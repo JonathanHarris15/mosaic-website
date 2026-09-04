@@ -812,6 +812,57 @@ _Avoid_: FCM token, device id, registration, push subscription
 The one OS prompt asking whether Mosaic may notify this phone. **Asked once, and only after a Mosaic-owned explainer** on the phone's home once somebody is signed in and linked — never on first launch. iOS gives exactly one prompt: denied is denied, and the only way back is talking somebody through iOS Settings, so spending it on a stranger who has not yet seen what Mosaic does is spending it badly. A permanent toggle in settings is the way back afterwards. Mosaic keeps **no preferences of its own** on top of it — no per-kind opt-outs — because with one thing sending Notifications that is a settings screen with one row; revisit when there are genuinely different kinds to choose between.
 _Avoid_: opt-in, subscription, notification settings
 
+## Forms and Registrations — MS-173
+
+### Form Template
+The definition of a form: a title and an ordered set of sections and questions, each question carrying a response type and optionally **required**. Built and owned by **editors and above**, in the [[Forms library]]. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+- **The title is capped at 90 characters.** Whoever opens the link reads it first, and it has to survive a phone. The cap is in the model, not in the text box.
+- **Questions stay editable after publishing**, because a sign-up whose wording cannot be fixed is worse than one that changes under you. But editing a form that already has [[Response]]s **says so before it saves**, and a question carrying answers is never deleted — it is retired, so the tally it already gathered survives. There is no template versioning: an edit does not migrate answers already given.
+_Avoid_: form (unqualified — the template is what is built, a [[Form Document]] and a [[Response]] are what it makes), survey, questionnaire
+
+### Forms library
+The page the [[Form Template]]s live on, and **a place you navigate into rather than a list you pick from** ([ADR 0053](docs/adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)). A full-width list; opening a form goes to the form's own page carrying its questions, its settings and its responses. Modelled on the [[Document Library]], which is the closest sibling this feature has — not on the [[Roles Manager]]'s split pane, which cannot hold a folder tree beside an editor and would have to be thrown away the moment folders arrive.
+- **Folders arrive with MS-361.** Until then the breadcrumb reads `Forms` and nothing else, because there is nowhere yet to go.
+- Carries a **search across every form**, and a **hide-closed** toggle that is **on by default** — a [[Closed]] form is a record, and this page is a working list. What is folded away says so, and says the links still work.
+_Avoid_: forms manager, forms dashboard, the forms pane
+
+### Form Mode
+What a [[Form Template]] produces, chosen when the template is made. The spine of MS-173, and the reason several settings exist on one side of it and are meaningless on the other.
+- **`document`** — filled in **once**, and the filled-in thing *is* the record. Lands in a document library like anything else written in Mosaic. The Elder Interview is the case. The same template is deliberately used many times by the same person, each time producing a separate [[Form Document]].
+- **`responses`** — **published** to a link, answered by many people, read as a tally. The church poll and the bible-study sign-up.
+_Avoid_: form type, template kind, output type
+
+### Response
+One person's answers to a `responses`-mode [[Form Template]]. Counted on the **Responses tab**; never shown to the person answering (see [[Answering rung]]). Distinct from a [[Form Document]], which is a record rather than a data point.
+- **A Response may be partial.** Only *required* questions must be answered, so "four of five questions" is an ordinary Response and not a broken one.
+- **The Responses tab changes shape with [[Attribution]].** An anonymous form has no people to list, so it leads with the per-question tally. An attributed form leads with **who answered**, one row each, opened one at a time — two answers are a list of people, not a chart — and the tally sits a tab away.
+- **An anonymous answer's handle is positional, never chronological** ([ADR 0052](docs/adr/0052-a-secret-ballot-keeps-two-lists-that-cannot-be-joined.md)). Answers are read back in a stable shuffle keyed by the form, so "answer 6" means the same thing to two elders reading at once and says nothing about when it arrived. **No timestamp is shown against an anonymous answer at all** — not a date, not "3 days ago". An attributed answer keeps its timestamps; it already says who gave it.
+_Avoid_: submission, entry, result
+
+### Answering rung
+Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` — reusing the [[Event visibility]] ladder rather than inventing a second one. **`public` is the only rung that needs no account**, because proving you are a member requires one; "is sign-in required" is therefore not a separate switch, it is read off the rung.
+- **A `public` form is link-only and unlisted** ([ADR 0051](docs/adr/0051-a-public-form-is-served-and-answered-through-one-closed-door.md)). You can open a form whose link you were sent; you cannot ask what forms exist, and an id is not guessable.
+- **A signed-out person never touches Firestore.** One Cloud Function hands out the questions and takes the answer, and `firestore.rules` gains nothing — the public path is a door with somebody standing in it, not a hole in the wall. Public submissions pass an invisible bot check (App Check).
+- **A form's link carries a random token, never its title.** `/f/7bQm2xK9vRt4Lp8sYw3NcF` — 128 bits, base58, stable for the life of the form. A readable slug like `/f/monday-food` is a *guessable* slug, and derivable from the form's own name, which is the enumeration the closed door exists to prevent. The form page carries a **copy-link row**, because you come back on Thursday and want the link again.
+_Avoid_: visibility (that is [[Event visibility]]'s word for an Event), audience, access level, slug
+
+### Attribution
+Separately from the [[Answering rung]], whether a [[Response]] records **who** gave it. On a signed-in rung that means stamping the [[Person]]. On `public` there is no Person to stamp, so a name is a *question on the form* like any other — the form asks, rather than Mosaic knowing.
+_Avoid_: anonymous (as the field name — attribution is the setting, anonymous is one of its values), named, identified
+
+### One Response Each
+A [[Form Template]] setting: may a person answer more than once. **Only available on `member` and above**, because a `public` form has no account to key on and half-enforcing it with a browser cookie would be a promise the thing cannot keep. **Only meaningful in `responses` [[Form Mode]]** — a [[Form Document]] is filled in repeatedly by the same person on purpose. A member who has answered may go back and **change** their answer until the form closes; they never get a second one.
+- **It combines with [[Attribution]] off to make a real secret ballot**, and the two lists that requires may never be joined ([ADR 0052](docs/adr/0052-a-secret-ballot-keeps-two-lists-that-cannot-be-joined.md)): the answers carry no person, the ledger carries no answers, and timestamps are coarse because millisecond ordering would line them back up. The form says so in its own words — *we record that you answered, we do not record what you said* — because the promise the church hears must be the one the storage makes.
+_Avoid_: single submission, one vote, unique response
+
+### Closed (a form)
+A `responses`-mode [[Form Template]] that has stopped taking answers — pressed shut by an editor, or reached the **closing date** set when it was published. A closed form's link still works and shows the form's **title and when it closed**, never the questions and never the tally: a working link that renders as not-found reads as broken and generates a phone call, and showing the tally would hand every answer to whoever holds a forwarded link. Closing also ends a member's right to change their answer.
+_Avoid_: expired, archived, disabled, locked
+
+### Answering a form
+What the person filling one in sees. They get the questions, and on submitting they get **a thank-you and nothing else** — never the running tally. Showing the split changes what later people answer, which quietly ruins the poll being run, and on a `public` form it would let a stranger holding a forwarded link read everybody else's answers.
+- **Nobody is notified when an answer arrives.** The Responses tab is the inbox and an editor goes and looks. Pushing an answer at a named person is real and wanted — MS-271 needs it — but it is its own ticket, not part of proving a stranger can answer safely.
+
 ## User Interface Conventions
 
 ### Autosave

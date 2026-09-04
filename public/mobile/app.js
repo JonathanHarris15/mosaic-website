@@ -105,23 +105,84 @@
     }
   }
 
+  // Creating an account fails its own way, and here "that address already has an
+  // account" is not the leak it would be on the sign-in side: you are the one
+  // who just tried to claim it.
+  function signUpMessage(err) {
+    switch (err && err.code) {
+      case "auth/email-already-in-use": return { text: "That address already has an account. Log in instead.", fields: true };
+      case "auth/invalid-email": return { text: "That doesn't look like an email address.", fields: true };
+      case "auth/weak-password": return { text: "Choose a password of at least 6 characters.", fields: true };
+      case "auth/network-request-failed": return { text: "Can't reach Mosaic. Check your connection and try again.", fields: false };
+      default: return { text: "Couldn't create that account. Please try again.", fields: false };
+    }
+  }
+
+  // The phone had a door and no keys beside it: no way to make an account, and
+  // no way back into one you were locked out of — both of which the web login
+  // page has had since MS-241. Same screen, same two extra jobs, so somebody who
+  // only ever opens the app isn't sent to find a desktop.
+  var Recovery = window.AccountRecoveryCore;
+
   function LoginScreen(props) {
-    var emailS = useState(""), pwS = useState(""), errS = useState(null), busyS = useState(false);
+    var modeS = useState("login"); // "login" | "signup"
+    var emailS = useState(""), pwS = useState(""), pw2S = useState("");
+    var errS = useState(null), noticeS = useState(""), busyS = useState(false);
+    var mode = modeS[0], signup = mode === "signup";
+
+    function fail(text, fields) { errS[1]({ text: text, fields: !!fields }); }
+
     function submit() {
       if (busyS[0]) return;
-      if (!emailS[0].trim() || !pwS[0]) { errS[1]({ text: "Enter your email and password.", fields: true }); return; }
-      busyS[1](true); errS[1](null);
-      data.signIn(emailS[0].trim(), pwS[0])
-        .then(function () { busyS[1](false); props.nav("home"); })
-        .catch(function (err) { busyS[1](false); errS[1](signInMessage(err)); });
+      noticeS[1](""); errS[1](null);
+      if (!emailS[0].trim() || !pwS[0]) { fail("Enter your email and password.", true); return; }
+      if (signup) {
+        if (pwS[0] !== pw2S[0]) { fail("Those two passwords don't match.", true); return; }
+        if (pwS[0].length < 6) { fail("Choose a password of at least 6 characters.", true); return; }
+      }
+      busyS[1](true);
+      var run = signup ? data.signUp : data.signIn;
+      run(emailS[0].trim(), pwS[0])
+        .then(function () { busyS[1](false); props.nav("home", null, { replace: true }); })
+        .catch(function (err) { busyS[1](false); errS[1]((signup ? signUpMessage : signInMessage)(err)); });
     }
+
+    // ⚠ The answer is the same whether or not that address has an account —
+    // anything else turns this screen into a list of who attends this church.
+    // account-recovery-core.js carries the reasoning and the test.
+    function sendReset() {
+      if (busyS[0]) return;
+      noticeS[1](""); errS[1](null);
+      var email = emailS[0].trim();
+      if (!Recovery || !Recovery.validateEmail(email)) {
+        fail("Enter your email address above, then press Forgot password.", true);
+        return;
+      }
+      busyS[1](true);
+      data.sendPasswordReset(email)
+        .then(function () { return null; })
+        .catch(function (err) { return (err && err.code) || "unknown"; })
+        .then(function (code) {
+          busyS[1](false);
+          var outcome = Recovery.resetOutcome(code);
+          if (outcome.ok) noticeS[1](outcome.message);
+          else fail(outcome.message, false);
+        });
+    }
+
+    function toggleMode() {
+      modeS[1](signup ? "login" : "signup");
+      errS[1](null); noticeS[1](""); pw2S[1]("");
+    }
+
     // Typing is the person answering the complaint — clear it so the red doesn't
     // outlive the mistake.
     function onEdit(setter) {
       return function (ev) { if (errS[0]) errS[1](null); setter(ev.target.value); };
     }
     function onEnter(ev) { if (ev.key === "Enter") submit(); }
-    var err = errS[0], bad = !!(err && err.fields);
+    var err = errS[0], bad = !!(err && err.fields), notice = noticeS[0];
+    var linkStyle = { background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", padding: 4 };
     return html`
       <div style=${{ height: "100%", background: "var(--background)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px 40px", position: "relative" }}>
@@ -135,13 +196,24 @@
           <div style=${{ display: "flex", flexDirection: "column", gap: 16, position: "relative" }}>
             <${Input} label="Email Address" type="email" placeholder="you@example.com" value=${emailS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(emailS[1])} />
             <${Input} label="Password" type="password" placeholder="••••••••" value=${pwS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(pwS[1])} />
+            ${signup ? html`<${Input} label="Confirm Password" type="password" placeholder="••••••••" value=${pw2S[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(pw2S[1])} />` : null}
             ${err ? html`<div role="alert" style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.35 }}>
               <span style=${{ display: "flex", flexShrink: 0, color: "var(--error)" }}>${Ic("circle-alert", 16)}</span>${err.text}
             </div>` : null}
+            ${notice ? html`<div role="status" style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--surface-container)", color: "var(--on-surface)", border: "1px solid var(--outline-variant)", fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.35 }}>
+              <span style=${{ display: "flex", flexShrink: 0, color: "var(--primary)" }}>${Ic("mail-check", 16)}</span>${notice}
+            </div>` : null}
             <div style=${{ marginTop: 4 }}>
-              <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic("log-in", 18)} onClick=${submit}>${busyS[0] ? "Signing in…" : "Sign In"}<//>
+              <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic(signup ? "user-plus" : "log-in", 18)} onClick=${submit}>
+                ${busyS[0] ? (signup ? "Creating account…" : "Signing in…") : (signup ? "Create Account" : "Sign In")}
+              <//>
             </div>
-            <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
+            ${signup ? null : html`
+              <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${linkStyle}>Continue as guest</button>
+              <button onClick=${sendReset} disabled=${busyS[0]} style=${Object.assign({}, linkStyle, { marginTop: -8, opacity: busyS[0] ? 0.5 : 1 })}>Forgot password?</button>`}
+            <div style=${{ display: "flex", justifyContent: "center", borderTop: "1px solid var(--outline-variant)", paddingTop: 12, marginTop: 2 }}>
+              <button onClick=${toggleMode} style=${linkStyle}>${signup ? "Already have an account? Log in" : "Don't have an account? Sign up"}</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -245,7 +317,25 @@
   // service builder / service guide / profile (routed elsewhere in nav()).
   var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
-  function nav(route, params) {
+  // Going somewhere usually means "and I can come back" — a pushed history entry,
+  // so the phone's back gesture retraces it. Two moves are not like that: being
+  // sent to the login screen because you are signed out, and leaving it because
+  // you just signed in. Pushed, those leave the sign-in screen sitting in the
+  // back stack, and one back gesture after signing in put you in front of it
+  // again — signed in, being asked to sign in. So they replace instead.
+  function goTo(hash, replace) {
+    if (replace && window.history && history.replaceState) {
+      history.replaceState(null, "", location.pathname + location.search + hash);
+      // replaceState fires no hashchange, so say it ourselves — the listener
+      // re-reads the route rather than reading the event.
+      window.dispatchEvent(new Event("hashchange"));
+      return;
+    }
+    location.hash = hash;
+  }
+
+  function nav(route, params, opts) {
+    var replace = !!(opts && opts.replace);
     // Opening an editor is the last moment we know the thing being edited is
     // about to change. What data.js remembered about it has to go now — the
     // editor is a whole new document, so nothing here runs again to do it
@@ -269,9 +359,9 @@
       return;
     }
     if (SHELL_PAGES[route]) { window.location.href = SHELL_PAGES[route] + "?shell=mobile"; return; }
-    if (SCREENS[route]) { M.navParams = params || {}; location.hash = "#/" + route + encodeParams(params); return; }
-    if (ROUTE_META[route]) { M.navParams = ROUTE_META[route]; location.hash = "#/" + route + encodeParams(ROUTE_META[route]); return; }
-    M.navParams = {}; location.hash = "#/home";
+    if (SCREENS[route]) { M.navParams = params || {}; goTo("#/" + route + encodeParams(params), replace); return; }
+    if (ROUTE_META[route]) { M.navParams = ROUTE_META[route]; goTo("#/" + route + encodeParams(ROUTE_META[route]), replace); return; }
+    M.navParams = {}; goTo("#/home", replace);
   }
 
   // ── Drawer ───────────────────────────────────────────────
@@ -370,7 +460,7 @@
     useEffect(function () {
       if (userState[0] !== null) return;
       if (isGuest() || routeState[0] === "login") return;
-      nav("login");
+      nav("login", null, { replace: true });
     });
     useEffect(function () {
       function onHash() { routeState[1](currentRoute()); menuState[1](false); }
@@ -414,7 +504,8 @@
   function mount() {
     var root = typeof document !== "undefined" && document.getElementById("app");
     if (!root) return;
-    if (!location.hash) location.hash = "#/home";
+    if (!location.hash && history.replaceState) history.replaceState(null, "", location.pathname + location.search + "#/home");
+    else if (!location.hash) location.hash = "#/home";
     M.render(M.h(App), root);
   }
   if (typeof document !== "undefined") {

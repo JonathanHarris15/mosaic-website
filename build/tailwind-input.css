@@ -383,6 +383,107 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-check input:disabled { cursor: not-allowed; }
 .m-check:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 
+/* FormPane — A titled panel with a head, a body, and a row of badges saying what the thing inside it is. */
+/* overflow is VISIBLE, not hidden: the question-type Dropdown opens a panel
+   that would otherwise be clipped by this card. Nothing inside carries its own
+   background, so nothing pokes out of the rounded corners either way. */
+.f-pane { display: flex; flex-direction: column; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: visible; }
+.f-panehead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+.f-panename { margin: 4px 0 0; font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--on-surface); text-wrap: pretty; }
+.f-panebody { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+.f-badgewrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* QuestionEditor — A question on a form being built — a row when it is shut, a panel when it is open. */
+.f-qrow { display: flex; align-items: flex-start; gap: var(--space-sm); width: 100%; padding: 12px 14px 13px; text-align: left; background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius); cursor: pointer; font-family: var(--font-sans); transition: background-color var(--duration) var(--ease-standard); }
+.f-qrow:hover { background: var(--surface-container-low); }
+.f-qnum { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 auto; margin-top: 1px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container); font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--on-surface-variant); }
+.f-qtext { display: block; font-family: var(--font-serif); font-size: 17px; line-height: 1.3; color: var(--on-surface); text-wrap: pretty; }
+.f-qmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+.f-qopen { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-left: 3px solid var(--primary); border-radius: var(--radius); }
+.f-qhead { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt .m-input { height: 44px; font-size: 15px; }
+.f-opthead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.f-add { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: 46px; padding: 0 var(--space-sm); background: transparent; border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary); font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; transition: background-color var(--duration) var(--ease-standard); }
+.f-add:hover { background: var(--surface-container); }
+
+/* SettingBlock — A group of settings that constrain each other, each carrying its own reason. */
+.f-set { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
+.f-why { margin: 0 0 0 28px; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+
+/* Dropdown — A picker with grouped options that opens downward, caps its height, and scrolls inside. */
+.m-dropdown { position: relative; display: block; }
+.m-dropdown__button {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; min-height: 48px; padding: 0 var(--space-base) 0 var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__button:hover { background: var(--surface-container-low); }
+.m-dropdown__button:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-dropdown__button .material-symbols-outlined { font-size: 20px; color: var(--on-surface-variant); flex: 0 0 auto; }
+.m-dropdown__panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  max-height: min(320px, 50vh); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-xs);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.m-dropdown__group {
+  padding: var(--space-base) var(--space-base) var(--space-xs);
+  font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant);
+}
+.m-dropdown__opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; padding: 9px var(--space-base);
+  background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__opt:hover:not(:disabled) { background: var(--surface-container-low); }
+.m-dropdown__opt:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: -2px; }
+.m-dropdown__opt--picked { background: var(--primary-fixed); color: var(--primary); font-weight: 600; }
+.m-dropdown__opt:disabled { color: var(--outline); cursor: default; }
+.m-dropdown__later {
+  flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--outline);
+}
+
+/* OptionCard — One choice on a form somebody is answering, as a card you tap rather than a radio you aim at. */
+.m-option {
+  display: flex; align-items: center; gap: var(--space-base);
+  min-height: 52px; padding: 11px var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 16px; line-height: 1.35;
+  color: var(--on-surface);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-option:hover { background: var(--surface-container-low); }
+.m-option:focus-within { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.m-option__mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: 0 0 auto;
+  border: 1.5px solid var(--outline); border-radius: var(--radius-full);
+}
+.m-option__mark::after { content: ""; width: 10px; height: 10px; border-radius: var(--radius-full); background: transparent; }
+.m-option--picked {
+  background: var(--primary-fixed); border: 1.5px solid var(--tertiary); font-weight: 500;
+}
+.m-option--picked .m-option__mark { border-color: var(--primary); }
+.m-option--picked .m-option__mark::after { background: var(--primary); }
+.m-option__said {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--primary);
+}
+
 /* SearchBar — An Input with a leading search glyph and a clear button that only appears once there is something to clear. */
 .m-search { position: relative; display: flex; align-items: center; }
 .m-search > .material-symbols-outlined {
@@ -444,6 +545,21 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-unitfield--sm > input { width: 62px; font-size: 15px; }
 
 /* ── Display ───────────────────────────────────────────────── */
+
+/* Tally — What came back from a form — a labelled bar per option, and free-text answers as quotes. */
+.f-tally { display: flex; flex-direction: column; gap: 10px; }
+.f-bar { display: flex; align-items: center; gap: var(--space-sm); }
+.f-barname { flex: 0 0 8.5rem; font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+.f-bartrack { flex: 1 1 auto; height: 26px; background: var(--surface-container); border-radius: var(--radius-sm); overflow: hidden; }
+.f-barfill { display: block; height: 100%; background: var(--primary-fixed); border-right: 2px solid var(--primary); }
+.f-barnum { flex: 0 0 5.5rem; font-family: var(--font-sans); font-size: 13px; color: var(--on-surface-variant); }
+.f-quote { padding: 13px 16px 14px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-left: 2px solid var(--gold); border-radius: var(--radius); }
+.f-quote p { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.5; color: var(--on-surface); text-wrap: pretty; }
+.f-quote span { display: block; margin-top: 7px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--outline); }
+
+/* LinkRow — A URL you are meant to copy, with the button to copy it. */
+.f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
+.f-linkrow code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* SectionLabel — The tracked-caps overline above a group of things. */
 /* Every size here is a token. The overline is --label-sm, one step below
@@ -554,6 +670,46 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-scripture cite { display: block; margin-top: var(--space-base); font-style: normal; }
 .m-scripture--center { border-left: none; padding: var(--space-sm) 0; text-align: center; }
+
+/* Type — The type scale, as classes. */
+.m-display-lg {
+  font-family: var(--font-display);
+  font-size: var(--display-lg-size);
+  line-height: var(--display-lg-line);
+  letter-spacing: var(--display-lg-spacing);
+  font-weight: var(--display-lg-weight);
+  color: var(--primary);
+}
+.m-headline-lg {
+  font-family: var(--font-serif);
+  font-size: var(--headline-lg-size);
+  line-height: var(--headline-lg-line);
+  font-weight: var(--headline-lg-weight);
+}
+.m-headline-md {
+  font-family: var(--font-serif);
+  font-size: var(--headline-md-size);
+  line-height: var(--headline-md-line);
+  font-weight: var(--headline-md-weight);
+}
+.m-body-lg {
+  font-family: var(--font-sans);
+  font-size: var(--body-lg-size);
+  line-height: var(--body-lg-line);
+}
+.m-body-md {
+  font-family: var(--font-sans);
+  font-size: var(--body-md-size);
+  line-height: var(--body-md-line);
+}
+.m-label-md {
+  font-family: var(--font-sans);
+  font-size: var(--label-md-size);
+  line-height: var(--label-md-line);
+  letter-spacing: var(--label-md-spacing);
+  font-weight: var(--label-md-weight);
+  text-transform: uppercase;
+}
 
 /* Divider — A warm hairline between things. */
 .m-divider { display: block; width: 100%; height: 1px; background: var(--outline-variant); border: 0; }
@@ -932,6 +1088,11 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-notice--error .m-notice__text { color: var(--on-error-container); }
 
 /* ── Layout ────────────────────────────────────────────────── */
+
+/* Breadcrumbs — Where you are in a library you can navigate into. */
+.f-crumbs { display: flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: 600; letter-spacing: var(--label-sm-spacing); text-transform: uppercase; color: var(--on-surface-variant); }
+.f-crumbs a { color: inherit; }
+.f-crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; }
 
 /* PageShell — The body of a desktop page: warm background, navy ink, a column capped at --container-max. */
 .m-page {

@@ -15,6 +15,7 @@
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="account-recovery-core.js"></script>
+    <script src="sign-in-return-core.js"></script>
     <script src="auth.js"></script>
 
     <!-- Alpine JS -->
@@ -113,6 +114,23 @@
     </div>
 
     <script>
+        // Where to go once they are in. Normally that is wherever this account
+        // lands, but a page can ask to have them back with ?next= — the form
+        // answering page does, because being sent to the church's home page
+        // after signing in to answer a form loses the form (MS-371).
+        //
+        // ⚠ Two rules, and both are here rather than in the caller. `next` is
+        // only ever a path on this site (SignInReturn.safeReturn — anything
+        // else is an open redirect off the back of our own sign-in page). And
+        // a kiosk account ignores it: that is a shared device on a table by the
+        // door, and it belongs on the kiosk screen whatever link brought it
+        // here.
+        function afterSignIn(data) {
+            if (isKioskAccount(data)) return landingPageFor(data);
+            const asked = new URLSearchParams(window.location.search).get('next');
+            return SignInReturn.safeReturn(asked) || landingPageFor(data);
+        }
+
         function authForm() {
             return {
                 mode: 'login',
@@ -128,7 +146,7 @@
                         // Only auto-redirect if we aren't currently in the middle of a login/signup submission
                         if (user && !user.isAnonymous && !this.loading) {
                             getUserData(user.uid).then(data => {
-                                window.location.href = landingPageFor(data);
+                                window.location.href = afterSignIn(data);
                             });
                         }
                     });
@@ -219,7 +237,7 @@
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
                             });
                         }
-                        window.location.href = landingPageFor(await getUserData(uid));
+                        window.location.href = afterSignIn(await getUserData(uid));
                     } catch (err) {
                         this.error = err.message;
                         this.loading = false;

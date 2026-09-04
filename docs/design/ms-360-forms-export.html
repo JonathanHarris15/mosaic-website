@@ -1,0 +1,1561 @@
+<section style="display:flex;flex-direction:column;gap:22px;padding:40px 40px 0;background:var(--background);font-family:var(--font-sans);color:var(--on-surface)">
+
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:22px;letter-spacing:.02em;color:var(--primary)">Forms — MS-360 · two pages</span>
+    <span style="font-size:12.5px;color:var(--on-surface-variant)">The library <a href="#2a">2a</a> · Inside a folder, closed shown <a href="#2b">2b</a> · The form page <a href="#2c">2c</a> · Its Responses tab <a href="#2d">2d</a> · Phone <a href="#2e">2e</a></span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:48px">
+
+    <!-- ══════════════ 2a · THE LIBRARY ══════════════ -->
+    <div id="2a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2a</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Page one · the library · folders, and closed forms folded away</span>
+      </div>
+
+      <div class="f-frame" style="width:1100px">
+        <header class="m-header">
+          <div class="m-header__inner">
+            <div class="m-header__lead">
+              <a class="m-back" href="#2a"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+              <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+            </div>
+            <div class="m-header__actions">
+              <button type="button" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">create_new_folder</span><span class="m-btn__label">New folder</span></button>
+              <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">post_add</span><span class="m-btn__label">New form</span></button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth">
+              <span class="m-avatar m-avatar--sm">JH</span>
+              <span style="font-size:13.5px;color:var(--on-surface-variant);padding-right:4px">Jonathan Harris</span>
+              <button type="button" class="m-icon-btn m-icon-btn--ghost m-header__logout" title="Sign out"><span class="material-symbols-outlined">logout</span></button>
+            </div>
+          </div>
+        </header>
+
+        <div class="f-main" style="display:flex;flex-direction:column;gap:var(--space-sm)">
+
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);flex-wrap:wrap">
+            <nav class="f-crumbs">
+              <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;color:var(--secondary)">folder_open</span>
+              <span style="color:var(--on-surface)">Home</span>
+            </nav>
+            <div style="display:flex;align-items:center;gap:var(--space-sm)">
+              <span class="m-search" style="width:260px"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Search every form"></span>
+              <label class="m-check"><input type="checkbox" checked="{{ hideClosed }}" sc-camel-on-change="{{ toggleClosed }}"><span>Hide closed</span></label>
+            </div>
+          </div>
+
+          <div class="m-card-list">
+            <sc-for list="{{ libItems }}" as="i" hint-placeholder-count="8">
+              <div class="m-row m-row--interactive m-row--serif {{ i.cls }}">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">{{ i.icon }}</span>
+                <span class="m-row__main">
+                  <span class="m-row__title">{{ i.name }}</span>
+                  <span class="m-row__sub">{{ i.sub }}</span>
+                </span>
+                <sc-if value="{{ i.hasState }}" hint-placeholder-val="{{ true }}">
+                  <span class="m-badge {{ i.tone }}">{{ i.state }}</span>
+                </sc-if>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ closedHidden }}" hint-placeholder-val="{{ true }}">
+            <div class="m-notice">
+              <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
+              <div class="m-notice__body">
+                <p class="m-notice__text" style="margin:0">Three closed forms are folded away. They are not deleted and their links still work — a closed form is a record, and this page is a working list.</p>
+              </div>
+              <div class="m-notice__acts"><button type="button" class="m-btn m-btn--quiet m-btn--sm" sc-camel-on-click="{{ toggleClosed }}">Show them</button></div>
+            </div>
+          </sc-if>
+
+          <p style="margin:0;font-size:12px;line-height:1.5;color:var(--outline);text-wrap:pretty">Open a folder to go into it. Drag a form onto a folder to file it. Renaming happens on the row — {{ libCount }}.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 2b · INSIDE A FOLDER, CLOSED SHOWN ══════════════ -->
+    <div id="2b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2b</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Inside a folder · closed shown · naming a new form on the row</span>
+      </div>
+
+      <div class="f-frame" style="width:760px">
+        <div style="padding:var(--space-md);display:flex;flex-direction:column;gap:var(--space-sm)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);flex-wrap:wrap">
+            <nav class="f-crumbs">
+              <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;color:var(--secondary)">folder_open</span>
+              <a href="#2a">Home</a>
+              <span class="material-symbols-outlined">chevron_right</span>
+              <span style="color:var(--on-surface)">Sign-ups</span>
+            </nav>
+            <label class="m-check"><input type="checkbox"><span>Hide closed</span></label>
+          </div>
+
+          <div class="m-card-list">
+            <div class="m-row m-row--serif" style="background:var(--surface-container-low);box-shadow:inset 3px 0 0 var(--primary)">
+              <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+              <span class="m-row__main" style="display:flex;align-items:center;gap:var(--space-base)">
+                <input type="text" class="m-input" value="Church camp — dietary and medical" style="height:40px;font-size:15px">
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Keep this name"><span class="material-symbols-outlined" style="color:var(--success)">check</span></button>
+              </span>
+            </div>
+            <div class="m-row m-row--interactive m-row--serif">
+              <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+              <span class="m-row__main">
+                <span class="m-row__title">Inductive Bible Study — Spring sign-up (the book is $18)</span>
+                <span class="m-row__sub">Members · named · one each · closes 21 Sep</span>
+              </span>
+              <span class="m-badge m-badge--success">Open</span>
+              <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+            </div>
+            <div class="m-row m-row--interactive m-row--serif f-dim">
+              <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+              <span class="m-row__main">
+                <span class="m-row__title">Men’s breakfast — March</span>
+                <span class="m-row__sub">Members · named · one each · 31 answers</span>
+              </span>
+              <span class="m-badge m-badge--neutral"><span class="material-symbols-outlined">lock</span>Closed 8 Mar</span>
+              <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+            </div>
+            <div class="m-row m-row--interactive m-row--serif m-row--last f-dim">
+              <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+              <span class="m-row__main">
+                <span class="m-row__title">Carols by candlelight — how many invite cards?</span>
+                <span class="m-row__sub">Public · anonymous · 140 answers</span>
+              </span>
+              <span class="m-badge m-badge--neutral"><span class="material-symbols-outlined">lock</span>Closed 12 Dec</span>
+              <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+            </div>
+          </div>
+          <p style="margin:0;font-size:12px;line-height:1.5;color:var(--outline);text-wrap:pretty">A new form is named on its own row, the way a document is — no dialog, and it is already in the folder you are standing in.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 2c · THE FORM PAGE ══════════════ -->
+    <div id="2c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2c</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Page two · one form · who may answer on the left, questions down the middle</span>
+      </div>
+
+      <div class="f-frame" style="width:1240px">
+        <header class="m-header">
+          <div class="m-header__inner">
+            <div class="m-header__lead">
+              <div class="m-header__titles">
+                <nav class="m-header__crumbs">
+                  <a href="#2a">Forms</a>
+                  <span class="material-symbols-outlined">chevron_right</span>
+                  <a href="#2b">Sign-ups</a>
+                </nav>
+                <h1 class="m-header__title m-header__title--serif">Inductive Bible Study — Spring sign-up (the book is $18)</h1>
+              </div>
+            </div>
+            <div class="m-header__actions">
+              <span class="m-badge m-badge--warning m-header__chip"><span class="m-chip-dot m-chip-dot--pulse"></span>Unsaved</span>
+              <button type="button" class="m-btn m-btn--danger-outline m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">delete</span><span class="m-btn__label">Delete</span></button>
+              <button type="button" class="m-btn m-btn--secondary m-btn--sm">Preview</button>
+              <button type="button" class="m-btn m-btn--primary m-btn--sm">Save</button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth"><span class="m-avatar m-avatar--sm">JH</span></div>
+          </div>
+        </header>
+
+        <div class="f-main">
+          <div class="f-editcols">
+
+            <!-- the left card: who may answer -->
+            <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+              <div class="m-card m-card--sm" style="display:flex;flex-direction:column;gap:var(--space-sm)">
+                <span class="m-label">Who may answer</span>
+                <div>
+                  <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+                  <div class="m-seg m-seg--fill">
+                    <button type="button" class="m-seg__opt" aria-pressed="{{ publicOn }}" sc-camel-on-click="{{ setPublic }}">Public</button>
+                    <button type="button" class="m-seg__opt" aria-pressed="{{ memberOn }}" sc-camel-on-click="{{ setMember }}">Members</button>
+                  </div>
+                  <p class="m-input-hint">Editors and elders arrive with the next two rungs.</p>
+                </div>
+                <p class="m-settled m-settled--sm">{{ rungSentence }}</p>
+                <hr class="m-divider">
+                <div>
+                  <label class="m-check"><input type="checkbox" checked="{{ attribution }}" disabled="{{ attrLocked }}" sc-camel-on-change="{{ toggleAttribution }}"><span>Record who answered</span></label>
+                  <p class="f-why">{{ attrWhy }}</p>
+                </div>
+                <div>
+                  <label class="m-check"><input type="checkbox" checked="{{ oneEach }}" disabled="{{ oneEachLocked }}" sc-camel-on-change="{{ toggleOneEach }}"><span>One response each</span></label>
+                  <p class="f-why">{{ oneEachWhy }}</p>
+                </div>
+                <sc-if value="{{ ballot }}">
+                  <div class="m-notice m-notice--info">
+                    <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
+                    <div class="m-notice__body">
+                      <p class="m-notice__title" style="margin:0">This is a secret ballot.</p>
+                      <p class="m-notice__text" style="margin:0">We record that you answered, we do not record what you said.</p>
+                    </div>
+                  </div>
+                </sc-if>
+                <hr class="m-divider">
+                <div>
+                  <div style="font-size:15px;margin-bottom:6px">Closing date</div>
+                  <input type="date" class="m-input" value="2026-09-21">
+                  <p class="m-input-hint">After this the link still opens and says the form is closed.</p>
+                </div>
+              </div>
+
+              <div class="m-card m-card--sm" style="display:flex;flex-direction:column;gap:var(--space-base)">
+                <span class="m-label m-label--sm">The link</span>
+                <p style="margin:0;font-size:12.5px;line-height:1.45;color:var(--on-surface-variant);text-wrap:pretty">Nothing to copy yet. Publishing puts the link here, and it stays here.</p>
+              </div>
+            </div>
+
+            <!-- the main column -->
+            <div class="f-pane" style="height:760px">
+              <div class="m-tabs" style="padding:0 var(--space-md)">
+                <button type="button" class="m-tabs__tab m-tabs__tab--current">Questions · 3</button>
+                <button type="button" class="m-tabs__tab">Responses · 0</button>
+              </div>
+
+              <div class="f-scroller">
+                <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                  <label class="m-label" for="f-title3">Title</label>
+                  <input id="f-title3" type="text" class="m-input" value="Inductive Bible Study — Spring sign-up (the book is $18)">
+                  <span class="m-input-hint">Whoever opens the link reads this first. 54 of 90 characters.</span>
+                </div>
+
+                <hr class="m-divider">
+
+                <sc-if value="{{ q1shut }}" hint-placeholder-val="{{ true }}">
+                  <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ1 }}">
+                    <span class="f-qnum">1</span>
+                    <span style="flex:1 1 auto;min-width:0">
+                      <span class="f-qtext">Which evening suits you best?</span>
+                      <span class="f-qmeta"><span>Multiple choice</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>3 options</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span style="color:var(--secondary)">Required</span></span>
+                    </span>
+                    <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                  </button>
+                </sc-if>
+                <sc-if value="{{ q1open }}">
+                  <div class="f-qopen">
+                    <div class="f-qhead">
+                      <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                      <span class="m-label m-label--sm" style="flex:1 1 auto">Question 1</span>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate"><span class="material-symbols-outlined">content_copy</span></button>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                    </div>
+                    <input type="text" class="m-input" value="Which evening suits you best?">
+                    <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                      <span class="m-select-wrap" style="flex:0 0 240px">
+                        <sc-raw-select class="m-select"><optgroup label="Text"><option>Short answer</option><option>Paragraph</option></optgroup><optgroup label="Choice"><option selected="selected">Multiple choice</option></optgroup></sc-raw-select>
+                      </span>
+                      <label class="m-check"><input type="checkbox" checked="checked"><span>Required</span></label>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                      <span class="m-label m-label--sm">Options</span>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Tuesday, 7pm"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Thursday, 7pm"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Either suits me"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <button type="button" class="f-add" style="align-self:flex-start;min-height:40px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add an option</button>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ q2shut }}">
+                  <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ2 }}">
+                    <span class="f-qnum">2</span>
+                    <span style="flex:1 1 auto;min-width:0">
+                      <span class="f-qtext">Do you need a copy of the book?</span>
+                      <span class="f-qmeta"><span>Multiple choice</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>3 options</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span style="color:var(--secondary)">Required</span></span>
+                    </span>
+                    <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                  </button>
+                </sc-if>
+                <sc-if value="{{ q2open }}" hint-placeholder-val="{{ true }}">
+                  <div class="f-qopen">
+                    <div class="f-qhead">
+                      <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                      <span class="m-label m-label--sm" style="flex:1 1 auto">Question 2</span>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate"><span class="material-symbols-outlined">content_copy</span></button>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                    </div>
+                    <input type="text" class="m-input" value="Do you need a copy of the book?">
+                    <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                      <span class="m-select-wrap" style="flex:0 0 240px">
+                        <sc-raw-select class="m-select"><optgroup label="Text"><option>Short answer</option><option>Paragraph</option></optgroup><optgroup label="Choice"><option selected="selected">Multiple choice</option></optgroup></sc-raw-select>
+                      </span>
+                      <label class="m-check"><input type="checkbox" checked="checked"><span>Required</span></label>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                      <span class="m-label m-label--sm">Options</span>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Yes please — put me down for one ($18)"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="I already have one"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="I'd rather talk to someone about the cost"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                      <button type="button" class="f-add" style="align-self:flex-start;min-height:40px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add an option</button>
+                    </div>
+                    <p class="m-input-hint" style="margin:0">Taking the money is a Stripe payment question, which arrives later. For now the price is in the words.</p>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ q3shut }}" hint-placeholder-val="{{ true }}">
+                  <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ3 }}">
+                    <span class="f-qnum">3</span>
+                    <span style="flex:1 1 auto;min-width:0">
+                      <span class="f-qtext">Anything we should know?</span>
+                      <span class="f-qmeta"><span>Paragraph</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>Optional</span></span>
+                    </span>
+                    <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                  </button>
+                </sc-if>
+                <sc-if value="{{ q3open }}">
+                  <div class="f-qopen">
+                    <div class="f-qhead">
+                      <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                      <span class="m-label m-label--sm" style="flex:1 1 auto">Question 3</span>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                      <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                    </div>
+                    <input type="text" class="m-input" value="Anything we should know?">
+                    <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                      <span class="m-select-wrap" style="flex:0 0 240px">
+                        <sc-raw-select class="m-select"><optgroup label="Text"><option>Short answer</option><option selected="selected">Paragraph</option></optgroup><optgroup label="Choice"><option>Multiple choice</option></optgroup></sc-raw-select>
+                      </span>
+                      <label class="m-check"><input type="checkbox"><span>Required</span></label>
+                    </div>
+                    <p class="m-settled m-settled--sm">A box that grows as they type. Nothing else to set.</p>
+                  </div>
+                </sc-if>
+
+                <button type="button" class="f-add" style="align-self:flex-start"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add a question</button>
+              </div>
+
+              <div class="m-actionbar">
+                <div class="m-actionbar__said">
+                  <span class="m-actionbar__count">Not published — nobody can answer this yet.</span>
+                  <span class="m-actionbar__note">Publishing makes a link, and puts it in the card on the left.</span>
+                </div>
+                <div class="m-actionbar__acts">
+                  <button type="button" class="m-btn m-btn--quiet m-btn--sm">Preview as a member</button>
+                  <button type="button" class="m-btn m-btn--primary"><span class="material-symbols-outlined" style="font-size:19px">publish</span><span class="m-btn__label">Publish</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 2d · THE RESPONSES TAB, SAME PAGE ══════════════ -->
+    <div id="2d" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2d</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Same page, other tab · published, anonymous, 34 answers</span>
+      </div>
+
+      <div class="f-frame" style="width:1240px">
+        <header class="m-header">
+          <div class="m-header__inner">
+            <div class="m-header__lead">
+              <div class="m-header__titles">
+                <nav class="m-header__crumbs"><a href="#2a">Forms</a></nav>
+                <h1 class="m-header__title m-header__title--serif">What do you want to eat at the Monday gathering?</h1>
+              </div>
+            </div>
+            <div class="m-header__actions">
+              <button type="button" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">download</span><span class="m-btn__label">Export CSV</span></button>
+              <button type="button" class="m-btn m-btn--secondary m-btn--sm">Close form</button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth"><span class="m-avatar m-avatar--sm">JH</span></div>
+          </div>
+        </header>
+
+        <div class="f-main">
+          <div class="f-editcols">
+
+            <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+              <div class="m-card m-card--sm" style="display:flex;flex-direction:column;gap:var(--space-sm)">
+                <span class="m-label">Who may answer</span>
+                <div>
+                  <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+                  <div class="m-seg m-seg--fill"><button type="button" class="m-seg__opt" aria-pressed="true">Public</button><button type="button" class="m-seg__opt" aria-pressed="false">Members</button></div>
+                </div>
+                <p class="m-settled m-settled--sm">Anyone with the link can answer, without an account.</p>
+                <hr class="m-divider">
+                <div>
+                  <label class="m-check"><input type="checkbox" disabled="disabled"><span>Record who answered</span></label>
+                  <p class="f-why">Off, and not yours to change: a public form has no account to attach a name to.</p>
+                </div>
+                <div>
+                  <label class="m-check"><input type="checkbox" disabled="disabled"><span>One response each</span></label>
+                  <p class="f-why">Off, and not yours to change: a form anyone can open has no way to tell one person from another.</p>
+                </div>
+                <hr class="m-divider">
+                <p class="m-input-hint" style="margin:0">These stay put once answers exist. Changing the rung under 34 people is a different conversation, and it is not this button.</p>
+              </div>
+
+              <div class="m-card m-card--sm" style="display:flex;flex-direction:column;gap:var(--space-base)">
+                <span class="m-label m-label--sm">The link</span>
+                <div class="f-linkrow">
+                  <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span>
+                  <code style="flex:1 1 auto;overflow:hidden;text-overflow:ellipsis">mosaicchurch.app/f/monday-food</code>
+                  <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Copy the link"><span class="material-symbols-outlined">content_copy</span></button>
+                </div>
+                <span style="font-size:12px;color:var(--outline)">Published 28 Aug · open</span>
+              </div>
+            </div>
+
+            <div class="f-pane" style="height:700px">
+              <div class="m-tabs" style="padding:0 var(--space-md)">
+                <button type="button" class="m-tabs__tab">Questions · 2</button>
+                <button type="button" class="m-tabs__tab m-tabs__tab--current">Responses · 34</button>
+              </div>
+
+              <div class="f-scroller" style="gap:var(--space-md)">
+                <div class="m-notice">
+                  <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
+                  <div class="m-notice__body">
+                    <p class="m-notice__text" style="margin:0">This form records no names, so there is nobody to show. Thirty-four answers, and no way — here or in the export — to say whose is whose.</p>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-sm)">
+                    <span class="m-label">1 · What should we eat?</span>
+                    <span class="m-label m-label--sm" style="color:var(--outline)">34 of 34 answered</span>
+                  </div>
+                  <div class="f-tally">
+                    <div class="f-bar"><span class="f-barname">Chili</span><span class="f-bartrack"><span class="f-barfill" style="width:100%;display:block"></span></span><span class="f-barnum">14 · 41%</span></div>
+                    <div class="f-bar"><span class="f-barname">Soup and bread</span><span class="f-bartrack"><span class="f-barfill" style="width:64%;display:block"></span></span><span class="f-barnum">9 · 26%</span></div>
+                    <div class="f-bar"><span class="f-barname">Tacos</span><span class="f-bartrack"><span class="f-barfill" style="width:50%;display:block"></span></span><span class="f-barnum">7 · 21%</span></div>
+                    <div class="f-bar"><span class="f-barname">Sandwiches</span><span class="f-bartrack"><span class="f-barfill" style="width:29%;display:block"></span></span><span class="f-barnum">4 · 12%</span></div>
+                  </div>
+                </div>
+
+                <hr class="m-divider">
+
+                <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-sm)">
+                    <span class="m-label">2 · Anything else we should know?</span>
+                    <span class="m-label m-label--sm" style="color:var(--outline)">3 of 34 answered</span>
+                  </div>
+                  <span class="m-search" style="max-width:320px"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Search these answers"></span>
+                  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-sm);margin-top:4px">
+                    <div class="f-quote"><p>I can bring a slow cooker if that helps</p><span>Answer 6 · 31 Aug</span></div>
+                    <div class="f-quote"><p>nut allergy in our family — two of us</p><span>Answer 11 · 31 Aug</span></div>
+                    <div class="f-quote"><p>we'll be late, around 6:30</p><span>Answer 28 · 1 Sep</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 2e · PHONE, TWO PAGES ══════════════ -->
+    <div id="2e" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2e</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Phone · the library, then the form page with its card at the top</span>
+      </div>
+
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+
+        <!-- phone: the library -->
+        <div class="f-phone">
+          <header class="m-header m-header--compact">
+            <div class="m-header__inner">
+              <div class="m-header__lead">
+                <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Menu"><span class="material-symbols-outlined">menu</span></button>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+              </div>
+              <div class="m-header__actions"><button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="New form"><span class="material-symbols-outlined">post_add</span></button></div>
+            </div>
+          </header>
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-sm)">
+            <nav class="f-crumbs"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;color:var(--secondary)">folder_open</span><span style="color:var(--on-surface)">Home</span></nav>
+            <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Search every form"></span>
+            <label class="m-check"><input type="checkbox" checked="checked"><span>Hide closed</span></label>
+            <div class="m-card-list">
+              <div class="m-row m-row--interactive m-row--serif">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">folder</span>
+                <span class="m-row__main"><span class="m-row__title">Sign-ups</span><span class="m-row__sub">4 forms · 2 open</span></span>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+              <div class="m-row m-row--interactive m-row--serif">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">folder</span>
+                <span class="m-row__main"><span class="m-row__title">Ballots &amp; votes</span><span class="m-row__sub">2 forms · 1 open</span></span>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+              <div class="m-row m-row--interactive m-row--serif">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">folder</span>
+                <span class="m-row__main"><span class="m-row__title">Waivers &amp; consent</span><span class="m-row__sub">3 forms · 1 open</span></span>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+              <div class="m-row m-row--interactive m-row--serif">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+                <span class="m-row__main"><span class="m-row__title" style="white-space:normal">What do you want to eat at the Monday gathering?</span><span class="m-row__sub">Public · anonymous · 34 answers</span></span>
+                <span class="m-badge m-badge--success">Open</span>
+              </div>
+              <div class="m-row m-row--interactive m-row--serif m-row--last">
+                <span class="material-symbols-outlined" style="flex:0 0 auto;font-size:22px;color:var(--secondary)">assignment</span>
+                <span class="m-row__main"><span class="m-row__title" style="white-space:normal">Counselling intake</span><span class="m-row__sub">Public · names asked for · 2 answers</span></span>
+                <span class="m-badge m-badge--success">Open</span>
+              </div>
+            </div>
+            <p style="margin:0;font-size:12px;line-height:1.5;color:var(--outline)">Three closed forms are folded away.</p>
+          </div>
+        </div>
+
+        <!-- phone: the form page -->
+        <div class="f-phone">
+          <header class="m-header m-header--compact">
+            <div class="m-header__inner">
+              <div class="m-header__lead">
+                <a class="m-back" href="#2e"><span class="material-symbols-outlined">chevron_left</span></a>
+                <div class="m-header__titles"><h1 class="m-header__title m-header__title--serif" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Spring sign-up</h1></div>
+              </div>
+              <div class="m-header__actions"><button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="More"><span class="material-symbols-outlined">more_vert</span></button></div>
+            </div>
+          </header>
+          <div class="m-tabs" style="padding:0 var(--space-base);background:var(--surface-container-lowest)">
+            <button type="button" class="m-tabs__tab m-tabs__tab--current">Questions · 3</button>
+            <button type="button" class="m-tabs__tab">Responses · 0</button>
+          </div>
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-sm);background:var(--surface-container-lowest)">
+            <div class="m-card m-card--sm" style="display:flex;flex-direction:column;gap:var(--space-base);background:var(--surface-container-low)">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-sm)">
+                <span class="m-label m-label--sm">Who may answer</span>
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Open these settings"><span class="material-symbols-outlined">expand_more</span></button>
+              </div>
+              <p class="m-settled m-settled--sm">Members and above can answer, once each, and their names are recorded. Closes 21 Sep.</p>
+            </div>
+            <input type="text" class="m-input" value="Inductive Bible Study — Spring sign-up">
+            <button type="button" class="f-qrow">
+              <span class="f-qnum">1</span>
+              <span style="flex:1 1 auto;min-width:0"><span class="f-qtext" style="font-size:16px">Which evening suits you best?</span><span class="f-qmeta"><span>Multiple choice · 3 · Required</span></span></span>
+              <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline)">edit</span>
+            </button>
+            <button type="button" class="f-qrow">
+              <span class="f-qnum">2</span>
+              <span style="flex:1 1 auto;min-width:0"><span class="f-qtext" style="font-size:16px">Do you need a copy of the book?</span><span class="f-qmeta"><span>Multiple choice · 3 · Required</span></span></span>
+              <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline)">edit</span>
+            </button>
+            <button type="button" class="f-qrow">
+              <span class="f-qnum">3</span>
+              <span style="flex:1 1 auto;min-width:0"><span class="f-qtext" style="font-size:16px">Anything we should know?</span><span class="f-qmeta"><span>Paragraph · Optional</span></span></span>
+              <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline)">edit</span>
+            </button>
+            <button type="button" class="f-add" style="min-height:46px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add a question</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-base);padding:var(--space-base) var(--space-sm) var(--space-sm);background:var(--surface-container-lowest);border-top:1px solid var(--outline-variant)">
+            <button type="button" class="m-btn m-btn--secondary" style="flex:1 1 auto">Save</button>
+            <button type="button" class="m-btn m-btn--primary" style="flex:1 1 auto">Publish</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:22px;padding:40px;background:var(--background);font-family:var(--font-sans);color:var(--on-surface)">
+
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:22px;letter-spacing:.02em;color:var(--primary)">Forms — MS-360</span>
+    <span style="font-size:12.5px;color:var(--on-surface-variant)">Authoring <a href="#1a">1a</a> · Responses, anonymous <a href="#1b">1b</a> · Responses, named <a href="#1c">1c</a> · Published &amp; closed <a href="#1d">1d</a> · The three settings <a href="#1e">1e</a> · Phone <a href="#1f">1f</a> · Nothing yet <a href="#1g">1g</a></span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:48px">
+
+    <!-- ══════════════ 1a · DESKTOP · AUTHORING ══════════════ -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1a</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Desktop · a form being built · a dozen forms in the list</span>
+      </div>
+
+      <div class="f-frame" style="width:1320px">
+        <header class="m-header">
+          <div class="m-header__inner">
+            <div class="m-header__lead">
+              <a class="m-back" href="#1a"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+              <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth">
+              <span class="m-avatar m-avatar--sm">JH</span>
+              <span style="font-size:13.5px;color:var(--on-surface-variant);padding-right:4px">Jonathan Harris</span>
+              <button type="button" class="m-icon-btn m-icon-btn--ghost m-header__logout" title="Sign out"><span class="material-symbols-outlined">logout</span></button>
+            </div>
+          </div>
+        </header>
+
+        <div class="f-main">
+          <div class="m-split" style="--m-split-list:372px;grid-template-columns:372px minmax(0,1fr)">
+
+            <div class="m-split__list" style="display:flex;flex-direction:column;gap:var(--space-sm)">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-sm)">
+                <span class="m-label">Forms</span>
+                <span class="m-label m-label--sm" style="color:var(--outline)">12 forms · 3 closed</span>
+              </div>
+              <div style="display:flex;gap:var(--space-base)">
+                <input type="text" class="m-input" placeholder="New form, e.g. Church camp sign-up" style="flex:1 1 auto;min-width:0">
+                <button type="button" class="m-icon-btn m-icon-btn--primary" title="Create form" style="width:48px;height:48px;border-radius:var(--radius)"><span class="material-symbols-outlined">add</span></button>
+              </div>
+              <ul class="m-picklist" style="margin:0;padding:0;list-style:none">
+                <sc-for list="{{ forms }}" as="f" hint-placeholder-count="8">
+                  <li>
+                    <button type="button" class="m-picklist__item {{ f.cls }}" sc-camel-on-click="{{ noop }}">
+                      <span class="m-picklist__main">
+                        <span class="m-picklist__name">{{ f.name }}</span>
+                        <span class="m-picklist__line">{{ f.detail }}</span>
+                      </span>
+                      <span style="display:flex;align-items:center;gap:6px;flex:0 0 auto;padding-top:2px">
+                        <span class="m-badge {{ f.tone }}">{{ f.state }}</span>
+                      </span>
+                    </button>
+                  </li>
+                </sc-for>
+              </ul>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:var(--outline);text-wrap:pretty">Name a form here and it opens beside you. Nothing is answerable until you publish it.</p>
+            </div>
+
+            <div class="m-split__pane">
+              <div class="f-pane">
+
+                <div class="f-panehead">
+                  <div style="min-width:0">
+                    <span class="m-label m-label--sm">Editing form</span>
+                    <h2 class="f-panename">Inductive Bible Study — Spring sign-up (the book is $18)</h2>
+                    <div class="f-badgewrap">
+                      <span class="m-badge m-badge--secondary"><span class="material-symbols-outlined">groups</span>Members</span>
+                      <span class="m-badge">Names recorded</span>
+                      <span class="m-badge">One response each</span>
+                      <span class="m-badge m-badge--warning"><span class="material-symbols-outlined">event_busy</span>Closes 21 Sep 2026</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:var(--space-base);flex:0 0 auto">
+                    <button type="button" class="m-btn m-btn--danger-outline m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">delete</span><span class="m-btn__label">Delete</span></button>
+                    <button type="button" class="m-btn m-btn--secondary m-btn--sm">Preview</button>
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm">Save</button>
+                  </div>
+                </div>
+
+                <div class="m-tabs">
+                  <button type="button" class="m-tabs__tab m-tabs__tab--current">Questions<span class="m-tabs__dot"></span></button>
+                  <button type="button" class="m-tabs__tab">Responses · 0</button>
+                </div>
+
+                <div class="f-panebody">
+
+                  <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                    <label class="m-label" for="f-title">Title</label>
+                    <input id="f-title" type="text" class="m-input" value="Inductive Bible Study — Spring sign-up (the book is $18)">
+                    <span class="m-input-hint">Whoever opens the link reads this first. 54 of 90 characters.</span>
+                  </div>
+
+                  <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-sm)">
+                      <span class="m-label">Questions</span>
+                      <span class="m-label m-label--sm" style="color:var(--outline)">Three · one open</span>
+                    </div>
+
+                    <sc-if value="{{ q1shut }}" hint-placeholder-val="{{ true }}">
+                      <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ1 }}">
+                        <span class="f-qnum">1</span>
+                        <span style="flex:1 1 auto;min-width:0">
+                          <span class="f-qtext">Which evening suits you best?</span>
+                          <span class="f-qmeta"><span>Multiple choice</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>3 options</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span style="color:var(--secondary)">Required</span></span>
+                        </span>
+                        <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                      </button>
+                    </sc-if>
+                    <sc-if value="{{ q1open }}">
+                      <div class="f-qopen">
+                        <div class="f-qhead">
+                          <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                          <span class="m-label m-label--sm" style="flex:1 1 auto">Question 1</span>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate"><span class="material-symbols-outlined">content_copy</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                        </div>
+                        <input type="text" class="m-input" value="Which evening suits you best?">
+                        <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                          <span class="m-select-wrap" style="flex:0 0 240px">
+                            <sc-raw-select class="m-select">
+                              <optgroup label="Text"><option>Short answer</option><option>Paragraph</option></optgroup>
+                              <optgroup label="Choice"><option selected="selected">Multiple choice</option></optgroup>
+                            </sc-raw-select>
+                          </span>
+                          <label class="m-check"><input type="checkbox" checked="checked"><span>Required</span></label>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                          <span class="m-label m-label--sm">Options</span>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Tuesday, 7pm"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Thursday, 7pm"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Either suits me"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <button type="button" class="f-add" style="align-self:flex-start;min-height:40px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add an option</button>
+                        </div>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{ q2shut }}">
+                      <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ2 }}">
+                        <span class="f-qnum">2</span>
+                        <span style="flex:1 1 auto;min-width:0">
+                          <span class="f-qtext">Do you need a copy of the book?</span>
+                          <span class="f-qmeta"><span>Multiple choice</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>3 options</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span style="color:var(--secondary)">Required</span></span>
+                        </span>
+                        <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                      </button>
+                    </sc-if>
+                    <sc-if value="{{ q2open }}" hint-placeholder-val="{{ true }}">
+                      <div class="f-qopen">
+                        <div class="f-qhead">
+                          <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                          <span class="m-label m-label--sm" style="flex:1 1 auto">Question 2</span>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate"><span class="material-symbols-outlined">content_copy</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                        </div>
+                        <input type="text" class="m-input" value="Do you need a copy of the book?">
+                        <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                          <span class="m-select-wrap" style="flex:0 0 240px">
+                            <sc-raw-select class="m-select">
+                              <optgroup label="Text"><option>Short answer</option><option>Paragraph</option></optgroup>
+                              <optgroup label="Choice"><option selected="selected">Multiple choice</option></optgroup>
+                            </sc-raw-select>
+                          </span>
+                          <label class="m-check"><input type="checkbox" checked="checked"><span>Required</span></label>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                          <span class="m-label m-label--sm">Options</span>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="Yes please — put me down for one ($18)"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="I already have one"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <div class="f-opt"><span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">radio_button_unchecked</span><input type="text" class="m-input" value="I'd rather talk to someone about the cost"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                          <button type="button" class="f-add" style="align-self:flex-start;min-height:40px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add an option</button>
+                        </div>
+                        <p class="m-input-hint" style="margin:0">Taking the money is a Stripe payment question, which arrives later. For now the price is in the words.</p>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{ q3shut }}" hint-placeholder-val="{{ true }}">
+                      <button type="button" class="f-qrow" sc-camel-on-click="{{ openQ3 }}">
+                        <span class="f-qnum">3</span>
+                        <span style="flex:1 1 auto;min-width:0">
+                          <span class="f-qtext">Anything we should know?</span>
+                          <span class="f-qmeta"><span>Paragraph</span><span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span><span>Optional</span></span>
+                        </span>
+                        <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);flex:0 0 auto">edit</span>
+                      </button>
+                    </sc-if>
+                    <sc-if value="{{ q3open }}">
+                      <div class="f-qopen">
+                        <div class="f-qhead">
+                          <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);cursor:grab">drag_indicator</span>
+                          <span class="m-label m-label--sm" style="flex:1 1 auto">Question 3</span>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate"><span class="material-symbols-outlined">content_copy</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this question"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                          <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" sc-camel-on-click="{{ shutAll }}"><span class="material-symbols-outlined">expand_less</span></button>
+                        </div>
+                        <input type="text" class="m-input" value="Anything we should know?">
+                        <div style="display:flex;gap:var(--space-sm);align-items:flex-end;flex-wrap:wrap">
+                          <span class="m-select-wrap" style="flex:0 0 240px">
+                            <sc-raw-select class="m-select">
+                              <optgroup label="Text"><option>Short answer</option><option selected="selected">Paragraph</option></optgroup>
+                              <optgroup label="Choice"><option>Multiple choice</option></optgroup>
+                            </sc-raw-select>
+                          </span>
+                          <label class="m-check"><input type="checkbox"><span>Required</span></label>
+                        </div>
+                        <p class="m-settled m-settled--sm">A box that grows as they type. Nothing else to set.</p>
+                      </div>
+                    </sc-if>
+
+                    <button type="button" class="f-add" style="align-self:flex-start"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add a question</button>
+                  </div>
+
+                  <hr class="m-divider">
+
+                  <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+                    <span class="m-label">Who may answer</span>
+
+                    <div class="f-set">
+                      <div>
+                        <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+                        <div class="m-seg">
+                          <button type="button" class="m-seg__opt" aria-pressed="false" sc-camel-on-click="{{ setPublic }}">Public</button>
+                          <button type="button" class="m-seg__opt" aria-pressed="true" sc-camel-on-click="{{ setMember }}">Members</button>
+                        </div>
+                        <p class="m-input-hint">Editors and elders arrive with the next two rungs.</p>
+                      </div>
+                      <hr class="m-divider">
+                      <p class="m-settled m-settled--sm">{{ rungSentence }}</p>
+                      <hr class="m-divider">
+                      <div>
+                        <label class="m-check"><input type="checkbox" checked="{{ attribution }}" disabled="{{ attrLocked }}" sc-camel-on-change="{{ toggleAttribution }}"><span>Record who answered</span></label>
+                        <p class="f-why">{{ attrWhy }}</p>
+                      </div>
+                      <div>
+                        <label class="m-check"><input type="checkbox" checked="{{ oneEach }}" disabled="{{ oneEachLocked }}" sc-camel-on-change="{{ toggleOneEach }}"><span>One response each</span></label>
+                        <p class="f-why">{{ oneEachWhy }}</p>
+                      </div>
+                      <sc-if value="{{ ballot }}">
+                        <div class="m-notice m-notice--info">
+                          <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
+                          <div class="m-notice__body">
+                            <p class="m-notice__title" style="margin:0">This is a secret ballot.</p>
+                            <p class="m-notice__text" style="margin:0">We record that you answered, we do not record what you said. The form says exactly that above its first question.</p>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+
+                    <div class="f-set">
+                      <div class="f-opthead">
+                        <div>
+                          <div style="font-size:15px">Closing date</div>
+                          <p class="m-input-hint" style="margin-top:4px">After this date the link still opens and says the form is closed.</p>
+                        </div>
+                        <input type="date" class="m-input" value="2026-09-21" style="width:200px">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="m-actionbar">
+                  <div class="m-actionbar__said">
+                    <span class="m-actionbar__count">Not published — nobody can answer this yet.</span>
+                    <span class="m-actionbar__note">Publishing makes a link. Members who open it sign in first; the questions stay editable afterwards.</span>
+                  </div>
+                  <div class="m-actionbar__acts">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm">Preview as a member</button>
+                    <button type="button" class="m-btn m-btn--primary"><span class="material-symbols-outlined" style="font-size:19px">publish</span><span class="m-btn__label">Publish</span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1b · RESPONSES · ANONYMOUS ══════════════ -->
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1b</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Desktop · Responses · anonymous, 34 answers · no names anywhere</span>
+      </div>
+
+      <div class="f-frame" style="width:900px">
+        <div class="f-pane" style="border:0;border-radius:0">
+          <div class="f-panehead">
+            <div style="min-width:0">
+              <span class="m-label m-label--sm">Open form</span>
+              <h2 class="f-panename">What do you want to eat at the Monday gathering?</h2>
+              <div class="f-badgewrap">
+                <span class="m-badge m-badge--tertiary"><span class="material-symbols-outlined">public</span>Public</span>
+                <span class="m-badge">Anonymous</span>
+                <span class="m-badge m-badge--success">Open · 34 answers</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--space-base);flex:0 0 auto">
+              <button type="button" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">download</span><span class="m-btn__label">Export CSV</span></button>
+              <button type="button" class="m-btn m-btn--quiet m-btn--sm">Close form</button>
+            </div>
+          </div>
+
+          <div style="padding:0 var(--space-md);border-bottom:1px solid var(--outline-variant)">
+            <div class="f-linkrow" style="margin:var(--space-sm) 0;display:inline-flex">
+              <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span>
+              <code>mosaicchurch.app/f/monday-food</code>
+              <button type="button" class="m-btn m-btn--quiet m-btn--sm" style="height:32px"><span class="material-symbols-outlined" style="font-size:17px">content_copy</span><span class="m-btn__label">Copy</span></button>
+            </div>
+          </div>
+
+          <div class="m-tabs" style="padding:0 var(--space-md)">
+            <button type="button" class="m-tabs__tab">Questions · 2</button>
+            <button type="button" class="m-tabs__tab m-tabs__tab--current">Responses · 34</button>
+          </div>
+
+          <div class="f-panebody">
+            <div class="m-notice">
+              <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
+              <div class="m-notice__body">
+                <p class="m-notice__text" style="margin:0">This form records no names, so there is nobody to show. Thirty-four answers, and no way — here or in the export — to say whose is whose.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-sm)">
+                <span class="m-label">1 · What should we eat?</span>
+                <span class="m-label m-label--sm" style="color:var(--outline)">34 of 34 answered</span>
+              </div>
+              <div class="f-tally">
+                <div class="f-bar"><span class="f-barname">Chili</span><span class="f-bartrack"><span class="f-barfill" style="width:100%;display:block"></span></span><span class="f-barnum">14 · 41%</span></div>
+                <div class="f-bar"><span class="f-barname">Soup and bread</span><span class="f-bartrack"><span class="f-barfill" style="width:64%;display:block"></span></span><span class="f-barnum">9 · 26%</span></div>
+                <div class="f-bar"><span class="f-barname">Tacos</span><span class="f-bartrack"><span class="f-barfill" style="width:50%;display:block"></span></span><span class="f-barnum">7 · 21%</span></div>
+                <div class="f-bar"><span class="f-barname">Sandwiches</span><span class="f-bartrack"><span class="f-barfill" style="width:29%;display:block"></span></span><span class="f-barnum">4 · 12%</span></div>
+              </div>
+            </div>
+
+            <hr class="m-divider">
+
+            <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-sm)">
+                <span class="m-label">2 · Anything else we should know?</span>
+                <span class="m-label m-label--sm" style="color:var(--outline)">3 of 34 answered</span>
+              </div>
+              <span class="m-search" style="max-width:320px"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Search these answers"></span>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-sm);margin-top:4px">
+                <div class="f-quote"><p>I can bring a slow cooker if that helps</p><span>Answer 6 · 31 Aug</span></div>
+                <div class="f-quote"><p>nut allergy in our family — two of us</p><span>Answer 11 · 31 Aug</span></div>
+                <div class="f-quote"><p>we'll be late, around 6:30</p><span>Answer 28 · 1 Sep</span></div>
+              </div>
+              <p style="margin:2px 0 0;font-size:12.5px;color:var(--on-surface-variant)">Answers are numbered in the order they arrived, which is the only handle an anonymous form has. Forty of these keep two columns and their own search rather than becoming one grey column.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1c · RESPONSES · NAMED ══════════════ -->
+    <div id="1c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1c</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Desktop · Responses · named, 2 answers</span>
+      </div>
+
+      <div class="f-frame" style="width:620px">
+        <div class="f-pane" style="border:0;border-radius:0">
+          <div class="f-panehead">
+            <div style="min-width:0">
+              <span class="m-label m-label--sm">Open form</span>
+              <h2 class="f-panename">Counselling intake</h2>
+              <div class="f-badgewrap">
+                <span class="m-badge m-badge--tertiary"><span class="material-symbols-outlined">public</span>Public</span>
+                <span class="m-badge m-badge--warning">Names asked for</span>
+                <span class="m-badge m-badge--success">Open · 2 answers</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="m-tabs" style="padding:0 var(--space-md)">
+            <button type="button" class="m-tabs__tab">Questions · 5</button>
+            <button type="button" class="m-tabs__tab m-tabs__tab--current">Responses · 2</button>
+          </div>
+
+          <div class="f-panebody">
+            <div class="m-notice m-notice--gold">
+              <span class="material-symbols-outlined m-notice__icon">lock</span>
+              <div class="m-notice__body">
+                <p class="m-notice__title" style="margin:0">A public form has no account to attach.</p>
+                <p class="m-notice__text" style="margin:0">These names were typed in by whoever answered, not read from a Directory record — so they are words, not people, and nothing here links to a profile.</p>
+              </div>
+            </div>
+
+            <div class="m-card-list">
+              <div class="m-row m-row--interactive">
+                <span class="m-avatar m-avatar--sm">?</span>
+                <span class="m-row__main">
+                  <span class="m-row__title" style="font-family:var(--font-serif);font-size:17px;font-weight:600">Rebecca Lyle</span>
+                  <span class="m-row__sub">Answered 28 Aug · all five questions</span>
+                </span>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+              <div class="m-row m-row--interactive m-row--last">
+                <span class="m-avatar m-avatar--sm">?</span>
+                <span class="m-row__main">
+                  <span class="m-row__title" style="font-family:var(--font-serif);font-size:17px;font-weight:600">Daniel Okoye</span>
+                  <span class="m-row__sub">Answered 1 Sep · four of five questions</span>
+                </span>
+                <span class="m-row__chevron"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+              </div>
+            </div>
+
+            <p style="margin:0;font-size:12.5px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty">Two answers is a list of people, not a chart. A named form leads with who answered and opens one answer at a time; the per-question tally is a tab away and only earns its place once there are enough answers to have a shape.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1d · PUBLISHED, AND WHERE THE LINK LIVES ══════════════ -->
+    <div id="1d" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1d</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">The publish moment · then Thursday · then closed</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:20px;width:760px">
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span class="m-label m-label--sm">The moment itself — the action bar becomes the link</span>
+          <div class="f-frame" style="padding:0">
+            <div class="m-actionbar" style="position:static;background:var(--surface-container-lowest)">
+              <div class="m-actionbar__said">
+                <span class="m-actionbar__count" style="display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:19px;color:var(--success)">check_circle</span>Published. The link works now.</span>
+                <span class="m-actionbar__note">Members open it and sign in first. You can keep editing the questions; answers already given stay as they were given.</span>
+              </div>
+              <div class="m-actionbar__acts">
+                <div class="f-linkrow">
+                  <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span>
+                  <code>mosaicchurch.app/f/spring-ibs</code>
+                </div>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">content_copy</span><span class="m-btn__label">Copy link</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span class="m-label m-label--sm">And on Thursday — the link lives under the title, for good</span>
+          <div class="f-frame">
+            <div class="f-panehead" style="border-bottom:0">
+              <div style="min-width:0">
+                <span class="m-label m-label--sm">Open form</span>
+                <h2 class="f-panename">Inductive Bible Study — Spring sign-up (the book is $18)</h2>
+                <div class="f-badgewrap">
+                  <span class="m-badge m-badge--secondary"><span class="material-symbols-outlined">groups</span>Members</span>
+                  <span class="m-badge">Names recorded</span>
+                  <span class="m-badge">One response each</span>
+                  <span class="m-badge m-badge--warning">Closes 21 Sep</span>
+                </div>
+                <div class="f-badgewrap" style="margin-top:12px">
+                  <div class="f-linkrow">
+                    <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span>
+                    <code>mosaicchurch.app/f/spring-ibs</code>
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Copy the link"><span class="material-symbols-outlined">content_copy</span></button>
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Open the form as an answerer sees it"><span class="material-symbols-outlined">open_in_new</span></button>
+                  </div>
+                  <span style="font-size:12px;color:var(--outline)">Published 2 Sep · 11 answers</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--space-base);flex:0 0 auto">
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm">Close form</button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span class="m-label m-label--sm">Closed — pressed closed, or the date passed. Both read the same way.</span>
+          <div class="f-frame">
+            <div class="f-panehead" style="border-bottom:0">
+              <div style="min-width:0">
+                <span class="m-label m-label--sm">Closed form</span>
+                <h2 class="f-panename" style="color:var(--on-surface-variant)">Volunteer waiver — Fall work day</h2>
+                <div class="f-badgewrap">
+                  <span class="m-badge m-badge--tertiary"><span class="material-symbols-outlined">public</span>Public</span>
+                  <span class="m-badge m-badge--warning">Names asked for</span>
+                  <span class="m-badge m-badge--neutral"><span class="material-symbols-outlined">lock</span>Closed 30 Aug</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--space-base);flex:0 0 auto">
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm">Reopen</button>
+              </div>
+            </div>
+            <div style="padding:0 var(--space-md) var(--space-md)">
+              <div class="m-notice">
+                <span class="material-symbols-outlined m-notice__icon">event_busy</span>
+                <div class="m-notice__body">
+                  <p class="m-notice__title" style="margin:0">Closed on 30 August, because the closing date passed.</p>
+                  <p class="m-notice__text" style="margin:0">The link still works. Anyone who opens it is told the form is closed rather than shown a dead page — so the text you sent round in July does not have to be corrected.</p>
+                </div>
+                <div class="m-notice__acts">
+                  <div class="f-linkrow"><span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span><code>mosaicchurch.app/f/fall-waiver</code><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Copy the link"><span class="material-symbols-outlined">content_copy</span></button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1e · THE THREE SETTINGS + TYPE PICKER + FAILED SAVE ══════════════ -->
+    <div id="1e" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1e</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Every state that has to explain itself</span>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:440px">
+          <span class="m-label m-label--sm">Public — two of the three are decided for you</span>
+          <div class="f-set">
+            <div>
+              <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+              <div class="m-seg"><button type="button" class="m-seg__opt" aria-pressed="true">Public</button><button type="button" class="m-seg__opt" aria-pressed="false">Members</button></div>
+            </div>
+            <p class="m-settled m-settled--sm">Anyone with the link can answer, without an account.</p>
+            <div>
+              <label class="m-check"><input type="checkbox" disabled="disabled"><span>Record who answered</span></label>
+              <p class="f-why">Off, and not yours to change: a public form has no account to attach a name to. Move the rung to Members to record who answered.</p>
+            </div>
+            <div>
+              <label class="m-check"><input type="checkbox" disabled="disabled"><span>One response each</span></label>
+              <p class="f-why">Off, and not yours to change: a form anyone can open has no way to tell one person from another.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:440px">
+          <span class="m-label m-label--sm">Members, named — a sign-up sheet</span>
+          <div class="f-set">
+            <div>
+              <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+              <div class="m-seg"><button type="button" class="m-seg__opt" aria-pressed="false">Public</button><button type="button" class="m-seg__opt" aria-pressed="true">Members</button></div>
+            </div>
+            <p class="m-settled m-settled--sm">Members and above can answer. They sign in on the way through.</p>
+            <div>
+              <label class="m-check"><input type="checkbox" checked="checked"><span>Record who answered</span></label>
+              <p class="f-why">Each answer carries the Person who gave it, so you can see who is coming and who has not replied.</p>
+            </div>
+            <div>
+              <label class="m-check"><input type="checkbox" checked="checked"><span>One response each</span></label>
+              <p class="f-why">A second visit opens their own answer to change rather than a blank form.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:440px">
+          <span class="m-label m-label--sm">Members, anonymous, one each — the secret ballot</span>
+          <div class="f-set">
+            <div>
+              <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
+              <div class="m-seg"><button type="button" class="m-seg__opt" aria-pressed="false">Public</button><button type="button" class="m-seg__opt" aria-pressed="true">Members</button></div>
+            </div>
+            <p class="m-settled m-settled--sm">Members and above can answer. They sign in on the way through.</p>
+            <div>
+              <label class="m-check"><input type="checkbox"><span>Record who answered</span></label>
+              <p class="f-why">Off. Nothing on the answer says who gave it.</p>
+            </div>
+            <div>
+              <label class="m-check"><input type="checkbox" checked="checked"><span>One response each</span></label>
+              <p class="f-why">On. The church keeps a list of who has voted, kept apart from the answers themselves.</p>
+            </div>
+            <div class="m-notice m-notice--info">
+              <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
+              <div class="m-notice__body">
+                <p class="m-notice__title" style="margin:0">This is a secret ballot.</p>
+                <p class="m-notice__text" style="margin:0">We record that you answered, we do not record what you said. Whoever opens the form reads that sentence above the first question, in these words.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:440px">
+          <span class="m-label m-label--sm">The type picker, built for thirteen</span>
+          <div class="f-set">
+            <span class="m-label m-label--sm">Question type</span>
+            <span class="m-select-wrap">
+              <sc-raw-select class="m-select" size="12" style="height:auto;padding:8px 12px">
+                <optgroup label="Text"><option>Short answer</option><option selected="selected">Paragraph</option></optgroup>
+                <optgroup label="Choice"><option>Multiple choice</option><option disabled="disabled">Select all that apply — later</option><option disabled="disabled">Dropdown — later</option></optgroup>
+                <optgroup label="Number"><option disabled="disabled">Number — later</option><option disabled="disabled">Linear scale — later</option></optgroup>
+                <optgroup label="When"><option disabled="disabled">Date — later</option><option disabled="disabled">Time — later</option></optgroup>
+                <optgroup label="Attach"><option disabled="disabled">Image — later</option><option disabled="disabled">File submission — later</option></optgroup>
+                <optgroup label="From the app"><option disabled="disabled">Directory Person picker — later</option><option disabled="disabled">Stripe payment — later</option></optgroup>
+              </sc-raw-select>
+            </span>
+            <p class="m-input-hint">Three work today. The other ten are named and grouped now, because a picker that grows from three loose buttons to thirteen is a redesign, and a grouped list is not.</p>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:660px">
+          <span class="m-label m-label--sm">A save that failed</span>
+          <div class="f-frame">
+            <header class="m-header" style="--m-header-h:56px">
+              <div class="m-header__inner">
+                <div class="m-header__lead">
+                  <a class="m-back" href="#1e"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                  <div class="m-header__titles"><h1 class="m-header__title" style="--m-header-title:24px">Forms</h1></div>
+                </div>
+                <span class="m-badge m-badge--warning m-header__chip"><span class="m-chip-dot m-chip-dot--pulse"></span>Unsaved</span>
+                <div class="m-header__rule"></div>
+                <div class="m-header__auth"><span class="m-avatar m-avatar--sm">JH</span></div>
+              </div>
+            </header>
+            <div style="padding:var(--space-md)">
+              <div class="m-notice m-notice--error">
+                <span class="material-symbols-outlined m-notice__icon">error</span>
+                <div class="m-notice__body">
+                  <p class="m-notice__title" style="margin:0">This form did not save.</p>
+                  <p class="m-notice__text" style="margin:0">Your three questions are still on the screen and nothing has been lost. The published link is unchanged — answerers are still seeing the last version that saved.</p>
+                </div>
+                <div class="m-notice__acts">
+                  <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1f · PHONE ══════════════ -->
+    <div id="1f" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1f</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Phone · the same page at ?shell=mobile · list, then editor, then responses</span>
+      </div>
+
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+
+        <!-- phone: the list -->
+        <div class="f-phone">
+          <header class="m-header m-header--compact">
+            <div class="m-header__inner">
+              <div class="m-header__lead">
+                <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Menu"><span class="material-symbols-outlined">menu</span></button>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+              </div>
+              <div class="m-header__actions"><button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Account"><span class="material-symbols-outlined">account_circle</span></button></div>
+            </div>
+          </header>
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-sm)">
+            <div style="display:flex;gap:var(--space-base)">
+              <input type="text" class="m-input" placeholder="New form" style="flex:1 1 auto;min-width:0">
+              <button type="button" class="m-icon-btn m-icon-btn--primary" title="Create form" style="width:48px;height:48px;border-radius:var(--radius)"><span class="material-symbols-outlined">add</span></button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ phoneForms }}" as="f" hint-placeholder-count="5">
+                <button type="button" class="m-picklist__item" style="min-height:64px;border:1px solid var(--outline-variant);border-left-width:3px;border-radius:var(--radius);background:var(--surface-container-lowest)">
+                  <span class="m-picklist__main">
+                    <span class="m-picklist__name">{{ f.name }}</span>
+                    <span class="m-picklist__line">{{ f.detail }}</span>
+                  </span>
+                  <span style="flex:0 0 auto;padding-top:2px"><span class="m-badge {{ f.tone }}">{{ f.state }}</span></span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- phone: the editor -->
+        <div class="f-phone">
+          <header class="m-header m-header--compact">
+            <div class="m-header__inner">
+              <div class="m-header__lead">
+                <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Menu"><span class="material-symbols-outlined">menu</span></button>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+              </div>
+            </div>
+          </header>
+          <div class="f-editorbar">
+            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Back to the forms list"><span class="material-symbols-outlined">chevron_left</span></button>
+            <span style="flex:1 1 auto;min-width:0">
+              <span style="display:block;font-family:var(--font-serif);font-size:17px;font-weight:600;line-height:1.25;color:var(--on-surface);text-wrap:pretty">Inductive Bible Study — Spring sign-up (the book is $18)</span>
+              <span style="display:block;margin-top:2px;font-size:var(--label-xs-size);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Members · 3 questions · not published</span>
+            </span>
+          </div>
+          <div class="m-tabs" style="padding:0 var(--space-base);background:var(--surface-container-lowest)">
+            <button type="button" class="m-tabs__tab m-tabs__tab--current">Questions<span class="m-tabs__dot"></span></button>
+            <button type="button" class="m-tabs__tab">Responses · 0</button>
+          </div>
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-sm);background:var(--surface-container-lowest)">
+            <button type="button" class="f-qrow">
+              <span class="f-qnum">1</span>
+              <span style="flex:1 1 auto;min-width:0">
+                <span class="f-qtext" style="font-size:16px">Which evening suits you best?</span>
+                <span class="f-qmeta"><span>Multiple choice · 3 · Required</span></span>
+              </span>
+              <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline)">edit</span>
+            </button>
+            <div class="f-qopen">
+              <div class="f-qhead">
+                <span class="m-label m-label--sm" style="flex:1 1 auto">Question 2</span>
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done"><span class="material-symbols-outlined">expand_less</span></button>
+              </div>
+              <input type="text" class="m-input" value="Do you need a copy of the book?">
+              <span class="m-select-wrap"><sc-raw-select class="m-select"><optgroup label="Text"><option>Short answer</option><option>Paragraph</option></optgroup><optgroup label="Choice"><option selected="selected">Multiple choice</option></optgroup></sc-raw-select></span>
+              <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                <div class="f-opt"><input type="text" class="m-input" value="Yes please ($18)"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                <div class="f-opt"><input type="text" class="m-input" value="I already have one"><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove"><span class="material-symbols-outlined">close</span></button></div>
+                <button type="button" class="f-add" style="min-height:44px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add an option</button>
+              </div>
+              <label class="m-check"><input type="checkbox" checked="checked"><span>Required</span></label>
+            </div>
+            <button type="button" class="f-qrow">
+              <span class="f-qnum">3</span>
+              <span style="flex:1 1 auto;min-width:0">
+                <span class="f-qtext" style="font-size:16px">Anything we should know?</span>
+                <span class="f-qmeta"><span>Paragraph · Optional</span></span>
+              </span>
+              <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline)">edit</span>
+            </button>
+            <button type="button" class="f-add" style="min-height:46px"><span class="material-symbols-outlined" style="font-size:18px">add</span>Add a question</button>
+            <button type="button" class="m-btn m-btn--secondary" style="width:100%"><span class="material-symbols-outlined" style="font-size:19px">tune</span><span class="m-btn__label">Who may answer</span></button>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-base);padding:var(--space-base) var(--space-sm) var(--space-sm);background:var(--surface-container-lowest);border-top:1px solid var(--outline-variant)">
+            <button type="button" class="m-btn m-btn--secondary" style="flex:1 1 auto">Save</button>
+            <button type="button" class="m-btn m-btn--primary" style="flex:1 1 auto">Publish</button>
+          </div>
+        </div>
+
+        <!-- phone: responses -->
+        <div class="f-phone">
+          <header class="m-header m-header--compact">
+            <div class="m-header__inner">
+              <div class="m-header__lead">
+                <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Menu"><span class="material-symbols-outlined">menu</span></button>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+              </div>
+            </div>
+          </header>
+          <div class="f-editorbar">
+            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost" title="Back to the forms list"><span class="material-symbols-outlined">chevron_left</span></button>
+            <span style="flex:1 1 auto;min-width:0">
+              <span style="display:block;font-family:var(--font-serif);font-size:17px;font-weight:600;line-height:1.25;color:var(--on-surface);text-wrap:pretty">What do you want to eat at the Monday gathering?</span>
+              <span style="display:block;margin-top:2px;font-size:var(--label-xs-size);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Public · anonymous · open</span>
+            </span>
+          </div>
+          <div class="m-tabs" style="padding:0 var(--space-base);background:var(--surface-container-lowest)">
+            <button type="button" class="m-tabs__tab">Questions · 2</button>
+            <button type="button" class="m-tabs__tab m-tabs__tab--current">Responses · 34</button>
+          </div>
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-sm);display:flex;flex-direction:column;gap:var(--space-md);background:var(--surface-container-lowest)">
+            <div class="f-linkrow">
+              <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span>
+              <code style="flex:1 1 auto;overflow:hidden;text-overflow:ellipsis">mosaicchurch.app/f/monday-food</code>
+              <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Copy the link"><span class="material-symbols-outlined">content_copy</span></button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+              <span class="m-label m-label--sm">1 · What should we eat? · 34 answers</span>
+              <div class="f-tally">
+                <div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;font-size:15px;font-family:var(--font-serif)"><span>Chili</span><span style="font-family:var(--font-sans);font-size:13px;color:var(--on-surface-variant)">14</span></div><span class="f-bartrack" style="height:12px;display:block"><span class="f-barfill" style="width:100%;display:block"></span></span></div>
+                <div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;font-size:15px;font-family:var(--font-serif)"><span>Soup and bread</span><span style="font-family:var(--font-sans);font-size:13px;color:var(--on-surface-variant)">9</span></div><span class="f-bartrack" style="height:12px;display:block"><span class="f-barfill" style="width:64%;display:block"></span></span></div>
+                <div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;font-size:15px;font-family:var(--font-serif)"><span>Tacos</span><span style="font-family:var(--font-sans);font-size:13px;color:var(--on-surface-variant)">7</span></div><span class="f-bartrack" style="height:12px;display:block"><span class="f-barfill" style="width:50%;display:block"></span></span></div>
+                <div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;font-size:15px;font-family:var(--font-serif)"><span>Sandwiches</span><span style="font-family:var(--font-sans);font-size:13px;color:var(--on-surface-variant)">4</span></div><span class="f-bartrack" style="height:12px;display:block"><span class="f-barfill" style="width:29%;display:block"></span></span></div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+              <span class="m-label m-label--sm">2 · Anything else? · 3 answers</span>
+              <div class="f-quote"><p style="font-size:15px">I can bring a slow cooker if that helps</p><span>Answer 6</span></div>
+              <div class="f-quote"><p style="font-size:15px">nut allergy in our family — two of us</p><span>Answer 11</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1g · NOTHING YET ══════════════ -->
+    <div id="1g" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1g</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Nothing yet · first run, one form, no questions, no responses</span>
+      </div>
+
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:640px">
+          <span class="m-label m-label--sm">First run — no forms at all</span>
+          <div class="f-frame">
+            <header class="m-header" style="--m-header-h:56px">
+              <div class="m-header__inner">
+                <div class="m-header__lead">
+                  <a class="m-back" href="#1g"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                  <div class="m-header__titles"><h1 class="m-header__title" style="--m-header-title:24px">Forms</h1></div>
+                </div>
+                <div class="m-header__rule"></div>
+                <div class="m-header__auth"><span class="m-avatar m-avatar--sm">JH</span></div>
+              </div>
+            </header>
+            <div style="padding:var(--space-md);display:flex;flex-direction:column;gap:var(--space-sm);max-width:520px">
+              <span class="m-label">Forms</span>
+              <div style="display:flex;gap:var(--space-base)">
+                <input type="text" class="m-input" placeholder="New form, e.g. Church camp sign-up" style="flex:1 1 auto;min-width:0">
+                <button type="button" class="m-icon-btn m-icon-btn--primary" title="Create form" style="width:48px;height:48px;border-radius:var(--radius)"><span class="material-symbols-outlined">add</span></button>
+              </div>
+              <div class="m-empty">
+                <span class="material-symbols-outlined">assignment</span>
+                <p>No forms yet. Name one above — a sign-up, a poll, a waiver — and it opens here with its first question ready.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:560px">
+          <span class="m-label m-label--sm">A form with no questions yet</span>
+          <div class="f-frame">
+            <div class="f-panehead">
+              <div style="min-width:0">
+                <span class="m-label m-label--sm">Editing form</span>
+                <h2 class="f-panename">Church camp — dietary and medical</h2>
+                <div class="f-badgewrap"><span class="m-badge m-badge--neutral">Draft · never published</span></div>
+              </div>
+            </div>
+            <div class="f-panebody">
+              <div style="display:flex;flex-direction:column;gap:var(--space-base)">
+                <label class="m-label" for="f-title2">Title</label>
+                <input id="f-title2" type="text" class="m-input" value="Church camp — dietary and medical">
+              </div>
+              <div class="m-empty">
+                <span class="material-symbols-outlined">help_center</span>
+                <p>No questions yet. The first one is the whole form — start with the thing you actually need to know.</p>
+              </div>
+              <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+                <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">add</span><span class="m-btn__label">Short answer</span></button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">add</span><span class="m-btn__label">Paragraph</span></button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">add</span><span class="m-btn__label">Multiple choice</span></button>
+              </div>
+            </div>
+            <div class="m-actionbar" style="position:static">
+              <div class="m-actionbar__said">
+                <span class="m-actionbar__count">Nothing to publish yet.</span>
+                <span class="m-actionbar__note">A form needs one question before it can have a link.</span>
+              </div>
+              <div class="m-actionbar__acts"><button type="button" class="m-btn m-btn--primary" disabled="disabled"><span class="m-btn__label">Publish</span></button></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;width:560px">
+          <span class="m-label m-label--sm">Published, and nobody has answered</span>
+          <div class="f-frame">
+            <div class="m-tabs" style="padding:0 var(--space-md)">
+              <button type="button" class="m-tabs__tab">Questions · 3</button>
+              <button type="button" class="m-tabs__tab m-tabs__tab--current">Responses · 0</button>
+            </div>
+            <div class="f-panebody">
+              <div class="m-empty">
+                <span class="material-symbols-outlined">hourglass_empty</span>
+                <p>No answers yet. Published 2 Sep — the link has been live for four hours.</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--space-sm);flex-wrap:wrap">
+                <div class="f-linkrow"><span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">link</span><code>mosaicchurch.app/f/spring-ibs</code><button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Copy the link"><span class="material-symbols-outlined">content_copy</span></button></div>
+                <span style="font-size:12.5px;color:var(--on-surface-variant)">Send it round and it fills up here.</span>
+              </div>
+              <p style="margin:0;font-size:12.5px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty">The Responses tab is never absent and never dead. Before publishing it says the same thing in the same place — that there is nothing yet, and why — because a tab bar that changes shape under you is worse than a tab that has nothing to show.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;openQuestion&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:3,&quot;section&quot;:&quot;Authoring&quot;,&quot;label&quot;:&quot;Which question is open in 1a&quot;},&quot;rung&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;member&quot;,&quot;options&quot;:[&quot;public&quot;,&quot;member&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Who may answer&quot;},&quot;attribution&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Who may answer&quot;},&quot;oneEach&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Who may answer&quot;}}">
+class Component extends DCLogic {
+  state = { open: 2, rung: 'member', attribution: true, oneEach: true, hideClosed: true };
+
+  componentDidMount() {
+    const p = this.props;
+    this.setState({
+      open: p.openQuestion === undefined ? 2 : p.openQuestion,
+      rung: p.rung || 'member',
+      attribution: p.attribution === undefined ? true : p.attribution,
+      oneEach: p.oneEach === undefined ? true : p.oneEach,
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isPublic = s.rung === 'public';
+    const attribution = isPublic ? false : s.attribution;
+    const oneEach = isPublic ? false : s.oneEach;
+
+    const forms = [
+      { name: 'What do you want to eat at the Monday gathering?', detail: 'Public · anonymous · 34 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Inductive Bible Study — Spring sign-up (the book is $18)', detail: 'Members · named · one each · closes 21 Sep', state: 'Draft', tone: 'm-badge--neutral', cls: 'm-picklist__item--current' },
+      { name: 'Members\u2019 meeting — the building lease', detail: 'Members · secret ballot · 88 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Counselling intake', detail: 'Public · names asked for · 2 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Church camp — dietary and medical', detail: 'Members · named · one each · 61 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Elder interview', detail: 'Filled in as a document · not published', state: 'Document', tone: 'm-badge--primary' },
+      { name: 'Serving interest — where could you help?', detail: 'Members · named · 23 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Volunteer waiver — Fall work day', detail: 'Public · names asked for · 17 answers', state: 'Closed 30 Aug', tone: 'm-badge--neutral' },
+      { name: 'Carols by candlelight — how many invite cards?', detail: 'Public · anonymous · 140 answers', state: 'Closed 12 Dec', tone: 'm-badge--neutral' },
+      { name: 'Nursery volunteer — background check consent', detail: 'Members · named · one each · 12 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Prayer requests for the Tuesday meeting', detail: 'Members · named · 9 answers', state: 'Open', tone: 'm-badge--success' },
+      { name: 'Men\u2019s breakfast — March', detail: 'Members · named · one each · 31 answers', state: 'Closed 8 Mar', tone: 'm-badge--neutral' },
+    ].map(f => ({ ...f, cls: f.cls || '' }));
+
+    const rungSentence = isPublic
+      ? 'Anyone with the link can answer, without an account.'
+      : 'Members and above can answer. They sign in on the way through.';
+
+    const attrWhy = isPublic
+      ? 'Off, and not yours to change: a public form has no account to attach a name to. Move the rung to Members to record who answered.'
+      : (attribution
+        ? 'Each answer carries the Person who gave it, so you can see who is coming and who has not replied.'
+        : 'Off. Nothing on the answer says who gave it.');
+
+    const oneEachWhy = isPublic
+      ? 'Off, and not yours to change: a form anyone can open has no way to tell one person from another.'
+      : (oneEach
+        ? 'A second visit opens their own answer to change rather than a blank form.'
+        : 'Somebody can answer as many times as they like — right for a poll you want the room to keep voting in.');
+
+    // ── The library. Folders first, then forms; closed ones fold away. ──
+    const folders = [
+      { icon: 'folder', name: 'Sign-ups', sub: '4 forms · 2 open', kind: 'folder' },
+      { icon: 'folder', name: 'Ballots & votes', sub: '2 forms · 1 open', kind: 'folder' },
+      { icon: 'folder', name: 'Waivers & consent', sub: '3 forms · 1 open', kind: 'folder' },
+    ];
+    const loose = [
+      { icon: 'assignment', name: 'What do you want to eat at the Monday gathering?', sub: 'Public · anonymous · 34 answers · published 28 Aug', state: 'Open', tone: 'm-badge--success' },
+      { icon: 'assignment', name: 'Inductive Bible Study — Spring sign-up (the book is $18)', sub: 'Members · named · one each · never published', state: 'Draft', tone: 'm-badge--neutral' },
+      { icon: 'assignment', name: 'Counselling intake', sub: 'Public · names asked for · 2 answers', state: 'Open', tone: 'm-badge--success' },
+      { icon: 'description', name: 'Elder interview', sub: 'Filled in as a document · not published', state: 'Document', tone: 'm-badge--primary' },
+      { icon: 'assignment', name: 'Prayer requests for the Tuesday meeting', sub: 'Members · named · 9 answers', state: 'Open', tone: 'm-badge--success' },
+    ];
+    const closed = [
+      { icon: 'assignment', name: 'Volunteer waiver — Fall work day', sub: 'Public · names asked for · 17 answers', state: 'Closed 30 Aug', tone: 'm-badge--neutral', dim: true },
+      { icon: 'assignment', name: 'Carols by candlelight — how many invite cards?', sub: 'Public · anonymous · 140 answers', state: 'Closed 12 Dec', tone: 'm-badge--neutral', dim: true },
+      { icon: 'assignment', name: 'Men’s breakfast — March', sub: 'Members · named · one each · 31 answers', state: 'Closed 8 Mar', tone: 'm-badge--neutral', dim: true },
+    ];
+    const mark = i => ({ ...i, cls: i.dim ? 'f-dim' : '', last: '', hasState: !!i.state, state: i.state || '', tone: i.tone || '' });
+    const libItems = s.hideClosed
+      ? folders.concat(loose).map(mark)
+      : folders.concat(loose, closed).map(mark);
+
+    return {
+      forms,
+      phoneForms: forms.slice(0, 5),
+      libItems,
+      libFolders: folders.map(mark),
+      libCount: s.hideClosed ? '12 forms · 3 closed, hidden' : '12 forms · 3 closed, shown',
+      hideClosed: s.hideClosed,
+      closedHidden: s.hideClosed,
+      toggleClosed: () => this.setState(st => ({ hideClosed: !st.hideClosed })),
+      publicOn: isPublic,
+      memberOn: !isPublic,
+      q1open: s.open === 1, q1shut: s.open !== 1,
+      q2open: s.open === 2, q2shut: s.open !== 2,
+      q3open: s.open === 3, q3shut: s.open !== 3,
+      openQ1: () => this.setState({ open: 1 }),
+      openQ2: () => this.setState({ open: 2 }),
+      openQ3: () => this.setState({ open: 3 }),
+      shutAll: () => this.setState({ open: 0 }),
+      noop: () => {},
+      setPublic: () => this.setState({ rung: 'public' }),
+      setMember: () => this.setState({ rung: 'member' }),
+      toggleAttribution: () => this.setState(st => ({ attribution: !st.attribution })),
+      toggleOneEach: () => this.setState(st => ({ oneEach: !st.oneEach })),
+      attribution, oneEach,
+      attrLocked: isPublic, oneEachLocked: isPublic,
+      rungSentence, attrWhy, oneEachWhy,
+      ballot: !isPublic && !attribution && oneEach,
+    };
+  }
+}
+
+</script>
+
+
+</body></html>

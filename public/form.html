@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Form · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Form', menu: false, back: 'forms.html', route: 'home' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+</head>
+
+<body class="m-page" x-data="formPage()" x-init="init()" x-cloak>
+
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a class="m-back" :href="libraryHref">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Forms</span>
+                </a>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+            </div>
+            <span class="m-badge m-header__chip"
+                  :class="saveState === 'failed' ? 'm-badge--error' : (saveState === 'saved' ? 'm-badge--success' : 'm-badge--warning')"
+                  x-show="!loading && form" x-text="saveLabel"></span>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="m-page__body">
+
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+        <div class="m-empty" x-show="notFound">
+            <span class="material-symbols-outlined">link_off</span>
+            <p>There is no form here.</p>
+            <a class="m-btn m-btn--secondary" :href="libraryHref"><span class="m-btn__label">Back to Forms</span></a>
+        </div>
+
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+            <div class="m-notice__acts"><button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="problem = ''">Dismiss</button></div>
+        </div>
+
+        <template x-if="!loading && form">
+            <div class="f-pane">
+
+                <div class="f-panehead">
+                    <div style="min-width:0">
+                        <span class="m-label m-label--sm">Editing form</span>
+                        <h2 class="f-panename" x-text="form.title"></h2>
+                        <div class="f-badgewrap">
+                            <template x-for="b in badges" :key="b.text">
+                                <span class="m-badge" :class="b.tone">
+                                    <span class="material-symbols-outlined" x-show="b.icon" x-text="b.icon"></span>
+                                    <span x-text="b.text"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="fp-acts" x-show="!confirmingDelete">
+                        <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="confirmingDelete = true">
+                            <span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span>
+                        </button>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.published && !isClosed" @click="setClosed(true)">Close form</button>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.closed" @click="setClosed(false)">Reopen</button>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)">Save</button>
+                    </div>
+
+                    <!-- ⚠ THE QUESTION IS ASKED WHERE THE BUTTON WAS, replacing
+                         it. It used to be a notice at the foot of the page, so
+                         on anything but a short form you pressed Delete, saw
+                         nothing move, and concluded the button was broken. A
+                         confirmation you have to go and find is worse than no
+                         confirmation: it teaches people the control does not
+                         work. Naming the count is what makes it answerable. -->
+                    <div class="fp-acts fp-confirm" x-show="confirmingDelete">
+                        <span class="fp-confirm__ask" x-text="deleteQuestion"></span>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="confirmingDelete = false">Keep it</button>
+                        <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="doDelete()">
+                            <span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="fp-link" x-show="form.published">
+                    <div class="f-linkrow">
+                        <span class="material-symbols-outlined">link</span>
+                        <code x-text="shareUrl"></code>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="copyLink()">
+                            <span class="material-symbols-outlined">content_copy</span>
+                            <span class="m-btn__label" x-text="copied ? 'Copied' : 'Copy'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="m-tabs">
+                    <button type="button" class="m-tabs__tab" :class="tab === 'questions' ? 'm-tabs__tab--current' : ''" @click="tab = 'questions'">Questions</button>
+                    <button type="button" class="m-tabs__tab" :class="tab === 'responses' ? 'm-tabs__tab--current' : ''" @click="tab = 'responses'">
+                        <span x-text="'Responses · ' + responseCount"></span>
+                    </button>
+                </div>
+
+                <!-- ── Questions ──────────────────────────────────── -->
+                <div class="f-panebody" x-show="tab === 'questions'">
+                    <div class="fp-cols">
+
+                        <!-- Who may answer sits left, because it is the frame
+                             everything else is written inside: the rung decides
+                             what the other two switches are allowed to be at
+                             all. On a phone it drops below the questions. -->
+                        <aside class="fp-aside">
+                            <section class="fp-block">
+                                <div class="fp-block__head"><span class="m-label">Who may answer</span></div>
+
+                                <div class="m-seg">
+                                    <template x-for="r in liveRungs" :key="r">
+                                        <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r" @click="setRung(r)"
+                                                x-text="r === 'public' ? 'Public' : 'Members'"></button>
+                                    </template>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" x-model="form.attribution" :disabled="!settings.attribution.available" @change="touch()" />
+                                        <span>Record who answered</span>
+                                    </label>
+                                    <!-- The only text left in this card, and it
+                                         earns it: a greyed box with no reason is
+                                         a bug report waiting to happen, and these
+                                         two are unavailable for DIFFERENT
+                                         reasons. Shown only when disabled. -->
+                                    <span class="fp-off" x-show="!settings.attribution.available">No account to attach a name to</span>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" x-model="form.oneEach" :disabled="!settings.oneEach.available" @change="touch()" />
+                                        <span>One response each</span>
+                                    </label>
+                                    <span class="fp-off" x-show="!settings.oneEach.available">Cannot tell one person from another</span>
+                                </div>
+
+                                <div class="m-notice m-notice--info" x-show="isBallot">
+                                    <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">A secret ballot.</span>
+                                        <span class="m-notice__text">One answer each, final.</span>
+                                    </div>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-label m-label--sm" for="f-closing">Closing date</label>
+                                    <input id="f-closing" type="date" class="m-input" x-model="form.closingDate" @change="touch()" />
+                                </div>
+                            </section>
+                        </aside>
+
+                        <div class="fp-maincol">
+
+                            <section class="fp-block">
+                                <div class="fp-block__head"><span class="m-label">The form</span></div>
+                                <div class="fp-field">
+                                    <label class="m-label m-label--sm" for="f-title">Title</label>
+                                    <input id="f-title" type="text" class="m-input" maxlength="90" x-model="form.title" @input="touch()" />
+                                </div>
+                                <div class="fp-field">
+                                    <label class="m-label m-label--sm" for="f-desc">Description</label>
+                                    <textarea id="f-desc" class="m-input" rows="2" maxlength="400" x-model="form.description" @input="touch()"></textarea>
+                                </div>
+                            </section>
+
+                            <section class="fp-block">
+                                <div class="fp-block__head">
+                                    <span class="m-label">Questions</span>
+                                    <span class="m-label m-label--sm" x-text="askedCount"></span>
+                                </div>
+
+                                <template x-for="(q, i) in form.questions" :key="q.id">
+                                    <div>
+                                        <div class="f-qrow f-dim" x-show="q.retired">
+                                            <span class="f-qnum">—</span>
+                                            <span style="flex:1 1 auto;min-width:0">
+                                                <span class="f-qtext" x-text="q.text"></span>
+                                                <span class="f-qmeta"><span>Retired — its answers kept</span></span>
+                                            </span>
+                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="restoreQuestion(q)">Ask it again</button>
+                                        </div>
+
+                                        <button type="button" class="f-qrow" x-show="!q.retired && openQuestion !== q.id" @click="openQuestion = q.id">
+                                            <span class="f-qnum" x-text="i + 1"></span>
+                                            <span style="flex:1 1 auto;min-width:0">
+                                                <span class="f-qtext" x-text="q.text || 'Untitled question'"></span>
+                                                <span class="f-qmeta">
+                                                    <template x-for="(m, mi) in metaFor(q)" :key="mi"><span x-text="m"></span></template>
+                                                </span>
+                                            </span>
+                                            <span class="material-symbols-outlined">edit</span>
+                                        </button>
+
+                                        <div class="f-qopen" x-show="!q.retired && openQuestion === q.id">
+                                            <div class="f-qhead">
+                                                <span class="m-label m-label--sm" style="flex:1 1 auto" x-text="'Question ' + (i + 1)"></span>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move up" @click="move(q, -1)"><span class="material-symbols-outlined">arrow_upward</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move down" @click="move(q, 1)"><span class="material-symbols-outlined">arrow_downward</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate" @click="duplicateQuestion(q)"><span class="material-symbols-outlined">content_copy</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :title="answersFor(q) ? 'Retire this question' : 'Delete this question'" @click="removeQuestion(q)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" @click="openQuestion = null"><span class="material-symbols-outlined">expand_less</span></button>
+                                            </div>
+
+                                            <input type="text" class="m-input" placeholder="Ask the question" x-model="q.text" @input="touch()" />
+
+                                            <div class="fp-row">
+                                                <!-- Not a <select>. Its popup is drawn by the OS:
+                                                     it takes no styling, no max-height, and the
+                                                     browser decides whether it opens up or down —
+                                                     which here meant thirteen options opening
+                                                     upward off the top of the window. -->
+                                                <div class="m-dropdown" style="flex:0 0 260px"
+                                                     x-data="{ open: false }"
+                                                     @click.outside="open = false"
+                                                     @keydown.escape.window="open = false">
+                                                    <button type="button" class="m-dropdown__button"
+                                                            :aria-expanded="open" aria-haspopup="listbox"
+                                                            @click="open = !open">
+                                                        <span x-text="typeLabel(q.type)"></span>
+                                                        <span class="material-symbols-outlined" x-text="open ? 'expand_less' : 'expand_more'"></span>
+                                                    </button>
+                                                    <div class="m-dropdown__panel" role="listbox" x-show="open" x-transition.opacity.duration.120ms>
+                                                        <template x-for="g in typeGroups" :key="g">
+                                                            <div>
+                                                                <div class="m-dropdown__group" x-text="g"></div>
+                                                                <template x-for="t in typesIn(g)" :key="t.id">
+                                                                    <button type="button" class="m-dropdown__opt"
+                                                                            role="option" :aria-selected="q.type === t.id"
+                                                                            :class="q.type === t.id ? 'm-dropdown__opt--picked' : ''"
+                                                                            :disabled="!t.live"
+                                                                            @click="q.type = t.id; onTypeChange(q); open = false">
+                                                                        <span x-text="t.label"></span>
+                                                                        <span class="m-dropdown__later" x-show="!t.live">later</span>
+                                                                    </button>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                                <label class="m-check"><input type="checkbox" x-model="q.required" @change="touch()" /><span>Needed</span></label>
+                                            </div>
+
+                                            <div class="fp-field" x-show="hasOptions(q.type)">
+                                                <span class="m-label m-label--sm">Options</span>
+                                                <template x-for="(opt, oi) in (q.options || [])" :key="oi">
+                                                    <div class="f-opt">
+                                                        <span class="material-symbols-outlined">radio_button_unchecked</span>
+                                                        <input type="text" class="m-input" x-model="q.options[oi]" @input="touch()" />
+                                                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Remove" @click="removeOption(q, oi)"><span class="material-symbols-outlined">close</span></button>
+                                                    </div>
+                                                </template>
+                                                <button type="button" class="f-add" style="align-self:flex-start;min-height:40px" @click="addOption(q)">
+                                                    <span class="material-symbols-outlined">add</span>Add an option
+                                                </button>
+                                            </div>
+
+                                            <input type="text" class="m-input" placeholder="Hint under the box (optional)" maxlength="140" x-model="q.hint" @input="touch()" />
+                                            <input type="text" class="m-input" placeholder="Placeholder inside the box (optional)" maxlength="80" x-model="q.placeholder" @input="touch()" />
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <button type="button" class="f-add" style="align-self:flex-start" @click="addQuestion()">
+                                    <span class="material-symbols-outlined">add</span>Add a question
+                                </button>
+                            </section>
+
+                            <section class="fp-block">
+                                <div class="fp-block__head"><span class="m-label">What happens next</span></div>
+                                <textarea id="f-after" class="m-input" rows="3" maxlength="300" x-model="form.afterword" @input="touch()"></textarea>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Responses ─────────────────────────────────────────── -->
+                <div class="f-panebody" x-show="tab === 'responses'">
+
+                    <div class="m-empty" x-show="!responseCount">
+                        <span class="material-symbols-outlined">inbox</span>
+                        <p x-text="form.published ? 'Nothing has come back yet.' : 'Not published, so nobody can answer it yet.'"></p>
+                        <p x-show="form.published">Send the link and answers appear here.</p>
+                    </div>
+
+                    <div class="m-notice" x-show="responseCount && !form.attribution">
+                        <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
+                        <div class="m-notice__body">
+                            <span class="m-notice__text">This form records no names, so there is nobody to show. <span x-text="responseCount"></span> answered, and no way here to say whose is whose.</span>
+                        </div>
+                    </div>
+
+                    <!-- Attributed leads with WHO. Two answers are a list of
+                         people, not a chart. -->
+                    <div x-show="responseCount && form.attribution">
+                        <span class="m-label">Who answered</span>
+                        <div class="m-card-list" style="margin-top:var(--space-base)">
+                            <template x-for="(a, ai) in answerers" :key="a.id">
+                                <div class="m-row" :class="ai === answerers.length - 1 ? 'm-row--last' : ''">
+                                    <span class="m-avatar m-avatar--sm">?</span>
+                                    <span class="m-row__main">
+                                        <span class="m-row__title" x-text="a.name"></span>
+                                        <span class="m-row__sub" x-text="a.answered + ' of ' + a.of + ' questions'"></span>
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <template x-for="row in tally" :key="row.id">
+                        <div class="fp-field" x-show="responseCount">
+                            <div class="f-opthead">
+                                <span class="m-label" x-text="row.text"></span>
+                                <span class="m-label m-label--sm" x-text="row.answered + ' of ' + row.of + ' answered'"></span>
+                            </div>
+
+                            <div class="f-tally" x-show="row.options">
+                                <template x-for="o in (row.options || [])" :key="o.label">
+                                    <div class="f-bar">
+                                        <span class="f-barname" x-text="o.label"></span>
+                                        <span class="f-bartrack"><span class="f-barfill" :style="'width:' + o.width + '%'"></span></span>
+                                        <span class="f-barnum" x-text="o.count + ' · ' + o.share + '%'"></span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="fp-quotes" x-show="row.answers && row.answers.length">
+                                <template x-for="(q, qi) in quotesFor(row)" :key="qi">
+                                    <div class="f-quote">
+                                        <p x-text="q.text"></p>
+                                        <span x-text="q.said"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- ── Publish ───────────────────────────────────────────── -->
+                <div class="m-actionbar" x-show="!form.published">
+                    <div class="m-actionbar__said">
+                        <span class="m-actionbar__count">Not published — nobody can answer this yet.</span>
+                        <span class="m-actionbar__note">Publishing makes a link. The questions stay editable afterwards.</span>
+                    </div>
+                    <div class="m-actionbar__acts">
+                        <button type="button" class="m-btn m-btn--primary" @click="publish()">
+                            <span class="material-symbols-outlined">publish</span><span class="m-btn__label">Publish</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </main>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="forms-core.js"></script>
+    <script src="forms-store.js"></script>
+    <script src="form.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        .fp-acts { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; flex-wrap: wrap; }
+        /* The confirmation stands where the Delete button stood.
+           --radius, not --radius-full: it is a bar holding buttons, and those
+           buttons are --radius. A pill around square corners reads as two
+           different rounding systems on one control. */
+        .fp-confirm {
+            padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
+            background: var(--surface-container-low);
+            border: 1px solid var(--error); border-radius: var(--radius);
+        }
+        .fp-confirm__ask { font-size: 13.5px; line-height: 1.35; color: var(--on-surface); text-wrap: pretty; }
+        .fp-link { padding: var(--space-base) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+        .fp-field { display: flex; flex-direction: column; gap: var(--space-base); }
+
+        /* ── The two columns ──────────────────────────────────────────────
+           The aside is written last and read last, so on a phone it goes
+           BELOW the questions — which is why this is a flex column by
+           default and only becomes a grid when there is room for one. The
+           DOM order stays aside-then-main so the grid can place it left
+           without a second source of truth about the order. */
+        .fp-cols { display: flex; flex-direction: column; gap: var(--space-md); }
+        .fp-aside { order: 2; }
+        .fp-maincol { order: 1; display: flex; flex-direction: column; gap: var(--space-md); }
+
+        @media (min-width: 1000px) {
+            .fp-cols { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
+            .fp-aside { grid-column: 1; grid-row: 1; position: sticky; top: var(--space-md); }
+        }
+
+        /* ── One card per section ─────────────────────────────────────────
+           The questions and the settings were a single scroll parted by a
+           hairline, which reads as one long thing rather than three. Each is
+           its own card now, on the page's own surface so the f-set blocks
+           inside the settings still sit a step deeper than what holds them. */
+        .fp-block {
+            display: flex; flex-direction: column; gap: var(--space-base);
+            padding: var(--space-sm) var(--space-md) var(--space-md);
+            background: var(--surface);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+        }
+        .fp-block__head {
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: var(--space-sm);
+            padding-bottom: var(--space-base);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .fp-block > .fp-field { gap: var(--space-sm); }
+
+        /* One control and, only when it is disabled, the reason. */
+        .fp-switch { display: flex; flex-direction: column; gap: var(--space-xs); }
+        .fp-off {
+            margin-left: 28px;
+            font-size: 11.5px; line-height: 1.4;
+            color: var(--on-surface-variant); text-wrap: pretty;
+        }
+        /* The aside is a narrow column, so its controls go full width rather
+           than sitting at whatever width they were designed for on a form. */
+        .fp-aside .m-seg { width: 100%; }
+        .fp-aside .m-input { width: 100%; }
+        .fp-row { display: flex; gap: var(--space-sm); align-items: flex-end; flex-wrap: wrap; }
+        .fp-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-sm); }
+        .f-dim { opacity: .72; }
+        .m-row__main { display: block; min-width: 0; }
+        .m-row__title, .m-row__sub { display: block; }
+        @media (max-width: 640px) {
+            .f-panehead { flex-direction: column; gap: var(--space-sm); }
+            .f-linkrow code { max-width: 52vw; }
+        }
+    </style>
+</body>
+</html>

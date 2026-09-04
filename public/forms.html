@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Forms · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Forms', menu: false, back: 'index.html', route: 'home' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+</head>
+
+<body class="m-page" x-data="formsPage()" x-init="init()" x-cloak>
+
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a class="m-back" :href="homeHref">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+            </div>
+            <div class="m-header__actions">
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating">
+                    <span class="material-symbols-outlined">post_add</span>
+                    <span class="m-btn__label">New form</span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="m-page__body">
+
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+        </div>
+
+        <template x-if="!loading">
+            <div class="fl-stack">
+
+                <div class="fl-bar">
+                    <!-- Reads "Forms" and nothing else. There is nowhere yet to
+                         go — folders arrive with MS-361, into a page already
+                         shaped for them (ADR-0053). -->
+                    <nav class="f-crumbs">
+                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder_open</span>
+                        <span>Forms</span>
+                    </nav>
+                    <div class="fl-bar__right" x-show="forms.length">
+                        <span class="m-search">
+                            <span class="material-symbols-outlined">search</span>
+                            <input type="text" placeholder="Search every form" x-model="search" />
+                        </span>
+                        <label class="m-check">
+                            <input type="checkbox" x-model="hideClosed" />
+                            <span>Hide closed</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Naming a new form and opening it are one move, the way the
+                     Document Library creates a document. -->
+                <div class="m-card-list" x-show="creating">
+                    <div class="m-row">
+                        <span class="material-symbols-outlined">post_add</span>
+                        <span class="m-row__main">
+                            <input id="new-form-title" type="text" class="m-input"
+                                   placeholder="Name it — Church camp sign-up"
+                                   maxlength="90"
+                                   x-model="newTitle"
+                                   @keydown.enter.prevent="createForm()"
+                                   @keydown.escape.prevent="cancelCreate()" />
+                        </span>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createForm()">Create</button>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelCreate()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Nothing at all yet -->
+                <div class="m-empty" x-show="isEmpty && !creating">
+                    <span class="material-symbols-outlined">post_add</span>
+                    <p>No forms yet.</p>
+                    <p>A form is a list of questions you can send to people — a sign-up, a poll, a waiver. Name one and it opens for you to write.</p>
+                    <button type="button" class="m-btn m-btn--primary" @click="startCreate()">
+                        <span class="m-btn__label">New form</span>
+                    </button>
+                </div>
+
+                <div class="m-card-list" x-show="visible.length">
+                    <template x-for="(form, i) in visible" :key="form.id">
+                        <div class="m-row m-row--interactive m-row--serif"
+                             :class="[i === visible.length - 1 ? 'm-row--last' : '', isClosed(form) ? 'f-dim' : '']"
+                             @click="open(form)">
+                            <span class="material-symbols-outlined">description</span>
+                            <span class="m-row__main">
+                                <span class="m-row__title" x-text="form.title"></span>
+                                <span class="m-row__sub" x-text="subFor(form)"></span>
+                            </span>
+                            <span class="m-badge" :class="stateFor(form).tone" x-text="stateFor(form).text"></span>
+                            <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Searched and found nothing, as opposed to having nothing -->
+                <div class="m-empty" x-show="!visible.length && forms.length && !isEmpty">
+                    <p>Nothing matches that.</p>
+                    <p x-show="closedHidden">Closed forms are hidden — try showing them.</p>
+                </div>
+
+                <div class="m-notice" x-show="closedHidden">
+                    <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__text" x-text="closedLine"></span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="hideClosed = false">Show them</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="forms-core.js"></script>
+    <script src="forms-store.js"></script>
+    <script src="forms.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        .fl-stack { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .fl-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
+        .fl-bar__right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+        .fl-bar__right .m-search { width: 260px; max-width: 100%; }
+        .f-dim { opacity: .72; }
+        .f-dim .m-row__title, .f-dim .m-row__sub { color: var(--on-surface-variant); }
+        .m-row__main { display: block; min-width: 0; }
+        .m-row__title, .m-row__sub { display: block; }
+    </style>
+</body>
+</html>

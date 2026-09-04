@@ -257,6 +257,257 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   {
+    name: "FormPane",
+    cls: "f-pane",
+    group: "Forms",
+    summary: "A titled panel with a head, a body, and a row of badges saying what the thing inside it is.",
+    variants: { part: ["pane", "head", "name", "body", "badges"] },
+    notes: [
+      "From the MS-360 design. It is the form page's whole shell: the form's name, what it is (public/members, named/anonymous, open/closed) as badges, the actions, then the tabs and the body.",
+      "⚠ Its shell is the same three declarations m-card-list uses — surface-container-lowest, a hairline, radius-xl. That is not an accident and not yet worth merging: a card LIST is rows, this is a titled container with a head. If a third thing wants the same shell, promote it rather than adding a fourth copy.",
+      "__name is serif because it is the form's own name, the same reason m-row--serif exists.",
+    ],
+    examples: [
+      '<div class="f-pane"><div class="f-panehead"><div><span class="m-label m-label--sm">Editing form</span><h2 class="f-panename">Monday gathering</h2></div></div><div class="f-panebody">…</div></div>',
+    ],
+    css: `
+/* overflow is VISIBLE, not hidden: the question-type Dropdown opens a panel
+   that would otherwise be clipped by this card. Nothing inside carries its own
+   background, so nothing pokes out of the rounded corners either way. */
+.f-pane { display: flex; flex-direction: column; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: visible; }
+.f-panehead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+.f-panename { margin: 4px 0 0; font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--on-surface); text-wrap: pretty; }
+.f-panebody { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+.f-badgewrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+`,
+  },
+
+  {
+    name: "QuestionEditor",
+    cls: "f-qrow",
+    group: "Forms",
+    summary: "A question on a form being built — a row when it is shut, a panel when it is open.",
+    variants: { state: ["shut", "open"], part: ["row", "number", "text", "meta", "head", "option", "add"] },
+    notes: [
+      "The main event of the MS-360 design, and the thing it was asked to have an opinion about. Shut, a question is one row saying its type, its option count and whether it is needed. Open, it is a panel with a left edge in --primary so you can see at a glance which one you are in.",
+      "One open at a time is the PAGE's rule, not this component's — the component only knows how to be shut or open.",
+      "f-add is the dashed 'Add a question' affordance. Dashed because it is not a thing yet; every other button here does something to something that exists.",
+      "The type picker inside an open question is a plain m-select with optgroups. It is built for thirteen types while only three work, because a picker that grows from three loose buttons to thirteen is a redesign and a grouped list that lights up is not.",
+    ],
+    examples: [
+      '<button class="f-qrow"><span class="f-qnum">1</span><span><span class="f-qtext">Which evening suits you?</span><span class="f-qmeta"><span>Multiple choice</span></span></span></button>',
+    ],
+    css: `
+.f-qrow { display: flex; align-items: flex-start; gap: var(--space-sm); width: 100%; padding: 12px 14px 13px; text-align: left; background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius); cursor: pointer; font-family: var(--font-sans); transition: background-color var(--duration) var(--ease-standard); }
+.f-qrow:hover { background: var(--surface-container-low); }
+.f-qnum { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 auto; margin-top: 1px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container); font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--on-surface-variant); }
+.f-qtext { display: block; font-family: var(--font-serif); font-size: 17px; line-height: 1.3; color: var(--on-surface); text-wrap: pretty; }
+.f-qmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+.f-qopen { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-left: 3px solid var(--primary); border-radius: var(--radius); }
+.f-qhead { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt .m-input { height: 44px; font-size: 15px; }
+.f-opthead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.f-add { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: 46px; padding: 0 var(--space-sm); background: transparent; border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary); font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; transition: background-color var(--duration) var(--ease-standard); }
+.f-add:hover { background: var(--surface-container); }
+`,
+  },
+
+  {
+    name: "SettingBlock",
+    cls: "f-set",
+    group: "Forms",
+    summary: "A group of settings that constrain each other, each carrying its own reason.",
+    variants: { part: ["block", "why"] },
+    notes: [
+      "⚠ f-why is the load-bearing half. On a public form both Attribution and One Response Each are off and cannot be turned on, FOR DIFFERENT REASONS — no account to attach a name to, and no way to tell one person from another. A greyed checkbox with no why is the thing this exists to prevent, and one blanket sentence over both would be a lie about one of them.",
+      "Indented to 28px so the reason lines up under its checkbox's label rather than its box.",
+    ],
+    examples: [
+      '<div class="f-set"><label class="m-check"><input type="checkbox" disabled><span>Record who answered</span></label><p class="f-why">Off, and not yours to change: a public form has no account to attach a name to.</p></div>',
+    ],
+    css: `
+.f-set { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
+.f-why { margin: 0 0 0 28px; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+`,
+  },
+
+  {
+    name: "Tally",
+    cls: "f-tally",
+    group: "Display",
+    summary: "What came back from a form — a labelled bar per option, and free-text answers as quotes.",
+    variants: { part: ["tally", "bar", "quote"] },
+    notes: [
+      "⚠ A quote carries its handle and NEVER a date when the form is anonymous. Arrival order plus a timestamp is what lines the answers back up against the ledger of who answered, which is the join ADR-0052 exists to prevent. An attributed form may show times; the component does not care, the page decides.",
+      "The bar is a track and a fill rather than a chart library. Four options on a phone is not a visualisation problem.",
+      "f-barname is a fixed 8.5rem so the bars start at the same x and can be compared by eye, which is the only thing a tally is for.",
+    ],
+    examples: [
+      '<div class="f-tally"><div class="f-bar"><span class="f-barname">Chili</span><span class="f-bartrack"><span class="f-barfill" style="width:100%"></span></span><span class="f-barnum">14 · 41%</span></div></div>',
+    ],
+    css: `
+.f-tally { display: flex; flex-direction: column; gap: 10px; }
+.f-bar { display: flex; align-items: center; gap: var(--space-sm); }
+.f-barname { flex: 0 0 8.5rem; font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+.f-bartrack { flex: 1 1 auto; height: 26px; background: var(--surface-container); border-radius: var(--radius-sm); overflow: hidden; }
+.f-barfill { display: block; height: 100%; background: var(--primary-fixed); border-right: 2px solid var(--primary); }
+.f-barnum { flex: 0 0 5.5rem; font-family: var(--font-sans); font-size: 13px; color: var(--on-surface-variant); }
+.f-quote { padding: 13px 16px 14px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-left: 2px solid var(--gold); border-radius: var(--radius); }
+.f-quote p { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.5; color: var(--on-surface); text-wrap: pretty; }
+.f-quote span { display: block; margin-top: 7px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--outline); }
+`,
+  },
+
+  {
+    name: "LinkRow",
+    cls: "f-linkrow",
+    group: "Display",
+    summary: "A URL you are meant to copy, with the button to copy it.",
+    notes: [
+      "For a published form's link. You publish on Sunday and want the link again on Thursday, so it lives on the page rather than only in the moment of publishing.",
+      "Monospace, because it is a string somebody may have to read out or check character by character.",
+      "The URL carries the form's id, which is 128 bits of base58 and never its title — a readable slug would be a guessable one (ADR-0051). So it is long, and this does not try to hide that.",
+      "⚠ --radius, not --radius-full. It was drawn as a pill and shipped as one, and on the form page it was then the only round-cornered thing among cards, buttons, question rows and setting blocks that are all 10px. One pill among square corners does not read as emphasis, it reads as a mistake.",
+    ],
+    examples: [
+      '<div class="f-linkrow"><span class="material-symbols-outlined">link</span><code>mosaicmanagercstx.com/f/7bQm2xK9vRt4Lp8sYw3NcF</code><button class="m-btn m-btn--quiet m-btn--sm">Copy</button></div>',
+    ],
+    css: `
+.f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
+.f-linkrow code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+`,
+  },
+
+  {
+    name: "Breadcrumbs",
+    cls: "f-crumbs",
+    group: "Layout",
+    summary: "Where you are in a library you can navigate into.",
+    notes: [
+      "MS-360 ships it reading 'Forms' and nothing else, because there is nowhere yet to go — folders arrive with MS-361 (ADR-0053). It is here now so that ticket adds depth to a page already shaped for it rather than rebuilding the navigation.",
+    ],
+    examples: [
+      '<nav class="f-crumbs"><span class="material-symbols-outlined">folder_open</span><a href="#">Forms</a><span class="material-symbols-outlined">chevron_right</span><span>Sign-ups</span></nav>',
+    ],
+    css: `
+.f-crumbs { display: flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: 600; letter-spacing: var(--label-sm-spacing); text-transform: uppercase; color: var(--on-surface-variant); }
+.f-crumbs a { color: inherit; }
+.f-crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; }
+`,
+  },
+
+  {
+    name: "Dropdown",
+    cls: "m-dropdown",
+    group: "Forms",
+    summary: "A picker with grouped options that opens downward, caps its height, and scrolls inside.",
+    variants: { part: ["button", "panel", "group", "option"], state: ["picked", "later"] },
+    notes: [
+      "⚠ THIS EXISTS BECAUSE A NATIVE <select> CANNOT BE MADE TO BEHAVE. Its popup is drawn by the operating system: it will not take a font, a colour, a corner or a max-height, and the browser decides whether it opens up or down. On the form page the question-type picker had thirteen options in six groups and opened UPWARD off the top of the window, in system chrome that looked nothing like the rest of the app. None of that is fixable with CSS on the select.",
+      "Opens DOWN, always, and caps at min(320px, 50vh) with the list scrolling inside. Predictable beats clever: a picker that sometimes flips is a picker you have to look for.",
+      "__opt--later is for an option that is named but not built yet. It is shown, greyed and unselectable, with the word 'later' after it — a picker that grows from three entries to thirteen is a redesign, and one that shows all thirteen from the start is not.",
+      "Escape closes it and a click outside closes it. Both are the caller's to wire; this is CSS.",
+      "It needs an ancestor that does not clip. f-pane carries overflow:visible for exactly this.",
+    ],
+    examples: [
+      '<div class="m-dropdown"><button class="m-dropdown__button">Short answer<span class="material-symbols-outlined">expand_more</span></button><div class="m-dropdown__panel"><div class="m-dropdown__group">Text</div><button class="m-dropdown__opt m-dropdown__opt--picked">Short answer</button></div></div>',
+    ],
+    css: `
+.m-dropdown { position: relative; display: block; }
+.m-dropdown__button {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; min-height: 48px; padding: 0 var(--space-base) 0 var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__button:hover { background: var(--surface-container-low); }
+.m-dropdown__button:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-dropdown__button .material-symbols-outlined { font-size: 20px; color: var(--on-surface-variant); flex: 0 0 auto; }
+.m-dropdown__panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  max-height: min(320px, 50vh); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-xs);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.m-dropdown__group {
+  padding: var(--space-base) var(--space-base) var(--space-xs);
+  font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant);
+}
+.m-dropdown__opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; padding: 9px var(--space-base);
+  background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__opt:hover:not(:disabled) { background: var(--surface-container-low); }
+.m-dropdown__opt:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: -2px; }
+.m-dropdown__opt--picked { background: var(--primary-fixed); color: var(--primary); font-weight: 600; }
+.m-dropdown__opt:disabled { color: var(--outline); cursor: default; }
+.m-dropdown__later {
+  flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--outline);
+}
+`,
+  },
+
+  {
+    name: "OptionCard",
+    cls: "m-option",
+    group: "Forms",
+    summary: "One choice on a form somebody is answering, as a card you tap rather than a radio you aim at.",
+    variants: { state: ["default", "picked"], lines: ["one", "many"] },
+    notes: [
+      "Built for MS-371 — the page a stranger answers a form on, usually on a phone, usually standing up. A native radio is an 18px target next to its label; this is the whole row, 52px tall, which is the difference between answering and giving up.",
+      "NOT a Checkbox. m-check is an editor ticking a setting on a dense admin screen; this is a member choosing between three things they are reading for the first time. Same HTML input underneath, different job and different size.",
+      "--picked is the answer they have chosen. It carries a fill and a heavier border rather than only a dot, because on a phone in sunlight a 10px dot is not an answer to 'which did I pick'.",
+      "__said is the 'Your answer' marker, used when somebody returns to a form they already answered and needs to see what they said before they change it.",
+      "The mark is drawn rather than native so it matches in both themes. The real input is visually hidden but still focusable, so the keyboard and a screen reader get an ordinary radio.",
+    ],
+    examples: [
+      '<label class="m-option"><input type="radio" name="q3"><span class="m-option__mark"></span>Tuesday 7am</label>',
+      '<label class="m-option m-option--picked"><input type="radio" name="q3" checked><span class="m-option__mark"></span>Tuesday 7pm<span class="m-option__said">Your answer</span></label>',
+    ],
+    css: `
+.m-option {
+  display: flex; align-items: center; gap: var(--space-base);
+  min-height: 52px; padding: 11px var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 16px; line-height: 1.35;
+  color: var(--on-surface);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-option:hover { background: var(--surface-container-low); }
+.m-option:focus-within { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.m-option__mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: 0 0 auto;
+  border: 1.5px solid var(--outline); border-radius: var(--radius-full);
+}
+.m-option__mark::after { content: ""; width: 10px; height: 10px; border-radius: var(--radius-full); background: transparent; }
+.m-option--picked {
+  background: var(--primary-fixed); border: 1.5px solid var(--tertiary); font-weight: 500;
+}
+.m-option--picked .m-option__mark { border-color: var(--primary); }
+.m-option--picked .m-option__mark::after { background: var(--primary); }
+.m-option__said {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--primary);
+}
+`,
+  },
+
+  {
     name: "SearchBar",
     cls: "m-search",
     group: "Forms",
@@ -561,6 +812,66 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-scripture cite { display: block; margin-top: var(--space-base); font-style: normal; }
 .m-scripture--center { border-left: none; padding: var(--space-sm) 0; text-align: center; }
+`,
+  },
+
+  {
+    name: "Type",
+    cls: "m-body-md",
+    group: "Display",
+    summary: "The type scale, as classes. Six roles over the three families — display for the church's own voice, serif for headings, sans for everything you read.",
+    variants: { role: ["display-lg", "headline-lg", "headline-md", "body-lg", "body-md", "label-md"] },
+    notes: [
+      "⚠ These classes existed in build/design-tokens/typography.css — the file we PUSH to Claude Design — and nowhere the app could reach. The custom properties were spliced into the app's stylesheet; the classes wrapping them were not. So the design system documented a scale the app could not use, and a design composed against it came back full of classes that resolve to nothing in a browser. Found on the MS-360 pull (2026-09-02), where the type would have looked right in the design and silently fallen back to browser defaults in the page.",
+      "They live here now because this file is the one source of m-* classes and generates into BOTH public/mosaic.css and public/mobile/tokens.css. Adding them to the token file again would recreate the split.",
+      "Purely additive — no existing page used one, so nothing re-renders.",
+      "m-label-md uppercases. It is the small caps label above a field, not a <label> element's default styling; m-label is the form component and a different thing.",
+    ],
+    examples: [
+      '<h1 class="m-display-lg">Mosaic</h1>',
+      '<h2 class="m-headline-lg">Inductive Bible Study</h2>',
+      '<p class="m-body-md">A box that grows as they type.</p>',
+      '<span class="m-label-md">Answering rung</span>',
+    ],
+    css: `
+.m-display-lg {
+  font-family: var(--font-display);
+  font-size: var(--display-lg-size);
+  line-height: var(--display-lg-line);
+  letter-spacing: var(--display-lg-spacing);
+  font-weight: var(--display-lg-weight);
+  color: var(--primary);
+}
+.m-headline-lg {
+  font-family: var(--font-serif);
+  font-size: var(--headline-lg-size);
+  line-height: var(--headline-lg-line);
+  font-weight: var(--headline-lg-weight);
+}
+.m-headline-md {
+  font-family: var(--font-serif);
+  font-size: var(--headline-md-size);
+  line-height: var(--headline-md-line);
+  font-weight: var(--headline-md-weight);
+}
+.m-body-lg {
+  font-family: var(--font-sans);
+  font-size: var(--body-lg-size);
+  line-height: var(--body-lg-line);
+}
+.m-body-md {
+  font-family: var(--font-sans);
+  font-size: var(--body-md-size);
+  line-height: var(--body-md-line);
+}
+.m-label-md {
+  font-family: var(--font-sans);
+  font-size: var(--label-md-size);
+  line-height: var(--label-md-line);
+  letter-spacing: var(--label-md-spacing);
+  font-weight: var(--label-md-weight);
+  text-transform: uppercase;
+}
 `,
   },
 
