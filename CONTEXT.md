@@ -364,6 +364,8 @@ _Avoid_: Baptizee, baptism name, candidate (unqualified)
 
 ## Service Guide Template System
 
+> **Being succeeded by [[Printable]]s (MS-359).** Both service-guide systems stay in production until a Sunday guide has been printed from a Printable and handed out; MS-401 carries the gate and the removal. Nothing below is changed by the Printables work.
+
 **Page Template**:
 A reusable definition of a single printable page, authored by an editor in the Page Library. Consists of user-written HTML/CSS (optionally inheriting a Style Preset) with embedded Components. Pages are composed into Service Guide Templates. The current special pages (title page, hymn sheet, pastoral prayer, Mosaic Kids, announcements, sermon notes, the Order of Service list) are reborn as developer-seeded Page Templates rather than hardcoded element types.
 _Avoid_: Page type, element, layout
@@ -880,9 +882,20 @@ What a `document`-mode [[Form Template]] produces: a form somebody fills in **on
 
 ⚠ **A Form Document is elder-only today**, because it lives among the [[Elder Document]]s and that collection is elder-only. Its template's [[Answering rung]] therefore governs nothing, which is why a `document` template does not have one. A non-elder Form Document is a real future ticket, not an oversight — ADR-0055 names the two routes.
 
+**It is started from either place a document lives** — the [[Document Library]]'s *new document → form document*, or the **Documents tab of a [[Shepherding Profile]]**, which is where an elder is already standing when the interview is about the person in front of them (MS-405). The profile tab offers a Note and a Form Document and no [[Care List]]: a Care List is a list over the whole directory and means nothing scoped to one person. Both draw from one list of what may be made, so the two menus cannot drift apart.
+
 ⚠ **On a phone you can open one but not yet make one.** The native Documents screen opens a Form Document in the shell; the new-document flow there offers only a note and a care list, because it does not read the template list. Making one is done from the Documents page on the web or in the shell.
 
+**Deleting the template deletes the answers, and only a function can.** `form_responses` is closed to every client — answers are written server-side, and a delete is a write — so the browser's delete could ask the question and never carry it out: a form that had ever been answered could not be deleted at all. It goes through `deleteFormTemplate`, which checks the rank itself, takes the [[Response]]s (and with them their uploads, through the cleanup trigger), clears the ballot ledger nobody else may even read, and then removes the template.
+
 _Avoid_: form response (that is a [[Response]]), filled form, submission
+
+### Personal shepherding document
+A [[Form Template]] in `document` mode that is an interview **about somebody** — a membership interview, a first visit, an exit conversation. Ticked by an elder or super admin on the builder, stored as `shepherdingDoc`. Two things follow, and they are one thing said twice:
+- **The first question is always the [[Directory Person picker]]** that names who it is for, at a fixed id, required, and not the author's to move, duplicate, retype or delete. The wording is theirs to change; the question is not. The model puts it back on the next save, and the builder refuses rather than letting it quietly reappear.
+- **Every [[Form Document]] made from it lives in two places** — the [[Document Library]] and the **Documents tab of the [[Shepherding Profile]]** of whoever that first answer names. Started from the Library, it files itself onto their profile as soon as the picker is answered, and **moves** if the answer is changed. Started from somebody's profile, it opens already answered with them and files itself into the Library. Either way it is in both by construction, so there is nothing to opt into.
+⚠ **The subject is read off the answers, never off the template.** A Form Document keeps a copy of its questions and never looks at its template again (ADR-0055), so the fact that it *is* one of these is **stamped on the record** and the subject is read under the fixed question id. That is what the fixed id is for.
+_Avoid_: person form, profile form, subject question (fine in prose; the thing is the document, not the field)
 
 ### Response export
 A form's [[Response]]s as a CSV an editor downloads. One row per Response, one header row, UTF-8 with a byte-order mark so a spreadsheet opens it as text rather than mangling accents.
@@ -912,6 +925,10 @@ It carries a **scope** — anybody, members, people who are not members, or the 
 
 The answer stores the Person id **and their name as it read at the time**, so a [[Response]] stays readable after somebody is renamed or leaves the directory.
 
+It is drawn as **one box you type into with the matches dropping under it**, the same shape as the person picker on the [[Order of Service]], because it is the same act and people have learnt that one already. The markup is shared by the two pages that draw a question (`form-question-markup.js`) and so are its styles (`form-question.css`) — they were not, once, and the picker drew as bare HTML on both.
+
+**Adding somebody from the picker (an editor's row).** When the name being typed is nobody the directory holds, an **editor or above** is offered a last row that opens a card and adds them then and there — name, sex, birthday and contact, the same fields the [[People Manager]] asks for when it creates a Person. Their family, tags and shepherding record are still added in the directory itself. Below editor there is no such row: the directory is editor-authored and the door for everybody else is a [[Directory Request]], which an editor approves. ⚠ **The rank is decided on the server**, which sends the page a yes or no; the page only decides whether to draw the row, and the `addPerson` call checks again on the way through. One card (`new-person-card.js`), two doors — the elder's [[Form Document]] writes `people` as a signed-in elder, the fill-in page goes through `publicForm` because it has no Firestore to write with.
+
 _Avoid_: people picker, member picker (a scope, not the type)
 
 ### Form upload
@@ -935,6 +952,15 @@ Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` —
 - **A signed-out person never touches Firestore.** One Cloud Function hands out the questions and takes the answer, and `firestore.rules` gains nothing — the public path is a door with somebody standing in it, not a hole in the wall. Public submissions pass an invisible bot check (App Check).
 - **A form's link carries a random token, never its title.** `/f/7bQm2xK9vRt4Lp8sYw3NcF` — 128 bits, base58, stable for the life of the form. A readable slug like `/f/monday-food` is a *guessable* slug, and derivable from the form's own name, which is the enumeration the closed door exists to prevent. The form page carries a **copy-link row**, because you come back on Thursday and want the link again.
 _Avoid_: visibility (that is [[Event visibility]]'s word for an Event), audience, access level, slug
+
+### Elders only
+Separately from the [[Answering rung]], and above it: whether anybody below an elder may **see** the form at all — in the [[Forms library]], in the builder, and on the [[Responses tab]]. The rung says who may *answer*; `elder` there still leaves the template, its questions and every answer open to any editor, because the library and the Responses tab are the editor ladder. So this is the narrower thing, stored as `elderOnly` on the [[Form Template]].
+- **Only an elder or a super admin may switch it on — and only they may switch it off.** An editor who could clear it could read the lot, so the rule refuses an editor whose write would leave *or* arrive at an elder-only form. An **admin is not an elder** here, the same way `isElder()` has always read.
+- **It moves the [[Answering rung]] to `elder` with it**, forced in the model and refused again at the door. A form nobody below an elder may open, answerable by members, is a record that contradicts itself — and the link still works whatever the library shows. Being served an elder-only form you may not see answers **"there is no form here"**, not "not open to you": its existence is one of the things being kept.
+- **The flag is stamped on every [[Response]] and written into every upload's path.** A rule cannot afford to read the form once per answer ([ADR 0018](docs/adr/0018-event-visibility-is-stamped-on-the-occurrence.md) §5, the same reason [[Event visibility]] is stamped onto each occurrence), and `storage.rules` cannot see a Firestore field at all — so an elder-only form's files live under `form_uploads_elder/`, chosen in one place (`uploadPath`). Whoever may read an answer may read what came with it, and shutting one has to shut the other.
+- ⚠ **Every form and every answer carries the flag, false included.** A rule that narrows per document does not narrow a **query**: Firestore refuses the whole query unless it can see every row it could return is allowed, so a reader below elder asks for `elderOnly == false` by name — and that cannot match a document where the field is absent. Saves write it now; `scripts/backfill-form-elder-only.js` stamped the ones that pre-date it, and it must be run **before** the rules deploy or the library goes blank for every editor who is not an elder.
+- **A [[Form Document]] template is not forced shut**, though the documents it makes are elder-only already by living among the [[Elder Document]]s. Forcing it would quietly take every existing document template away from the editors using it.
+_Avoid_: private form, hidden form, elder rung (that is the [[Answering rung]]'s top value, which is a different question)
 
 ### Attribution
 Separately from the [[Answering rung]], whether a [[Response]] records **who** gave it. On a signed-in rung that means stamping the [[Person]]. On `public` there is no Person to stamp, so a name is a *question on the form* like any other — the form asks, rather than Mosaic knowing.
@@ -1003,6 +1029,52 @@ The read over the whole history of the church's services — hymn usage, a Bible
 - **The refusal lands before the read, not after the draw.** A page that assembles every Person's serving history and then declines to render it has already handed it to the browser.
 - ⚠ **A door, and the lock behind it sits lower.** `people` and `involvement` need an account since [ADR 0031](docs/adr/0031-the-directory-asks-for-an-account.md), but this screen is editors-and-above — so a member who types the URL is stopped by the screen and by nothing else, and could still assemble the same picture with a query. (`services` stays world-readable: the congregant-facing Service Guide is on the other side of it.)
 - People carrying a tag with `hidePeople` are filtered out of the People's Involvement table for anyone below elder — the same per-tag visibility the [[Membership Directory]] honours.
+
+## Printables — MS-359
+
+**Printable**:
+A project the church lays out and prints — a membership directory, a service guide, an event handout. A name, the folder it is filed in, the [[Page template]] it was made on, and its **pages**. Stored in `printables` as a tree of elements, never as HTML ([ADR 0056](docs/adr/0056-a-printable-is-a-tree-of-boxes-not-a-template-of-tags.md)); it holds which field feeds which element, never the values ([ADR 0057](docs/adr/0057-a-printable-reads-live-data-the-snapshot-on-an-event-is-the-frozen-copy.md)). The successor to the [[Service Guide Template]] system, which stays in production until MS-401's gate is met.
+_Avoid_: document (reserved — a Printable is not a [[Document]] and never appears in the [[Document Library]]), template (that is what it is made *on*), project (fine in prose; not the name)
+
+**Printables library**:
+The page (`printables.html`) where every Printable lives, filed in folders exactly the way the [[Forms library]] files forms — a place you navigate into ([ADR 0053](docs/adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)), flat records where a Printable remembers its folder and a folder does not remember its Printables ([ADR 0054](docs/adr/0054-a-form-remembers-its-folder-a-folder-does-not-remember-its-forms.md)). The folder walks are one shared module, `filing-core.js`, which the Forms library now reads through its old names. Editor and above. **Duplicate** is a library action: a guest directory is the members' directory copied and given one different filter.
+_Avoid_: Printables manager, printables page
+
+**Page template**:
+What a Printable is made on: a paper size (Letter, Legal, Tabloid, Half Letter, A4, A5, 5×7, 4×6), an orientation, and a **pixel density** (96, 150 or 300 pixels to the inch). Chosen once in the picker when a new Printable opens and fixed for its life, because every measurement in it is written in those pixels. A page's size in pixels is inches × density. A **custom page template** is a page somebody built, saved with its paper, margins, stylesheet and elements (`printable_templates`) so the next Printable can start from it.
+_Avoid_: paper (that is one part of it), layout, master page
+
+**Element**:
+One real HTML element on a page: a **box** (a div that holds others), a run of **text** (p, a heading, a span — one string with CSS; bold words are more elements, not rich text), or an **image**. Carries its inline CSS, an optional name, and optionally a [[Binding]] or a [[Repeat]]. The **element panel** on the editor's left edits whatever is selected in plain words — size, position, spacing, border, background, font, alignment, how children are arranged — and a **custom CSS** box takes the rest. The **code view** shows the page's elements as HTML and its stylesheet as CSS; an edit there is parsed back into elements, ids and wires intact, and refused by line when the markup is broken.
+_Avoid_: node (the code's word, not the church's), component (the ADR 0008 word), widget
+
+**Sizing** (**Hug**, **Fixed**, **Fill**):
+How an [[Element]] takes its width and its height, said the way the layout tools people already use say it: **Hug** is as big as what is inside it, **Fixed** is the number you typed, **Fill** is as big as the space its parent gives it — for a box straight on the page, margin to margin. The mode is never stored; it is read back off the element's own CSS (`printable-core.js`), so a page written by hand in the code view reads the same as one clicked together in the panel. What Fill has to write depends on what the parent does with its children — a share of a row, a stretch across a column, an auto width in a plain box — and **Align self** says how an element sits across that. Padding, margin and border width are each shown at whichever **fidelity** they need: all four sides the same, the two pairs, or each side on its own, the same three the page's margins offer.
+_Avoid_: auto layout (Figma's word, and it names the parent's side of it), stretch (that is one align, not a size), hug contents
+
+**Data drawer**:
+The editor's right panel: everything the website can tell a Printable, grouped by where it comes from — **People**, **Sunday**, **Events**, **Forms** — each **source** listing its **fields** by kind (text, image, date, number). What it offers is exactly what the signed-in viewer may read: the catalog (`printable-data-core.js`) is the first half of the permission boundary and holds nothing elder-only at all; `firestore.rules` is the second. A source is a **single** (one row — this Sunday, who holds a role) or a **list** (many rows — the directory, the fortnight's events).
+_Avoid_: variables panel, connectors (the brief's word; a field is what you drag)
+
+**Binding** (a **wire**):
+Which field feeds which element — the text of a text element, the picture of an image. Made by dragging a field chip from the drawer onto the element; a wire is drawn from chip to element while dragging and whenever the element is selected. A binding is either **global** (a single source with its params: "next Sunday's theme") or an **item** binding (a field of each row of the [[Repeat]] the element sits inside). Unwired on the element panel.
+_Avoid_: connection, link (that is a Printable on an event), data-bind
+
+**Repeat** (an **iterated element**):
+A box that stands for one row of a list and is drawn once per row — right-click › **Make this element iterated**, pick a list source, set its **filters** (members / non-members / everyone, a tag, inactive people, a sort; for dated sources a **date range** that is static or relative to today) and its **layout** (down or across, per line, gap, a cap per page). The first copy keeps the element's own id and is the one you edit; the rest carry the row number after a tilde and are drawn, never edited. **Overflow** is either **Clip** (the list stops at the margin) or **Makes a new page**: the list stops before the margin and continues on **generated pages** that copy the page it started on — or a page chosen instead — until the rows run out. How many rows fit is measured in the browser and decided by a pure bisection (`printable-render-core.js`).
+_Avoid_: loop, list element, template row
+
+**Stand-in**:
+What an element shows when no data is loaded or its field has nothing today: its own typed text, its own picture. The editor's **Live / Stand-ins** switch shows either. A field with nothing behind it keeps the stand-in and is listed under **Not all data could be pulled** in the drawer, which names the element and the reason; a source that has nothing (no Sunday planned, nobody holding the role) says so there too.
+_Avoid_: placeholder (fine in prose), fallback, default value
+
+**View-only page**:
+`printable-view.html` — a Printable resolved with today's data, laid out page by page, read-only, with a Print button. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks).
+_Avoid_: preview, print preview, share page
+
+**Linked Printable**:
+A Printable an [[Event]] series carries (`events/{id}.printables`), so every date of it offers the Printable on its Files tab: open in the editor, view, **Members may view**, unlink, and **File a PDF snapshot**. The snapshot renders every page — generated pages included — with vendored html2canvas and jsPDF, and files it as an ordinary [[Event Attachment]] on that date, fetched and never linked ([ADR 0046](docs/adr/0046-an-event-attachment-is-fetched-never-linked.md)). It is the one frozen copy in a live system ([ADR 0057](docs/adr/0057-a-printable-reads-live-data-the-snapshot-on-an-event-is-the-frozen-copy.md)); unlinking keeps both the Printable and the snapshot.
+_Avoid_: attached Printable, event printable
 
 ## Flagged ambiguities
 

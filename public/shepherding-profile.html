@@ -1038,7 +1038,7 @@
              Do not flatten it back into plain values. -->
         <div x-show="activeTab === 'documents'" x-cloak>
             <template x-if="personId">
-                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, embedded: true, identity: () => ({ user: currentUser, name: currentUserName, permissionLevel: currentPermissionLevel }) })">
+                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, ownerPersonName: () => (person && person.name) || '', embedded: true, identity: () => ({ user: currentUser, name: currentUserName, permissionLevel: currentPermissionLevel }) })">
 
                     <div x-show="loading" class="flex items-center justify-center py-xl">
                         <span class="material-symbols-outlined text-[36px] text-outline animate-spin">progress_activity</span>
@@ -1057,6 +1057,64 @@
                                     <span class="material-symbols-outlined text-[18px]">note_add</span>
                                     New Document
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- New Document, on this person's profile (MS-405).
+                             The Library's own modal is on the Library page, and
+                             this is the small half of it: a profile offers a
+                             Note and a Form Document and no Care List, because
+                             a Care List is a list over the whole directory and
+                             means nothing scoped to one person. Which types
+                             there are is the component's answer, so the two
+                             cannot drift. -->
+                        <div x-show="showCreateModal" x-cloak
+                             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+                             @click.self="showCreateModal = false">
+                            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md">
+                                <h2 class="font-headline-md text-headline-md text-primary">New Document</h2>
+
+                                <div class="flex flex-col gap-sm">
+                                    <label class="font-label-md text-label-md text-on-surface-variant">Document Type</label>
+                                    <div class="grid gap-sm" :style="'grid-template-columns: repeat(' + creatableTypes.length + ', minmax(0, 1fr))'">
+                                        <template x-for="t in creatableTypes" :key="t">
+                                            <button @click="createDocType = t"
+                                                    :class="createDocType === t ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                                                    class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30"
+                                                    x-text="docTypeLabel(t)">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Only `document`-mode templates are here: a
+                                     `responses` one has a link to send and a
+                                     Responses tab, and makes no documents. -->
+                                <div x-show="createDocType === 'form'" class="flex flex-col gap-sm overflow-y-auto max-h-[50vh]">
+                                    <label class="font-label-md text-label-md text-on-surface-variant">Which form</label>
+                                    <template x-for="t in formTemplates" :key="t.id">
+                                        <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer">
+                                            <input type="radio" x-model="createTemplateId" :value="t.id" class="accent-primary" />
+                                            <span class="material-symbols-outlined text-[18px] text-secondary">edit_document</span>
+                                            <span class="font-body-md text-on-surface" x-text="t.title"></span>
+                                        </label>
+                                    </template>
+                                    <p x-show="!formTemplates.length" class="font-body-md text-sm text-on-surface-variant">
+                                        No forms are set up to be filled in as documents yet. In
+                                        <a href="forms.html" class="underline">Forms &amp; Registrations</a>,
+                                        make one and choose <strong>A document</strong> rather than
+                                        <em>People answer it</em>.
+                                    </p>
+                                </div>
+
+                                <div class="flex justify-end gap-sm mt-md">
+                                    <button @click="showCreateModal = false" class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
+                                    <button @click="createDocument()"
+                                            :disabled="createDocType === 'form' && !createTemplateId"
+                                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                        Create
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1357,6 +1415,7 @@
     <script src="tiptap-render.js"></script>
     <script src="relationship-group-core.js"></script>
     <script src="shepherding-quick-assign.js"></script>
+    <script src="forms-core.js"></script>
     <script src="shepherding-documents-core.js"></script>
     <script src="shepherding-documents.js"></script>
     <!-- Loads the vendored TipTap bundle. Must come before the page

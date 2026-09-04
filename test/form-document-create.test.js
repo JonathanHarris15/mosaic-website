@@ -22,8 +22,63 @@ const PAGE = read('shepherding-documents.js');
 const MARKUP = read('shepherding-documents.html');
 
 test('the new-document menu offers a form as well as a note and a care list', () => {
-    assert.match(MARKUP, /createDocType = 'form'/, 'there is no way to choose a form');
-    assert.match(MARKUP, /grid-cols-3/, 'a third choice was added to a two-column grid');
+    // The types are the component's answer now (MS-405) rather than three
+    // hand-written buttons, because a profile tab offers a different set and
+    // two hand-written lists drift.
+    assert.match(PAGE, /creatableTypes\(\)[\s\S]*?'note', 'care-list', 'form'/,
+        'the Library no longer offers all three types');
+    assert.match(MARKUP, /x-for="t in creatableTypes"/,
+        'the menu does not draw the types the component says it has');
+    assert.match(MARKUP, /repeat\(' \+ creatableTypes\.length/,
+        'the grid is a fixed width and will crop or stretch when the types change');
+});
+
+// ── From a person's own profile (MS-405) ─────────────────────────────────────
+//
+// A Form Document is an interview about somebody, and the profile tab is where
+// an elder is already standing when they want one. It used to force every
+// document made there to a plain note.
+
+test('a profile offers a form document, and no care list', () => {
+    assert.match(PAGE, /creatableTypes\(\)[\s\S]*?isProfileScope \? \['note', 'form'\]/,
+        'a profile tab does not offer a form document');
+});
+
+test('a care list cannot be made on a profile even if something asks for one', () => {
+    // A Care List is a list over the whole directory; scoped to one person it
+    // means nothing. The type is checked against what this surface offers
+    // rather than trusted.
+    const create = PAGE.match(/async createDocument\(\)[\s\S]*?const type = [^;]*;/);
+    assert.ok(create, 'createDocument has gone missing');
+    assert.match(create[0], /creatableTypes\.includes\(this\.createDocType\)/,
+        'createDocument writes whatever type it was handed');
+});
+
+test('a profile opens the same menu rather than making a note on the spot', () => {
+    const open = PAGE.match(/openCreateModal\(\)[\s\S]*?\n        \},/);
+    assert.ok(open, 'openCreateModal has gone missing');
+    assert.ok(!/isProfileScope[\s\S]{0,60}createDocument\(\)/.test(open[0]),
+        'a profile still short-circuits straight to a plain note');
+});
+
+test('the templates are loaded on a profile too, or its menu would be empty', () => {
+    const load = PAGE.match(/async loadData\(\)[\s\S]*?const \[structSnap/);
+    assert.ok(load, 'loadData has gone missing');
+    assert.ok(!/isProfileScope\) \{[\s\S]*?loadFormTemplates\(\);[\s\S]*?\}/.test(load[0]),
+        'loadFormTemplates is still behind the not-a-profile branch');
+    assert.match(load[0], /\n                this\.loadFormTemplates\(\);/,
+        'loadFormTemplates is not called for both surfaces');
+});
+
+test('the profile draws the menu it needs, bound to the same component', () => {
+    const profile = read('shepherding-profile.html');
+    assert.match(profile, /x-show="showCreateModal"/, 'the profile has no create menu to open');
+    assert.match(profile, /x-for="t in creatableTypes"/,
+        'the profile hand-writes its types instead of asking the component');
+    assert.match(profile, /x-for="t in formTemplates"/,
+        'the profile offers no template to start a form document from');
+    assert.match(profile, /createDocType === 'form' && !createTemplateId/,
+        'a form document can be created on a profile without choosing a template');
 });
 
 test('only document-mode templates are offered', () => {

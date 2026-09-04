@@ -23,7 +23,7 @@
 // already written.
 
 function formDocumentPage() {
-    return {
+    const page = {
         loading: true,
         problem: '',
         docId: '',
@@ -94,6 +94,39 @@ function formDocumentPage() {
             this.answers[q.id] = person ? { personId: person.id, name: person.name } : null;
             this.personQueries[q.id] = '';
             this.touch();
+        },
+
+        // Whoever has a Form Document open is a signed-in elder, and an elder
+        // is an editor by the rules' ladder — so the picker may offer to add
+        // somebody who is not in the directory yet.
+        canAddPerson: true,
+
+        addPerson(q) {
+            this.openNewPerson(q, this.personQueries[q.id]);
+        },
+
+        // The card gathered it; this writes it, as this elder, under the same
+        // rule that governs the People manager. The same shape that manager
+        // writes, so a Person added from here is not a second kind of Person.
+        async createPerson(details) {
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+            const ref = await db.collection('people').add({
+                name: details.name,
+                totalInvolvements: 0,
+                contact: { email: details.email, phone: details.phone, address: details.address },
+                birthday: details.birthday || null,
+                sex: details.sex || null,
+                lastPastoralPrayerDate: null,
+                tags: [],
+                createdAt: now,
+                updatedAt: now,
+            });
+            // Into the list this page searches, so the picker can find them
+            // without a reload — and so the answer that follows is a pick from
+            // the directory like any other.
+            const person = { id: ref.id, name: details.name, isMember: false, tagIds: [] };
+            this.directory.push(person);
+            return person;
         },
 
         // ⚠ An upload on a Form Document does not work yet, and says so rather
@@ -233,11 +266,77 @@ function formDocumentPage() {
                     updatedByName: this.currentUserName,
                 });
                 this.saveStatus = 'saved';
+                await this.refileForSubject();
             } catch (e) {
                 console.error('Error saving form document:', e);
                 this.saveStatus = 'unsaved';
                 this.problem = 'That did not save. What is on screen is still here — try again in a moment.';
             }
         },
+
+        // ── Filed by its first answer (MS-405) ───────────────────────────────
+        //
+        // A personal shepherding document is an interview ABOUT somebody, and
+        // it lives in two places at once: the Document Library, and the
+        // Documents tab of the Shepherding Profile of whoever the first
+        // question names. Answer that question and it appears there; change the
+        // answer and it moves.
+        //
+        // ⚠ IT READS THE ANSWER, NOT THE TEMPLATE. A document keeps a copy of
+        // its questions and never looks at its template again (ADR-0055), so
+        // the fact that this IS a shepherding document is stamped on the record
+        // and the subject is read from the answers under a fixed id.
+        //
+        // The Library entry is never touched. It is in both places by
+        // construction, so there is nothing here to opt into and nothing to
+        // take away.
+        get subjectPersonId() {
+            return FormsCore.subjectPersonId({ answers: this.answers });
+        },
+
+        async refileForSubject() {
+            if (!(this.doc && this.doc.shepherdingDoc)) return;
+            const now = this.subjectPersonId;
+            const was = String((this.doc && this.doc.ownerPersonId) || '');
+            if (now === was) return;
+            try {
+                // Off the old profile first. The other order would, for a
+                // moment, have one document on two people's profiles — and if
+                // the second write failed, permanently.
+                if (was) await this.unfileFrom('person_' + was);
+                if (now) await this.fileOn('person_' + now);
+                await db.collection('elder_documents').doc(this.docId).update({
+                    ownerPersonId: now || null,
+                    inLibrary: true,
+                });
+                this.doc.ownerPersonId = now || null;
+            } catch (e) {
+                // The answer is saved either way — this is where the document
+                // is SHOWN, not what it says. Saying so beats a silent miss.
+                console.error('Error filing this document on a profile:', e);
+                this.problem = 'Saved, but this did not reach their profile. ' +
+                    'Change the first answer and back again to try that part once more.';
+            }
+        },
+
+        async fileOn(structureId) {
+            const ref = db.collection('elder_document_structure').doc(structureId);
+            const snap = await ref.get();
+            const structure = snap.exists && snap.data().children ? snap.data() : { children: [] };
+            if (!ShepherdingDocsCore.fileInRoot(structure, this.docId)) return;
+            await ref.set(JSON.parse(JSON.stringify(structure)));
+        },
+
+        async unfileFrom(structureId) {
+            const ref = db.collection('elder_document_structure').doc(structureId);
+            const snap = await ref.get();
+            if (!snap.exists || !snap.data().children) return;
+            const structure = snap.data();
+            if (!ShepherdingDocsCore.removeFromTree(structure, this.docId)) return;
+            await ref.set(JSON.parse(JSON.stringify(structure)));
+        },
     };
+    // The new-person card brings its own state and its own Save; this page
+    // brings the door it writes through (createPerson, above).
+    return Object.assign(page, NewPersonCard.state());
 }

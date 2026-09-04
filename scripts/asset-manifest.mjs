@@ -43,6 +43,11 @@ export const JS_CSS_ASSETS = [
   // ---- jsPDF ----
   { url: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", local: "vendor/jspdf-2.5.1.umd.min.js" },
 
+  // ---- html2canvas (draws a Printable's pages to a bitmap for the PDF
+  //      snapshot filed on an event, MS-400). Loaded on demand by
+  //      printable-pdf.js, never in a page head. ----
+  { url: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", local: "vendor/html2canvas-1.4.1.min.js" },
+
   // ---- CodeMirror 5.65.16 (core + modes + addons + themes) ----
   { url: `${CM}/codemirror.min.js`,                 local: "vendor/codemirror/codemirror.min.js" },
   { url: `${CM}/codemirror.min.css`,                local: "vendor/codemirror/codemirror.min.css" },

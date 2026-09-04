@@ -505,3 +505,95 @@ test('an extension full of surprises is cleaned rather than trusted', () => {
     const p = fp.uploadPath('f1', 'r1', 'q1', 'x.p<>ng?token=1');
     assert.ok(!/[<>?=]/.test(p), 'the extension carried characters through into the path');
 });
+
+// ── Adding somebody to the directory (MS-403) ────────────────────────────────
+//
+// The directory is editor-authored, and the door for everybody below an editor
+// is a Directory Request that an editor approves. So the "add them" row on a
+// person picker is an editor's row, and these pin that it stays one — a form
+// link is something a stranger can open.
+
+const PERSON_FORM = {
+    rung: 'member',
+    questions: [{ id: 'q1', type: 'person', text: 'Who?' }],
+};
+
+test('an editor and above may add somebody from a form that asks for a person', () => {
+    ['editor', 'elder', 'admin', 'super_admin'].forEach(rank => {
+        assert.ok(fp.mayAddPeople(PERSON_FORM, { signedIn: true, rank: rank }), rank + ' could not add');
+    });
+});
+
+test('a member, a viewer and a stranger may not — they ask, and an editor answers', () => {
+    ['member', 'viewer', null].forEach(rank => {
+        assert.ok(!fp.mayAddPeople(PERSON_FORM, { signedIn: !!rank, rank: rank }), String(rank) + ' could add');
+    });
+});
+
+test('a form that never asks for a person offers nobody a way to add one', () => {
+    const plain = { rung: 'member', questions: [{ id: 'q1', type: 'short_text', text: 'Name' }] };
+    assert.ok(!fp.mayAddPeople(plain, { signedIn: true, rank: 'elder' }));
+    assert.ok(!fp.mayAddPeople(null, { signedIn: true, rank: 'elder' }));
+});
+
+test('a proposed person is trimmed and capped, and keeps a contact even when it is empty', () => {
+    const r = fp.personProposal({ name: '  Jane Example  ', email: ' j@e.org ', sex: 'female' });
+    assert.equal(r.ok, true);
+    assert.equal(r.person.name, 'Jane Example');
+    assert.equal(r.person.contact.email, 'j@e.org');
+    assert.deepEqual(Object.keys(r.person.contact).sort(), ['address', 'email', 'phone']);
+    assert.equal(r.person.sex, 'female');
+    assert.equal(r.person.birthday, null);
+});
+
+test('a name is the one thing required, and a birthday that is not a date is refused', () => {
+    assert.equal(fp.personProposal({ name: '   ' }).ok, false);
+    assert.equal(fp.personProposal({}).ok, false);
+    assert.equal(fp.personProposal(null).ok, false);
+    assert.equal(fp.personProposal({ name: 'A', birthday: '3rd of May' }).ok, false);
+    assert.equal(fp.personProposal({ name: 'A', birthday: '1990-05-03' }).person.birthday, '1990-05-03');
+});
+
+test('a sex the picker never offers is dropped rather than stored', () => {
+    assert.equal(fp.personProposal({ name: 'A', sex: 'other' }).person.sex, null);
+});
+
+test('a very long name is cut rather than refused, because refusing loses what they typed', () => {
+    const r = fp.personProposal({ name: 'x'.repeat(400) });
+    assert.equal(r.ok, true);
+    assert.equal(r.person.name.length, 120);
+});
+
+// ── Serving a form shut to elders (MS-404) ───────────────────────────────────
+
+const ELDER_ONLY_FORM = {
+    published: true, rung: 'elder', elderOnly: true, questions: [],
+};
+
+test('a form shut to elders is not there at all for anybody else', () => {
+    // "Not there", not "not open to you". A form nobody below an elder may see
+    // is a form they should not learn the existence of.
+    ['editor', 'admin', 'member', null].forEach(rank => {
+        const served = fp.whatToServe(ELDER_ONLY_FORM, { signedIn: !!rank, rank: rank }, '2026-09-04');
+        assert.equal(served.ok, false, String(rank) + ' was served an elder-only form');
+        assert.equal(served.code, 'not-found', 'it told ' + String(rank) + ' the form exists');
+    });
+});
+
+test('an elder is served it', () => {
+    ['elder', 'super_admin'].forEach(rank => {
+        const served = fp.whatToServe(ELDER_ONLY_FORM, { signedIn: true, rank: rank }, '2026-09-04');
+        assert.equal(served.ok, true, rank + ' could not open an elder-only form');
+    });
+});
+
+test('the flag is asked separately from the rung, so the two cannot drift apart', () => {
+    // The model forces the rung to `elder` whenever the flag is on. Two facts
+    // that always agree still drift the day one is written by hand — a console
+    // edit, an import, a migration — and this is the one that must not be the
+    // weaker of the two.
+    const drifted = { published: true, rung: 'member', elderOnly: true, questions: [] };
+    const served = fp.whatToServe(drifted, { signedIn: true, rank: 'member' }, '2026-09-04');
+    assert.equal(served.ok, false);
+    assert.equal(served.code, 'not-found');
+});

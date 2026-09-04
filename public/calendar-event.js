@@ -136,6 +136,16 @@
             // sheet, a floor plan. Visible to anyone who can see the Event,
             // same as its description; only an editor attaches or removes one.
             attachments: [],
+            // Printables linked to this event's series (MS-400): the service
+            // guide on a Sunday, the directory on a members' meeting.
+            printables: [],
+            linkingPrintable: false,
+            libraryPrintables: [],
+            libraryFolders: [],
+            libraryLoading: false,
+            snapshotBusy: null,
+            snapshotProgress: '',
+            printableError: '',
             // A document WRITTEN here rather than uploaded (ADR-0049). Listed
             // on the same tab, read by the same people; the difference a person
             // sees is what happens when they click.
@@ -537,6 +547,9 @@
 
                     if (series.status === 'fulfilled' && series.value && series.value.exists) {
                         this.series = Object.assign({ id: series.value.id }, series.value.data());
+                        // Not awaited: a slow read here should cost the tab a
+                        // moment, never the page.
+                        this.loadPrintables();
                     } else if (series.status === 'rejected') {
                         // Survivable: the series carries the recurrence and the
                         // colour, so the roster reads fine without it.
@@ -1980,6 +1993,163 @@
             //
             // So a refusal is now repaired where it can be, and SAID where it
             // cannot.
+            // ── Printables linked to this event (MS-400) ─────────────────
+            //
+            // The series carries the ids; each Printable carries whether
+            // members may open it. An editor sees every linked one; a member
+            // sees only those marked for members — a refused read is simply
+            // not listed, because that is what "not shared" means.
+            // The Printable modules are optional neighbours (ADR-0045): the
+            // Roles tab this script also draws on the Order of Service page
+            // never shows the Files tab, and does not load them.
+            get printablesAvailable() {
+                return typeof PrintableStore !== 'undefined' && typeof PrintableCore !== 'undefined'
+                    && typeof PrintableDataStore !== 'undefined' && typeof PrintableLive !== 'undefined'
+                    && typeof PrintablePdf !== 'undefined' && typeof FilingCore !== 'undefined';
+            },
+
+            async loadPrintables() {
+                if (!this.series || !this.printablesAvailable) { this.printables = []; return; }
+                const ids = Array.isArray(this.series.printables) ? this.series.printables : [];
+                if (!ids.length) { this.printables = []; return; }
+                try {
+                    this.printables = await PrintableStore.loadLinked(db, ids);
+                } catch (e) {
+                    this.printables = [];
+                }
+            },
+
+            get canLinkPrintables() { return this.isEditor && !!this.series && this.printablesAvailable; },
+
+            printableHref(p, mode) {
+                return (mode === 'edit' ? 'printable-editor.html?id=' : 'printable-view.html?id=') + encodeURIComponent(p.id);
+            },
+
+            printableSub(p) {
+                const bits = [];
+                if (p.template && p.template.label) bits.push(p.template.label);
+                bits.push(p.memberVisible ? 'Members may view' : 'Editors only');
+                return bits.join(' · ');
+            },
+
+            async startLinkPrintable() {
+                if (!this.canLinkPrintables) return;
+                this.linkingPrintable = true;
+                this.libraryLoading = true;
+                try {
+                    const [printables, folders] = await Promise.all([
+                        PrintableStore.listPrintables(db),
+                        PrintableStore.listFolders(db).catch(() => []),
+                    ]);
+                    this.libraryPrintables = printables;
+                    this.libraryFolders = folders;
+                } catch (e) {
+                    this.printableError = 'The library did not load. Try again.';
+                    this.linkingPrintable = false;
+                } finally {
+                    this.libraryLoading = false;
+                }
+            },
+
+            // Where a library entry is filed, for the picker.
+            printablePath(p) {
+                if (!this.printablesAvailable) return '';
+                const crumbs = FilingCore.breadcrumbFor(this.libraryFolders, p.folderId);
+                return crumbs.length ? crumbs.map(c => c.name).join(' / ') : 'Printables';
+            },
+
+            get linkable() {
+                const linked = new Set(this.printables.map(p => p.id));
+                return this.libraryPrintables.filter(p => p.template && !linked.has(p.id));
+            },
+
+            async linkPrintable(p) {
+                if (!this.canLinkPrintables) return;
+                const ids = PrintableCore.linkPrintable(this.series.printables || [], p.id);
+                try {
+                    await PrintableStore.linkToSeries(db, this.series.id, ids);
+                    this.series.printables = ids;
+                    this.linkingPrintable = false;
+                    await this.loadPrintables();
+                } catch (e) {
+                    this.printableError = 'That link did not save. Try again.';
+                }
+            },
+
+            async unlinkPrintable(p) {
+                if (!this.canLinkPrintables) return;
+                const ids = PrintableCore.unlinkPrintable(this.series.printables || [], p.id);
+                try {
+                    await PrintableStore.linkToSeries(db, this.series.id, ids);
+                    this.series.printables = ids;
+                    this.printables = this.printables.filter(x => x.id !== p.id);
+                } catch (e) {
+                    this.printableError = 'That change did not save. Try again.';
+                }
+            },
+
+            async setMembersMayView(p, on) {
+                if (!this.isEditor) return;
+                try {
+                    await PrintableStore.setMemberVisible(db, firebase, firebase.auth().currentUser, p.id, on);
+                    p.memberVisible = on === true;
+                } catch (e) {
+                    this.printableError = 'That change did not save. Try again.';
+                }
+            },
+
+            // The snapshot: the Printable rendered with today's data, every
+            // page, as a PDF filed as an ordinary attachment on this date —
+            // so it obeys the attachment rules, fetched and never linked
+            // (ADR-0046), and it is the one frozen copy (ADR-0057).
+            async filePrintableSnapshot(p) {
+                if (!this.canManageAttachments || !this.occurrence || this.snapshotBusy) return;
+                this.snapshotBusy = p.id;
+                this.snapshotProgress = 'Reading the data…';
+                this.printableError = '';
+                try {
+                    const record = await PrintableStore.loadPrintable(db, p.id);
+                    if (!record || !record.template) throw new Error('not laid out');
+                    const project = Object.assign({ id: record.id }, PrintableCore.migrate(record));
+                    const viewer = { level: this.rank, personId: this.personId || null };
+                    const bundle = await PrintableDataStore.fetch(db, PrintableLive.collectNeeds(project), viewer);
+                    const resolver = PrintableLive.resolver(project, bundle, { level: this.rank, canEdit: true });
+                    const host = document.createElement('div');
+                    host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none;';
+                    document.body.appendChild(host);
+                    let entries;
+                    try { entries = PrintableLive.layoutPages(project, resolver, host); } finally { host.remove(); }
+                    this.snapshotProgress = 'Drawing ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + '…';
+                    const blob = await PrintablePdf.render(project, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => { this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…'; },
+                    });
+                    this.snapshotProgress = 'Filing…';
+                    const occurrenceId = this.occurrence.id;
+                    const name = PrintablePdf.fileName(project, this.occurrence.date);
+                    const attachmentId = Store.newAttachmentId(db, occurrenceId);
+                    const path = Attachments.storagePath(occurrenceId, attachmentId, name);
+                    await firebase.storage().ref().child(path).put(blob, { contentType: 'application/pdf' });
+                    const attachment = Attachments.buildAttachmentRecord({
+                        name: name,
+                        contentType: 'application/pdf',
+                        size: blob.size,
+                        storagePath: path,
+                        uploadedBy: this.uid,
+                        uploadedByName: this.personId ? this.personName(this.personId) : null,
+                        uploadedAt: new Date().toISOString(),
+                    });
+                    await Store.saveAttachment(db, occurrenceId, attachmentId, attachment);
+                    this.attachments = this.attachments.concat([Object.assign({ id: attachmentId }, attachment)]);
+                } catch (e) {
+                    console.error('Printable snapshot failed:', e);
+                    this.printableError = 'That snapshot could not be filed. ' + (String(e && e.message).includes('not laid out') ? 'The printable has no pages yet.' : 'Try again.');
+                } finally {
+                    this.snapshotBusy = null;
+                    this.snapshotProgress = '';
+                }
+            },
+
             async loadFilesTab(occurrence) {
                 const read = async () => {
                     const [attachments, documents] = await Promise.all([

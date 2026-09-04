@@ -42,6 +42,70 @@ function rankSatisfies(rung, rank) {
   return allowed.indexOf(rank) !== -1;
 }
 
+// ── Adding somebody to the directory (MS-403) ────────────────────────────────
+//
+// A person question offers who the directory knows. When the name being typed
+// is nobody it knows, an EDITOR is offered a way to add them without leaving
+// the form. Editor and no lower, on purpose: the directory is editor-authored
+// (ADR-0025, ADR-0027) and the door for everybody else is a Directory Request,
+// which an editor approves. A create button on a link that a stranger can open
+// would be that door with nobody at it.
+//
+// ⚠ THE RANK IS READ HERE, NEVER TAKEN FROM THE PAGE. The page is sent a
+// boolean so it knows whether to draw the row; this is what actually decides.
+
+/**
+ * May this caller add somebody from this form's picker?
+ * @param {?Object} form The stored Form Template.
+ * @param {!Object} caller {signedIn, rank}.
+ * @return {boolean} True when they may.
+ */
+function mayAddPeople(form, caller) {
+  if (!form) return false;
+  const asksForAPerson = FormsCore.askedQuestions(form)
+      .some((q) => q.type === "person");
+  if (!asksForAPerson) return false;
+  return rankSatisfies("editor", caller && caller.rank);
+}
+
+/**
+ * What a proposed Person may say. Everything but a name is optional — a name
+ * and nothing else is a real thing to know about somebody you have just been
+ * told about — but nothing arrives unchecked, because this writes with admin
+ * credentials past the rules that would otherwise have shaped it.
+ *
+ * @param {*} proposed What the card sent.
+ * @return {!Object} {ok, person} or {ok:false, code, message}.
+ */
+function personProposal(proposed) {
+  const p = proposed && typeof proposed === "object" ? proposed : {};
+  const text = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+  const name = text(p.name, 120);
+  if (!name) {
+    return {ok: false, code: "invalid-argument", message: "They need a name."};
+  }
+  const birthday = text(p.birthday, 10);
+  if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    return {
+      ok: false, code: "invalid-argument",
+      message: "That birthday is not a date.",
+    };
+  }
+  return {
+    ok: true,
+    person: {
+      name: name,
+      sex: p.sex === "male" || p.sex === "female" ? p.sex : null,
+      birthday: birthday || null,
+      contact: {
+        email: text(p.email, 200),
+        phone: text(p.phone, 40),
+        address: text(p.address, 300),
+      },
+    },
+  };
+}
+
 // ── Handing out the questions ────────────────────────────────────────────────
 
 /**
@@ -102,6 +166,17 @@ function whatToServe(form, caller, today) {
   // which ones are real. The whole point of a 128-bit id is that guessing
   // fails, and it fails silently.
   if (!form || !form.published) {
+    return {ok: false, code: "not-found", message: "There is no form here."};
+  }
+
+  // ⚠ SHUT TO ELDERS IS ASKED SEPARATELY FROM THE RUNG (MS-404), even though
+  // the model forces the rung to `elder` whenever the flag is on. Two facts
+  // that always agree still drift the day one of them is written by hand — a
+  // record edited in a console, an import, a migration — and the one that must
+  // not be the weaker of the two is this one. It answers "not found", not
+  // "not open to you": a form nobody below an elder may see is a form they
+  // should not learn the existence of.
+  if (FormsCore.isElderOnly(form) && !rankSatisfies("elder", c.rank)) {
     return {ok: false, code: "not-found", message: "There is no form here."};
   }
 
@@ -205,12 +280,20 @@ function pickerChoices(form, directory) {
  * @param {string} responseId The response the file belongs to.
  * @param {string} questionId The question it answers.
  * @param {string} name The name it arrived with, for its extension only.
+ * @param {boolean=} elderOnly Whether the form is shut to elders (MS-404).
  * @return {string} The storage path.
  */
-function uploadPath(formId, responseId, questionId, name) {
+function uploadPath(formId, responseId, questionId, name, elderOnly) {
   const dot = String(name || "").lastIndexOf(".");
   const ext = dot > 0 ? String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
-  return `form_uploads/${formId}/${responseId}/${questionId}${ext}`;
+  // ⚠ A SEPARATE PREFIX, NOT A FLAG (MS-404). Whoever may read an answer may
+  // read what came with it, and shutting a form to elders has to shut its
+  // files too — but storage.rules cannot see the `elderOnly` on the answer,
+  // and asking it to reach into Firestore per file would put a lookup on every
+  // read of every attachment. So the fact is written into the path, where the
+  // rule can see it, exactly the way the answer carries its own stamp.
+  const home = elderOnly === true ? "form_uploads_elder" : "form_uploads";
+  return `${home}/${formId}/${responseId}/${questionId}${ext}`;
 }
 
 /**
@@ -387,6 +470,8 @@ function judgeSubmission(form, attempt, today) {
 }
 
 module.exports = {
+  mayAddPeople,
+  personProposal,
   uploadPath,
   judgeUploads,
   personInScope,

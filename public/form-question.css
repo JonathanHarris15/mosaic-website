@@ -1,0 +1,119 @@
+/* The controls a form question draws, where they need more than the shared
+ * design system gives them (MS-403).
+ *
+ * FormQuestionMarkup writes the markup once for both pages that draw a
+ * question — the fill-in page and the elder's Form Document — so the look has
+ * to be written once too, or the two drift the moment somebody styles one of
+ * them. That is what happened to the Directory Person picker: its classes were
+ * in the shared markup and its styles were in neither page, so it drew as bare
+ * HTML on both.
+ *
+ * The picker is shaped like the one on the Order of Service: one box you type
+ * into, and the matches drop under it in a card.
+ */
+
+.fa-person { position: relative; display: flex; flex-direction: column; gap: 8px; }
+
+.fa-person__picked {
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 12px;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius, 10px);
+    background: var(--surface-container-lowest);
+    font-size: 14px; color: var(--on-surface);
+}
+.fa-person__picked > span:nth-child(2) { flex: 1 1 auto; min-width: 0; font-weight: 600; }
+.fa-person__picked .material-symbols-outlined { font-size: 20px; color: var(--primary); }
+
+.fa-person__find { position: relative; }
+
+.fa-person__box {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius, 10px);
+    background: var(--surface-container-lowest);
+}
+.fa-person__box:focus-within { border-color: var(--primary); }
+.fa-person__box input {
+    flex: 1 1 auto; min-width: 0;
+    height: 44px; padding: 0;
+    border: 0; background: transparent; outline: none;
+    font: 14px var(--font-sans); color: var(--on-surface);
+}
+.fa-person__box .material-symbols-outlined { flex: 0 0 auto; font-size: 20px; color: var(--on-surface-variant); }
+
+/* Over the questions below it, and never wider than the phone it is on. */
+.fa-person__drop {
+    position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+    max-height: 268px; overflow-y: auto;
+    padding: 4px;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius, 10px);
+    box-shadow: 0 14px 34px rgba(14, 28, 54, .16);
+}
+
+.fa-person__opt {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    min-height: 44px; padding: 8px 10px;
+    border: 0; border-radius: 7px; background: transparent;
+    font: 14px var(--font-sans); color: var(--on-surface); text-align: left;
+    cursor: pointer;
+}
+.fa-person__opt:hover, .fa-person__opt:focus-visible { background: var(--surface-container); }
+.fa-person__opt .material-symbols-outlined { flex: 0 0 auto; font-size: 20px; color: var(--on-surface-variant); }
+
+/* Adding somebody is a different kind of act from picking somebody, and it
+ * sits under a rule so a fast tap on the last name in the list cannot land on
+ * it by accident. */
+.fa-person__opt--new { border-top: 1px solid var(--outline-variant); border-radius: 0 0 7px 7px; color: var(--primary); }
+.fa-person__opt--new .material-symbols-outlined { color: var(--primary); }
+.fa-person__opt--new strong { font-weight: 600; }
+
+.fa-person__none { margin: 0; padding: 10px; font-size: 13px; color: var(--on-surface-variant); }
+
+/* ── The card that adds somebody to the directory ──────────────────────────
+ *
+ * A dialog, not a page surface: it is filled in and then accepted or dropped
+ * as one thing (ADR-0032), which is why it has a Save button when the pages
+ * around it do not.
+ */
+.np-veil {
+    position: fixed; inset: 0; z-index: 90;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 0; background: rgba(14, 28, 54, .38);
+}
+@media (min-width: 620px) { .np-veil { align-items: center; padding: 24px; } }
+
+.np-card {
+    display: flex; flex-direction: column;
+    width: 100%; max-width: 520px; max-height: 92vh;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(14, 28, 54, .2);
+}
+@media (min-width: 620px) { .np-card { border-radius: 16px; } }
+
+.np-card__head { padding: 18px 20px 12px; border-bottom: 1px solid var(--outline-variant); }
+.np-card__head h2 { margin: 0; font-family: var(--font-serif); font-size: 21px; font-weight: 600; color: var(--on-surface); }
+.np-card__head p { margin: 5px 0 0; font-size: 13px; color: var(--on-surface-variant); text-wrap: pretty; }
+
+.np-card__body { flex: 1 1 auto; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.np-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 460px) { .np-pair { grid-template-columns: 1fr; } }
+
+.np-f { display: flex; flex-direction: column; gap: 5px; }
+.np-f > span { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--on-surface-variant); }
+.np-f input, .np-f select {
+    height: 44px; padding: 0 11px;
+    border: 1px solid var(--outline-variant); border-radius: var(--radius, 10px);
+    background: var(--surface-container-lowest); color: var(--on-surface);
+    font: 14px var(--font-sans); box-sizing: border-box; width: 100%;
+}
+.np-f input:focus, .np-f select:focus { outline: none; border-color: var(--primary); }
+
+.np-card__problem { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--error-container, #fdecec); color: var(--on-error-container, #7a1c1c); font-size: 13px; }
+
+.np-card__acts { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--outline-variant); }

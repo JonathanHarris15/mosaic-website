@@ -40,9 +40,30 @@
     }
 
     // ── Reading ──────────────────────────────────────────────────────────────
+    //
+    // ⚠ EVERY QUERY HERE HAS TO SAY WHETHER THE READER IS AN ELDER (MS-404).
+    // A form an elder has shut to elders is closed in `firestore.rules`, and a
+    // rule that narrows per document does NOT narrow a query — Firestore
+    // refuses the whole query unless it can see that every row it could return
+    // is allowed. So a reader below elder has to ask for `elderOnly == false`
+    // by name; asking for everything would not return "the ones they may see",
+    // it would return a permission error and an empty library.
+    //
+    // That is also why buildFormTemplate writes the flag on every save, false
+    // included, and why a backfill stamped the forms that pre-date it: this
+    // query cannot match a document where the field is simply absent.
+    function formsFor(db, asElder) {
+        const forms = db.collection(FORMS);
+        return asElder ? forms : forms.where('elderOnly', '==', false);
+    }
 
-    async function listForms(db) {
-        const snap = await db.collection(FORMS).orderBy('updatedAt', 'desc').get();
+    function answersFor(db, formId, asElder) {
+        const answers = db.collection(RESPONSES).where('formId', '==', formId);
+        return asElder ? answers : answers.where('elderOnly', '==', false);
+    }
+
+    async function listForms(db, asElder) {
+        const snap = await formsFor(db, asElder).orderBy('updatedAt', 'desc').get();
         return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     }
 
@@ -51,16 +72,16 @@
         return doc.exists ? Object.assign({ id: doc.id }, doc.data()) : null;
     }
 
-    async function loadResponses(db, formId) {
+    async function loadResponses(db, formId, asElder) {
         // No orderBy. On an anonymous form the read order IS the disclosure —
         // FormsCore.anonymousReadOrder shuffles what comes back, and sorting by
         // arrival here would defeat it before the page ever saw the rows.
-        const snap = await db.collection(RESPONSES).where('formId', '==', formId).get();
+        const snap = await answersFor(db, formId, asElder).get();
         return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     }
 
-    async function countResponses(db, formId) {
-        const snap = await db.collection(RESPONSES).where('formId', '==', formId).get();
+    async function countResponses(db, formId, asElder) {
+        const snap = await answersFor(db, formId, asElder).get();
         return snap.size;
     }
 
@@ -114,13 +135,30 @@
     // The ledger is NOT cleaned up here, because no client may touch it. A
     // stale ledger row is harmless — it says somebody answered a form that no
     // longer exists, joins to nothing, and is unreadable by anybody anyway.
-    async function deleteForm(db, formId) {
-        const answers = await db.collection(RESPONSES).where('formId', '==', formId).get();
-        const batch = db.batch();
-        answers.forEach(doc => batch.delete(doc.ref));
-        batch.delete(db.collection(FORMS).doc(formId));
-        await batch.commit();
-        return answers.size;
+    // ⚠ THROUGH A FUNCTION, BECAUSE A BROWSER CANNOT DELETE AN ANSWER (MS-406).
+    // `form_responses` is `allow write: if false` for every client — answers are
+    // written server-side because validation cannot live in a browser we do not
+    // control — and delete is a write. So this used to ask, be answered "yes,
+    // delete it", and then fail: a form that had ever been answered could not be
+    // deleted at all, and the page could only say "that did not delete".
+    //
+    // The function also clears the ballot ledger, which no client may even read.
+    // The old comment here was right that a stale ledger row is harmless; a door
+    // that can tidy it is simply better than one that cannot.
+    async function deleteForm(db, formId, fns) {
+        const app = global.firebase && global.firebase.app && global.firebase.app();
+        if (!fns && !(app && typeof app.functions === 'function')) {
+            // The page did not load firebase-functions-compat.js. Said as a
+            // sentence rather than as "functions is not a function", which is
+            // what a person pressing Delete actually saw.
+            throw new Error('This page cannot reach the server. Refresh and try again.');
+        }
+        const call = (fns || app.functions('us-central1'))
+            .httpsCallable('deleteFormTemplate');
+        const res = await call({ formId: formId });
+        const data = (res && res.data) || {};
+        if (!data.ok) throw new Error(data.message || 'That did not delete.');
+        return data.answers || 0;
     }
 
     // ── Folders (MS-376) ─────────────────────────────────────────────────────
@@ -184,6 +222,8 @@
         for (const form of doomedForms) {
             await deleteForm(db, form.id);
         }
+        // Every form is gone before a single folder is, so a failure part-way
+        // leaves forms filed where they were rather than orphaned at the top.
         const batch = db.batch();
         doomedFolders.forEach(id => batch.delete(db.collection(FOLDERS).doc(id)));
         await batch.commit();

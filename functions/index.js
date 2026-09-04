@@ -2726,6 +2726,87 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
  * Every judgement is in forms-public.js and forms-core.js, both pure and tested
  * without an emulator. This reads, asks, and writes.
  */
+// The two ladders, restated because the rules language cannot export anything
+// — the same trade forms-public.js already accepts. ⚠ An admin is NOT an
+// elder: isElder() in firestore.rules has never said so.
+const EDITOR_RANKS = ["editor", "admin", "elder", "super_admin"];
+const ELDER_RANKS = ["elder", "super_admin"];
+
+// Deleting a Form Template, and the answers it gathered (MS-406).
+//
+// ⚠ WHY THIS IS NOT A BATCH IN THE BROWSER. It was, and it could not work:
+// `form_responses` is `allow write: if false` for every client, because answers
+// are written server-side where the validation lives — and delete is a write.
+// So the page asked "delete this form and all 14 answers it has gathered?", was
+// told yes, and then failed. A form that had ever been answered could not be
+// deleted at all.
+//
+// It also clears the ballot ledger, which no client may even read (ADR-0052).
+// A stale ledger row was harmless, but a door that can tidy it is better than
+// one that cannot.
+exports.deleteFormTemplate = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      const {formId} = request.data || {};
+      if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
+        return {ok: false, message: "There is no form here."};
+      }
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in first.");
+      }
+
+      const userSnap = await db.collection("users").doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+      const rank = user.permissionLevel || user.role || null;
+      if (!EDITOR_RANKS.includes(rank)) {
+        return {ok: false, message: "Only an editor can delete a form."};
+      }
+
+      const formRef = db.collection("forms").doc(formId);
+      const formSnap = await formRef.get();
+      if (!formSnap.exists) return {ok: false, message: "There is no form here."};
+      const form = formSnap.data();
+
+      // A form shut to elders is deleted by an elder and nobody else (MS-404).
+      // The rules say so for the record; this door has to say so too, because
+      // it writes past them.
+      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank)) {
+        return {ok: false, message: "There is no form here."};
+      }
+
+      // In pages, so a form with thousands of answers does not try to become
+      // one batch. Deleting a response fires cleanUpFormUploads, which takes
+      // the bytes that came with it.
+      let answers = 0;
+      for (;;) {
+        const page = await db.collection("form_responses")
+            .where("formId", "==", formId).limit(300).get();
+        if (page.empty) break;
+        const batch = db.batch();
+        page.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        answers += page.size;
+        if (page.size < 300) break;
+      }
+
+      // The ledger is keyed `{formId}_{personId}`, so its rows are found by
+      // prefix rather than by a field.
+      const ledger = await db.collection("form_ledger")
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .startAt(`${formId}_`).endAt(`${formId}_`).get();
+      if (!ledger.empty) {
+        const batch = db.batch();
+        ledger.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+
+      await formRef.delete();
+      log(`deleteFormTemplate: ${formId} and ${answers} answer(s)`);
+      return {ok: true, answers: answers};
+    },
+);
+
 exports.publicForm = onCall(
     // ⚠ enforceAppCheck MUST MATCH `enabled` IN public/app-check-config.js,
     // where the reasons are written out in full. Enforced here but not enabled
@@ -2749,7 +2830,7 @@ exports.publicForm = onCall(
       if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
         return {ok: false, code: "not-found", message: "There is no form here."};
       }
-      if (op !== "fetch" && op !== "submit") {
+      if (op !== "fetch" && op !== "submit" && op !== "addPerson") {
         throw new HttpsError("invalid-argument", "Unknown operation.");
       }
 
@@ -2798,7 +2879,55 @@ exports.publicForm = onCall(
           });
           served.people = fp.pickerChoices(form, directory);
         }
+        // Whether to draw the "add them to the directory" row. The page is
+        // told; the addPerson op below is what actually decides.
+        served.mayAddPeople = fp.mayAddPeople(form, caller);
         return served;
+      }
+
+      // ── addPerson (MS-403) ───────────────────────────────────────────────
+      //
+      // Somebody typed a name the directory does not hold, and is an editor,
+      // so they may add them without leaving the form. This page has no
+      // Firestore (ADR-0051), so the write comes through here like everything
+      // else it does — and the rank is read from `users` above, never taken
+      // from what the page claims about itself.
+      if (op === "addPerson") {
+        const servable = fp.whatToServe(form, caller, today);
+        if (!servable.ok) return servable;
+        if (!fp.mayAddPeople(form, caller)) {
+          return {
+            ok: false,
+            code: "permission-denied",
+            message: "Only an editor can add somebody to the directory.",
+          };
+        }
+        const proposal = fp.personProposal(request.data && request.data.person);
+        if (!proposal.ok) return proposal;
+
+        // The shape the People manager writes, so a Person added from a form
+        // is not a second kind of Person.
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const ref = await db.collection("people").add({
+          name: proposal.person.name,
+          totalInvolvements: 0,
+          contact: proposal.person.contact,
+          birthday: proposal.person.birthday,
+          sex: proposal.person.sex,
+          lastPastoralPrayerDate: null,
+          tags: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        // Shaped like a row of `served.people`, because that is the list the
+        // picker searches and the answer that follows must be an ordinary pick.
+        return {
+          ok: true,
+          person: {
+            id: ref.id, name: proposal.person.name,
+            isMember: false, tagIds: [],
+          },
+        };
       }
 
       // ── submit ───────────────────────────────────────────────────────────
@@ -2875,7 +3004,9 @@ exports.publicForm = onCall(
       const writtenPaths = [];
       for (const qid of Object.keys(files || {})) {
         const file = files[qid];
-        const path = fp.uploadPath(formId, responseRef.id, qid, file.name);
+        const path = fp.uploadPath(
+            formId, responseRef.id, qid, file.name,
+            FormsCore.isElderOnly(form));
         const buffer = Buffer.from(file.dataBase64, "base64");
         await admin.storage().bucket().file(path).save(buffer, {
           contentType: file.contentType || "application/octet-stream",
@@ -2899,6 +3030,13 @@ exports.publicForm = onCall(
         // The files join the answers here rather than in the model, because
         // only this side knows where the bytes actually landed.
         answers: Object.assign({}, verdict.response.answers, storedFiles),
+        // ⚠ THE FORM'S "elders only" RIDES ON THE ANSWER (MS-404). A security
+        // rule cannot afford to read the form once per answer — the same
+        // reason Event visibility is stamped onto every occurrence (ADR-0018
+        // §5) — so firestore.rules reads the flag straight off the row. Always
+        // written, false included: a query that has to say `elderOnly == false`
+        // cannot match a document where the field is absent.
+        elderOnly: FormsCore.isElderOnly(form),
         submittedAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
 

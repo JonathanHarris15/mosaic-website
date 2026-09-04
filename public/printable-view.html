@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Printable · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Printable', menu: false, back: '#back', route: 'home' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+
+<body class="m-page pv-body" x-data="printableView()" x-init="init()" x-cloak>
+
+    <header class="m-header m-header--compact pv-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="javascript:history.back()" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Back</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title m-header__title--serif" x-text="project ? project.name : 'Printable'"></h1>
+                    <span class="m-header__sub" x-show="template" x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') : '')) : ''"></span>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="warnings.length" @click="showWarnings = !showWarnings" title="Not all data could be pulled">
+                    <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
+                </button>
+                <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="m-page__body pv-main">
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+        </div>
+        <div class="m-notice m-notice--warning" x-show="showWarnings && warnings.length">
+            <span class="material-symbols-outlined m-notice__icon">warning</span>
+            <div class="m-notice__body">
+                <span class="m-notice__title">Not all data could be pulled</span>
+                <template x-for="(w, i) in warnings" :key="i"><span class="m-notice__text pv-warn" x-text="w.label + ': ' + w.message"></span></template>
+            </div>
+        </div>
+        <div id="pv-pages" class="pv-pages" x-show="!loading && !problem"></div>
+        <div id="pv-measure" class="pv-measure"></div>
+    </main>
+
+    <div id="pv-print" class="pv-print"></div>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-dom.js"></script>
+    <script src="printable-store.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="printable-data-core.js"></script>
+    <script src="printable-data-store.js"></script>
+    <script src="printable-render-core.js"></script>
+    <script src="printable-live.js"></script>
+    <script src="printable-view.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        .pv-body { background: var(--surface-container); }
+        .pv-main { display: flex; flex-direction: column; gap: var(--space-md); align-items: center; }
+        .pv-main .m-notice { width: 100%; max-width: 1100px; }
+        .pv-warn { display: block; }
+        .pv-pages { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--space-lg); padding-bottom: var(--space-xl); }
+        .pv-sheet { position: relative; overflow: hidden; box-shadow: 0 18px 48px rgba(14,28,54,.18), 0 0 0 1px rgba(14,28,54,.08); background: #fff; }
+        /* The page's own base rules come from PrintableDom.ensureBaseStyles. */
+        .pv-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
+        .pv-print { display: none; }
+        @media print {
+            body.pv-printing > *:not(.pv-print) { display: none !important; }
+            .pv-print { display: block; }
+            body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</body>
+</html>

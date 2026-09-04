@@ -829,8 +829,30 @@ service cloud.firestore {
     // granted here.
     //
     // What that leaves is the ordinary editor ladder, and nothing below it.
+    // A Form Template. Editor and above, EXCEPT one an elder has shut to
+    // elders (MS-404).
+    //
+    // ⚠ THE FLAG IS ON THE RECORD, NOT LOOKED UP. A form that does not carry
+    // `elderOnly` at all is an ordinary form, because that is what every form
+    // was before this existed — and every save writes it now, false included,
+    // so an editor's library query can say `elderOnly == false` and match.
+    //
+    // Only an elder may turn it on, and only an elder may turn it off: the
+    // update below refuses an editor whose write would leave OR arrive at an
+    // elder-only form, so an editor cannot set the flag and cannot clear one
+    // somebody else set.
+    function shutToElders(data) {
+      return ('elderOnly' in data) && data.elderOnly == true;
+    }
+
     match /forms/{formId} {
-      allow read, write: if isEditor();
+      allow read: if isEditor() && (isElder() || !shutToElders(resource.data));
+      allow create: if isEditor()
+        && (isElder() || !shutToElders(request.resource.data));
+      allow update: if isEditor()
+        && (isElder()
+            || (!shutToElders(resource.data) && !shutToElders(request.resource.data)));
+      allow delete: if isEditor() && (isElder() || !shutToElders(resource.data));
     }
 
     // Where a form is filed: a name and the folder it sits in, and nothing
@@ -846,12 +868,49 @@ service cloud.firestore {
       allow read, write: if isEditor();
     }
 
+    // Printables (MS-359): a project the church lays out and prints — a
+    // directory, a service guide, a handout. The record holds the page
+    // template, the pages' element trees and which live field feeds which
+    // element; it never holds the data those fields resolve to, so reading a
+    // Printable discloses nothing a Person or an Event would not.
+    //
+    // Editor and above write, the same ladder as the Forms library. A member
+    // reads one only when an editor has marked it `memberVisible` (MS-400) —
+    // the "members may view" switch on the event that links it. The event's
+    // own visibility is not re-checked here: the Printable is the record in
+    // hand, and a member only ever finds the link on an event they can open.
+    // A missing flag reads as false; nothing below member reads at all.
+    match /printables/{printableId} {
+      allow read: if isEditor()
+        || (isMember() && ('memberVisible' in resource.data) && resource.data.memberVisible == true);
+      allow write: if isEditor();
+    }
+
+    // Where a Printable is filed: a name and the folder it sits in, and
+    // nothing else. A Printable remembers its folder; a folder does not
+    // remember its Printables (ADR-0054) — two editors filing at the same
+    // moment write two different records.
+    match /printable_folders/{folderId} {
+      allow read, write: if isEditor();
+    }
+
+    // A custom page template (MS-393): a page somebody built, kept to start
+    // the next project from. Editor and above, like the projects it seeds.
+    match /printable_templates/{templateId} {
+      allow read, write: if isEditor();
+    }
+
     // One person's answers. Editors read them on the Responses tab; the
     // function writes them. No client writes — validation (required questions,
     // the rung, whether the form is closed) happens on the server, because a
     // browser answering a public form is not something we control.
+    // ⚠ THE FORM'S `elderOnly` IS STAMPED ON EVERY ANSWER, and this is why. A
+    // rule cannot afford to read the form per answer — the same reason Event
+    // visibility is stamped onto every occurrence (ADR-0018 §5) — so the flag
+    // rides on the answer and is read straight off it here. The function
+    // stamps it; no client writes these at all.
     match /form_responses/{responseId} {
-      allow read: if isEditor();
+      allow read: if isEditor() && (isElder() || !shutToElders(resource.data));
       allow write: if false;
     }
 

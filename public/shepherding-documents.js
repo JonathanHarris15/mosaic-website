@@ -16,6 +16,12 @@ document.addEventListener('alpine:init', () => {
         // tab) the Person that owns documents created here. Defaults reproduce the
         // global Library exactly.
         structureDocId: config.structureDocId || 'root',
+        // Whose profile this is, for the first answer of a shepherding document
+        // started here. A function because the page loads the Person after it
+        // mounts this, and a value read at mount would always be ''.
+        get ownerPersonName() {
+            return typeof config.ownerPersonName === 'function' ? (config.ownerPersonName() || '') : '';
+        },
         ownerPersonId: config.ownerPersonId || null,
         embedded: !!config.embedded, // mounted inside an already-authenticated page
 
@@ -155,15 +161,20 @@ document.addEventListener('alpine:init', () => {
                     db.collection('elder_documents').orderBy('createdAt', 'desc').get(),
                 ];
                 // The care-list picker (views/tags) only exists on the global
-                // Library; a profile tab creates plain notes, so skip those reads.
+                // Library — a Care List is a list over the whole directory and
+                // has no meaning scoped to one person, so a profile tab does
+                // not offer one and does not pay for the reads.
                 if (!this.isProfileScope) {
                     reads.push(db.collection('shepherding_views').orderBy('title', 'asc').get());
                     reads.push(db.collection('people_tags').orderBy('name', 'asc').get());
-                    // Form Templates, on their own rather than in this list, so
-                    // a library that cannot reach them is still a working
-                    // library — see loadFormTemplates.
-                    this.loadFormTemplates();
                 }
+                // Form Templates BOTH places (MS-405). A Form Document is an
+                // interview about somebody, and the profile tab is where an
+                // elder is already standing when they want one. On its own
+                // rather than in the list above, so a library that cannot reach
+                // the templates is still a working library — see
+                // loadFormTemplates.
+                this.loadFormTemplates();
                 const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all(reads);
 
                 if (structSnap.exists) {
@@ -291,9 +302,18 @@ document.addEventListener('alpine:init', () => {
 
         // ── Create ────────────────────────────────────────────────────────────
 
+        // What a New Document can be, here. A Care List is a list over the
+        // whole directory, so it is not one of the answers on somebody's own
+        // profile; a Form Document is, and that is the point of MS-405.
+        get creatableTypes() {
+            return this.isProfileScope ? ['note', 'form'] : ['note', 'care-list', 'form'];
+        },
+
+        docTypeLabel(type) {
+            return { note: 'Note', 'care-list': 'Care List', form: 'Form' }[type] || 'Note';
+        },
+
         openCreateModal() {
-            // A profile tab makes plain notes only — skip the care-list picker.
-            if (this.isProfileScope) { this.createDocument(); return; }
             this.createDocType = 'note';
             this.createFilterMode = 'preset';
             this.customFilter = { filterTags: [], filterMode: 'any', statusZoneFilters: [] };
@@ -338,13 +358,27 @@ document.addEventListener('alpine:init', () => {
 
         async createDocument() {
             this.showCreateModal = false;
-            const type = this.isProfileScope ? 'note' : this.createDocType;
+            // A type this surface does not offer is not a type it writes, even
+            // if something set it — the profile tab has no Care List.
+            const type = this.creatableTypes.includes(this.createDocType)
+                ? this.createDocType : 'note';
             const template = type === 'form' ? this.chosenTemplate : null;
             // A form document is named for the template it came from, which is
             // what somebody will look for in a folder later. Renaming it
             // afterwards is the same inline rename as any other document.
             const title = type === 'care-list' ? 'New Care List'
                 : (template ? template.title : 'New Document');
+            // A personal shepherding document (MS-405) is in BOTH places by
+            // construction — the Library and the person's own profile — so
+            // whichever surface it was started from, the other one gets it too.
+            // Started from somebody's profile, the first question is already
+            // answered with them; started from the Library, nobody is named yet
+            // and the document files itself when the picker is answered.
+            const shepherding = !!(template && template.shepherdingDoc);
+            const subject = (shepherding && this.ownerPersonId)
+                ? { personId: this.ownerPersonId, name: this.ownerPersonName || '' }
+                : null;
+
             try {
                 const preset = this.createFilterMode === 'preset';
                 const docData = Docs.buildElderDocument({
@@ -360,18 +394,35 @@ document.addEventListener('alpine:init', () => {
                     // (ADR-0055). Editing the template later must not reach
                     // back into an interview already filled in.
                     questions: template ? template.questions : null,
+                    shepherdingDoc: shepherding,
+                    answers: subject ? { [FormsCore.SUBJECT_QUESTION_ID]: subject } : null,
+                    inLibrary: shepherding ? true : null,
                 });
 
                 const docRef = await db.collection('elder_documents').add(docData);
                 this.allDocs[docRef.id] = {
                     id: docRef.id, title: title, docType: type, authorName: docData.authorName,
-                    ownerPersonId: this.ownerPersonId || null, inLibrary: false,
+                    ownerPersonId: this.ownerPersonId || null,
+                    inLibrary: shepherding ? true : false,
                 };
 
                 const currentFolder = this.currentFolder;
                 if (!currentFolder.children) currentFolder.children = [];
                 currentFolder.children.push({ type: 'document', id: docRef.id });
                 await this.saveStructure();
+
+                // The other half of "both places". Only when it was started on
+                // a profile: from the Library there is nobody to file it under
+                // yet. Best-effort — a document that failed to reach the
+                // Library is still a document on the profile, and the button
+                // that adds it by hand is still there.
+                if (shepherding && this.isProfileScope) {
+                    try {
+                        await this.alsoFileInLibrary(docRef.id);
+                    } catch (e) {
+                        console.error('Error filing in the Library:', e);
+                    }
+                }
 
                 this.renamingItemId = docRef.id;
                 this.renameValue = title;
@@ -577,6 +628,18 @@ document.addEventListener('alpine:init', () => {
                 console.error('Error adding to Library:', e);
                 this.showToast('Error adding to Library', 'error');
             }
+        },
+
+        // Put a document at the top of the Library, if it is not already in it.
+        // The same write the opt-in dialog makes, without the dialog: a
+        // shepherding document is in both places by construction and has
+        // nothing to opt into.
+        async alsoFileInLibrary(docId) {
+            const snap = await db.collection('elder_document_structure').doc('root').get();
+            const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
+            if (!Docs.fileInRoot(rootStruct, docId)) return;
+            await db.collection('elder_document_structure').doc('root')
+                .set(JSON.parse(JSON.stringify(rootStruct)));
         },
 
         // The Library folder choices for the opt-in dialog.

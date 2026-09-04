@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Printables · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Printables', menu: false, back: 'index.html', route: 'home' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+
+<body class="m-page" x-data="printablesPage()" x-init="init()" x-cloak>
+
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a class="m-back" :href="homeHref">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles"><h1 class="m-header__title">Printables</h1></div>
+            </div>
+            <div class="m-header__actions">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startFolder()" x-show="!creatingFolder && !creating">
+                    <span class="material-symbols-outlined">create_new_folder</span>
+                    <span class="m-btn__label">New folder</span>
+                </button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating && !creatingFolder">
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">New printable</span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="m-page__body">
+
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+        </div>
+
+        <template x-if="!loading">
+            <div class="pl-stack">
+
+                <div class="pl-bar">
+                    <!-- Every level navigates, and every level takes a drop —
+                         dragging a printable onto "Printables" is how it comes
+                         back out of a folder without a dialog. -->
+                    <nav class="f-crumbs">
+                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder_open</span>
+                        <button type="button" class="f-crumb"
+                                :class="dragging ? 'f-crumb--target' : ''"
+                                @click="openFolder(null)"
+                                @dragover.prevent @drop.prevent="dropOn(null)">Printables</button>
+                        <template x-for="crumb in breadcrumb" :key="crumb.id">
+                            <span class="f-crumbs__step">
+                                <span class="material-symbols-outlined f-crumbs__sep">chevron_right</span>
+                                <button type="button" class="f-crumb"
+                                        :class="mayDropOn(crumb.id) ? 'f-crumb--target' : ''"
+                                        @click="openFolder(crumb.id)"
+                                        @dragover.prevent @drop.prevent="dropOn(crumb.id)"
+                                        x-text="crumb.name"></button>
+                            </span>
+                        </template>
+                    </nav>
+                    <div class="pl-bar__right" x-show="printables.length">
+                        <span class="m-search">
+                            <span class="material-symbols-outlined">search</span>
+                            <input type="text" placeholder="Search every printable" x-model="search" />
+                        </span>
+                    </div>
+                </div>
+
+                <!-- A folder appears where you are with its name already
+                     editable. No dialog: filing is something you do while
+                     thinking about printables, not a task of its own. -->
+                <div class="m-card-list" x-show="creatingFolder">
+                    <div class="m-row">
+                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder</span>
+                        <span class="m-row__main">
+                            <input id="new-folder-name" type="text" class="m-input"
+                                   placeholder="Name it — Members' meetings"
+                                   maxlength="60"
+                                   x-model="newFolderName"
+                                   @keydown.enter.prevent="createFolder()"
+                                   @keydown.escape.prevent="cancelFolder()" />
+                        </span>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createFolder()">Create</button>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelFolder()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Naming a new printable and opening it are one move. The
+                     editor asks which paper it is on next. -->
+                <div class="m-card-list" x-show="creating">
+                    <div class="m-row">
+                        <span class="material-symbols-outlined">add</span>
+                        <span class="m-row__main">
+                            <input id="new-printable-name" type="text" class="m-input"
+                                   placeholder="Name it — Membership directory"
+                                   maxlength="90"
+                                   x-model="newName"
+                                   @keydown.enter.prevent="createPrintable()"
+                                   @keydown.escape.prevent="cancelCreate()" />
+                        </span>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createPrintable()">Create</button>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelCreate()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Nothing at all yet -->
+                <div class="m-empty" x-show="isEmpty && !creating && !creatingFolder">
+                    <span class="material-symbols-outlined">print</span>
+                    <p>No printables yet.</p>
+                    <p>A printable is something the church lays out and prints — a directory, a service guide, a handout. Name one and it opens for you to lay out.</p>
+                    <button type="button" class="m-btn m-btn--primary" @click="startCreate()">
+                        <span class="m-btn__label">New printable</span>
+                    </button>
+                </div>
+
+                <div class="m-card-list" x-show="visibleFolders.length">
+                    <template x-for="(folder, i) in visibleFolders" :key="folder.id">
+                        <div class="m-row m-row--interactive m-row--serif pl-drop"
+                             :class="[i === visibleFolders.length - 1 ? 'm-row--last' : '', mayDropOn(folder.id) ? 'pl-drop--on' : '']"
+                             draggable="true"
+                             @dragstart="startDrag(folder, 'folder')"
+                             @dragend="endDrag()"
+                             @dragover.prevent
+                             @drop.prevent="dropOn(folder.id)"
+                             @click="renamingId === folder.id || openFolder(folder.id)">
+                            <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder</span>
+                            <span class="m-row__main">
+                                <input x-show="renamingId === folder.id" :id="'rename-' + folder.id"
+                                       type="text" class="m-input" maxlength="60" x-model="renameText"
+                                       @click.stop
+                                       @keydown.enter.prevent="commitRename(folder, true)"
+                                       @keydown.escape.prevent="cancelRename()"
+                                       @blur="commitRename(folder, true)" />
+                                <span x-show="renamingId !== folder.id" class="m-row__title" x-text="folder.name"></span>
+                                <span x-show="renamingId !== folder.id" class="m-row__sub" x-text="folderSub(folder)"></span>
+                            </span>
+                            <span class="pl-acts" @click.stop>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(folder)"><span class="material-symbols-outlined">edit</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(folder, 'folder')"><span class="material-symbols-outlined">drive_file_move</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete" @click="startDeleteFolder(folder)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                            </span>
+                            <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="m-card-list" x-show="visible.length">
+                    <template x-for="(p, i) in visible" :key="p.id">
+                        <div class="m-row m-row--interactive m-row--serif"
+                             :class="i === visible.length - 1 ? 'm-row--last' : ''"
+                             draggable="true"
+                             @dragstart="startDrag(p, 'printable')"
+                             @dragend="endDrag()"
+                             @click="renamingId === p.id || open(p)">
+                            <span class="material-symbols-outlined">print</span>
+                            <span class="m-row__main">
+                                <input x-show="renamingId === p.id" :id="'rename-' + p.id"
+                                       type="text" class="m-input" maxlength="90" x-model="renameText"
+                                       @click.stop
+                                       @keydown.enter.prevent="commitRename(p, false)"
+                                       @keydown.escape.prevent="cancelRename()"
+                                       @blur="commitRename(p, false)" />
+                                <span x-show="renamingId !== p.id" class="m-row__title" x-text="p.name"></span>
+                                <span x-show="renamingId !== p.id" class="m-row__sub" x-text="subFor(p)"></span>
+                                <span x-show="searching && renamingId !== p.id" class="m-row__sub pl-where" x-text="pathFor(p)"></span>
+                            </span>
+                            <span class="pl-acts" @click.stop>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(p)"><span class="material-symbols-outlined">edit</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate" @click="duplicate(p)"><span class="material-symbols-outlined">content_copy</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(p, 'printable')"><span class="material-symbols-outlined">drive_file_move</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete" @click="startDeletePrintable(p)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                            </span>
+                            <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="m-empty" x-show="folderEmpty && !creating && !creatingFolder">
+                    <span class="material-symbols-outlined">folder_open</span>
+                    <p>Nothing filed here yet.</p>
+                    <p>Drag a printable onto this folder from anywhere in the library, or make one here.</p>
+                </div>
+
+                <div class="m-empty" x-show="!visible.length && printables.length && !isEmpty && searching">
+                    <p>Nothing matches that.</p>
+                </div>
+            </div>
+        </template>
+
+        <!-- "Move to…" — the fallback for a device where dragging is awkward. -->
+        <div x-show="moving" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelMove()" @keydown.escape.window="cancelMove()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary">Move to…</h2>
+                <p class="font-body-md text-on-surface-variant" x-text="moving ? moving.name : ''"></p>
+                <div class="flex flex-col gap-xs max-h-64 overflow-y-auto">
+                    <template x-for="opt in moveOptions" :key="opt.id">
+                        <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer"
+                               :style="`padding-left: ${12 + opt.depth * 20}px`">
+                            <input type="radio" x-model="moveTargetId" :value="opt.id" class="accent-primary" />
+                            <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                            <span class="font-body-md text-on-surface" x-text="opt.name"></span>
+                        </label>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelMove()">Cancel</button>
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="confirmMove()">Move it</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deleting a folder asks first and names the count. -->
+        <div x-show="deleting" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary"
+                    x-text="deleting ? ('Delete ' + deleting.name + '?') : ''"></h2>
+                <p class="font-body-md text-on-surface" x-text="deleteLine"></p>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelDelete()">Keep it</button>
+                    <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="confirmDeleteFolder()">Delete it</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deleting a printable asks once. It is hours of layout. -->
+        <div x-show="deletingPrintable" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary"
+                    x-text="deletingPrintable ? ('Delete ' + deletingPrintable.name + '?') : ''"></h2>
+                <p class="font-body-md text-on-surface">Its pages and everything wired into them go with it. That cannot be undone.</p>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelDelete()">Keep it</button>
+                    <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="confirmDeletePrintable()">Delete it</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-store.js"></script>
+    <script src="printables.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        .pl-stack { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .pl-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
+        .pl-bar__right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+        .pl-bar__right .m-search { width: 260px; max-width: 100%; }
+        /* Breadcrumb steps, the Forms library's. Each is a button because
+           each navigates, and each takes a drop. */
+        .f-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+        .f-crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
+        .f-crumbs__sep { font-size: 18px; color: var(--on-surface-variant); }
+        .f-crumb { border: 1px solid transparent; background: none; padding: 3px 8px; border-radius: var(--radius-sm, 6px); font: inherit; color: inherit; cursor: pointer; }
+        .f-crumb:hover { background: var(--surface-container); }
+        .f-crumb--target { border-color: var(--primary); background: var(--primary-fixed, var(--surface-container)); }
+        /* A row that will accept what is being dragged says so. Bound to the
+           model's own answer, so a row cannot light up for a drop that would
+           then be refused. */
+        .pl-drop--on { outline: 2px solid var(--primary); outline-offset: -2px; }
+        .pl-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+        .pl-where { font-style: italic; }
+        @media (max-width: 560px) {
+            .m-card-list .m-row__chevron { display: none; }
+            .pl-bar { align-items: flex-start; }
+            .pl-bar__right { width: 100%; }
+            .pl-bar__right .m-search { width: 100%; }
+        }
+        .m-card-list .m-row { flex-wrap: wrap; }
+        .m-row__main { display: block; min-width: 0; }
+        .m-row__title, .m-row__sub { display: block; }
+    </style>
+</body>
+</html>

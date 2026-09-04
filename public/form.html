@@ -144,6 +144,48 @@
                                      understand. -->
                                 <span class="m-input-hint" x-show="!modeChange.ok" x-text="modeChange.why"></span>
                                 <span class="m-input-hint" x-show="modeChange.ok && isDocument">No link to send. It appears under new document → form document in the Documents library.</span>
+
+                                <!-- A personal shepherding document (MS-405).
+                                     Here rather than in a card of its own,
+                                     because it is not a fourth setting — it is
+                                     what KIND of document this is, which is the
+                                     question this card already asks. Drawn for
+                                     an elder and a super admin only, the same
+                                     set that may shut a form to elders. -->
+                                <div class="fp-switch" x-show="isDocument && elderOnlySetting.available">
+                                    <label class="m-check">
+                                        <input type="checkbox" :checked="form.shepherdingDoc" @change="setShepherdingDoc($event.target.checked)" />
+                                        <span>A personal shepherding document</span>
+                                    </label>
+                                </div>
+                                <span class="m-input-hint" x-show="isDocument && elderOnlySetting.available && form.shepherdingDoc">
+                                    The first question asks who it is for, and every one filled in is kept on that person's Shepherding Profile as well as in the Documents library.
+                                </span>
+                            </section>
+
+                            <!-- Shut to elders (MS-404). A card of its own,
+                                 above the rung, because it answers a different
+                                 question: the rung says who may ANSWER, this
+                                 says who may SEE it at all — in the library, in
+                                 here, and on the Responses tab. It is drawn for
+                                 an elder and a super admin and for nobody else,
+                                 and it applies to a document template too. -->
+                            <section class="fp-block" x-show="elderOnlySetting.available">
+                                <div class="fp-block__head"><span class="m-label">Who may see it</span></div>
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" :checked="form.elderOnly" @change="setElderOnly($event.target.checked)" />
+                                        <span>Elders only</span>
+                                    </label>
+                                </div>
+                                <span class="m-input-hint" x-text="elderOnlySetting.why"></span>
+                                <div class="m-notice m-notice--info" x-show="form.elderOnly && !isDocument">
+                                    <span class="material-symbols-outlined m-notice__icon">shield_person</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Answering moves to Elders too.</span>
+                                        <span class="m-notice__text">A form only elders can open cannot be answerable by anybody else — the link still works whatever the library shows.</span>
+                                    </div>
+                                </div>
                             </section>
 
                             <!-- A document template has no rung, and the model
@@ -247,10 +289,15 @@
                                         <div class="f-qopen" x-show="!q.retired && openQuestion === q.id">
                                             <div class="f-qhead">
                                                 <span class="m-label m-label--sm" style="flex:1 1 auto" x-text="'Question ' + (i + 1)"></span>
-                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move up" @click="move(q, -1)"><span class="material-symbols-outlined">arrow_upward</span></button>
-                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move down" @click="move(q, 1)"><span class="material-symbols-outlined">arrow_downward</span></button>
-                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate" @click="duplicateQuestion(q)"><span class="material-symbols-outlined">content_copy</span></button>
-                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :title="answersFor(q) ? 'Retire this question' : 'Delete this question'" @click="removeQuestion(q)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                                                <!-- The subject question is the one the document is
+                                                     filed by, not one the author wrote. Its buttons
+                                                     are gone rather than greyed: there is nothing to
+                                                     explain, it is simply not that kind of row. -->
+                                                <span class="m-label m-label--sm" x-show="isSubject(q)" style="color:var(--primary)">Always first</span>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" x-show="!isSubject(q)" title="Move up" @click="move(q, -1)"><span class="material-symbols-outlined">arrow_upward</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" x-show="!isSubject(q)" title="Move down" @click="move(q, 1)"><span class="material-symbols-outlined">arrow_downward</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" x-show="!isSubject(q)" title="Duplicate" @click="duplicateQuestion(q)"><span class="material-symbols-outlined">content_copy</span></button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" x-show="!isSubject(q)" :title="answersFor(q) ? 'Retire this question' : 'Delete this question'" @click="removeQuestion(q)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
                                                 <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" @click="openQuestion = null"><span class="material-symbols-outlined">expand_less</span></button>
                                             </div>
 
@@ -510,6 +557,10 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <!-- ⚠ Deleting a form goes through a Cloud Function, because a
+         browser may not delete an answer (MS-406). Without this the
+         Delete button throws rather than deletes. -->
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script src="date-utils.js"></script>
@@ -520,6 +571,7 @@
     <script src="forms-export-core.js"></script>
     <!-- forms-store.js reaches for the folder graph when it files or
          deletes something, so it loads first. -->
+    <script src="filing-core.js"></script>
     <script src="form-folders-core.js"></script>
     <script src="forms-store.js"></script>
     <script src="form.js"></script>

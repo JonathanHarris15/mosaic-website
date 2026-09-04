@@ -30,6 +30,8 @@ function loadPage(doc) {
     sandbox.globalThis = sandbox;
     sandbox.location = { search: '?id=doc_1', href: '', pathname: '/shepherding-form-document.html' };
     sandbox.FormsCore = require('../public/forms-core.js');
+    // The page loads this too, and the component spreads its state in.
+    sandbox.NewPersonCard = require('../public/new-person-card.js');
 
     const writes = [];
     sandbox.db = {

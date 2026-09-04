@@ -811,3 +811,60 @@ test('the tally does not treat a person or an upload as an option to count', () 
         assert.ok(!row.distribution, row.type + ' was counted as if it were a number');
     });
 });
+
+// ── Shut to elders (MS-404) ──────────────────────────────────────────────────
+//
+// Separate from the Answering rung, and it has to be: `elder` there says who
+// may ANSWER and leaves the template and every answer open to any editor,
+// because the library and the Responses tab are the editor ladder.
+
+test('only an elder and a super admin may shut a form to elders', () => {
+    assert.equal(FormsCore.mayShutToElders('elder'), true);
+    assert.equal(FormsCore.mayShutToElders('super_admin'), true);
+    ['editor', 'admin', 'member', 'viewer', '', null].forEach(rank => {
+        assert.equal(FormsCore.mayShutToElders(rank), false, String(rank) + ' could shut a form');
+    });
+});
+
+test('an admin is not an elder here, the same way the rules have always had it', () => {
+    // The tier list reads editor → elder → admin, which suggests an admin sees
+    // everything an elder does. isElder() has never said so.
+    assert.equal(FormsCore.elderOnlyFor('admin').available, false);
+    assert.equal(FormsCore.elderOnlyFor('elder').available, true);
+});
+
+test('the switch says why it is not theirs to change, rather than just greying', () => {
+    const off = FormsCore.elderOnlyFor('editor');
+    assert.equal(off.available, false);
+    assert.equal(off.value, false);
+    assert.match(off.why, /Not yours to change/);
+});
+
+test('shutting a form to elders moves the answering rung with it', () => {
+    // A form nobody below an elder may open, answerable by members, is a record
+    // that contradicts itself — and the link still works whatever the library
+    // shows, so the contradiction is not theoretical.
+    const f = FormsCore.buildFormTemplate({ title: 'Elders only', rung: 'member', elderOnly: true });
+    assert.equal(f.elderOnly, true);
+    assert.equal(f.rung, 'elder');
+});
+
+test('a document template keeps its null rung, and is not forced shut', () => {
+    // The documents it makes are elder-only already, because they live among
+    // the Elder Documents. Forcing the template would take every existing one
+    // away from the editors using it.
+    const doc = FormsCore.buildFormTemplate({ title: 'Visit', mode: 'document', elderOnly: true });
+    assert.equal(doc.rung, null);
+    assert.equal(doc.elderOnly, true);
+    assert.equal(FormsCore.buildFormTemplate({ title: 'Visit', mode: 'document' }).elderOnly, false);
+});
+
+test('every form carries the flag, false included, because a query cannot match an absent field', () => {
+    const plain = FormsCore.buildFormTemplate({ title: 'Sign up' });
+    assert.equal(plain.elderOnly, false);
+    assert.ok('elderOnly' in plain, 'a form saved without the field is a form no editor query returns');
+    assert.equal(FormsCore.isElderOnly(plain), false);
+    assert.equal(FormsCore.isElderOnly({ elderOnly: true }), true);
+    assert.equal(FormsCore.isElderOnly(null), false);
+    assert.equal(FormsCore.isElderOnly({}), false, 'an absent flag must read as an ordinary form');
+});

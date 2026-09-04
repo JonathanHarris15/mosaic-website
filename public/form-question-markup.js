@@ -39,6 +39,12 @@
 //   personChoices(q)   the people to offer for `q`, already narrowed by its
 //                      scope and by what has been typed
 //   pickPerson(q, p)   record `p` as the answer to `q`
+//   canAddPerson       may THIS viewer add somebody to the directory? False on
+//                      every page where it is not their business; the picker
+//                      offers no way to add when it is false, and the door the
+//                      page adds through checks again anyway
+//   addPerson(q)       open the page's new-person card, for `q`, on whatever
+//                      has been typed into its box
 //   onFileChosen(q, ev) take the chosen file. The page checks the size BEFORE
 //                      uploading and puts any complaint where uploadFault(q)
 //                      can find it — nobody should wait for a failure.
@@ -122,8 +128,22 @@
         <!-- A Directory Person picker. Searched rather than scrolled: a
              congregation is longer than a list anybody reads. What has already
              been picked shows as the answer, with a way to change it, because a
-             picker that hides its own answer is one people re-pick to check. -->
-        <div x-show="q.type === 'person'" class="fa-person">
+             picker that hides its own answer is one people re-pick to check.
+
+             Shaped like the picker on the Order of Service (MS-403) — one box
+             you type into and the matches dropping under it — because it is the
+             same act and people had learnt one of them already. Whether the
+             list is showing is local to this picker: two person questions on
+             one form each own their own dropdown, and neither page has to hold
+             which of them is open.
+
+             The last row adds somebody who is not there yet, and only appears
+             for a viewer who may write the directory. The picker asks the page
+             rather than working it out from a rank it would have to be told
+             anyway; on the fill-in page the answer comes from
+             the server, because a browser saying "I am an editor" is not a
+             permission. -->
+        <div x-show="q.type === 'person'" class="fa-person" x-data="{ open: false }" @click.away="open = false">
             <div class="fa-person__picked" x-show="answers[q.id] && answers[q.id].personId">
                 <span class="material-symbols-outlined">person</span>
                 <span x-text="answers[q.id] && answers[q.id].name"></span>
@@ -131,18 +151,27 @@
             </div>
             <template x-if="!(answers[q.id] && answers[q.id].personId)">
                 <div class="fa-person__find">
-                    <span class="m-search">
-                        <span class="material-symbols-outlined">search</span>
-                        <input type="text" placeholder="Search by name" x-model="personQueries[q.id]" />
-                    </span>
-                    <div class="fa-person__list" x-show="(personQueries[q.id] || '').trim()">
+                    <div class="fa-person__box">
+                        <input type="text" placeholder="Search by name" autocomplete="off"
+                               x-model="personQueries[q.id]"
+                               @focus="open = true" @click="open = true" @input="open = true"
+                               @keydown.escape.stop="open = false" />
+                        <span class="material-symbols-outlined">person</span>
+                    </div>
+                    <div class="fa-person__drop" x-show="open && (personQueries[q.id] || '').trim()" x-cloak>
                         <template x-for="p in personChoices(q)" :key="p.id">
-                            <button type="button" class="fa-person__opt" @click="pickPerson(q, p)">
+                            <button type="button" class="fa-person__opt" @click="pickPerson(q, p); open = false">
                                 <span class="material-symbols-outlined">person</span>
                                 <span x-text="p.name"></span>
                             </button>
                         </template>
-                        <p class="m-input-hint" x-show="!personChoices(q).length">Nobody by that name.</p>
+                        <template x-if="canAddPerson && !personChoices(q).some(p => String(p.name || '').trim().toLowerCase() === (personQueries[q.id] || '').trim().toLowerCase())">
+                            <button type="button" class="fa-person__opt fa-person__opt--new" @click="open = false; addPerson(q)">
+                                <span class="material-symbols-outlined">person_add</span>
+                                <span>Add <strong x-text="(personQueries[q.id] || '').trim()"></strong> to the directory</span>
+                            </button>
+                        </template>
+                        <p class="fa-person__none" x-show="!personChoices(q).length && !canAddPerson">Nobody by that name.</p>
                     </div>
                 </div>
             </template>

@@ -29,6 +29,7 @@
         html.shell-mobile .cal-when-icon { display: none; }
         html.shell-mobile .cal-event-title { font-size: 23px; }
 
+        .cal-printable__toggle { flex: 0 0 auto; font-size: 12px; margin-right: 4px; }
         .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
         @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
     </style>
@@ -51,6 +52,17 @@
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="event-attachments-core.js"></script>
+    <!-- Printables linked to this event (MS-400): the model, the store, the
+         live data and the PDF snapshot. -->
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-dom.js"></script>
+    <script src="printable-store.js"></script>
+    <script src="printable-data-core.js"></script>
+    <script src="printable-data-store.js"></script>
+    <script src="printable-render-core.js"></script>
+    <script src="printable-live.js"></script>
+    <script src="printable-pdf.js"></script>
     <!-- The shape of a document written on the Files tab (ADR-0049). -->
     <script src="document-body-core.js"></script>
     <!-- Owns the one .docx sanitiser, which the Files viewer uses to show a
@@ -494,6 +506,54 @@
                     </template>
                 </div>
 
+                <!-- ── Printables linked to this event (MS-400) ───────────
+                     The service guide on a Sunday, the directory on a members'
+                     meeting: a Printable the series carries, opened live from
+                     here, viewed by members when an editor allows it, and
+                     filed below as a PDF snapshot of how it stood on the day. -->
+                <section class="mb-sm" x-show="printables.length || canLinkPrintables">
+                    <div class="flex items-center justify-between gap-sm mb-2">
+                        <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">Printables</h3>
+                        <button type="button" x-show="canLinkPrintables" @click="startLinkPrintable()"
+                                class="m-btn m-btn--quiet m-btn--sm">
+                            <span class="material-symbols-outlined">add_link</span>
+                            <span class="m-btn__label">Link a printable</span>
+                        </button>
+                    </div>
+                    <p x-show="printableError" class="text-[12.5px] text-error mb-2" x-text="printableError"></p>
+                    <p x-show="!printables.length && canLinkPrintables" class="text-[12.5px] text-on-surface-variant">
+                        Nothing linked yet. A linked printable opens from every date of this event and can be filed here as a PDF.
+                    </p>
+                    <div x-show="printables.length" class="m-card-list">
+                        <template x-for="p in printables" :key="p.id">
+                            <div class="m-row cal-printable">
+                                <span class="material-symbols-outlined text-[19px] text-secondary shrink-0">print</span>
+                                <a :href="printableHref(p, 'view')" class="m-row__main text-left cal-focus">
+                                    <span class="m-row__title" x-text="p.name"></span>
+                                    <span class="m-row__sub" x-text="snapshotBusy === p.id ? snapshotProgress : printableSub(p)"></span>
+                                </a>
+                                <label x-show="isEditor" class="m-check cal-printable__toggle" title="Members may view: members can open the read-only page of this printable">
+                                    <input type="checkbox" :checked="p.memberVisible" @change="setMembersMayView(p, $event.target.checked)" />
+                                    <span>Members may view</span>
+                                </label>
+                                <a x-show="isEditor" :href="printableHref(p, 'edit')" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" :aria-label="'Open ' + p.name + ' in the editor'" title="Open in the editor">
+                                    <span class="material-symbols-outlined text-[18px]">edit</span>
+                                </a>
+                                <button type="button" x-show="canManageAttachments" @click="filePrintableSnapshot(p)"
+                                        :disabled="snapshotBusy" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
+                                        :aria-label="'File a PDF snapshot of ' + p.name" title="File a PDF snapshot of it, as it stands today, in this date's files">
+                                    <span class="material-symbols-outlined text-[18px]" :class="snapshotBusy === p.id ? 'm-spinner' : ''"
+                                          x-text="snapshotBusy === p.id ? 'progress_activity' : 'picture_as_pdf'"></span>
+                                </button>
+                                <button type="button" x-show="canLinkPrintables" @click="unlinkPrintable(p)"
+                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" :aria-label="'Unlink ' + p.name" title="Unlink (the printable itself is kept)">
+                                    <span class="material-symbols-outlined text-[18px]">link_off</span>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </section>
+
                 <div x-show="attachments.length" class="m-card-list">
                     <template x-for="a in attachments" :key="a.id">
                         <div class="m-row">
@@ -528,6 +588,33 @@
                             </button>
                         </div>
                     </template>
+                </div>
+            </div>
+
+            <!-- Link a printable: the library, flattened, minus what is already linked. -->
+            <div x-show="linkingPrintable" x-cloak
+                 class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+                 @click.self="linkingPrintable = false" @keydown.escape.window="linkingPrintable = false">
+                <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md"
+                     role="dialog" aria-modal="true">
+                    <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
+                    <p class="font-body-md text-on-surface-variant">It will open from every date of this event. Members can open it once you switch that on.</p>
+                    <div class="m-loading" x-show="libraryLoading"><span class="m-spinner"></span></div>
+                    <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkable.length">Every laid-out printable in the library is already linked, or there are none yet.</p>
+                    <div class="flex flex-col gap-xs max-h-72 overflow-y-auto" x-show="!libraryLoading">
+                        <template x-for="p in linkable" :key="p.id">
+                            <button type="button" class="m-row m-row--interactive text-left" @click="linkPrintable(p)">
+                                <span class="material-symbols-outlined text-[18px] text-secondary">print</span>
+                                <span class="m-row__main">
+                                    <span class="m-row__title" x-text="p.name"></span>
+                                    <span class="m-row__sub" x-text="printablePath(p) + ' · ' + (p.template ? p.template.label : '')"></span>
+                                </span>
+                            </button>
+                        </template>
+                    </div>
+                    <div class="flex justify-end gap-sm">
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="linkingPrintable = false">Cancel</button>
+                    </div>
                 </div>
             </div>
 
