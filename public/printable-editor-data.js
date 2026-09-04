@@ -397,6 +397,8 @@
                 const page = this.currentPage;
                 const node = this.selectedNode;
                 if (!page || !node) return;
+                // Only a box stands for a row; makeIterated has already said so.
+                if (Core.kindOf(node) !== 'box') return;
                 const repeat = Object.assign({}, node.repeat || { layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' }, {
                     source: source.key,
                     params: Data.defaultParams(source),
