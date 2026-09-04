@@ -146,7 +146,14 @@
     // The old comment here was right that a stale ledger row is harmless; a door
     // that can tidy it is simply better than one that cannot.
     async function deleteForm(db, formId, fns) {
-        const call = (fns || global.firebase.app().functions('us-central1'))
+        const app = global.firebase && global.firebase.app && global.firebase.app();
+        if (!fns && !(app && typeof app.functions === 'function')) {
+            // The page did not load firebase-functions-compat.js. Said as a
+            // sentence rather than as "functions is not a function", which is
+            // what a person pressing Delete actually saw.
+            throw new Error('This page cannot reach the server. Refresh and try again.');
+        }
+        const call = (fns || app.functions('us-central1'))
             .httpsCallable('deleteFormTemplate');
         const res = await call({ formId: formId });
         const data = (res && res.data) || {};

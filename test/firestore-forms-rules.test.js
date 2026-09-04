@@ -191,3 +191,15 @@ test('an admin is not an elder in the function either', () => {
     assert.match(fn, /const ELDER_RANKS = \["elder", "super_admin"\];/,
         'ELDER_RANKS no longer matches isElder()');
 });
+
+test('every page that can delete a form loads the door it goes through', () => {
+    // How this shipped broken: the delete moved to a callable and neither page
+    // loaded firebase-functions-compat.js, so pressing Delete threw
+    // "functions is not a function" instead of deleting.
+    ['form.html', 'forms.html'].forEach(page => {
+        const html = src2('public', page);
+        assert.ok(html.includes('forms-store.js'), page + ' no longer uses the store');
+        assert.ok(html.includes('firebase-functions-compat.js'),
+            page + ' can delete a form but cannot reach the function that does it');
+    });
+});
