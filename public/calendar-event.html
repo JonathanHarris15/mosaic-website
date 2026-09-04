@@ -532,9 +532,9 @@
                                     <span class="m-row__title" x-text="p.name"></span>
                                     <span class="m-row__sub" x-text="snapshotBusy === p.id ? snapshotProgress : printableSub(p)"></span>
                                 </a>
-                                <label x-show="isEditor" class="m-check cal-printable__toggle" title="Members may open the view-only page">
+                                <label x-show="isEditor" class="m-check cal-printable__toggle" title="Members may view: members can open the read-only page of this printable">
                                     <input type="checkbox" :checked="p.memberVisible" @change="setMembersMayView(p, $event.target.checked)" />
-                                    <span>Members</span>
+                                    <span>Members may view</span>
                                 </label>
                                 <a x-show="isEditor" :href="printableHref(p, 'edit')" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" :aria-label="'Open ' + p.name + ' in the editor'" title="Open in the editor">
                                     <span class="material-symbols-outlined text-[18px]">edit</span>

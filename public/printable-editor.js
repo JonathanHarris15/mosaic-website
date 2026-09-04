@@ -219,7 +219,7 @@ function printableEditor() {
         },
 
         async deleteCustom(t) {
-            if (!confirm('Delete the "' + t.name + '" template? Projects already started from it are not affected.')) return;
+            if (!confirm('Delete the "' + t.name + '" template? Printables already started from it are not affected.')) return;
             try {
                 await PrintableStore.deleteTemplate(db, t.id);
                 this.picker.customs = this.picker.customs.filter(x => x.id !== t.id);
