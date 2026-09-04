@@ -458,6 +458,28 @@
                     grid.appendChild(card);
                 }
 
+                // Printables — editors and above (MS-392). A project the
+                // church lays out and prints; the library and the editor gate
+                // themselves and the rules gate the records — a hidden card is
+                // not a lock.
+                if (grid && !document.getElementById('printables-card') &&
+                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    const card = document.createElement('a');
+                    card.id = 'printables-card';
+                    // ⚠ The STORED key behind every user's saved card order.
+                    card.dataset.cardKey = 'printables';
+                    card.href = 'printables.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>print</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Printables</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Lay out a directory, a service guide or a handout from live church data, and print it.</p>
+                    `;
+                    grid.appendChild(card);
+                }
+
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
                     ['elder', 'super_admin'].includes(permissionLevel)) {

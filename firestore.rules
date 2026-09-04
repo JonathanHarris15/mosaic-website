@@ -846,6 +846,28 @@ service cloud.firestore {
       allow read, write: if isEditor();
     }
 
+    // Printables (MS-359): a project the church lays out and prints — a
+    // directory, a service guide, a handout. The record holds the page
+    // template, the pages' element trees and which live field feeds which
+    // element; it never holds the data those fields resolve to, so reading a
+    // Printable discloses nothing a Person or an Event would not.
+    //
+    // Editor and above, the same ladder as the Forms library. A member reads
+    // one only through the narrower door MS-400 adds (a Printable linked from
+    // an Event they may see, with members-may-view on) — see the second
+    // `allow read` below, which is deliberately absent until then.
+    match /printables/{printableId} {
+      allow read, write: if isEditor();
+    }
+
+    // Where a Printable is filed: a name and the folder it sits in, and
+    // nothing else. A Printable remembers its folder; a folder does not
+    // remember its Printables (ADR-0054) — two editors filing at the same
+    // moment write two different records.
+    match /printable_folders/{folderId} {
+      allow read, write: if isEditor();
+    }
+
     // One person's answers. Editors read them on the Responses tab; the
     // function writes them. No client writes — validation (required questions,
     // the rung, whether the form is closed) happens on the server, because a

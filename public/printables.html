@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Forms · Mosaic</title>
+    <title>Printables · Mosaic</title>
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
     <script src="mobile/destinations.js"></script>
-    <script>window.MOBILE_HEADER = { title: 'Forms', menu: false, back: 'index.html', route: 'home' };</script>
+    <script>window.MOBILE_HEADER = { title: 'Printables', menu: false, back: 'index.html', route: 'home' };</script>
     <script src="person-photo-core.js"></script>
     <script src="mobile-shell-header.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 
-<body class="m-page" x-data="formsPage()" x-init="init()" x-cloak>
+<body class="m-page" x-data="printablesPage()" x-init="init()" x-cloak>
 
     <header class="m-header">
         <div class="m-header__inner">
@@ -24,7 +25,7 @@
                     <span class="material-symbols-outlined">chevron_left</span>
                     <span class="m-back__label">Home</span>
                 </a>
-                <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
+                <div class="m-header__titles"><h1 class="m-header__title">Printables</h1></div>
             </div>
             <div class="m-header__actions">
                 <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startFolder()" x-show="!creatingFolder && !creating">
@@ -32,8 +33,8 @@
                     <span class="m-btn__label">New folder</span>
                 </button>
                 <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating && !creatingFolder">
-                    <span class="material-symbols-outlined">post_add</span>
-                    <span class="m-btn__label">New form</span>
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">New printable</span>
                 </button>
             </div>
             <div class="m-header__rule"></div>
@@ -51,18 +52,18 @@
         </div>
 
         <template x-if="!loading">
-            <div class="fl-stack">
+            <div class="pl-stack">
 
-                <div class="fl-bar">
+                <div class="pl-bar">
                     <!-- Every level navigates, and every level takes a drop —
-                         dragging a form onto "Forms" is how it comes back out
-                         of a folder without a dialog. -->
+                         dragging a printable onto "Printables" is how it comes
+                         back out of a folder without a dialog. -->
                     <nav class="f-crumbs">
                         <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder_open</span>
                         <button type="button" class="f-crumb"
                                 :class="dragging ? 'f-crumb--target' : ''"
                                 @click="openFolder(null)"
-                                @dragover.prevent @drop.prevent="dropOn(null)">Forms</button>
+                                @dragover.prevent @drop.prevent="dropOn(null)">Printables</button>
                         <template x-for="crumb in breadcrumb" :key="crumb.id">
                             <span class="f-crumbs__step">
                                 <span class="material-symbols-outlined f-crumbs__sep">chevron_right</span>
@@ -74,27 +75,23 @@
                             </span>
                         </template>
                     </nav>
-                    <div class="fl-bar__right" x-show="forms.length">
+                    <div class="pl-bar__right" x-show="printables.length">
                         <span class="m-search">
                             <span class="material-symbols-outlined">search</span>
-                            <input type="text" placeholder="Search every form" x-model="search" />
+                            <input type="text" placeholder="Search every printable" x-model="search" />
                         </span>
-                        <label class="m-check">
-                            <input type="checkbox" x-model="hideClosed" />
-                            <span>Hide closed</span>
-                        </label>
                     </div>
                 </div>
 
                 <!-- A folder appears where you are with its name already
                      editable. No dialog: filing is something you do while
-                     thinking about forms, not a task of its own. -->
+                     thinking about printables, not a task of its own. -->
                 <div class="m-card-list" x-show="creatingFolder">
                     <div class="m-row">
                         <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder</span>
                         <span class="m-row__main">
                             <input id="new-folder-name" type="text" class="m-input"
-                                   placeholder="Name it — 2026 sign-ups"
+                                   placeholder="Name it — Members' meetings"
                                    maxlength="60"
                                    x-model="newFolderName"
                                    @keydown.enter.prevent="createFolder()"
@@ -105,45 +102,38 @@
                     </div>
                 </div>
 
-                <!-- Naming a new form and opening it are one move, the way the
-                     Document Library creates a document. -->
+                <!-- Naming a new printable and opening it are one move. The
+                     editor asks which paper it is on next. -->
                 <div class="m-card-list" x-show="creating">
                     <div class="m-row">
-                        <span class="material-symbols-outlined">post_add</span>
+                        <span class="material-symbols-outlined">add</span>
                         <span class="m-row__main">
-                            <input id="new-form-title" type="text" class="m-input"
-                                   placeholder="Name it — Church camp sign-up"
+                            <input id="new-printable-name" type="text" class="m-input"
+                                   placeholder="Name it — Membership directory"
                                    maxlength="90"
-                                   x-model="newTitle"
-                                   @keydown.enter.prevent="createForm()"
+                                   x-model="newName"
+                                   @keydown.enter.prevent="createPrintable()"
                                    @keydown.escape.prevent="cancelCreate()" />
                         </span>
-                        <!-- Asked here because it is near-unchangeable later:
-                             once a form has answers, or a template has documents
-                             made from it, switching kind would orphan them. -->
-                        <span class="m-seg fl-mode">
-                            <button type="button" class="m-seg__opt" :aria-pressed="newMode === 'responses'" @click="newMode = 'responses'">People answer it</button>
-                            <button type="button" class="m-seg__opt" :aria-pressed="newMode === 'document'" @click="newMode = 'document'">A document</button>
-                        </span>
-                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createForm()">Create</button>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createPrintable()">Create</button>
                         <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelCreate()">Cancel</button>
                     </div>
                 </div>
 
                 <!-- Nothing at all yet -->
-                <div class="m-empty" x-show="isEmpty && !creating">
-                    <span class="material-symbols-outlined">post_add</span>
-                    <p>No forms yet.</p>
-                    <p>A form is a list of questions you can send to people — a sign-up, a poll, a waiver. Name one and it opens for you to write.</p>
+                <div class="m-empty" x-show="isEmpty && !creating && !creatingFolder">
+                    <span class="material-symbols-outlined">print</span>
+                    <p>No printables yet.</p>
+                    <p>A printable is something the church lays out and prints — a directory, a service guide, a handout. Name one and it opens for you to lay out.</p>
                     <button type="button" class="m-btn m-btn--primary" @click="startCreate()">
-                        <span class="m-btn__label">New form</span>
+                        <span class="m-btn__label">New printable</span>
                     </button>
                 </div>
 
                 <div class="m-card-list" x-show="visibleFolders.length">
                     <template x-for="(folder, i) in visibleFolders" :key="folder.id">
-                        <div class="m-row m-row--interactive m-row--serif f-drop"
-                             :class="[i === visibleFolders.length - 1 ? 'm-row--last' : '', mayDropOn(folder.id) ? 'f-drop--on' : '']"
+                        <div class="m-row m-row--interactive m-row--serif pl-drop"
+                             :class="[i === visibleFolders.length - 1 ? 'm-row--last' : '', mayDropOn(folder.id) ? 'pl-drop--on' : '']"
                              draggable="true"
                              @dragstart="startDrag(folder, 'folder')"
                              @dragend="endDrag()"
@@ -161,7 +151,7 @@
                                 <span x-show="renamingId !== folder.id" class="m-row__title" x-text="folder.name"></span>
                                 <span x-show="renamingId !== folder.id" class="m-row__sub" x-text="folderSub(folder)"></span>
                             </span>
-                            <span class="f-acts" @click.stop>
+                            <span class="pl-acts" @click.stop>
                                 <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(folder)"><span class="material-symbols-outlined">edit</span></button>
                                 <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(folder, 'folder')"><span class="material-symbols-outlined">drive_file_move</span></button>
                                 <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete" @click="startDeleteFolder(folder)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
@@ -172,69 +162,49 @@
                 </div>
 
                 <div class="m-card-list" x-show="visible.length">
-                    <template x-for="(form, i) in visible" :key="form.id">
+                    <template x-for="(p, i) in visible" :key="p.id">
                         <div class="m-row m-row--interactive m-row--serif"
-                             :class="[i === visible.length - 1 ? 'm-row--last' : '', isClosed(form) ? 'f-dim' : '']"
+                             :class="i === visible.length - 1 ? 'm-row--last' : ''"
                              draggable="true"
-                             @dragstart="startDrag(form, 'form')"
+                             @dragstart="startDrag(p, 'printable')"
                              @dragend="endDrag()"
-                             @click="renamingId === form.id || open(form)">
-                            <span class="material-symbols-outlined">description</span>
+                             @click="renamingId === p.id || open(p)">
+                            <span class="material-symbols-outlined">print</span>
                             <span class="m-row__main">
-                                <input x-show="renamingId === form.id" :id="'rename-' + form.id"
+                                <input x-show="renamingId === p.id" :id="'rename-' + p.id"
                                        type="text" class="m-input" maxlength="90" x-model="renameText"
                                        @click.stop
-                                       @keydown.enter.prevent="commitRename(form, false)"
+                                       @keydown.enter.prevent="commitRename(p, false)"
                                        @keydown.escape.prevent="cancelRename()"
-                                       @blur="commitRename(form, false)" />
-                                <span x-show="renamingId !== form.id" class="m-row__title" x-text="form.title"></span>
-                                <span x-show="renamingId !== form.id" class="m-row__sub" x-text="subFor(form)"></span>
-                                <!-- Where it was found. Only while searching: a
-                                     hit three folders deep is not much use
-                                     without saying where it is. -->
-                                <span x-show="searching && renamingId !== form.id" class="m-row__sub f-where" x-text="pathFor(form)"></span>
+                                       @blur="commitRename(p, false)" />
+                                <span x-show="renamingId !== p.id" class="m-row__title" x-text="p.name"></span>
+                                <span x-show="renamingId !== p.id" class="m-row__sub" x-text="subFor(p)"></span>
+                                <span x-show="searching && renamingId !== p.id" class="m-row__sub pl-where" x-text="pathFor(p)"></span>
                             </span>
-                            <span class="f-acts" @click.stop>
-                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(form)"><span class="material-symbols-outlined">edit</span></button>
-                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(form, 'form')"><span class="material-symbols-outlined">drive_file_move</span></button>
+                            <span class="pl-acts" @click.stop>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(p)"><span class="material-symbols-outlined">edit</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Duplicate" @click="duplicate(p)"><span class="material-symbols-outlined">content_copy</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(p, 'printable')"><span class="material-symbols-outlined">drive_file_move</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete" @click="startDeletePrintable(p)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
                             </span>
-                            <span class="m-badge" :class="stateFor(form).tone" x-text="stateFor(form).text"></span>
                             <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
                         </div>
                     </template>
                 </div>
 
-                <!-- This folder is empty, which is not the same as having no
-                     forms at all — that one offers to start you off. -->
                 <div class="m-empty" x-show="folderEmpty && !creating && !creatingFolder">
                     <span class="material-symbols-outlined">folder_open</span>
                     <p>Nothing filed here yet.</p>
-                    <p>Drag a form onto this folder from anywhere in the library, or make one here.</p>
+                    <p>Drag a printable onto this folder from anywhere in the library, or make one here.</p>
                 </div>
 
-                <!-- Searched and found nothing, as opposed to having nothing -->
-                <div class="m-empty" x-show="!visible.length && forms.length && !isEmpty">
+                <div class="m-empty" x-show="!visible.length && printables.length && !isEmpty && searching">
                     <p>Nothing matches that.</p>
-                    <p x-show="closedHidden">Closed forms are hidden — try showing them.</p>
-                </div>
-
-                <div class="m-notice" x-show="closedHidden">
-                    <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
-                    <div class="m-notice__body">
-                        <span class="m-notice__text" x-text="closedLine"></span>
-                    </div>
-                    <div class="m-notice__acts">
-                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="hideClosed = false">Show them</button>
-                    </div>
                 </div>
             </div>
         </template>
 
-        <!-- "Move to…" — the fallback for a device where dragging is awkward,
-             which on a touch screen is every device. Never offers a folder its
-             own subtree, so it cannot propose a move that would then be
-             refused. Built in the same shape as the Document Library's move
-             dialog, because it is the same job on the sibling page. -->
+        <!-- "Move to…" — the fallback for a device where dragging is awkward. -->
         <div x-show="moving" x-cloak
              class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
              @click.self="cancelMove()" @keydown.escape.window="cancelMove()">
@@ -259,10 +229,7 @@
             </div>
         </div>
 
-        <!-- The one thing on this page that asks first, because it is the one
-             that destroys answers people gave. The count is what makes the
-             question answerable: "delete Sign-ups?" cannot be answered,
-             "delete Sign-ups and the 14 forms in it?" can. -->
+        <!-- Deleting a folder asks first and names the count. -->
         <div x-show="deleting" x-cloak
              class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
              @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
@@ -277,6 +244,22 @@
                 </div>
             </div>
         </div>
+
+        <!-- Deleting a printable asks once. It is hours of layout. -->
+        <div x-show="deletingPrintable" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary"
+                    x-text="deletingPrintable ? ('Delete ' + deletingPrintable.name + '?') : ''"></h2>
+                <p class="font-body-md text-on-surface">Its pages and everything wired into them go with it. That cannot be undone.</p>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelDelete()">Keep it</button>
+                    <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="confirmDeletePrintable()">Delete it</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -284,22 +267,19 @@
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
-    <script src="date-utils.js"></script>
-    <script src="forms-core.js"></script>
     <script src="filing-core.js"></script>
-    <script src="form-folders-core.js"></script>
-    <script src="forms-store.js"></script>
-    <script src="forms.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-store.js"></script>
+    <script src="printables.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
     <style>
-        .fl-stack { display: flex; flex-direction: column; gap: var(--space-sm); }
-        .fl-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
-        .fl-bar__right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
-        .fl-bar__right .m-search { width: 260px; max-width: 100%; }
-        /* Breadcrumb steps. Each is a button because each navigates, and
-           each takes a drop — dragging onto "Forms" is how something comes back
-           out of a folder without a dialog. */
+        .pl-stack { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .pl-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
+        .pl-bar__right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+        .pl-bar__right .m-search { width: 260px; max-width: 100%; }
+        /* Breadcrumb steps, the Forms library's. Each is a button because
+           each navigates, and each takes a drop. */
         .f-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
         .f-crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
         .f-crumbs__sep { font-size: 18px; color: var(--on-surface-variant); }
@@ -309,27 +289,16 @@
         /* A row that will accept what is being dragged says so. Bound to the
            model's own answer, so a row cannot light up for a drop that would
            then be refused. */
-        .f-drop--on { outline: 2px solid var(--primary); outline-offset: -2px; }
-        .f-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-        .f-where { font-style: italic; }
+        .pl-drop--on { outline: 2px solid var(--primary); outline-offset: -2px; }
+        .pl-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+        .pl-where { font-style: italic; }
         @media (max-width: 560px) {
-            /* The chevron is decoration on a phone — the whole row is already
-               the tap target — and the width it costs is better spent on the
-               action buttons, which on a touch screen are the ONLY way to file
-               something. Dragging is not available there. */
             .m-card-list .m-row__chevron { display: none; }
-            .fl-bar { align-items: flex-start; }
-            .fl-bar__right { width: 100%; }
-            .fl-bar__right .m-search { width: 100%; }
+            .pl-bar { align-items: flex-start; }
+            .pl-bar__right { width: 100%; }
+            .pl-bar__right .m-search { width: 100%; }
         }
-        /* The new-form row carries a name box, a two-way choice and two
-           buttons. That is more than fits on a narrow screen, and an m-row does
-           not wrap on its own — so it wraps here rather than pushing the
-           buttons off the side where nobody can press Create. */
         .m-card-list .m-row { flex-wrap: wrap; }
-        .m-seg.fl-mode { flex-wrap: wrap; }
-        .f-dim { opacity: .72; }
-        .f-dim .m-row__title, .f-dim .m-row__sub { color: var(--on-surface-variant); }
         .m-row__main { display: block; min-width: 0; }
         .m-row__title, .m-row__sub { display: block; }
     </style>
