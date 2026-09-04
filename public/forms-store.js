@@ -21,6 +21,11 @@
 
     const FORMS = 'forms';
     const RESPONSES = 'form_responses';
+    const FOLDERS = 'form_folders';
+
+    const Folders = (typeof require === 'function' && typeof module !== 'undefined' && module.exports)
+        ? require('./form-folders-core.js')
+        : global.FormFoldersCore;
 
     // ── The id ───────────────────────────────────────────────────────────────
     //
@@ -118,8 +123,82 @@
         return answers.size;
     }
 
+    // ── Folders (MS-376) ─────────────────────────────────────────────────────
+    //
+    // ⚠ Every write here touches ONE record. That is the whole point of
+    // ADR-0054: two editors filing two different things at the same moment
+    // write two different documents, so neither loses the other's change. A
+    // helper that gathered the folders into one document to save "the tree"
+    // would put the collision back.
+
+    async function listFolders(db) {
+        const snap = await db.collection(FOLDERS).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function createFolder(db, fb, user, spec) {
+        const record = Folders.buildFolder(spec || {});
+        const ref = await db.collection(FOLDERS).add(Object.assign(record, {
+            createdAt: fb.firestore.FieldValue.serverTimestamp(),
+            createdByName: (user && user.displayName) || (user && user.email) || 'Somebody',
+        }));
+        return ref.id;
+    }
+
+    async function renameFolder(db, folderId, name) {
+        await db.collection(FOLDERS).doc(folderId)
+            .set({ name: Folders.normaliseFolderName(name) }, { merge: true });
+    }
+
+    // The caller checks canMoveFolder first. This does not re-check, because a
+    // move refused deep in the store is a move whose reason never reaches the
+    // person who tried it.
+    async function moveFolder(db, folderId, parentId) {
+        await db.collection(FOLDERS).doc(folderId)
+            .set({ parentId: parentId || null }, { merge: true });
+    }
+
+    async function moveForm(db, fb, user, formId, folderId) {
+        await db.collection(FORMS).doc(formId)
+            .set(Object.assign({ folderId: folderId || null }, stamp(fb, user)), { merge: true });
+    }
+
+    async function renameFormTitle(db, fb, user, formId, title) {
+        await db.collection(FORMS).doc(formId)
+            .set(Object.assign({ title: Core.normaliseTitle(title) }, stamp(fb, user)), { merge: true });
+    }
+
+    // Deleting a folder takes everything under it, at any depth: the forms, the
+    // answers those forms gathered, and the folders in between. The page asks
+    // first and names the count of forms, because the number is what makes the
+    // question answerable.
+    //
+    // Forms go one at a time through deleteForm rather than in one batch, so
+    // that a failure part-way leaves a smaller library rather than a folder
+    // that is gone with its forms still in it — an orphaned form comes back to
+    // the top level and can be found again, which a lost one cannot.
+    async function deleteFolderTree(db, folders, forms, folderId) {
+        const doomedFolders = [folderId].concat(Folders.descendantFolderIds(folders, folderId));
+        const doomedForms = Folders.formsUnder(folders, forms, folderId);
+
+        for (const form of doomedForms) {
+            await deleteForm(db, form.id);
+        }
+        const batch = db.batch();
+        doomedFolders.forEach(id => batch.delete(db.collection(FOLDERS).doc(id)));
+        await batch.commit();
+        return doomedForms.length;
+    }
+
     const FormsStore = {
         newFormId,
+        listFolders,
+        createFolder,
+        renameFolder,
+        moveFolder,
+        moveForm,
+        renameFormTitle,
+        deleteFolderTree,
         listForms,
         loadForm,
         loadResponses,

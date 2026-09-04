@@ -188,3 +188,165 @@ test('somebody with no linked Person is refused a one-each form rather than let 
     }, TODAY);
     assert.strictEqual(verdict.code, 'no-person');
 });
+
+// ── An answer that is there and does not fit (MS-378) ────────────────────────
+//
+// Six question types went live in MS-377, and each one has a way of being
+// answered wrongly that the fill-in page cannot produce. A scale draws a row of
+// buttons between its own ends; a date box hands back a date. So a value outside
+// those was typed into the request rather than clicked, and the server is the
+// only place that matters.
+
+const richForm = (over) => FormsCore.buildFormTemplate(Object.assign({
+    title: 'Spring sign-up',
+    published: true,
+    rung: 'public',
+    questions: [
+        { id: 'q1', type: 'short_text', text: 'Your name', required: true },
+        {
+            id: 'howoften', type: 'scale', text: 'How often do you come?',
+            scale: { min: 1, max: 5, minLabel: 'Never', maxLabel: 'Every week' },
+        },
+        { id: 'nights', type: 'choice_many', text: 'Which nights?', options: ['Mon', 'Tue'] },
+        { id: 'when', type: 'date', text: 'Which day suits?' },
+        { id: 'start', type: 'time', text: 'What time?' },
+        { id: 'howmany', type: 'number', text: 'How many of you?' },
+    ],
+}, over || {}));
+
+const answered = (over) => Object.assign({ q1: 'Rebecca' }, over || {});
+
+test('an answer that fits every question is written', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1',
+        answers: answered({
+            howoften: 5, nights: ['Mon'], when: '2026-11-03', start: '19:30', howmany: '2',
+        }),
+    }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('a scale answered off the end of its own range is refused', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ howoften: 9 }),
+    }, TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.strictEqual(verdict.code, 'unanswerable');
+    assert.strictEqual(verdict.missing.length, 1);
+    assert.strictEqual(verdict.missing[0].id, 'howoften');
+    assert.ok(verdict.missing[0].text, 'the refusal has to name the question');
+});
+
+test('a date that is not a date, and a time that is not a time, are refused', () => {
+    const badDate = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ when: 'next Tuesday' }),
+    }, TODAY);
+    assert.strictEqual(badDate.code, 'unanswerable');
+
+    const badTime = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ start: 'half seven' }),
+    }, TODAY);
+    assert.strictEqual(badTime.code, 'unanswerable');
+});
+
+test('an option the form never offered is refused', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ nights: ['Mon', 'Sunday'] }),
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'unanswerable');
+});
+
+test('a number question refuses prose', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ howmany: 'a few of us' }),
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'unanswerable');
+});
+
+test('leaving the optional ones blank is not an error', () => {
+    // Only REQUIRED questions must be answered. A partial Response is ordinary.
+    const verdict = fp.judgeSubmission(richForm(), { formId: 'f1', answers: answered() }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('a blank required question is reported before a wrong answer is', () => {
+    // Somebody who left half the form empty is told that, rather than being
+    // corrected on the half they did fill in.
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: { howoften: 99 },
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'incomplete');
+});
+
+// ── The last two rungs (MS-380) ──────────────────────────────────────────────
+//
+// MS-360 offered `public` and `member` and named all four. These two were
+// already enforced — the rank check has covered them since the function was
+// written — so what these tests pin is that turning them on in the builder did
+// not change what the server does. If the enforcement ever moves, this is where
+// it fails.
+
+const rungForm = (rung) => FormsCore.buildFormTemplate({
+    title: 'Rota preferences',
+    published: true,
+    rung: rung,
+    questions: [{ id: 'q1', type: 'short_text', text: 'Which weeks?' }],
+});
+
+const asRank = (rank) => ({ signedIn: !!rank, rank: rank || null });
+
+test('an editors-only form is open to editors and above, and shut below', () => {
+    const form = rungForm('editor');
+    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
+    });
+    ['member', 'viewer'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, false, rank + ' should be refused');
+    });
+    assert.strictEqual(fp.whatToServe(form, stranger, TODAY).ok, false);
+});
+
+test('an elders-only form is open to elders and super admins, and nobody else', () => {
+    const form = rungForm('elder');
+    ['elder', 'super_admin'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
+    });
+    ['admin', 'editor', 'member', 'viewer'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, false, rank + ' should be refused');
+    });
+});
+
+test('being refused a form does not show the form', () => {
+    // The refusal is the whole answer. A question list handed out alongside
+    // "you may not answer this" makes the rung a suggestion.
+    const verdict = fp.whatToServe(rungForm('elder'), asRank('member'), TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.ok(!verdict.view, 'a refused caller was handed the form anyway');
+    assert.ok(!JSON.stringify(verdict).includes('Which weeks?'),
+        'the question text leaked into a refusal');
+});
+
+test('an editors-only form cannot be answered by somebody below it either', () => {
+    const verdict = fp.judgeSubmission(rungForm('editor'), Object.assign(
+        { formId: 'f1', answers: { q1: 'Any' } }, asRank('member'),
+    ), TODAY);
+    assert.strictEqual(verdict.ok, false);
+});
+
+test('a secret ballot among elders is possible', () => {
+    // Attribution and One Response Each stay available on every rung above
+    // public, which is what makes an elders' vote a thing this can hold.
+    const settings = FormsCore.settingsFor('elder');
+    assert.strictEqual(settings.attribution.available, true);
+    assert.strictEqual(settings.oneEach.available, true);
+
+    const ballot = FormsCore.buildFormTemplate({ rung: 'elder', attribution: false, oneEach: true });
+    assert.strictEqual(FormsCore.isBallot(ballot), true);
+});
+
+test('every rung the builder offers is one the model recognises', () => {
+    FormsCore.RUNGS_LIVE.forEach(rung => {
+        assert.ok(FormsCore.RUNGS.includes(rung), rung + ' is offered but not in the ladder');
+        assert.ok(FormsCore.rungLabel(rung), rung + ' has no name to draw');
+    });
+});

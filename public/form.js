@@ -45,6 +45,10 @@ function formPage() {
         get settings() { return FormsCore.settingsFor(this.form ? this.form.rung : 'member'); },
         get liveRungs() { return FormsCore.RUNGS_LIVE; },
 
+        // Asked of the model, not spelled out here — the picker is not the only
+        // place a rung gets named, and two lists of these words would drift.
+        rungLabel(rung) { return FormsCore.rungLabel(rung); },
+
         get badges() {
             if (!this.form) return [];
             const out = [];
@@ -204,10 +208,35 @@ function formPage() {
             if (FormsCore.hasOptions(q.type) && !(q.options || []).length) {
                 q.options = ['', ''];
             }
+            // And switching to a scale needs a scale to switch to. A form
+            // LOADED from Firestore comes through buildFormTemplate and always
+            // has one; a question retyped here is the case this covers.
+            if (q.type === 'scale' && !q.scale) {
+                q.scale = FormsCore.buildScale(null);
+            }
             this.touch();
         },
 
+        // The ends are clamped in the model, not by these boxes — a scale
+        // arrives from a paste as well as from somebody typing. Running the
+        // typed value back through it means the box shows what will actually be
+        // saved rather than what was asked for.
+        onScaleChange(q) {
+            q.scale = FormsCore.buildScale(q.scale);
+            this.touch();
+        },
+
+        scaleLine(q) {
+            const points = FormsCore.scalePoints(q && q.scale).length;
+            return points + (points === 1 ? ' point' : ' points');
+        },
+
         hasOptions(type) { return FormsCore.hasOptions(type); },
+
+        // Does this entry collect an answer? Everything does except a section
+        // heading. Asked of the model rather than compared against 'section'
+        // here, so a second non-asking type later needs no edit on this page.
+        asks(q) { return FormsCore.asksSomething(q && q.type); },
 
         // The type picker's own vocabulary. Derived from FormsCore rather than
         // listed here, so the day a type goes live the picker follows without

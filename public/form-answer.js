@@ -162,13 +162,44 @@
 
             get missingIds() { return this.missing.map(m => m.id); },
 
+            // A "select all that apply" answer is a list, and it has to already
+            // be one before the first box is ticked — x-model on a checkbox
+            // group pushes into an array and does not make one.
+            readyFor(questions) {
+                (questions || []).forEach(q => {
+                    if (q.type === 'choice_many' && !Array.isArray(this.answers[q.id])) {
+                        this.answers[q.id] = [];
+                    }
+                });
+            },
+
+            // Questions are numbered by how many questions came before them, not
+            // by position — a heading in the middle must not make question 4
+            // into question 5.
+            numberFor(index) {
+                const qs = this.form.questions || [];
+                let n = 0;
+                for (let i = 0; i <= index && i < qs.length; i += 1) {
+                    if (qs[i] && qs[i].type !== 'section') n += 1;
+                }
+                return n;
+            },
+
+            // The points a linear scale runs between, for the row of buttons.
+            scalePoints(q) {
+                return window.FormsCore.scalePoints(q && q.scale);
+            },
+
             get missingLine() {
                 if (!this.missing.length) return '';
                 return this.missing.map(m => m.text).join(' · ');
             },
 
             get countLine() {
-                const qs = this.form.questions || [];
+                // Headings are not questions and must not be counted as any —
+                // "9 questions" on a form with four and five headings is a
+                // promise the form does not keep.
+                const qs = (this.form.questions || []).filter(q => q.type !== 'section');
                 const need = qs.filter(q => q.required).length;
                 const n = qs.length + (qs.length === 1 ? ' question' : ' questions');
                 // ⚠ No time estimate. The design offered "About 2 minutes"; a
@@ -313,6 +344,7 @@
             settle(data, isFetch) {
                 if (data.ok && isFetch) {
                     this.form = data.view || this.form;
+                    this.readyFor(this.form.questions);
                     this.state = 'open';
                     return;
                 }
@@ -342,6 +374,14 @@
                     case 'incomplete':
                         this.missing = data.missing || [];
                         this.problem = data.message || 'Some questions still need an answer.';
+                        return;
+                    case 'unanswerable':
+                        // An answer that is there and does not fit — the same
+                        // questions get marked, because to the person filling
+                        // it in "you missed this" and "that will not do" are
+                        // the same job: look here again.
+                        this.missing = data.missing || [];
+                        this.problem = data.message || 'Some answers do not fit their questions.';
                         return;
                     case 'already-answered':
                         // Only a ballot reaches this. An attributed one-each

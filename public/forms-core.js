@@ -65,16 +65,22 @@
         { id: 'short_text', label: 'Short answer', group: 'Text', live: true },
         { id: 'paragraph', label: 'Paragraph', group: 'Text', live: true },
         { id: 'choice_one', label: 'Multiple choice', group: 'Choice', live: true },
-        { id: 'choice_many', label: 'Select all that apply', group: 'Choice', live: false },
-        { id: 'dropdown', label: 'Dropdown', group: 'Choice', live: false },
-        { id: 'number', label: 'Number', group: 'Number', live: false },
-        { id: 'scale', label: 'Linear scale', group: 'Number', live: false },
-        { id: 'date', label: 'Date', group: 'When', live: false },
-        { id: 'time', label: 'Time', group: 'When', live: false },
+        { id: 'choice_many', label: 'Select all that apply', group: 'Choice', live: true },
+        { id: 'dropdown', label: 'Dropdown', group: 'Choice', live: true },
+        { id: 'number', label: 'Number', group: 'Number', live: true },
+        { id: 'scale', label: 'Linear scale', group: 'Number', live: true },
+        { id: 'date', label: 'Date', group: 'When', live: true },
+        { id: 'time', label: 'Time', group: 'When', live: true },
         { id: 'image', label: 'Image', group: 'Attach', live: false },
         { id: 'file', label: 'File submission', group: 'Attach', live: false },
         { id: 'person', label: 'Directory Person picker', group: 'From the app', live: false },
         { id: 'payment', label: 'Stripe payment', group: 'From the app', live: false },
+        // The odd one out, and the reason `asks` exists at all. When a form is
+        // acting as a structured document rather than a survey, some of what is
+        // on it is not asking anything — it is a heading, marking where one part
+        // ends and the next begins. It is NOT a grouping structure: it sits in
+        // the same ordered list as everything above and reorders with them.
+        { id: 'section', label: 'Section heading', group: 'Layout', live: true, asks: false },
     ];
 
     const TYPES_BY_ID = {};
@@ -83,6 +89,77 @@
     // Which types carry a list of options the author writes.
     const OPTION_TYPES = { choice_one: true, choice_many: true, dropdown: true };
 
+    // Which types are answered with a number, and read back as a spread rather
+    // than as a list of strings.
+    const NUMERIC_TYPES = { number: true, scale: true };
+
+    // Which types are stored in a fixed, sortable text form. That is the whole
+    // reason the format is pinned: "the 3rd" and "the 12th" fall the wrong way
+    // round as ordinary words, and a locale string sorts by whatever the
+    // answerer's phone happened to write.
+    const WHEN_TYPES = { date: true, time: true };
+
+    // ── The linear scale ─────────────────────────────────────────────────────
+    //
+    // A scale runs between two ends and carries a word for each, so "1 = never,
+    // 5 = every week" is part of the question rather than something the author
+    // has to write into the question text and keep in step by hand.
+    //
+    // It starts at 0 or 1 and stops at 10. Both ends are clamped in the model
+    // rather than by the number boxes on the builder, because a scale arrives
+    // from a paste and from whatever a future import does as well as from a
+    // person typing. A 500-point scale is a row of buttons off the side of a
+    // phone; an upside-down one is a question nobody can answer.
+    const SCALE_MAX_CEILING = 10;
+    const DEFAULT_SCALE = { min: 1, max: 5 };
+
+    function buildScale(spec) {
+        const s = spec || {};
+        let min = Number(s.min);
+        let max = Number(s.max);
+        if (!Number.isFinite(min)) min = DEFAULT_SCALE.min;
+        if (!Number.isFinite(max)) max = DEFAULT_SCALE.max;
+        min = Math.round(min);
+        max = Math.round(max);
+        if (min < 0) min = 0;
+        if (min > 1) min = 1;
+        if (max > SCALE_MAX_CEILING) max = SCALE_MAX_CEILING;
+        if (max <= min) max = Math.min(SCALE_MAX_CEILING, min + 1);
+        return {
+            min: min,
+            max: max,
+            minLabel: trimTo(s.minLabel, MAX_OPTION_LENGTH),
+            maxLabel: trimTo(s.maxLabel, MAX_OPTION_LENGTH),
+        };
+    }
+
+    function scalePoints(scale) {
+        const s = scale || DEFAULT_SCALE;
+        const out = [];
+        for (let v = s.min; v <= s.max; v += 1) out.push(v);
+        return out;
+    }
+
+    // ── A date and a time ────────────────────────────────────────────────────
+    //
+    // Checked rather than parsed leniently: 2026-13-01 has the right shape and
+    // is not a date, and a browser that accepts it will happily store it.
+    function isDateStr(value) {
+        const str = String(value == null ? '' : value);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+        const parts = str.split('-').map(Number);
+        const when = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        return when.getUTCFullYear() === parts[0]
+            && when.getUTCMonth() === parts[1] - 1
+            && when.getUTCDate() === parts[2];
+    }
+
+    function isTimeStr(value) {
+        const m = /^(\d{2}):(\d{2})$/.exec(String(value == null ? '' : value));
+        if (!m) return false;
+        return Number(m[1]) <= 23 && Number(m[2]) <= 59;
+    }
+
     function questionType(id) {
         return TYPES_BY_ID[id] || null;
     }
@@ -90,6 +167,16 @@
     function isLiveType(id) {
         const t = TYPES_BY_ID[id];
         return !!(t && t.live);
+    }
+
+    // Does this type collect an answer? Everything does except the section
+    // heading, and every place that treats a question as a question — the
+    // tally, the required check, what is stored in a Response — asks this
+    // rather than naming the heading, so a second non-asking type later is one
+    // line in the list above.
+    function asksSomething(id) {
+        const t = TYPES_BY_ID[id];
+        return !!t && t.asks !== false;
     }
 
     function hasOptions(typeId) {
@@ -102,10 +189,31 @@
     // `public` is the only rung that needs no account — which is why "is
     // sign-in required" is NOT a separate setting: it is read off the rung.
     //
-    // MS-360 offers the first two; `editor` and `elder` arrive with MS-361.
-    // They are named here because the ladder is the model, not the UI.
+    // MS-360 offered the first two and named all four, because the ladder is
+    // the model rather than the UI. MS-380 offers the other two, so the two
+    // lists now match.
+    //
+    // They stay two names on purpose. RUNGS is what a stored record may say and
+    // what the server enforces; RUNGS_LIVE is what the builder offers. They were
+    // different for one ticket and could be again — a rung added to the ladder
+    // ahead of the screens that explain it should not appear in the picker the
+    // same afternoon.
     const RUNGS = ['public', 'member', 'editor', 'elder'];
-    const RUNGS_LIVE = ['public', 'member'];
+    const RUNGS_LIVE = ['public', 'member', 'editor', 'elder'];
+
+    // What a rung is called on screen. Here rather than on the page, because
+    // the picker is not the only place a rung is named and two lists of these
+    // words would drift.
+    const RUNG_LABELS = {
+        public: 'Public',
+        member: 'Members',
+        editor: 'Editors',
+        elder: 'Elders',
+    };
+
+    function rungLabel(rung) {
+        return RUNG_LABELS[rung] || 'Members';
+    }
 
     function isRung(rung) {
         return RUNGS.indexOf(rung) !== -1;
@@ -231,8 +339,14 @@
             type: type,
             text: trimTo(s.text, MAX_QUESTION_LENGTH),
             hint: trimTo(s.hint, MAX_HINT_LENGTH),
-            placeholder: trimTo(s.placeholder, MAX_PLACEHOLDER_LENGTH),
-            required: s.required === true,
+            // There is no box under a heading, so there is nothing to put
+            // inside one. The hint survives: it is the line under the heading.
+            placeholder: asksSomething(type) ? trimTo(s.placeholder, MAX_PLACEHOLDER_LENGTH) : '',
+            // A heading takes no answer, so it can never be the thing
+            // stopping a form being submitted. Forced here rather than hidden on
+            // the page, because a stored record that claimed it would be
+            // believed by everything downstream.
+            required: asksSomething(type) && s.required === true,
             // A question that has gathered answers is RETIRED, never deleted —
             // the tally it already holds would otherwise lose its label. A
             // retired question is not shown to answerers and is still shown on
@@ -243,6 +357,9 @@
             q.options = (Array.isArray(s.options) ? s.options : [])
                 .map(o => String(o == null ? '' : o).trim().slice(0, MAX_OPTION_LENGTH))
                 .filter(o => o.length > 0);
+        }
+        if (type === 'scale') {
+            q.scale = buildScale(s.scale);
         }
         return q;
     }
@@ -264,6 +381,12 @@
             description: trimTo(s.description, MAX_DESCRIPTION_LENGTH),
             afterword: trimTo(s.afterword, MAX_AFTERWORD_LENGTH),
             questions: (Array.isArray(s.questions) ? s.questions : []).map(buildQuestion),
+            // Where it is filed (MS-375). An explicit null means the top level,
+            // which is also where a form with an unknown folder is drawn — the
+            // library lists this collection, so a form can never be filed out of
+            // sight while its public link still works. The folder graph itself
+            // lives in form-folders-core.js.
+            folderId: s.folderId || null,
             rung: rung,
             // Forced values win over whatever was passed. A form saved as
             // `public` while carrying attribution:true would be a record that
@@ -380,6 +503,84 @@
             .map(q => ({ id: q.id, text: q.text }));
     }
 
+    // ── Is this answer the right shape for the question it answers? ──────────
+    //
+    // Separate from missingRequired on purpose. That one is about ABSENCE — a
+    // required question nobody filled in. This one is about an answer that IS
+    // there and is wrong for its type: a scale off the end of its own range, a
+    // date that is not a date, a choice the form never offered.
+    //
+    // ⚠ Like missingRequired, the copy that counts runs on the server. A person
+    // answering a public form has a browser we do not control, and every check
+    // the fill-in page makes is a courtesy to somebody honest — an option that
+    // was never on the form arrives by somebody typing into the request, not by
+    // clicking.
+    //
+    // A question left blank is not a fault here. Only required questions must be
+    // answered, and a partial Response is ordinary rather than broken.
+    function answerFault(q, value) {
+        const type = q.type;
+
+        if (type === 'choice_many') {
+            const list = Array.isArray(value) ? value : [value];
+            const offered = q.options || [];
+            const stray = list.some(v => offered.indexOf(v) === -1);
+            return stray ? 'That is not one of the choices offered.' : '';
+        }
+        if (hasOptions(type)) {
+            if (Array.isArray(value)) return 'Only one choice is allowed here.';
+            return (q.options || []).indexOf(value) === -1
+                ? 'That is not one of the choices offered.'
+                : '';
+        }
+        if (Array.isArray(value)) return 'That answer has the wrong shape.';
+
+        if (type === 'number') {
+            return Number.isFinite(Number(value)) ? '' : 'That needs to be a number.';
+        }
+        if (type === 'scale') {
+            const n = Number(value);
+            const scale = q.scale || DEFAULT_SCALE;
+            if (!Number.isFinite(n) || Math.round(n) !== n) {
+                return 'That needs to be a number on the scale.';
+            }
+            return (n < scale.min || n > scale.max)
+                ? 'That is off the end of the scale.'
+                : '';
+        }
+        if (type === 'date') return isDateStr(value) ? '' : 'That needs to be a date.';
+        if (type === 'time') return isTimeStr(value) ? '' : 'That needs to be a time.';
+        return '';
+    }
+
+    // What a Response actually keeps. Anything sent against a question that
+    // asks nothing is dropped rather than refused: a heading produces no key in
+    // a Response, and a value arriving for one is junk rather than an attack.
+    function answersOnly(form, answers) {
+        const given = normaliseAnswers(answers);
+        const asking = {};
+        ((form && form.questions) || []).forEach(q => {
+            if (q && asksSomething(q.type)) asking[q.id] = true;
+        });
+        const out = {};
+        Object.keys(given).forEach(qid => {
+            if (asking[qid]) out[qid] = given[qid];
+        });
+        return out;
+    }
+
+    function answerProblems(form, answers) {
+        const given = normaliseAnswers(answers);
+        const problems = [];
+        askedQuestions(form).forEach(q => {
+            if (!asksSomething(q.type)) return;
+            if (!(q.id in given)) return;
+            const why = answerFault(q, given[q.id]);
+            if (why) problems.push({ id: q.id, text: q.text, why: why });
+        });
+        return problems;
+    }
+
     // ── Reading anonymous answers back ───────────────────────────────────────
     //
     // A stable shuffle keyed by the form. Two elders looking at the same poll at
@@ -443,7 +644,9 @@
     // get the "right" one is the join ADR-0052 forbids.
     function tally(form, responses) {
         const rows = responses || [];
-        return ((form && form.questions) || []).map(q => {
+        // A heading is not a row here. Left in, every form with one would report
+        // a question nobody answered.
+        return ((form && form.questions) || []).filter(q => asksSomething(q.type)).map(q => {
             const given = rows
                 .map(r => (r.answers || {})[q.id])
                 .filter(v => v != null && v !== '');
@@ -478,6 +681,34 @@
                     // winner fills the track and the rest are read against it.
                     width: Math.round((counts[o] / top) * 100),
                 }));
+            } else if (NUMERIC_TYPES[q.type]) {
+                // A spread and an average, not a bag of strings. A scale shows
+                // EVERY point on it including the ones nobody picked — a gap in
+                // the middle is the interesting part of the answer, and it
+                // disappears if only the values given are drawn. A free number
+                // has no such range, so it shows what came back.
+                const numbers = given.map(v => Number(v)).filter(n => Number.isFinite(n));
+                const values = q.type === 'scale'
+                    ? scalePoints(q.scale)
+                    : numbers.slice().sort((a, b) => a - b).filter((n, i, all) => i === 0 || all[i - 1] !== n);
+
+                const counts = {};
+                values.forEach(v => { counts[v] = 0; });
+                numbers.forEach(n => { if (n in counts) counts[n] += 1; });
+
+                const top = values.reduce((most, v) => Math.max(most, counts[v]), 1);
+                out.distribution = values.map(v => ({
+                    value: v,
+                    count: counts[v],
+                    width: Math.round((counts[v] / top) * 100),
+                }));
+                const total = numbers.reduce((sum, n) => sum + n, 0);
+                out.average = numbers.length
+                    ? Math.round((total / numbers.length) * 100) / 100
+                    : null;
+            } else if (WHEN_TYPES[q.type]) {
+                // Sorted, which is the whole reason the stored format is fixed.
+                out.answers = given.map(v => String(v)).sort();
             } else {
                 out.answers = given.map(v => String(v));
             }
@@ -497,6 +728,7 @@
         QUESTION_TYPES,
         RUNGS,
         RUNGS_LIVE,
+        rungLabel,
         BALLOT_PROMISE,
         ID_BYTES,
         questionType,
@@ -518,6 +750,15 @@
         buildResponse,
         buildLedgerEntry,
         missingRequired,
+        answerProblems,
+        answersOnly,
+        asksSomething,
+        isDateStr,
+        isTimeStr,
+        buildScale,
+        scalePoints,
+        DEFAULT_SCALE,
+        SCALE_MAX_CEILING,
         tally,
         stableShuffle,
         anonymousReadOrder,
