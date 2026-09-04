@@ -90,7 +90,14 @@ test('nothing anywhere mints a download URL for a form upload', () => {
         // Comments stripped first. Several of these files EXPLAIN why the call
         // is banned, and a test that failed on the explanation would teach
         // people to delete the warning rather than obey it.
+        // ⚠ Line endings normalised FIRST. These files check out with CRLF on
+        // Windows, and in a regex `.` does not cross a \r while `$` (without
+        // /m) matches only the very end of the input — so `//.*$` matched
+        // nothing at all and this strip silently did nothing. The test then
+        // failed on a comment EXPLAINING the ban, which is the exact failure it
+        // was written to avoid.
         const src = fs.readFileSync(file, 'utf8')
+            .replace(/\r\n/g, '\n')
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
         assert.ok(!src.includes('getDownloadURL'),

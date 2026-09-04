@@ -390,6 +390,14 @@
                         <p x-show="form.published">Send the link and answers appear here.</p>
                     </div>
 
+                    <div class="fp-exportbar" x-show="responseCount">
+                        <span class="m-label m-label--sm" x-text="responseCount + (responseCount === 1 ? ' response' : ' responses')"></span>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="exportResponses()">
+                            <span class="material-symbols-outlined">download</span>
+                            <span class="m-btn__label">Export CSV</span>
+                        </button>
+                    </div>
+
                     <div class="m-notice" x-show="responseCount && !form.attribution">
                         <span class="material-symbols-outlined m-notice__icon">visibility_off</span>
                         <div class="m-notice__body">
@@ -509,6 +517,7 @@
          a link: getDownloadURL bypasses storage.rules for ever (ADR-0046). -->
     <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <script src="forms-core.js"></script>
+    <script src="forms-export-core.js"></script>
     <!-- forms-store.js reaches for the folder graph when it files or
          deletes something, so it loads first. -->
     <script src="form-folders-core.js"></script>
@@ -528,7 +537,16 @@
             border: 1px solid var(--error); border-radius: var(--radius);
         }
         .fp-confirm__ask { font-size: 13.5px; line-height: 1.35; color: var(--on-surface); text-wrap: pretty; }
-        .fp-link { padding: var(--space-base) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+        .fp-link { padding: var(--space-base) var(--space-md); border-bottom: 1px solid var(--outline-variant); min-width: 0; }
+
+        /* The share link, which is the other thing that ran off the side.
+           .f-linkrow is inline-flex, so it grows to whatever its contents need
+           and a long URL pushes the whole row past the card — and a preview
+           build's URL is very long. The code cell is the part that gives: it
+           ellipsises at ANY width now, not only on a phone, which is where the
+           old 52vw rule stopped. */
+        .f-linkrow { max-width: 100%; }
+        .f-linkrow code { flex: 1 1 auto; min-width: 0; }
         .fp-field { display: flex; flex-direction: column; gap: var(--space-base); }
 
         /* ── The two columns ──────────────────────────────────────────────
@@ -574,17 +592,23 @@
             color: var(--on-surface-variant); text-wrap: pretty;
         }
         /* The aside is a narrow column, so its controls go full width rather
-           than sitting at whatever width they were designed for on a form. */
-        .fp-aside .m-seg { width: 100%; }
+           than sitting at whatever width they were designed for on a form.
+           ⚠ AND THEY HAVE TO WRAP. The Answering rung went from two options to
+           four (MS-380), and four uppercase words at .14em tracking do not fit
+           across 320px. A segmented control is inline-flex with nowrap options,
+           so without this the buttons run straight out of their own box and the
+           last rung is sliced in half by the edge of the card. */
+        .fp-aside .m-seg { width: 100%; flex-wrap: wrap; }
+        .fp-aside .m-seg__opt { flex: 1 1 auto; }
         .fp-aside .m-input { width: 100%; }
         .fp-row { display: flex; gap: var(--space-sm); align-items: flex-end; flex-wrap: wrap; }
         .fp-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-sm); }
+        .fp-exportbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding-bottom: 8px; }
         .f-dim { opacity: .72; }
         .m-row__main { display: block; min-width: 0; }
         .m-row__title, .m-row__sub { display: block; }
         @media (max-width: 640px) {
             .f-panehead { flex-direction: column; gap: var(--space-sm); }
-            .f-linkrow code { max-width: 52vw; }
         }
     </style>
 </body>

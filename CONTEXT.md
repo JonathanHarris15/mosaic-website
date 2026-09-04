@@ -884,6 +884,21 @@ What a `document`-mode [[Form Template]] produces: a form somebody fills in **on
 
 _Avoid_: form response (that is a [[Response]]), filled form, submission
 
+### Response export
+A form's [[Response]]s as a CSV an editor downloads. One row per Response, one header row, UTF-8 with a byte-order mark so a spreadsheet opens it as text rather than mangling accents.
+
+**Deliberately wide.** A metadata block (`Form`, `Form ID`, `Exported on`, `Answer #`), then one or more columns per question in the order the form asks them. A [[Directory Person picker]] exports two columns — the id and the name. A [[Form upload]] exports three — the file's name, its size, and where it is stored. A [[Section heading]] exports none, because it asks nothing. **Retired questions keep their columns**, because they still hold answers.
+
+⚠ **An anonymous form IS exportable, and its export carries exactly what the screen carries.** This was an open question and it is settled: an export is not a new disclosure, because the Responses tab already shows every anonymous answer to any editor, and the list of who answered is the ledger — which no client may read at all (ADR-0052). Refusing would have protected nothing already visible while pushing somebody towards retyping the answers by hand, which has none of these protections.
+
+So an anonymous export carries **no name, no person id, no timestamp of any kind, and no Response id**. Its rows come out in the same **stable shuffle** the screen uses, never arrival order — a file keeps whatever order it was written in for ever. The row's handle is positional, the same "Answer 6" the screen shows.
+
+**What a form does not hold, it does not export.** Those columns are absent rather than empty: an empty column invites somebody to go looking for what should fill it.
+
+An upload's column carries its **storage path, never a link** — the same rule as everywhere else (ADR-0046). The file is assembled in the page from responses it has already read, so exporting reads nothing new.
+
+_Avoid_: report, download (the verb, not the thing), spreadsheet
+
 ### Directory Person picker
 A [[Form Template]] question answered by choosing somebody from the church directory rather than typing a name, so the answer joins up with the [[Person]] record instead of being a string to match by hand.
 

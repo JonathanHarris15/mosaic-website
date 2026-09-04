@@ -23,11 +23,9 @@
     <script src="shepherding-form-document.js"></script>
 
     <!-- The question controls, shared with the page a stranger answers a public
-         form on (MS-383). Mounted BEFORE Alpine's deferred script: Alpine walks
-         the DOM once at startup and never sees markup added afterwards, so a
-         late mount is a question with no control and no error. -->
+         form on (MS-383). Loaded here; MOUNTED at the end of the body, which is
+         the only place the slots exist and Alpine has not yet run. -->
     <script src="form-question-markup.js"></script>
-    <script>document.addEventListener('DOMContentLoaded', function () { FormQuestionMarkup.mount(); });</script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -119,6 +117,15 @@
             </div>
         </template>
     </main>
+
+    <!-- ⚠ THE MOUNT RUNS HERE, AT THE END OF THE BODY. See form-answer.html for
+         the reasoning: the slots live inside a <template x-for>, so they have to
+         be filled after the body is parsed and before Alpine walks it, and an
+         inline script at the end of the body is the one place that is true.
+         DOMContentLoaded, which this used, fires after the deferred Alpine has
+         already run — so every question drew a label and nothing to answer it
+         with. -->
+    <script>FormQuestionMarkup.mount();</script>
 
     <style>
         .fd-stack { display: flex; flex-direction: column; gap: var(--space-sm); max-width: 760px; margin: 0 auto; width: 100%; }

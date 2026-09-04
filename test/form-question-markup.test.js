@@ -77,15 +77,6 @@ test('the fill-in page mounts the shared controls instead of holding its own', (
     });
 });
 
-test('the markup is mounted before Alpine, or it is never seen', () => {
-    // Alpine walks the DOM once at startup. Markup injected afterwards gets no
-    // bindings and no error — a question with no control and nothing to say why.
-    const mountAt = ANSWER.indexOf('FormQuestionMarkup.mount()');
-    const alpineAt = ANSWER.indexOf('alpine-3.15.12.min.js');
-    assert.ok(mountAt !== -1, 'nothing mounts the shared markup');
-    assert.ok(mountAt < alpineAt, 'the markup is mounted after Alpine has already walked the DOM');
-});
-
 test('the fill-in page provides everything the markup asks of a host', () => {
     // The markup binds to these four. A page that mounts it and does not own
     // them renders a question that silently does nothing.
@@ -97,18 +88,140 @@ test('the fill-in page provides everything the markup asks of a host', () => {
 
 // ── Mounting ─────────────────────────────────────────────────────────────────
 
-test('mounting fills every slot on the page, and reports how many', () => {
-    const slots = [{ innerHTML: '' }, { innerHTML: '' }];
-    const fakeDoc = { querySelectorAll: () => ({ forEach: (fn) => slots.forEach(fn) }) };
-    const filled = Markup.mount(fakeDoc);
-    assert.strictEqual(filled, 2);
-    slots.forEach(slot => {
-        assert.ok(slot.innerHTML.includes("q.type === 'date'"), 'a slot was left empty');
-    });
+// A DOM small enough to hand-write and honest about the one thing that matters:
+// a <template>'s children are NOT in the document. They live in a separate
+// fragment that querySelectorAll does not descend into.
+//
+// The first version of these tests used a fake whose querySelectorAll simply
+// returned the slots, which is not how a browser behaves and is exactly why a
+// real bug shipped: every question drew a label and nothing to answer it with,
+// on both pages, with no error anywhere.
+function node(tag, attrs) {
+    return {
+        tag: tag,
+        attrs: attrs || {},
+        innerHTML: '',
+        children: [],
+        content: tag === 'template' ? fragment() : null,
+    };
+}
+
+function fragment() {
+    const frag = { children: [] };
+    frag.querySelectorAll = (sel) => matches(frag, sel);
+    return frag;
+}
+
+function matches(scope, sel) {
+    const out = [];
+    const walk = (parent) => {
+        (parent.children || []).forEach(child => {
+            const isSlot = sel === '[data-form-question]' && 'data-form-question' in child.attrs;
+            const isTpl = sel === 'template' && child.tag === 'template';
+            if (isSlot || isTpl) out.push(child);
+            // ⚠ Deliberately does NOT walk into child.content. That is the whole
+            // point: a browser's querySelectorAll does not either.
+            walk(child);
+        });
+    };
+    walk(scope);
+    out.forEach = Array.prototype.forEach.bind(out);
+    return out;
+}
+
+test('mounting reaches a slot inside a template, where the questions live', () => {
+    // The bug this exists for. A question is drawn by <template x-for>, so the
+    // mount point is inside a template and a plain document query never sees it.
+    const doc = fragment();
+    const tpl = node('template');
+    tpl.content.children.push(node('div', { 'data-form-question': '' }));
+    doc.children.push(tpl);
+
+    const filled = Markup.mount(doc);
+    assert.strictEqual(filled, 1, 'the slot inside the template was never filled');
+    assert.ok(tpl.content.children[0].innerHTML.includes("q.type === 'date'"));
+});
+
+test('mounting reaches a slot inside a template inside a template', () => {
+    // The Form Document page nests them: <template x-if> around <template x-for>.
+    const doc = fragment();
+    const outer = node('template');
+    const inner = node('template');
+    inner.content.children.push(node('div', { 'data-form-question': '' }));
+    outer.content.children.push(inner);
+    doc.children.push(outer);
+
+    assert.strictEqual(Markup.mount(doc), 1, 'a nested template was not reached');
+});
+
+test('mounting fills every slot, and reports how many', () => {
+    const doc = fragment();
+    doc.children.push(node('div', { 'data-form-question': '' }));
+    const tpl = node('template');
+    tpl.content.children.push(node('div', { 'data-form-question': '' }));
+    doc.children.push(tpl);
+
+    assert.strictEqual(Markup.mount(doc), 2);
 });
 
 test('mounting into nothing is not an error', () => {
     // A page that loads the module without a slot is odd, not broken.
-    const fakeDoc = { querySelectorAll: () => ({ forEach: () => {} }) };
-    assert.strictEqual(Markup.mount(fakeDoc), 0);
+    assert.strictEqual(Markup.mount(fragment()), 0);
+});
+
+// ── When it runs ─────────────────────────────────────────────────────────────
+
+test('both pages mount at the end of the body, the one moment that works', () => {
+    // A narrow window. In <head> the slots do not exist yet. On
+    // DOMContentLoaded it is too late, because that fires AFTER a deferred
+    // script — so Alpine has already walked the DOM. An inline script at the
+    // end of <body> runs during parsing, after the slots and before Alpine.
+    [['form-answer.html', ANSWER], ['shepherding-form-document.html', read('shepherding-form-document.html')]]
+        .forEach(([name, html]) => {
+            const mountAt = html.indexOf('FormQuestionMarkup.mount()');
+            assert.ok(mountAt !== -1, name + ' never mounts the shared markup');
+
+            const bodyAt = html.indexOf('<body');
+            assert.ok(mountAt > bodyAt, name + ' mounts in <head>, before the slots exist');
+
+            const lastSlotAt = html.lastIndexOf('data-form-question');
+            assert.ok(mountAt > lastSlotAt,
+                name + ' mounts before the last slot has been parsed');
+
+            // Comments stripped: both pages EXPLAIN why DOMContentLoaded was
+            // wrong, and a test that tripped on the explanation would teach
+            // somebody to delete the explanation.
+            const code = html.replace(/<!--[\s\S]*?-->/g, '');
+            assert.ok(!/DOMContentLoaded[\s\S]*?FormQuestionMarkup/.test(code),
+                name + ' mounts on DOMContentLoaded, which fires after deferred Alpine');
+        });
+});
+
+// ── Every page that mounts it owes the same set ──────────────────────────────
+
+test('both pages provide everything the shared markup binds to', () => {
+    // A page that mounts the markup and does not own one of these renders a
+    // question that silently does nothing — no error, no control, no clue.
+    // MS-388 added three types that need four more functions, so this checks
+    // the whole contract rather than the part that existed first.
+    const OWED = ['saidBefore', 'scalePoints', 'personChoices', 'pickPerson',
+        'onFileChosen', 'uploadFault', 'clearUpload'];
+
+    [['form-answer.js', 'the public fill-in page'],
+        ['shepherding-form-document.js', 'the Form Document editor']].forEach(([file, what]) => {
+        const src = read(file);
+        OWED.forEach(fn => {
+            assert.ok(src.includes(fn + '('), what + ' does not provide ' + fn);
+        });
+        assert.ok(/personQueries/.test(src), what + ' does not provide personQueries');
+    });
+});
+
+test('a Form Document says uploads are not supported rather than failing quietly', () => {
+    // The public page sends bytes through the Cloud Function; this page writes
+    // as a signed-in elder, and the upload path is write:false for every
+    // client. Until that has its own ticket, saying so is the honest answer.
+    const src = read('shepherding-form-document.js');
+    assert.match(src, /cannot be attached to a document yet/,
+        'a file chosen on a Form Document would fail with no explanation');
 });

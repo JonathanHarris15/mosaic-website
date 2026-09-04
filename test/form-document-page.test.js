@@ -185,11 +185,18 @@ test('it draws the shared controls rather than its own', async () => {
     });
 });
 
-test('the shared controls are mounted before Alpine walks the page', () => {
+test('the shared controls are mounted at the end of the body', () => {
+    // Not "before Alpine's script tag", which is what this used to check and
+    // was wrong: a deferred script runs after parsing wherever its tag sits.
+    // What matters is that the mount runs after the slots have been parsed and
+    // before Alpine walks them — one inline script at the end of <body>.
+    // The full reasoning, and the nested-template case, is in
+    // form-question-markup.test.js.
     const mountAt = MARKUP.indexOf('FormQuestionMarkup.mount()');
-    const alpineAt = MARKUP.indexOf('alpine-3.15.12.min.js');
-    assert.ok(mountAt !== -1 && mountAt < alpineAt,
-        'the controls are mounted after Alpine has already walked the DOM');
+    assert.ok(mountAt !== -1, 'the page never mounts the shared controls');
+    assert.ok(mountAt > MARKUP.lastIndexOf('data-form-question'),
+        'the controls are mounted before the slot has been parsed');
+    assert.ok(mountAt > MARKUP.indexOf('<body'), 'the mount is still in the head');
 });
 
 test('it shows the same three save states as the other document editors', () => {

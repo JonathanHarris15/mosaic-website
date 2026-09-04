@@ -135,10 +135,32 @@ test('the answering page boots and never sits on the spinner', async (t) => {
             'the browser did not render the page at all');
 
         // ── Alpine got as far as running ─────────────────────────────────────
-        const bodyTag = (dom.match(/<body[^>]*>/) || [''])[0];
+        // ⚠ Comments stripped BEFORE looking for the body tag. This matched
+        // the first "<body...>" in the served HTML, and a comment in the head
+        // that merely MENTIONED the body tag was picked up instead of the real
+        // one — so the test reported that Alpine had never bound, on a page
+        // where Alpine was fine. A decoy in prose is a silly way to lose an
+        // afternoon, and stripping comments costs one line.
+        const bodyTag = (dom.replace(/<!--[\s\S]*?-->/g, '').match(/<body[^>]*>/) || [''])[0];
         assert.doesNotMatch(bodyTag, /x-cloak/,
             'x-cloak is still on <body>, so Alpine never started and the whole ' +
             'page is invisible: ' + bodyTag);
+
+        // ── The controls actually got mounted ────────────────────────────────
+        //
+        // A question is drawn by <template x-for>, and a template's children are
+        // not in the document — querySelectorAll does not descend into them. The
+        // first version of the mount searched the document, found nothing, and
+        // said nothing, so every question rendered with a label and no way to
+        // answer it. On both pages. Through a green suite.
+        //
+        // Nothing less than a real browser catches that, which is what this file
+        // is for.
+        const mounted = Number((dom.match(/data-form-controls="(\d+)"/) || [])[1]);
+        assert.ok(mounted > 0,
+            'the shared question controls mounted into NOTHING. The slots live ' +
+            'inside a <template>, so either the mount stopped descending into ' +
+            'template content or it ran at the wrong moment.');
 
         // ── ⚠ THE ONE THAT BIT: it must not still be loading ─────────────────
         //

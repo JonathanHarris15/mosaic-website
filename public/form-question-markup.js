@@ -42,6 +42,8 @@
 //   onFileChosen(q, ev) take the chosen file. The page checks the size BEFORE
 //                      uploading and puts any complaint where uploadFault(q)
 //                      can find it — nobody should wait for a failure.
+//   uploadFault(q)     that complaint, or '' when there is none
+//   clearUpload(q)     forget the file chosen for `q`
 //
 // The chrome AROUND a question — its number, its "Needed" chip, whether it is
 // highlighted as missing — is deliberately NOT here. That genuinely differs:
@@ -157,9 +159,9 @@
             <div class="fa-file__got" x-show="answers[q.id] && answers[q.id].name">
                 <span class="material-symbols-outlined">description</span>
                 <span x-text="answers[q.id] && answers[q.id].name"></span>
-                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="pickPerson && (answers[q.id] = null)">Remove</button>
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="clearUpload(q)">Remove</button>
             </div>
-            <span class="m-input-hint fa-file__fault" x-show="uploadFault && uploadFault(q)" x-text="uploadFault && uploadFault(q)"></span>
+            <span class="m-input-hint fa-file__fault" x-show="uploadFault(q)" x-text="uploadFault(q)"></span>
         </div>
 
         <span class="m-input-hint" x-show="q.hint" x-text="q.hint"></span>
@@ -167,14 +169,26 @@
 
     // Put the controls inside every element carrying `data-form-question`.
     //
-    // ⚠ MUST RUN BEFORE ALPINE BOOTS. Alpine walks the DOM once at startup and
-    // never sees markup added afterwards, so a page that mounts this late gets
-    // a question with no control and no error. Both pages call this from a
-    // plain <script> above Alpine's own deferred one — the same ordering
-    // mobile-shell-header.js relies on.
-    function mount(root) {
-        const scope = root || (typeof document !== 'undefined' ? document : null);
-        if (!scope) return 0;
+    // ⚠ IT HAS TO LOOK INSIDE <template>, AND THAT IS THE WHOLE DIFFICULTY.
+    //
+    // A question is drawn by `<template x-for="q in questions">`, so the mount
+    // point sits inside a template. A template's children are NOT in the
+    // document — they live in a separate DocumentFragment that
+    // `document.querySelectorAll` does not descend into. The first version of
+    // this searched the document, found nothing, filled nothing, and reported
+    // zero, and every page using it drew a question with a label and no way to
+    // answer it. No error, nothing in the console: the slot was simply empty.
+    //
+    // So this walks every template's content as well, recursively, because a
+    // template can hold a template.
+    //
+    // ⚠ AND IT MUST RUN AFTER THE BODY IS PARSED BUT BEFORE ALPINE BOOTS.
+    // That is a narrow window and it has exactly one reliable spot: a plain
+    // inline <script> at the END of <body>. A script in <head> runs before the
+    // slots exist; DOMContentLoaded fires AFTER a deferred script, so Alpine
+    // has already walked the DOM by then. Both pages call it from the end of
+    // the body, and a test pins that.
+    function fillSlots(scope) {
         let filled = 0;
         // Counted as we go rather than read off `.length`: what a query returns
         // is only promised to be iterable, and a caller passing anything else
@@ -183,6 +197,26 @@
             slot.innerHTML = QUESTION_CONTROLS;
             filled += 1;
         });
+        scope.querySelectorAll('template').forEach(tpl => {
+            if (tpl.content) filled += fillSlots(tpl.content);
+        });
+        return filled;
+    }
+
+    function mount(root) {
+        const scope = root || (typeof document !== 'undefined' ? document : null);
+        if (!scope) return 0;
+        const filled = fillSlots(scope);
+
+        // ⚠ SAY HOW MANY, ON THE PAGE ITSELF. A mount that finds nothing is
+        // otherwise completely silent — no error, no warning, just a question
+        // with a label and nothing to answer it with. That is how this shipped
+        // broken, and how it stayed broken through a test suite that only read
+        // the source. Stamped here so a person opening dev tools and a test
+        // driving a real browser can both see it in one glance.
+        if (!root && typeof document !== 'undefined' && document.documentElement) {
+            document.documentElement.setAttribute('data-form-controls', String(filled));
+        }
         return filled;
     }
 

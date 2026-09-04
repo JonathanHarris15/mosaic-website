@@ -60,12 +60,10 @@
     <script src="/vendor/firebase/firebase-auth-compat.js"></script>
     <script src="/vendor/firebase/firebase-app-check-compat.js"></script>
     <script src="/vendor/firebase/firebase-functions-compat.js"></script>
-    <!-- The question controls, shared with the Form Document editor. Mounted
-         BEFORE Alpine's deferred script runs: Alpine walks the DOM once at
-         startup and never sees markup added afterwards, so a late mount is a
-         question with no control and no error. -->
+    <!-- The question controls, shared with the Form Document editor. Loaded
+         here; MOUNTED at the end of the body, which is the only place the slots
+         exist and Alpine has not yet walked past them. -->
     <script src="/form-question-markup.js"></script>
-    <script>FormQuestionMarkup.mount();</script>
     <script defer src="/vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -361,7 +359,7 @@
     </style>
 
     <!--
-      ⚠ THESE THREE RUN AT THE END OF <body>, AND THAT POSITION IS THE FIX FOR A
+      ⚠ THESE THREE RUN AT THE END OF THE BODY, AND THAT POSITION IS THE FIX FOR A
       REAL BUG — do not tidy them up into <head> with the SDKs.
 
       App Check's reCAPTCHA provider appends its own container to
@@ -379,6 +377,17 @@
       Shipped once, on 2026-09-02. test/form-answer-browser.test.js is the
       guard, and it uses a real browser because nothing less can catch this.
     -->
+    <!-- ⚠ THE MOUNT RUNS HERE, AT THE END OF THE BODY, AND THE POSITION IS THE
+         WHOLE POINT. The controls go inside a <template x-for>, so they must be
+         in place before Alpine walks the DOM — and the slots must exist before
+         the mount looks for them. That is a narrow window with one reliable
+         spot: an inline script at the end of the body, which runs during
+         parsing and therefore before any deferred script.
+
+         In the head it found no slots because the body did not exist yet. On
+         DOMContentLoaded it would be too late, because that fires AFTER a
+         deferred script has run. -->
+    <script>FormQuestionMarkup.mount();</script>
     <script src="/app-check-config.js"></script>
     <script src="/forms-core.js"></script>
     <script src="/form-answer.js"></script>
