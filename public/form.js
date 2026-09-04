@@ -11,6 +11,9 @@ function formPage() {
         formId: '',
         form: null,
         responses: [],
+        // The Shepherding Tags a person picker may be scoped to. Loaded only
+        // when a picker is on the form — see loadTags.
+        tags: [],
         tab: 'questions',
         openQuestion: null,
         currentUser: null,
@@ -156,12 +159,53 @@ function formPage() {
                     this.form.createdBy = form.createdBy || null;
                     this.form.createdByName = form.createdByName || null;
                     this.responses = await FormsStore.loadResponses(db, this.formId);
+                    this.loadTags();
                 } catch (e) {
                     this.problem = 'This form did not load. Check your connection and refresh.';
                 } finally {
                     this.loading = false;
                 }
             });
+        },
+
+        // The tags a Directory Person picker may be scoped to.
+        //
+        // Read on its own, so a builder that cannot reach them still edits a
+        // form. Hidden tags are dropped by FormsCore.offerableTags rather than
+        // here, because "which tags may a form name" is a rule about forms and
+        // belongs where the rule lives.
+        loadTags() {
+            const wantsTags = (this.form.questions || []).some(q => q.type === 'person');
+            if (!wantsTags) return;
+            db.collection('people_tags').orderBy('name', 'asc').get().then(snap => {
+                this.tags = snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+            }).catch(() => { this.tags = []; });
+        },
+
+        // Open what somebody sent.
+        //
+        // ⚠ FETCHED AS THE SIGNED-IN READER, NEVER LINKED. getDownloadURL()
+        // would mint a token that bypasses storage.rules and never expires, so
+        // one forwarded link would make an editors-only file public for ever
+        // (ADR-0046). Downloading through an authenticated request means the
+        // rule is checked every single time — the same thing an Event
+        // Attachment does.
+        async openUpload(entry) {
+            if (!entry || !entry.storagePath) return;
+            try {
+                const ref = firebase.storage().ref(entry.storagePath);
+                const blob = await ref.getBlob();
+                const url = URL.createObjectURL(blob);
+                // A blob: URL lives in this tab only and dies with it. It is not
+                // a shareable address and nothing is stored.
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = entry.name || 'file';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 30000);
+            } catch (e) {
+                this.problem = 'That file did not open. It may have been removed.';
+            }
         },
 
         // ── Saving ───────────────────────────────────────────────────────────
@@ -251,6 +295,17 @@ function formPage() {
             if (FormsCore.hasOptions(q.type) && !(q.options || []).length) {
                 q.options = ['', ''];
             }
+            if (q.type === 'person') {
+                if (!q.people) q.people = FormsCore.buildPeopleScope(null);
+                // Adding a picker to a form that is already public would make a
+                // record the model refuses to store. Said here, at the moment
+                // it happens, rather than discovered at save.
+                if (this.form.rung === 'public') {
+                    this.form.rung = 'member';
+                    this.problem = 'Moved to Members: a form anyone can open cannot ' +
+                        'ask for somebody from the directory.';
+                }
+            }
             // And switching to a scale needs a scale to switch to. A form
             // LOADED from Firestore comes through buildFormTemplate and always
             // has one; a question retyped here is the case this covers.
@@ -275,6 +330,33 @@ function formPage() {
         },
 
         hasOptions(type) { return FormsCore.hasOptions(type); },
+
+        // ── The three that reach outside the form (MS-390) ───────────────────
+
+        // Whether this form may be public at all. A Directory Person picker
+        // needs an account to read the directory (ADR-0031), so a form anybody
+        // can open cannot carry one.
+        get publicCheck() { return FormsCore.mayBePublic(this.form); },
+
+        // The tags a picker may be scoped to. Never the ones that hide
+        // themselves or their carriers — see offerableTags.
+        get scopeTags() { return FormsCore.offerableTags(this.tags); },
+
+        onScopeChange(q) {
+            q.people = FormsCore.buildPeopleScope(q.people);
+            this.touch();
+        },
+
+        scopeLine(q) {
+            const scope = (q.people && q.people.scope) || 'everyone';
+            if (scope === 'member') return 'Members only.';
+            if (scope === 'non_member') return 'People who are not members.';
+            if (scope === 'tag') {
+                const tag = this.scopeTags.find(t => t.id === q.people.tagId);
+                return tag ? ('People tagged ' + tag.name + '.') : 'Pick a tag.';
+            }
+            return 'Anybody in the directory.';
+        },
 
         // Does this entry collect an answer? Everything does except a section
         // heading. Asked of the model rather than compared against 'section'
@@ -317,6 +399,13 @@ function formPage() {
         // forbids. Doing it here too means the screen agrees with the record
         // rather than showing a tick that will not survive the save.
         setRung(rung) {
+            // Refused here as well as in the model, so the reason reaches the
+            // person who tried rather than the rung quietly snapping back.
+            if (rung === 'public' && !this.publicCheck.ok) {
+                this.problem = this.publicCheck.why;
+                return;
+            }
+            this.problem = '';
             this.form.rung = rung;
             const allowed = FormsCore.settingsFor(rung);
             if (!allowed.attribution.available) this.form.attribution = false;

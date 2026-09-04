@@ -395,3 +395,113 @@ test('and it cannot be answered through the public door either', () => {
     assert.strictEqual(verdict.ok, false,
         'a Form Document template accepted a Response through the public function');
 });
+
+// ── Files arriving with an answer (MS-389) ───────────────────────────────────
+//
+// The page checks the size before it uploads, as a courtesy. This is the copy
+// that counts: on a public form the page is one we do not control, so every
+// limit is checked again here.
+
+const uploadForm = () => FormsCore.buildFormTemplate({
+    title: 'Camp sign-up',
+    published: true,
+    rung: 'public',
+    questions: [
+        { id: 'q1', type: 'short_text', text: 'Your name', required: true },
+        { id: 'photo', type: 'image', text: 'A photo of the form' },
+        { id: 'waiver', type: 'file', text: 'The signed waiver' },
+    ],
+});
+
+const aFile = (over) => Object.assign({
+    name: 'waiver.pdf',
+    contentType: 'application/pdf',
+    size: 2048,
+    dataBase64: 'aGVsbG8=',
+}, over || {});
+
+test('a file against an upload question is accepted', () => {
+    assert.deepEqual(fp.judgeUploads(uploadForm(), { waiver: aFile() }), []);
+});
+
+test('a file against a question that takes no file is refused', () => {
+    const bad = fp.judgeUploads(uploadForm(), { q1: aFile() });
+    assert.strictEqual(bad.length, 1);
+    assert.match(bad[0].why, /does not take a file/);
+});
+
+test('a file against a question the form does not have is refused', () => {
+    const bad = fp.judgeUploads(uploadForm(), { nosuch: aFile() });
+    assert.strictEqual(bad.length, 1);
+    assert.match(bad[0].why, /not on this form/);
+});
+
+test('a file over the cap is refused here too, whatever the page allowed', () => {
+    const bad = fp.judgeUploads(uploadForm(), {
+        waiver: aFile({ size: FormsCore.MAX_UPLOAD_BYTES + 1 }),
+    });
+    assert.strictEqual(bad.length, 1);
+    assert.match(bad[0].why, /too big/);
+});
+
+test('a file with no bytes is refused rather than stored empty', () => {
+    assert.strictEqual(fp.judgeUploads(uploadForm(), { waiver: aFile({ dataBase64: '' }) }).length, 1);
+    assert.strictEqual(fp.judgeUploads(uploadForm(), { waiver: aFile({ dataBase64: 42 }) }).length, 1);
+});
+
+test('a submission carrying a bad file is refused before anything is written', () => {
+    // The whole submission stops. Bytes in the bucket with no Response pointing
+    // at them is rubbish nobody can find; a Response pointing at bytes that
+    // never saved is a record somebody trusts.
+    const verdict = fp.judgeSubmission(uploadForm(), {
+        formId: 'f1',
+        answers: { q1: 'Rebecca' },
+        files: { waiver: aFile({ size: FormsCore.MAX_UPLOAD_BYTES + 1 }) },
+    }, TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.strictEqual(verdict.code, 'unanswerable');
+});
+
+test('a submission with good files goes through', () => {
+    const verdict = fp.judgeSubmission(uploadForm(), {
+        formId: 'f1',
+        answers: { q1: 'Rebecca' },
+        files: { waiver: aFile(), photo: aFile({ name: 'p.jpg', contentType: 'image/jpeg' }) },
+    }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('a submission with no files at all is ordinary', () => {
+    const verdict = fp.judgeSubmission(uploadForm(), {
+        formId: 'f1', answers: { q1: 'Rebecca' },
+    }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+// ── Where the bytes go ───────────────────────────────────────────────────────
+
+test('an upload is filed under its form and its response', () => {
+    const p = fp.uploadPath('form123', 'resp456', 'waiver', 'signed.pdf');
+    assert.match(p, /^form_uploads\/form123\/resp456\//);
+    assert.match(p, /\.pdf$/);
+});
+
+test('the stored name comes from the question, never from the answerer', () => {
+    // A path built from a name a stranger chose is a path a stranger can aim.
+    // The name they sent is kept in the record, where it is data rather than an
+    // address.
+    const p = fp.uploadPath('f1', 'r1', 'waiver', '../../../people_photos/evil.png');
+    assert.ok(!p.includes('..'), 'an answerer walked out of their own folder');
+    assert.ok(p.startsWith('form_uploads/f1/r1/'), 'the path left the response it belongs to');
+    assert.ok(p.includes('waiver'), 'the question id should name the file');
+});
+
+test('a name with no extension still gets a path', () => {
+    const p = fp.uploadPath('f1', 'r1', 'q1', 'noextension');
+    assert.strictEqual(p, 'form_uploads/f1/r1/q1');
+});
+
+test('an extension full of surprises is cleaned rather than trusted', () => {
+    const p = fp.uploadPath('f1', 'r1', 'q1', 'x.p<>ng?token=1');
+    assert.ok(!/[<>?=]/.test(p), 'the extension carried characters through into the path');
+});

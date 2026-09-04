@@ -150,6 +150,26 @@
             form: { title: '', description: '', questions: [], ballot: false, promise: '' },
             answers: {},
             was: {},
+            // What has been typed into each Directory Person picker, and who
+            // each one may offer.
+            //
+            // ⚠ THE LISTS ARRIVE FROM THE SERVER, ALREADY NARROWED. This page
+            // has no Firestore at all — that is ADR-0051, and it is the whole
+            // reason a stranger can answer a form safely. So the picker cannot
+            // read the directory, and does not: `publicForm` sends the people
+            // each question may offer along with the questions themselves.
+            //
+            // That is also the stronger version. People a scope excludes are
+            // never sent, so a tag's membership cannot be read out of a network
+            // response by somebody who was only shown a search box.
+            personQueries: {},
+            pickerPeople: {},
+            // The bytes waiting to go with the submission, question id →
+            // {name, contentType, size, dataBase64}. Held here rather than
+            // uploaded as they are chosen, because a file and the answer it
+            // belongs to are accepted or refused together.
+            files: {},
+            fileFaults: {},
             missing: [],
             problem: '',
             afterword: '',
@@ -184,6 +204,61 @@
                 }
                 return n;
             },
+
+            // ── The three that reach outside the form (MS-390) ───────────────
+
+            // Search within what the server already decided this question may
+            // offer. The scope was applied there; this only narrows by name.
+            personChoices(q) {
+                const typed = String(this.personQueries[q.id] || '').trim().toLowerCase();
+                if (!typed) return [];
+                return (this.pickerPeople[q.id] || [])
+                    .filter(p => String(p.name || '').toLowerCase().includes(typed))
+                    .slice(0, 8);
+            },
+
+            // The id is the answer; the name rides along so the Response stays
+            // readable after somebody is renamed or removed from the directory.
+            pickPerson(q, person) {
+                if (!person) { this.answers[q.id] = null; return; }
+                this.answers[q.id] = { personId: person.id, name: person.name };
+                this.personQueries[q.id] = '';
+            },
+
+            // ⚠ The size is checked HERE only as a courtesy. The function
+            // checks it again, because on a public form this page is one we do
+            // not control. What this buys is that nobody waits through an
+            // upload to be told no.
+            onFileChosen(q, ev) {
+                const file = ev && ev.target && ev.target.files && ev.target.files[0];
+                this.fileFaults[q.id] = '';
+                if (!file) return;
+
+                const fault = window.FormsCore.uploadFault(file);
+                if (fault) { this.fileFaults[q.id] = fault; return; }
+
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // A data: URL is "<meta>,<base64>"; only the second half is
+                    // the file.
+                    const base64 = String(reader.result || '').split(',')[1] || '';
+                    this.files[q.id] = {
+                        name: file.name,
+                        contentType: file.type || 'application/octet-stream',
+                        size: file.size,
+                        dataBase64: base64,
+                    };
+                    // What the control shows. The stored answer is written by
+                    // the server once the bytes have actually landed.
+                    this.answers[q.id] = { name: file.name, size: file.size };
+                };
+                reader.onerror = () => {
+                    this.fileFaults[q.id] = 'That file could not be read. Try choosing it again.';
+                };
+                reader.readAsDataURL(file);
+            },
+
+            uploadFault(q) { return this.fileFaults[q.id] || ''; },
 
             // Owed to the shared question markup: was this option what they
             // answered last time? Only a form with One Response Each ever has a
@@ -322,7 +397,12 @@
                 this.sending = true;
                 this.problem = '';
                 this.missing = [];
-                await this.ask({ op: 'submit', formId: this.formId, answers: this.answers }, false);
+                await this.ask({
+                    op: 'submit',
+                    formId: this.formId,
+                    answers: this.answers,
+                    files: this.files,
+                }, false);
                 this.sending = false;
             },
 
@@ -354,6 +434,7 @@
                 if (data.ok && isFetch) {
                     this.form = data.view || this.form;
                     this.readyFor(this.form.questions);
+                    this.pickerPeople = data.people || {};
                     this.state = 'open';
                     return;
                 }

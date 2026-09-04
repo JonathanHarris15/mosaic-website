@@ -143,6 +143,120 @@ function whatToServe(form, caller, today) {
 // ── Taking the answer ────────────────────────────────────────────────────────
 
 /**
+ * Does this person belong in this picker?
+ *
+ * Pure, and applied SERVER-SIDE. The fill-in page has no Firestore at all —
+ * that is ADR-0051, and it is why a stranger answering a public form never
+ * touches the database. So a Directory Person picker cannot read the directory
+ * itself; the list arrives already narrowed, through the same closed door as
+ * the questions.
+ *
+ * Filtering here rather than in the browser is also the stronger version: the
+ * people a scope excludes are never sent at all, so a tag's membership cannot
+ * be read out of a network response by somebody who was only shown a search box.
+ *
+ * @param {!Object} q A `person` question.
+ * @param {!Object} person A directory person: {id, name, isMember, tagIds}.
+ * @return {boolean} True when the picker may offer them.
+ */
+function personInScope(q, person) {
+  const scope = (q.people && q.people.scope) || "everyone";
+  const tagId = q.people && q.people.tagId;
+  if (scope === "member") return person.isMember === true;
+  if (scope === "non_member") return person.isMember !== true;
+  if (scope === "tag") return (person.tagIds || []).indexOf(tagId) !== -1;
+  return true;
+}
+
+/**
+ * The people each picker on this form may offer, keyed by question id.
+ *
+ * @param {?Object} form The stored Form Template.
+ * @param {!Array<!Object>} directory Everybody, as {id, name, isMember, tagIds}.
+ * @return {!Object} Question id → [{id, name}].
+ */
+function pickerChoices(form, directory) {
+  const out = {};
+  FormsCore.askedQuestions(form)
+      .filter((q) => q.type === "person")
+      .forEach((q) => {
+        out[q.id] = (directory || [])
+            .filter((p) => personInScope(q, p))
+            // Only the id and the name leave the server. Nothing else about a
+            // Person is any of a form's business.
+            .map((p) => ({id: p.id, name: p.name}));
+      });
+  return out;
+}
+
+/**
+ * Where an uploaded file is kept.
+ *
+ * Under the form and the response it belongs to, so the rules can answer "may
+ * you read this" by looking at the path, and so deleting a response's files is
+ * a prefix delete rather than a search.
+ *
+ * The stored name is the response's own id plus the question's, NOT the name
+ * the file arrived with. An answerer picks that name, and a path built from
+ * something a stranger chose is a path a stranger can aim. The original name is
+ * kept in the record, where it is data rather than an address.
+ *
+ * @param {string} formId The form.
+ * @param {string} responseId The response the file belongs to.
+ * @param {string} questionId The question it answers.
+ * @param {string} name The name it arrived with, for its extension only.
+ * @return {string} The storage path.
+ */
+function uploadPath(formId, responseId, questionId, name) {
+  const dot = String(name || "").lastIndexOf(".");
+  const ext = dot > 0 ? String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
+  return `form_uploads/${formId}/${responseId}/${questionId}${ext}`;
+}
+
+/**
+ * Are these files answers this form can actually take?
+ *
+ * Pure, so the interesting cases are testable without a bucket. What it will
+ * not do is trust the page: the size is checked here as well, because the page
+ * that checked it is one we do not control on a public form.
+ *
+ * @param {?Object} form The stored Form Template.
+ * @param {?Object} files Question id → {name, contentType, size, dataBase64}.
+ * @return {!Array<!Object>} One {id, text, why} per file that cannot be taken.
+ */
+function judgeUploads(form, files) {
+  const out = [];
+  const asked = {};
+  FormsCore.askedQuestions(form).forEach((q) => {
+    asked[q.id] = q;
+  });
+
+  Object.keys(files || {}).forEach((qid) => {
+    const file = files[qid];
+    const q = asked[qid];
+    if (!q) {
+      out.push({id: qid, text: "", why: "That question is not on this form."});
+      return;
+    }
+    if (!FormsCore.isUploadType(q.type)) {
+      out.push({id: qid, text: q.text, why: "That question does not take a file."});
+      return;
+    }
+    const fault = FormsCore.uploadFault(file);
+    if (fault) {
+      out.push({id: qid, text: q.text, why: fault});
+      return;
+    }
+    // The bytes have to BE bytes. A page sending something else is a page we
+    // did not write, which on a public form is the ordinary case.
+    if (typeof file.dataBase64 !== "string" || !file.dataBase64.length) {
+      out.push({id: qid, text: q.text, why: "That file did not arrive."});
+    }
+  });
+  return out;
+}
+
+/**
  * May this submission be written, and what should be written.
  *
  * @param {?Object} form The stored Form Template.
@@ -193,6 +307,21 @@ function judgeSubmission(form, attempt, today) {
       // Same key as the missing list, so the page marks the same questions the
       // same way rather than growing a second highlighting path.
       missing: unfit,
+    };
+  }
+
+  // Files, judged BEFORE anything is written. An upload that cannot be taken
+  // should stop the submission rather than leaving bytes in the bucket with no
+  // Response pointing at them.
+  const badFiles = judgeUploads(form, a.files);
+  if (badFiles.length) {
+    return {
+      ok: false,
+      code: "unanswerable",
+      message: badFiles.length === 1 ?
+        "One file could not be accepted." :
+        `${badFiles.length} files could not be accepted.`,
+      missing: badFiles,
     };
   }
 
@@ -258,6 +387,10 @@ function judgeSubmission(form, attempt, today) {
 }
 
 module.exports = {
+  uploadPath,
+  judgeUploads,
+  personInScope,
+  pickerChoices,
   RANKS_AT_OR_ABOVE,
   rankSatisfies,
   answerersView,

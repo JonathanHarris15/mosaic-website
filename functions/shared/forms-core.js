@@ -79,9 +79,9 @@
         { id: 'scale', label: 'Linear scale', group: 'Number', live: true },
         { id: 'date', label: 'Date', group: 'When', live: true },
         { id: 'time', label: 'Time', group: 'When', live: true },
-        { id: 'image', label: 'Image', group: 'Attach', live: false },
-        { id: 'file', label: 'File submission', group: 'Attach', live: false },
-        { id: 'person', label: 'Directory Person picker', group: 'From the app', live: false },
+        { id: 'image', label: 'Image', group: 'Attach', live: true },
+        { id: 'file', label: 'File submission', group: 'Attach', live: true },
+        { id: 'person', label: 'Directory Person picker', group: 'From the app', live: true },
         { id: 'payment', label: 'Stripe payment', group: 'From the app', live: false },
         // The odd one out, and the reason `asks` exists at all. When a form is
         // acting as a structured document rather than a survey, some of what is
@@ -189,6 +189,110 @@
 
     function hasOptions(typeId) {
         return !!OPTION_TYPES[typeId];
+    }
+
+    // ── Who a picker offers ──────────────────────────────────────────────────
+    //
+    // A Directory Person picker answers with somebody from the church directory
+    // rather than typed text. Its scope narrows who is offered: everyone, just
+    // members, just non-members, or the carriers of one tag.
+    const PERSON_SCOPES = ['everyone', 'member', 'non_member', 'tag'];
+    const DEFAULT_PERSON_SCOPE = 'everyone';
+
+    function buildPeopleScope(spec) {
+        const s = spec || {};
+        let scope = PERSON_SCOPES.indexOf(s.scope) !== -1 ? s.scope : DEFAULT_PERSON_SCOPE;
+        const tagId = s.tagId ? String(s.tagId) : null;
+        // A tag scope pointing at no tag would draw an empty picker and explain
+        // nothing. Falling back to everyone is wrong in a visible way rather
+        // than in an invisible one.
+        if (scope === 'tag' && !tagId) scope = DEFAULT_PERSON_SCOPE;
+        return { scope: scope, tagId: scope === 'tag' ? tagId : null };
+    }
+
+    // ⚠ WHICH TAGS MAY BE A SCOPE AT ALL.
+    //
+    // A Shepherding Tag carries two hiding flags. `hiddenFromOthers` hides the
+    // tag itself from ordinary users; `hidePeople` hides who carries it. A
+    // picker scoped to a tag names the tag AND lists its carriers, so it can
+    // break either promise.
+    //
+    // The ticket asked only about the first. Both are excluded here, because
+    // hiding a tag's name while handing its membership to whoever opens the
+    // form is the wrong half of the job.
+    function offerableTags(tags) {
+        return (tags || [])
+            .filter(t => t && !t.hiddenFromOthers && !t.hidePeople)
+            .map(t => ({ id: t.id, name: t.name }));
+    }
+
+    // ── What a public form may not ask ───────────────────────────────────────
+    //
+    // Reading the directory needs an account (ADR-0031). A picker on a form
+    // anybody can open could only ever be an empty list or a leak, so the form
+    // is refused as public rather than shipping a question nobody can answer.
+    //
+    // A RETIRED picker does not stand in the way: it is not asked any more.
+    function mayBePublic(form) {
+        const blocking = askedQuestions(form).filter(q => q.type === 'person');
+        if (!blocking.length) return { ok: true, why: '' };
+        const names = blocking.map(q => q.text || 'a question').join(', ');
+        return {
+            ok: false,
+            why: 'A form anyone can open cannot ask for somebody from the directory ' +
+                '— reading it needs an account. Remove or retire: ' + names + '.',
+        };
+    }
+
+    // ── An upload ────────────────────────────────────────────────────────────
+    //
+    // ⚠ 5MB, AND THE NUMBER IS A CONSEQUENCE RATHER THAN A PREFERENCE.
+    //
+    // Somebody answering a public form has no account, and storage.rules
+    // requires one for everything down to the catch-all. So the bytes travel
+    // through the same closed door as everything else a stranger does: the
+    // public Cloud Function, which writes them past the rules (ADR-0051). A
+    // callable request is capped near 10MB and base64 inflates by a third, so
+    // this is what fits with room to spare.
+    //
+    // That is why it is smaller than an Event Attachment's 25MB, which is
+    // uploaded straight to Storage by a signed-in editor. Raising it means
+    // minting a signed upload URL in the function — a different design with its
+    // own leak surface, and a real ticket rather than a constant to edit.
+    const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+    const MAX_UPLOAD_LABEL = '5MB';
+
+    function uploadFault(file) {
+        if (!file) return 'No file was chosen.';
+        const name = String(file.name == null ? '' : file.name).trim();
+        const size = Number(file.size);
+        if (!name) return 'That file has no name.';
+        if (!Number.isFinite(size) || size <= 0) return 'That file is empty.';
+        if (size > MAX_UPLOAD_BYTES) {
+            return 'That file is too big. The most a form can take is ' + MAX_UPLOAD_LABEL + '.';
+        }
+        return '';
+    }
+
+    // What an upload looks like once it is stored.
+    //
+    // ⚠ NO URL, EVER. getDownloadURL() mints a token that bypasses every rule
+    // and never expires, so one forwarded link would undo the boundary
+    // permanently (ADR-0046). This builds the record field by field rather than
+    // copying an object through, precisely so that a URL somebody adds upstream
+    // cannot ride along.
+    function buildUploadAnswer(spec) {
+        const s = spec || {};
+        return {
+            name: String(s.name || 'file'),
+            contentType: s.contentType ? String(s.contentType) : null,
+            size: Number(s.size) || 0,
+            storagePath: String(s.storagePath || ''),
+        };
+    }
+
+    function isUploadType(id) {
+        return id === 'image' || id === 'file';
     }
 
     // ── What a template is FOR ───────────────────────────────────────────────
@@ -440,6 +544,9 @@
         if (type === 'scale') {
             q.scale = buildScale(s.scale);
         }
+        if (type === 'person') {
+            q.people = buildPeopleScope(s.people);
+        }
         return q;
     }
 
@@ -458,7 +565,16 @@
         // A document-mode template has no rung, so `settingsFor` is asked about
         // the one it would have had. Attribution and One Response Each are
         // meaningless on a thing filled in once, and are forced off below.
-        const rung = isRung(s.rung) ? s.rung : 'member';
+        let rung = isRung(s.rung) ? s.rung : 'member';
+
+        // ⚠ A public form carrying a directory picker is a record that
+        // contradicts itself: the fill-in page could not draw the question and
+        // the server would serve it anyway. Forced back to `member` here rather
+        // than only refused on the page — the page is a courtesy, this is the
+        // authority. The builder shows mayBePublic()'s reason.
+        if (rung === 'public' && !mayBePublic({ questions: s.questions || [] }).ok) {
+            rung = 'member';
+        }
         const allowed = settingsFor(rung);
 
         const record = {
@@ -797,6 +913,12 @@
                 out.average = numbers.length
                     ? Math.round((total / numbers.length) * 100) / 100
                     : null;
+            } else if (q.type === 'person' || isUploadType(q.type)) {
+                // Neither is a value to count. A person is a reference to
+                // somebody and an upload is a file; the Responses tab lists
+                // them one by one rather than tallying them into a bar chart
+                // that would say nothing.
+                out.entries = given;
             } else if (WHEN_TYPES[q.type]) {
                 // Sorted, which is the whole reason the stored format is fixed.
                 out.answers = given.map(v => String(v)).sort();
@@ -817,6 +939,16 @@
         MAX_PLACEHOLDER_LENGTH,
         DEFAULT_TITLE,
         QUESTION_TYPES,
+        PERSON_SCOPES,
+        DEFAULT_PERSON_SCOPE,
+        buildPeopleScope,
+        offerableTags,
+        mayBePublic,
+        MAX_UPLOAD_BYTES,
+        MAX_UPLOAD_LABEL,
+        uploadFault,
+        buildUploadAnswer,
+        isUploadType,
         MODES,
         DEFAULT_MODE,
         isMode,

@@ -641,6 +641,43 @@ exports.sealEventAttachment = onObjectFinalized(
     },
 );
 
+// Deleting a Response takes its uploads with it.
+//
+// Server-side, on the record's deletion, because a client never deletes blobs
+// anywhere in this app — the record is the truth and the bytes follow it. This
+// also catches the delete-a-whole-form path, which removes responses in a batch
+// and never touches Storage itself.
+exports.cleanUpFormUploads = onDocumentWritten(
+    {
+      document: "form_responses/{responseId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+      if (after) return; // Created or updated, not deleted.
+
+      const before = event.data && event.data.before && event.data.before.exists ?
+        event.data.before.data() : null;
+      const answers = (before && before.answers) || {};
+
+      const paths = Object.keys(answers)
+          .map((qid) => answers[qid] && answers[qid].storagePath)
+          .filter((path) => typeof path === "string" && path.length);
+      if (!paths.length) return;
+
+      const results = await Promise.allSettled(paths.map((path) =>
+        admin.storage().bucket().file(path).delete()));
+      results.forEach((r, i) => {
+        if (r.status === "rejected") {
+          log(`Could not remove form upload ${paths[i]}: ${r.reason}`);
+        } else {
+          log(`Removed form upload ${paths[i]}`);
+        }
+      });
+    },
+);
+
 exports.cleanUpDeletedAttachment = onDocumentWritten(
     {
       document: "event_occurrences/{occurrenceId}/attachments/{attachmentId}",
@@ -2702,7 +2739,10 @@ exports.publicForm = onCall(
     {cors: true, region: "us-central1", enforceAppCheck: false},
     async (request) => {
       const db = admin.firestore();
-      const {op, formId, answers} = request.data || {};
+      // `files` is question id → {name, contentType, size, dataBase64}. It
+      // arrives with the submission rather than through a second call, so a
+      // file and the answer it belongs to are accepted or refused together.
+      const {op, formId, answers, files} = request.data || {};
 
       // Shape-check the id before it reaches a read. A form's id is 128 bits of
       // base58 and nothing else ever addresses one.
@@ -2730,7 +2770,35 @@ exports.publicForm = onCall(
       const form = formSnap.exists ? formSnap.data() : null;
 
       if (op === "fetch") {
-        return fp.whatToServe(form, caller, today);
+        const served = fp.whatToServe(form, caller, today);
+        if (!served.ok) return served;
+
+        // A Directory Person picker needs people to offer, and this page has no
+        // Firestore to find them with (ADR-0051). So the list comes through
+        // this door with the questions, already narrowed by each question's
+        // scope — the people a scope excludes are never sent at all, so a
+        // tag's membership cannot be read out of the response.
+        //
+        // Only reached on a form at `member` or above: the model refuses a
+        // picker on a public one (MS-388), and whatToServe has already checked
+        // the caller against the rung above.
+        const wantsPeople = FormsCore.askedQuestions(form)
+            .some((q) => q.type === "person");
+        if (wantsPeople) {
+          const peopleSnap = await db.collection("people")
+              .orderBy("name", "asc").get();
+          const directory = peopleSnap.docs.map((doc) => {
+            const d = doc.data() || {};
+            return {
+              id: doc.id,
+              name: d.name || "Unnamed",
+              isMember: d.isMember === true || d.membershipStage === "member",
+              tagIds: d.tagIds || [],
+            };
+          });
+          served.people = fp.pickerChoices(form, directory);
+        }
+        return served;
       }
 
       // ── submit ───────────────────────────────────────────────────────────
@@ -2760,6 +2828,7 @@ exports.publicForm = onCall(
       const verdict = fp.judgeSubmission(form, {
         formId: formId,
         answers: answers,
+        files: files,
         signedIn: !!request.auth,
         rank: rank,
         personId: personId,
@@ -2788,7 +2857,48 @@ exports.publicForm = onCall(
       }
 
       const responseRef = db.collection("form_responses").doc();
+
+      // ── The uploads ───────────────────────────────────────────────────────
+      //
+      // ⚠ THE FUNCTION WRITES THESE, NOT THE BROWSER, AND THAT IS THE WHOLE
+      // DESIGN. storage.rules requires an account for everything down to the
+      // catch-all, and somebody answering a public form has none. There is no
+      // rule that could let them upload without opening the bucket, so the
+      // bytes come here and go out under admin credentials — the same closed
+      // door ADR-0051 already put every other public write behind.
+      //
+      // The id is minted first so the path can carry it. Written before the
+      // batch, because a Response pointing at bytes that failed to save is
+      // worse than bytes with no Response: the first is a broken record
+      // somebody trusts, the second is unreachable rubbish.
+      const storedFiles = {};
+      const writtenPaths = [];
+      for (const qid of Object.keys(files || {})) {
+        const file = files[qid];
+        const path = fp.uploadPath(formId, responseRef.id, qid, file.name);
+        const buffer = Buffer.from(file.dataBase64, "base64");
+        await admin.storage().bucket().file(path).save(buffer, {
+          contentType: file.contentType || "application/octet-stream",
+          resumable: false,
+          // ⚠ NO DOWNLOAD TOKEN. Storage mints one on upload unless told
+          // otherwise, and getDownloadURL hands out a link that bypasses every
+          // rule and never expires (ADR-0046). An upload nobody can link to is
+          // the point; the Responses tab fetches these as the signed-in reader.
+          metadata: {metadata: {firebaseStorageDownloadTokens: ""}},
+        });
+        writtenPaths.push(path);
+        storedFiles[qid] = FormsCore.buildUploadAnswer({
+          name: file.name,
+          contentType: file.contentType || null,
+          size: Number(file.size) || buffer.length,
+          storagePath: path,
+        });
+      }
+
       batch.set(responseRef, Object.assign({}, verdict.response, {
+        // The files join the answers here rather than in the model, because
+        // only this side knows where the bytes actually landed.
+        answers: Object.assign({}, verdict.response.answers, storedFiles),
         submittedAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
 
@@ -2796,7 +2906,17 @@ exports.publicForm = onCall(
         batch.set(db.collection("form_ledger").doc(ledgerId), verdict.ledger);
       }
 
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (e) {
+        // The bytes are already in the bucket and now nothing points at them.
+        // Tidy up rather than leaving a file nobody can reach and nobody knows
+        // about — a best-effort delete, because failing to clean up must not
+        // turn one failure into two.
+        await Promise.allSettled(writtenPaths.map((path) =>
+          admin.storage().bucket().file(path).delete()));
+        throw e;
+      }
 
       // ⚠ NOTHING ABOUT THE TALLY COMES BACK. Whoever just answered gets a
       // thank-you and no more: showing the running split changes what later

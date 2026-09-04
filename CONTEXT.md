@@ -884,6 +884,34 @@ What a `document`-mode [[Form Template]] produces: a form somebody fills in **on
 
 _Avoid_: form response (that is a [[Response]]), filled form, submission
 
+### Directory Person picker
+A [[Form Template]] question answered by choosing somebody from the church directory rather than typing a name, so the answer joins up with the [[Person]] record instead of being a string to match by hand.
+
+It carries a **scope** — anybody, members, people who are not members, or the carriers of one [[Shepherding Tag]].
+
+⚠ **A picker cannot go on a `public` form**, and the model refuses to store one that does. Reading the directory needs an account (ADR-0031), so on a form anybody can open the picker could only ever be an empty list or a leak. The builder greys `public` and says why; adding a picker to a form already public moves it to Members and says so.
+
+⚠ **The list of people is narrowed on the server**, and arrives with the questions through the `publicForm` function. The fill-in page has no Firestore at all — that is ADR-0051 and it is why a stranger can answer a form safely — so the picker could not read the directory even if it were allowed to. Filtering there is also the stronger version: people a scope excludes are **never sent**, so a tag's membership cannot be read out of a network response by somebody who was only shown a search box. Only an id and a name ever leave the server.
+
+**A tag is offerable as a scope only if it hides neither itself nor its carriers.** `hiddenFromOthers` hides the tag; `hidePeople` hides who carries it. Both exclude a tag here — hiding a tag's name while handing its membership to whoever opens the form is the wrong half of the job.
+
+The answer stores the Person id **and their name as it read at the time**, so a [[Response]] stays readable after somebody is renamed or leaves the directory.
+
+_Avoid_: people picker, member picker (a scope, not the type)
+
+### Form upload
+A file or an image somebody sends with a form answer.
+
+⚠ **The Cloud Function writes it, not the browser.** `storage.rules` requires an account for everything down to the catch-all, and somebody answering a public form has none — there is no rule that could let them upload without opening the bucket. So the bytes travel through the same closed door as every other public write (ADR-0051), and the upload path says `write: if false` for everybody, which needs no reasoning about who is asking and cannot be loosened by accident.
+
+⚠ **It is fetched, never linked** (ADR-0046). `getDownloadURL()` mints a token that bypasses every rule and never expires, so one forwarded link would make an editors-only file public permanently. Uploads are written with that token emptied, a test bans the call outright, and the Responses tab downloads the bytes as the signed-in reader so the rule is checked every time.
+
+**5MB per file**, which is smaller than an [[Event Attachment]]'s 25MB and is a consequence rather than a preference: a callable request is capped near 10MB and base64 inflates by a third. Raising it means minting a signed upload URL in the function — a different design with its own leak surface.
+
+The stored path is built from the **question's** id, never the name the file arrived with: a path built from something a stranger chose is a path a stranger can aim. The original name is kept in the record, where it is data rather than an address. Deleting a [[Response]] deletes its uploads, server-side.
+
+_Avoid_: attachment (that is an [[Event Attachment]], stored and ruled differently), download link
+
 ### Answering rung
 Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` — reusing the [[Event visibility]] ladder rather than inventing a second one. **`public` is the only rung that needs no account**, because proving you are a member requires one; "is sign-in required" is therefore not a separate switch, it is read off the rung.
 - **A `public` form is link-only and unlisted** ([ADR 0051](docs/adr/0051-a-public-form-is-served-and-answered-through-one-closed-door.md)). You can open a form whose link you were sent; you cannot ask what forms exist, and an id is not guessable.
