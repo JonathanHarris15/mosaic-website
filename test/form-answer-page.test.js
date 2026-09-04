@@ -25,6 +25,10 @@ function loadPage(reply, locationOver) {
     sandbox.location = Object.assign({ pathname: '/form-answer.html', search: '', href: 'https://x/' }, locationOver || {});
     sandbox.navigator = { share: null };
     sandbox.FormsCore = require('../public/forms-core.js');
+    // The page loads this too, and the component spreads its state in — a
+    // sandbox without it is a page that cannot boot, which is what the page
+    // would do in a browser if the script tag went missing.
+    sandbox.NewPersonCard = require('../public/new-person-card.js');
 
     // Enough browser for the module to install its fatal handler. The page owes
     // a stranger a message when it cannot start, and that is not something to

@@ -13,6 +13,7 @@
 
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="form-question.css" />
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -26,6 +27,7 @@
          form on (MS-383). Loaded here; MOUNTED at the end of the body, which is
          the only place the slots exist and Alpine has not yet run. -->
     <script src="form-question-markup.js"></script>
+    <script src="new-person-card.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -125,7 +127,8 @@
          DOMContentLoaded, which this used, fires after the deferred Alpine has
          already run — so every question drew a label and nothing to answer it
          with. -->
-    <script>FormQuestionMarkup.mount();</script>
+    <div data-new-person-card></div>
+    <script>FormQuestionMarkup.mount(); NewPersonCard.mount();</script>
 
     <style>
         .fd-stack { display: flex; flex-direction: column; gap: var(--space-sm); max-width: 760px; margin: 0 auto; width: 100%; }

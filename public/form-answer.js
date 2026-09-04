@@ -193,7 +193,7 @@
     }
 
     window.answerPage = function answerPage() {
-        return {
+        const page = {
             state: 'loading',
             form: { title: '', description: '', questions: [], ballot: false, promise: '' },
             answers: {},
@@ -212,6 +212,12 @@
             // response by somebody who was only shown a search box.
             personQueries: {},
             pickerPeople: {},
+            // Whether the picker may offer to add somebody who is not in the
+            // directory yet. ⚠ THE SERVER DECIDES THIS AND SENDS IT. A page
+            // that worked it out from a rank it had read for itself would be
+            // a page claiming its own permission; the door checks again on the
+            // way through, and this only decides whether to draw the row.
+            canAddPerson: false,
             // The bytes waiting to go with the submission, question id →
             // {name, contentType, size, dataBase64}. Held here rather than
             // uploaded as they are chosen, because a file and the answer it
@@ -272,6 +278,34 @@
                 if (!person) { this.answers[q.id] = null; return; }
                 this.answers[q.id] = { personId: person.id, name: person.name };
                 this.personQueries[q.id] = '';
+            },
+
+            addPerson(q) {
+                this.openNewPerson(q, this.personQueries[q.id]);
+            },
+
+            // ⚠ THROUGH THE SAME DOOR AS EVERYTHING ELSE ON THIS PAGE. There is
+            // no Firestore here (ADR-0051) and there is not about to be one for
+            // this: the callable checks who is asking, and refuses anybody who
+            // is not an editor. A browser saying it is an editor is not a
+            // permission, which is why `canAddPerson` above only draws a row.
+            async createPerson(details) {
+                const res = await withTimeout(
+                    fns.httpsCallable('publicForm')({
+                        op: 'addPerson', formId: this.formId, person: details,
+                    }),
+                    CALL_TIMEOUT,
+                    'the server did not answer in time');
+                const data = (res && res.data) || {};
+                if (!data.ok || !data.person) {
+                    throw new Error(data.message || 'They could not be added.');
+                }
+                // Into every picker's list, so the one they were added from can
+                // find them and so a second question can offer them too.
+                Object.keys(this.pickerPeople).forEach(id => {
+                    this.pickerPeople[id] = (this.pickerPeople[id] || []).concat([data.person]);
+                });
+                return data.person;
             },
 
             // ⚠ The size is checked HERE only as a courtesy. The function
@@ -525,6 +559,7 @@
                     this.form = data.view || this.form;
                     this.readyFor(this.form.questions);
                     this.pickerPeople = data.people || {};
+                    this.canAddPerson = data.mayAddPeople === true;
                     this.state = 'open';
                     return;
                 }
@@ -585,5 +620,8 @@
                 navigator.share({ title: this.form.title, url: location.href }).catch(() => {});
             },
         };
+        // The new-person card brings its own fields and its own Save; this page
+        // brings the door it writes through (createPerson, above).
+        return Object.assign(page, NewPersonCard.state());
     };
 })();

@@ -14,6 +14,7 @@
          visible at once. It looks like a broken app; it is a broken URL. -->
     <link rel="stylesheet" href="/mosaic.css" />
     <link rel="stylesheet" href="/fonts.css" />
+    <link rel="stylesheet" href="/form-question.css" />
     <link rel="icon" href="/assets/mosaic-logo.png" />
 
     <!-- ⚠ EVERY OTHER PAGE IN THIS APP CARRIES THIS AND THIS ONE DID NOT, which
@@ -64,6 +65,7 @@
          here; MOUNTED at the end of the body, which is the only place the slots
          exist and Alpine has not yet walked past them. -->
     <script src="/form-question-markup.js"></script>
+    <script src="/new-person-card.js"></script>
     <script defer src="/vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -387,7 +389,8 @@
          In the head it found no slots because the body did not exist yet. On
          DOMContentLoaded it would be too late, because that fires AFTER a
          deferred script has run. -->
-    <script>FormQuestionMarkup.mount();</script>
+    <div data-new-person-card></div>
+    <script>FormQuestionMarkup.mount(); NewPersonCard.mount();</script>
     <script src="/app-check-config.js"></script>
     <script src="/forms-core.js"></script>
     <script src="/form-answer.js"></script>

@@ -23,7 +23,7 @@
 // already written.
 
 function formDocumentPage() {
-    return {
+    const page = {
         loading: true,
         problem: '',
         docId: '',
@@ -94,6 +94,39 @@ function formDocumentPage() {
             this.answers[q.id] = person ? { personId: person.id, name: person.name } : null;
             this.personQueries[q.id] = '';
             this.touch();
+        },
+
+        // Whoever has a Form Document open is a signed-in elder, and an elder
+        // is an editor by the rules' ladder — so the picker may offer to add
+        // somebody who is not in the directory yet.
+        canAddPerson: true,
+
+        addPerson(q) {
+            this.openNewPerson(q, this.personQueries[q.id]);
+        },
+
+        // The card gathered it; this writes it, as this elder, under the same
+        // rule that governs the People manager. The same shape that manager
+        // writes, so a Person added from here is not a second kind of Person.
+        async createPerson(details) {
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+            const ref = await db.collection('people').add({
+                name: details.name,
+                totalInvolvements: 0,
+                contact: { email: details.email, phone: details.phone, address: details.address },
+                birthday: details.birthday || null,
+                sex: details.sex || null,
+                lastPastoralPrayerDate: null,
+                tags: [],
+                createdAt: now,
+                updatedAt: now,
+            });
+            // Into the list this page searches, so the picker can find them
+            // without a reload — and so the answer that follows is a pick from
+            // the directory like any other.
+            const person = { id: ref.id, name: details.name, isMember: false, tagIds: [] };
+            this.directory.push(person);
+            return person;
         },
 
         // ⚠ An upload on a Form Document does not work yet, and says so rather
@@ -240,4 +273,7 @@ function formDocumentPage() {
             }
         },
     };
+    // The new-person card brings its own state and its own Save; this page
+    // brings the door it writes through (createPerson, above).
+    return Object.assign(page, NewPersonCard.state());
 }

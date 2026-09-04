@@ -225,3 +225,43 @@ test('a Form Document says uploads are not supported rather than failing quietly
     assert.match(src, /cannot be attached to a document yet/,
         'a file chosen on a Form Document would fail with no explanation');
 });
+
+// ── The Directory Person picker (MS-403) ─────────────────────────────────────
+//
+// Shaped like the picker on the Order of Service — one box you type into and
+// the matches dropping under it — because it is the same act, and people had
+// learnt one of them already. It drew as bare HTML for a while: its classes
+// were in this shared markup and its styles were in neither page.
+
+test('the picker is a box and a dropdown, not a list stapled under a search field', () => {
+    const m = Markup.QUESTION_CONTROLS;
+    assert.ok(m.includes('fa-person__box'), 'no box to type into');
+    assert.ok(m.includes('fa-person__drop'), 'the matches are not in a dropdown');
+    assert.ok(m.includes('@click.away'), 'the dropdown never closes');
+    assert.ok(!m.includes('fa-person__list'), 'the old inline list is still here');
+});
+
+test('every class the picker draws with has a style behind it', () => {
+    const css = read('form-question.css');
+    const used = new Set((Markup.QUESTION_CONTROLS.match(/fa-person[a-z_-]*/g) || []));
+    used.forEach(cls => {
+        assert.ok(css.includes('.' + cls), 'no styles for .' + cls + ' — it will draw bare');
+    });
+});
+
+test('the add row is offered only where the page says it may be, and never on an exact match', () => {
+    const m = Markup.QUESTION_CONTROLS;
+    assert.ok(m.includes('canAddPerson'), 'the picker decides for itself who may add');
+    assert.ok(m.includes('addPerson(q)'), 'the add row goes nowhere');
+    assert.ok(/canAddPerson &&[^"]*personChoices\(q\)\.some/.test(m),
+        'the add row does not check for a name that is already there');
+});
+
+test('the two pages that mount this both owe the picker what it asks of them', () => {
+    [['form-answer.js', 'canAddPerson'], ['shepherding-form-document.js', 'canAddPerson']].forEach(([file, owed]) => {
+        const js = read(file);
+        assert.ok(js.includes(owed), file + ' does not provide ' + owed);
+        assert.ok(js.includes('addPerson(q)'), file + ' does not provide addPerson');
+        assert.ok(js.includes('createPerson'), file + ' gives the card no door to write through');
+    });
+});

@@ -914,6 +914,10 @@ It carries a **scope** — anybody, members, people who are not members, or the 
 
 The answer stores the Person id **and their name as it read at the time**, so a [[Response]] stays readable after somebody is renamed or leaves the directory.
 
+It is drawn as **one box you type into with the matches dropping under it**, the same shape as the person picker on the [[Order of Service]], because it is the same act and people have learnt that one already. The markup is shared by the two pages that draw a question (`form-question-markup.js`) and so are its styles (`form-question.css`) — they were not, once, and the picker drew as bare HTML on both.
+
+**Adding somebody from the picker (an editor's row).** When the name being typed is nobody the directory holds, an **editor or above** is offered a last row that opens a card and adds them then and there — name, sex, birthday and contact, the same fields the [[People Manager]] asks for when it creates a Person. Their family, tags and shepherding record are still added in the directory itself. Below editor there is no such row: the directory is editor-authored and the door for everybody else is a [[Directory Request]], which an editor approves. ⚠ **The rank is decided on the server**, which sends the page a yes or no; the page only decides whether to draw the row, and the `addPerson` call checks again on the way through. One card (`new-person-card.js`), two doors — the elder's [[Form Document]] writes `people` as a signed-in elder, the fill-in page goes through `publicForm` because it has no Firestore to write with.
+
 _Avoid_: people picker, member picker (a scope, not the type)
 
 ### Form upload

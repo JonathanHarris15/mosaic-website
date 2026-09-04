@@ -2749,7 +2749,7 @@ exports.publicForm = onCall(
       if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
         return {ok: false, code: "not-found", message: "There is no form here."};
       }
-      if (op !== "fetch" && op !== "submit") {
+      if (op !== "fetch" && op !== "submit" && op !== "addPerson") {
         throw new HttpsError("invalid-argument", "Unknown operation.");
       }
 
@@ -2798,7 +2798,55 @@ exports.publicForm = onCall(
           });
           served.people = fp.pickerChoices(form, directory);
         }
+        // Whether to draw the "add them to the directory" row. The page is
+        // told; the addPerson op below is what actually decides.
+        served.mayAddPeople = fp.mayAddPeople(form, caller);
         return served;
+      }
+
+      // ── addPerson (MS-403) ───────────────────────────────────────────────
+      //
+      // Somebody typed a name the directory does not hold, and is an editor,
+      // so they may add them without leaving the form. This page has no
+      // Firestore (ADR-0051), so the write comes through here like everything
+      // else it does — and the rank is read from `users` above, never taken
+      // from what the page claims about itself.
+      if (op === "addPerson") {
+        const servable = fp.whatToServe(form, caller, today);
+        if (!servable.ok) return servable;
+        if (!fp.mayAddPeople(form, caller)) {
+          return {
+            ok: false,
+            code: "permission-denied",
+            message: "Only an editor can add somebody to the directory.",
+          };
+        }
+        const proposal = fp.personProposal(request.data && request.data.person);
+        if (!proposal.ok) return proposal;
+
+        // The shape the People manager writes, so a Person added from a form
+        // is not a second kind of Person.
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const ref = await db.collection("people").add({
+          name: proposal.person.name,
+          totalInvolvements: 0,
+          contact: proposal.person.contact,
+          birthday: proposal.person.birthday,
+          sex: proposal.person.sex,
+          lastPastoralPrayerDate: null,
+          tags: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        // Shaped like a row of `served.people`, because that is the list the
+        // picker searches and the answer that follows must be an ordinary pick.
+        return {
+          ok: true,
+          person: {
+            id: ref.id, name: proposal.person.name,
+            isMember: false, tagIds: [],
+          },
+        };
       }
 
       // ── submit ───────────────────────────────────────────────────────────

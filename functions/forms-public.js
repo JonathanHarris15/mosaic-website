@@ -42,6 +42,70 @@ function rankSatisfies(rung, rank) {
   return allowed.indexOf(rank) !== -1;
 }
 
+// ── Adding somebody to the directory (MS-403) ────────────────────────────────
+//
+// A person question offers who the directory knows. When the name being typed
+// is nobody it knows, an EDITOR is offered a way to add them without leaving
+// the form. Editor and no lower, on purpose: the directory is editor-authored
+// (ADR-0025, ADR-0027) and the door for everybody else is a Directory Request,
+// which an editor approves. A create button on a link that a stranger can open
+// would be that door with nobody at it.
+//
+// ⚠ THE RANK IS READ HERE, NEVER TAKEN FROM THE PAGE. The page is sent a
+// boolean so it knows whether to draw the row; this is what actually decides.
+
+/**
+ * May this caller add somebody from this form's picker?
+ * @param {?Object} form The stored Form Template.
+ * @param {!Object} caller {signedIn, rank}.
+ * @return {boolean} True when they may.
+ */
+function mayAddPeople(form, caller) {
+  if (!form) return false;
+  const asksForAPerson = FormsCore.askedQuestions(form)
+      .some((q) => q.type === "person");
+  if (!asksForAPerson) return false;
+  return rankSatisfies("editor", caller && caller.rank);
+}
+
+/**
+ * What a proposed Person may say. Everything but a name is optional — a name
+ * and nothing else is a real thing to know about somebody you have just been
+ * told about — but nothing arrives unchecked, because this writes with admin
+ * credentials past the rules that would otherwise have shaped it.
+ *
+ * @param {*} proposed What the card sent.
+ * @return {!Object} {ok, person} or {ok:false, code, message}.
+ */
+function personProposal(proposed) {
+  const p = proposed && typeof proposed === "object" ? proposed : {};
+  const text = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+  const name = text(p.name, 120);
+  if (!name) {
+    return {ok: false, code: "invalid-argument", message: "They need a name."};
+  }
+  const birthday = text(p.birthday, 10);
+  if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    return {
+      ok: false, code: "invalid-argument",
+      message: "That birthday is not a date.",
+    };
+  }
+  return {
+    ok: true,
+    person: {
+      name: name,
+      sex: p.sex === "male" || p.sex === "female" ? p.sex : null,
+      birthday: birthday || null,
+      contact: {
+        email: text(p.email, 200),
+        phone: text(p.phone, 40),
+        address: text(p.address, 300),
+      },
+    },
+  };
+}
+
 // ── Handing out the questions ────────────────────────────────────────────────
 
 /**
@@ -387,6 +451,8 @@ function judgeSubmission(form, attempt, today) {
 }
 
 module.exports = {
+  mayAddPeople,
+  personProposal,
   uploadPath,
   judgeUploads,
   personInScope,
