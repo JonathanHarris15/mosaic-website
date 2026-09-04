@@ -252,6 +252,117 @@
                             </div>
                         </details>
 
+                        <details open class="pe-group" x-show="selectedBindings.length || selectedNode.repeat || repeatContext">
+                            <summary>Data</summary>
+                            <template x-if="selectedBindings.length">
+                                <div>
+                                    <template x-for="b in selectedBindings" :key="b.prop">
+                                        <div class="pe-bind">
+                                            <span class="material-symbols-outlined">cable</span>
+                                            <span class="pe-bind__body">
+                                                <span class="pe-bind__label"><em x-text="b.propLabel"></em> ← <span x-text="b.label"></span></span>
+                                                <span class="pe-bind__detail" x-show="b.detail" x-text="b.detail"></span>
+                                                <template x-if="b.bind.scope === 'global' && b.bind.source && b.bind.source.startsWith('sunday')">
+                                                    <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                        <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'last'" @click="setBindParam(b.prop, 'when', { mode: 'last' })">Last</button>
+                                                        <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'this'" @click="setBindParam(b.prop, 'when', { mode: 'this' })">This Sunday</button>
+                                                        <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'next'" @click="setBindParam(b.prop, 'when', { mode: 'next' })">Next</button>
+                                                        <input type="date" class="pe-in pe-in--date" :value="b.bind.params.when && b.bind.params.when.date || ''" @change="setBindParam(b.prop, 'when', { mode: 'date', date: $event.target.value })" title="The Sunday of a date" />
+                                                    </span>
+                                                </template>
+                                            </span>
+                                            <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Unwire" @click="unbind(b.prop)"><span class="material-symbols-outlined">link_off</span></button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <p class="pe-hint" x-show="!selectedBindings.length && !selectedNode.repeat && repeatContext">Inside the iterated element <strong x-text="repeatContext && (repeatContext.name || 'Box')"></strong>. Drag a field from the drawer onto this to fill it from each row.</p>
+
+                            <template x-if="selectedNode.repeat">
+                                <div class="pe-iter">
+                                    <div class="pe-iter__head">
+                                        <span class="material-symbols-outlined">repeat</span>
+                                        <span class="pe-iter__title">Iterated element</span>
+                                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="stopIterating()"><span class="m-btn__label">Stop iterating</span></button>
+                                    </div>
+                                    <p class="pe-hint" x-show="!selectedNode.repeat.source">Pick a list in the drawer on the right. This element will be drawn once per row.</p>
+                                    <div x-show="selectedNode.repeat.source">
+                                        <p class="pe-iter__source">Stands for one row of <strong x-text="repeatSource ? repeatSource.label : ''"></strong><span x-show="repeatRowCount !== null" x-text="' — ' + repeatRowCount + ' row' + (repeatRowCount === 1 ? '' : 's') + ' today'"></span>.
+                                            <button type="button" class="pe-linkbtn" @click="data.picking = true">Change list</button></p>
+
+                                        <template x-for="spec in repeatParamSpecs" :key="spec.key">
+                                            <div>
+                                                <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
+                                                    <select class="pe-in" :value="repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                        <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
+                                                    </select></label>
+                                                <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
+                                                    <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" placeholder="any" /></label>
+                                                <label class="pe-f pe-f--check" x-show="spec.kind === 'bool'"><span x-text="spec.label"></span>
+                                                    <input type="checkbox" :checked="!!repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.checked)" /></label>
+                                                <div class="pe-f" x-show="spec.kind === 'when'"><span x-text="spec.label"></span>
+                                                    <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'last'" @click="setRepeatParam(spec.key, { mode: 'last' })">Last</button>
+                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'this'" @click="setRepeatParam(spec.key, { mode: 'this' })">This</button>
+                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'next'" @click="setRepeatParam(spec.key, { mode: 'next' })">Next</button>
+                                                        <input type="date" class="pe-in pe-in--date" :value="(repeatParam(spec.key) || {}).date || ''" @change="setRepeatParam(spec.key, { mode: 'date', date: $event.target.value })" />
+                                                    </span></div>
+                                                <div x-show="spec.kind === 'range'">
+                                                    <div class="pe-f"><span x-text="spec.label"></span>
+                                                        <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                            <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRepeatParam(spec.key, { mode: 'relative', fromDays: 0, toDays: 14 })">From today</button>
+                                                            <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRepeatParam(spec.key, { mode: 'static', from: '', to: '' })">Fixed dates</button>
+                                                        </span></div>
+                                                    <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">
+                                                        <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).fromDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { fromDays: Number($event.target.value) }))" /></label>
+                                                        <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).toDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { toDays: Number($event.target.value) }))" /></label>
+                                                    </div>
+                                                    <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'static'">
+                                                        <label class="pe-f"><span>From</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).from || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { from: $event.target.value }))" /></label>
+                                                        <label class="pe-f"><span>To</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).to || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { to: $event.target.value }))" /></label>
+                                                    </div>
+                                                </div>
+                                                <label class="pe-f" x-show="spec.kind === 'series'"><span x-text="spec.label"></span>
+                                                    <select class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                        <option value="">Every event</option>
+                                                        <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
+                                                    </select></label>
+                                                <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
+                                                    <select class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                        <option value="">Choose a form</option>
+                                                        <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" x-text="f.title"></option></template>
+                                                    </select></label>
+                                            </div>
+                                        </template>
+
+                                        <h3 class="pe-h pe-h--sub">Layout of the copies</h3>
+                                        <div class="pe-f"><span>Direction</span>
+                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                <button type="button" :aria-pressed="selectedNode.repeat.layout.direction !== 'row'" @click="setRepeatLayout('direction', 'column')">Down</button>
+                                                <button type="button" :aria-pressed="selectedNode.repeat.layout.direction === 'row'" @click="setRepeatLayout('direction', 'row')">Across</button>
+                                            </span></div>
+                                        <div class="pe-grid2">
+                                            <label class="pe-f"><span x-text="selectedNode.repeat.layout.direction === 'row' ? 'Per row' : 'Columns'"></span><input class="pe-in" type="number" min="1" max="12" :value="selectedNode.repeat.layout.perLine" @change="setRepeatLayout('perLine', Number($event.target.value))" /></label>
+                                            <label class="pe-f"><span>Gap (px)</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.gap" @change="setRepeatLayout('gap', Number($event.target.value))" /></label>
+                                            <label class="pe-f"><span>Max per page</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.maxPerPage" @change="setRepeatLayout('maxPerPage', Number($event.target.value))" placeholder="0 = as many as fit" /></label>
+                                        </div>
+                                        <h3 class="pe-h pe-h--sub">When the list runs past the page</h3>
+                                        <div class="pe-f"><span>Overflow</span>
+                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                <button type="button" :aria-pressed="selectedNode.repeat.overflow !== 'new-page'" @click="setRepeatOverflow('clip')">Clip</button>
+                                                <button type="button" :aria-pressed="selectedNode.repeat.overflow === 'new-page'" @click="setRepeatOverflow('new-page')">Makes a new page</button>
+                                            </span></div>
+                                        <label class="pe-f" x-show="selectedNode.repeat.overflow === 'new-page'"><span>New pages copy</span>
+                                            <select class="pe-in" :value="selectedNode.repeat.continueWith || ''" @change="setContinueWith($event.target.value)">
+                                                <option value="">The page the list starts on</option>
+                                                <template x-for="(pg, i) in pages" :key="pg.id"><option :value="pg.id" x-text="'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : '')"></option></template>
+                                            </select></label>
+                                        <p class="pe-hint" x-show="selectedNode.repeat.overflow === 'new-page'">Each new page copies the chosen page, with the list continuing where it left off. Generated pages are drawn below and cannot be edited themselves.</p>
+                                    </div>
+                                </div>
+                            </template>
+                        </details>
+
                         <details class="pe-group">
                             <summary>Custom CSS</summary>
                             <textarea class="pe-in pe-ta pe-mono" x-model="customCss" @change="applyProps(true)" rows="4" placeholder="letter-spacing: 0.1em;&#10;box-shadow: 0 2px 8px #0002;"></textarea>
@@ -279,6 +390,10 @@
                     <span class="pe-overlay__label" x-text="selBox ? selBox.label : ''"></span>
                     <span class="pe-overlay__handle" x-show="selectedNode" @mousedown="startResize($event)" title="Drag to resize"></span>
                 </div>
+
+                <template x-for="(d, i) in boundDots" :key="i">
+                    <span class="pe-bound-dot" :style="`left:${d.x}px;top:${d.y}px`" title="Wired to data"></span>
+                </template>
 
                 <!-- Right-click menu -->
                 <div class="pe-menu pe-menu--ctx" x-show="menu.open" x-cloak :style="`left:${menu.x}px;top:${menu.y}px`" @click.outside="menu.open = false">
@@ -331,7 +446,142 @@
         </section>
 
         <!-- ═══ Right: the data drawer (MS-396) ═══ -->
-        <aside class="pe-panel pe-panel--right" id="pe-drawer"></aside>
+        <aside class="pe-panel pe-panel--right pe-drawer" id="pe-drawer">
+            <div class="pe-drawer__head">
+                <h2 class="pe-h">Data</h2>
+                <span class="pe-seg pe-seg--text pe-seg--tiny" title="Live shows today's data; stand-ins show what you typed">
+                    <button type="button" :aria-pressed="data.mode === 'live'" @click="setDataMode('live')">Live</button>
+                    <button type="button" :aria-pressed="data.mode === 'standins'" @click="setDataMode('standins')">Stand-ins</button>
+                </span>
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Refresh data" @click="refreshData()" :disabled="data.loading">
+                    <span class="material-symbols-outlined" :class="data.loading ? 'pe-spin' : ''">refresh</span>
+                </button>
+            </div>
+            <div class="pe-drawer__search">
+                <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a field" x-model="data.search" /></span>
+            </div>
+            <div class="pe-drawer__body">
+                <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
+
+                <!-- Picking a list for an iterated element -->
+                <div class="pe-drawer__pick" x-show="data.picking">
+                    <p class="pe-hint"><strong>Choose what the element iterates over.</strong> It will be drawn once per row.</p>
+                    <template x-for="region in regions" :key="'pick-' + region.name">
+                        <div>
+                            <template x-for="src in region.sources.filter(x => x.shape === 'list')" :key="'pick-' + src.key">
+                                <button type="button" class="pe-src pe-src--pick" @click="chooseList(src)">
+                                    <span class="material-symbols-outlined">list</span>
+                                    <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-text="src.blurb"></span></span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="data.picking = false">Cancel</button>
+                </div>
+
+                <div x-show="!data.picking">
+                    <!-- The row the selection stands for -->
+                    <section class="pe-drawer__section pe-drawer__section--item" x-show="repeatContext && repeatSource">
+                        <h3 class="pe-drawer__title"><span class="material-symbols-outlined">repeat</span>Each row of <span x-text="repeatSource ? repeatSource.label.toLowerCase() : ''"></span></h3>
+                        <p class="pe-hint">Drag a field onto an element inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
+                        <div class="pe-chips">
+                            <template x-for="f in itemFields" :key="'item-' + f.key">
+                                <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
+                                      @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
+                                    <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </section>
+
+                    <template x-for="region in regions" :key="region.name">
+                        <section class="pe-drawer__section">
+                            <h3 class="pe-drawer__title" x-text="region.name"></h3>
+                            <template x-for="src in region.sources" :key="src.key">
+                                <div class="pe-src" :class="data.open[src.key] ? 'is-open' : ''">
+                                    <button type="button" class="pe-src__row" @click="toggleSource(src.key)">
+                                        <span class="material-symbols-outlined" x-text="src.shape === 'list' ? 'list' : 'data_object'"></span>
+                                        <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-show="!data.open[src.key]" x-text="src.blurb"></span></span>
+                                        <span class="material-symbols-outlined pe-src__chev">expand_more</span>
+                                    </button>
+                                    <div class="pe-src__detail" x-show="data.open[src.key]">
+                                        <p class="pe-src__blurb" x-text="src.blurb"></p>
+                                        <!-- A list: iterate an element over it -->
+                                        <template x-if="src.shape === 'list'">
+                                            <div>
+                                                <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" :disabled="!selectedNode" @click="makeIterated(); chooseList(src)">
+                                                    <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Iterate the selected element over this</span>
+                                                </button>
+                                                <p class="pe-hint" x-show="!selectedNode">Select a box on the page first.</p>
+                                                <p class="pe-hint">Fields of a row:</p>
+                                                <div class="pe-chips pe-chips--inert">
+                                                    <template x-for="f in fieldsOf(src)" :key="src.key + '-' + f.key"><span class="pe-chip pe-chip--inert"><span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span></span></template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <!-- A single: its params, then its fields as chips -->
+                                        <template x-if="src.shape === 'single'">
+                                            <div>
+                                                <template x-for="param in (src.params || [])" :key="src.key + '-' + param.key">
+                                                    <div>
+                                                        <div class="pe-f" x-show="param.kind === 'when'"><span x-text="param.label"></span>
+                                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'last'" @click="sourceParams(src)[param.key] = { mode: 'last' }">Last</button>
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'this'" @click="sourceParams(src)[param.key] = { mode: 'this' }">This</button>
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'next'" @click="sourceParams(src)[param.key] = { mode: 'next' }">Next</button>
+                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="sourceParams(src)[param.key] = { mode: 'date', date: $event.target.value }" />
+                                                            </span></div>
+                                                        <div class="pe-f" x-show="param.kind === 'when-event'"><span x-text="param.label"></span>
+                                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) !== 'date'" @click="sourceParams(src)[param.key] = { mode: 'next' }">Next date</button>
+                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="sourceParams(src)[param.key] = { mode: 'date', date: $event.target.value }" title="The first date on or after" />
+                                                            </span></div>
+                                                        <label class="pe-f" x-show="param.kind === 'series'"><span x-text="param.label"></span>
+                                                            <select class="pe-in" x-model="sourceParams(src)[param.key]">
+                                                                <option value="">Choose an event</option>
+                                                                <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
+                                                            </select></label>
+                                                        <label class="pe-f" x-show="param.kind === 'role'"><span x-text="param.label"></span>
+                                                            <select class="pe-in" x-model="sourceParams(src)[param.key]">
+                                                                <option value="">Choose a role</option>
+                                                                <template x-for="r in rolesFor(sourceParams(src).seriesId)" :key="r.slug"><option :value="r.slug" x-text="r.name"></option></template>
+                                                            </select></label>
+                                                    </div>
+                                                </template>
+                                                <div class="pe-chips">
+                                                    <template x-for="f in fieldsOf(src)" :key="src.key + '-' + f.key">
+                                                        <span class="pe-chip" draggable="true" :data-chip="chipKey('global', src.key, f.key)"
+                                                              @dragstart="onChipDragStart($event, 'global', src, f)" @dragend="onChipDragEnd()">
+                                                            <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </section>
+                    </template>
+
+                    <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
+                        <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
+                        <template x-for="(w, i) in data.warnings" :key="i">
+                            <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
+                                <span class="pe-warn__label" x-text="w.label"></span>
+                                <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
+                            </button>
+                        </template>
+                    </section>
+                    <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading">Every wired field has a value today.</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Wires from chips to elements, drawn over everything. -->
+        <svg id="pe-wires" class="pe-wires" aria-hidden="true"></svg>
+        <!-- Where probe pages are drawn and measured for overflow. Off screen, never seen. -->
+        <div id="pe-measure" class="pe-measure"></div>
     </main>
 
     <!-- The picker: the first thing a new printable asks. -->
@@ -429,6 +679,14 @@
     <script src="printable-core.js"></script>
     <script src="printable-dom.js"></script>
     <script src="printable-store.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="printable-data-core.js"></script>
+    <script src="printable-data-store.js"></script>
+    <script src="printable-render-core.js"></script>
+    <script src="printable-live.js"></script>
+    <script src="printable-editor-data.js"></script>
     <script src="printable-editor.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
@@ -532,6 +790,73 @@
         .pe-overlay__handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: #fff; border: 2px solid var(--tertiary); border-radius: 2px; pointer-events: auto; cursor: nwse-resize; }
         .pe-zoom { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius); box-shadow: var(--shadow-sm); z-index: 6; }
         .pe-zoom__label { border: 0; background: none; font: 600 12px var(--font-sans); color: var(--on-surface); min-width: 48px; cursor: pointer; }
+
+        /* ── Data: drawer, chips, wires ────────────────────────────────── */
+        .pe-drawer { display: flex; flex-direction: column; }
+        .pe-panel--right:empty { display: flex; }
+        .pe-drawer__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+        .pe-drawer__head .pe-h { margin: 0; flex: 1; }
+        .pe-drawer__search { padding: 0 12px 8px; border-bottom: 1px solid var(--outline-variant); }
+        .pe-drawer__search .m-search { width: 100%; }
+        .pe-drawer__body { flex: 1; overflow: auto; padding: 8px 12px 16px; }
+        .pe-drawer__error { color: var(--error); font-size: 12px; margin: 4px 0 8px; }
+        .pe-drawer__section { margin-bottom: 14px; }
+        .pe-drawer__section--item { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
+        .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
+        .pe-drawer__ok { color: var(--success, #2f7a4b); }
+        .pe-src { border: 1px solid var(--outline-variant); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface-container-lowest); overflow: hidden; }
+        .pe-src__row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+        .pe-src__row:hover { background: var(--surface-container); }
+        .pe-src__row > .material-symbols-outlined { font-size: 18px; color: var(--primary); flex: 0 0 auto; }
+        .pe-src__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .pe-src__label { font: 600 13px var(--font-sans); color: var(--on-surface); }
+        .pe-src__blurb { font-size: 11.5px; line-height: 1.35; color: var(--on-surface-variant); }
+        .pe-src__chev { font-size: 18px; color: var(--on-surface-variant); transition: transform var(--duration) var(--ease-standard); }
+        .pe-src.is-open .pe-src__chev { transform: rotate(180deg); }
+        .pe-src__detail { padding: 4px 10px 10px; border-top: 1px solid var(--outline-variant); }
+        .pe-src__iter { width: 100%; justify-content: center; margin: 6px 0; }
+        .pe-src--pick { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+        .pe-src--pick:hover { border-color: var(--primary); background: var(--surface-container); }
+        .pe-src--pick > .material-symbols-outlined { color: var(--primary); }
+        .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+        .pe-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 6px; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container-lowest); font: 500 12px var(--font-sans); color: var(--on-surface); cursor: grab; user-select: none; }
+        .pe-chip:hover { border-color: var(--tertiary); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        .pe-chip:active { cursor: grabbing; }
+        .pe-chip .material-symbols-outlined { font-size: 15px; color: var(--tertiary); }
+        .pe-chip--inert { cursor: default; opacity: .7; }
+        .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
+        .pe-warn { display: flex; flex-direction: column; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-left: 3px solid var(--warning, #b8860b); background: var(--surface-container-lowest); margin-bottom: 4px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font: inherit; color: inherit; cursor: default; }
+        .pe-warn--element { cursor: pointer; }
+        .pe-warn--element:hover { background: var(--surface-container); }
+        .pe-warn__label { font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-warn__msg { font-size: 12px; line-height: 1.35; }
+        .pe-bind { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); margin-bottom: 6px; background: var(--surface-container-lowest); }
+        .pe-bind > .material-symbols-outlined { font-size: 18px; color: var(--tertiary); margin-top: 2px; }
+        .pe-bind__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+        .pe-bind__label em { font-style: normal; font-weight: 600; color: var(--on-surface-variant); }
+        .pe-bind__detail { font-size: 11px; color: var(--on-surface-variant); }
+        .pe-iter { margin-top: 4px; }
+        .pe-iter__head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .pe-iter__head .material-symbols-outlined { color: var(--tertiary); font-size: 18px; }
+        .pe-iter__title { flex: 1; font: 600 12px var(--font-sans); color: var(--on-surface); }
+        .pe-iter__source { font-size: 12px; line-height: 1.4; margin: 4px 0 8px; }
+        .pe-linkbtn { border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
+        .pe-h--sub { margin-top: 10px; }
+        .pe-seg--tiny button { padding: 3px 7px; min-height: 0; font-size: 10.5px; }
+        .pe-in--date { width: auto; height: 24px; font-size: 11px; padding: 0 4px; }
+        .pe-f--check input { justify-self: start; }
+        .pe-bound-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--tertiary); border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--tertiary); pointer-events: none; z-index: 4; }
+        .pe-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 70; overflow: visible; }
+        .pe-wires path { fill: none; stroke: var(--tertiary); stroke-width: 2; stroke-linecap: round; }
+        .pe-wires path.is-live { stroke-dasharray: 6 5; animation: pe-dash .6s linear infinite; }
+        @keyframes pe-dash { to { stroke-dashoffset: -11; } }
+        .pe-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
+        .pe-page-holder--generated > .pr-page { box-shadow: 0 18px 48px rgba(14,28,54,.12), 0 0 0 1px rgba(14,28,54,.08); outline: 2px dashed var(--outline-variant); outline-offset: 6px; }
+        .pe-page-holder--generated .pe-margin-guide { display: none; }
+        .pe-spin { animation: pe-spin 1s linear infinite; }
+        @keyframes pe-spin { to { transform: rotate(360deg); } }
+        .pe-main { position: relative; }
 
         /* ── Menus ─────────────────────────────────────────────────────── */
         .pe-filemenu { position: relative; }

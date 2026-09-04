@@ -18,6 +18,7 @@
 // the Save button means "now".
 
 function printableEditor() {
+    const global = window;
     // Things Alpine must NOT make reactive: DOM handles, the undo stack, the
     // CodeMirror instances (a proxied CodeMirror throws on click — see
     // service-guide-manager.js), and the drag state, which changes on every
@@ -54,7 +55,7 @@ function printableEditor() {
         { label: 'Courier', value: 'Courier New, Courier, monospace' },
     ];
 
-    return {
+    const base = {
         id: '',
         loading: true,
         problem: '',
@@ -125,6 +126,7 @@ function printableEditor() {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
                     const userData = await getUserData(user.uid);
+                    this.currentUserData = userData || null;
                     this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
                     if (!this.canEdit) { window.location.href = 'index.html'; return; }
                     this.currentUser = user;
@@ -159,6 +161,7 @@ function printableEditor() {
                 this.renderAll();
                 this.fitToView();
                 if (!this.selection.pageId && this.pages[0]) this.selectPage(this.pages[0].id);
+                if (this.initData) this.initData();
             }
             window.addEventListener('resize', () => this.refreshOverlays());
         },
@@ -208,6 +211,7 @@ function printableEditor() {
                     this.renderAll();
                     this.fitToView();
                     this.selectPage(firstPage.id);
+                    if (this.initData) this.initData();
                 });
             } finally {
                 this.picker.busy = false;
@@ -638,13 +642,22 @@ function printableEditor() {
             return y;
         },
 
+        // What the canvas draws: the project's pages with their data poured
+        // in, plus the pages an overflowing list generates. Without the data
+        // side loaded, the pages themselves with their stand-ins.
+        entries() {
+            if (this.computeLayout) return this.computeLayout();
+            return this.pages.map((page, i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
+        },
+
         renderAll() {
             if (!ui.world || !this.template) return;
+            const entries = this.entries();
             ui.world.innerHTML = '';
             ui.pageEls = {};
             const t = this.template;
-            this.pages.forEach((page, i) => {
-                ui.world.appendChild(this.buildPageEl(page, i));
+            entries.forEach((entry, i) => {
+                ui.world.appendChild(this.buildPageEl(entry, i));
             });
             // The "+" below the last page.
             const add = document.createElement('button');
@@ -652,35 +665,39 @@ function printableEditor() {
             add.className = 'pe-add-page';
             add.innerHTML = '<span class="material-symbols-outlined">add</span><span>Add a page</span>';
             add.style.left = PAD + 'px';
-            add.style.top = (this.pageTop(this.pages.length) - GAP + 16) + 'px';
+            add.style.top = (this.pageTop(entries.length) - GAP + 16) + 'px';
             add.style.width = t.widthPx + 'px';
             add.addEventListener('click', () => this.addPage());
             ui.world.appendChild(add);
             ui.world.style.width = (PAD * 2 + t.widthPx) + 'px';
-            ui.world.style.height = (this.pageTop(this.pages.length) + PAD) + 'px';
+            ui.world.style.height = (this.pageTop(entries.length) + PAD) + 'px';
             this.applyView();
             this.renderTree();
             this.refreshOverlays();
+            if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
-        buildPageEl(page, index) {
+        buildPageEl(entry, index) {
             const t = this.template;
+            const page = entry.page;
             const holder = document.createElement('div');
-            holder.className = 'pe-page-holder';
+            holder.className = 'pe-page-holder' + (entry.generated ? ' pe-page-holder--generated' : '');
             holder.style.left = PAD + 'px';
             holder.style.top = this.pageTop(index) + 'px';
             holder.style.width = t.widthPx + 'px';
             holder.style.height = t.heightPx + 'px';
-            holder.setAttribute('data-page-holder', page.id);
+            holder.setAttribute('data-page-holder', entry.key);
 
             const label = document.createElement('div');
             label.className = 'pe-page-label';
-            label.textContent = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '');
+            label.textContent = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '')
+                + (entry.generated ? ' · continued from page ' + (entry.pageIndex + 1) + ' (rows ' + (entry.rowsFrom + 1) + '–' + entry.rowsTo + ')' : '');
             label.style.fontSize = Math.round(14 / Math.max(0.2, this.view.zoom)) + 'px';
             label.style.top = (-Math.round(22 / Math.max(0.2, this.view.zoom))) + 'px';
             holder.appendChild(label);
 
-            const el = PrintableDom.renderPage(page, t, { editing: true, values: this.valuesFor ? this.valuesFor(page) : null });
+            const el = PrintableDom.renderPage(Object.assign({}, page, { nodes: entry.nodes }), t, { editing: true, scopeId: page.id });
+            if (entry.generated) el.setAttribute('data-generated', '1');
             holder.appendChild(el);
 
             const guide = document.createElement('div');
@@ -691,22 +708,24 @@ function printableEditor() {
             guide.style.left = page.margins.left + 'px';
             holder.appendChild(guide);
 
-            ui.pageEls[page.id] = holder;
+            if (!entry.generated) ui.pageEls[page.id] = holder;
             return holder;
         },
 
+        // One page changed. When the project reads live data — a list may
+        // have grown or shrunk a page — everything is redrawn; otherwise just
+        // that page.
         renderPage(pageId) {
             const i = this.pages.findIndex(p => p.id === pageId);
             const old = ui.pageEls[pageId];
-            if (i < 0 || !old) { this.renderAll(); return; }
-            const fresh = this.buildPageEl(this.pages[i], i);
+            const hasLists = this.pages.some(p => { let found = false; PrintableCore.walk(p.nodes, n => { if (n.repeat) { found = true; return false; } }); return found; });
+            if (i < 0 || !old || hasLists || (this.data && this.data.loaded)) { this.renderAll(); return; }
+            const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i);
             old.replaceWith(fresh);
             this.refreshOverlays();
             this.renderTree();
+            if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
-
-        // A hook the data drawer (MS-396) fills in: resolved values per node.
-        valuesFor: null,
 
         applyView() {
             if (!ui.world) return;
@@ -760,6 +779,21 @@ function printableEditor() {
         refreshOverlays() {
             this.selBox = this.boxFor(this.selection.nodeId) || (this.pageSelected ? this.pageBoxFor(this.selection.pageId) : null);
             this.hoverBox = (this.hover.nodeId && this.hover.nodeId !== this.selection.nodeId) ? this.boxFor(this.hover.nodeId) : null;
+            this.boundDots = this.boundDotsFor();
+            if (this.refreshWires) this.refreshWires();
+        },
+
+        // A small mark on every element wired to data, in screen space.
+        boundDots: [],
+        boundDotsFor() {
+            if (!ui.world || !ui.viewport) return [];
+            const v = ui.viewport.getBoundingClientRect();
+            // Only the element itself, not the copies a list draws of it —
+            // one mark says "wired"; forty say nothing more.
+            return Array.from(ui.world.querySelectorAll('[data-bound]')).filter(el => el.getAttribute('data-pid').indexOf('~') < 0).slice(0, 400).map(el => {
+                const r = el.getBoundingClientRect();
+                return { x: r.left - v.left, y: r.top - v.top };
+            });
         },
 
         boxFor(nodeId) {
@@ -780,6 +814,12 @@ function printableEditor() {
             const r = el.getBoundingClientRect();
             const v = ui.viewport.getBoundingClientRect();
             return { x: r.left - v.left, y: r.top - v.top, w: r.width, h: r.height, label: label };
+        },
+
+        // A copy of an iterated element (id~3) is drawn, never edited; every
+        // click on one lands on the element it copies.
+        originalId(id) {
+            return (window.PrintableRenderCore ? window.PrintableRenderCore.originalId(id) : String(id || '').split('~')[0]);
         },
 
         nameOf(nodeId) {
@@ -827,7 +867,7 @@ function printableEditor() {
                 if (e.button === 0) {
                     const target = e.target.closest('[data-pid]');
                     if (target && ui.editingText !== target.getAttribute('data-pid')) {
-                        const nodeId = target.getAttribute('data-pid');
+                        const nodeId = this.originalId(target.getAttribute('data-pid'));
                         const page = this.pageOfNode(nodeId);
                         const node = page && PrintableCore.findNode(page, nodeId);
                         if (node && node.style.position === 'absolute') {
@@ -877,16 +917,17 @@ function printableEditor() {
                 if (e.target.closest('.pe-add-page') || e.target.closest('.pe-overlay')) return;
                 const target = e.target.closest('[data-pid]');
                 if (target) {
-                    const nodeId = target.getAttribute('data-pid');
+                    const nodeId = this.originalId(target.getAttribute('data-pid'));
                     if (ui.editingText === nodeId) return;
                     this.finishTextEdit();
                     const page = this.pageOfNode(nodeId);
+                    if (!page) return;
                     this.select(page.id, nodeId);
                     return;
                 }
                 const pageEl = e.target.closest('.pr-page');
                 this.finishTextEdit();
-                if (pageEl) { this.selectPage(pageEl.getAttribute('data-page')); return; }
+                if (pageEl) { this.selectPage(this.originalId(pageEl.getAttribute('data-page'))); return; }
                 if (this.selection.nodeId) this.clearSelection();
             });
 
@@ -894,28 +935,35 @@ function printableEditor() {
                 const target = e.target.closest('[data-pid]');
                 if (!target) return;
                 const nodeId = target.getAttribute('data-pid');
+                if (nodeId !== this.originalId(nodeId)) return; // a copy is drawn, not edited
                 const page = this.pageOfNode(nodeId);
                 const node = page && PrintableCore.findNode(page, nodeId);
+                if (node && node.bind && node.bind.text) { this.flash('This text is wired to data. Unwire it on the left to type here.'); return; }
                 if (node && PrintableCore.kindOf(node) === 'text') this.startTextEdit(nodeId, target);
             });
 
             vp.addEventListener('mousemove', (e) => {
                 if (ui.drag) return;
                 const target = e.target.closest('[data-pid]');
-                const id = target ? target.getAttribute('data-pid') : null;
+                const id = target ? this.originalId(target.getAttribute('data-pid')) : null;
                 if (id !== this.hover.nodeId) { this.hover.nodeId = id; this.refreshOverlays(); }
             });
             vp.addEventListener('mouseleave', () => { this.hover.nodeId = null; this.refreshOverlays(); });
+
+            vp.addEventListener('dragover', (e) => { if (this.onCanvasDragOver) this.onCanvasDragOver(e); });
+            vp.addEventListener('drop', (e) => { if (this.onCanvasDrop) this.onCanvasDrop(e); });
 
             vp.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 const target = e.target.closest('[data-pid]');
                 const pageEl = e.target.closest('.pr-page');
                 if (target) {
-                    const nodeId = target.getAttribute('data-pid');
-                    this.select(this.pageOfNode(nodeId).id, nodeId);
+                    const nodeId = this.originalId(target.getAttribute('data-pid'));
+                    const page = this.pageOfNode(nodeId);
+                    if (!page) return;
+                    this.select(page.id, nodeId);
                 } else if (pageEl) {
-                    this.selectPage(pageEl.getAttribute('data-page'));
+                    this.selectPage(this.originalId(pageEl.getAttribute('data-page')));
                 } else { return; }
                 const v = vp.getBoundingClientRect();
                 this.menu = { open: true, x: e.clientX - v.left, y: e.clientY - v.top, nodeId: this.selection.nodeId, pageId: this.selection.pageId };
@@ -1285,7 +1333,13 @@ function printableEditor() {
             setTimeout(() => window.print(), 150);
         },
 
-        // A hook MS-397 fills in: the pages to print, overflow pages included.
-        printPages: null,
     };
+
+    // The data side — drawer, wires, iteration, live pages — lives in
+    // printable-editor-data.js and is mixed in here.
+    // Copied by descriptor, not by Object.assign — the data side has getters,
+    // and Object.assign would call each one once here and freeze its answer.
+    const data = (typeof global.PrintableEditorData === 'function') ? global.PrintableEditorData(ui) : {};
+    Object.defineProperties(base, Object.getOwnPropertyDescriptors(data));
+    return base;
 }
