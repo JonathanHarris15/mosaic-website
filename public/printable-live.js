@@ -75,7 +75,7 @@
             if (bind.scope === 'item') {
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
-                if (v === undefined) return { ok: false, why: 'The list has no "' + bind.field + '" field.' };
+                if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
                 if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + (row.name || row.label || row._id || 'this row') + '.' };
                 return { ok: true, value: v };
             }
@@ -140,7 +140,11 @@
                 return;
             }
 
-            const continueWith = (repeat.repeat.continueWith && (project.pages || []).find(p => p.id === repeat.repeat.continueWith)) || page;
+            // The page new pages copy must carry the list, or the rows would
+            // have nowhere to go; a page chosen that lacks it falls back to
+            // the page the list started on.
+            const chosen = repeat.repeat.continueWith && (project.pages || []).find(p => p.id === repeat.repeat.continueWith);
+            const continueWith = (chosen && Core.findNode(chosen, repeat.id)) ? chosen : page;
             const cap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
             const fitsOn = (i, start, n) => {
                 const bg = i === 0 ? page : continueWith;
@@ -155,7 +159,7 @@
                     key: page.id + (i === 0 ? '' : '~' + i),
                     page: bg,
                     nodes: expanded.nodes,
-                    warnings: i === 0 ? expanded.warnings : [],
+                    warnings: expanded.warnings,
                     generated: i > 0,
                     originId: page.id,
                     pageIndex: pageIndex,

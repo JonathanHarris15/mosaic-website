@@ -86,9 +86,7 @@
         .pv-warn { display: block; }
         .pv-pages { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--space-lg); padding-bottom: var(--space-xl); }
         .pv-sheet { position: relative; overflow: hidden; box-shadow: 0 18px 48px rgba(14,28,54,.18), 0 0 0 1px rgba(14,28,54,.08); background: #fff; }
-        .pr-page { font-family: 'EB Garamond', Georgia, serif; color: #000; }
-        .pr-page * { box-sizing: border-box; }
-        .pr-page img { display: block; }
+        /* The page's own base rules come from PrintableDom.ensureBaseStyles. */
         .pv-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
         .pv-print { display: none; }
         @media print {

@@ -146,6 +146,14 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+test('a field above the viewer never leaves the resolver, whoever wired it', () => {
+    const asEditor = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
+    const asMember = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'member' });
+    assert.equal(asEditor.rows[0].stage, 'Member');
+    assert.equal('stage' in asMember.rows[0], false, 'the Membership Track is pastoral, not congregational');
+    assert.equal(asMember.rows[0].membership, 'Member', 'the congregational fact still reads');
+});
+
 test('a source above the viewer resolves to nothing and says why', () => {
     const r = Data.resolve('role_holder', { seriesId: 's', roleSlug: 'x' }, {}, { today: TODAY, level: 'member' });
     assert.equal(r.rows.length, 0);

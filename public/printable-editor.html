@@ -293,7 +293,7 @@
                                         <template x-for="spec in repeatParamSpecs" :key="spec.key">
                                             <div>
                                                 <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" :value="repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key); }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
                                                         <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
                                                     </select></label>
                                                 <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
@@ -323,12 +323,12 @@
                                                     </div>
                                                 </div>
                                                 <label class="pe-f" x-show="spec.kind === 'series'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
                                                         <option value="">Every event</option>
                                                         <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
                                                     </select></label>
                                                 <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)">
+                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
                                                         <option value="">Choose a form</option>
                                                         <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" x-text="f.title"></option></template>
                                                     </select></label>
@@ -353,9 +353,9 @@
                                                 <button type="button" :aria-pressed="selectedNode.repeat.overflow === 'new-page'" @click="setRepeatOverflow('new-page')">Makes a new page</button>
                                             </span></div>
                                         <label class="pe-f" x-show="selectedNode.repeat.overflow === 'new-page'"><span>New pages copy</span>
-                                            <select class="pe-in" :value="selectedNode.repeat.continueWith || ''" @change="setContinueWith($event.target.value)">
+                                            <select class="pe-in" x-data="{ get v() { return selectedNode.repeat.continueWith || ''; }, set v(val) { setContinueWith(val); } }" x-model="v">
                                                 <option value="">The page the list starts on</option>
-                                                <template x-for="(pg, i) in pages" :key="pg.id"><option :value="pg.id" x-text="'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : '')"></option></template>
+                                                <template x-for="pg in continuationPages" :key="pg.id"><option :value="pg.id" x-text="pg.label"></option></template>
                                             </select></label>
                                         <p class="pe-hint" x-show="selectedNode.repeat.overflow === 'new-page'">Each new page copies the chosen page, with the list continuing where it left off. Generated pages are drawn below and cannot be edited themselves.</p>
                                     </div>
@@ -509,10 +509,10 @@
                                         <!-- A list: iterate an element over it -->
                                         <template x-if="src.shape === 'list'">
                                             <div>
-                                                <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" :disabled="!selectedNode" @click="makeIterated(); chooseList(src)">
+                                                <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" :disabled="selectedKind !== 'box'" @click="makeIterated(); chooseList(src)">
                                                     <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Iterate the selected element over this</span>
                                                 </button>
-                                                <p class="pe-hint" x-show="!selectedNode">Select a box on the page first.</p>
+                                                <p class="pe-hint" x-show="selectedKind !== 'box'">Select a box on the page first — a box is what stands for a row.</p>
                                                 <p class="pe-hint">Fields of a row:</p>
                                                 <div class="pe-chips pe-chips--inert">
                                                     <template x-for="f in fieldsOf(src)" :key="src.key + '-' + f.key"><span class="pe-chip pe-chip--inert"><span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span></span></template>
@@ -777,9 +777,7 @@
         .pe-add-page { position: absolute; height: 48px; border: 2px dashed var(--outline-variant); border-radius: var(--radius); background: transparent; color: var(--on-surface-variant); font: 600 20px var(--font-sans); display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
         .pe-add-page:hover { border-color: var(--primary); color: var(--primary); background: rgba(255,255,255,.4); }
         .pe-add-page .material-symbols-outlined { font-size: 28px; }
-        .pr-page { font-family: 'EB Garamond', Georgia, serif; color: #000; }
-        .pr-page * { box-sizing: border-box; }
-        .pr-page img { display: block; }
+        /* The page's own base rules come from PrintableDom.ensureBaseStyles. */
         .pe-img-empty { background: repeating-linear-gradient(45deg, #e8e4dc, #e8e4dc 8px, #f3f0ea 8px, #f3f0ea 16px); outline: 1px dashed #b9b2a4; outline-offset: -1px; min-width: 24px; min-height: 24px; }
         .pe-text-empty { min-height: 1em; min-width: 2em; outline: 1px dotted #b9b2a4; }
         .pe-editing { outline: 2px solid var(--tertiary); cursor: text; user-select: text; }
@@ -804,7 +802,7 @@
         .pe-drawer__section--item { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
         .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
-        .pe-drawer__ok { color: var(--success, #2f7a4b); }
+        .pe-drawer__ok { color: var(--success); }
         .pe-src { border: 1px solid var(--outline-variant); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface-container-lowest); overflow: hidden; }
         .pe-src__row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
         .pe-src__row:hover { background: var(--surface-container); }
@@ -826,7 +824,7 @@
         .pe-chip .material-symbols-outlined { font-size: 15px; color: var(--tertiary); }
         .pe-chip--inert { cursor: default; opacity: .7; }
         .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
-        .pe-warn { display: flex; flex-direction: column; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-left: 3px solid var(--warning, #b8860b); background: var(--surface-container-lowest); margin-bottom: 4px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font: inherit; color: inherit; cursor: default; }
+        .pe-warn { display: flex; flex-direction: column; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-left: 3px solid var(--warning); background: var(--surface-container-lowest); margin-bottom: 4px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font: inherit; color: inherit; cursor: default; }
         .pe-warn--element { cursor: pointer; }
         .pe-warn--element:hover { background: var(--surface-container); }
         .pe-warn__label { font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--on-surface-variant); }

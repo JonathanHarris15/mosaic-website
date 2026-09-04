@@ -757,7 +757,15 @@
         if (!mayRead(c.level, source.minLevel)) {
             return { rows: [], warnings: [source.label + ' is not visible to you.'] };
         }
-        return RESOLVERS[sourceKey](params, data || {}, c);
+        const out = RESOLVERS[sourceKey](params, data || {}, c);
+        // A field above the viewer's level is not in their drawer, and it is
+        // not in their rows either — a wire an editor made must not read it
+        // out for a member on the view-only page.
+        const hidden = source.fields.filter(f => f.minLevel && !mayRead(c.level, f.minLevel)).map(f => f.key);
+        if (hidden.length) {
+            out.rows = out.rows.map(row => { const r = Object.assign({}, row); hidden.forEach(k => { delete r[k]; }); return r; });
+        }
+        return out;
     }
 
     // What the store must fetch to answer a source: the collections, and for

@@ -172,8 +172,10 @@ service firebase.storage {
       allow delete: if false;
     }
 
-    // Pictures placed on a Printable (MS-394): a logo, a cover photo. Read by
-    // anyone signed in — the page it is on is what decides who sees it, and a
+    // Pictures placed on a Printable (MS-394): a logo, a cover photo. Like a
+    // Directory Photo (ADR-0029) and unlike an Event Attachment, the editor
+    // keeps the getDownloadURL() token URL on the element, so the picture is
+    // readable by anyone holding that URL — it is decoration on a page, and a
     // Printable holds nothing a Person record does not. Written by an editor,
     // as an image, under 8MB. No client deletes; a picture an element no
     // longer points at is inert.

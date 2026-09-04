@@ -482,6 +482,17 @@
                 this.renderAll();
             },
 
+            // Which pages may be copied for the list's new pages: only those
+            // that carry the list, since a page without it has nowhere to put
+            // the rows.
+            get continuationPages() {
+                const r = this.repeatContext;
+                if (!r) return [];
+                return this.pages
+                    .map((pg, i) => ({ id: pg.id, label: 'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : ''), has: !!Core.findNode(pg, r.id) }))
+                    .filter(x => x.has);
+            },
+
             // Sub-fields of a param, for the small editors: a `when`, a range.
             whenMode(v) { return (v && v.mode) || 'this'; },
             rangeMode(v) { return (v && v.mode) || 'relative'; },

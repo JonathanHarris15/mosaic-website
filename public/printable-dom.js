@@ -16,6 +16,24 @@
 
     const Core = global.PrintableCore;
 
+    // The rules every drawn page depends on — box-sizing, the paper's type
+    // and colour, block images — put into the document ONCE by the first
+    // page drawn, so the editor, the view page and the PDF snapshot on the
+    // event page all lay out the same page the same way.
+    const BASE_CSS = [
+        '.pr-page { font-family: "EB Garamond", Georgia, serif; color: #000; background: #fff; }',
+        '.pr-page * { box-sizing: border-box; }',
+        '.pr-page img { display: block; }',
+    ].join('\n');
+
+    function ensureBaseStyles() {
+        if (typeof document === 'undefined' || document.getElementById('pr-page-base')) return;
+        const style = document.createElement('style');
+        style.id = 'pr-page-base';
+        style.textContent = BASE_CSS;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
     function applyStyle(el, style) {
         Object.keys(style || {}).forEach(k => {
             const v = style[k];
@@ -77,6 +95,7 @@
     // is scoped under so one page's rules cannot restyle another's.
     function renderPage(page, template, opts) {
         const o = opts || {};
+        ensureBaseStyles();
         const wrap = document.createElement('div');
         wrap.className = 'pr-page' + (o.className ? ' ' + o.className : '');
         const scope = 'pr-' + (o.scopeId || page.id);
@@ -109,7 +128,7 @@
         });
     }
 
-    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle };
+    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, BASE_CSS };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableDom;
