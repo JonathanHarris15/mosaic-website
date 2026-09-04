@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <title>Form Document | Mosaic Shepherd</title>
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Document', back: 'shepherding-documents.html' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="forms-core.js"></script>
+    <script src="shepherding-form-document.js"></script>
+
+    <!-- The question controls, shared with the page a stranger answers a public
+         form on (MS-383). Mounted BEFORE Alpine's deferred script: Alpine walks
+         the DOM once at startup and never sees markup added afterwards, so a
+         late mount is a question with no control and no error. -->
+    <script src="form-question-markup.js"></script>
+    <script>document.addEventListener('DOMContentLoaded', function () { FormQuestionMarkup.mount(); });</script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="m-page" x-data="formDocumentPage()" x-init="init()" x-cloak>
+
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="backHref" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Documents</span>
+                </a>
+            </div>
+            <div class="m-header__actions">
+                <template x-if="saveStatus === 'saving'">
+                    <span class="m-badge m-badge--neutral m-header__chip">
+                        <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                        <span class="m-btn__label">Saving…</span>
+                    </span>
+                </template>
+                <template x-if="saveStatus === 'saved'">
+                    <span class="m-badge m-badge--success m-header__chip">
+                        <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                        <span class="m-btn__label">Saved</span>
+                    </span>
+                </template>
+                <template x-if="saveStatus === 'unsaved'">
+                    <span class="m-badge m-badge--warning m-header__chip">
+                        <span class="m-chip-dot m-chip-dot--pulse"></span>
+                        <span class="m-btn__label">Unsaved changes</span>
+                    </span>
+                </template>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="m-page__body">
+
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+        </div>
+
+        <template x-if="!loading && doc">
+            <div class="fd-stack">
+
+                <!-- Its own name, editable, like every other document. Renaming
+                     it never touches the template it came from. -->
+                <input type="text" class="fd-title" x-model="title" @input="onTitleInput()"
+                       placeholder="Name this document…" maxlength="200" />
+
+                <div class="fd-meta">
+                    <span x-text="'Started by ' + (doc.authorName || 'somebody')"></span>
+                    <span>·</span>
+                    <span x-text="progressLine"></span>
+                </div>
+
+                <div class="fa-questions">
+                    <template x-for="(q, i) in questions" :key="q.id">
+                        <div class="fa-q" :class="q.type === 'section' ? 'fa-q--head' : ''">
+                            <!-- A heading is not question 4 of 9. It carries no
+                                 number and nothing to type into. -->
+                            <span class="fa-q__num" x-show="asks(q)" x-text="numberFor(i)"></span>
+                            <div class="fa-q__body">
+                                <div>
+                                    <div class="fa-q__text" :class="q.type === 'section' ? 'fa-head__text' : ''" x-text="q.text"></div>
+                                </div>
+
+                                <!-- The same controls the fill-in page draws. A
+                                     date is a date control, and a multiple
+                                     choice shows every option with the chosen
+                                     one marked — so this reads as a record of
+                                     what was asked as well as what was said. -->
+                                <div data-form-question @input="touch()" @change="touch()"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="m-empty" x-show="!questions.length">
+                    <span class="material-symbols-outlined">description</span>
+                    <p>This one has no questions on it.</p>
+                    <p>It was made from a template that had none. Add them to the template and make a new one — this document keeps the form it was created with.</p>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <style>
+        .fd-stack { display: flex; flex-direction: column; gap: var(--space-sm); max-width: 760px; margin: 0 auto; width: 100%; }
+        .fd-title { width: 100%; font-family: var(--font-display); font-size: 28px; color: var(--primary); background: transparent; border: 0; border-bottom: 2px solid transparent; padding-bottom: 4px; }
+        .fd-title:focus { outline: none; border-bottom-color: var(--outline-variant); }
+        .fd-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; color: var(--on-surface-variant); padding-bottom: 8px; border-bottom: 1px solid var(--outline-variant); }
+
+        /* The question rows, and the scale, match the fill-in page exactly —
+           the controls are the same code, so their surroundings have to agree
+           or the same question looks like two different questions. */
+        .fa-questions { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
+        .fa-q { display: flex; gap: 12px; align-items: flex-start; }
+        .fa-q__num { flex: 0 0 24px; font-size: 12px; font-weight: 700; color: var(--on-surface-variant); padding-top: 4px; }
+        .fa-q__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .fa-q__text { font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+        .fa-q--head { border-top: 1px solid var(--outline-variant); padding-top: 18px; margin-top: 6px; }
+        .fa-q--head:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+        .fa-head__text { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); }
+        .fa-opts { display: flex; flex-direction: column; gap: 8px; }
+        .fa-box { border-radius: 5px; }
+        .fa-scale { display: flex; flex-direction: column; gap: 6px; }
+        .fa-scale__end { font-size: 12px; color: var(--on-surface-variant); }
+        .fa-scale__points { display: flex; flex-wrap: wrap; gap: 8px; }
+        .fa-scale__point { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius-md, 10px); background: var(--surface-container-lowest); cursor: pointer; font-weight: 600; }
+        .fa-scale__point input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .fa-scale__point--picked { border-color: var(--primary); background: var(--primary-fixed, var(--surface-container)); color: var(--primary); }
+    </style>
+</body>
+</html>

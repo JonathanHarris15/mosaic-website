@@ -6,11 +6,17 @@
    (shepherding-documents.js). Byte-compatible tree shape, so folders
    and docs created here round-trip on desktop.
 
-   Documents come in two docTypes: `note` → the native Document editor
+   Documents come in three docTypes. `note` → the native Document editor
    (screens-document-editor.js), `care-list` → the native Care List
-   editor (screens-carelist.js). New-document flow lets you pick which;
-   a Care List also picks the Filtered View (or a custom filter) that
-   drives its rows.
+   editor (screens-carelist.js), and `form` → the desktop Form Document
+   page opened in the shell, because that one is a form rather than prose
+   and there should only ever be one of it (MS-386, ADR-0055).
+
+   ⚠ The new-document flow here offers the first two only. Making a Form
+   Document needs the list of document-mode Form Templates, which this
+   screen does not read — so on a phone you OPEN one here and MAKE one
+   from the Documents page on the web or in the shell. Written down rather
+   than left as a gap somebody finds by looking for a button.
    ============================================================ */
 (function () {
   "use strict";
@@ -204,8 +210,21 @@
 
     function openDoc(id) {
       var d = docs[id];
-      if (d && d.docType === "care-list") props.nav("careList", { id: id });
-      else props.nav("documentEditor", { id: id });
+      if (d && d.docType === "care-list") { props.nav("careList", { id: id }); return; }
+      // A Form Document (MS-386) is a form, not prose. Falling through to the
+      // native prose editor would show an empty body and invite somebody to
+      // type into a record whose answers live somewhere else entirely.
+      //
+      // It opens the desktop page in the shell rather than a native port, so
+      // there is one Form Document editor to keep in step with the model. Set
+      // directly rather than through props.nav, because nav() drops params when
+      // it hands off to a shell page and the id is the whole message.
+      if (d && d.docType === "form") {
+        window.location.href = "shepherding-form-document.html?id=" +
+          encodeURIComponent(id) + "&shell=mobile";
+        return;
+      }
+      props.nav("documentEditor", { id: id });
     }
 
     // ── Create ──

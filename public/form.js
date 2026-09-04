@@ -43,6 +43,11 @@ function formPage() {
         get isClosed() { return this.form && FormsCore.isClosed(this.form, this.today); },
         get isBallot() { return this.form && FormsCore.isBallot(this.form); },
         get settings() { return FormsCore.settingsFor(this.form ? this.form.rung : 'member'); },
+
+        // Filled in once and kept, rather than published and answered. Nearly
+        // every control on this page is about a link — publishing one, closing
+        // one, deciding who may follow one — and a document template has none.
+        get isDocument() { return FormsCore.isDocumentMode(this.form); },
         get liveRungs() { return FormsCore.RUNGS_LIVE; },
 
         // Asked of the model, not spelled out here — the picker is not the only
@@ -52,9 +57,17 @@ function formPage() {
         get badges() {
             if (!this.form) return [];
             const out = [];
+
+            // A document template says what it is and stops. The other badges
+            // all describe answering a link it does not have.
+            if (this.isDocument) {
+                out.push({ text: 'Filled in as a document', tone: 'm-badge--tertiary', icon: 'edit_document' });
+                return out;
+            }
+
             out.push(this.form.rung === 'public'
                 ? { text: 'Anyone with the link', tone: 'm-badge--tertiary', icon: 'public' }
-                : { text: 'Members and above', tone: 'm-badge--secondary', icon: 'groups' });
+                : { text: FormsCore.rungLabel(this.form.rung) + ' and above', tone: 'm-badge--secondary', icon: 'groups' });
             out.push(this.form.attribution
                 ? { text: 'Names recorded', tone: '' }
                 : { text: 'Anonymous', tone: '' });
@@ -86,6 +99,36 @@ function formPage() {
         // that is closed to every client, and reaching for it would be the join
         // ADR-0052 forbids dressed up as a count.
         get responseCount() { return this.responses.length; },
+
+        // How many Form Documents have been made from this template. Zero until
+        // MS-384 builds the record; the mode control below already asks, so that
+        // the day documents exist they start protecting the template without
+        // anybody remembering to come back here.
+        get documentCount() { return this.documentsMade || 0; },
+
+        // May this template still change what kind of form it is?
+        //
+        // Only while nothing has been made from it. The refusal names the count,
+        // because "you cannot change this" is not answerable and "four answers
+        // have already come in" is.
+        get modeChange() {
+            return FormsCore.mayChangeMode(
+                this.form,
+                { responses: this.responseCount, documents: this.documentCount },
+            );
+        },
+
+        setMode(mode) {
+            if (!this.form || this.form.mode === mode) return;
+            if (!this.modeChange.ok) return;
+            this.form.mode = mode;
+            // Rebuild through the model rather than setting one field: a
+            // document template has no rung, no link and no closing date, and
+            // the model is what knows that. Setting `mode` alone would leave a
+            // record contradicting itself.
+            this.form = FormsCore.buildFormTemplate(this.form);
+            this.touch();
+        },
 
         // ── Load ─────────────────────────────────────────────────────────────
         async init() {

@@ -72,18 +72,25 @@ test('the library has a phone width it was actually thought about at', () => {
 
 // ── Answering the new types with a thumb ─────────────────────────────────────
 
+// The controls moved into form-question-markup.js in MS-383, so that a Form
+// Document draws the same ones. They are asked about where they now live; that
+// the fill-in page mounts them rather than keeping its own copy is pinned in
+// form-question-markup.test.js.
+const CONTROLS = require('../public/form-question-markup.js').QUESTION_CONTROLS;
+
 test('every new question type has a control on the fill-in page', () => {
     ['choice_many', 'dropdown', 'number', 'scale', 'date', 'time'].forEach(type => {
-        assert.ok(ANSWER.includes("q.type === '" + type + "'"),
+        assert.ok(CONTROLS.includes("q.type === '" + type + "'"),
             type + ' has nothing to answer it with');
     });
+    assert.match(ANSWER, /data-form-question/, 'the fill-in page does not mount the controls');
 });
 
 test('the date and time questions use the phone\'s own pickers', () => {
     // A hand-drawn date picker is worse than the one built into the device,
     // and this page is met on a phone more often than not.
-    assert.match(ANSWER, /type="date"/);
-    assert.match(ANSWER, /type="time"/);
+    assert.match(CONTROLS, /type="date"/);
+    assert.match(CONTROLS, /type="time"/);
 });
 
 test('a linear scale wraps instead of scrolling sideways', () => {

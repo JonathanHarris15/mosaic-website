@@ -816,6 +816,7 @@ _Avoid_: opt-in, subscription, notification settings
 
 ### Form Template
 The definition of a form: a title and **one ordered list of questions**, each carrying a response type and optionally **required**. Built and owned by **editors and above**, in the [[Forms library]]. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+- **Every template has a [[Form Mode]]**, chosen when it is made: it either publishes a link and gathers [[Response]]s, or it makes [[Form Document]]s. Almost everything else on a template only means something for one of the two.
 - ⚠ **A [[Section heading]] is one of those questions, not a structure around them.** This entry used to read "an ordered set of sections and questions", which suggested a grouping layer that has never existed and is not wanted. There is one list.
 - **The title is capped at 90 characters.** Whoever opens the link reads it first, and it has to survive a phone. The cap is in the model, not in the text box.
 - **Questions stay editable after publishing**, because a sign-up whose wording cannot be fixed is worse than one that changes under you. But editing a form that already has [[Response]]s **says so before it saves**, and a question carrying answers is never deleted — it is retired, so the tally it already gathered survives. There is no template versioning: an edit does not migrate answers already given.
@@ -855,8 +856,9 @@ The page the [[Form Template]]s live on, and **a place you navigate into rather 
 _Avoid_: forms manager, forms dashboard, the forms pane
 
 ### Form Mode
-What a [[Form Template]] produces, chosen when the template is made. The spine of MS-173, and the reason several settings exist on one side of it and are meaningless on the other.
-- **`document`** — filled in **once**, and the filled-in thing *is* the record. Lands in a document library like anything else written in Mosaic. The Elder Interview is the case. The same template is deliberately used many times by the same person, each time producing a separate [[Form Document]].
+What a [[Form Template]] produces, chosen when the template is made and near-unchangeable afterwards — once answers or documents exist against it, switching would leave records nothing knows how to open, and the refusal names the count.
+- **`document`** — filled in **once**, and the filled-in thing *is* the record. Lands in the [[Document Library]] like anything else written in Mosaic. The Elder Interview is the case. The same template is deliberately used many times, each use producing a separate [[Form Document]].
+- ⚠ **A `document` template has no [[Answering rung]], no link, no closing date and no Responses tab**, and none of those are merely hidden — the model forces them, because a stored record claiming to be a document with a published link would be believed by everything downstream. The rung is stored as **null** rather than a plausible value nothing honours: a field that looks like it decides something while deciding nothing is what somebody later writes a permission check against.
 - **`responses`** — **published** to a link, answered by many people, read as a tally. The church poll and the bible-study sign-up.
 _Avoid_: form type, template kind, output type
 
@@ -866,6 +868,21 @@ One person's answers to a `responses`-mode [[Form Template]]. Counted on the **R
 - **The Responses tab changes shape with [[Attribution]].** An anonymous form has no people to list, so it leads with the per-question tally. An attributed form leads with **who answered**, one row each, opened one at a time — two answers are a list of people, not a chart — and the tally sits a tab away.
 - **An anonymous answer's handle is positional, never chronological** ([ADR 0052](docs/adr/0052-a-secret-ballot-keeps-two-lists-that-cannot-be-joined.md)). Answers are read back in a stable shuffle keyed by the form, so "answer 6" means the same thing to two elders reading at once and says nothing about when it arrived. **No timestamp is shown against an anonymous answer at all** — not a date, not "3 days ago". An attributed answer keeps its timestamps; it already says who gave it.
 _Avoid_: submission, entry, result
+
+### Form Document
+What a `document`-mode [[Form Template]] produces: a form somebody fills in **once**, where the filled-in thing *is* the record. An Elder Interview, not a poll. Distinct from a [[Response]], which is one data point among many.
+
+**It is an [[Elder Document]] with a third `docType`** ([ADR 0055](docs/adr/0055-a-form-document-is-an-elder-document-with-a-third-doctype.md)) — not a new kind of record and not a new place. A [[Care List]] already carries its own payload instead of a body of prose, so a document holding something other than TipTap was the existing idea used a third time. It follows that the [[Document Library]] lists, files, renames, moves and deletes it with no special case, and **no Firestore rule changed**.
+
+**It keeps the form's structure rather than becoming prose.** A date question is still a date control; a multiple choice still shows **every** option with the chosen one marked, so it reads as a record of what was asked as well as what was answered; a [[Section heading]] is still a heading. Every answer stays editable — opening it a year later and changing one is ordinary. The controls are the same code the [[Form Template]]'s public fill-in page draws, written once.
+
+**It carries a copy of its template's questions, not a reference.** Editing the template afterwards never reaches into documents already made — a record has to keep the question it was actually asked, the same reasoning that **retires** a question rather than deleting it on a `responses` form. A document whose template has since been deleted still opens.
+
+⚠ **A Form Document is elder-only today**, because it lives among the [[Elder Document]]s and that collection is elder-only. Its template's [[Answering rung]] therefore governs nothing, which is why a `document` template does not have one. A non-elder Form Document is a real future ticket, not an oversight — ADR-0055 names the two routes.
+
+⚠ **On a phone you can open one but not yet make one.** The native Documents screen opens a Form Document in the shell; the new-document flow there offers only a note and a care list, because it does not read the template list. Making one is done from the Documents page on the web or in the shell.
+
+_Avoid_: form response (that is a [[Response]]), filled form, submission
 
 ### Answering rung
 Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` — reusing the [[Event visibility]] ladder rather than inventing a second one. **`public` is the only rung that needs no account**, because proving you are a member requires one; "is sign-in required" is therefore not a separate switch, it is read off the rung.

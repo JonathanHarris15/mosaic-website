@@ -205,7 +205,7 @@
             
             <div class="flex flex-col gap-sm">
                 <label class="font-label-md text-label-md text-on-surface-variant">Document Type</label>
-                <div class="grid grid-cols-2 gap-sm">
+                <div class="grid grid-cols-3 gap-sm">
                     <button @click="createDocType = 'note'"
                             :class="createDocType === 'note' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
                             class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
@@ -216,7 +216,36 @@
                             class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
                         Care List
                     </button>
+                    <button @click="createDocType = 'form'"
+                            :class="createDocType === 'form' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
+                        Form
+                    </button>
                 </div>
+            </div>
+
+            <!-- Which template to start from. Only `document`-mode ones are
+                 here: a `responses` template has a link to send and a Responses
+                 tab, and makes no documents at all. -->
+            <div x-show="createDocType === 'form'" class="flex flex-col gap-sm overflow-y-auto max-h-[50vh]">
+                <label class="font-label-md text-label-md text-on-surface-variant">Which form</label>
+
+                <template x-for="t in formTemplates" :key="t.id">
+                    <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer">
+                        <input type="radio" x-model="createTemplateId" :value="t.id" class="accent-primary" />
+                        <span class="material-symbols-outlined text-[18px] text-secondary">edit_document</span>
+                        <span class="font-body-md text-on-surface" x-text="t.title"></span>
+                    </label>
+                </template>
+
+                <!-- Says what to do about it rather than showing an empty list.
+                     Nobody guesses that the answer is on another page. -->
+                <p x-show="!formTemplates.length" class="font-body-md text-sm text-on-surface-variant">
+                    No forms are set up to be filled in as documents yet. In
+                    <a href="forms.html" class="underline">Forms &amp; Registrations</a>,
+                    make one and choose <strong>A document</strong> rather than
+                    <em>People answer it</em>.
+                </p>
             </div>
 
             <div x-show="createDocType === 'care-list'" class="flex flex-col gap-sm overflow-y-auto max-h-[60vh]">
@@ -299,7 +328,8 @@
                     Cancel
                 </button>
                 <button @click="createDocument()"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    :disabled="createDocType === 'form' && !createTemplateId"
+                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     Create
                 </button>
             </div>

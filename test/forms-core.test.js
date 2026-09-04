@@ -524,3 +524,103 @@ test('a heading is still shown to whoever is filling the form in', () => {
     });
     assert.deepEqual(FormsCore.askedQuestions(form).map(q => q.id), ['h', 'q1']);
 });
+
+// ── Form Mode (MS-382) ───────────────────────────────────────────────────────
+//
+// A template is one of two things, and it is decided when it is made.
+//
+// `responses` is what has existed until now: publish a link, many people answer,
+// each answer is a data point counted on a tab. `document` is filled in ONCE and
+// the filled-in thing is the record — an Elder Interview, not a poll.
+//
+// Most of what follows is about what a `document` template STOPS offering. A
+// control that decides nothing is worse than no control, and the Answering rung
+// is the sharpest case: a Form Document lives among the elder documents and is
+// elder-only, so a rung on the template would govern nothing at all.
+
+test('a template made before Form Mode existed is a responses form', () => {
+    // The default has to be `responses` or every template already stored
+    // silently changes meaning.
+    const form = FormsCore.buildFormTemplate({ title: 'Monday food' });
+    assert.strictEqual(form.mode, 'responses');
+});
+
+test('a mode nobody recognises falls back rather than being stored', () => {
+    const form = FormsCore.buildFormTemplate({ title: 'x', mode: 'whatever' });
+    assert.strictEqual(form.mode, 'responses');
+});
+
+test('a document template is never published and carries no link', () => {
+    // Forced in the model, not merely hidden on the page. A stored record
+    // claiming both would be believed by everything downstream.
+    const form = FormsCore.buildFormTemplate({
+        title: 'Elder Interview', mode: 'document', published: true,
+    });
+    assert.strictEqual(form.mode, 'document');
+    assert.strictEqual(form.published, false);
+});
+
+test('a document template has no answering rung to speak of', () => {
+    // It lives among the elder documents, which are elder-only, so the rung
+    // would decide nothing. Stored as null rather than as a plausible-looking
+    // value nothing honours.
+    const form = FormsCore.buildFormTemplate({ mode: 'document', rung: 'public' });
+    assert.strictEqual(form.rung, null);
+    assert.strictEqual(FormsCore.hasRung(form), false);
+
+    const poll = FormsCore.buildFormTemplate({ mode: 'responses', rung: 'member' });
+    assert.strictEqual(poll.rung, 'member');
+    assert.strictEqual(FormsCore.hasRung(poll), true);
+});
+
+test('a document template is not closeable and has no closing date', () => {
+    // Closing is what stops a link taking answers. There is no link.
+    const form = FormsCore.buildFormTemplate({
+        mode: 'document', closed: true, closingDate: '2026-12-01',
+    });
+    assert.strictEqual(form.closed, false);
+    assert.strictEqual(form.closingDate, null);
+});
+
+test('a document template gathers no Responses, so it is never a ballot', () => {
+    const form = FormsCore.buildFormTemplate({
+        mode: 'document', attribution: false, oneEach: true,
+    });
+    assert.strictEqual(FormsCore.isBallot(form), false,
+        'a secret ballot needs many answers; this is filled in once');
+});
+
+test('a responses template is unchanged in every respect', () => {
+    const form = FormsCore.buildFormTemplate({
+        title: 'Monday food', mode: 'responses', rung: 'member',
+        attribution: true, oneEach: true, published: true, closingDate: '2026-12-01',
+    });
+    assert.strictEqual(form.rung, 'member');
+    assert.strictEqual(form.published, true);
+    assert.strictEqual(form.attribution, true);
+    assert.strictEqual(form.oneEach, true);
+    assert.strictEqual(form.closingDate, '2026-12-01');
+});
+
+// ── Changing your mind, and when you may not ─────────────────────────────────
+
+test('the mode can be changed while nothing has been made from the template', () => {
+    const verdict = FormsCore.mayChangeMode({ mode: 'responses' }, { responses: 0, documents: 0 });
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('the mode cannot be changed once records exist, and it says why', () => {
+    // A template that switched would leave records nothing knows how to open.
+    const withAnswers = FormsCore.mayChangeMode({ mode: 'responses' }, { responses: 4, documents: 0 });
+    assert.strictEqual(withAnswers.ok, false);
+    assert.match(withAnswers.why, /4/, 'the refusal should name the count');
+
+    const withDocs = FormsCore.mayChangeMode({ mode: 'document' }, { responses: 0, documents: 1 });
+    assert.strictEqual(withDocs.ok, false);
+    assert.ok(withDocs.why);
+});
+
+test('being asked to change to the mode it already has is not a change', () => {
+    const verdict = FormsCore.mayChangeMode({ mode: 'document' }, { responses: 0, documents: 3 }, 'document');
+    assert.strictEqual(verdict.ok, true, 'saving a template should not be refused for not changing anything');
+});

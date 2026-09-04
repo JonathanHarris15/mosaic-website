@@ -60,6 +60,12 @@
     <script src="/vendor/firebase/firebase-auth-compat.js"></script>
     <script src="/vendor/firebase/firebase-app-check-compat.js"></script>
     <script src="/vendor/firebase/firebase-functions-compat.js"></script>
+    <!-- The question controls, shared with the Form Document editor. Mounted
+         BEFORE Alpine's deferred script runs: Alpine walks the DOM once at
+         startup and never sees markup added afterwards, so a late mount is a
+         question with no control and no error. -->
+    <script src="/form-question-markup.js"></script>
+    <script>FormQuestionMarkup.mount();</script>
     <script defer src="/vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -246,68 +252,12 @@
                                 <span class="fa-q__opt" x-show="!q.required && q.type !== 'section'">Optional</span>
                             </div>
 
-                            <input x-show="q.type === 'short_text'" type="text" class="m-input"
-                                   :placeholder="q.placeholder" x-model="answers[q.id]" />
-
-                            <textarea x-show="q.type === 'paragraph'" class="m-input" rows="3"
-                                      :placeholder="q.placeholder" x-model="answers[q.id]"></textarea>
-
-                            <div x-show="q.type === 'choice_one'" class="fa-opts">
-                                <template x-for="opt in (q.options || [])" :key="opt">
-                                    <label class="m-option" :class="answers[q.id] === opt ? 'm-option--picked' : ''">
-                                        <input type="radio" :name="q.id" :value="opt" x-model="answers[q.id]" />
-                                        <span class="m-option__mark"></span>
-                                        <span x-text="opt"></span>
-                                        <span class="m-option__said" x-show="state === 'answered' && was[q.id] === opt">Your answer</span>
-                                    </label>
-                                </template>
-                            </div>
-
-                            <div x-show="q.type === 'choice_many'" class="fa-opts">
-                                <template x-for="opt in (q.options || [])" :key="opt">
-                                    <label class="m-option" :class="(answers[q.id] || []).includes(opt) ? 'm-option--picked' : ''">
-                                        <input type="checkbox" :value="opt" x-model="answers[q.id]" />
-                                        <span class="m-option__mark fa-box"></span>
-                                        <span x-text="opt"></span>
-                                        <span class="m-option__said" x-show="state === 'answered' && (was[q.id] || []).includes(opt)">Your answer</span>
-                                    </label>
-                                </template>
-                            </div>
-
-                            <!-- A native select, unlike the builder's type picker.
-                                 There the OS popup was wrong because thirteen
-                                 grouped options opened off the top of the window;
-                                 here it is right, because a phone draws its own
-                                 wheel for this and that beats anything we would
-                                 draw for somebody answering one-handed. -->
-                            <select x-show="q.type === 'dropdown'" class="m-input" x-model="answers[q.id]">
-                                <option value="">Choose one…</option>
-                                <template x-for="opt in (q.options || [])" :key="opt">
-                                    <option :value="opt" x-text="opt"></option>
-                                </template>
-                            </select>
-
-                            <input x-show="q.type === 'number'" type="number" class="m-input" inputmode="decimal"
-                                   :placeholder="q.placeholder" x-model="answers[q.id]" />
-
-                            <div x-show="q.type === 'scale'" class="fa-scale">
-                                <span class="fa-scale__end" x-show="q.scale && q.scale.minLabel" x-text="q.scale && q.scale.minLabel"></span>
-                                <div class="fa-scale__points">
-                                    <template x-for="point in scalePoints(q)" :key="point">
-                                        <label class="fa-scale__point" :class="String(answers[q.id]) === String(point) ? 'fa-scale__point--picked' : ''">
-                                            <input type="radio" :name="q.id" :value="point" x-model="answers[q.id]" />
-                                            <span x-text="point"></span>
-                                        </label>
-                                    </template>
-                                </div>
-                                <span class="fa-scale__end" x-show="q.scale && q.scale.maxLabel" x-text="q.scale && q.scale.maxLabel"></span>
-                            </div>
-
-                            <input x-show="q.type === 'date'" type="date" class="m-input" x-model="answers[q.id]" />
-
-                            <input x-show="q.type === 'time'" type="time" class="m-input" x-model="answers[q.id]" />
-
-                            <span class="m-input-hint" x-show="q.hint" x-text="q.hint"></span>
+                            <!-- The controls themselves come from
+                                 form-question-markup.js, injected here before
+                                 Alpine boots. A Form Document draws the same
+                                 ones (MS-383), so a date question looks the
+                                 same whoever is filling it in and wherever. -->
+                            <div data-form-question></div>
                         </div>
                     </div>
                 </template>

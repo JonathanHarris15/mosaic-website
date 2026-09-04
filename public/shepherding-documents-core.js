@@ -168,12 +168,15 @@
     // without Firebase.
     //
     //   title          what the document is called
-    //   docType        'note' (blank Word-style document) or 'care-list'
+    //   docType        'note' (blank Word-style document), 'care-list', or
+    //                  'form' (a Form Document, MS-384)
     //   author         { uid, name } of the Elder writing it — both required
     //   timestamp      the value to stamp created/updated with
     //   ownerPersonId  the Person this belongs to, in profile scope; null in the Library
     //   filterId       care-list only: the preset Shepherding View it reads
     //   filterConfig   care-list only: a bespoke filter, used when there is no preset
+    //   templateId     form only: which Form Template it was started from
+    //   questions      form only: a COPY of that template's questions
     //
     // Refuses an unauthored document rather than emitting one. An Elder Document
     // with a missing author is worse than a create that failed: the record exists,
@@ -181,6 +184,7 @@
     function buildElderDocument({
         title, docType, author, timestamp,
         ownerPersonId = null, filterId = null, filterConfig = null,
+        templateId = null, questions = null,
     } = {}) {
         const authorUid = requiredText(author && author.uid, 'author id');
         const authorName = requiredText(author && author.name, 'author name');
@@ -206,6 +210,25 @@
             if (filterConfig) record.filterConfig = { ...filterConfig };
             else record.filterId = filterId;
             record.careListData = {}; // Person id -> TipTap JSON
+        } else if (docType === 'form') {
+            // A Form Document (MS-384). It holds its questions and answers
+            // where a note holds prose — the same move `care-list` above
+            // already makes, so this is a third docType rather than a new
+            // shape of record.
+            //
+            // ⚠ THE QUESTIONS ARE COPIED, NOT REFERENCED, AND THAT IS THE
+            // WHOLE POINT. A record has to keep the question it was actually
+            // asked, so editing the template afterwards must never reach back
+            // into interviews already filled in. Deep-copied because a
+            // question carries its own options and scale, and a shallow copy
+            // would leave those shared with the template.
+            record.templateId = templateId || null;
+            record.questions = JSON.parse(JSON.stringify(
+                Array.isArray(questions) ? questions : [],
+            ));
+            // Empty rather than absent: an answers field that might not be
+            // there is one every reader has to guard against.
+            record.answers = {};
         } else {
             record.contentJson = null;
         }

@@ -41,6 +41,11 @@ function formsPage() {
         currentPermissionLevel: 'viewer',
         creating: false,
         newTitle: '',
+        // Which kind of form is being made. Asked at creation because it is
+        // near-unchangeable afterwards — once answers or documents exist the
+        // model refuses to switch, since a template that changed kind would
+        // leave records nothing knows how to open.
+        newMode: 'responses',
         problem: '',
 
         get inShell() {
@@ -61,11 +66,22 @@ function formsPage() {
 
         // What a row says under the name. Deliberately not a date: the useful
         // thing at a glance is what state it is in and how much came back.
+        isDocument(form) { return FormsCore.isDocumentMode(form); },
+
         subFor(form) {
             const bits = [];
-            bits.push(form.rung === 'public' ? 'Anyone with the link' : 'Members and above');
-            if (form.attribution === false) bits.push('Anonymous');
-            if (form.oneEach) bits.push('One each');
+            // A document template has no rung and no anonymity to describe —
+            // every one of those words is about answering a link it does not
+            // have. It says what it is instead.
+            if (this.isDocument(form)) {
+                bits.push('Filled in as a document');
+            } else {
+                bits.push(form.rung === 'public'
+                    ? 'Anyone with the link'
+                    : FormsCore.rungLabel(form.rung) + ' and above');
+                if (form.attribution === false) bits.push('Anonymous');
+                if (form.oneEach) bits.push('One each');
+            }
             const n = (form.questions || []).length;
             bits.push(n === 1 ? '1 question' : n + ' questions');
             return bits.join(' · ');
@@ -83,6 +99,10 @@ function formsPage() {
         },
 
         stateFor(form) {
+            // Draft / Open / Closed are all about a link. A document template
+            // is usable the moment it has questions, so it says the one thing
+            // that is true of it.
+            if (this.isDocument(form)) return { text: 'Document', tone: 'm-badge--tertiary' };
             if (this.isClosed(form)) return { text: 'Closed', tone: 'm-badge--neutral' };
             if (!form.published) return { text: 'Draft', tone: 'm-badge--warning' };
             return { text: 'Open', tone: 'm-badge--success' };
@@ -144,6 +164,13 @@ function formsPage() {
 
         get closedCount() {
             return this.forms.filter(f => this.isClosed(f)).length;
+        },
+
+        // Which document-mode templates exist, for the documents page's
+        // new-document menu. Here rather than on that page because "which
+        // templates make documents" is a question about forms.
+        get documentTemplates() {
+            return this.forms.filter(f => this.isDocument(f));
         },
 
         get closedHidden() {
@@ -211,6 +238,7 @@ function formsPage() {
         startCreate() {
             this.creating = true;
             this.newTitle = '';
+            this.newMode = 'responses';
             this.$nextTick(() => {
                 const el = document.getElementById('new-form-title');
                 if (el) el.focus();
@@ -231,6 +259,7 @@ function formsPage() {
             try {
                 const id = await FormsStore.createForm(db, firebase, this.currentUser, {
                     title: title,
+                    mode: this.newMode,
                     rung: 'member',
                     attribution: true,
                     // Made where you are standing, which is what filing means.
