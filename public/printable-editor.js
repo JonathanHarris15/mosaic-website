@@ -545,10 +545,40 @@ function printableEditor() {
             if (node.tag === 'img') { patch.attrs.src = this.props.src; patch.attrs.alt = this.props.alt; }
             const next = PrintableCore.updateNode(page, node.id, patch);
             this.replacePage(next);
-            this.renderPage(next.id);
-            if (commit) this.commit(); else this.touch();
+            if (commit) {
+                this.renderPage(next.id);
+                this.commit();
+            } else {
+                // Live, while typing: restyle the drawn element (and every
+                // copy a list drew of it) in place. A full redraw re-measures
+                // every generated page, which is too much per keystroke.
+                this.patchDrawn(PrintableCore.findNode(next, node.id));
+                this.touch();
+            }
             this.refreshOverlays();
             this.renderTree();
+        },
+
+        // The drawn element, plus its copies, brought up to date without a
+        // redraw. Structure is not touched here — that waits for the commit.
+        patchDrawn(node) {
+            if (!ui.world || !node) return;
+            const els = ui.world.querySelectorAll('[data-pid="' + node.id + '"], [data-pid^="' + node.id + '~"]');
+            els.forEach(el => {
+                Array.from(el.style).slice().forEach(k => el.style.removeProperty(k));
+                PrintableDom.applyStyle(el, node.style);
+                if (node.tag === 'img') {
+                    if (!node.bind || !node.bind.src) {
+                        const src = (node.attrs && node.attrs.src) || '';
+                        if (src) { el.src = src; el.classList.remove('pe-img-empty'); }
+                        else { el.removeAttribute('src'); el.classList.add('pe-img-empty'); }
+                    }
+                    el.setAttribute('alt', (node.attrs && node.attrs.alt) || '');
+                } else if (PrintableCore.kindOf(node) === 'text' && !(node.bind && node.bind.text) && el.getAttribute('data-pid') === node.id) {
+                    el.textContent = node.text || '';
+                    el.classList.toggle('pe-text-empty', !node.text);
+                }
+            });
         },
 
         setProp(key, value, commit) {
@@ -571,8 +601,21 @@ function printableEditor() {
                 style: Object.assign({}, page.style, { 'background-color': pp.bg || '#ffffff' }),
             });
             this.replacePage(next);
-            this.renderPage(next.id);
-            if (commit) this.commit(); else this.touch();
+            if (commit) {
+                this.renderPage(next.id);
+                this.commit();
+            } else {
+                // Live: move the margins and the guide on the drawn page;
+                // the lists re-flow to them on commit.
+                const holder = ui.pageEls[next.id];
+                if (holder) {
+                    const el = holder.querySelector('.pr-page');
+                    if (el) PrintableDom.applyStyle(el, PrintableCore.pageContainerStyle(this.template, next));
+                    const guide = holder.querySelector('.pe-margin-guide');
+                    if (guide) { guide.style.top = margins.top + 'px'; guide.style.right = margins.right + 'px'; guide.style.bottom = margins.bottom + 'px'; guide.style.left = margins.left + 'px'; }
+                }
+                this.touch();
+            }
             this.refreshOverlays();
             this.renderTree();
         },
