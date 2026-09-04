@@ -29,6 +29,7 @@ const code = block => block
 
 const printablesBlock = () => blockFor(/match \/printables\/\{printableId\}\s*\{([\s\S]*?)\n    \}/);
 const foldersBlock = () => blockFor(/match \/printable_folders\/\{folderId\}\s*\{([\s\S]*?)\n    \}/);
+const templatesBlock = () => blockFor(/match \/printable_templates\/\{templateId\}\s*\{([\s\S]*?)\n    \}/);
 
 test('a Printable is written by editors and above, and nobody below', () => {
     const block = code(printablesBlock());
@@ -40,6 +41,12 @@ test('a Printable is written by editors and above, and nobody below', () => {
 
 test('a Printable folder is editor-and-above, the same ladder as the Forms library', () => {
     const block = code(foldersBlock());
+    assert.match(block, /allow read, write: if isEditor\(\);/);
+    assert.doesNotMatch(block, /if true/);
+});
+
+test('a custom page template is editor-and-above, like the projects it seeds', () => {
+    const block = code(templatesBlock());
     assert.match(block, /allow read, write: if isEditor\(\);/);
     assert.doesNotMatch(block, /if true/);
 });

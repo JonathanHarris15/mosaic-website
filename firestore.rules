@@ -868,6 +868,12 @@ service cloud.firestore {
       allow read, write: if isEditor();
     }
 
+    // A custom page template (MS-393): a page somebody built, kept to start
+    // the next project from. Editor and above, like the projects it seeds.
+    match /printable_templates/{templateId} {
+      allow read, write: if isEditor();
+    }
+
     // One person's answers. Editors read them on the Responses tab; the
     // function writes them. No client writes — validation (required questions,
     // the rung, whether the form is closed) happens on the server, because a

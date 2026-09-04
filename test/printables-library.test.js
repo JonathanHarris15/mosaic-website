@@ -172,12 +172,11 @@ test('a copy is named beside the original and never collides with an earlier cop
 
 test('a duplicate keeps the paper, the pages and where it was filed, and nothing about who made it', () => {
     const Core = require('../public/printable-core.js');
-    const original = {
+    const original = Object.assign(Core.buildPrintable({
         name: 'Directory', folderId: 'y2026',
         template: { paper: 'letter', orientation: 'landscape', dpi: 150 },
-        pages: [{ id: 'pg1', nodes: [{ id: 'n1', bind: { text: { field: 'name' } } }] }],
-        createdByName: 'Somebody', updatedAt: 'yesterday',
-    };
+        pages: [{ id: 'pg1', nodes: [{ id: 'n1', tag: 'p', text: 'Jane', bind: { text: { field: 'name' } } }] }],
+    }), { createdByName: 'Somebody', updatedAt: 'yesterday' });
     const copy = Core.duplicatePrintable(original, ['Directory']);
     assert.equal(copy.name, 'Directory copy');
     assert.equal(copy.folderId, 'y2026');

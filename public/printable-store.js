@@ -20,6 +20,7 @@
 
     const PRINTABLES = 'printables';
     const FOLDERS = 'printable_folders';
+    const TEMPLATES = 'printable_templates';
 
     function who(user) {
         return (user && user.displayName) || (user && user.email) || 'Somebody';
@@ -140,9 +141,36 @@
         return doomed.length;
     }
 
+    // ── Custom page templates (MS-393) ───────────────────────────────────────
+    //
+    // A page somebody built, kept to start the next project from. Offered in
+    // the picker beside the papers, for every editor.
+
+    async function listTemplates(db) {
+        const snap = await db.collection(TEMPLATES).orderBy('name').get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function saveTemplate(db, fb, user, spec) {
+        const record = Core.buildCustomTemplate(spec || {});
+        const ref = await db.collection(TEMPLATES).add(Object.assign(record, {
+            createdAt: fb.firestore.FieldValue.serverTimestamp(),
+            createdByName: who(user),
+        }));
+        return ref.id;
+    }
+
+    async function deleteTemplate(db, id) {
+        await db.collection(TEMPLATES).doc(id).delete();
+    }
+
     const PrintableStore = {
         PRINTABLES,
         FOLDERS,
+        TEMPLATES,
+        listTemplates,
+        saveTemplate,
+        deleteTemplate,
         listPrintables,
         loadPrintable,
         createPrintable,
