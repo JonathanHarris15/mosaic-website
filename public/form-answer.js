@@ -144,6 +144,54 @@
         return new URLSearchParams(location.search).get('f') || '';
     }
 
+    // Redraw a photo small enough to go through the form (MS-391).
+    //
+    // ⚠ WHITE UNDERNEATH BEFORE ANYTHING IS DRAWN. A PNG with see-through
+    // parts painted onto a fresh canvas and saved as JPEG comes out with BLACK
+    // wherever it was clear — a signature on a transparent background becomes
+    // a black box. White is what the same picture would look like printed.
+    //
+    // The canvas work lives on this page rather than in forms-core.js because
+    // it needs a browser; every judgment it makes — what to redraw, how big,
+    // whether the result was worth keeping — is in the model and tested there.
+    // The Form Document page cannot upload at all yet; when it can, this lifts
+    // out into a module the two of them share.
+    function shrinkImage(file, plan) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const fit = window.FormsCore.fittedSize(
+                        img.naturalWidth, img.naturalHeight, plan.maxEdge);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = fit.width;
+                    canvas.height = fit.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, fit.width, fit.height);
+                    ctx.drawImage(img, 0, 0, fit.width, fit.height);
+                    canvas.toBlob(blob => {
+                        URL.revokeObjectURL(url);
+                        if (!blob) { reject(new Error('the photo could not be redrawn')); return; }
+                        resolve(new File(
+                            [blob],
+                            window.FormsCore.renamedFor(file.name, plan.type),
+                            { type: plan.type }));
+                    }, plan.type, plan.quality);
+                } catch (e) {
+                    URL.revokeObjectURL(url);
+                    reject(e);
+                }
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('the photo could not be opened'));
+            };
+            img.src = url;
+        });
+    }
+
     window.answerPage = function answerPage() {
         return {
             state: 'loading',
@@ -170,6 +218,7 @@
             // belongs to are accepted or refused together.
             files: {},
             fileFaults: {},
+            shrinking: {},
             missing: [],
             problem: '',
             afterword: '',
@@ -229,11 +278,37 @@
             // checks it again, because on a public form this page is one we do
             // not control. What this buys is that nobody waits through an
             // upload to be told no.
+            //
+            // A photo off a phone arrives at 8 or 12MB and the cap is 5, so a
+            // straight check would refuse most of them — and the person holding
+            // the phone has no way to make it smaller. So a big photo is
+            // redrawn first (MS-391) and only what redrawing cannot save is
+            // refused.
             onFileChosen(q, ev) {
                 const file = ev && ev.target && ev.target.files && ev.target.files[0];
                 this.fileFaults[q.id] = '';
                 if (!file) return;
 
+                const plan = window.FormsCore.shrinkPlan(file);
+                if (!plan.shrink) { this.takeFile(q, file); return; }
+
+                this.shrinking[q.id] = true;
+                shrinkImage(file, plan).then(smaller => {
+                    this.shrinking[q.id] = false;
+                    this.takeFile(q,
+                        window.FormsCore.worthKeeping(file.size, smaller.size) ? smaller : file);
+                }).catch(() => {
+                    // ⚠ A photo we could not redraw is still a photo they
+                    // chose. Fall back to the original and let the size check
+                    // decide — a browser that cannot do canvas work must not
+                    // become a form nobody can answer.
+                    this.shrinking[q.id] = false;
+                    this.takeFile(q, file);
+                });
+            },
+
+            // The file that is actually going, whether or not it was redrawn.
+            takeFile(q, file) {
                 const fault = window.FormsCore.uploadFault(file);
                 if (fault) { this.fileFaults[q.id] = fault; return; }
 
@@ -259,6 +334,12 @@
             },
 
             uploadFault(q) { return this.fileFaults[q.id] || ''; },
+
+            // Redrawing a big photo takes a second or two on an old phone, and
+            // a control that sat there saying nothing would look broken.
+            busyWith(q) {
+                return this.shrinking[q.id] ? 'Making that photo smaller…' : '';
+            },
 
             // Forget a chosen file. Both the bytes waiting to go and what the
             // control shows, or the page would say a file is attached when

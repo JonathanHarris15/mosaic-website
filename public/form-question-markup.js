@@ -43,6 +43,10 @@
 //                      uploading and puts any complaint where uploadFault(q)
 //                      can find it — nobody should wait for a failure.
 //   uploadFault(q)     that complaint, or '' when there is none
+//   busyWith(q)        what the page is doing to the chosen file right
+//                      now, or '' when it is doing nothing. Shrinking a
+//                      photo takes a second or two on an old phone, and
+//                      a control that said nothing would look broken.
 //   clearUpload(q)     forget the file chosen for `q`
 //
 // The chrome AROUND a question — its number, its "Needed" chip, whether it is
@@ -161,6 +165,7 @@
                 <span x-text="answers[q.id] && answers[q.id].name"></span>
                 <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="clearUpload(q)">Remove</button>
             </div>
+            <span class="m-input-hint" x-show="busyWith(q)" x-text="busyWith(q)"></span>
             <span class="m-input-hint fa-file__fault" x-show="uploadFault(q)" x-text="uploadFault(q)"></span>
         </div>
 

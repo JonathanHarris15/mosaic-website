@@ -923,6 +923,8 @@ A file or an image somebody sends with a form answer.
 
 **5MB per file**, which is smaller than an [[Event Attachment]]'s 25MB and is a consequence rather than a preference: a callable request is capped near 10MB and base64 inflates by a third. Raising it means minting a signed upload URL in the function — a different design with its own leak surface.
 
+⚠ **A big photo is redrawn smaller rather than refused.** A phone camera makes 8 to 12MB pictures and the person holding the phone has no way to shrink one, so refusing would end the form there. A photo over 1.5MB is redrawn to 2000 pixels on its longest edge and saved as JPEG before it is sent — kept only if the result is actually smaller, and the original goes as it was if the browser cannot redraw it. **A GIF or an SVG is never touched**: a canvas keeps one frame of an animation and silently drops the rest, and it turns a vector into pixels at one size. What still meets the cap is a big *file* — a video, a long scan — and that is what the signed-URL ticket is for.
+
 The stored path is built from the **question's** id, never the name the file arrived with: a path built from something a stranger chose is a path a stranger can aim. The original name is kept in the record, where it is data rather than an address. Deleting a [[Response]] deletes its uploads, server-side.
 
 _Avoid_: attachment (that is an [[Event Attachment]], stored and ruled differently), download link

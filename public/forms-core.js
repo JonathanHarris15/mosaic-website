@@ -251,6 +251,11 @@
     // uploaded straight to Storage by a signed-in editor. Raising it means
     // minting a signed upload URL in the function — a different design with its
     // own leak surface, and a real ticket rather than a constant to edit.
+    //
+    // A PHOTO RARELY MEETS THIS CAP, because a big one is redrawn smaller
+    // before it is sent — see shrinkPlan below. What still meets it is a big
+    // FILE: a video, a long scanned PDF, an animation. Those are the ones the
+    // signed-URL ticket is really for.
     const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
     const MAX_UPLOAD_LABEL = '5MB';
 
@@ -285,6 +290,91 @@
 
     function isUploadType(id) {
         return id === 'image' || id === 'file';
+    }
+
+    // ── Making a photo small enough to send ──────────────────────────────────
+    //
+    // A phone camera makes a 4000-pixel photo weighing 8MB, and the cap above
+    // is 5MB. Refusing it is the wrong answer twice over: the person holding
+    // the phone has no way to resize it, and what a form needs from a waiver
+    // photo is that it can be READ, not that it is enormous. So the page
+    // redraws it smaller first, and only refuses what redrawing cannot save.
+    //
+    // The threshold is well under the cap on purpose. A 3MB photo would fit,
+    // but as base64 up a phone's uplink it is a long silent wait for a picture
+    // nobody will ever look at above 2000 pixels.
+    const SHRINK_OVER_BYTES = 1.5 * 1024 * 1024;
+    const SHRINK_MAX_EDGE = 2000;
+    const SHRINK_QUALITY = 0.82;
+
+    // ⚠ GIF AND SVG ARE ABSENT DELIBERATELY. Drawing an animation onto a
+    // canvas keeps the first frame and silently throws the rest away, and a
+    // vector redrawn at one size stops being a vector. Both are losses nobody
+    // asked for, so neither is touched — an over-sized one is refused instead,
+    // which at least says so.
+    const SHRINKABLE = {
+        'image/jpeg': 'image/jpeg',
+        'image/png': 'image/jpeg',
+        'image/webp': 'image/jpeg',
+    };
+
+    // What, if anything, to do with a chosen file before it is sent.
+    function shrinkPlan(file) {
+        const f = file || {};
+        const type = String(f.type || '').toLowerCase();
+        const size = Number(f.size);
+        if (!SHRINKABLE[type]) {
+            return { shrink: false, reason: 'not a photo that can be safely redrawn' };
+        }
+        if (!Number.isFinite(size) || size <= SHRINK_OVER_BYTES) {
+            return { shrink: false, reason: 'small enough to send as it is' };
+        }
+        return {
+            shrink: true,
+            type: SHRINKABLE[type],
+            maxEdge: SHRINK_MAX_EDGE,
+            quality: SHRINK_QUALITY,
+            reason: 'a photo bigger than a form should push through',
+        };
+    }
+
+    // The size to redraw at: the longest edge comes down to `maxEdge` and the
+    // shape is kept. A photo already smaller than that is left alone, because
+    // scaling a small picture UP would cost bytes and add nothing.
+    function fittedSize(width, height, maxEdge) {
+        const w = Math.max(1, Math.round(Number(width) || 0));
+        const h = Math.max(1, Math.round(Number(height) || 0));
+        const edge = Math.max(1, Math.round(Number(maxEdge) || SHRINK_MAX_EDGE));
+        const longest = Math.max(w, h);
+        if (longest <= edge) return { width: w, height: h };
+        const scale = edge / longest;
+        return {
+            width: Math.max(1, Math.round(w * scale)),
+            height: Math.max(1, Math.round(h * scale)),
+        };
+    }
+
+    // ⚠ SMALLER, OR IT DOES NOT COUNT. Re-encoding can come back BIGGER — a
+    // flat graphic pushed through JPEG is the usual way — and sending a worse
+    // AND heavier copy of what somebody chose is the wrong result in both
+    // directions at once. When this is false the original goes as it is, and
+    // the size check decides its fate.
+    function worthKeeping(originalSize, shrunkSize) {
+        const before = Number(originalSize);
+        const after = Number(shrunkSize);
+        if (!Number.isFinite(before) || before <= 0) return false;
+        if (!Number.isFinite(after) || after <= 0) return false;
+        return after < before;
+    }
+
+    // A redrawn PNG is a JPEG, and a file called `signature.png` that is
+    // actually a JPEG confuses whoever opens it later. The name follows the
+    // bytes.
+    function renamedFor(name, type) {
+        const original = String(name == null ? '' : name).trim() || 'photo';
+        if (type !== 'image/jpeg') return original;
+        if (/\.jpe?g$/i.test(original)) return original;
+        return original.replace(/\.[^.\\/]*$/, '') + '.jpg';
     }
 
     // ── What a template is FOR ───────────────────────────────────────────────
@@ -941,6 +1031,13 @@
         uploadFault,
         buildUploadAnswer,
         isUploadType,
+        SHRINK_OVER_BYTES,
+        SHRINK_MAX_EDGE,
+        SHRINK_QUALITY,
+        shrinkPlan,
+        fittedSize,
+        worthKeeping,
+        renamedFor,
         MODES,
         DEFAULT_MODE,
         isMode,
