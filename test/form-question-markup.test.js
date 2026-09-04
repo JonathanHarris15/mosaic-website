@@ -205,7 +205,7 @@ test('both pages provide everything the shared markup binds to', () => {
     // MS-388 added three types that need four more functions, so this checks
     // the whole contract rather than the part that existed first.
     const OWED = ['saidBefore', 'scalePoints', 'personChoices', 'pickPerson',
-        'onFileChosen', 'uploadFault', 'clearUpload'];
+        'onFileChosen', 'uploadFault', 'busyWith', 'clearUpload'];
 
     [['form-answer.js', 'the public fill-in page'],
         ['shepherding-form-document.js', 'the Form Document editor']].forEach(([file, what]) => {

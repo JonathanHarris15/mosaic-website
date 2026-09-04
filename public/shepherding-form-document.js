@@ -113,6 +113,9 @@ function formDocumentPage() {
 
         uploadFault(q) { return this.fileFaults[q.id] || ''; },
 
+        // Nothing to be busy with: this page never takes a file at all.
+        busyWith() { return ''; },
+
         clearUpload(q) {
             this.answers[q.id] = null;
             this.fileFaults[q.id] = '';

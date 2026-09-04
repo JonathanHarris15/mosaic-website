@@ -141,10 +141,20 @@ test('a file too big is refused before the upload starts', () => {
     // Checked on the page as a courtesy so nobody waits through an upload to be
     // told no. The function checks it again, because on a public form this page
     // is one we do not control.
+    //
+    // ⚠ THE CHECK SITS IN takeFile, NOT IN onFileChosen, and that is the point:
+    // a big photo is redrawn smaller first (MS-391), so the size that decides is
+    // the one going OUT, not the one chosen. Every path — redrawn, not worth
+    // redrawing, redraw failed — ends at takeFile, so none of them skips it.
+    const take = ANSWER_JS.match(/takeFile\(q, file\) \{[\s\S]*?\n            \},/);
+    assert.ok(take, 'takeFile has gone missing');
+    assert.match(take[0], /FormsCore\.uploadFault\(file\)/);
+    assert.match(take[0], /this\.fileFaults\[q\.id\] = fault/);
+
     const fn = ANSWER_JS.match(/onFileChosen\(q, ev\) \{[\s\S]*?\n            \},/);
     assert.ok(fn, 'onFileChosen has gone missing');
-    assert.match(fn[0], /FormsCore\.uploadFault\(file\)/);
-    assert.match(fn[0], /this\.fileFaults\[q\.id\] = fault/);
+    assert.ok(!/FileReader/.test(fn[0]),
+        'onFileChosen reads a file itself, which is a way round the size check');
 });
 
 test('the bytes ride with the submission rather than going up on their own', () => {
