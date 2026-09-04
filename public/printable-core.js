@@ -660,6 +660,173 @@
         return { ok: true, problems: [], nodes: parsed.children.map(toNode) };
     }
 
+    // ── How an element takes its size (MS-402) ───────────────────────────────
+    //
+    // Three ways an element can be sized on each axis, the way every layout
+    // tool says it:
+    //
+    //   Hug    as big as what is inside it
+    //   Fixed  the number you typed
+    //   Fill   as big as the space its parent gives it
+    //
+    // Which CSS says that depends on the parent, so these functions are handed
+    // `where` — what the parent does with its children — from `layoutOf`. The
+    // mode is never stored: it is read back off the element's own style, so a
+    // page written by hand in the code view reads the same as one clicked
+    // together in the panel.
+
+    // Sizes that mean "work it out", not a measurement.
+    const AUTO_SIZES = ['', 'auto', 'fit-content', 'min-content', 'max-content'];
+
+    // What a parent's style does to the children inside it.
+    function layoutOf(parentStyle) {
+        const s = parentStyle || {};
+        const display = String(s.display || '').trim();
+        const align = String(s['align-items'] || '').trim();
+        if (display === 'flex') {
+            const down = String(s['flex-direction'] || '').indexOf('column') === 0;
+            return { layout: down ? 'column' : 'row', align: align };
+        }
+        if (display === 'grid') return { layout: 'grid', align: align };
+        return { layout: 'block', align: align };
+    }
+
+    // The axis the parent lays its children out along, if it has one.
+    function mainAxis(where) {
+        const l = (where && where.layout) || 'block';
+        if (l === 'row') return 'width';
+        if (l === 'column') return 'height';
+        return '';
+    }
+
+    // Where "fill" has no spelling of its own and has to be said as 100%:
+    // an element taken out of the flow, and the height of a block child,
+    // neither of which grows to its parent on its own.
+    function fillsWithPercent(where, axis) {
+        const l = (where && where.layout) || 'block';
+        if (l === 'absolute') return true;
+        return l === 'block' && axis === 'height';
+    }
+
+    // Does `flex` make this element grow along its parent's axis?
+    function grows(style, where, axis) {
+        if (mainAxis(where) !== axis) return false;
+        const f = String((style || {}).flex || '').trim();
+        if (!f) return false;
+        if (f === 'auto') return true;
+        if (f === 'none' || f === 'initial') return false;
+        return (parseFloat(f) || 0) > 0;
+    }
+
+    // Reading the mode back off an element's style.
+    function sizeMode(style, where, axis) {
+        const s = style || {};
+        const value = String(s[axis] == null ? '' : s[axis]).trim();
+        if (AUTO_SIZES.indexOf(value) < 0) {
+            return value === '100%' && fillsWithPercent(where, axis) ? 'fill' : 'fixed';
+        }
+        if (value && value !== 'auto') return 'hug';           // fit-content and its kin
+        if (mainAxis(where) === axis) return grows(s, where, axis) ? 'fill' : 'hug';
+        const l = (where && where.layout) || 'block';
+        if (l === 'row' || l === 'column') {
+            // The cross axis: a flex child is stretched unless it is told to
+            // sit at one end, and then it is only as big as its contents.
+            const self = String(s['align-self'] || '').trim();
+            if (self && self !== 'stretch' && self !== 'auto') return 'hug';
+            return 'fill';
+        }
+        if (l === 'grid') return 'fill';
+        if (l === 'absolute') return 'hug';
+        return axis === 'width' ? 'fill' : 'hug';              // a block child
+    }
+
+    // The style to write for a mode. Returns only the properties that change;
+    // `px` is the measurement Fixed should start from.
+    function setSizeMode(style, where, axis, mode, px) {
+        const s = style || {};
+        const patch = {};
+        const main = mainAxis(where) === axis;
+        const cross = !main && (where.layout === 'row' || where.layout === 'column');
+        if (main && grows(s, where, axis) && mode !== 'fill') patch.flex = '';
+        if (mode === 'fixed') {
+            const n = String(px == null ? '' : px).trim();
+            patch[axis] = /^-?[\d.]+$/.test(n) ? Math.round(Number(n)) + 'px' : n;
+            return patch;
+        }
+        if (mode === 'hug') {
+            // Nothing said is already "as big as the contents" everywhere the
+            // parent is not stretching this axis; where it is, say fit-content.
+            patch[axis] = (cross || where.layout === 'grid' || (where.layout === 'block' && axis === 'width')) ? 'fit-content' : '';
+            return patch;
+        }
+        patch[axis] = fillsWithPercent(where, axis) ? '100%' : '';
+        if (main) patch.flex = '1 1 0';
+        if (cross) {
+            // Only pin align-self when the parent is not already stretching.
+            const parentStretches = !where.align || where.align === 'stretch';
+            const self = String(s['align-self'] || '').trim();
+            if (!parentStretches) patch['align-self'] = 'stretch';
+            else if (self && self !== 'stretch' && self !== 'auto') patch['align-self'] = '';
+        }
+        return patch;
+    }
+
+    // ── The four sides of an element (MS-402) ────────────────────────────────
+    //
+    // Padding, margin and a border's width are each one CSS value standing for
+    // four sides, written short when the sides agree — `12px`, `12px 20px`, or
+    // all four in the order top, right, bottom, left. The panel offers the same
+    // three fidelities the page's margins do, and these two functions are the
+    // whole of it: read a value into four numbers, write four numbers back as
+    // short as they will go.
+    //
+    // Only plain pixels are understood. Anything else — `1rem`, `5%`, a calc —
+    // is handed back as `ok: false` so the panel can leave it alone and show
+    // the value as typed rather than rounding somebody's stylesheet off.
+
+    function sidePx(token) {
+        const t = String(token == null ? '' : token).trim();
+        if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+        if (/^-?\d+(\.\d+)?px$/i.test(t)) return parseFloat(t);
+        return null;
+    }
+
+    function readSides(value) {
+        const raw = String(value == null ? '' : value).trim();
+        if (!raw) return { ok: true, top: 0, right: 0, bottom: 0, left: 0 };
+        if (raw.indexOf('(') >= 0) return { ok: false, raw: raw };
+        const parts = raw.split(/\s+/);
+        if (parts.length > 4) return { ok: false, raw: raw };
+        const n = parts.map(sidePx);
+        if (n.some(v => v === null)) return { ok: false, raw: raw };
+        const across = n.length > 1 ? n[1] : n[0];
+        return {
+            ok: true,
+            top: n[0],
+            right: across,
+            bottom: n.length > 2 ? n[2] : n[0],
+            left: n.length > 3 ? n[3] : across,
+        };
+    }
+
+    // Which of the three the sides are asking to be shown as.
+    function sidesMode(sides) {
+        const s = sides || {};
+        if (s.top === s.right && s.top === s.bottom && s.top === s.left) return 'all';
+        if (s.top === s.bottom && s.left === s.right) return 'pairs';
+        return 'four';
+    }
+
+    function writeSides(sides) {
+        const s = sides || {};
+        const n = k => Math.round(Number(s[k]) || 0);
+        const top = n('top'), right = n('right'), bottom = n('bottom'), left = n('left');
+        const mode = sidesMode({ top, right, bottom, left });
+        if (mode === 'all') return top + 'px';
+        if (mode === 'pairs') return top + 'px ' + right + 'px';
+        return [top, right, bottom, left].map(v => v + 'px').join(' ');
+    }
+
     // ── The page as a CSS rule for print and screen ──────────────────────────
 
     function pageContainerStyle(template, page) {
@@ -740,6 +907,12 @@
         parseHtml,
         htmlToNodes,
         pageContainerStyle,
+        layoutOf,
+        readSides,
+        sidesMode,
+        writeSides,
+        sizeMode,
+        setSizeMode,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

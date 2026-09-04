@@ -83,6 +83,122 @@ function directoryPage() {
     return { template: t, page: Core.buildPage(t, { id: 'pg1', nodes: [header, card], css: '.card { color: red; }' }) };
 }
 
+// ── Hug, Fixed, Fill (MS-402) ────────────────────────────────────────────────
+//
+// The panel shows one of three words per axis and never stores it — it reads
+// the element's own style back. So every test here goes both ways: what a mode
+// writes, and what that writing reads as.
+
+const PAGE = Core.layoutOf({});                                     // a page, or any plain box
+const ROW = Core.layoutOf({ display: 'flex' });
+const COLUMN = Core.layoutOf({ display: 'flex', 'flex-direction': 'column' });
+const ABSOLUTE = { layout: 'absolute', align: '' };
+
+test('a box straight on the page is already filling the width and hugging the height', () => {
+    const style = Core.newBox(150).style;
+    assert.equal(Core.sizeMode(style, PAGE, 'width'), 'fill');
+    assert.equal(Core.sizeMode(style, PAGE, 'height'), 'hug');
+});
+
+test('dragging a box to a size makes it fixed, and Fill hands the width back to the margins', () => {
+    const dragged = { width: '795px', height: '94px' };
+    assert.equal(Core.sizeMode(dragged, PAGE, 'width'), 'fixed');
+    const patch = Core.setSizeMode(dragged, PAGE, 'width', 'fill');
+    assert.equal(patch.width, '');
+    assert.equal(Core.sizeMode(Object.assign({}, dragged, patch), PAGE, 'width'), 'fill');
+});
+
+test('Fixed rounds the measurement it is given into pixels', () => {
+    assert.equal(Core.setSizeMode({}, PAGE, 'width', 'fixed', 240.6).width, '241px');
+    assert.equal(Core.setSizeMode({}, PAGE, 'width', 'fixed', '50%').width, '50%');
+});
+
+test('across a row, filling the width is a share of the row and hugging gives it back', () => {
+    const fill = Core.setSizeMode({}, ROW, 'width', 'fill');
+    assert.equal(fill.flex, '1 1 0');
+    assert.equal(fill.width, '');
+    assert.equal(Core.sizeMode(fill, ROW, 'width'), 'fill');
+
+    const hug = Core.setSizeMode(fill, ROW, 'width', 'hug');
+    assert.equal(hug.flex, '');
+    assert.equal(Core.sizeMode(Object.assign({}, fill, hug), ROW, 'width'), 'hug');
+});
+
+test('down a column the width is the other axis, so filling it is stretch and not a share', () => {
+    const fill = Core.setSizeMode({}, COLUMN, 'width', 'fill');
+    assert.equal(fill.flex, undefined);
+    assert.equal(fill.width, '');
+    assert.equal(Core.sizeMode(fill, COLUMN, 'width'), 'fill');
+    assert.equal(Core.sizeMode(Core.setSizeMode({}, COLUMN, 'width', 'hug'), COLUMN, 'width'), 'hug');
+});
+
+test('a child told to sit at one end of a column is hugging, whatever the panel last wrote', () => {
+    const style = { 'align-self': 'flex-start' };
+    assert.equal(Core.sizeMode(style, COLUMN, 'width'), 'hug');
+    const patch = Core.setSizeMode(style, COLUMN, 'width', 'fill');
+    assert.equal(patch['align-self'], '');
+});
+
+test('when the parent aligns its children to the start, Fill has to say stretch itself', () => {
+    const where = Core.layoutOf({ display: 'flex', 'flex-direction': 'column', 'align-items': 'flex-start' });
+    assert.equal(Core.setSizeMode({}, where, 'width', 'fill')['align-self'], 'stretch');
+});
+
+test('the height of a box on the page fills by running to the bottom margin, and reads as Fill not Fixed', () => {
+    const patch = Core.setSizeMode({}, PAGE, 'height', 'fill');
+    assert.equal(patch.height, '100%');
+    assert.equal(Core.sizeMode(patch, PAGE, 'height'), 'fill');
+    assert.equal(Core.sizeMode({ height: '100%' }, ROW, 'height'), 'fixed');
+});
+
+test('an element dragged loose of the flow fills by taking the whole space, both ways', () => {
+    assert.equal(Core.setSizeMode({}, ABSOLUTE, 'width', 'fill').width, '100%');
+    assert.equal(Core.sizeMode({ width: '100%' }, ABSOLUTE, 'width'), 'fill');
+    assert.equal(Core.sizeMode({}, ABSOLUTE, 'width'), 'hug');
+});
+
+test('a page that lays its own elements out in a row is read as a row', () => {
+    assert.deepEqual(Core.layoutOf({ display: 'flex', 'flex-direction': 'row-reverse' }), { layout: 'row', align: '' });
+    assert.equal(Core.layoutOf({ display: 'grid' }).layout, 'grid');
+    assert.equal(Core.layoutOf({ display: 'inline-block' }).layout, 'block');
+});
+
+// ── The four sides (MS-402) ──────────────────────────────────────────────────
+
+test('one value is all four sides, two are the pairs, three name the bottom on its own', () => {
+    assert.deepEqual(Core.readSides('12px'), { ok: true, top: 12, right: 12, bottom: 12, left: 12 });
+    assert.deepEqual(Core.readSides('12px 20px'), { ok: true, top: 12, right: 20, bottom: 12, left: 20 });
+    assert.deepEqual(Core.readSides('1px 2px 3px'), { ok: true, top: 1, right: 2, bottom: 3, left: 2 });
+    assert.deepEqual(Core.readSides('1px 2px 3px 4px'), { ok: true, top: 1, right: 2, bottom: 3, left: 4 });
+});
+
+test('nothing written is nothing on any side, and a bare 0 is still a zero', () => {
+    assert.deepEqual(Core.readSides(''), { ok: true, top: 0, right: 0, bottom: 0, left: 0 });
+    assert.equal(Core.readSides('0').top, 0);
+    assert.equal(Core.readSides('-4px').top, -4);
+});
+
+test('a value the panel cannot take apart is handed back untouched rather than rounded off', () => {
+    assert.deepEqual(Core.readSides('1rem'), { ok: false, raw: '1rem' });
+    assert.deepEqual(Core.readSides('5%'), { ok: false, raw: '5%' });
+    assert.equal(Core.readSides('calc(1px + 2px)').ok, false);
+    assert.equal(Core.readSides('1px 2px 3px 4px 5px').ok, false);
+});
+
+test('four sides are written as short as they will go, and read back the same', () => {
+    assert.equal(Core.writeSides({ top: 8, right: 8, bottom: 8, left: 8 }), '8px');
+    assert.equal(Core.writeSides({ top: 8, right: 16, bottom: 8, left: 16 }), '8px 16px');
+    assert.equal(Core.writeSides({ top: 1, right: 2, bottom: 3, left: 4 }), '1px 2px 3px 4px');
+    const sides = { top: 4, right: 0, bottom: 12, left: 0 };
+    assert.deepEqual(Core.readSides(Core.writeSides(sides)), Object.assign({ ok: true }, sides));
+});
+
+test('which fidelity a value is asking for', () => {
+    assert.equal(Core.sidesMode({ top: 3, right: 3, bottom: 3, left: 3 }), 'all');
+    assert.equal(Core.sidesMode({ top: 3, right: 5, bottom: 3, left: 5 }), 'pairs');
+    assert.equal(Core.sidesMode({ top: 3, right: 5, bottom: 4, left: 5 }), 'four');
+});
+
 // ── Walking ──────────────────────────────────────────────────────────────────
 
 test('insert, update, move, duplicate and remove all return a new page and leave the old one alone', () => {

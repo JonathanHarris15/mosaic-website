@@ -38,7 +38,7 @@ function printableEditor() {
 
     const STYLE_KEYS = [
         'width', 'height', 'min-height', 'max-width', 'display', 'flex-direction', 'flex-wrap', 'gap',
-        'justify-content', 'align-items', 'grid-template-columns', 'flex', 'position', 'left', 'top',
+        'justify-content', 'align-items', 'align-self', 'grid-template-columns', 'flex', 'position', 'left', 'top',
         'padding', 'margin', 'border-width', 'border-style', 'border-color', 'border-radius',
         'background-color', 'opacity', 'overflow', 'font-family', 'font-size', 'font-weight', 'font-style',
         'color', 'line-height', 'text-align', 'letter-spacing', 'text-transform', 'object-fit',
@@ -76,6 +76,11 @@ function printableEditor() {
         selection: { pageId: null, nodeId: null },
         view: { x: 0, y: 0, zoom: 0.5 },
         props: {},
+        // Padding, margin and border width, each taken apart into four sides
+        // and remembering which fidelity the panel is showing them at.
+        sides: {},
+        sideFields: [{ key: 'padding', label: 'Padding', min: 0 }, { key: 'margin', label: 'Margin', min: null }],
+        borderFields: [{ key: 'border-width', label: 'Border', min: 0 }],
         customCss: '',
         pageProps: { marginMode: 'all', all: 0, tb: 0, lr: 0, top: 0, right: 0, bottom: 0, left: 0, bg: '#ffffff', name: '' },
         menu: { open: false, x: 0, y: 0, nodeId: null, pageId: null },
@@ -107,6 +112,16 @@ function printableEditor() {
             return PrintableCore.findNode(page, this.selection.nodeId);
         },
         get selectedKind() { return this.selectedNode ? PrintableCore.kindOf(this.selectedNode) : ''; },
+        // What the space round the selected element is: the parent's layout,
+        // or the page's own when the element sits straight on the page. An
+        // element out of the flow answers to neither.
+        get selectedWhere() {
+            const page = this.currentPage, node = this.selectedNode;
+            if (!page || !node) return { layout: 'block', align: '' };
+            if (this.props.position === 'absolute') return { layout: 'absolute', align: '' };
+            const at = PrintableCore.locate(page, node.id);
+            return PrintableCore.layoutOf(at && at.parent ? at.parent.style : (page.style || {}));
+        },
         get pageSelected() { return !!this.currentPage && !this.selection.nodeId; },
         get zoomLabel() { return Math.round(this.view.zoom * 100) + '%'; },
         get paperPreview() {
@@ -513,6 +528,7 @@ function printableEditor() {
                 this.customCss = '';
             }
             this.props = props;
+            this.readSides(node ? node.id : '');
             const page = this.currentPage;
             if (page) {
                 const m = page.margins;
@@ -586,6 +602,97 @@ function printableEditor() {
             this.applyProps(commit !== false);
         },
 
+        // Hug / Fixed / Fill. The mode is never stored — it is read back off
+        // the element's style, so a page written in the code view reads the
+        // same as one clicked together here.
+        sizeMode(axis) {
+            return PrintableCore.sizeMode(this.props, this.selectedWhere, axis);
+        },
+
+        setSizeMode(axis, mode) {
+            if (!this.selectedNode) return;
+            const patch = PrintableCore.setSizeMode(this.props, this.selectedWhere, axis, mode, this.drawnSize(axis));
+            Object.keys(patch).forEach(k => { this.props[k] = patch[k]; });
+            this.applyProps(true);
+        },
+
+        // The size the element is on the page right now, so switching to Fixed
+        // holds it where it stands instead of jumping to a guess.
+        drawnSize(axis) {
+            const id = this.selection.nodeId;
+            const el = id && ui.world && ui.world.querySelector('[data-pid="' + id + '"]');
+            if (!el) return '';
+            return axis === 'width' ? el.offsetWidth : el.offsetHeight;
+        },
+
+        // ── Four sides: padding, margin, border width ────────────────────
+
+        // Taken apart for the panel. The fidelity is sticky while one element
+        // stays selected — asking for all four sides and then typing the same
+        // number in each should not fold the row back up under you — and
+        // starts again at whatever the next element's value is asking for.
+        readSides(nodeId) {
+            const same = this.sides._for === nodeId;
+            const next = { _for: nodeId };
+            [].concat(this.sideFields, this.borderFields).forEach(f => {
+                const was = same ? (this.sides[f.key] || {}) : {};
+                const r = PrintableCore.readSides(this.props[f.key]);
+                if (!r.ok) {
+                    next[f.key] = { mode: was.mode || 'all', ok: false, all: 0, tb: 0, lr: 0, top: 0, right: 0, bottom: 0, left: 0 };
+                    return;
+                }
+                const asked = PrintableCore.sidesMode(r);
+                const mode = asked === 'four' ? 'four'
+                    : asked === 'pairs' ? (was.mode === 'four' ? 'four' : 'pairs')
+                    : (was.mode === 'four' || was.mode === 'pairs' ? was.mode : 'all');
+                next[f.key] = { mode: mode, ok: true, all: r.top, tb: r.top, lr: r.left, top: r.top, right: r.right, bottom: r.bottom, left: r.left };
+            });
+            this.sides = next;
+        },
+
+        applySides(key, commit) {
+            const s = this.sides[key];
+            if (!s) return;
+            const n = v => Math.round(Number(v) || 0);
+            let four;
+            if (s.mode === 'all') four = { top: n(s.all), right: n(s.all), bottom: n(s.all), left: n(s.all) };
+            else if (s.mode === 'pairs') four = { top: n(s.tb), right: n(s.lr), bottom: n(s.tb), left: n(s.lr) };
+            else four = { top: n(s.top), right: n(s.right), bottom: n(s.bottom), left: n(s.left) };
+            this.props[key] = PrintableCore.writeSides(four);
+            if (key === 'border-width') this.settleBorder();
+            // On the way out, every box in the row is brought up to what was
+            // written, so changing fidelity carries the number across instead
+            // of dropping back to whatever the finer boxes last held. Not
+            // while typing, or a half-typed minus sign would be squashed.
+            if (commit !== false) this.spreadSides(s, four);
+            this.applyProps(commit !== false);
+        },
+
+        spreadSides(s, four) {
+            s.all = four.top; s.tb = four.top; s.lr = four.left;
+            s.top = four.top; s.right = four.right; s.bottom = four.bottom; s.left = four.left;
+        },
+
+        // A border width with no style draws nothing at all — the commonest
+        // way to be left wondering where the border went. Asking for a width
+        // asks for a solid line; picking a line asks for a width.
+        settleBorder() {
+            const w = PrintableCore.readSides(this.props['border-width']);
+            const any = !w.ok || w.top || w.right || w.bottom || w.left;
+            if (any && !this.props['border-style']) this.props['border-style'] = 'solid';
+        },
+
+        setBorderStyle(value) {
+            this.props['border-style'] = value;
+            const w = PrintableCore.readSides(this.props['border-width']);
+            if (value && w.ok && !(w.top || w.right || w.bottom || w.left)) {
+                this.props['border-width'] = '1px';
+                const s = this.sides['border-width'];
+                if (s) { s.ok = true; s.all = 1; s.tb = 1; s.lr = 1; s.top = 1; s.right = 1; s.bottom = 1; s.left = 1; }
+            }
+            this.applyProps(true);
+        },
+
         applyPageProps(commit) {
             const page = this.currentPage;
             if (!page) return;
@@ -602,6 +709,7 @@ function printableEditor() {
             });
             this.replacePage(next);
             if (commit) {
+                this.spreadSides(pp, margins);
                 this.renderPage(next.id);
                 this.commit();
             } else {

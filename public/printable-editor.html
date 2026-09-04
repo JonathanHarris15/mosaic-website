@@ -163,9 +163,30 @@
 
                         <details open class="pe-group">
                             <summary>Size &amp; position</summary>
+                            <div class="pe-f"><span>Width</span>
+                                <span class="pe-size">
+                                    <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                        <button type="button" :aria-pressed="sizeMode('width') === 'hug'" @click="setSizeMode('width', 'hug')" title="As wide as what is inside it">Hug</button>
+                                        <button type="button" :aria-pressed="sizeMode('width') === 'fixed'" @click="setSizeMode('width', 'fixed')" title="The width you type, and it stays there">Fixed</button>
+                                        <button type="button" :aria-pressed="sizeMode('width') === 'fill'" @click="setSizeMode('width', 'fill')" title="As wide as the space it is given — margin to margin on the page">Fill</button>
+                                    </span>
+                                    <input class="pe-in" x-show="sizeMode('width') === 'fixed'" x-model="props.width" @input="applyProps(false)" @change="applyProps(true)" placeholder="300px" />
+                                </span>
+                            </div>
+                            <div class="pe-f"><span>Height</span>
+                                <span class="pe-size">
+                                    <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                        <button type="button" :aria-pressed="sizeMode('height') === 'hug'" @click="setSizeMode('height', 'hug')" title="As tall as what is inside it">Hug</button>
+                                        <button type="button" :aria-pressed="sizeMode('height') === 'fixed'" @click="setSizeMode('height', 'fixed')" title="The height you type, and it stays there">Fixed</button>
+                                        <button type="button" :aria-pressed="sizeMode('height') === 'fill'" @click="setSizeMode('height', 'fill')" title="As tall as the space it is given — down to the bottom margin on the page">Fill</button>
+                                    </span>
+                                    <input class="pe-in" x-show="sizeMode('height') === 'fixed'" x-model="props.height" @input="applyProps(false)" @change="applyProps(true)" placeholder="200px" />
+                                </span>
+                            </div>
+                            <label class="pe-f" x-show="selectedWhere.layout !== 'block' && selectedWhere.layout !== 'absolute'"><span>Align self</span><select class="pe-in" x-model="props['align-self']" @change="applyProps(true)" title="How this element sits across the way its parent lays out">
+                                <option value="">Follow the parent</option><option value="stretch">Stretch</option><option value="flex-start">Start</option><option value="center">Centre</option><option value="flex-end">End</option>
+                            </select></label>
                             <div class="pe-grid2">
-                                <label class="pe-f"><span>Width</span><input class="pe-in" x-model="props.width" @input="applyProps(false)" @change="applyProps(true)" placeholder="auto, 300px, 50%" /></label>
-                                <label class="pe-f"><span>Height</span><input class="pe-in" x-model="props.height" @input="applyProps(false)" @change="applyProps(true)" placeholder="auto" /></label>
                                 <label class="pe-f"><span>Min height</span><input class="pe-in" x-model="props['min-height']" @input="applyProps(false)" @change="applyProps(true)" /></label>
                                 <label class="pe-f"><span>Max width</span><input class="pe-in" x-model="props['max-width']" @input="applyProps(false)" @change="applyProps(true)" /></label>
                             </div>
@@ -206,18 +227,71 @@
 
                         <details open class="pe-group">
                             <summary>Spacing</summary>
-                            <label class="pe-f"><span>Padding</span><input class="pe-in" x-model="props.padding" @input="applyProps(false)" @change="applyProps(true)" placeholder="12px or 8px 16px" /></label>
-                            <label class="pe-f"><span>Margin</span><input class="pe-in" x-model="props.margin" @input="applyProps(false)" @change="applyProps(true)" placeholder="0" /></label>
+                            <template x-for="s in sideFields" :key="s.key">
+                                <div>
+                                    <div class="pe-f"><span x-text="s.label"></span>
+                                        <span class="pe-seg" x-show="sides[s.key] && sides[s.key].ok">
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'all'" @click="sides[s.key].mode = 'all'; applySides(s.key, true)" title="All four the same"><span class="material-symbols-outlined">select_all</span></button>
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'pairs'" @click="sides[s.key].mode = 'pairs'; applySides(s.key, true)" title="Top and bottom, left and right"><span class="material-symbols-outlined">view_agenda</span></button>
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'four'" @click="sides[s.key].mode = 'four'; applySides(s.key, true)" title="Each side on its own"><span class="material-symbols-outlined">grid_view</span></button>
+                                        </span>
+                                        <input class="pe-in" x-show="sides[s.key] && !sides[s.key].ok" x-model="props[s.key]" @input="applyProps(false)" @change="applyProps(true)" title="Written in something other than pixels, so it is shown as typed" />
+                                    </div>
+                                    <template x-if="sides[s.key] && sides[s.key].ok">
+                                        <div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'all'">
+                                                <label class="pe-f"><span>All sides</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].all" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'pairs'">
+                                                <label class="pe-f"><span>Top &amp; bottom</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].tb" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Left &amp; right</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].lr" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'four'">
+                                                <label class="pe-f"><span>Top</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].top" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Right</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].right" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Bottom</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].bottom" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Left</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].left" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
                             <label class="pe-f"><span>Flex</span><input class="pe-in" x-model="props.flex" @change="applyProps(true)" placeholder="1 (grow to fill)" /></label>
                         </details>
 
                         <details open class="pe-group">
                             <summary>Border &amp; background</summary>
                             <label class="pe-f"><span>Background</span><span class="pe-color"><input type="color" :value="swatch(props['background-color'])" @input="setProp('background-color', $event.target.value, false)" @change="applyProps(true)" /><input class="pe-in" x-model="props['background-color']" @input="applyProps(false)" @change="applyProps(true)" placeholder="none" /></span></label>
-                            <div class="pe-grid2">
-                                <label class="pe-f"><span>Border</span><input class="pe-in" x-model="props['border-width']" @input="applyProps(false)" @change="applyProps(true)" placeholder="1px" /></label>
-                                <label class="pe-f"><span>Style</span><select class="pe-in" x-model="props['border-style']" @change="applyProps(true)"><option value="">None</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="double">Double</option></select></label>
-                            </div>
+                            <template x-for="s in borderFields" :key="s.key">
+                                <div>
+                                    <div class="pe-f"><span x-text="s.label"></span>
+                                        <span class="pe-seg" x-show="sides[s.key] && sides[s.key].ok">
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'all'" @click="sides[s.key].mode = 'all'; applySides(s.key, true)" title="All four the same"><span class="material-symbols-outlined">select_all</span></button>
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'pairs'" @click="sides[s.key].mode = 'pairs'; applySides(s.key, true)" title="Top and bottom, left and right"><span class="material-symbols-outlined">view_agenda</span></button>
+                                            <button type="button" :aria-pressed="sides[s.key].mode === 'four'" @click="sides[s.key].mode = 'four'; applySides(s.key, true)" title="Each side on its own"><span class="material-symbols-outlined">grid_view</span></button>
+                                        </span>
+                                        <input class="pe-in" x-show="sides[s.key] && !sides[s.key].ok" x-model="props[s.key]" @input="applyProps(false)" @change="applyProps(true)" title="Written in something other than pixels, so it is shown as typed" />
+                                    </div>
+                                    <template x-if="sides[s.key] && sides[s.key].ok">
+                                        <div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'all'">
+                                                <label class="pe-f"><span>All sides</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].all" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'pairs'">
+                                                <label class="pe-f"><span>Top &amp; bottom</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].tb" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Left &amp; right</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].lr" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                            <div class="pe-grid2" x-show="sides[s.key].mode === 'four'">
+                                                <label class="pe-f"><span>Top</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].top" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Right</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].right" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Bottom</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].bottom" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                                <label class="pe-f"><span>Left</span><span class="pe-unit"><input class="pe-in" type="number" :min="s.min" x-model="sides[s.key].left" @input="applySides(s.key, false)" @change="applySides(s.key, true)" /><em>px</em></span></label>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <label class="pe-f"><span>Style</span><select class="pe-in" :value="props['border-style']" @change="setBorderStyle($event.target.value)"><option value="">None</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="double">Double</option></select></label>
                             <label class="pe-f"><span>Border colour</span><span class="pe-color"><input type="color" :value="swatch(props['border-color'])" @input="setProp('border-color', $event.target.value, false)" @change="applyProps(true)" /><input class="pe-in" x-model="props['border-color']" @input="applyProps(false)" @change="applyProps(true)" /></span></label>
                             <div class="pe-grid2">
                                 <label class="pe-f"><span>Corners</span><input class="pe-in" x-model="props['border-radius']" @input="applyProps(false)" @change="applyProps(true)" placeholder="0" /></label>
@@ -734,6 +808,8 @@
         .pe-seg button .material-symbols-outlined { font-size: 18px; }
         .pe-seg button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
         .pe-seg--text button { padding: 5px 10px; }
+        .pe-size { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .pe-size .pe-in { flex: 1 1 0; }
         .pe-group { border-top: 1px solid var(--outline-variant); padding: 6px 0 2px; }
         .pe-group > summary { cursor: pointer; font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--primary); padding: 4px 0 8px; list-style: none; display: flex; align-items: center; gap: 6px; }
         .pe-group > summary::before { content: 'expand_more'; font-family: 'Material Symbols Outlined'; font-size: 18px; transition: transform var(--duration) var(--ease-standard); }
