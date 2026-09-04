@@ -252,3 +252,12 @@ test('the page container carries its size, margins as padding, and its backgroun
     assert.equal(style.padding, '75px 75px 75px 75px');
     assert.equal(style['background-color'], '#ffffff');
 });
+
+// ── Linked to an event ───────────────────────────────────────────────────────
+
+test('linking adds an id once and unlinking removes it, leaving the rest alone', () => {
+    assert.deepEqual(Core.linkPrintable(['a'], 'b'), ['a', 'b']);
+    assert.deepEqual(Core.linkPrintable(['a', 'b'], 'b'), ['a', 'b'], 'linking twice is one link');
+    assert.deepEqual(Core.unlinkPrintable(['a', 'b'], 'a'), ['b']);
+    assert.deepEqual(Core.unlinkPrintable(undefined, 'a'), []);
+});

@@ -164,10 +164,39 @@
         await db.collection(TEMPLATES).doc(id).delete();
     }
 
+    // ── Linked to an event (MS-400) ──────────────────────────────────────────
+
+    // Whether members may open this Printable's view-only page. Carried on
+    // the Printable itself, because that is the record the read rule sees.
+    async function setMemberVisible(db, fb, user, id, visible) {
+        await db.collection(PRINTABLES).doc(id)
+            .set(Object.assign({ memberVisible: visible === true }, stamp(fb, user)), { merge: true });
+    }
+
+    async function linkToSeries(db, seriesId, printableIds) {
+        await db.collection('events').doc(seriesId).set({ printables: printableIds }, { merge: true });
+    }
+
+    // The Printables an event links, as records. A read the rules refuse — a
+    // member opening one an editor has not shared — is simply not listed.
+    async function loadLinked(db, ids) {
+        const out = [];
+        for (const id of ids || []) {
+            try {
+                const doc = await db.collection(PRINTABLES).doc(id).get();
+                if (doc.exists) out.push(Object.assign({ id: doc.id }, doc.data()));
+            } catch (e) { /* not shared with this viewer */ }
+        }
+        return out;
+    }
+
     const PrintableStore = {
         PRINTABLES,
         FOLDERS,
         TEMPLATES,
+        setMemberVisible,
+        linkToSeries,
+        loadLinked,
         listTemplates,
         saveTemplate,
         deleteTemplate,

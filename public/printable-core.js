@@ -675,8 +675,27 @@
         }, (page && page.style) || {});
     }
 
+    // ── Linked to an event (MS-400) ──────────────────────────────────────────
+    //
+    // An event series carries the ids of the Printables that belong to it
+    // (`printables: [id, …]`), so every date of it offers them. Whether a
+    // member may open one is a fact about the Printable — `memberVisible` on
+    // its own record — because the rule that answers a member's read has the
+    // Printable in hand and not the event.
+
+    function linkPrintable(ids, id) {
+        const list = (ids || []).filter(x => x && x !== id);
+        return id ? list.concat([id]) : list;
+    }
+
+    function unlinkPrintable(ids, id) {
+        return (ids || []).filter(x => x && x !== id);
+    }
+
     const PrintableCore = {
         RECORD_VERSION,
+        linkPrintable,
+        unlinkPrintable,
         MAX_NAME_LENGTH,
         DEFAULT_NAME,
         PAPERS,

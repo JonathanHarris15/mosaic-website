@@ -33,10 +33,16 @@ const templatesBlock = () => blockFor(/match \/printable_templates\/\{templateId
 
 test('a Printable is written by editors and above, and nobody below', () => {
     const block = code(printablesBlock());
-    assert.match(block, /allow read, write: if isEditor\(\);/);
+    assert.match(block, /allow write: if isEditor\(\);/);
     assert.doesNotMatch(block, /if true/, 'a Printable is not world-readable');
     assert.doesNotMatch(block, /request\.auth != null/,
         'request.auth != null accepts an anonymous token anybody can mint; isSignedIn() is the floor');
+});
+
+test('a member reads a Printable only when an editor marked it visible to members (MS-400)', () => {
+    const block = code(printablesBlock());
+    assert.match(block, /allow read: if isEditor\(\)\s*\|\| \(isMember\(\) && \('memberVisible' in resource\.data\) && resource\.data\.memberVisible == true\);/);
+    assert.doesNotMatch(block, /isSignedIn\(\)/, 'signed-in is not the floor for a Printable; member is');
 });
 
 test('a Printable folder is editor-and-above, the same ladder as the Forms library', () => {

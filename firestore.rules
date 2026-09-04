@@ -852,12 +852,16 @@ service cloud.firestore {
     // element; it never holds the data those fields resolve to, so reading a
     // Printable discloses nothing a Person or an Event would not.
     //
-    // Editor and above, the same ladder as the Forms library. A member reads
-    // one only through the narrower door MS-400 adds (a Printable linked from
-    // an Event they may see, with members-may-view on) — see the second
-    // `allow read` below, which is deliberately absent until then.
+    // Editor and above write, the same ladder as the Forms library. A member
+    // reads one only when an editor has marked it `memberVisible` (MS-400) —
+    // the "members may view" switch on the event that links it. The event's
+    // own visibility is not re-checked here: the Printable is the record in
+    // hand, and a member only ever finds the link on an event they can open.
+    // A missing flag reads as false; nothing below member reads at all.
     match /printables/{printableId} {
-      allow read, write: if isEditor();
+      allow read: if isEditor()
+        || (isMember() && ('memberVisible' in resource.data) && resource.data.memberVisible == true);
+      allow write: if isEditor();
     }
 
     // Where a Printable is filed: a name and the folder it sits in, and

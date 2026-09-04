@@ -61,6 +61,7 @@ function printablesPage() {
             const n = (p.pages || []).length;
             if (!p.template) bits.push('Not started');
             else bits.push(n === 1 ? '1 page' : n + ' pages');
+            if (p.memberVisible) bits.push('Members may view');
             if (p.updatedByName) bits.push('Edited by ' + p.updatedByName);
             return bits.join(' · ');
         },
