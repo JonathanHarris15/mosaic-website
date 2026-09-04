@@ -886,7 +886,16 @@ What a `document`-mode [[Form Template]] produces: a form somebody fills in **on
 
 ⚠ **On a phone you can open one but not yet make one.** The native Documents screen opens a Form Document in the shell; the new-document flow there offers only a note and a care list, because it does not read the template list. Making one is done from the Documents page on the web or in the shell.
 
+**Deleting the template deletes the answers, and only a function can.** `form_responses` is closed to every client — answers are written server-side, and a delete is a write — so the browser's delete could ask the question and never carry it out: a form that had ever been answered could not be deleted at all. It goes through `deleteFormTemplate`, which checks the rank itself, takes the [[Response]]s (and with them their uploads, through the cleanup trigger), clears the ballot ledger nobody else may even read, and then removes the template.
+
 _Avoid_: form response (that is a [[Response]]), filled form, submission
+
+### Personal shepherding document
+A [[Form Template]] in `document` mode that is an interview **about somebody** — a membership interview, a first visit, an exit conversation. Ticked by an elder or super admin on the builder, stored as `shepherdingDoc`. Two things follow, and they are one thing said twice:
+- **The first question is always the [[Directory Person picker]]** that names who it is for, at a fixed id, required, and not the author's to move, duplicate, retype or delete. The wording is theirs to change; the question is not. The model puts it back on the next save, and the builder refuses rather than letting it quietly reappear.
+- **Every [[Form Document]] made from it lives in two places** — the [[Document Library]] and the **Documents tab of the [[Shepherding Profile]]** of whoever that first answer names. Started from the Library, it files itself onto their profile as soon as the picker is answered, and **moves** if the answer is changed. Started from somebody's profile, it opens already answered with them and files itself into the Library. Either way it is in both by construction, so there is nothing to opt into.
+⚠ **The subject is read off the answers, never off the template.** A Form Document keeps a copy of its questions and never looks at its template again (ADR-0055), so the fact that it *is* one of these is **stamped on the record** and the subject is read under the fixed question id. That is what the fixed id is for.
+_Avoid_: person form, profile form, subject question (fine in prose; the thing is the document, not the field)
 
 ### Response export
 A form's [[Response]]s as a CSV an editor downloads. One row per Response, one header row, UTF-8 with a byte-order mark so a spreadsheet opens it as text rather than mangling accents.

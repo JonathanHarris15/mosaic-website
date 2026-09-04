@@ -185,6 +185,11 @@
         title, docType, author, timestamp,
         ownerPersonId = null, filterId = null, filterConfig = null,
         templateId = null, questions = null,
+        // A personal shepherding document (MS-405): an interview ABOUT
+        // somebody, which lives in the Library AND on that person's own
+        // Shepherding Profile. `answers` lets it start already answered —
+        // started from somebody's profile, the first question is them.
+        shepherdingDoc = false, answers = null, inLibrary = null,
     } = {}) {
         const authorUid = requiredText(author && author.uid, 'author id');
         const authorName = requiredText(author && author.name, 'author name');
@@ -205,6 +210,10 @@
             record.ownerPersonId = ownerPersonId;
             record.inLibrary = false;
         }
+        // ⚠ A shepherding document is in BOTH places by construction, so it is
+        // never waiting to be opted in. Set after the block above, which would
+        // otherwise say false for one started from a profile.
+        if (inLibrary !== null) record.inLibrary = inLibrary === true;
 
         if (docType === 'care-list') {
             if (filterConfig) record.filterConfig = { ...filterConfig };
@@ -228,12 +237,26 @@
             ));
             // Empty rather than absent: an answers field that might not be
             // there is one every reader has to guard against.
-            record.answers = {};
+            record.answers = answers ? JSON.parse(JSON.stringify(answers)) : {};
+            // ⚠ STAMPED ON THE DOCUMENT, not looked up. A document keeps a copy
+            // of its questions and never reads its template again (ADR-0055),
+            // so the page that files it on somebody's profile has to be able to
+            // tell what kind of document it is holding without asking anybody.
+            if (shepherdingDoc) record.shepherdingDoc = true;
         } else {
             record.contentJson = null;
         }
 
         return record;
+    }
+
+    // Put a document at the top of a structure, unless it is already somewhere
+    // in it. Returns whether anything changed, so a caller can skip the write.
+    function fileInRoot(root, docId) {
+        if (!root || containsDoc(root, docId)) return false;
+        if (!root.children) root.children = [];
+        root.children.push({ type: 'document', id: docId });
+        return true;
     }
 
     const ROOT = '__root__';
@@ -258,6 +281,7 @@
         ROOT,
         MISSING_AUTHOR,
         buildElderDocument,
+        fileInRoot,
         resolveAuthor,
         newId,
         getFolderById,

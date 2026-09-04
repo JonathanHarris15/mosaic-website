@@ -68,6 +68,25 @@ function formPage() {
         // actually refuse; this decides whether the switch is drawn.
         get elderOnlySetting() { return FormsCore.elderOnlyFor(this.currentPermissionLevel); },
 
+        // A personal shepherding document (MS-405): an interview ABOUT
+        // somebody, filed on their Shepherding Profile. Its first question is
+        // the Directory Person picker that names them, and it is not a question
+        // the author writes — so it cannot be moved, duplicated or deleted, and
+        // the model puts it back if it goes missing.
+        isSubject(q) { return FormsCore.isSubjectQuestion(this.form, q); },
+
+        setShepherdingDoc(on) {
+            // Rebuilt through the model rather than patched, because ticking
+            // this ADDS a question. Rebuilding is what saving already does, so
+            // what is on screen is what would be stored.
+            const kept = { createdAt: this.form.createdAt, createdBy: this.form.createdBy, createdByName: this.form.createdByName };
+            this.form = Object.assign(
+                FormsCore.buildFormTemplate(Object.assign({}, this.form, { shepherdingDoc: on === true })),
+                kept);
+            this.openQuestion = null;
+            this.touch();
+        },
+
         // Asked of the model, not spelled out here — the picker is not the only
         // place a rung gets named, and two lists of these words would drift.
         rungLabel(rung) { return FormsCore.rungLabel(rung); },
@@ -291,6 +310,8 @@ function formPage() {
         },
 
         duplicateQuestion(q) {
+            // Two of them would be two answers to "who is this about".
+            if (this.isSubject(q)) return;
             const copy = FormsCore.buildQuestion(Object.assign({}, q, { id: this.newId() }));
             const at = this.form.questions.findIndex(x => x.id === q.id);
             this.form.questions.splice(at + 1, 0, copy);
@@ -306,6 +327,14 @@ function formPage() {
         },
 
         removeQuestion(q) {
+            // Refused here as well as put back by the model, so the reason
+            // reaches the person who tried rather than the question quietly
+            // reappearing on the next save.
+            if (this.isSubject(q)) {
+                this.problem = 'This one names who the document is about, so it stays. ' +
+                    'Untick "A personal shepherding document" to remove it.';
+                return;
+            }
             const n = this.answersFor(q);
             if (n > 0) {
                 q.retired = true;
@@ -321,9 +350,14 @@ function formPage() {
         restoreQuestion(q) { q.retired = false; this.touch(); },
 
         move(q, by) {
+            // It is the question the document is filed by, and it is asked
+            // first because nothing else on the page makes sense until it is
+            // answered. Nothing moves above it either.
+            if (this.isSubject(q)) return;
             const at = this.form.questions.findIndex(x => x.id === q.id);
             const to = at + by;
-            if (to < 0 || to >= this.form.questions.length) return;
+            const floor = FormsCore.isShepherdingDoc(this.form) ? 1 : 0;
+            if (to < floor || to >= this.form.questions.length) return;
             const list = this.form.questions;
             [list[at], list[to]] = [list[to], list[at]];
             this.touch();
@@ -498,10 +532,10 @@ function formPage() {
 
         async doDelete() {
             try {
-                await FormsStore.deleteForm(db, this.formId, this.isElder);
+                await FormsStore.deleteForm(db, this.formId);
                 window.location.href = this.libraryHref;
             } catch (e) {
-                this.problem = 'That did not delete. Try again.';
+                this.problem = (e && e.message) || 'That did not delete. Try again.';
                 this.confirmingDelete = false;
             }
         },

@@ -135,13 +135,23 @@
     // The ledger is NOT cleaned up here, because no client may touch it. A
     // stale ledger row is harmless — it says somebody answered a form that no
     // longer exists, joins to nothing, and is unreadable by anybody anyway.
-    async function deleteForm(db, formId, asElder) {
-        const answers = await answersFor(db, formId, asElder).get();
-        const batch = db.batch();
-        answers.forEach(doc => batch.delete(doc.ref));
-        batch.delete(db.collection(FORMS).doc(formId));
-        await batch.commit();
-        return answers.size;
+    // ⚠ THROUGH A FUNCTION, BECAUSE A BROWSER CANNOT DELETE AN ANSWER (MS-406).
+    // `form_responses` is `allow write: if false` for every client — answers are
+    // written server-side because validation cannot live in a browser we do not
+    // control — and delete is a write. So this used to ask, be answered "yes,
+    // delete it", and then fail: a form that had ever been answered could not be
+    // deleted at all, and the page could only say "that did not delete".
+    //
+    // The function also clears the ballot ledger, which no client may even read.
+    // The old comment here was right that a stale ledger row is harmless; a door
+    // that can tidy it is simply better than one that cannot.
+    async function deleteForm(db, formId, fns) {
+        const call = (fns || global.firebase.app().functions('us-central1'))
+            .httpsCallable('deleteFormTemplate');
+        const res = await call({ formId: formId });
+        const data = (res && res.data) || {};
+        if (!data.ok) throw new Error(data.message || 'That did not delete.');
+        return data.answers || 0;
     }
 
     // ── Folders (MS-376) ─────────────────────────────────────────────────────
@@ -205,6 +215,8 @@
         for (const form of doomedForms) {
             await deleteForm(db, form.id);
         }
+        // Every form is gone before a single folder is, so a failure part-way
+        // leaves forms filed where they were rather than orphaned at the top.
         const batch = db.batch();
         doomedFolders.forEach(id => batch.delete(db.collection(FOLDERS).doc(id)));
         await batch.commit();

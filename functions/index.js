@@ -2726,6 +2726,87 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
  * Every judgement is in forms-public.js and forms-core.js, both pure and tested
  * without an emulator. This reads, asks, and writes.
  */
+// The two ladders, restated because the rules language cannot export anything
+// — the same trade forms-public.js already accepts. ⚠ An admin is NOT an
+// elder: isElder() in firestore.rules has never said so.
+const EDITOR_RANKS = ["editor", "admin", "elder", "super_admin"];
+const ELDER_RANKS = ["elder", "super_admin"];
+
+// Deleting a Form Template, and the answers it gathered (MS-406).
+//
+// ⚠ WHY THIS IS NOT A BATCH IN THE BROWSER. It was, and it could not work:
+// `form_responses` is `allow write: if false` for every client, because answers
+// are written server-side where the validation lives — and delete is a write.
+// So the page asked "delete this form and all 14 answers it has gathered?", was
+// told yes, and then failed. A form that had ever been answered could not be
+// deleted at all.
+//
+// It also clears the ballot ledger, which no client may even read (ADR-0052).
+// A stale ledger row was harmless, but a door that can tidy it is better than
+// one that cannot.
+exports.deleteFormTemplate = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      const {formId} = request.data || {};
+      if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
+        return {ok: false, message: "There is no form here."};
+      }
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in first.");
+      }
+
+      const userSnap = await db.collection("users").doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+      const rank = user.permissionLevel || user.role || null;
+      if (!EDITOR_RANKS.includes(rank)) {
+        return {ok: false, message: "Only an editor can delete a form."};
+      }
+
+      const formRef = db.collection("forms").doc(formId);
+      const formSnap = await formRef.get();
+      if (!formSnap.exists) return {ok: false, message: "There is no form here."};
+      const form = formSnap.data();
+
+      // A form shut to elders is deleted by an elder and nobody else (MS-404).
+      // The rules say so for the record; this door has to say so too, because
+      // it writes past them.
+      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank)) {
+        return {ok: false, message: "There is no form here."};
+      }
+
+      // In pages, so a form with thousands of answers does not try to become
+      // one batch. Deleting a response fires cleanUpFormUploads, which takes
+      // the bytes that came with it.
+      let answers = 0;
+      for (;;) {
+        const page = await db.collection("form_responses")
+            .where("formId", "==", formId).limit(300).get();
+        if (page.empty) break;
+        const batch = db.batch();
+        page.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        answers += page.size;
+        if (page.size < 300) break;
+      }
+
+      // The ledger is keyed `{formId}_{personId}`, so its rows are found by
+      // prefix rather than by a field.
+      const ledger = await db.collection("form_ledger")
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .startAt(`${formId}_`).endAt(`${formId}_`).get();
+      if (!ledger.empty) {
+        const batch = db.batch();
+        ledger.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+
+      await formRef.delete();
+      log(`deleteFormTemplate: ${formId} and ${answers} answer(s)`);
+      return {ok: true, answers: answers};
+    },
+);
+
 exports.publicForm = onCall(
     // ⚠ enforceAppCheck MUST MATCH `enabled` IN public/app-check-config.js,
     // where the reasons are written out in full. Enforced here but not enabled

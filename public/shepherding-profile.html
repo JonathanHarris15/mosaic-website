@@ -1038,7 +1038,7 @@
              Do not flatten it back into plain values. -->
         <div x-show="activeTab === 'documents'" x-cloak>
             <template x-if="personId">
-                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, embedded: true, identity: () => ({ user: currentUser, name: currentUserName, permissionLevel: currentPermissionLevel }) })">
+                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, ownerPersonName: () => (person && person.name) || '', embedded: true, identity: () => ({ user: currentUser, name: currentUserName, permissionLevel: currentPermissionLevel }) })">
 
                     <div x-show="loading" class="flex items-center justify-center py-xl">
                         <span class="material-symbols-outlined text-[36px] text-outline animate-spin">progress_activity</span>
@@ -1415,6 +1415,7 @@
     <script src="tiptap-render.js"></script>
     <script src="relationship-group-core.js"></script>
     <script src="shepherding-quick-assign.js"></script>
+    <script src="forms-core.js"></script>
     <script src="shepherding-documents-core.js"></script>
     <script src="shepherding-documents.js"></script>
     <!-- Loads the vendored TipTap bundle. Must come before the page

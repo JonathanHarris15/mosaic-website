@@ -151,3 +151,43 @@ test('filing a form is not a second way to reach one', () => {
     assert.doesNotMatch(block, /form_responses|form_ledger/,
         'the folder rules should say nothing about answers');
 });
+
+// ── Deleting a form, and the answers with it (MS-406) ────────────────────────
+//
+// The rule above is the reason this exists. `form_responses` is
+// `allow write: if false` for every client, and delete is a write — so the
+// browser's delete-in-a-batch could not work, and a form that had ever been
+// answered could not be deleted at all. The page asked, was told yes, and then
+// said "that did not delete".
+
+const fs2 = require('node:fs');
+const path2 = require('node:path');
+const src2 = (dir, name) => fs2.readFileSync(path2.join(__dirname, '..', dir, name), 'utf8').replace(/\r\n/g, '\n');
+
+test('the browser no longer tries to delete an answer it may not write', () => {
+    const store = src2('public', 'forms-store.js');
+    const del = store.match(/async function deleteForm\([\s\S]*?\n    \}/);
+    assert.ok(del, 'deleteForm has gone missing');
+    assert.ok(!/batch\.delete/.test(del[0]),
+        'deleteForm still batches deletes a client is refused');
+    assert.match(del[0], /httpsCallable\('deleteFormTemplate'\)/,
+        'deleteForm does not go through the function that can');
+});
+
+test('the door checks the rank itself, and an elder-only form needs an elder', () => {
+    const fn = src2('functions', 'index.js');
+    const block = fn.match(/exports\.deleteFormTemplate = onCall\([\s\S]*?\n\);/);
+    assert.ok(block, 'there is no deleteFormTemplate function');
+    assert.match(block[0], /EDITOR_RANKS\.includes\(rank\)/,
+        'anybody signed in can delete a form');
+    assert.match(block[0], /isElderOnly\(form\) && !ELDER_RANKS\.includes\(rank\)/,
+        'an ordinary editor can delete a form shut to elders');
+    assert.match(block[0], /form_ledger/,
+        'the ballot ledger is left behind by the one door that could tidy it');
+});
+
+test('an admin is not an elder in the function either', () => {
+    const fn = src2('functions', 'index.js');
+    assert.match(fn, /const ELDER_RANKS = \["elder", "super_admin"\];/,
+        'ELDER_RANKS no longer matches isElder()');
+});

@@ -685,6 +685,62 @@
         return ((form && form.questions) || []).filter(q => !q.retired);
     }
 
+    // ── A personal shepherding document (MS-405) ─────────────────────────────
+    //
+    // A `document` template can say it is an interview ABOUT SOMEBODY — a
+    // membership interview, a first visit, an exit conversation. Two things
+    // follow from ticking it, and they are the same thing said twice:
+    //
+    //   1. The first question is always "who is this for", a Directory Person
+    //      picker, and it cannot be moved, retyped or removed. It is not a
+    //      question the author writes; it is the one the document is filed by.
+    //   2. Every document made from it lands on that Person's [[Shepherding
+    //      Profile]], under their own Documents, as soon as the picker is
+    //      answered — and moves with the answer if it is changed.
+    //
+    // ⚠ THE QUESTION HAS A FIXED ID, and that is what makes the filing
+    // possible. A document keeps a COPY of its questions and never reads its
+    // template again (ADR-0055), so the page that files it has only the answers
+    // in hand — it has to know which key to look under without asking anybody.
+    const SUBJECT_QUESTION_ID = 'shepherd_subject';
+    const SUBJECT_QUESTION_TEXT = 'Who is this document for?';
+
+    function subjectQuestion(existing) {
+        return buildQuestion(Object.assign({}, existing || {}, {
+            id: SUBJECT_QUESTION_ID,
+            type: 'person',
+            text: (existing && existing.text) || SUBJECT_QUESTION_TEXT,
+            required: true,
+            retired: false,
+        }));
+    }
+
+    function isShepherdingDoc(form) {
+        return !!(form && form.shepherdingDoc === true);
+    }
+
+    // Is this the question the document is filed by? Asked by the builder,
+    // which must not let it be moved or deleted, and by the record's own page.
+    function isSubjectQuestion(form, question) {
+        return isShepherdingDoc(form) && !!question && question.id === SUBJECT_QUESTION_ID;
+    }
+
+    // Who a filled-in shepherding document is about, or '' before anybody has
+    // said. Read off the answers, never off the template.
+    function subjectPersonId(doc) {
+        const answer = doc && doc.answers && doc.answers[SUBJECT_QUESTION_ID];
+        return (answer && answer.personId) ? String(answer.personId) : '';
+    }
+
+    // The question list with the subject question first and exactly once. An
+    // author who reordered or deleted it in the browser gets it back on the
+    // next save, because this is what a shepherding document IS.
+    function withSubjectFirst(questions) {
+        const rest = (questions || []).filter(q => q && q.id !== SUBJECT_QUESTION_ID);
+        const had = (questions || []).find(q => q && q.id === SUBJECT_QUESTION_ID);
+        return [subjectQuestion(had)].concat(rest);
+    }
+
     // ── The Form Template record ─────────────────────────────────────────────
 
     function buildFormTemplate(spec) {
@@ -712,13 +768,21 @@
         const elderOnly = s.elderOnly === true;
         if (elderOnly && !asDocument) rung = 'elder';
 
+        // Only a document can be a shepherding document. A `responses` form
+        // gathers many answers from many people; "who is this one about" is not
+        // a question it has, and storing the flag anyway would be a record
+        // claiming something nothing honours.
+        const shepherdingDoc = asDocument && s.shepherdingDoc === true;
+
         const allowed = settingsFor(rung);
 
         const record = {
             title: normaliseTitle(s.title),
             description: trimTo(s.description, MAX_DESCRIPTION_LENGTH),
             afterword: trimTo(s.afterword, MAX_AFTERWORD_LENGTH),
-            questions: (Array.isArray(s.questions) ? s.questions : []).map(buildQuestion),
+            questions: shepherdingDoc
+                ? withSubjectFirst((Array.isArray(s.questions) ? s.questions : []).map(buildQuestion))
+                : (Array.isArray(s.questions) ? s.questions : []).map(buildQuestion),
             // Where it is filed (MS-375). An explicit null means the top level,
             // which is also where a form with an unknown folder is drawn — the
             // library lists this collection, so a form can never be filed out of
@@ -733,6 +797,10 @@
             // the Elder Documents, and forcing it would quietly take every
             // existing document template away from the editors using them.
             elderOnly: elderOnly,
+            // An interview about somebody, filed on their Shepherding Profile.
+            // Always written so a reader never has to guard against its
+            // absence — the same reason elderOnly is.
+            shepherdingDoc: shepherdingDoc,
             // Null on a document template rather than a plausible-looking value
             // nothing honours — see hasRung.
             rung: asDocument ? null : rung,
@@ -1118,6 +1186,13 @@
         needsAccount,
         settingsFor,
         mayShutToElders,
+        SUBJECT_QUESTION_ID,
+        SUBJECT_QUESTION_TEXT,
+        subjectQuestion,
+        isShepherdingDoc,
+        isSubjectQuestion,
+        subjectPersonId,
+        withSubjectFirst,
         isElderOnly,
         elderOnlyFor,
         isBallot,
