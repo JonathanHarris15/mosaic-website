@@ -255,3 +255,63 @@ test('the household count is a pill, not the Calendar chip that lights up on hov
     // .m-chip is width:100% with its own :hover background — wrong component.
     assert.doesNotMatch(html, /class="m-chip/);
 });
+
+// ── The print escape hatch (MS-317 follow-up) ────────────────────────────────
+//
+// A switch a greeter can find when the button does nothing and there is a queue
+// at the door. It turns off the hidden print frame and puts the labels in a
+// window they can see, where the ordinary dialog — and failing that, Ctrl+P —
+// still works.
+
+test('the kiosk offers a way out when printing does nothing', () => {
+    const html = read('kiosk.html');
+    // Their words, not ours. Nothing here ever skipped the dialog, but this is
+    // what somebody who has pressed print and seen nothing will look for.
+    assert.match(html, /Don't skip print dialog/);
+    assert.match(html, /@click="togglePlainPrint\(\)"/);
+});
+
+test('the switch sits quietly in the corner, opposite Back and Log Out', () => {
+    const html = read('kiosk.html');
+    assert.match(html, /fixed bottom-4 left-4/);
+    // The same faint uniform the other desk-volunteer controls wear.
+    assert.match(html, /text-on-surface-variant\/50[\s\S]{0,80}hover:text-on-surface-variant/);
+});
+
+test('the switch says which way it is set', () => {
+    // A control that changes how the whole morning prints must not look the
+    // same on as off.
+    const html = read('kiosk.html');
+    assert.match(html, /:aria-pressed="plainPrint/);
+    assert.match(html, /plainPrint \? 'check_box' : 'check_box_outline_blank'/);
+});
+
+test('with the switch on, the hidden frame is not used at all', () => {
+    const js = read('kiosk.js');
+    assert.match(js, /if \(this\.plainPrint\) \{[\s\S]*?Nametag\.openPrintWindow\(/);
+    // And the ordinary path is still there underneath it.
+    assert.match(js, /Nametag\.printLabels\(this\.lastLabels, document/);
+});
+
+test('a blocked pop-up is explained rather than looking like another silence', () => {
+    const js = read('kiosk.js');
+    assert.match(js, /blocked the new tab/i);
+    assert.match(js, /Ctrl\+P/);
+});
+
+test('the switch is remembered on the machine, not just for the session', () => {
+    // A kiosk gets reloaded. A greeter who found this once must not have to
+    // find it again mid-morning.
+    const js = read('kiosk.js');
+    assert.match(js, /PLAIN_PRINT_KEY/);
+    assert.match(js, /localStorage\.setItem\(PLAIN_PRINT_KEY/);
+    assert.match(js, /this\.loadPrintPreference\(\);/);
+});
+
+test('a browser that refuses localStorage still gets a working switch', () => {
+    // Locked-down kiosk browsers can throw on the accessor itself, and a switch
+    // that cannot be remembered must still be a switch that works today.
+    const js = read('kiosk.js');
+    assert.match(js, /loadPrintPreference\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
+    assert.match(js, /togglePlainPrint\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
+});
