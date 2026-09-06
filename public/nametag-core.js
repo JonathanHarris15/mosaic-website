@@ -207,20 +207,44 @@
             '</style></head><body>' + body + '</body></html>';
     }
 
+    // How long to wait for the frame to say it has loaded before printing
+    // anyway. Long enough that a slow load is not cut off, short enough that a
+    // greeter with a queue at the door does not conclude the button is dead.
+    const LOAD_FALLBACK_MS = 1500;
+
     // Print the labels through a hidden frame, so the kiosk page itself is not
     // what goes to the printer.
     //
-    // ⚠ TWO THINGS HERE ARE NOT COSMETIC.
+    // ⚠ FOUR THINGS HERE ARE NOT COSMETIC. Every one of them is a way this has
+    // already failed in front of somebody.
     //
     // 1. THE FRAME HAS A REAL SIZE. It used to be 0×0, and Chrome will open a
     //    print preview for a zero-sized frame and then close it again on its own
     //    — the dialog "blinks away" and nothing prints. It is parked off-screen
     //    instead, which costs nothing and is what makes the dialog stay.
     //
-    // 2. IT WAITS FOR THE FRAME TO LOAD, not for 50ms and a hope. Calling print()
-    //    before layout has run gives a preview of a blank page, or of the first
-    //    label only. `srcdoc` fires a real `load` event; one animation frame
-    //    after it, the pages exist and the dialog can be trusted.
+    // 2. THE WAITING IS DONE ON THE PAGE'S CLOCK, NOT THE FRAME'S. This is the
+    //    Sunday-morning bug: the code asked the FRAME for an animation frame
+    //    before calling print(), and a frame parked off-screen is a subtree
+    //    Chrome is never going to paint, so it does no rendering work for it and
+    //    the callback simply never runs. print() was never called. There was no
+    //    error and no dialog — the button did nothing at all, while Ctrl+P on
+    //    the same machine printed fine, because Ctrl+P never went near this
+    //    code. The kiosk page itself IS on screen, so its clock always ticks.
+    //
+    //    ⚠ NEVER SCHEDULE ANYTHING ON `frame.contentWindow`. That is the whole
+    //    fault. Two of the page's frames, so the label boxes have laid out —
+    //    printing before layout gives a preview of a blank page, or of the first
+    //    label only.
+    //
+    // 3. IT PRINTS ANYWAY IF `load` NEVER COMES. Waiting on an event is right
+    //    until the event does not arrive, and then it is silence. A fallback
+    //    timer asks regardless. `fired` keeps the two paths to one dialog.
+    //
+    // 4. THE CALLER IS ALWAYS TOLD IT IS OVER. The kiosk sets `printing` true
+    //    before calling this and false in `onReady`; an onReady that never runs
+    //    leaves a greeter looking at a dead button. Even a print() that throws
+    //    releases it.
     //
     // The frame is created once and kept. Removing it — even after the dialog
     // opens — takes the dialog with it.
@@ -234,26 +258,47 @@
             frame.id = 'kiosk-print-frame';
             frame.setAttribute('aria-hidden', 'true');
             frame.setAttribute('tabindex', '-1');
+            // Off-screen, and NOT `opacity: 0`. Zero opacity is the other way of
+            // telling a browser this subtree is not worth rendering, which is
+            // the state that stopped the frame's own clock in the first place.
             frame.style.cssText =
-                'position:fixed;left:-10000px;top:0;width:320px;height:240px;border:0;opacity:0;';
+                'position:fixed;left:-10000px;top:0;width:320px;height:240px;border:0;';
             doc.body.appendChild(frame);
         }
 
-        const open = function () {
-            const win = frame.contentWindow;
-            if (!win) return;
-            // One frame after load: the document is parsed, and this lets the
-            // page boxes lay out before the preview is asked to render them.
-            const go = function () {
-                try { win.focus(); } catch (e) { /* focus is a nicety, print is not */ }
-                win.print();
+        // The page's own window — the one that is visible, and whose timers and
+        // animation frames therefore actually run.
+        const view = doc.defaultView ||
+            (typeof window !== 'undefined' ? window : null);
+        const raf = (view && view.requestAnimationFrame) ?
+            function (fn) { return view.requestAnimationFrame(fn); } :
+            function (fn) { return setTimeout(fn, 16); };
+        const later = (view && view.setTimeout) ?
+            function (fn, ms) { return view.setTimeout(fn, ms); } :
+            function (fn, ms) { return setTimeout(fn, ms); };
+
+        let fired = false;
+        const go = function () {
+            if (fired) return;
+            fired = true;
+            try {
+                const win = frame.contentWindow;
+                if (win) {
+                    try { win.focus(); } catch (e) { /* focus is a nicety, print is not */ }
+                    win.print();
+                }
+            } catch (e) {
+                // A refused print is worth knowing about in the console, and is
+                // never worth leaving the button stuck for.
+                console.error('Could not open the print dialog', e);
+            } finally {
                 if (typeof onReady === 'function') onReady();
-            };
-            if (win.requestAnimationFrame) win.requestAnimationFrame(go);
-            else setTimeout(go, 0);
+            }
         };
 
-        frame.onload = open;
+        frame.onload = function () { raf(function () { raf(go); }); };
+        later(go, LOAD_FALLBACK_MS);
+
         // srcdoc rather than document.write: write() leaves the frame with no
         // load event to wait for, which is what the old 50ms timer was papering
         // over. Same-origin either way, so the print call is still allowed.
