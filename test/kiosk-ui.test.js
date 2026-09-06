@@ -255,3 +255,158 @@ test('the household count is a pill, not the Calendar chip that lights up on hov
     // .m-chip is width:100% with its own :hover background — wrong component.
     assert.doesNotMatch(html, /class="m-chip/);
 });
+
+// ── The print escape hatch (MS-317 follow-up) ────────────────────────────────
+//
+// A switch a greeter can find when the button does nothing and there is a queue
+// at the door. It turns off the hidden print frame and puts the labels in a
+// window they can see, where the ordinary dialog — and failing that, Ctrl+P —
+// still works.
+
+test('the kiosk offers a way out when printing does nothing', () => {
+    const html = read('kiosk.html');
+    // Their words, not ours. Nothing here ever skipped the dialog, but this is
+    // what somebody who has pressed print and seen nothing will look for.
+    assert.match(html, /Don't skip print dialog/);
+    assert.match(html, /@click="togglePlainPrint\(\)"/);
+});
+
+test('the switch sits quietly in the corner, opposite Back and Log Out', () => {
+    const html = read('kiosk.html');
+    assert.match(html, /fixed bottom-4 left-4/);
+    // The same faint uniform the other desk-volunteer controls wear.
+    assert.match(html, /text-on-surface-variant\/50[\s\S]{0,80}hover:text-on-surface-variant/);
+});
+
+test('the switch says which way it is set', () => {
+    // A control that changes how the whole morning prints must not look the
+    // same on as off.
+    const html = read('kiosk.html');
+    assert.match(html, /:aria-pressed="plainPrint/);
+    assert.match(html, /plainPrint \? 'check_box' : 'check_box_outline_blank'/);
+});
+
+test('with the switch on, the hidden frame is not used at all', () => {
+    const js = read('kiosk.js');
+    assert.match(js, /if \(this\.plainPrint\) \{[\s\S]*?Nametag\.openPrintWindow\(/);
+    // And the ordinary path is still there underneath it.
+    assert.match(js, /Nametag\.printLabels\(this\.lastLabels, document/);
+});
+
+test('a blocked pop-up is explained rather than looking like another silence', () => {
+    const js = read('kiosk.js');
+    assert.match(js, /blocked the new tab/i);
+    assert.match(js, /Ctrl\+P/);
+});
+
+test('the switch is remembered on the machine, not just for the session', () => {
+    // A kiosk gets reloaded. A greeter who found this once must not have to
+    // find it again mid-morning.
+    const js = read('kiosk.js');
+    assert.match(js, /PLAIN_PRINT_KEY/);
+    assert.match(js, /localStorage\.setItem\(PLAIN_PRINT_KEY/);
+    assert.match(js, /this\.loadPrintPreference\(\);/);
+});
+
+test('a browser that refuses localStorage still gets a working switch', () => {
+    // Locked-down kiosk browsers can throw on the accessor itself, and a switch
+    // that cannot be remembered must still be a switch that works today.
+    const js = read('kiosk.js');
+    assert.match(js, /loadPrintPreference\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
+    assert.match(js, /togglePlainPrint\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
+});
+
+// ── Reaching the name-tag setting at all ─────────────────────────────────────
+//
+// ⚠ THE REAL CAUSE OF THE SUNDAY-MORNING SILENCE. The checkbox that decides
+// whether an Event prints name tags sat inside the "Who can see this" card,
+// which only renders for a ONE-OFF — series visibility moved to the Recurring
+// Events tabs in MS-229. So on every repeating event, the Sunday Service
+// included, the setting could not be reached. The store wrote it, the kiosk read
+// it, the help text explained what it did across a series, and no editor could
+// ever tick it. Greeters pressed print and nothing happened, because no event
+// had ever been able to say it wanted tags.
+
+test('the name-tag setting can be reached on a repeating event, not just a one-off', () => {
+    const html = read('calendar-event.html');
+    const marker = 'Print name tags when people are marked present at the kiosk';
+    const at = html.indexOf(marker);
+    assert.ok(at !== -1, 'the setting must still be on the page');
+
+    // The section it lives in, found by walking back to the nearest <section.
+    const openedAt = html.lastIndexOf('<section', at);
+    const section = html.slice(openedAt, at);
+    assert.ok(!/isOneOff/.test(section),
+        'the name-tag setting must not be shut behind isOneOff: ' + section.slice(0, 120));
+    assert.match(section, /x-show="isEditor"/);
+});
+
+test('name tags are their own setting, not a visibility one', () => {
+    const html = read('calendar-event.html');
+    const at = html.indexOf('Print name tags when people are marked present');
+    const openedAt = html.lastIndexOf('<section', at);
+    assert.match(html.slice(openedAt, at), /Name tags/);
+});
+
+test('the box reads the same rule the kiosk reads', () => {
+    // A date of a repeating event carries nothing itself and inherits from the
+    // Event. Reading only the occurrence leaves the box unticked on an event
+    // that is busily printing tags.
+    const html = read('calendar-event.html');
+    const js = read('calendar-event.js');
+    assert.match(html, /:checked="needsNameTagsOn"/);
+    assert.match(js, /get needsNameTagsOn\(\)[\s\S]*?this\.series && this\.series\.needsNameTags/);
+
+    // And it must match kiosk.js's own getter.
+    assert.match(read('kiosk.js'),
+        /get needsNameTags\(\)[\s\S]*?series && series\.needsNameTags/);
+});
+
+// ── Setting it once for a whole repeating event ──────────────────────────────
+//
+// The Calendar sets one date. For the Sunday Service that is fifty-two ticks a
+// year, so the Event itself has to be able to say it — which is what the kiosk
+// already read: the date's own answer first, then the Event's.
+
+test('a repeating event can ask for name tags on every date', () => {
+    const html = read('recurring-events.html');
+    const at = html.indexOf('Print name tags when people are marked present at the kiosk');
+    assert.ok(at !== -1, 'the Recurring Events pane must carry the setting');
+
+    const section = html.slice(html.lastIndexOf('<section', at), at);
+    assert.match(section, /x-show="isEditor"/, 'editors only');
+    assert.match(section, /Name tags/);
+});
+
+test('it sits on THE EVENT tab, with the rest of what is true of every date', () => {
+    const html = read('recurring-events.html');
+    const eventTab = html.indexOf("tab === 'event'");
+    const at = html.indexOf('Print name tags when people are marked present at the kiosk');
+    const nextTab = html.indexOf("tab === '", eventTab + 20);
+    assert.ok(at > eventTab && (nextTab === -1 || at < nextTab),
+        'the setting must be inside the event tab');
+});
+
+test('the series toggle writes the Event, and says so', () => {
+    const js = read('recurring-events.js');
+    assert.match(js, /async setNeedsNameTags\(value\)[\s\S]*?Store\.setNeedsNameTags\(db, \{[\s\S]*?seriesId: this\.seriesId/);
+    // Not the occurrences: rewriting every date to restate what the Event now
+    // says would be a batch across years of history.
+    const fn = js.slice(js.indexOf('async setNeedsNameTags(value)'));
+    assert.ok(!/occurrenceId/.test(fn.slice(0, 500)), 'the series write must not touch dates');
+});
+
+test('it saves on change, like the start time beside it', () => {
+    // A checkbox is never half-ticked, and a greeter about to open the doors
+    // should not have to find a Save button.
+    const html = read('recurring-events.html');
+    assert.match(html, /@change="setNeedsNameTags\(\$event\.target\.checked\)"/);
+});
+
+test('the two surfaces agree on what the setting is called', () => {
+    // The same sentence on the Calendar's single date and on the Event, so
+    // nobody has to work out whether they are the same switch.
+    const label = 'Print name tags when people are marked present at the kiosk';
+    assert.ok(read('calendar-event.html').includes(label));
+    assert.ok(read('recurring-events.html').includes(label));
+});

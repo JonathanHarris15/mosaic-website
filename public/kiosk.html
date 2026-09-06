@@ -267,6 +267,29 @@
         </section>
     </main>
 
+    <!-- The print escape hatch (MS-317 follow-up).
+         Bottom LEFT, mirroring the Back / Log Out corner opposite and wearing
+         the same quiet uniform: this is for the volunteer running the desk, not
+         the family standing at it, so it stays out of the way until somebody
+         goes looking for it. It comes up to full strength when it is ON, because
+         a switch that changes how the morning prints should not be something you
+         have to squint at to notice you left flipped. -->
+    <div x-show="!loading && view !== 'events'"
+         class="fixed bottom-4 left-4 z-40">
+        <button type="button" @click="togglePlainPrint()"
+                :aria-pressed="plainPrint ? 'true' : 'false'"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg
+                       text-[11px] font-label-md uppercase tracking-wider
+                       hover:bg-surface-container transition-colors"
+                :class="plainPrint
+                    ? 'text-primary'
+                    : 'text-on-surface-variant/50 hover:text-on-surface-variant'">
+            <span class="material-symbols-outlined text-[16px]"
+                  x-text="plainPrint ? 'check_box' : 'check_box_outline_blank'"></span>
+            <span>Don't skip print dialog</span>
+        </button>
+    </div>
+
     <!-- Getting out, and getting back. Both are for the volunteer running the
          desk rather than the person standing at it, so they sit quietly in the
          corner and only come up to full strength under the pointer. The event's

@@ -1,3 +1,7 @@
+// Where the greeter's choice of print route is remembered, so a kiosk that
+// gets reloaded mid-morning does not lose it. See togglePlainPrint().
+const PLAIN_PRINT_KEY = 'mosaic.kiosk.plainPrint';
+
 function kioskPage() {
     const Store = window.EventsStore;
     const Kiosk = window.KioskCore;
@@ -71,6 +75,7 @@ function kioskPage() {
         },
 
         async init() {
+            this.loadPrintPreference();
             auth.onAuthStateChanged(async user => {
                 if (!user || user.isAnonymous) {
                     window.location.href = 'login.html';
@@ -336,13 +341,66 @@ function kioskPage() {
         // Hand the labels to the browser's own print dialog. It stays open until
         // somebody answers it — the page does not wait, and does not pretend to
         // know whether a label came out (ADR-0042, MS-317).
+        //
+        // Two ways to do it, and the switch between them is the greeter's, not
+        // ours — see `plainPrint`.
         printNow() {
             if (!this.lastLabels.length) return;
             this.printing = true;
+
+            if (this.plainPrint) {
+                Nametag.openPrintWindow(this.lastLabels, window, opened => {
+                    this.printing = false;
+                    this.printNote = opened
+                        ? 'The labels are in a new tab. If the dialog did not open, press Ctrl+P there. Attendance is already saved.'
+                        : 'The browser blocked the new tab. Allow pop-ups for this site, or turn the switch off. Attendance is already saved.';
+                });
+                return;
+            }
+
             Nametag.printLabels(this.lastLabels, document, () => {
                 this.printing = false;
                 this.printNote = 'If a tag did not come out, print again. Attendance is already saved.';
             });
+        },
+
+        // ── The escape hatch (MS-317 follow-up) ──────────────────────────────
+        //
+        // ⚠ NOTHING HERE EVER SKIPPED THE PRINT DIALOG, and the switch is
+        // labelled as though it did. That is deliberate. The person who reaches
+        // for it is a greeter with a queue at the door who has pressed print and
+        // seen nothing happen, and "don't skip print dialog" is what they will
+        // be looking for. Being right about our internals is worth less this
+        // morning than being findable.
+        //
+        // What it actually does: stop using the hidden frame, and put the labels
+        // in a window that can be seen. If even that window's dialog is refused,
+        // the labels are still sitting in it and Ctrl+P prints them — which is
+        // the one thing we know works on that machine.
+        //
+        // ⚠ IT IS REMEMBERED ON THE MACHINE, not in the session. A kiosk gets
+        // reloaded, and a greeter who found this once must not have to find it
+        // again mid-morning. localStorage can throw outright in a locked-down
+        // browser, so every touch of it is wrapped: a switch that cannot be
+        // remembered is still a switch that works today.
+        plainPrint: false,
+
+        loadPrintPreference() {
+            try {
+                this.plainPrint = localStorage.getItem(PLAIN_PRINT_KEY) === 'yes';
+            } catch (e) {
+                this.plainPrint = false;
+            }
+        },
+
+        togglePlainPrint() {
+            this.plainPrint = !this.plainPrint;
+            this.printNote = '';
+            try {
+                localStorage.setItem(PLAIN_PRINT_KEY, this.plainPrint ? 'yes' : 'no');
+            } catch (e) {
+                console.warn('Could not remember the print setting', e);
+            }
         },
 
         // Taken off the list entirely (MS-321). A wrong tap is not a fact about
