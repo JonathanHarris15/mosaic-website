@@ -809,6 +809,37 @@
                                     </div>
                                 </section>
 
+                                <!-- Name tags at the kiosk. Belongs on THE EVENT
+                                     because it is true of every date of it — the
+                                     kiosk reads the date's own answer first and
+                                     falls back to this one, so setting it here
+                                     covers a run of Sundays in one go rather than
+                                     one at a time forever.
+
+                                     ⚠ IT SAVES ON CHANGE, unlike the typed fields
+                                     above. Those wait for a press because a name is
+                                     half-typed for most of the time somebody is
+                                     typing it; a checkbox is never half-ticked, and
+                                     a greeter about to open the doors should not
+                                     have to find a Save button. Same reasoning as
+                                     the start time beside it. -->
+                                <section class="m-card" x-show="isEditor">
+                                    <h3 class="re-cardhead">Name tags</h3>
+                                    <p class="re-standfirst">True of every date of this event.</p>
+                                    <label class="flex items-start gap-2 cursor-pointer mt-sm">
+                                        <input type="checkbox" :checked="needsNameTagsOn"
+                                               @change="setNeedsNameTags($event.target.checked)"
+                                               :disabled="saving"
+                                               class="accent-primary mt-0.5 re-focus" />
+                                        <span class="text-[13.5px] text-on-surface">
+                                            Print name tags when people are marked present at the kiosk
+                                        </span>
+                                    </label>
+                                    <p class="m-input-hint" style="margin-top:8px">
+                                        A single date can still be set on its own from the Calendar.
+                                    </p>
+                                </section>
+
                                 <section class="m-card">
                                     <h3 class="re-cardhead">When it happens</h3>
                                     <p class="font-headline-lg text-[17px] text-on-surface mt-2"

@@ -1097,6 +1097,47 @@
                 }
             },
 
+            // ── Name tags at the kiosk ───────────────────────────────────────
+            //
+            // A setting of the EVENT, so it is set here once rather than on one
+            // date at a time forever. The kiosk asks the date first and falls
+            // back to the Event, so turning it on here covers every Sunday.
+            //
+            // ⚠ THIS WRITES THE SERIES ONLY, NOT THE DATES. The date page writes
+            // both, because from a single date "every date of this event" is
+            // what an editor means. From here the Event is already the thing
+            // being edited, and rewriting every occurrence document to say what
+            // the Event now says would be a batch across years of history to
+            // record a fact that is already recorded.
+            //
+            // The consequence, said plainly rather than discovered later: a date
+            // somebody switched ON by hand stays on when this is switched off,
+            // because the kiosk ORs the two. That is the same rule the Calendar
+            // has always applied, and the hint under the checkbox says a single
+            // date can be set on its own.
+            get needsNameTagsOn() {
+                return !!(this.chosen && this.chosen.needsNameTags);
+            },
+
+            async setNeedsNameTags(value) {
+                if (this.saving || !this.chosen) return;
+                const on = value === true;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.setNeedsNameTags(db, {
+                        seriesId: this.seriesId,
+                        value: on,
+                    });
+                    this.patchSeries({ needsNameTags: on });
+                } catch (e) {
+                    console.error('Name tag setting failed:', e);
+                    this.error = 'That could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
             // ── The Roles it carries ─────────────────────────────────────────
             //
             // Liturgical ones are SHOWN and locked: an editor needs to see the

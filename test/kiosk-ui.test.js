@@ -361,3 +361,52 @@ test('the box reads the same rule the kiosk reads', () => {
     assert.match(read('kiosk.js'),
         /get needsNameTags\(\)[\s\S]*?series && series\.needsNameTags/);
 });
+
+// ── Setting it once for a whole repeating event ──────────────────────────────
+//
+// The Calendar sets one date. For the Sunday Service that is fifty-two ticks a
+// year, so the Event itself has to be able to say it — which is what the kiosk
+// already read: the date's own answer first, then the Event's.
+
+test('a repeating event can ask for name tags on every date', () => {
+    const html = read('recurring-events.html');
+    const at = html.indexOf('Print name tags when people are marked present at the kiosk');
+    assert.ok(at !== -1, 'the Recurring Events pane must carry the setting');
+
+    const section = html.slice(html.lastIndexOf('<section', at), at);
+    assert.match(section, /x-show="isEditor"/, 'editors only');
+    assert.match(section, /Name tags/);
+});
+
+test('it sits on THE EVENT tab, with the rest of what is true of every date', () => {
+    const html = read('recurring-events.html');
+    const eventTab = html.indexOf("tab === 'event'");
+    const at = html.indexOf('Print name tags when people are marked present at the kiosk');
+    const nextTab = html.indexOf("tab === '", eventTab + 20);
+    assert.ok(at > eventTab && (nextTab === -1 || at < nextTab),
+        'the setting must be inside the event tab');
+});
+
+test('the series toggle writes the Event, and says so', () => {
+    const js = read('recurring-events.js');
+    assert.match(js, /async setNeedsNameTags\(value\)[\s\S]*?Store\.setNeedsNameTags\(db, \{[\s\S]*?seriesId: this\.seriesId/);
+    // Not the occurrences: rewriting every date to restate what the Event now
+    // says would be a batch across years of history.
+    const fn = js.slice(js.indexOf('async setNeedsNameTags(value)'));
+    assert.ok(!/occurrenceId/.test(fn.slice(0, 500)), 'the series write must not touch dates');
+});
+
+test('it saves on change, like the start time beside it', () => {
+    // A checkbox is never half-ticked, and a greeter about to open the doors
+    // should not have to find a Save button.
+    const html = read('recurring-events.html');
+    assert.match(html, /@change="setNeedsNameTags\(\$event\.target\.checked\)"/);
+});
+
+test('the two surfaces agree on what the setting is called', () => {
+    // The same sentence on the Calendar's single date and on the Event, so
+    // nobody has to work out whether they are the same switch.
+    const label = 'Print name tags when people are marked present at the kiosk';
+    assert.ok(read('calendar-event.html').includes(label));
+    assert.ok(read('recurring-events.html').includes(label));
+});
