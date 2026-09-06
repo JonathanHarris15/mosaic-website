@@ -1651,6 +1651,20 @@
                 this.occurrence.rosterShared = shared;
             },
 
+            // Whether tags print for this date, counting the Event's own setting
+            // as well as the date's.
+            //
+            // ⚠ THE BOX MUST READ THE SAME RULE THE KIOSK DOES. The kiosk asks
+            // `occurrence.needsNameTags || series.needsNameTags` — a date of a
+            // repeating event usually carries nothing itself and inherits. Read
+            // only the occurrence here, as this used to, and the box sits
+            // unticked on an event that is busily printing tags.
+            get needsNameTagsOn() {
+                if (!this.occurrence) return false;
+                if (this.occurrence.needsNameTags) return true;
+                return !!(this.series && this.series.needsNameTags);
+            },
+
             async setNeedsNameTags(value) {
                 if (!this.isEditor || !this.occurrence) return;
                 const on = value === true;

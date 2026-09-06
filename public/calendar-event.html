@@ -866,9 +866,25 @@
                             </label>
                         </div>
 
-                        <div class="mt-sm pt-sm border-t border-outline-variant">
+                    </section>
+
+                    <!-- Name tags at the kiosk.
+                         ⚠ ITS OWN SECTION, AND IT HAD TO BECOME ONE. This lived
+                         inside "Who can see this" above, which is shown only for
+                         a one-off — series visibility is edited on the Recurring
+                         Events tabs (MS-229). So on every REPEATING event, the
+                         Sunday Service included, this checkbox was unreachable:
+                         the store wrote it, the kiosk read it, the help text
+                         below even explained what it does across a series, and
+                         nobody could ever tick it. Greeters pressed print at the
+                         kiosk and nothing happened, because no event had ever
+                         been able to say it wanted tags.
+                         Name tags are not a visibility setting anyway. -->
+                    <section x-show="isEditor" class="m-card">
+                        <h3 class="font-display text-[17px] text-primary">Name tags</h3>
+                        <div class="mt-sm">
                             <label class="flex items-start gap-2 cursor-pointer">
-                                <input type="checkbox" :checked="!!occurrence.needsNameTags"
+                                <input type="checkbox" :checked="needsNameTagsOn"
                                        @change="setNeedsNameTags($event.target.checked)"
                                        class="accent-primary mt-0.5 cal-focus" />
                                 <span class="text-[13px] text-on-surface">Print name tags when people are marked present at the kiosk</span>

@@ -315,3 +315,49 @@ test('a browser that refuses localStorage still gets a working switch', () => {
     assert.match(js, /loadPrintPreference\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
     assert.match(js, /togglePlainPrint\(\) \{[\s\S]*?try \{[\s\S]*?catch/);
 });
+
+// ── Reaching the name-tag setting at all ─────────────────────────────────────
+//
+// ⚠ THE REAL CAUSE OF THE SUNDAY-MORNING SILENCE. The checkbox that decides
+// whether an Event prints name tags sat inside the "Who can see this" card,
+// which only renders for a ONE-OFF — series visibility moved to the Recurring
+// Events tabs in MS-229. So on every repeating event, the Sunday Service
+// included, the setting could not be reached. The store wrote it, the kiosk read
+// it, the help text explained what it did across a series, and no editor could
+// ever tick it. Greeters pressed print and nothing happened, because no event
+// had ever been able to say it wanted tags.
+
+test('the name-tag setting can be reached on a repeating event, not just a one-off', () => {
+    const html = read('calendar-event.html');
+    const marker = 'Print name tags when people are marked present at the kiosk';
+    const at = html.indexOf(marker);
+    assert.ok(at !== -1, 'the setting must still be on the page');
+
+    // The section it lives in, found by walking back to the nearest <section.
+    const openedAt = html.lastIndexOf('<section', at);
+    const section = html.slice(openedAt, at);
+    assert.ok(!/isOneOff/.test(section),
+        'the name-tag setting must not be shut behind isOneOff: ' + section.slice(0, 120));
+    assert.match(section, /x-show="isEditor"/);
+});
+
+test('name tags are their own setting, not a visibility one', () => {
+    const html = read('calendar-event.html');
+    const at = html.indexOf('Print name tags when people are marked present');
+    const openedAt = html.lastIndexOf('<section', at);
+    assert.match(html.slice(openedAt, at), /Name tags/);
+});
+
+test('the box reads the same rule the kiosk reads', () => {
+    // A date of a repeating event carries nothing itself and inherits from the
+    // Event. Reading only the occurrence leaves the box unticked on an event
+    // that is busily printing tags.
+    const html = read('calendar-event.html');
+    const js = read('calendar-event.js');
+    assert.match(html, /:checked="needsNameTagsOn"/);
+    assert.match(js, /get needsNameTagsOn\(\)[\s\S]*?this\.series && this\.series\.needsNameTags/);
+
+    // And it must match kiosk.js's own getter.
+    assert.match(read('kiosk.js'),
+        /get needsNameTags\(\)[\s\S]*?series && series\.needsNameTags/);
+});
