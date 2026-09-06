@@ -306,10 +306,71 @@
         return html;
     }
 
+    // The escape hatch (MS-317 follow-up). Everything above is machinery, and
+    // machinery can fail on a Sunday morning with a queue at the door. This is
+    // the version with no machinery in it: the labels go in an ordinary window
+    // the greeter can see, and the ordinary print dialog opens on top of them.
+    //
+    // ⚠ IT IS WORTH HAVING EVEN IF print() IS REFUSED. That is the real point.
+    // A hidden frame that fails, fails invisibly. A visible window that fails
+    // still has the labels sitting in it, and Ctrl+P — which is the thing we
+    // know works on that machine — prints them. The window is deliberately left
+    // open for exactly that reason.
+    //
+    // ⚠ THE LOGO PATH HAS TO BE MADE ABSOLUTE HERE. The frame above inherits
+    // the kiosk page's base URL and a relative `assets/…` resolves. A window
+    // written into with document.write is at about:blank, where the same
+    // relative path resolves to nothing and every label prints with a hole
+    // where the mark should be.
+    function openPrintWindow(labels, win, onReady) {
+        const opener = win || (typeof window !== 'undefined' ? window : null);
+        if (!opener || typeof opener.open !== 'function') return null;
+
+        let logoSrc = LOGO_SRC;
+        try {
+            logoSrc = new opener.URL(LOGO_SRC, opener.location.href).href;
+        } catch (e) { /* a relative path is still better than no label */ }
+
+        const tab = opener.open('', '_blank');
+        if (!tab) {
+            // Blocked. The caller says so out loud rather than joining the list
+            // of things that fail silently.
+            if (typeof onReady === 'function') onReady(false);
+            return null;
+        }
+
+        tab.document.open();
+        tab.document.write(printHtml(labels, {logoSrc: logoSrc}));
+        tab.document.close();
+
+        let fired = false;
+        const go = function () {
+            if (fired) return;
+            fired = true;
+            try {
+                try { tab.focus(); } catch (e) { /* focus is a nicety */ }
+                tab.print();
+            } catch (e) {
+                console.error('Could not open the print dialog', e);
+            } finally {
+                if (typeof onReady === 'function') onReady(true);
+            }
+        };
+
+        // Timed from the OPENER, which is the visible kiosk page and whose
+        // clock is therefore known to tick — the same lesson as above. The wait
+        // is for the mark to load, so it is in the preview rather than arriving
+        // a moment after it.
+        tab.onload = go;
+        opener.setTimeout(go, 800);
+        return tab;
+    }
+
     const NametagCore = {
         WIDTH,
         HEIGHT,
         LOGO_SRC,
+        openPrintWindow,
         splitName,
         firstNameSizeMm,
         nextPickupCode,

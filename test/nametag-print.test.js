@@ -234,3 +234,112 @@ describe('the frame the labels are printed from', () => {
         assert.match(html, /Ada/);
     });
 });
+
+describe('the escape hatch: a plain window and the ordinary dialog', () => {
+    // ⚠ WHY THIS EXISTS. Everything above is machinery, and machinery can fail
+    // on a Sunday with a queue at the door. The toggle at the bottom of the
+    // kiosk turns all of it off: the labels go in a window the greeter can SEE,
+    // and the ordinary dialog opens on top of them. If even that is refused,
+    // the labels are still sitting there and Ctrl+P — the thing we know works
+    // on that machine — prints them.
+
+    function fakeOpener({blocked = false} = {}) {
+        const timers = [];
+        const printed = [];
+        const written = [];
+        const tab = {
+            onload: null,
+            focused: false,
+            document: {
+                open() {},
+                write(html) { written.push(html); },
+                close() {},
+            },
+            focus() { this.focused = true; },
+            print() { printed.push(written[written.length - 1]); },
+        };
+        const opener = {
+            location: {href: 'https://mosaic.example/kiosk.html'},
+            URL,
+            open: () => (blocked ? null : tab),
+            setTimeout(fn, ms) { timers.push({fn, ms}); return timers.length; },
+        };
+        return {
+            opener, tab, printed, written,
+            runTimers() { timers.splice(0, timers.length).forEach(t => t.fn()); },
+            pendingTimers: () => timers.length,
+        };
+    }
+
+    test('the labels go into a real window the greeter can see', () => {
+        const env = fakeOpener();
+        const tab = Nametag.openPrintWindow(LABELS, env.opener);
+
+        assert.strictEqual(tab, env.tab);
+        assert.strictEqual(env.written.length, 1);
+        assert.match(env.written[0], /Ada/);
+    });
+
+    test('the ordinary dialog opens on top of it', () => {
+        const env = fakeOpener();
+        Nametag.openPrintWindow(LABELS, env.opener);
+
+        env.tab.onload();
+        assert.strictEqual(env.printed.length, 1);
+    });
+
+    test('the mark is asked for by its full address, not a relative one', () => {
+        // document.write puts the window at about:blank, where the relative
+        // path the hidden frame relies on resolves to nothing and every label
+        // prints with a hole where the logo should be.
+        const env = fakeOpener();
+        Nametag.openPrintWindow(LABELS, env.opener);
+
+        assert.match(env.written[0], /https:\/\/mosaic\.example\/assets\/mosaic-icon\.png/);
+    });
+
+    test('it prints even if the window never reports loading', () => {
+        const env = fakeOpener();
+        Nametag.openPrintWindow(LABELS, env.opener);
+
+        assert.ok(env.pendingTimers() >= 1);
+        env.runTimers();
+        assert.strictEqual(env.printed.length, 1);
+    });
+
+    test('one dialog, not two, when load and the fallback both land', () => {
+        const env = fakeOpener();
+        Nametag.openPrintWindow(LABELS, env.opener);
+
+        env.tab.onload();
+        env.runTimers();
+        assert.strictEqual(env.printed.length, 1);
+    });
+
+    test('the window is left open, so Ctrl+P is still available', () => {
+        const env = fakeOpener();
+        Nametag.openPrintWindow(LABELS, env.opener);
+        env.tab.onload();
+
+        assert.strictEqual(typeof env.tab.closed, 'undefined',
+            'nothing may close the window — the labels in it are the fallback');
+    });
+
+    test('a blocked pop-up is reported, not swallowed', () => {
+        const env = fakeOpener({blocked: true});
+        let told = null;
+        const tab = Nametag.openPrintWindow(LABELS, env.opener, ok => { told = ok; });
+
+        assert.strictEqual(tab, null);
+        assert.strictEqual(told, false, 'the caller must be able to say why nothing appeared');
+    });
+
+    test('the caller is told when the dialog was actually asked for', () => {
+        const env = fakeOpener();
+        let told = null;
+        Nametag.openPrintWindow(LABELS, env.opener, ok => { told = ok; });
+        env.tab.onload();
+
+        assert.strictEqual(told, true);
+    });
+});
