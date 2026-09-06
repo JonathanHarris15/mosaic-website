@@ -1,3 +1,11 @@
+// ⚠ GENERATED FILE — DO NOT EDIT.
+//
+// Copied from public/shepherding-core.js by scripts/sync-shared-to-functions.js, because
+// functions/ deploys as its own bundle and cannot require across into
+// public/. Edit the original; run the script; commit both.
+//
+// test/functions-shared-sync.test.js fails if this copy is stale.
+
 // Shepherding Core — the single seam for the Shepherding Status value model and
 // the Pastoral Record write invariant (ADR-0005).
 //
