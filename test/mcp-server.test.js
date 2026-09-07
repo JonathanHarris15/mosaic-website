@@ -125,6 +125,17 @@ const FIELD_VALUES = {
     // Real code passes admin.firestore.FieldPath.documentId() here; the range
     // read is stubbed out, so a marker is enough to prove it was threaded.
     documentId: () => '<<document-id>>',
+    // MS-278. The shepherding writes take the sentinel factories rather than
+    // requiring firebase-admin themselves (see functions/mcp-firestore.js).
+    // Markers again: nothing in this file reaches a real Firestore, and what is
+    // under test here is the wiring, not the writes.
+    FieldValue: {
+        serverTimestamp: () => '<<server-timestamp>>',
+        arrayUnion: (v) => ({__arrayUnion: v}),
+        arrayRemove: (v) => ({__arrayRemove: v}),
+        delete: () => '<<delete>>',
+    },
+    Timestamp: {fromDate: (d) => ({__timestamp: d.toISOString()})},
 };
 
 // The origin the fake server is told it lives at. Only the seal's URL is
@@ -153,6 +164,16 @@ async function connectAs(permissionLevel) {
     return {client, server};
 }
 
+/** The smallest valid arguments for a tool, so a refusal can be provoked. */
+function argsFor(name) {
+    if (name === 'shep_find_person') return {query: 'Sarah'};
+    if (name === 'shep_write_note') {
+        return {personId: 'p1', type: 'Elder Meeting', markdown: 'x'};
+    }
+    if (name === 'cal_list_events') return {from: '2026-01-01', to: '2026-01-07'};
+    return {};
+}
+
 /** The text of a tool result, whatever shape it came back in. */
 function textOf(result) {
     return (result.content || []).map((c) => c.text || '').join('\n');
@@ -176,7 +197,7 @@ describe('the Order of Service MCP server', () => {
         const {tools} = await client.listTools();
         const names = tools.map((t) => t.name).sort();
 
-        assert.deepStrictEqual(names, [
+        assert.deepStrictEqual(names.filter((n) => n.startsWith('oos_')), [
             'oos_get_guidance',
             'oos_get_hymn_history',
             'oos_get_scripture_heatmap',
@@ -189,7 +210,145 @@ describe('the Order of Service MCP server', () => {
             'oos_update_liturgy',
             'oos_update_note',
         ]);
-        names.forEach((n) => assert.ok(n.startsWith('oos_'), n));
+
+        // Every name belongs to a capability group. The prefixes are the whole
+        // reason MS-262 chose `oos_` over bare names: a later group can be added
+        // without renaming anything a connected client already knows, which is
+        // exactly what MS-278 then did.
+        names.forEach((n) => assert.match(n, /^(oos|shep|cal)_/, n));
+    });
+
+    // -- The shepherding and calendar groups (MS-278) ---------------------
+
+    test('the shepherding and calendar tools are all there', async () => {
+        const {client} = await connectAs('elder');
+        const names = (await client.listTools()).tools.map((t) => t.name).sort();
+
+        // Pinned rather than counted. A tool that quietly stops being
+        // registered is a tool an assistant is told does not exist, and a count
+        // would not say which one went.
+        assert.deepStrictEqual(names.filter((n) => n.startsWith('shep_')), [
+            'shep_add_care_list_column',
+            'shep_add_person_panel',
+            'shep_add_tags',
+            'shep_answer_form_document',
+            'shep_append_to_document',
+            'shep_append_to_note',
+            'shep_clear_status',
+            'shep_create_care_list',
+            'shep_create_document',
+            'shep_create_folder',
+            'shep_create_form_document',
+            'shep_create_reminder',
+            'shep_create_tag',
+            'shep_create_view',
+            'shep_delete_document',
+            'shep_delete_folder',
+            'shep_delete_note',
+            'shep_delete_reminder',
+            'shep_delete_tag',
+            'shep_delete_view',
+            'shep_edit_note',
+            'shep_explain_change',
+            'shep_find_person',
+            'shep_get_care_list',
+            'shep_get_document',
+            'shep_get_form_document',
+            'shep_get_note',
+            'shep_get_pastoral_record',
+            'shep_get_profile',
+            'shep_list_documents',
+            'shep_list_form_templates',
+            'shep_list_notes',
+            'shep_list_people',
+            'shep_list_reminders',
+            'shep_list_tags',
+            'shep_list_views',
+            'shep_merge_tags',
+            'shep_move_document',
+            'shep_move_folder',
+            'shep_preview_tag_merge',
+            'shep_remove_tags',
+            'shep_rename_document',
+            'shep_rename_folder',
+            'shep_rename_tag',
+            'shep_set_elder_assignment',
+            'shep_set_membership_stage',
+            'shep_set_status',
+            'shep_update_document',
+            'shep_update_view',
+            'shep_write_care_list_cell',
+            'shep_write_note',
+        ]);
+
+        assert.deepStrictEqual(names.filter((n) => n.startsWith('cal_')), [
+            'cal_cancel_event',
+            'cal_create_event',
+            'cal_create_event_document',
+            'cal_delete_event',
+            'cal_get_event',
+            'cal_list_events',
+            'cal_list_series',
+            'cal_move_event',
+            'cal_update_event',
+            'cal_update_series',
+        ]);
+    });
+
+    test('an editor is offered them and refused every one', async () => {
+        // Registered for everybody on purpose. A tool an editor cannot SEE
+        // answers "unknown tool", which reads as a broken server; a tool that
+        // refuses can say it is elder-only and why.
+        const {client} = await connectAs('editor');
+        const listed = (await client.listTools()).tools
+            .map((t) => t.name)
+            .filter((n) => n.startsWith('shep_') || n.startsWith('cal_'));
+
+        assert.ok(listed.length > 50, 'they must still be listed for an editor');
+
+        for (const name of ['shep_find_person', 'shep_write_note', 'cal_list_events']) {
+            const result = await client.callTool({name, arguments: argsFor(name)});
+            assert.strictEqual(result.isError, true, name + ' must refuse an editor');
+            assert.match(textOf(result), /elder/i, name);
+        }
+    });
+
+    test('the refusal names the rank the caller actually holds', async () => {
+        // "Permission denied" tells an elder nothing they can act on. It has to
+        // say what they hold and what it falls short of.
+        const {client} = await connectAs('viewer');
+        const result = await client.callTool({
+            name: 'shep_get_profile',
+            arguments: {personId: 'p1'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.match(textOf(result), /viewer/);
+        assert.match(textOf(result), /elder/i);
+    });
+
+    test('an elder keeps every oos_ tool, and so does an editor', async () => {
+        // The gate is a SECOND one. Narrowing the first would have taken the
+        // Order of Service away from the editors it was built for.
+        for (const level of ['editor', 'elder']) {
+            const {client} = await connectAs(level);
+            const names = (await client.listTools()).tools.map((t) => t.name);
+            assert.strictEqual(names.filter((n) => n.startsWith('oos_')).length, 11, level);
+        }
+    });
+
+    test('every tool that writes is annotated as writing', async () => {
+        // The MCP Manager page draws "can this change something" straight off
+        // readOnlyHint, so a write tool wearing the read annotation would be
+        // shown to an editor as harmless.
+        const {client} = await connectAs('elder');
+        const {tools} = await client.listTools();
+
+        const shouldRead = /^(shep_(find|get|list|preview)|cal_(get|list))/;
+        tools.filter((t) => /^(shep|cal)_/.test(t.name)).forEach((t) => {
+            const readOnly = !!(t.annotations && t.annotations.readOnlyHint);
+            assert.strictEqual(readOnly, shouldRead.test(t.name),
+                t.name + ' is annotated ' + (readOnly ? 'read-only' : 'writing'));
+        });
     });
 
     test('every tool carries a description, so an assistant knows when to reach for it', async () => {

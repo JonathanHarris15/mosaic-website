@@ -24,9 +24,12 @@
  * exactly as the Manage Tags page refuses it.
  */
 
-const admin = require("firebase-admin");
-
-global.firebase = {firestore: {FieldValue: admin.firestore.FieldValue}};
+// ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
+// carries its own node_modules, so a `require("firebase-admin")` here would
+// be a different copy from whatever made the Firestore handle, and every
+// write would fail to serialise its own server timestamp. Same convention
+// liturgy-writes.js and service-read.js already follow. See mcp-firestore.js.
+const F = require("./mcp-firestore.js");
 
 const ShepherdingCore = require("./shared/shepherding-core.js");
 const {refuse} = require("./shepherding-writes.js");
@@ -300,7 +303,7 @@ async function deleteTag(db, {tagId}) {
       .where("tags", "array-contains", tagId).get();
 
   const ops = snap.docs.map((doc) => (batch) => {
-    const update = {tags: admin.firestore.FieldValue.arrayRemove(tagId)};
+    const update = {tags: F.arrayRemove(tagId)};
     if (data.hidePeople) {
       const remaining = (doc.data().tags || []).filter((t) => t !== tagId);
       update.shepherdingHidden = remaining.some((t) => otherHidePeople.includes(t));

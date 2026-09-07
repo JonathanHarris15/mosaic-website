@@ -26,9 +26,12 @@
  * here goes through it.
  */
 
-const admin = require("firebase-admin");
-
-global.firebase = {firestore: {FieldValue: admin.firestore.FieldValue}};
+// ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
+// carries its own node_modules, so a `require("firebase-admin")` here would
+// be a different copy from whatever made the Firestore handle, and every
+// write would fail to serialise its own server timestamp. Same convention
+// liturgy-writes.js and service-read.js already follow. See mcp-firestore.js.
+const F = require("./mcp-firestore.js");
 
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const DocumentBodyCore = require("./shared/document-body-core.js");
@@ -41,11 +44,6 @@ const STRUCTURE = "elder_document_structure";
 const STRUCTURE_DOC = "root";
 const PEOPLE = "people";
 const NOTES = "shepherding_notes";
-
-/** The Firestore sentinel for "now, by the server's clock". */
-function now() {
-  return admin.firestore.FieldValue.serverTimestamp();
-}
 
 /** The folder tree, or an empty one the first time anybody looks. */
 async function loadTree(db) {
@@ -171,7 +169,7 @@ async function createDocument(db, {title, markdown, folderId, ownerPersonId, act
     title: String(title || "").trim() || undefined,
     docType: "note",
     author: {uid: actor.uid, name: actor.name},
-    timestamp: now(),
+    timestamp: F.now(),
     ownerPersonId: ownerPersonId || null,
   });
 
@@ -216,7 +214,7 @@ async function updateDocument(db, {documentId, title, markdown, actor}) {
   const {ref, data} = await loadDocument(db, documentId);
   refuseIfNotProse(data, "written into");
 
-  const update = {updatedAt: now(), updatedByName: actor.name};
+  const update = {updatedAt: F.now(), updatedByName: actor.name};
   if (title !== undefined && title !== null) update.title = String(title).trim();
   if (markdown !== undefined && markdown !== null) {
     update.contentJson = NoteMarkdownCore.fromMarkdown(String(markdown));
@@ -241,7 +239,7 @@ async function appendToDocument(db, {documentId, markdown, actor}) {
 
   await ref.update(Object.assign({
     contentJson: NoteMarkdownCore.appendMarkdown(data.contentJson, body),
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedByName: actor.name,
   }, Actor.provenance()));
 
@@ -269,7 +267,7 @@ async function renameDocument(db, {documentId, title, actor}) {
   const name = String(title || "").trim();
   if (!name) throw refuse("A document needs a title.");
   await ref.update(Object.assign(
-      {title: name, updatedAt: now(), updatedByName: actor.name},
+      {title: name, updatedAt: F.now(), updatedByName: actor.name},
       Actor.provenance()));
   return {ok: true, documentId, title: name};
 }
@@ -468,7 +466,7 @@ async function addPersonPanel(db, {documentId, personId, noteType, markdown, act
     authorUid: actor.uid,
     authorName: actor.name,
     sourceDocumentId: documentId,
-    createdAt: now(),
+    createdAt: F.now(),
   }, Actor.provenance()));
 
   const panel = {
@@ -495,7 +493,7 @@ async function addPersonPanel(db, {documentId, personId, noteType, markdown, act
             !(node.content && node.content.length) && body.content.length === 1))
           .concat([panel]),
     },
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedByName: actor.name,
   }, Actor.provenance()));
 

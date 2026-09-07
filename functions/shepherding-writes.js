@@ -27,10 +27,12 @@
  * see what an agent did.
  */
 
-const admin = require("firebase-admin");
-
-// See the header. Set before shepherding-core.js is asked to commit anything.
-global.firebase = {firestore: {FieldValue: admin.firestore.FieldValue}};
+// ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
+// carries its own node_modules, so a `require("firebase-admin")` here would
+// be a different copy from whatever made the Firestore handle, and every
+// write would fail to serialise its own server timestamp. Same convention
+// liturgy-writes.js and service-read.js already follow. See mcp-firestore.js.
+const F = require("./mcp-firestore.js");
 
 const ShepherdingCore = require("./shared/shepherding-core.js");
 const DocumentBodyCore = require("./shared/document-body-core.js");
@@ -53,11 +55,6 @@ function refuse(message) {
   const err = new Error(message);
   err.code = "shepherding-refused";
   return err;
-}
-
-/** The Firestore sentinel for "now, by the server's clock". */
-function now() {
-  return admin.firestore.FieldValue.serverTimestamp();
 }
 
 /**
@@ -153,7 +150,7 @@ async function writeNote(db, {personId, type, subject, markdown, sourceDocumentI
     authorUid: actor.uid,
     authorName: actor.name,
     sourceDocumentId: sourceDocumentId || null,
-    createdAt: now(),
+    createdAt: F.now(),
   }, Actor.provenance()));
 
   return {ok: true, noteId: ref.id, personId};
@@ -196,7 +193,7 @@ async function appendToNote(db, {personId, noteId, markdown, actor}) {
   await ref.update(Object.assign({
     contentJson,
     content: DocumentBodyCore.plainText(contentJson),
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedBy: actor.uid,
     updatedByName: actor.name,
   }, Actor.provenance()));
@@ -214,7 +211,7 @@ async function editNote(db, {personId, noteId, type, subject, markdown, actor}) 
   const {ref} = await loadNote(db, personId, noteId);
 
   const update = {
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedBy: actor.uid,
     updatedByName: actor.name,
   };
@@ -305,7 +302,7 @@ async function setStatus(db, {personId, urgency, importance, explanation, actor}
   const newStatus = {urgency, importance};
   const activityId = await ShepherdingCore.commitPastoralChange(
       db, personId,
-      {shepherdingStatus: newStatus, updatedAt: now()},
+      {shepherdingStatus: newStatus, updatedAt: F.now()},
       marked(ShepherdingCore.buildStatusChange({
         previousStatus: data.shepherdingStatus || null,
         newStatus,
@@ -332,7 +329,7 @@ async function clearStatus(db, {personId, explanation, actor}) {
 
   const activityId = await ShepherdingCore.commitPastoralChange(
       db, personId,
-      {shepherdingStatus: null, updatedAt: now()},
+      {shepherdingStatus: null, updatedAt: F.now()},
       marked(ShepherdingCore.buildStatusChange({
         previousStatus: data.shepherdingStatus,
         newStatus: null,
@@ -400,10 +397,10 @@ async function changeTags(db, {personId, tagIds, action, explanation, actor}) {
         db, personId,
         {
           tags: adding ?
-            admin.firestore.FieldValue.arrayUnion(tagId) :
-            admin.firestore.FieldValue.arrayRemove(tagId),
+            F.arrayUnion(tagId) :
+            F.arrayRemove(tagId),
           shepherdingHidden: tags.some((id) => hidePeople.includes(id)),
-          updatedAt: now(),
+          updatedAt: F.now(),
         },
         marked(ShepherdingCore.buildTagChange({
           tagId,

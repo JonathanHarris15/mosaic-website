@@ -36,6 +36,7 @@ const sr = require("./service-read");
 const nw = require("./note-writes");
 const gs = require("./guidance-store");
 const gw = require("./guidance-writes");
+const shepTools = require("./mcp-shepherding-tools.js");
 const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
@@ -94,25 +95,13 @@ function loadSdk() {
 }
 
 /**
- * A tool result carrying JSON. MCP wants content blocks; an assistant reads
- * the text, so the data goes in as pretty JSON rather than a prose summary
- * this file would have to keep in step with the shape.
- * @param {*} data whatever the underlying module returned
- * @return {object} an MCP tool result
+ * A tool result carrying JSON, and a refusal an assistant can read.
+ *
+ * Both moved to mcp-result.js when the shepherding tools arrived (MS-278):
+ * two registration files with two slightly different ideas of what a refusal
+ * looks like is how an assistant learns to treat one of them as a crash.
  */
-function jsonResult(data) {
-  return {content: [{type: "text", text: JSON.stringify(data, null, 2)}]};
-}
-
-/**
- * A refusal the assistant can read and act on, rather than a thrown error
- * that surfaces to the user as "something went wrong".
- * @param {string} message why not
- * @return {object} an MCP tool result flagged as an error
- */
-function refuse(message) {
-  return {content: [{type: "text", text: message}], isError: true};
-}
+const {jsonResult, refuse} = require("./mcp-result.js");
 
 // A hymn slot is chosen as one act — id and name together — so the schema
 // takes the pair. `id` is null for a hymn typed in freehand that the registry
@@ -640,6 +629,17 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       note: "Visible on the Order of Service page for that Sunday now.",
     });
   });
+
+  // The Shepherding System and the Calendar (MS-278). Registered from their
+  // own file because sixty tools beside these twelve would have made neither
+  // readable — the rule they follow is the same one stated at the top of this
+  // file, and mcp-shepherding-tools.js restates it for anyone who opens that
+  // one first.
+  //
+  // ⚠ THEY CARRY THEIR OWN GATE. `oos_` is for editors and up; these are
+  // elder-only, checked per call. Passing `auth` through rather than a boolean
+  // is deliberate: the refusal names the level the caller actually holds.
+  shepTools.register(server, {db, auth, fieldValues});
 
   return server;
 }

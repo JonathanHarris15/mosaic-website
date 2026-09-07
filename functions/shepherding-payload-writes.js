@@ -31,9 +31,12 @@
  * self-cleaning and is why they need no confirmation an agent cannot give.
  */
 
-const admin = require("firebase-admin");
-
-global.firebase = {firestore: {FieldValue: admin.firestore.FieldValue}};
+// ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
+// carries its own node_modules, so a `require("firebase-admin")` here would
+// be a different copy from whatever made the Firestore handle, and every
+// write would fail to serialise its own server timestamp. Same convention
+// liturgy-writes.js and service-read.js already follow. See mcp-firestore.js.
+const F = require("./mcp-firestore.js");
 
 const FormsCore = require("./shared/forms-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
@@ -50,11 +53,6 @@ const REMINDERS = "shepherding_reminders";
 
 // The one column a Care List has before an elder adds any of their own.
 const DEFAULT_COLUMN = {id: "col_default", name: "Notes"};
-
-/** The Firestore sentinel for "now, by the server's clock". */
-function now() {
-  return admin.firestore.FieldValue.serverTimestamp();
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Form Documents
@@ -142,7 +140,7 @@ async function createFormDocument(db, {templateId, personId, title, folderId, ac
     title: String(title || "").trim() || template.title || "New Document",
     docType: "form",
     author: {uid: actor.uid, name: actor.name},
-    timestamp: now(),
+    timestamp: F.now(),
     ownerPersonId: personId || null,
     templateId,
     questions: template.questions || null,
@@ -261,7 +259,7 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
 
   await ref.update(Object.assign({
     answers: merged,
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedByName: actor.name,
   }, Actor.provenance()));
 
@@ -305,7 +303,7 @@ async function createCareList(db, {title, filter, viewId, columns, folderId, act
     title: String(title || "").trim() || "New Care List",
     docType: "care-list",
     author: {uid: actor.uid, name: actor.name},
-    timestamp: now(),
+    timestamp: F.now(),
     filterId: viewId || null,
     filterConfig: viewId ? null : filterConfig(filter),
   });
@@ -413,7 +411,7 @@ async function addCareListColumn(db, {documentId, name, actor}) {
   const added = {id: "col_" + n, name: label};
   await ref.update(Object.assign({
     careListColumns: columns.concat([added]),
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedByName: actor.name,
   }, Actor.provenance()));
 
@@ -446,7 +444,7 @@ async function writeCareListCell(db, {documentId, personId, columnId, markdown, 
 
   await ref.update(Object.assign({
     careListData: cells,
-    updatedAt: now(),
+    updatedAt: F.now(),
     updatedByName: actor.name,
   }, Actor.provenance()));
 
@@ -501,7 +499,7 @@ async function createView(db, {title, filter, actor}) {
         title: label,
         createdBy: actor.uid,
         createdByName: actor.name,
-        createdAt: now(),
+        createdAt: F.now(),
       },
       Actor.provenance()));
 
@@ -524,7 +522,7 @@ async function updateView(db, {viewId, title, filter, actor}) {
   const snap = await ref.get();
   if (!snap.exists) throw refuse(`No Filtered View with id "${viewId}".`);
 
-  const update = {updatedAt: now(), updatedByName: actor.name};
+  const update = {updatedAt: F.now(), updatedByName: actor.name};
   if (title !== undefined && title !== null) update.title = String(title).trim();
   if (filter) Object.assign(update, filterConfig(filter));
 
@@ -615,11 +613,11 @@ async function createReminder(db, {title, due, personIds, actor}) {
 
   const ref = await db.collection(REMINDERS).add(Object.assign({
     title: label,
-    dueDatetime: admin.firestore.Timestamp.fromDate(when),
+    dueDatetime: F.timestampFrom(when),
     mentions: mentioned,
     createdBy: actor.uid,
     createdByName: actor.name,
-    createdAt: now(),
+    createdAt: F.now(),
   }, Actor.provenance()));
 
   return {ok: true, reminderId: ref.id, title: label, due: when.toISOString()};
