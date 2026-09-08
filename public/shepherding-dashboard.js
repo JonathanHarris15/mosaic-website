@@ -3,15 +3,23 @@ const DASH_URGENCY_LEVELS = ShepherdingCore.URGENCY_LEVELS;
 const DASH_IMPORTANCE_LEVELS = ShepherdingCore.IMPORTANCE_LEVELS;
 const dashZoneKey = ShepherdingCore.statusZoneKey;
 
+// How far either side of today the panel resolves a repeat. The panel only ever
+// draws a handful of rows, but a missed occurrence is COMPUTED (ADR-0060), so
+// the window has to reach back far enough to find the ones nobody did.
+const DASH_TASK_LOOK_BACK_DAYS = 365;
+const DASH_TASK_LOOK_AHEAD_DAYS = 180;
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingDashboard', () => ({
         currentUser: null,
         currentPermissionLevel: null,
         currentUserName: '',
 
-        reminders: [],
-        showReminderModal: false,
-        newReminder: { title: '', dueDatetime: '' },
+        // Tasks & Reminders (MS-79). The panel is a GLANCE — yours, the
+        // unassigned, and anything late. Writing at length, filtering and the
+        // completed list live on shepherding-tasks.html.
+        panelTasks: [],
+        currentPersonId: null,
 
         views: [],
         selectedViewId: null,
@@ -56,9 +64,10 @@ document.addEventListener('alpine:init', () => {
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });
+                this.currentPersonId = (userData && userData.personId) || null;
 
                 await Promise.all([
-                    this.loadReminders(),
+                    this.loadPanelTasks(),
                     this.loadViews(),
                     this.loadPeople(),
                     this.loadTags(),
@@ -72,16 +81,52 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
-        async loadReminders() {
-            const now = firebase.firestore.Timestamp.now();
+        // ⚠ THE PANEL DECIDES NOTHING. Which Tasks belong here is
+        // TasksCore.panelFor, the same answer the phone's Shepherd screen gets,
+        // so the two cannot disagree about what "yours" means.
+        async loadPanelTasks() {
             try {
-                const snap = await db.collection('shepherding_reminders')
-                    .where('dueDatetime', '>=', now)
-                    .orderBy('dueDatetime', 'asc')
-                    .get();
-                this.reminders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const [taskSnap, occSnap] = await Promise.all([
+                    db.collection('shepherding_tasks').get(),
+                    db.collection('shepherding_task_occurrences').get(),
+                ]);
+                const rows = taskSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const now = Date.now();
+                const all = TasksCore.resolve({
+                    tasks: rows.filter(t => !t.recurrence),
+                    series: rows.filter(t => t.recurrence),
+                    occurrences: occSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                    now,
+                    from: TasksCore.dayOf(now - DASH_TASK_LOOK_BACK_DAYS * 86400000),
+                    to: TasksCore.dayOf(now + DASH_TASK_LOOK_AHEAD_DAYS * 86400000),
+                });
+                this.panelTasks = TasksCore.panelFor(all, this.currentPersonId, now);
             } catch (e) {
-                console.error('Error loading reminders:', e);
+                console.error('Error loading tasks:', e);
+            }
+        },
+
+        taskDueLabel(task) {
+            const date = new Date(task.dueDate + 'T12:00:00');
+            const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const when = task.dueTime ? day + ', ' + task.dueTime : day;
+            return task.state === 'overdue' ? when + ' — overdue' : when;
+        },
+
+        // Ticking from the panel goes through the same door the Tasks page and
+        // the assistant use, so the rules exist once (MS-79).
+        async completeTask(task) {
+            try {
+                await firebase.functions().httpsCallable('shepherdingTask')({
+                    op: 'complete',
+                    taskId: task.seriesId || task.id,
+                    date: task.seriesId ? task.dueDate : undefined,
+                });
+                await this.loadPanelTasks();
+                this.showToast('Done');
+            } catch (e) {
+                console.error('Error completing task:', e);
+                this.showToast((e && e.message) || 'Error completing task', 'error');
             }
         },
 
@@ -116,40 +161,6 @@ document.addEventListener('alpine:init', () => {
                 }));
             } catch (e) {
                 console.error('Error loading tags:', e);
-            }
-        },
-
-        async addReminder() {
-            if (!this.newReminder.title.trim() || !this.newReminder.dueDatetime) return;
-            try {
-                const dueDatetime = firebase.firestore.Timestamp.fromDate(
-                    new Date(this.newReminder.dueDatetime)
-                );
-                await db.collection('shepherding_reminders').add({
-                    title: this.newReminder.title.trim(),
-                    dueDatetime,
-                    createdBy: this.currentUser.uid,
-                    createdByName: this.currentUserName,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
-                this.newReminder = { title: '', dueDatetime: '' };
-                this.showReminderModal = false;
-                await this.loadReminders();
-                this.showToast('Reminder added');
-            } catch (e) {
-                console.error('Error adding reminder:', e);
-                this.showToast('Error adding reminder', 'error');
-            }
-        },
-
-        async deleteReminder(id) {
-            try {
-                await db.collection('shepherding_reminders').doc(id).delete();
-                this.reminders = this.reminders.filter(r => r.id !== id);
-                this.showToast('Reminder deleted');
-            } catch (e) {
-                console.error('Error deleting reminder:', e);
-                this.showToast('Error deleting reminder', 'error');
             }
         },
 

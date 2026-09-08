@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <!-- One page, two skins. `mobile-shell.js` must load FIRST: it sets
+         html.shell-mobile before first paint, and mobile-shell.css restyles the
+         page from there. The same trade the Forms library and the Roles Manager
+         make — one implementation rather than a second native screen to keep in
+         step (MS-79). -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <title>Tasks &amp; Reminders | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* A finished Task is struck through rather than removed, so the day's
+           work stays readable until the day is over. */
+        .task--done .task__title { text-decoration: line-through; opacity: 0.55; }
+        .task--skipped .task__title { text-decoration: line-through; opacity: 0.4; font-style: italic; }
+
+        /* Overdue is the one thing on this page allowed to shout. */
+        .task--overdue .task__due { color: var(--error, #b3261e); font-weight: 600; }
+
+        .task__body { font-size: 0.875rem; }
+        .task__body p { margin: 0 0 0.35rem; }
+        .task__body ul, .task__body ol { margin: 0 0 0.35rem 1.1rem; list-style: revert; }
+
+        .task-editor .ProseMirror { min-height: 6rem; outline: none; }
+        .task-editor .ProseMirror p { margin: 0 0 0.4rem; }
+        .task-editor .ProseMirror ul, .task-editor .ProseMirror ol { margin: 0 0 0.4rem 1.1rem; list-style: revert; }
+        .task-editor .ProseMirror:empty:before,
+        .task-editor .ProseMirror p.is-editor-empty:first-child:before {
+            content: attr(data-placeholder);
+            color: var(--on-surface-variant); opacity: 0.7; float: left; height: 0; pointer-events: none;
+        }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="tasks-core.js"></script>
+    <script src="tiptap-editor-loader.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="shepherdingTasks" x-cloak>
+
+    <header class="m-header m-header--tall">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'"
+                   href="shepherding-dashboard.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Shepherd</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Tasks &amp; Reminders</h1>
+                    <span class="m-header__sub">What the elders have to do, and what got done.</span>
+                </div>
+            </div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
+    </div>
+
+    <!-- Elder-only, and it says so rather than showing an empty page. -->
+    <div x-show="!loading && !isElder" class="flex-grow flex items-center justify-center px-4">
+        <p class="text-on-surface-variant italic">Elder-only tools.</p>
+    </div>
+
+    <main x-show="!loading && isElder"
+          class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+
+        <!-- Who, and whether to show what is finished -->
+        <div class="flex flex-wrap items-center gap-md">
+            <div class="flex items-center gap-2">
+                <label for="assignee-filter" class="font-label-md text-label-md text-on-surface-variant">Showing</label>
+                <select id="assignee-filter" x-model="assigneeFilter"
+                        class="px-md py-xs rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface">
+                    <option value="all">Everyone's tasks</option>
+                    <option value="mine">Mine</option>
+                    <option value="unassigned">Nobody has picked up</option>
+                    <template x-for="elder in elders" :key="elder.id">
+                        <option :value="elder.id" x-text="elder.name"></option>
+                    </template>
+                </select>
+            </div>
+
+            <label class="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant">
+                <input type="checkbox" x-model="showDone" class="accent-primary" />
+                Show what's been done
+            </label>
+
+            <button @click="openNew()"
+                class="ml-auto flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
+                <span class="material-symbols-outlined text-[18px]">add</span>
+                New Task
+            </button>
+        </div>
+
+        <!-- Overdue first, because it is the only thing here allowed to shout -->
+        <section x-show="overdue.length > 0" class="flex flex-col gap-2">
+            <h2 class="font-headline-md text-headline-md text-primary">Overdue</h2>
+            <div class="flex flex-col gap-2">
+                <template x-for="task in overdue" :key="'o' + task.id + task.dueDate">
+                    <div :class="rowClass(task)">
+                        <button @click="tick(task)" :aria-label="'Mark ' + task.title + ' done'"
+                            class="mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary"></button>
+                        <div class="flex-1 min-w-0" @click="openEdit(task)">
+                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="task__due text-sm" x-text="dueLabel(task)"></span>
+                                <span x-show="task.seriesId" class="text-xs text-on-surface-variant flex items-center gap-0.5">
+                                    <span class="material-symbols-outlined text-[14px]">repeat</span>
+                                    <span x-text="repeatLabel(task)"></span>
+                                </span>
+                                <span x-text="whoLabel(task)" class="text-xs text-on-surface-variant"></span>
+                            </div>
+                            <div x-show="task.body" x-html="task.body" class="task__body mt-1 text-on-surface-variant"></div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button x-show="task.seriesId" @click.stop="skip(task)" title="Skip this one"
+                                class="p-1 text-on-surface-variant hover:text-primary">
+                                <span class="material-symbols-outlined text-[18px]">redo</span>
+                            </button>
+                            <button @click.stop="remove(task)" title="Delete"
+                                class="p-1 text-on-surface-variant hover:text-error">
+                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+
+        <!-- Everything still to come -->
+        <section class="flex flex-col gap-2">
+            <h2 class="font-headline-md text-headline-md text-primary">Coming up</h2>
+            <p x-show="upcoming.length === 0" class="text-on-surface-variant italic text-sm">
+                Nothing outstanding. <span x-show="assigneeFilter !== 'all'">Try showing everyone's.</span>
+            </p>
+            <div class="flex flex-col gap-2">
+                <template x-for="task in upcoming" :key="'u' + task.id + task.dueDate">
+                    <div :class="rowClass(task)">
+                        <button @click="tick(task)" :aria-label="'Mark ' + task.title + ' done'"
+                            class="mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary"></button>
+                        <div class="flex-1 min-w-0" @click="openEdit(task)">
+                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="task__due text-sm text-on-surface-variant" x-text="dueLabel(task)"></span>
+                                <span x-show="task.seriesId" class="text-xs text-on-surface-variant flex items-center gap-0.5">
+                                    <span class="material-symbols-outlined text-[14px]">repeat</span>
+                                    <span x-text="repeatLabel(task)"></span>
+                                </span>
+                                <span x-text="whoLabel(task)" class="text-xs text-on-surface-variant"></span>
+                            </div>
+                            <div x-show="task.body" x-html="task.body" class="task__body mt-1 text-on-surface-variant"></div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button x-show="task.seriesId" @click.stop="skip(task)" title="Skip this one"
+                                class="p-1 text-on-surface-variant hover:text-primary">
+                                <span class="material-symbols-outlined text-[18px]">redo</span>
+                            </button>
+                            <button @click.stop="remove(task)" title="Delete"
+                                class="p-1 text-on-surface-variant hover:text-error">
+                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+
+        <!-- Kept, never deleted: this is how anybody can say what the elders did -->
+        <section x-show="showDone" class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+                <h2 class="font-headline-md text-headline-md text-primary">Done</h2>
+                <label class="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant">
+                    Last
+                    <select x-model.number="doneWindowDays"
+                            class="px-2 py-1 rounded-lg bg-surface-container-lowest border border-outline-variant">
+                        <option :value="30">30 days</option>
+                        <option :value="90">3 months</option>
+                        <option :value="365">a year</option>
+                        <option :value="0">everything</option>
+                    </select>
+                </label>
+            </div>
+            <p x-show="done.length === 0" class="text-on-surface-variant italic text-sm">
+                Nothing finished in that time.
+            </p>
+            <div class="flex flex-col gap-2">
+                <template x-for="task in done" :key="'d' + task.id + task.dueDate">
+                    <div :class="rowClass(task)">
+                        <button @click="untick(task)" title="Put it back"
+                            class="mt-1 w-5 h-5 shrink-0 rounded border border-primary bg-primary text-on-primary flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                            <div class="text-xs text-on-surface-variant mt-1" x-text="doneLabel(task)"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+    </main>
+
+    <!-- Writing one properly: the room the dashboard panel does not have -->
+    <div x-show="showModal" x-cloak
+         class="fixed inset-0 z-50 bg-scrim/50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
+         @click.self="closeModal()">
+        <div class="bg-surface-container-lowest w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl p-margin flex flex-col gap-md max-h-[95vh] overflow-y-auto">
+            <h2 class="font-headline-md text-headline-md text-primary" x-text="editingId ? 'Edit task' : 'New task'"></h2>
+
+            <label class="flex flex-col gap-1">
+                <span class="font-label-md text-label-md text-on-surface-variant">What needs doing</span>
+                <input type="text" x-model="form.title" placeholder="e.g. Follow up with the Johnson family"
+                    class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant text-on-surface" />
+            </label>
+
+            <div class="flex flex-col gap-1">
+                <span class="font-label-md text-label-md text-on-surface-variant">Anything more to say</span>
+                <div class="task-editor px-md py-2 rounded-lg bg-surface-container border border-outline-variant">
+                    <div x-ref="bodyEditor"></div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-md">
+                <label class="flex flex-col gap-1">
+                    <span class="font-label-md text-label-md text-on-surface-variant">
+                        <span x-text="form.repeats ? 'First date' : 'Due'"></span>
+                    </span>
+                    <input type="date" x-model="form.dueDate"
+                        class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant text-on-surface" />
+                </label>
+                <label class="flex flex-col gap-1">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Time (optional)</span>
+                    <input type="time" x-model="form.dueTime"
+                        class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant text-on-surface" />
+                </label>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <span class="font-label-md text-label-md text-on-surface-variant">
+                    Who's responsible <span class="opacity-70">— leave empty and it shows as unclaimed</span>
+                </span>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="elder in elders" :key="elder.id">
+                        <button type="button" @click="toggleAssignee(elder.id)"
+                            :class="form.assigneeIds.includes(elder.id)
+                                ? 'bg-primary text-on-primary'
+                                : 'bg-surface-container-lowest border border-outline-variant text-on-surface-variant'"
+                            class="px-md py-xs rounded-full font-label-md text-label-md"
+                            x-text="elder.name"></button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <label class="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant">
+                    <input type="checkbox" x-model="form.repeats" class="accent-primary" />
+                    It repeats
+                </label>
+                <div x-show="form.repeats" class="flex flex-wrap gap-md pl-6">
+                    <label class="flex flex-col gap-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">How often</span>
+                        <select x-model="form.freq"
+                            class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant">
+                            <option value="weekly">Weekly</option>
+                            <option value="fortnightly">Fortnightly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Until</span>
+                        <select x-model="form.endsKind"
+                            class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant">
+                            <option value="never">Forever</option>
+                            <option value="onDate">A date</option>
+                            <option value="afterCount">A number of times</option>
+                        </select>
+                    </label>
+                    <label x-show="form.endsKind === 'onDate'" class="flex flex-col gap-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Last date</span>
+                        <input type="date" x-model="form.endsDate"
+                            class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant" />
+                    </label>
+                    <label x-show="form.endsKind === 'afterCount'" class="flex flex-col gap-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">How many</span>
+                        <input type="number" min="1" x-model.number="form.endsCount"
+                            class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant w-24" />
+                    </label>
+                </div>
+                <!-- A rule is easy to get subtly wrong, so it says what it will do
+                     before anybody commits to it. -->
+                <p x-show="form.repeats && previewDates.length" class="pl-6 text-sm text-on-surface-variant">
+                    First few: <span x-text="previewDates.join(', ')"></span>
+                </p>
+            </div>
+
+            <p x-show="error" x-text="error" class="text-error text-sm"></p>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button @click="closeModal()"
+                    class="px-md py-xs rounded-lg text-on-surface-variant hover:bg-surface-container">Cancel</button>
+                <button @click="save()" :disabled="saving || !form.title.trim() || !form.dueDate"
+                    class="px-md py-xs rounded-lg bg-primary text-on-primary disabled:opacity-40">
+                    <span x-text="saving ? 'Saving…' : (editingId ? 'Save' : 'Add task')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="toast" x-cloak
+         class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-md py-2 rounded-lg bg-inverse-surface text-inverse-on-surface text-sm"
+         x-text="toast"></div>
+
+    <script src="shepherding-tasks.js"></script>
+</body>
+</html>

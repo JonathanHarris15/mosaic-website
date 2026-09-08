@@ -301,17 +301,46 @@
 
   // ── Shepherding (native Shepherd Dashboard) ──────────────────
   // Reads/writes the same collections as the desktop page
-  // (shepherding-dashboard.js): shepherding_reminders, shepherding_views,
+  // (shepherding-dashboard.js): shepherding_tasks, shepherding_views,
   // people, people_tags. The Shepherding Status value model and Tag-Hold
   // derivation come from window.ShepherdingCore — the single source of truth.
   function mapDocs(snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); }
 
-  function getShepherdingReminders() {
-    var now = firebase.firestore.Timestamp.now();
-    return get(db.collection("shepherding_reminders")
-      .where("dueDatetime", ">=", now).orderBy("dueDatetime", "asc"))
-      .then(mapDocs).catch(function () { return []; });
+  // Tasks & Reminders (MS-79). The panel's slice comes from TasksCore.panelFor,
+  // the same answer the desktop dashboard gets, so the two cannot disagree
+  // about what "yours" means. A missed occurrence is COMPUTED (ADR-0060), so
+  // the window reaches back far enough to find the ones nobody did.
+  var TASK_LOOK_BACK_DAYS = 365;
+  var TASK_LOOK_AHEAD_DAYS = 180;
+
+  function getShepherdingPanelTasks(user) {
+    return Promise.all([
+      get(db.collection("shepherding_tasks")).then(mapDocs).catch(function () { return []; }),
+      get(db.collection("shepherding_task_occurrences")).then(mapDocs).catch(function () { return []; }),
+    ]).then(function (both) {
+      var rows = both[0], occurrences = both[1], now = Date.now();
+      var all = window.TasksCore.resolve({
+        tasks: rows.filter(function (t) { return !t.recurrence; }),
+        series: rows.filter(function (t) { return t.recurrence; }),
+        occurrences: occurrences,
+        now: now,
+        from: window.TasksCore.dayOf(now - TASK_LOOK_BACK_DAYS * 86400000),
+        to: window.TasksCore.dayOf(now + TASK_LOOK_AHEAD_DAYS * 86400000),
+      });
+      return window.TasksCore.panelFor(all, (user && user.personId) || null, now);
+    }).catch(function () { return []; });
   }
+
+  // Every write goes through the one callable, never straight to Firestore —
+  // the rules about what a tick does live in functions/task-writes.js.
+  function completeShepherdingTask(task) {
+    return firebase.functions().httpsCallable("shepherdingTask")({
+      op: "complete",
+      taskId: task.seriesId || task.id,
+      date: task.seriesId ? task.dueDate : undefined,
+    });
+  }
+
   function getShepherdingViews() {
     return get(db.collection("shepherding_views").orderBy("createdAt", "asc"))
       .then(mapDocs).catch(function () { return []; });
@@ -348,16 +377,6 @@
       }).catch(function () { return {}; });
   }
 
-  function addShepherdingReminder(title, dueDate, user) {
-    return db.collection("shepherding_reminders").add({
-      title: title,
-      dueDatetime: firebase.firestore.Timestamp.fromDate(dueDate),
-      createdBy: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
-      createdByName: (user && user.name) || "",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-  function deleteShepherdingReminder(id) { return db.collection("shepherding_reminders").doc(id).delete(); }
 
   function addShepherdingView(payload, user) {
     return db.collection("shepherding_views").add(Object.assign({
@@ -1079,13 +1098,12 @@
     DESTINATIONS: DESTINATIONS, canSee: canSee,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
     getNextService: getNextService,
-    getShepherdingReminders: getShepherdingReminders,
+    getShepherdingPanelTasks: getShepherdingPanelTasks,
     getShepherdingViews: getShepherdingViews,
     getShepherdingPeople: getShepherdingPeople,
     getShepherdingTags: getShepherdingTags,
     getShepherdingTagHolds: getShepherdingTagHolds,
-    addShepherdingReminder: addShepherdingReminder,
-    deleteShepherdingReminder: deleteShepherdingReminder,
+    completeShepherdingTask: completeShepherdingTask,
     addShepherdingView: addShepherdingView,
     updateShepherdingView: updateShepherdingView,
     deleteShepherdingView: deleteShepherdingView,
