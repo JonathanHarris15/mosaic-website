@@ -27,6 +27,7 @@ function printableEditor() {
         viewport: null, world: null, tree: null,
         history: [], future: [],
         drag: null,          // { kind: 'pan'|'move'|'resize', ... }
+        panelW: { left: 0, right: 0 },   // 0 until the stored width is read
         treeDrag: null,      // { nodeId, pageId }
         cm: { html: null, css: null },
         pageEls: {},         // pageId -> the rendered page element
@@ -35,6 +36,15 @@ function printableEditor() {
 
     const PAD = 600;         // world padding round the pages, so panning never feels pinned
     const GAP = 80;          // between pages
+
+    // Each panel's width, dragged on its border and remembered per browser.
+    // `narrow` is the width below which a field row stacks its label above
+    // its control rather than sitting beside it.
+    const PANELS = {
+        left: { selector: '.pe-panel--left', varName: '--pe-left-w', key: 'printableEditorLeftWidth', min: 220, max: 560, def: 300, narrow: 272 },
+        right: { selector: '.pe-panel--right', varName: '--pe-right-w', key: 'printableEditorRightWidth', min: 220, max: 560, def: 320, narrow: 272 },
+    };
+    const CANVAS_FLOOR = 320;  // the canvas never gives up more than this
 
     const STYLE_KEYS = [
         'width', 'height', 'min-height', 'max-width', 'display', 'flex-direction', 'flex-wrap', 'gap',
@@ -172,13 +182,99 @@ function printableEditor() {
             if (!ui.viewport || !ui.world) return;
             this.bindCanvasEvents();
             this.bindKeys();
+            this.bindPanelResize();
             if (this.project && this.project.template) {
                 this.renderAll();
                 this.fitToView();
                 if (!this.selection.pageId && this.pages[0]) this.selectPage(this.pages[0].id);
                 if (this.initData) this.initData();
             }
-            window.addEventListener('resize', () => this.refreshOverlays());
+            // A narrower window can make a remembered panel width too greedy.
+            window.addEventListener('resize', () => {
+                Object.keys(PANELS).forEach(side => this.setPanelWidth(side, ui.panelW[side], false));
+                this.refreshOverlays();
+            });
+        },
+
+        // ── Panel widths ─────────────────────────────────────────────────
+        //
+        // The border between a panel and the canvas is a grab handle. The
+        // width lands on a CSS variable, so nothing here has to know what
+        // the panel holds, and the panel is told when it has gone narrow
+        // enough that its field rows should stack.
+
+        panelLimits(side) {
+            const spec = PANELS[side];
+            const other = side === 'left' ? 'right' : 'left';
+            const room = window.innerWidth - CANVAS_FLOOR - (ui.panelW[other] || PANELS[other].def);
+            const max = Math.max(spec.min, Math.min(spec.max, room));
+            return { min: spec.min, max: max };
+        },
+
+        setPanelWidth(side, px, remember) {
+            const spec = PANELS[side];
+            const main = document.querySelector('.pe-main');
+            if (!main) return;
+            const lim = this.panelLimits(side);
+            const w = Math.round(Math.min(lim.max, Math.max(lim.min, Number(px) || spec.def)));
+            ui.panelW[side] = w;
+            main.style.setProperty(spec.varName, w + 'px');
+            const panel = document.querySelector(spec.selector);
+            if (panel) panel.classList.toggle('is-narrow', w < spec.narrow);
+            if (remember) { try { window.localStorage.setItem(spec.key, String(w)); } catch (e) { /* private browsing */ } }
+            this.refreshOverlays();   // redraws the wires too
+        },
+
+        storedPanelWidth(side) {
+            const spec = PANELS[side];
+            let stored = null;
+            try { stored = window.localStorage.getItem(spec.key); } catch (e) { /* private browsing */ }
+            const n = Number(stored);
+            return Number.isFinite(n) && n > 0 ? n : spec.def;
+        },
+
+        bindPanelResize() {
+            const main = document.querySelector('.pe-main');
+            if (!main) return;
+            Object.keys(PANELS).forEach(side => { ui.panelW[side] = PANELS[side].def; });
+            Object.keys(PANELS).forEach(side => this.setPanelWidth(side, this.storedPanelWidth(side), false));
+
+            main.querySelectorAll('.pe-resizer').forEach(handle => {
+                const side = handle.getAttribute('data-resize');
+                if (!PANELS[side]) return;
+                // Left grows as the pointer goes right; the drawer is mirrored.
+                const sign = side === 'left' ? 1 : -1;
+
+                handle.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const startW = ui.panelW[side];
+                    handle.classList.add('is-dragging');
+                    document.body.classList.add('pe-resizing');
+                    const move = (ev) => this.setPanelWidth(side, startW + sign * (ev.clientX - startX), false);
+                    const up = () => {
+                        window.removeEventListener('mousemove', move);
+                        window.removeEventListener('mouseup', up);
+                        handle.classList.remove('is-dragging');
+                        document.body.classList.remove('pe-resizing');
+                        this.setPanelWidth(side, ui.panelW[side], true);
+                    };
+                    window.addEventListener('mousemove', move);
+                    window.addEventListener('mouseup', up);
+                });
+
+                handle.addEventListener('dblclick', () => this.setPanelWidth(side, PANELS[side].def, true));
+
+                handle.addEventListener('keydown', (e) => {
+                    const step = e.shiftKey ? 32 : 8;
+                    if (e.key === 'ArrowLeft') this.setPanelWidth(side, ui.panelW[side] - sign * step, true);
+                    else if (e.key === 'ArrowRight') this.setPanelWidth(side, ui.panelW[side] + sign * step, true);
+                    else if (e.key === 'Home') this.setPanelWidth(side, PANELS[side].def, true);
+                    else return;
+                    e.preventDefault();
+                });
+            });
         },
 
         // ── The picker ───────────────────────────────────────────────────

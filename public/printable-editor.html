@@ -453,6 +453,10 @@
             </section>
         </aside>
 
+        <!-- The border is the handle: drag it to widen a panel, double-click to reset. -->
+        <div class="pe-resizer" data-resize="left" role="separator" aria-orientation="vertical" tabindex="0"
+             aria-label="Resize the element panel" title="Drag to resize · double-click to reset"></div>
+
         <!-- ═══ Centre: the canvas ═══ -->
         <section class="pe-stage">
             <div id="pe-viewport" class="pe-viewport">
@@ -518,6 +522,9 @@
                 </div>
             </div>
         </section>
+
+        <div class="pe-resizer" data-resize="right" role="separator" aria-orientation="vertical" tabindex="0"
+             aria-label="Resize the data drawer" title="Drag to resize · double-click to reset"></div>
 
         <!-- ═══ Right: the data drawer (MS-396) ═══ -->
         <aside class="pe-panel pe-panel--right pe-drawer" id="pe-drawer">
@@ -774,10 +781,19 @@
         .pe-loading { flex: 1; }
         .pe-notices { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 90; width: min(640px, 90vw); display: flex; flex-direction: column; gap: 8px; }
         .pe-main { flex: 1; display: flex; min-height: 0; }
-        .pe-panel { flex: 0 0 300px; width: 300px; background: var(--surface-container-lowest); border-right: 1px solid var(--outline-variant); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-        .pe-panel--right { border-right: 0; border-left: 1px solid var(--outline-variant); flex-basis: 320px; width: 320px; }
+        .pe-panel { flex: 0 0 var(--pe-left-w, 300px); width: var(--pe-left-w, 300px); background: var(--surface-container-lowest); border-right: 1px solid var(--outline-variant); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+        .pe-panel--right { border-right: 0; border-left: 1px solid var(--outline-variant); flex-basis: var(--pe-right-w, 320px); width: var(--pe-right-w, 320px); }
         .pe-panel--right:empty { display: none; }
         .pe-stage { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+
+        /* The grab strip sits on the border and takes no room in the layout,
+           so the pages do not shift the moment it lights up. */
+        .pe-resizer { flex: 0 0 0; width: 0; position: relative; z-index: 6; align-self: stretch; }
+        .pe-resizer::before { content: ''; position: absolute; top: 0; bottom: 0; left: -5px; width: 11px; cursor: col-resize; }
+        .pe-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: -1px; width: 3px; background: var(--tertiary); opacity: 0; transition: opacity var(--duration) var(--ease-standard); }
+        .pe-resizer:hover::after, .pe-resizer:focus-visible::after, .pe-resizer.is-dragging::after { opacity: .75; }
+        .pe-resizer:focus-visible { outline: none; }
+        body.pe-resizing, body.pe-resizing * { cursor: col-resize !important; user-select: none; }
 
         /* ── Left panel ────────────────────────────────────────────────── */
         .pe-tools { display: flex; gap: 6px; padding: 10px; border-bottom: 1px solid var(--outline-variant); }
@@ -789,27 +805,45 @@
         .pe-section--props { flex: 1 1 auto; overflow: auto; }
         .pe-h { margin: 0 0 8px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-hint { margin: 6px 0; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
-        .pe-f { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 12px; color: var(--on-surface-variant); }
-        .pe-f > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .pe-f small { grid-column: 2; font-size: 11px; }
+        /* A field row is label then control. When the two will not fit side
+           by side the control drops to its own full-width line, so a narrow
+           panel makes rows taller and never squeezes a control to nothing. */
+        .pe-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 6px; font-size: 12px; color: var(--on-surface-variant); }
+        .pe-f > span:first-child { flex: 0 1 min(116px, 34%); min-width: 52px; }
+        .pe-f > .pe-in, .pe-f > .pe-unit, .pe-f > .pe-color, .pe-f > .pe-upload, .pe-f > .pe-size { flex: 1 1 132px; min-width: 0; }
+        .pe-f > .pe-seg { flex: 0 1 auto; min-width: 0; }
+        .pe-f small { flex: 1 0 100%; margin: 0 0 0 calc(min(116px, 34%) + 6px); font-size: 11px; }
+        .pe-f--check > input { flex: 0 0 auto; margin-right: auto; }
         .pe-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
-        .pe-grid2 .pe-f { grid-template-columns: 1fr; gap: 2px; }
+        /* A pair of columns stacks its label above its control, so it must
+           not wrap: a full-width basis down a column starts a second column
+           beside it rather than a second line. */
+        .pe-grid2 .pe-f { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 2px; }
+        .pe-grid2 .pe-f > span:first-child, .pe-grid2 .pe-f > .pe-in, .pe-grid2 .pe-f > .pe-unit, .pe-grid2 .pe-f > .pe-color, .pe-grid2 .pe-f > .pe-size { flex: 0 0 auto; }
+        .pe-grid2 .pe-f small { margin-left: 0; }
+        /* Narrower than a label and a control together: stack every row. The
+           pairs above already stack, and must keep their own rule. */
+        .pe-panel.is-narrow .pe-grid2 { grid-template-columns: 1fr; }
+        .pe-panel.is-narrow .pe-f > span:first-child { flex: 1 0 100%; }
+        .pe-panel.is-narrow .pe-grid2 .pe-f > span:first-child { flex: 0 0 auto; }
+        .pe-panel.is-narrow .pe-f small { margin-left: 0; }
         .pe-in { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: var(--on-surface); font: 13px var(--font-sans); box-sizing: border-box; min-width: 0; }
         .pe-in:focus { outline: none; border-color: var(--tertiary); box-shadow: 0 0 0 2px var(--m-focus-ring, rgba(0,0,0,.08)); }
         select.pe-in { padding-right: 4px; }
         .pe-ta { height: auto; padding: 6px 8px; resize: vertical; line-height: 1.35; }
         .pe-mono { font-family: Consolas, Menlo, monospace; font-size: 12px; }
-        .pe-unit { display: inline-flex; align-items: center; gap: 4px; }
+        .pe-unit { display: flex; align-items: center; gap: 4px; }
+        .pe-unit .pe-in { flex: 1 1 auto; width: auto; min-width: 48px; }
         .pe-unit em { font-style: normal; font-size: 11px; color: var(--on-surface-variant); }
         .pe-color { display: flex; align-items: center; gap: 4px; }
         .pe-color input[type="color"] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: none; cursor: pointer; flex: 0 0 auto; }
-        .pe-seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
+        .pe-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
         .pe-seg button { border: 0; background: transparent; border-radius: 4px; padding: 2px 6px; color: var(--on-surface-variant); cursor: pointer; display: inline-flex; align-items: center; font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; }
         .pe-seg button .material-symbols-outlined { font-size: 18px; }
         .pe-seg button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
         .pe-seg--text button { padding: 5px 10px; }
-        .pe-size { display: flex; align-items: center; gap: 6px; min-width: 0; }
-        .pe-size .pe-in { flex: 1 1 0; }
+        .pe-size { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+        .pe-size .pe-in { flex: 1 1 72px; min-width: 72px; }
         .pe-group { border-top: 1px solid var(--outline-variant); padding: 6px 0 2px; }
         .pe-group > summary { cursor: pointer; font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--primary); padding: 4px 0 8px; list-style: none; display: flex; align-items: center; gap: 6px; }
         .pe-group > summary::before { content: 'expand_more'; font-family: 'Material Symbols Outlined'; font-size: 18px; transition: transform var(--duration) var(--ease-standard); }
@@ -868,7 +902,7 @@
         /* ── Data: drawer, chips, wires ────────────────────────────────── */
         .pe-drawer { display: flex; flex-direction: column; }
         .pe-panel--right:empty { display: flex; }
-        .pe-drawer__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+        .pe-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 12px 6px; }
         .pe-drawer__head .pe-h { margin: 0; flex: 1; }
         .pe-drawer__search { padding: 0 12px 8px; border-bottom: 1px solid var(--outline-variant); }
         .pe-drawer__search .m-search { width: 100%; }
@@ -889,7 +923,8 @@
         .pe-src__chev { font-size: 18px; color: var(--on-surface-variant); transition: transform var(--duration) var(--ease-standard); }
         .pe-src.is-open .pe-src__chev { transform: rotate(180deg); }
         .pe-src__detail { padding: 4px 10px 10px; border-top: 1px solid var(--outline-variant); }
-        .pe-src__iter { width: 100%; justify-content: center; margin: 6px 0; }
+        .pe-src__iter { width: 100%; justify-content: center; margin: 6px 0; height: auto; min-height: 34px; padding: 7px 10px; white-space: normal; }
+        .pe-src__iter .m-btn__label { white-space: normal; text-align: center; line-height: 1.25; }
         .pe-src--pick { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
         .pe-src--pick:hover { border-color: var(--primary); background: var(--surface-container); }
         .pe-src--pick > .material-symbols-outlined { color: var(--primary); }
@@ -911,15 +946,14 @@
         .pe-bind__label em { font-style: normal; font-weight: 600; color: var(--on-surface-variant); }
         .pe-bind__detail { font-size: 11px; color: var(--on-surface-variant); }
         .pe-iter { margin-top: 4px; }
-        .pe-iter__head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .pe-iter__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
         .pe-iter__head .material-symbols-outlined { color: var(--tertiary); font-size: 18px; }
         .pe-iter__title { flex: 1; font: 600 12px var(--font-sans); color: var(--on-surface); }
         .pe-iter__source { font-size: 12px; line-height: 1.4; margin: 4px 0 8px; }
         .pe-linkbtn { border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
         .pe-h--sub { margin-top: 10px; }
         .pe-seg--tiny button { padding: 3px 7px; min-height: 0; font-size: 10.5px; }
-        .pe-in--date { width: auto; height: 24px; font-size: 11px; padding: 0 4px; }
-        .pe-f--check input { justify-self: start; }
+        .pe-in--date { flex: 1 1 92px; width: auto; min-width: 92px; height: 24px; font-size: 11px; padding: 0 4px; }
         .pe-bound-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--tertiary); border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--tertiary); pointer-events: none; z-index: 4; }
         .pe-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 70; overflow: visible; }
         .pe-wires path { fill: none; stroke: var(--tertiary); stroke-width: 2; stroke-linecap: round; }
@@ -966,7 +1000,8 @@
         .pe-paper__name { font: 600 13px var(--font-sans); color: var(--on-surface); }
         .pe-paper__size { font-size: 11px; color: var(--on-surface-variant); }
         .pe-picker__row { display: flex; gap: 24px; flex-wrap: wrap; margin: 8px 0; }
-        .pe-picker__row .pe-f { grid-template-columns: auto auto; }
+        .pe-picker__row .pe-f { flex-wrap: nowrap; }
+        .pe-picker__row .pe-f > span:first-child { flex: 0 0 auto; }
         .pe-picker__customs { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
         .pe-custom { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius); cursor: pointer; }
         .pe-custom__body { flex: 1; display: flex; flex-direction: column; }
