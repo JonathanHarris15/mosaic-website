@@ -46,6 +46,21 @@ const USERS = "users";
 const ELDER_LEVELS = ["elder", "super_admin"];
 
 /**
+ * The ranks that may build a Printable.
+ *
+ * Matches `isEditor()` in firestore.rules — `['editor', 'admin', 'elder',
+ * 'super_admin']` — and must keep matching it. `admin` IS here, unlike in
+ * ELDER_LEVELS above, and that is not an oversight: the rules have always let
+ * an admin lay out a page while keeping them out of a Person's record.
+ *
+ * ⚠ THIS IS THE ONLY GATE ON A PRINTABLE WRITE. An MCP tool writes through
+ * firebase-admin, which does not consult firestore.rules at all, so the rule
+ * protecting `printables` never runs for these calls. If this check is not
+ * applied, a viewer can lay out and publish a Printable.
+ */
+const EDITOR_LEVELS = ["editor", "admin", "elder", "super_admin"];
+
+/**
  * Where a Pastoral Record entry written by an assistant says it came from.
  *
  * A Status Change and a Tag Change already record a `source` — `profile`,
@@ -67,6 +82,15 @@ function isElder(permissionLevel) {
 }
 
 /**
+ * May this caller build a Printable?
+ * @param {?string} permissionLevel the caller's level, as mcp-auth read it
+ * @return {boolean} true for an editor and above, false for everyone else
+ */
+function isEditor(permissionLevel) {
+  return EDITOR_LEVELS.includes(permissionLevel);
+}
+
+/**
  * Why not, in words an assistant can pass on to the person asking.
  *
  * Not "permission denied": the elder reading this over their assistant's
@@ -81,6 +105,18 @@ function refusalFor(permissionLevel) {
   return "The Shepherding System is elder-only. This account holds " + held +
     ", which can build a Sunday but cannot read or write a Person's " +
     "shepherding record. Ask a super admin to raise it to elder.";
+}
+
+/**
+ * Why a Printables tool said no, in words an assistant can pass on.
+ * @param {?string} permissionLevel what they actually hold
+ * @return {string} the refusal
+ */
+function editorRefusalFor(permissionLevel) {
+  const held = permissionLevel ? `"${permissionLevel}"` : "no permission level";
+  return "Printables are editor-and-above. This account holds " + held +
+    ", which can read the church's pages but cannot lay one out. Ask a super " +
+    "admin to raise it to editor.";
 }
 
 /**
@@ -162,10 +198,13 @@ function provenance() {
 
 module.exports = {
   ELDER_LEVELS,
+  EDITOR_LEVELS,
   SOURCE,
   MISSING_AUTHOR,
   isElder,
+  isEditor,
   refusalFor,
+  editorRefusalFor,
   resolveActor,
   requireActor,
   provenance,

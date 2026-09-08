@@ -78,6 +78,15 @@ const MODULES = [
     'note-markdown-core.js',
     'shepherding-core.js',
     'shepherding-documents-core.js',
+    // The Printables tools. printable-core.js carries the whole record shape
+    // and, more to the point, the HTML parser: an assistant writes a page as
+    // markup and the SAME strict parser the code view uses turns it into
+    // elements, so a tool cannot accept markup the editor would refuse.
+    // printable-data-core.js is the catalog an assistant reads to know which
+    // fields it may wire, and it is the permission boundary's first half — it
+    // holds nothing elder-only, which is exactly why it is safe to hand over.
+    'printable-core.js',
+    'printable-data-core.js',
 ];
 
 const BANNER = [

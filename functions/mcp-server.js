@@ -37,6 +37,7 @@ const nw = require("./note-writes");
 const gs = require("./guidance-store");
 const gw = require("./guidance-writes");
 const shepTools = require("./mcp-shepherding-tools.js");
+const printableTools = require("./mcp-printable-tools.js");
 const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
@@ -654,6 +655,12 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
   // elder-only, checked per call. Passing `auth` through rather than a boolean
   // is deliberate: the refusal names the level the caller actually holds.
   shepTools.register(server, {db, auth, fieldValues});
+
+  // Printables (MS-359). Same arrangement, a third gate: `printable_` tools
+  // are editor-and-above, matching `isEditor()` in firestore.rules — which,
+  // note, never runs for them, because an MCP write goes through
+  // firebase-admin. The check in mcp-printable-tools.js is the only one.
+  printableTools.register(server, {db, auth, fieldValues});
 
   return server;
 }
