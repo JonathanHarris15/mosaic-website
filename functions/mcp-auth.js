@@ -81,6 +81,23 @@ function safeEqual(a, b) {
 }
 
 /**
+ * A copy of `record` without the keys whose value is `undefined`.
+ *
+ * Firestore rejects an `undefined` value outright rather than skipping it,
+ * and optional OAuth metadata arrives as exactly that.
+ *
+ * @param {object} record the object to clean
+ * @return {object} the same object without its undefined keys
+ */
+function defined(record) {
+  const out = {};
+  Object.keys(record).forEach((key) => {
+    if (record[key] !== undefined) out[key] = record[key];
+  });
+  return out;
+}
+
+/**
  * Where registered MCP clients live. An assistant registers itself once
  * (Dynamic Client Registration) and is remembered by its id thereafter.
  */
@@ -105,11 +122,34 @@ class FirebaseClientsStore {
    */
   async registerClient(client) {
     const clientId = randomToken();
-    const record = Object.assign({}, client, {
+    // ⚠ `defined()` IS NOT TIDINESS. IT IS THE WHOLE OF PUBLIC-CLIENT SUPPORT.
+    //
+    // A public client — one that keeps no secret and proves itself with PKCE
+    // instead — registers with `token_endpoint_auth_method: "none"`. That is
+    // what Claude and most assistants are. For those, the SDK hands us
+    // `client_secret: undefined` and `client_secret_expires_at: undefined`,
+    // and Firestore REFUSES to store `undefined` at all. The write threw, the
+    // SDK's register handler turned any throw into a bare 500, and nothing
+    // was logged — so registration failed for the common kind of client while
+    // working perfectly for the rare kind, and said nothing about why.
+    //
+    // Dropping the key is the correct shape as well as the working one: the
+    // SDK reads `client.client_secret` for truth, so an absent secret is how
+    // you say "this client has none". A stored `null` would also read as
+    // false, but it would go back in the registration response as
+    // `"client_secret": null`, which is a claim the spec does not make.
+    const record = defined(Object.assign({}, client, {
       client_id: clientId,
       client_id_issued_at: Math.floor(Date.now() / 1000),
-    });
-    await this.db.collection(CLIENTS).doc(clientId).set(record);
+    }));
+    try {
+      await this.db.collection(CLIENTS).doc(clientId).set(record);
+    } catch (e) {
+      // The SDK swallows this into an anonymous 500. Say what happened here
+      // or the next failure is as silent as this one was.
+      console.error("MCP client registration failed to store:", e);
+      throw e;
+    }
     return record;
   }
 }

@@ -96,6 +96,54 @@ suite('the MCP front door', () => {
             new URL(ISSUER + '/mcp'));
     }
 
+    // ── Who may register at all ─────────────────────────────
+
+    // ⚠ THIS PAIR IS THE WHOLE OF THE BUG THAT SHIPPED. Registration worked
+    // for a client that keeps a secret and returned a bare 500 for one that
+    // does not — which is most of them, Claude included. The cause was that
+    // the SDK hands us `client_secret: undefined` for a public client and
+    // Firestore refuses to store `undefined` at all. Nothing was logged, so
+    // the only symptom was an assistant that could never finish signing in.
+
+    test('a public client — no secret, PKCE instead — can register', async () => {
+        const client = await providerFor(UID).clientsStore.registerClient({
+            client_name: 'Claude',
+            redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+            token_endpoint_auth_method: 'none',
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+            // What the SDK passes for a client that keeps no secret.
+            client_secret: undefined,
+            client_secret_expires_at: undefined,
+        });
+
+        assert.ok(client.client_id, 'it was issued an id');
+        // Absent, not null: the SDK reads this field for truth, and a null
+        // would go back in the registration response as a claim we are not
+        // making.
+        assert.ok(!('client_secret' in client));
+        assert.ok(!('client_secret_expires_at' in client));
+
+        const stored = await providerFor(UID).clientsStore
+            .getClient(client.client_id);
+        assert.strictEqual(stored.client_name, 'Claude');
+        assert.strictEqual(stored.token_endpoint_auth_method, 'none');
+    });
+
+    test('a client that does keep a secret still keeps it', async () => {
+        const client = await providerFor(UID).clientsStore.registerClient({
+            client_name: 'Confidential Assistant',
+            redirect_uris: ['https://client.example.test/callback'],
+            client_secret: 'shhh',
+            client_secret_expires_at: 4102444800,
+        });
+
+        const stored = await providerFor(UID).clientsStore
+            .getClient(client.client_id);
+        assert.strictEqual(stored.client_secret, 'shhh');
+        assert.strictEqual(stored.client_secret_expires_at, 4102444800);
+    });
+
     // ── Who gets in ──────────────────────────────────────────────────────
 
     test('an editor signs in and is sent back with a code, the state and the issuer', async () => {

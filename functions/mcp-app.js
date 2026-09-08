@@ -52,6 +52,23 @@ async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}
   });
 
   const app = express();
+
+  // ⚠ WITHOUT THIS, EVERY CALLER IN THE WORLD SHARES ONE RATE-LIMIT BUCKET.
+  //
+  // The SDK's OAuth router limits registration to 20 an hour per caller, and
+  // works out who the caller is from `req.ip`. Behind Firebase Hosting and
+  // Google's front end, `req.ip` is the front end — the same address for
+  // everybody — unless Express is told to read the forwarded header instead.
+  // So one client retrying its sign-in could lock out every other client for
+  // the next hour, and the limit meant to protect the server was the thing
+  // breaking it.
+  //
+  // The honest cost: a forwarded address is supplied by the caller and can
+  // be made up, so this limit is a courtesy against accidents, not a defence
+  // against somebody determined. It was never the latter — a single shared
+  // bucket is easier to exhaust on purpose, not harder.
+  app.set("trust proxy", true);
+
   app.use(express.json({limit: "1mb"}));
   app.use(express.urlencoded({extended: false}));
 

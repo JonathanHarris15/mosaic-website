@@ -155,3 +155,15 @@ test('the address the page hands out is the one that is actually mounted', () =>
     assert.ok(sourcesOf().includes(endpoint),
         `${endpoint} is not routed to the MCP function in firebase.json`);
 });
+
+// ⚠ SERVED BEHIND GOOGLE'S FRONT END, WHICH THE APP HAS TO BE TOLD ABOUT.
+// The OAuth router limits registration per caller and works out the caller
+// from the connecting address. Behind Hosting that address is the front end,
+// identical for everybody, so without `trust proxy` one client's retries can
+// lock out every other client for an hour.
+test('the app reads the forwarded address, or the rate limit hits everyone at once', () => {
+    const app = fs.readFileSync(
+        path.join(ROOT, 'functions', 'mcp-app.js'), 'utf8');
+    assert.match(app, /app\.set\(\s*["']trust proxy["']/,
+        'mcp-app.js must trust the proxy — see the comment above the line');
+});
