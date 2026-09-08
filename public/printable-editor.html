@@ -801,8 +801,12 @@
         .pe-tool:hover { background: var(--surface-container); }
         .pe-tool .material-symbols-outlined { font-size: 22px; }
         .pe-section { padding: 10px 12px; }
-        .pe-section--tree { flex: 0 1 38%; min-height: 120px; overflow: auto; border-bottom: 1px solid var(--outline-variant); }
-        .pe-section--props { flex: 1 1 auto; overflow: auto; }
+        /* The tree keeps a third of the panel whatever is selected below it.
+           It must not shrink: the properties are what scroll. */
+        .pe-section--tree { flex: 0 0 33.3333%; min-height: 120px; overflow: auto; border-bottom: 1px solid var(--outline-variant); }
+        /* min-height: 0, or a column flex item's floor is its own content
+           height — long properties would push the tree out of its third. */
+        .pe-section--props { flex: 1 1 auto; min-height: 0; overflow: auto; }
         .pe-h { margin: 0 0 8px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-hint { margin: 6px 0; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
         /* A field row is label then control. When the two will not fit side
