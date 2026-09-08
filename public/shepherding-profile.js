@@ -5,7 +5,9 @@
 // minute old silently drops whoever was added in that minute. Ignored on the
 // web, where reads were always live.
 var FRESH_READ = { source: 'server' };
-const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Prayer Request', 'Other'];
+// One list, in shepherding-core.js, so the page and the MCP cannot come to
+// disagree about what a Note Type is.
+const NOTE_TYPES = ShepherdingCore.NOTE_TYPES;
 
 // Shepherding Status value model — single source of truth in shepherding-core.js.
 // The Profile uses the full label variant.

@@ -1076,6 +1076,56 @@ _Avoid_: preview, print preview, share page
 A Printable an [[Event]] series carries (`events/{id}.printables`), so every date of it offers the Printable on its Files tab: open in the editor, view, **Members may view**, unlink, and **File a PDF snapshot**. The snapshot renders every page — generated pages included — with vendored html2canvas and jsPDF, and files it as an ordinary [[Event Attachment]] on that date, fetched and never linked ([ADR 0046](docs/adr/0046-an-event-attachment-is-fetched-never-linked.md)). It is the one frozen copy in a live system ([ADR 0057](docs/adr/0057-a-printable-reads-live-data-the-snapshot-on-an-event-is-the-frozen-copy.md)); unlinking keeps both the Printable and the snapshot.
 _Avoid_: attached Printable, event printable
 
+## The MCP — MS-262, MS-278
+
+### MCP
+The door an AI assistant knocks on to work in Mosaic. One server
+(`functions/mcp-server.js`), behind the church's own sign-in, hosted on its own
+origin because the OAuth discovery specs claim `/authorize` and `/token` at the
+root of whatever serves them (ADR-0038). Built fresh per HTTP request and thrown
+away after it, so nothing is remembered between calls.
+_Avoid_: the API, the bot, the integration
+
+### Capability group
+A prefix on a tool's name marking what it is for: `oos_` the Order of Service,
+`shep_` the Shepherding System, `cal_` the Calendar. Not decoration — it is what
+lets a later group be added without renaming anything a connected assistant
+already knows, which is exactly what MS-278 did to MS-262's twelve tools.
+_Avoid_: namespace, module, category
+
+### Delegation (the MCP's one rule)
+**No tool queries Firestore or decides anything.** Every tool calls the same
+module the website calls, so an assistant and a page can never be told different
+things about the same Sunday or the same Person. A query written inside a tool
+file is a bug, not a shortcut. It is why MS-278's real cost was moving the
+shepherding writes out of the browser rather than writing sixty tools.
+
+### The elder gate
+A **second** rank check, applied per call, on top of the one at the door. The
+MCP admits anyone `editor` and up because that is right for the Order of Service;
+every `shep_` and `cal_` tool then refuses anyone below `elder`. The tools are
+still *listed* to an editor and refuse with a sentence naming the rank they hold
+— a tool that cannot be seen answers "unknown tool", which reads as a broken
+server rather than as a closed door.
+_Avoid_: permission check, auth (both are the first gate)
+
+### Written via MCP
+The provenance mark on any record an assistant wrote: `writtenVia: 'mcp'` on the
+record, and `source: 'mcp'` on a Pastoral Record entry, which already recorded
+where it came from. So an elder scrolling their own record can tell at a glance
+what an agent wrote from what somebody typed. Distinct from the [[Author]], which
+says *whose* name it was written in — an agent always writes as the elder whose
+assistant it is.
+_Avoid_: audit trail, bot flag
+
+### Actor
+Who an assistant is writing as, resolved fresh on every call from the connected
+account: the Person behind it by name, falling back to the account name the
+pages use. An account that resolves to neither is **refused** rather than written
+— the [[Author]] rule, applied at the one place every write passes through.
+_Avoid_: user, caller (those are the account; the Actor is the author)
+
+
 ## Flagged ambiguities
 
 - **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.
@@ -1083,3 +1133,4 @@ _Avoid_: attached Printable, event printable
 - **"Event"** is used for both the recurring [[Event series]] and a single dated [[Event occurrence]]. Prefer the precise term in code; in the UI, "Event" means whichever the user is looking at.
 - **"Fairness" was a ranking before MS-17 and is a solve after it.** ADR-0016 §5–6 and the original MS-17 described a module that ordered candidates for one Role, and MS-18 was to loop it across dates. It cannot work that way: no [[Involvement]] exists for a date that has not happened, so a ranking is identical for every date in the range. Fairness now staffs a whole occurrence at once and MS-18 is the loop around it (ADR-0020). Anything describing fairness as a score or a sorted list of candidates predates this.
 - **[[Permission Level]] is not one straight line.** The tier list reads `viewer → member → editor → elder → admin → super_admin`, which suggests `admin` sees everything `elder` does. It does not, and never has: `firestore.rules` has always defined `isElder()` as `['elder', 'super_admin']` and `isAdmin()` as `['admin', 'super_admin']`, so shepherding data is closed to admins. [[Event visibility]] follows the rules rather than the list — an `elder`-visibility Event is invisible to an admin. **One consequence, surfaced in MS-99:** the week-shift tool now refuses for anyone who cannot see every rung, so it is `elder`/`super_admin` only. Reading the tier list as a hierarchy is the mistake; `admin` is an operational tier, not a pastoral one.
+- **A [[Shepherding Tag]] lives in `people_tags`, not `shepherding_tags`.** The domain term and the collection name disagree, and the collection is the one every page reads and writes. `shepherding_tags` exists in `firestore.rules` and nothing uses it. Reaching for the name that reads correctly returns an empty tag list and no error at all, which is how this was found (MS-278).

@@ -58,6 +58,9 @@ function mcpManager() {
         // so the page has to know which of the two you are looking at. `.m-split`
         // deliberately has no opinion about that.
         phonePane: false,
+        // What the person reading this holds. Kept because the tool list
+        // now contains groups an editor is shown but cannot use (MS-278).
+        permissionLevel: 'viewer',
 
         // ── Setup ────────────────────────────────────────────────────────
         async init() {
@@ -78,6 +81,7 @@ function mcpManager() {
                 // guidance file can steer the assistant, so this screen is
                 // gated on the same rung that can already rewrite a Sunday.
                 // The rules enforce it too — a hidden page is not a lock.
+                this.permissionLevel = level;
                 this.canEdit = ['editor', 'elder', 'admin', 'super_admin'].includes(level);
                 if (!this.canEdit) {
                     this.refused = true;
@@ -391,10 +395,86 @@ The current wording is not lost — ` +
                 .filter(t => !t.writes);
         },
 
-        // A tool name reads better as words in a list than as a symbol.
+        // ── The capability groups (MS-278) ───────────────────────────────
+        //
+        // ⚠ THE LIST GOT LONG ENOUGH TO NEED A SHAPE. Twelve tools read fine
+        // as two flat columns. Seventy-three do not: an editor looking for
+        // what their assistant can do to a Sunday should not have to read
+        // past sixty tools about people to find it.
+        //
+        // The groups come off the manifest, which derives them from the tool
+        // name — so a group added later appears here on its own, with a
+        // fallback heading, rather than silently vanishing because nobody
+        // updated a list in the browser.
+        GROUPS: [
+            {
+                key: 'oos',
+                title: 'The Order of Service',
+                what: 'Building a Sunday — hymns, scripture, themes and the ' +
+                    'notes on them.',
+            },
+            {
+                key: 'shep',
+                title: 'Shepherding',
+                what: 'People: their notes, status, tags, documents and the ' +
+                    'Pastoral Record.',
+            },
+            {
+                key: 'cal',
+                title: 'The Calendar',
+                what: 'Events and their dates. Never who is serving on them.',
+            },
+        ],
+
+        get toolGroups() {
+            const tools = (this.capabilities && this.capabilities.tools) || [];
+            if (!tools.length) return [];
+
+            const known = this.GROUPS.map(g => g.key);
+            const seen = [];
+            tools.forEach(t => {
+                const key = t.group || 'other';
+                if (seen.indexOf(key) === -1) seen.push(key);
+            });
+
+            // Known groups in their written order, then anything new, so a
+            // later capability group is listed rather than lost.
+            const order = known.filter(k => seen.indexOf(k) !== -1)
+                .concat(seen.filter(k => known.indexOf(k) === -1));
+
+            return order.map(key => {
+                const described = this.GROUPS.find(g => g.key === key);
+                const mine = tools.filter(t => (t.group || 'other') === key);
+                return {
+                    key: key,
+                    title: (described && described.title) || key,
+                    what: (described && described.what) || '',
+                    // Writes first: it is the half worth reading carefully.
+                    tools: mine.slice().sort((a, b) =>
+                        (b.writes ? 1 : 0) - (a.writes ? 1 : 0) ||
+                        a.name.localeCompare(b.name)),
+                    writes: mine.filter(t => t.writes).length,
+                    reads: mine.filter(t => !t.writes).length,
+                    // A group is elder-only when everything in it is. Said per
+                    // group rather than per tool because that is how it is
+                    // true, and a badge on each of sixty rows is noise.
+                    eldersOnly: mine.length > 0 && mine.every(t => t.eldersOnly),
+                };
+            });
+        },
+
+        // Whether the person reading this page could actually use the
+        // elder-only groups, or is being shown what somebody else can do.
+        get isElder() {
+            return ['elder', 'super_admin'].indexOf(this.permissionLevel) !== -1;
+        },
+
+        // A tool name reads better as words in a list than as a symbol. Any
+        // capability prefix is dropped — the group heading above it already
+        // says which one it is, so repeating it on every row is noise.
         prettyToolName(name) {
             return String(name || '')
-                .replace(/^oos_/, '')
+                .replace(/^[a-z]+_/, '')
                 .replace(/_/g, ' ')
                 .replace(/^./, c => c.toUpperCase());
         },

@@ -1637,6 +1637,12 @@ exports.mcp = onRequest(
             deleteField: () => admin.firestore.FieldValue.delete(),
             // Passed in rather than reached for — see service-read.js.
             documentId: () => admin.firestore.FieldPath.documentId(),
+            // MS-278. The shepherding writes need the namespaces themselves,
+            // not just these two factories: an arrayUnion, and the Timestamp a
+            // Follow-up Reminder's due date is stored as. Same reason as
+            // above, and mcp-firestore.js says what goes wrong without it.
+            FieldValue: admin.firestore.FieldValue,
+            Timestamp: admin.firestore.Timestamp,
           },
         });
       }

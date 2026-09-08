@@ -36,6 +36,13 @@ const TO = path.join(ROOT, 'functions', 'shared');
 // reached for the DOM or for Firestore could not come along.
 const MODULES = [
     'events-occurrence-core.js',
+    // MS-278. The `cal_` tools edit Events, and every decision about what an
+    // Event is — the recurrence, the visibility stamp, what a move does to the
+    // assignments riding on a date — already lives in these two. They take a
+    // `db` and touch no browser API, so they come across whole rather than
+    // being restated. functions/calendar-writes.js is a thin door onto them.
+    'events-core.js',
+    'events-store.js',
     'roles-core.js',
     'cover-core.js',
     'away-core.js',
@@ -55,6 +62,22 @@ const MODULES = [
     // page. A restated copy is how the screen comes to refuse what the server
     // accepts.
     'forms-core.js',
+    // MS-278. The MCP writes on a Shepherding Profile — a note, a status, a
+    // tag, a document — and the rule from MS-262 holds: every tool delegates,
+    // and it delegates to THE SAME code the page calls. These four carry the
+    // decisions the browser used to make alone: what a Pastoral Record entry
+    // looks like, what an empty Note Body is, what a Note Body reads as in
+    // prose, and the Author rule that refuses an untraceable document.
+    //
+    // ⚠ shepherding-core.js reaches for `firebase.firestore.FieldValue` as a
+    // bare global in its three commit helpers, because it was written for a
+    // browser where every script shares one scope. functions/shepherding-writes.js
+    // sets that global from firebase-admin before calling them. That is the
+    // price of one code path instead of two, and it is the right price.
+    'document-body-core.js',
+    'note-markdown-core.js',
+    'shepherding-core.js',
+    'shepherding-documents-core.js',
 ];
 
 const BANNER = [
