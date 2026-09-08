@@ -366,9 +366,21 @@ async function moveFolder(db, {folderId, targetFolderId}) {
   const moved = await withTree(db, (tree) => {
     const folder = DocsCore.getFolderById(tree, folderId);
     if (!folder) throw refuse(`No Folder with id "${folderId}".`);
-    // A folder cannot be moved inside itself; the tree would stop being a tree
-    // and everything under it would vanish from the Library at once.
-    if (target !== DocsCore.ROOT && DocsCore.isDescendant(folder, target)) {
+
+    // ⚠ A FOLDER CANNOT BE MOVED INSIDE ITSELF. The tree would stop being a
+    // tree, and because moveNode lifts the subtree out BEFORE looking for the
+    // target, the target goes with it — so everything under the folder drops
+    // out of the Library at once and the failure reads as "no such folder".
+    //
+    // ⚠ THREE ARGUMENTS, AND THE ORDER IS NOT OBVIOUS: is `target` a descendant
+    // of `folderId`? Called with two, `ancestorId` is undefined, the lookup
+    // finds nothing, and the guard quietly answers "no" to every question it is
+    // asked. It did exactly that until an emulator test moved a folder into its
+    // own child and watched the Library empty.
+    if (target === folderId) {
+      throw refuse("A folder cannot be moved into itself.");
+    }
+    if (target !== DocsCore.ROOT && DocsCore.isDescendant(tree, target, folderId)) {
       throw refuse("A folder cannot be moved into one of its own sub-folders.");
     }
     return DocsCore.moveNode(tree, {type: "folder", id: folderId}, target);

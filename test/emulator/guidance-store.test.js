@@ -131,9 +131,16 @@ suite('guidance files and the capability manifest', () => {
 
         const names = caps.tools.map(t => t.name);
         assert.ok(names.length >= 8, `only ${names.length} tools`);
-        names.forEach(n => assert.ok(n.startsWith('oos_'), n));
         assert.ok(names.includes('oos_update_liturgy'));
         assert.ok(names.includes('oos_list_guidance'));
+
+        // Every name belongs to a capability group. MS-278 added `shep_` and
+        // `cal_` beside `oos_`, which is exactly what the prefixes were chosen
+        // to make possible — so this asserts the shape rather than the one
+        // group that happened to exist first.
+        names.forEach(n => assert.match(n, /^(oos|shep|cal)_/, n));
+        assert.ok(names.includes('shep_write_note'));
+        assert.ok(names.includes('cal_list_events'));
     });
 
     test('⚠ the manifest separates what can change a Sunday from what cannot', async () => {
