@@ -171,8 +171,6 @@
         }
 
         /* ── What it can do ──────────────────────────────────────────────── */
-        .mcp-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); align-items: start; }
-        @media (min-width: 900px) { .mcp-cols { grid-template-columns: 1fr 1fr; } }
         .mcp-tool {
             display: flex; gap: var(--space-sm);
             padding: 13px var(--space-sm);
@@ -518,68 +516,78 @@
                 </div>
             </div>
 
-            <div x-show="capabilities" x-cloak class="mcp-cols" style="margin-top: var(--space-md)">
+            <!-- ⚠ GROUPED SINCE MS-278. Twelve tools read fine as two flat
+                 columns of writes and reads. Seventy-three do not — an editor
+                 looking for what their assistant can do to a Sunday should not
+                 have to read past sixty tools about people to find it. The
+                 groups come off the manifest, which derives them from the tool
+                 name, so a group added later appears here on its own rather
+                 than disappearing because nobody updated a list in here. -->
+            <div x-show="capabilities" x-cloak style="margin-top: var(--space-md)">
 
-                <div>
-                    <div class="mcp-labelrow">
-                        <span class="m-label">Can change a Sunday</span>
-                        <span class="mcp-count" x-text="writeTools.length"></span>
-                    </div>
-                    <p class="m-input-hint" style="margin: 0 0 8px">
-                        Your assistant asks before using any of these.
-                    </p>
-                    <div class="mcp-listbox">
-                        <template x-for="t in writeTools" :key="t.name">
-                            <div class="mcp-tool">
-                                <span class="material-symbols-outlined mcp-tool__icon"
-                                      style="color: var(--error)">edit</span>
-                                <div class="mcp-tool__main">
-                                    <div class="mcp-tool__name" x-text="prettyToolName(t.name)"></div>
-                                    <code class="mcp-tool__id" x-text="t.name"></code>
-                                    <p class="mcp-tool__what" x-text="t.description"></p>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
+                <template x-for="g in toolGroups" :key="g.key">
+                    <section style="margin-bottom: var(--space-lg)">
+                        <div class="mcp-labelrow">
+                            <span class="m-label" x-text="g.title"></span>
+                            <span class="mcp-count" x-text="g.tools.length"></span>
+                        </div>
+                        <p class="m-input-hint" style="margin: 0 0 4px" x-text="g.what"></p>
 
-                <div>
-                    <div class="mcp-labelrow">
-                        <span class="m-label">Can only look</span>
-                        <span class="mcp-count" x-text="readTools.length"></span>
-                    </div>
-                    <p class="m-input-hint" style="margin: 0 0 8px">
-                        These read data. They cannot change anything.
-                    </p>
-                    <div class="mcp-listbox">
-                        <template x-for="t in readTools" :key="t.name">
-                            <div class="mcp-tool">
-                                <span class="material-symbols-outlined mcp-tool__icon"
-                                      style="color: var(--tertiary)">visibility</span>
-                                <div class="mcp-tool__main">
-                                    <div class="mcp-tool__name" x-text="prettyToolName(t.name)"></div>
-                                    <code class="mcp-tool__id" x-text="t.name"></code>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <div x-show="capabilities && capabilities.resources && capabilities.resources.length"
-                         style="margin-top: var(--space-md)">
-                        <span class="m-label">Guidance the assistant can see</span>
-                        <p class="m-input-hint" style="margin: 4px 0 8px">
-                            A file you wrote that is missing here is switched off.
+                        <!-- ⚠ SAID PLAINLY, BECAUSE THE LIST DOES NOT SHOW IT.
+                             Every tool is offered to every editor: one that
+                             could not be seen would answer "unknown tool",
+                             which reads as a broken server rather than a closed
+                             door. So an editor IS shown these, and would be
+                             refused by rank on the first call. Telling them
+                             their assistant can write a Shepherding Note when
+                             it cannot is worse than not listing it at all. -->
+                        <p x-show="g.eldersOnly && !isElder"
+                           class="m-input-hint" style="margin: 0 0 8px; color: var(--tertiary)">
+                            Elders only. Your assistant can see these and will be
+                            refused them — they are listed so you know they exist.
                         </p>
+                        <p x-show="g.eldersOnly && isElder"
+                           class="m-input-hint" style="margin: 0 0 8px">
+                            Elders only. Your assistant asks before using any
+                            that change something.
+                        </p>
+                        <p x-show="!g.eldersOnly" class="m-input-hint" style="margin: 0 0 8px">
+                            Your assistant asks before using any that change something.
+                        </p>
+
                         <div class="mcp-listbox">
-                            <template x-for="r in capabilities.resources" :key="r.uri">
+                            <template x-for="t in g.tools" :key="t.name">
                                 <div class="mcp-tool">
+                                    <span class="material-symbols-outlined mcp-tool__icon"
+                                          :style="t.writes
+                                            ? 'color: var(--error)'
+                                            : 'color: var(--tertiary)'"
+                                          x-text="t.writes ? 'edit' : 'visibility'"></span>
                                     <div class="mcp-tool__main">
-                                        <div class="mcp-tool__name" x-text="r.title"></div>
-                                        <code class="mcp-tool__id" x-text="r.uri"></code>
+                                        <div class="mcp-tool__name" x-text="prettyToolName(t.name)"></div>
+                                        <code class="mcp-tool__id" x-text="t.name"></code>
+                                        <p x-show="t.writes" class="mcp-tool__what" x-text="t.description"></p>
                                     </div>
                                 </div>
                             </template>
                         </div>
+                    </section>
+                </template>
+
+                <div x-show="capabilities && capabilities.resources && capabilities.resources.length">
+                    <span class="m-label">Guidance the assistant can see</span>
+                    <p class="m-input-hint" style="margin: 4px 0 8px">
+                        A file you wrote that is missing here is switched off.
+                    </p>
+                    <div class="mcp-listbox">
+                        <template x-for="r in capabilities.resources" :key="r.uri">
+                            <div class="mcp-tool">
+                                <div class="mcp-tool__main">
+                                    <div class="mcp-tool__name" x-text="r.title"></div>
+                                    <code class="mcp-tool__id" x-text="r.uri"></code>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>

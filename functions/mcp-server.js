@@ -735,8 +735,20 @@ async function describeCapabilities(deps) {
         title: (t.annotations && t.annotations.title) || t.title || t.name,
         description: t.description || "",
         // What an editor most wants to know at a glance: can this thing
-        // change a Sunday, or only look at one?
+        // change something, or only look at it?
         writes: !(t.annotations && t.annotations.readOnlyHint),
+        // Which capability group it belongs to, taken from the name rather
+        // than from a second list somebody has to remember to update. The
+        // prefixes exist precisely so this is derivable (MS-262, MS-278).
+        group: String(t.name).split("_")[0],
+        // ⚠ AND WHETHER THIS CALLER COULD ACTUALLY USE IT. Every tool is
+        // LISTED to every editor — a tool an editor cannot see answers
+        // "unknown tool", which reads as a broken server. But the page must
+        // not then tell an editor their assistant can write a Shepherding
+        // Note, because it cannot: it will be refused, by rank, on the first
+        // call. So the manifest says which are elder-only and the page shows
+        // it (MS-278).
+        eldersOnly: String(t.name).split("_")[0] !== "oos",
         inputs: Object.keys(
             (t.inputSchema && t.inputSchema.properties) || {}),
       })).sort((a, b) => a.name.localeCompare(b.name)),

@@ -114,3 +114,100 @@ test('it opens on writing in it, and is not tied to focus', () => {
     assert.ok((js.match(/this\.bodyOpen = false/g) || []).length >= 2,
         'the box is never closed again, so it stays open across files');
 });
+
+// ── The tool list, once there were seventy-three of them (MS-278) ───────────
+//
+// The page's whole claim is that it tells an editor the truth about what their
+// assistant can do. Two things stopped being true when the shepherding and
+// calendar groups landed: the list became a wall, and it started showing an
+// editor sixty-one tools that will refuse them by rank on the first call.
+
+const {mcpManager} = require('../public/mcp-manager.js');
+
+/** A manifest of the shape describeCapabilities now returns. */
+function manifest() {
+    return {tools: [
+        {name: 'oos_update_liturgy', writes: true, group: 'oos', eldersOnly: false, description: 'a'},
+        {name: 'oos_get_service', writes: false, group: 'oos', eldersOnly: false, description: 'b'},
+        {name: 'shep_write_note', writes: true, group: 'shep', eldersOnly: true, description: 'c'},
+        {name: 'shep_find_person', writes: false, group: 'shep', eldersOnly: true, description: 'd'},
+        {name: 'cal_create_event', writes: true, group: 'cal', eldersOnly: true, description: 'e'},
+    ]};
+}
+
+function page(level) {
+    const m = mcpManager();
+    m.capabilities = manifest();
+    m.permissionLevel = level || 'editor';
+    return m;
+}
+
+test('the tools are grouped by what part of the app they touch', () => {
+    const groups = page().toolGroups;
+    assert.deepStrictEqual(groups.map(g => g.key), ['oos', 'shep', 'cal']);
+    assert.deepStrictEqual(groups.map(g => g.tools.length), [2, 2, 1]);
+});
+
+test('a group added later is listed, not lost', () => {
+    // The groups are derived from the tool name, so the page must not depend
+    // on somebody remembering to add one to a list in the browser.
+    const m = page();
+    m.capabilities.tools.push({
+        name: 'roles_do_something', writes: true, group: 'roles', eldersOnly: true,
+    });
+    const keys = m.toolGroups.map(g => g.key);
+    assert.ok(keys.includes('roles'), keys.join(', '));
+    assert.strictEqual(keys[keys.length - 1], 'roles', 'and after the known ones');
+});
+
+test('writes come first inside a group — the half worth reading', () => {
+    const shep = page().toolGroups.find(g => g.key === 'shep');
+    assert.strictEqual(shep.tools[0].name, 'shep_write_note');
+    assert.strictEqual(shep.writes, 1);
+    assert.strictEqual(shep.reads, 1);
+});
+
+test('a group is elder-only when everything in it is', () => {
+    const groups = page().toolGroups;
+    assert.strictEqual(groups.find(g => g.key === 'oos').eldersOnly, false);
+    assert.strictEqual(groups.find(g => g.key === 'shep').eldersOnly, true);
+    assert.strictEqual(groups.find(g => g.key === 'cal').eldersOnly, true);
+});
+
+test('an editor is told the elder-only groups will refuse them', () => {
+    // They ARE listed — a tool an editor could not see would answer "unknown
+    // tool", which reads as a broken server. But telling an editor their
+    // assistant can write a Shepherding Note when it cannot is worse than
+    // saying nothing.
+    assert.strictEqual(page('editor').isElder, false);
+    assert.strictEqual(page('elder').isElder, true);
+    assert.strictEqual(page('super_admin').isElder, true);
+    assert.strictEqual(page('admin').isElder, false, 'admin is not a pastoral tier');
+
+    assert.match(html, /g\.eldersOnly && !isElder/);
+    assert.match(html, /will be\s*\n?\s*refused/);
+});
+
+test('a tool name drops whichever prefix it has, not just the first one written', () => {
+    const m = page();
+    assert.strictEqual(m.prettyToolName('oos_update_liturgy'), 'Update liturgy');
+    assert.strictEqual(m.prettyToolName('shep_add_person_panel'), 'Add person panel');
+    assert.strictEqual(m.prettyToolName('cal_list_events'), 'List events');
+});
+
+test('the page renders the groups rather than two flat columns', () => {
+    assert.match(html, /x-for="g in toolGroups"/);
+    // The old copy claimed every write changed a Sunday. Most of them now
+    // change a person.
+    assert.ok(!/Can change a Sunday/.test(html));
+    assert.ok(!/mcp-cols/.test(html), 'the two-column layout and its CSS are gone');
+});
+
+test('the manifest carries what the page groups on', () => {
+    // Derived from the tool name in describeCapabilities, so a new group needs
+    // no second list anywhere.
+    const server = fs.readFileSync(
+        path.join(ROOT, 'functions', 'mcp-server.js'), 'utf8');
+    assert.match(server, /group: String\(t\.name\)\.split\("_"\)\[0\]/);
+    assert.match(server, /eldersOnly: String\(t\.name\)\.split\("_"\)\[0\] !== "oos"/);
+});
