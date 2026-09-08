@@ -36,6 +36,12 @@ const TO = path.join(ROOT, 'functions', 'shared');
 // reached for the DOM or for Firestore could not come along.
 const MODULES = [
     'events-occurrence-core.js',
+    // MS-79. Every rule about a Task — when one is overdue, which dates a
+    // repeat produces, what an occurrence may override — and the writes in
+    // functions/ have to agree with the page about all of it. It reads its
+    // recurrence vocabulary straight out of events-occurrence-core.js, which
+    // is why it sits here beside it.
+    'tasks-core.js',
     // MS-278. The `cal_` tools edit Events, and every decision about what an
     // Event is — the recurrence, the visibility stamp, what a move does to the
     // assignments riding on a date — already lives in these two. They take a

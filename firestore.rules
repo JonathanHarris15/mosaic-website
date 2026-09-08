@@ -652,7 +652,23 @@ service cloud.firestore {
       allow read, write: if isElder();
     }
 
+    // Superseded by shepherding_tasks (MS-79). Left readable so the migration
+    // can be checked before anything is thrown away.
     match /shepherding_reminders/{reminderId} {
+      allow read, write: if isElder();
+    }
+
+    // A Task, and the standing commitment behind a repeating one — one
+    // collection, because a series IS a Task that happens more than once.
+    // Elder-only, like everything else on the Shepherd Dashboard: pastoral
+    // loose ends are not congregation reading.
+    match /shepherding_tasks/{taskId} {
+      allow read, write: if isElder();
+    }
+
+    // The sparse dated records of a repeat (ADR-0060) — one exists only once
+    // something has been said about a date.
+    match /shepherding_task_occurrences/{occurrenceId} {
       allow read, write: if isElder();
     }
 
