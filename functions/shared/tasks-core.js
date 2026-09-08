@@ -92,6 +92,35 @@
         return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     }
 
+    // A stored moment as milliseconds, whatever shape it arrived in.
+    //
+    // ⚠ THE DATABASE DOES NOT HAND BACK WHAT IT WAS GIVEN. `completedAt` is
+    // written as a server timestamp and comes back as a Timestamp OBJECT, not a
+    // number — while everything below this line counts in milliseconds. Left
+    // alone it makes `new Date(...)` say Invalid Date and every `>=` say false,
+    // so a Task finished today is missing from "the last 30 days" and its card
+    // reads "Done Invalid Date". The shape is settled once, here, at the door,
+    // rather than each surface remembering to unwrap it.
+    //
+    // Anything unreadable becomes null rather than NaN: a date we cannot read is
+    // no date, and no date is at least honest.
+    function msOf(value) {
+        if (value === null || value === undefined || value === '') return null;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+        if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+        if (typeof value.toMillis === 'function') return msOf(value.toMillis());
+        if (typeof value.toDate === 'function') return msOf(value.toDate());
+        // A Timestamp that crossed a wire and lost its methods on the way.
+        if (typeof value.seconds === 'number') {
+            return value.seconds * 1000 + Math.round((value.nanoseconds || 0) / 1e6);
+        }
+        if (typeof value._seconds === 'number') {
+            return value._seconds * 1000 + Math.round((value._nanoseconds || 0) / 1e6);
+        }
+        const parsed = new Date(value).getTime();
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
     function parseDate(dateStr) {
         const [y, m, d] = String(dateStr).split('-').map(Number);
         return new Date(y, m - 1, d);
@@ -134,6 +163,8 @@
     // database from an older model.
     function present(row, now) {
         const assigneeIds = Array.isArray(row.assigneeIds) ? row.assigneeIds.slice() : [];
+        // Normalised here and nowhere else — see `msOf`.
+        const completedAt = msOf(row.completedAt);
         return {
             id: row.id,
             seriesId: row.seriesId || null,
@@ -145,10 +176,10 @@
             assigneeIds: assigneeIds,
             isUnassigned: assigneeIds.length === 0,
             state: stateOf(row, now),
-            completedAt: row.completedAt || null,
-            completedOn: row.completedAt ? dayOf(row.completedAt) : null,
+            completedAt: completedAt,
+            completedOn: completedAt === null ? null : dayOf(completedAt),
             completedBy: row.completedBy || null,
-            skippedAt: row.skippedAt || null,
+            skippedAt: msOf(row.skippedAt),
             createdBy: row.createdBy || null,
             createdByName: row.createdByName || '',
         };
@@ -308,6 +339,7 @@
         stateOf,
         lateAfter,
         dayOf,
+        msOf,
         // slices
         panelFor,
         completed,

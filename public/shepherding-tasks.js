@@ -22,6 +22,13 @@ const LOOK_AHEAD_DAYS = 180;
 
 const ELDER_TAG = 'Elder';
 
+// How long the tick is allowed to be enjoyed before the row folds up. Both
+// numbers match the animations in the page's own stylesheet — change one and
+// the card either goes while the sparks are still flying or sits there after
+// they have finished.
+const CELEBRATE_MS = 620;
+const LEAVE_MS = 300;
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingTasks', () => ({
         loading: true,
@@ -38,6 +45,12 @@ document.addEventListener('alpine:init', () => {
         assigneeFilter: 'all',
         showDone: false,
         doneWindowDays: TasksCore.COMPLETED_WINDOW_DAYS,
+
+        // Which rows are mid-celebration, and how far through: 'finishing' while
+        // the tick is being enjoyed, 'leaving' while the card folds up. Keyed by
+        // row, not by task id — a repeat wears the same id on every date it
+        // produces, so ticking September must not set August off too.
+        finishing: {},
 
         showModal: false,
         editingId: null,
@@ -151,12 +164,23 @@ document.addEventListener('alpine:init', () => {
 
         // ── Labels ───────────────────────────────────────────────────────────
 
+        // A row's identity on the page — the date included, because a repeat
+        // wears one id across every date it produces. Same pair the x-for keys
+        // are built from, so a row keeps its element, and therefore its running
+        // animation, across a re-render.
+        keyOf(task) {
+            return String(task.id) + '|' + String(task.dueDate);
+        },
+
         rowClass(task) {
+            const stage = this.finishing[this.keyOf(task)];
             return 'task flex items-start gap-3 p-md rounded-lg bg-surface-container-lowest ' +
                 'border border-outline-variant cursor-default ' +
                 (task.state === TasksCore.STATES.OVERDUE ? 'task--overdue ' : '') +
                 (task.state === TasksCore.STATES.DONE ? 'task--done ' : '') +
-                (task.state === TasksCore.STATES.SKIPPED ? 'task--skipped ' : '');
+                (task.state === TasksCore.STATES.SKIPPED ? 'task--skipped ' : '') +
+                (stage ? 'task--finishing ' : '') +
+                (stage === 'leaving' ? 'task--leaving ' : '');
         },
 
         dueLabel(task) {
@@ -328,12 +352,45 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Finishing something is the point of the whole page, so it gets a
+        // moment. The box fills, sparks go, the title strikes through, the card
+        // folds up — and only then does the list redraw without it.
+        //
+        // ⚠ THE WRITE GOES FIRST AND DOES NOT WAIT FOR THE SHOW. The animation
+        // plays OVER the round trip rather than after it, so the celebration
+        // costs nothing: by the time the card has folded up, the server has
+        // usually already answered. If it refused, the reload puts the Task
+        // straight back and the toast says why.
         async tick(task) {
+            const key = this.keyOf(task);
+            if (this.finishing[key]) return;        // one tick per card
+
+            const saved = this.call('complete', {
+                taskId: task.seriesId || task.id,
+                date: task.seriesId ? task.dueDate : undefined,
+            }).then(() => null, e => e || new Error('That did not save.'));
+
+            this.finishing[key] = 'finishing';
+            await this.pause(CELEBRATE_MS);
+            this.finishing[key] = 'leaving';
+            await this.pause(LEAVE_MS);
+
+            const failure = await saved;
             try {
-                await this.call('complete', { taskId: task.seriesId || task.id, date: task.seriesId ? task.dueDate : undefined });
                 await this.loadTasks();
-                this.say('Done');
-            } catch (e) { this.say((e && e.message) || 'That did not save.'); }
+            } finally {
+                // Cleared only after the redraw, so the row cannot flash back
+                // into view at full size on its way out.
+                delete this.finishing[key];
+            }
+            this.say(failure ? (failure.message || 'That did not save.') : 'Done');
+        },
+
+        // Nothing is animating for somebody who asked for stillness, so there
+        // is nothing for them to wait on either.
+        pause(ms) {
+            const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            return new Promise(resolve => setTimeout(resolve, still ? 0 : ms));
         },
 
         async untick(task) {

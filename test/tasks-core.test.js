@@ -348,6 +348,75 @@ test('completed work is listed newest first', () => {
     assert.deepStrictEqual(titles(Tasks.completed(out)), ['Newer', 'Older']);
 });
 
+// ⚠ THE BUG THAT MADE THIS SECTION NECESSARY. `completedAt` is written with a
+// server timestamp, so what comes back out of the database is a Timestamp
+// OBJECT, not the number every reader here assumed. The page showed "Done
+// Invalid Date" and no window but "everything" ever listed anything, because
+// `object >= number` is quietly false rather than loudly wrong. The tests only
+// ever fed it plain numbers, so they all passed.
+
+// What the browser SDK hands back: methods, and the raw fields beneath them.
+const stamp = (iso) => {
+    const ms = at(iso);
+    return {
+        seconds: Math.floor(ms / 1000),
+        nanoseconds: (ms % 1000) * 1e6,
+        toMillis() { return ms; },
+        toDate() { return new Date(ms); },
+    };
+};
+
+// What the same value looks like after a trip through JSON — the callable's
+// reply, a cache, a postMessage — with its methods stripped off.
+const plainStamp = (iso) => {
+    const s = stamp(iso);
+    return { seconds: s.seconds, nanoseconds: s.nanoseconds };
+};
+
+test('a Task completed as a database timestamp still carries the day it was done', () => {
+    const out = resolve({ tasks: [task({ completedAt: stamp('2026-09-08T14:00:00') })] });
+    assert.strictEqual(out[0].state, Tasks.STATES.DONE);
+    assert.strictEqual(out[0].completedOn, '2026-09-08', 'not "NaN-NaN-NaN"');
+    assert.strictEqual(out[0].completedAt, at('2026-09-08T14:00:00'), 'milliseconds, not an object');
+});
+
+test('a timestamp that lost its methods on the way is still read', () => {
+    const out = resolve({ tasks: [task({ completedAt: plainStamp('2026-09-08T14:00:00') })] });
+    assert.strictEqual(out[0].completedOn, '2026-09-08');
+});
+
+test('a Task completed today is inside the last-30-days window', () => {
+    const out = resolve({ tasks: [task({ completedAt: stamp('2026-09-08T08:00:00') })] });
+    const since = Tasks.completedWindowStart(at(NOW), Tasks.COMPLETED_WINDOW_DAYS);
+    assert.strictEqual(Tasks.completed(out, { since }).length, 1,
+        'the whole point: finish something today and it is in the last 30 days');
+});
+
+test('the panel keeps a Task completed today when the time came from the database', () => {
+    const out = resolve({
+        tasks: [task({ assigneeIds: ['rob'], completedAt: stamp('2026-09-08T08:00:00') })],
+    });
+    assert.strictEqual(Tasks.panelFor(out, 'rob', at(NOW)).length, 1);
+});
+
+test('a date nobody can read is no date rather than a broken one', () => {
+    const out = resolve({ tasks: [task({ completedAt: { nothing: 'useful' } })] });
+    assert.strictEqual(out[0].completedAt, null);
+    assert.strictEqual(out[0].completedOn, null, 'null, so the card shows no date at all');
+});
+
+test('an occurrence completed as a database timestamp reads the same way', () => {
+    const out = resolve({
+        series: [series({})],
+        occurrences: [record('s1', '2026-09-01', { completedAt: stamp('2026-09-02T10:00:00') })],
+        to: '2026-09-08',
+    });
+    const done = out.find(t => t.dueDate === '2026-09-01');
+    assert.strictEqual(done.state, Tasks.STATES.DONE);
+    assert.strictEqual(done.completedOn, '2026-09-02');
+});
+
+
 test('completed work can be limited to a window of days', () => {
     const out = resolve({
         tasks: [

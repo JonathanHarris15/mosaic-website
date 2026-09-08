@@ -30,6 +30,111 @@
         .task__body p { margin: 0 0 0.35rem; }
         .task__body ul, .task__body ol { margin: 0 0 0.35rem 1.1rem; list-style: revert; }
 
+        /* ── Finishing one ──────────────────────────────────────────────
+           A tick is the only unambiguously good news on this page, so it is
+           allowed to be enjoyed. The row is not yanked away the instant it is
+           clicked: the box fills and pops, a ring goes out, sparks fly, the
+           title strikes itself through — and only then does the card fold up
+           and hand its space back.
+
+           ⚠ DECORATION ONLY. `task--finishing` and `task--leaving` are added by
+           the page AFTER the write has already gone (see `tick`). Nothing here
+           decides anything, and nothing waits on it. */
+
+        .task__tick {
+            position: relative;
+            display: flex; align-items: center; justify-content: center;
+            background: transparent;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .task__tick-mark { font-size: 14px; color: var(--on-primary, #f2eae2); opacity: 0; transform: scale(.3); }
+        /* ⚠ ABOVE THE BOX, AND CLEAR OF IT. The box fills with the same colour
+           at the same moment, so a spark that is behind it, or that only
+           travels as far as its edge, is a spark nobody ever sees. */
+        .task__sparks { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+        .task__sparks i {
+            position: absolute; top: 50%; left: 50%;
+            width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+            border-radius: 999px; background: var(--primary, #182f57); opacity: 0;
+        }
+
+        .task--finishing { position: relative; z-index: 1; animation: task-lift 620ms cubic-bezier(.2, 1.2, .35, 1) forwards; }
+
+        .task--finishing .task__tick {
+            background: var(--primary, #182f57);
+            border-color: var(--primary, #182f57);
+            animation: task-pop 420ms cubic-bezier(.2, 1.5, .35, 1) forwards;
+        }
+        .task--finishing .task__tick-mark { animation: task-check 300ms cubic-bezier(.2, 1.5, .35, 1) 70ms forwards; }
+
+        /* The ring that goes out from the box, once. */
+        .task--finishing .task__tick::after {
+            content: ''; position: absolute; inset: -3px; border-radius: inherit;
+            border: 2px solid var(--primary, #182f57);
+            animation: task-ring 560ms ease-out forwards;
+        }
+
+        .task--finishing .task__sparks i { animation: task-spark 540ms cubic-bezier(.15, .8, .3, 1) forwards; }
+        .task--finishing .task__sparks i:nth-child(1) { --dx:   0px; --dy: -28px; animation-delay:  20ms; }
+        .task--finishing .task__sparks i:nth-child(2) { --dx:  19px; --dy: -19px; animation-delay:  60ms; }
+        .task--finishing .task__sparks i:nth-child(3) { --dx:  27px; --dy:   0px; animation-delay:  30ms; }
+        .task--finishing .task__sparks i:nth-child(4) { --dx:  18px; --dy:  18px; animation-delay:  70ms; }
+        .task--finishing .task__sparks i:nth-child(5) { --dx:   0px; --dy:  26px; animation-delay:  25ms; }
+        .task--finishing .task__sparks i:nth-child(6) { --dx: -18px; --dy:  18px; animation-delay:  65ms; }
+        .task--finishing .task__sparks i:nth-child(7) { --dx: -27px; --dy:   0px; animation-delay:  35ms; }
+        .task--finishing .task__sparks i:nth-child(8) { --dx: -19px; --dy: -19px; animation-delay:  55ms; }
+
+        /* The line is drawn through the words rather than appearing on them. */
+        .task--finishing .task__title { display: inline-block; position: relative; }
+        .task--finishing .task__title::after {
+            content: ''; position: absolute; left: 0; top: 55%;
+            width: 0; height: 2px; background: currentColor; opacity: .55;
+            animation: task-strike 360ms ease-out 110ms forwards;
+        }
+
+        /* And then it gets out of the way, taking its gap with it. */
+        .task--leaving { overflow: hidden; animation: task-leave 300ms cubic-bezier(.4, 0, .6, 1) forwards; }
+
+        @keyframes task-pop {
+            0%   { transform: scale(1); }
+            45%  { transform: scale(1.45); }
+            100% { transform: scale(1); }
+        }
+        @keyframes task-check {
+            0%   { opacity: 0; transform: scale(.3) rotate(-12deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes task-ring {
+            0%   { opacity: .55; transform: scale(1); }
+            100% { opacity: 0;   transform: scale(2.6); }
+        }
+        @keyframes task-spark {
+            0%   { opacity: 0; transform: translate(0, 0) scale(.3); }
+            18%  { opacity: 1; transform: translate(calc(var(--dx) * .45), calc(var(--dy) * .45)) scale(1.15); }
+            60%  { opacity: 1; transform: translate(calc(var(--dx) * .85), calc(var(--dy) * .85)) scale(.9); }
+            100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.25); }
+        }
+        @keyframes task-lift {
+            0%   { transform: scale(1);     box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+            35%  { transform: scale(1.015); box-shadow: 0 6px 20px rgba(0, 0, 0, .12); }
+            100% { transform: scale(1);     box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+        }
+        @keyframes task-strike { to { width: 100%; } }
+        @keyframes task-leave {
+            0%   { opacity: 1; transform: translateX(0);    max-height: 20rem; }
+            100% { opacity: 0; transform: translateX(16px); max-height: 0;
+                   padding-top: 0; padding-bottom: 0; margin-bottom: -0.5rem; border-width: 0; }
+        }
+
+        /* Asked for stillness, given stillness. The row still goes, it just
+           goes without the show. */
+        @media (prefers-reduced-motion: reduce) {
+            .task--finishing, .task--finishing *, .task--leaving { animation: none !important; }
+            .task--finishing .task__tick { background: var(--primary, #182f57); border-color: var(--primary, #182f57); }
+            .task--finishing .task__tick-mark { opacity: 1; transform: none; }
+            .task--leaving { opacity: 0; }
+        }
+
         .task-editor .ProseMirror { min-height: 6rem; outline: none; }
         .task-editor .ProseMirror p { margin: 0 0 0.4rem; }
         .task-editor .ProseMirror ul, .task-editor .ProseMirror ol { margin: 0 0 0.4rem 1.1rem; list-style: revert; }
@@ -118,7 +223,10 @@
                 <template x-for="task in overdue" :key="'o' + task.id + task.dueDate">
                     <div :class="rowClass(task)">
                         <button @click="tick(task)" :aria-label="'Mark ' + task.title + ' done'"
-                            class="mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary"></button>
+                            class="task__tick mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary">
+                            <span class="task__tick-mark material-symbols-outlined">check</span>
+                            <span class="task__sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                        </button>
                         <div class="flex-1 min-w-0" @click="openEdit(task)">
                             <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
                             <div class="flex flex-wrap items-center gap-2 mt-1">
@@ -156,7 +264,10 @@
                 <template x-for="task in upcoming" :key="'u' + task.id + task.dueDate">
                     <div :class="rowClass(task)">
                         <button @click="tick(task)" :aria-label="'Mark ' + task.title + ' done'"
-                            class="mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary"></button>
+                            class="task__tick mt-1 w-5 h-5 shrink-0 rounded border border-outline hover:border-primary">
+                            <span class="task__tick-mark material-symbols-outlined">check</span>
+                            <span class="task__sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                        </button>
                         <div class="flex-1 min-w-0" @click="openEdit(task)">
                             <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
                             <div class="flex flex-wrap items-center gap-2 mt-1">
