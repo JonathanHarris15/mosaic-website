@@ -138,33 +138,35 @@
     return { tagHoldFilters: holds, tagHoldCmp: cmp };
   }
 
-  function fmtDue(ts) {
-    if (!ts) return "";
-    var d = ts.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  // When a Task is due, and whether it is late. Same wording as the desktop
+  // panel, because the two are the same panel on different screens.
+  function fmtTaskDue(t) {
+    var d = new Date(t.dueDate + "T12:00:00");
+    var day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    var when = t.dueTime ? day + ", " + t.dueTime : day;
+    return t.state === "overdue" ? when + " — overdue" : when;
   }
 
   // ── Shepherd Dashboard ───────────────────────────────────────
   function ShepherdScreen(props) {
     var user = props.user || {};
     var loadingS = useState(true), errS = useState(false);
-    var remindersS = useState([]), viewsS = useState([]), peopleS = useState([]), tagsS = useState([]), holdsS = useState({});
+    var tasksS = useState([]), viewsS = useState([]), peopleS = useState([]), tagsS = useState([]), holdsS = useState({});
     var selectedS = useState(null);
     var toastS = useState(null);
-    var rmndModalS = useState(false), rmndFormS = useState({ title: "", due: "" });
     var viewModalS = useState(null); // { editingId, title, filterTags, filterMode, statusZones }
 
-    var reminders = remindersS[0], views = viewsS[0], people = peopleS[0], tags = tagsS[0], holds = holdsS[0];
+    var tasks = tasksS[0], views = viewsS[0], people = peopleS[0], tags = tagsS[0], holds = holdsS[0];
     var toast = toastS[0];
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
     // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingReminders(), data.getShepherdingViews(), data.getShepherdingPeople(), data.getShepherdingTags()])
+      Promise.all([data.getShepherdingPanelTasks(user), data.getShepherdingViews(), data.getShepherdingPeople(), data.getShepherdingTags()])
         .then(function (res) {
           if (!alive) return;
-          remindersS[1](res[0]); viewsS[1](res[1]); peopleS[1](res[2]); tagsS[1](res[3]);
+          tasksS[1](res[0]); viewsS[1](res[1]); peopleS[1](res[2]); tagsS[1](res[3]);
           if (res[1].some(viewHasHoldFilter)) {
             data.getShepherdingTagHolds(res[2]).then(function (h) { if (alive) holdsS[1](h); });
           }
@@ -181,7 +183,7 @@
         if (selectId !== undefined) selectedS[1](selectId);
       });
     }
-    function reloadReminders() { return data.getShepherdingReminders().then(remindersS[1]); }
+    function reloadTasks() { return data.getShepherdingPanelTasks(user).then(tasksS[1]); }
 
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
@@ -216,26 +218,23 @@
       }).catch(function () { showToast("Error deleting view", "error"); });
     }
 
-    // ── Reminders ──
-    function addReminder() {
-      var f = rmndFormS[0];
-      if (!f.title.trim() || !f.due) return;
-      var due = new Date(f.due);
-      if (isNaN(due.getTime())) return;
-      data.addShepherdingReminder(f.title.trim(), due, user).then(function () {
-        rmndFormS[1]({ title: "", due: "" }); rmndModalS[1](false); reloadReminders(); showToast("Reminder added");
-      }).catch(function () { showToast("Error adding reminder", "error"); });
-    }
-    function deleteReminder(id) {
-      data.deleteShepherdingReminder(id).then(function () {
-        remindersS[1](reminders.filter(function (r) { return r.id !== id; })); showToast("Reminder deleted");
-      }).catch(function () { showToast("Error deleting reminder", "error"); });
+    // ── Tasks (MS-79) ──
+    // Ticking goes through the same door the page and the assistant use, so
+    // the rules about what a tick does exist once rather than three times.
+    function completeTask(t) {
+      data.completeShepherdingTask(t).then(function () {
+        reloadTasks(); showToast("Done");
+      }).catch(function (e) { showToast((e && e.message) || "Error completing task", "error"); });
     }
 
     var navCards = [
       { icon: "folder-open", title: "Documents", desc: "Elder notes & meeting minutes.", go: function () { props.nav("documents"); } },
       { icon: "users", title: "People", desc: "View & manage member profiles.", go: function () { props.nav("shepherdPeople"); } },
       { icon: "tag", title: "Manage Tags and Relationships", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
+      // Tasks & Reminders (MS-79) opens the desktop page in-shell rather than
+      // a native port, so there is one list with one editor rather than two to
+      // keep in step — the same trade the Calendar and Forms already make.
+      { icon: "list-checks", title: "Tasks & Reminders", desc: "What the elders have to do, and what got done.", go: function () { props.nav("shepherdTasks"); } },
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
@@ -291,32 +290,28 @@
             </${Fragment}>`}
 
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <span style=${OVER}>Reminders</span>
-            <button onClick=${function () { rmndModalS[1](true); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} Add</button>
+            <span style=${OVER}>Your tasks</span>
+            <button onClick=${function () { props.nav("shepherdTasks"); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "transparent", color: "var(--primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>All tasks ${Ic("chevron-right", 15)}</button>
           </div>
           ${loadingS[0] ? null
-            : reminders.length === 0 ? html`<p style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)", margin: 0 }}>No upcoming reminders.</p>`
+            : tasks.length === 0 ? html`<p style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)", margin: 0 }}>Nothing outstanding.</p>`
             : html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-              ${reminders.map(function (r) {
-                return html`<div key=${r.id} style=${{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, background: "var(--surface-container)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
-                  <div style=${{ minWidth: 0 }}>
-                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${r.title}</div>
-                    <div style=${{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>${Ic("clock", 13)} ${fmtDue(r.dueDatetime)}</div>
+              ${tasks.map(function (t) {
+                var late = t.state === "overdue";
+                var finished = t.state === "done";
+                return html`<div key=${t.id + t.dueDate} style=${{ display: "flex", alignItems: "flex-start", gap: 10, background: "var(--surface-container)", borderRadius: "var(--radius)", padding: "12px 14px", opacity: finished ? 0.6 : 1 }}>
+                  <button onClick=${function () { completeTask(t); }} disabled=${finished} aria-label=${"Mark " + t.title + " done"} style=${{ marginTop: 2, width: 18, height: 18, flexShrink: 0, borderRadius: 4, cursor: finished ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", border: finished ? "none" : "1px solid var(--outline)", background: finished ? "var(--primary)" : "transparent", color: "var(--on-primary)" }}>${finished ? Ic("check", 12) : null}</button>
+                  <div style=${{ minWidth: 0, flex: 1 }}>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)", textDecoration: finished ? "line-through" : "none" }}>${t.title}</div>
+                    <div style=${{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: late ? 600 : 400, color: late ? "var(--error)" : "var(--on-surface-variant)" }}>${Ic("clock", 13)} ${fmtTaskDue(t)}</div>
+                    ${t.isUnassigned ? html`<div style=${{ marginTop: 2, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)" }}>Nobody has picked this up</div>` : null}
                   </div>
-                  <button onClick=${function () { deleteReminder(r.id); }} aria-label="Delete reminder" style=${Object.assign({}, iconBtn, { flexShrink: 0 })}>${Ic("trash-2", 16)}</button>
                 </div>`;
               })}
             </div>`}
           `}
         </${Body}>
 
-        ${rmndModalS[0] ? html`<${Modal} onClose=${function () { rmndModalS[1](false); }} title="Add Reminder"
-          footer=${html`<${Fragment}><button onClick=${function () { rmndModalS[1](false); }} style=${pill("ghost")}>Cancel</button><button onClick=${addReminder} style=${pill()}>Add Reminder</button></${Fragment}>`}>
-          <div style=${{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <${Field} label="Title"><input value=${rmndFormS[0].title} onInput=${function (e) { rmndFormS[1](Object.assign({}, rmndFormS[0], { title: e.target.value })); }} placeholder="e.g. Follow up with the Johnson family" style=${inputStyle} /></${Field}>
-            <${Field} label="Due date & time"><input type="datetime-local" value=${rmndFormS[0].due} onInput=${function (e) { rmndFormS[1](Object.assign({}, rmndFormS[0], { due: e.target.value })); }} style=${inputStyle} /></${Field}>
-          </div>
-        </${Modal}>` : null}
 
         ${vm ? html`<${Modal} onClose=${function () { viewModalS[1](null); }} title=${vm.editingId ? "Edit Filtered View" : "New Filtered View"}
           footer=${html`<${Fragment}><button onClick=${function () { viewModalS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveView} style=${pill()}>${vm.editingId ? "Save Changes" : "Create View"}</button></${Fragment}>`}>

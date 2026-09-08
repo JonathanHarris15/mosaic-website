@@ -43,6 +43,7 @@ const Tags = require("./shepherding-tag-writes.js");
 const Docs = require("./shepherding-doc-writes.js");
 const Payload = require("./shepherding-payload-writes.js");
 const Cal = require("./calendar-writes.js");
+const Tasks = require("./task-writes.js");
 
 // Said once, appended to every tool that can reach a Person's record. An
 // assistant summarising a meeting into a message an elder then pastes somewhere
@@ -782,37 +783,99 @@ function register(server, deps) {
     inputSchema: {viewId: z.string().min(1)},
   }, (a) => Payload.deleteView(db, a));
 
-  tool("shep_list_reminders", {
-    title: "The Follow-up Reminders",
+  // ── Tasks & Reminders (MS-79) ────────────────────────────────────────────
+  //
+  // These replace the old shep_*_reminder tools. A Task does not disappear when
+  // its date passes — it goes overdue and stays until somebody finishes it
+  // (ADR-0058), so "list" now has to say what is late, and there is something
+  // to tick off where before there was only something to delete.
+  //
+  // ⚠ THE PEOPLE ARGUMENT CHANGED MEANING. It used to be "people it is about",
+  // checked against the directory. A Task has no such field (ADR-0059) — it
+  // names who must DO it, and they must be elders, because anybody else would
+  // never see it. An old call passing the congregation will now be refused, and
+  // that is the correct outcome rather than a regression.
+
+  tool("shep_list_tasks", {
+    title: "What the elders still have to do",
     description:
-      "The Follow-up Reminders still standing on the Shepherd Landing Page. " +
-      "Past ones are not listed because they are not there — a reminder " +
-      "disappears on its own once its date passes." + PRIVACY,
+      "Every Task still outstanding, with who is responsible and which are " +
+      "overdue. Unlike the old reminders, a Task whose date has passed is " +
+      "still here — that is the point of it. A Task nobody has been given " +
+      "reads as unassigned, which means nobody has picked it up yet." + PRIVACY,
     inputSchema: {},
     annotations: read,
-  }, () => Payload.listReminders(db));
+  }, () => Tasks.listTasks(db));
 
-  tool("shep_create_reminder", {
-    title: "Leave a reminder for the elders",
+  tool("shep_create_task", {
+    title: "Write a task down for the elders",
     description:
-      "Add a Follow-up Reminder, visible to all elders, which clears itself " +
-      "after its date. Good for the loose ends at the end of a meeting. " +
-      "People can be mentioned by id — they are checked, so a reminder cannot " +
-      "point at somebody who is not in the directory.",
+      "Add a Task. Good for the loose ends at the end of a meeting — write " +
+      "them down and hand some of them out in the same breath.\n\n" +
+      "It needs a date: without one nothing can ever read as overdue. A time " +
+      "on that date is optional and usually wrong to invent.\n\n" +
+      "assigneeIds are the ELDERS responsible for it — not the people it is " +
+      "about, which a Task does not record. They are checked, and somebody " +
+      "who is not an elder is refused by name. Leave it empty and the Task " +
+      "shows on every elder's dashboard as unclaimed.\n\n" +
+      "Give a recurrence to make it repeat. The reply names the next few " +
+      "dates it computes, so a misread pattern is visible now rather than as " +
+      "a date quietly missing in three months.",
     inputSchema: {
       title: z.string().min(1).describe("What needs doing"),
-      due: z.string().min(1).describe("When, as an ISO date and time"),
-      personIds: z.array(z.string()).optional().describe("People it is about"),
+      body: z.string().optional().describe("Anything more to say about it"),
+      due: z.string().optional().describe("The day it is due, YYYY-MM-DD. Not needed for a repeat, which starts on its own first date"),
+      dueTime: z.string().optional().describe("A time on that day, HH:MM. Leave out unless it genuinely matters"),
+      assigneeIds: z.array(z.string()).optional().describe("The elders responsible — Person ids, checked against the Elder Tag"),
+      recurrence: z.object({
+        freq: z.enum(["weekly", "fortnightly", "monthly"]).describe("How often"),
+        startDate: z.string().describe("The first date, YYYY-MM-DD"),
+        ends: z.object({
+          kind: z.enum(["never", "onDate", "afterCount"]),
+          date: z.string().optional().describe("For onDate"),
+          count: z.number().optional().describe("For afterCount"),
+        }).optional(),
+      }).optional().describe("Makes it a standing commitment rather than a one-off"),
     },
-  }, (a, actor) => Payload.createReminder(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Tasks.createTask(db, Object.assign({}, a, {actor})));
 
-  tool("shep_delete_reminder", {
-    title: "Delete a reminder",
+  tool("shep_complete_task", {
+    title: "Tick a task off",
     description:
-      "Remove a Follow-up Reminder before its date comes round. Left alone it " +
-      "would clear itself anyway.",
-    inputSchema: {reminderId: z.string().min(1)},
-  }, (a) => Payload.deleteReminder(db, a));
+      "Mark a Task done. It is kept, never deleted — the completed list is " +
+      "how anybody can say what the elders actually did.\n\n" +
+      "For a repeating Task give the date of the one you mean: that month is " +
+      "finished and the standing commitment carries on.",
+    inputSchema: {
+      taskId: z.string().min(1),
+      date: z.string().optional().describe("Which date, for a repeating Task"),
+    },
+  }, (a, actor) => Tasks.completeTask(db, Object.assign({}, a, {actor})));
+
+  tool("shep_skip_task", {
+    title: "Stand one date of a repeat down",
+    description:
+      "Skip one date of a repeating Task without claiming it was done — " +
+      "December, because it is Christmas. Deliberately not the same as " +
+      "ticking it: once things get marked done that were not, the completed " +
+      "list stops meaning anything. A one-off cannot be skipped; it is either " +
+      "done or deleted.",
+    inputSchema: {
+      taskId: z.string().min(1),
+      date: z.string().min(1).describe("Which date, YYYY-MM-DD"),
+    },
+  }, (a, actor) => Tasks.skipOccurrence(db, Object.assign({}, a, {actor})));
+
+  tool("shep_delete_task", {
+    title: "Delete a task",
+    description:
+      "Remove a Task written by mistake. A repeat that has finished work " +
+      "behind it is STOPPED rather than erased: no more dates, and every " +
+      "record of the times it was kept survives, because stopping a " +
+      "commitment and denying you kept it are different things. The result " +
+      "says which happened.",
+    inputSchema: {taskId: z.string().min(1)},
+  }, (a) => Tasks.deleteTask(db, a));
 
   // ── H. The Calendar ──────────────────────────────────────────────────────
 

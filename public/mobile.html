@@ -66,6 +66,12 @@
   <!-- Shepherding Status value model + Tag-Hold logic (single source of truth,
        shared with the desktop pages). Used by the native Shepherd Dashboard. -->
   <script src="shepherding-core.js"></script>
+  <!-- The Task model (MS-79). The Shepherd screen's panel asks it which Tasks
+       belong there rather than deciding itself, so the phone and the desktop
+       dashboard cannot disagree. events-occurrence-core.js first: tasks-core.js
+       takes its recurrence vocabulary from it rather than restating it. -->
+  <script src="events-occurrence-core.js"></script>
+  <script src="tasks-core.js"></script>
   <!-- Family model (ADR-0012, MS-88): pure household traversal, shared with web. -->
   <script src="family-core.js"></script>
   <script src="person-photo-core.js"></script>

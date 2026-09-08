@@ -37,6 +37,12 @@
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
+    <!-- The Task model (MS-79). The panel asks it which Tasks belong here
+         rather than deciding for itself, so it cannot disagree with the Tasks
+         page or the phone's Shepherd screen. events-occurrence-core.js first:
+         tasks-core.js takes its recurrence vocabulary from it. -->
+    <script src="events-occurrence-core.js"></script>
+    <script src="tasks-core.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -99,6 +105,16 @@
                 <p class="m-nav-card__desc">Shepherding tags, and the Relationship Types elders can apply.</p>
             </a>
 
+            <!-- Tasks & Reminders (MS-79) — what the elders have to do. The
+                 panel below is a glance at yours; this is the whole of it. -->
+            <a href="shepherding-tasks.html" class="m-nav-card">
+                <div class="m-medallion">
+                    <span class="material-symbols-outlined">checklist</span>
+                </div>
+                <h2 class="m-nav-card__title">Tasks &amp; Reminders</h2>
+                <p class="m-nav-card__desc">What the elders have to do, and what got done.</p>
+            </a>
+
             <!-- Relations Viewer (MS-91) — the interactive relationship graph. -->
             <a href="relations-viewer.html" class="m-nav-card">
                 <div class="m-medallion">
@@ -109,7 +125,7 @@
             </a>
         </div>
 
-        <!-- Content area: Filtered Views + Reminders side panel -->
+        <!-- Content area: Filtered Views + your tasks -->
         <div class="flex flex-col lg:flex-row gap-margin items-start">
 
             <!-- Filtered Views -->
@@ -213,35 +229,50 @@
                 </template>
             </section>
 
-            <!-- Upcoming Reminders side panel -->
+            <!-- Your tasks (MS-79) — a GLANCE, not a second home. Yours, the
+                 ones nobody has picked up, and anything late, whoever it belongs
+                 to. Writing at length, filtering and the completed list all
+                 live on the Tasks & Reminders page. -->
             <aside class="w-full lg:w-80 flex-shrink-0 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
                 <div class="flex items-center justify-between">
-                    <h2 class="font-headline-md text-headline-md text-primary">Reminders</h2>
-                    <button @click="showReminderModal = true"
-                        class="flex items-center gap-1 px-sm py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        Add
-                    </button>
+                    <h2 class="font-headline-md text-headline-md text-primary">Your tasks</h2>
+                    <a href="shepherding-tasks.html"
+                        class="flex items-center gap-1 px-sm py-xs text-primary font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors">
+                        All tasks
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </a>
                 </div>
 
-                <div x-show="reminders.length === 0" class="text-on-surface-variant italic text-sm">
-                    No upcoming reminders.
+                <div x-show="panelTasks.length === 0" class="text-on-surface-variant italic text-sm">
+                    Nothing outstanding.
                 </div>
 
                 <ul class="flex flex-col gap-sm">
-                    <template x-for="reminder in reminders" :key="reminder.id">
-                        <li class="flex items-start justify-between gap-sm bg-surface-container rounded-lg px-md py-sm">
-                            <div class="flex flex-col gap-xs min-w-0">
-                                <span class="font-body-md text-on-surface" :class="ShepherdingBlur.contentClass(reminder.createdBy)" x-text="reminder.title"></span>
-                                <span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-xs">
+                    <template x-for="task in panelTasks" :key="task.id + task.dueDate">
+                        <li class="flex items-start justify-between gap-sm bg-surface-container rounded-lg px-md py-sm"
+                            :class="task.state === 'done' ? 'opacity-60' : ''">
+                            <button @click="completeTask(task)" :disabled="task.state === 'done'"
+                                :aria-label="'Mark ' + task.title + ' done'"
+                                class="mt-1 w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center"
+                                :class="task.state === 'done'
+                                    ? 'border-primary bg-primary text-on-primary'
+                                    : 'border-outline hover:border-primary'">
+                                <span x-show="task.state === 'done'" class="material-symbols-outlined text-[12px]">check</span>
+                            </button>
+                            <div class="flex flex-col gap-xs min-w-0 flex-1">
+                                <span class="font-body-md text-on-surface"
+                                      :class="(task.state === 'done' ? 'line-through ' : '') + ShepherdingBlur.contentClass(task.createdBy)"
+                                      x-text="task.title"></span>
+                                <span class="font-label-md text-label-md flex items-center gap-xs"
+                                      :class="task.state === 'overdue' ? 'text-error font-semibold' : 'text-on-surface-variant'">
                                     <span class="material-symbols-outlined text-[14px]">schedule</span>
-                                    <span x-text="formatDatetime(reminder.dueDatetime)"></span>
+                                    <span x-text="taskDueLabel(task)"></span>
+                                </span>
+                                <span x-show="task.isUnassigned"
+                                      class="font-label-md text-label-md text-on-surface-variant italic">
+                                    Nobody has picked this up
                                 </span>
                             </div>
-                            <button @click="deleteReminder(reminder.id)"
-                                class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0 mt-xs">
-                                <span class="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
                         </li>
                     </template>
                 </ul>
@@ -249,36 +280,6 @@
 
         </div>
     </main>
-
-    <!-- Add Reminder Modal -->
-    <div x-show="showReminderModal" x-cloak
-         class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-         @click.self="showReminderModal = false">
-        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md">
-            <h2 class="font-headline-md text-headline-md text-primary">Add Reminder</h2>
-            <div class="flex flex-col gap-sm">
-                <label class="flex flex-col gap-xs">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Title</span>
-                    <input type="text" x-model="newReminder.title" placeholder="e.g. Follow up with the Johnson family"
-                           class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </label>
-                <label class="flex flex-col gap-xs">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Due date &amp; time</span>
-                    <input type="datetime-local" x-model="newReminder.dueDatetime"
-                           class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </label>
-            </div>
-            <div class="flex justify-end gap-sm mt-xs">
-                <button @click="showReminderModal = false"
-                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
-                <button @click="addReminder()"
-                    :disabled="!newReminder.title.trim() || !newReminder.dueDatetime"
-                    class="m-btn m-btn--primary m-btn--sm">
-                    Add Reminder
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Add/Edit Filtered View Modal -->
     <div x-show="showViewModal" x-cloak

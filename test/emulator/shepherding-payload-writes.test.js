@@ -7,7 +7,7 @@ const Writes = require('../../functions/shepherding-writes.js');
 const FormsCore = require('../../functions/shared/forms-core.js');
 const Actor = require('../../functions/mcp-actor.js');
 
-// Form Documents, Care Lists, Filtered Views and Follow-up Reminders, against a
+// Form Documents, Care Lists and Filtered Views, against a
 // real Firestore (MS-278).
 //
 // ⚠ WHAT ONLY A REAL DATABASE SHOWS HERE.
@@ -365,62 +365,4 @@ suite('the payload-carrying shepherding tools', () => {
             () => Payload.deleteView(db, {viewId: 'nope'}), /No Filtered View/);
     });
 
-    // ── Follow-up Reminders ──────────────────────────────────────────────
-
-    test('a reminder is stored with a real timestamp and its mentions checked', async () => {
-        const made = await Payload.createReminder(db, {
-            title: 'Ring Sarah about the surgery',
-            due: '2026-12-01T10:00:00.000Z',
-            personIds: [A],
-            actor,
-        });
-
-        const stored = (await db.collection('shepherding_reminders')
-            .doc(made.reminderId).get()).data();
-        assert.strictEqual(stored.title, 'Ring Sarah about the surgery');
-        assert.strictEqual(typeof stored.dueDatetime.toDate, 'function',
-            'a real Timestamp, or the landing page cannot order by it');
-        assert.deepStrictEqual(stored.mentions, [{personId: A, name: 'Sarah Bell'}]);
-        assert.strictEqual(stored.createdByName, 'Jonathan Harris');
-    });
-
-    test('a reminder about somebody who is not in the directory is refused', async () => {
-        await assert.rejects(() => Payload.createReminder(db, {
-            title: 'Ring them', due: '2026-12-01T10:00:00.000Z',
-            personIds: ['person-nobody'], actor,
-        }), /No Person/);
-    });
-
-    test('a due date that is not a date is refused', async () => {
-        await assert.rejects(() => Payload.createReminder(db, {
-            title: 'Ring them', due: 'next Tuesday', actor,
-        }), /not a date/);
-    });
-
-    test('only the reminders still standing are listed', async () => {
-        // A reminder disappears on its own once its date passes; that is the
-        // whole shape of the feature, so a past one must not be listed.
-        await Payload.createReminder(db, {
-            title: 'Future', due: '2030-01-01T10:00:00.000Z', actor,
-        });
-        await db.collection('shepherding_reminders').add({
-            title: 'Long past',
-            dueDatetime: require('firebase-admin').firestore.Timestamp
-                .fromDate(new Date('2020-01-01T10:00:00.000Z')),
-            createdByName: 'Someone',
-        });
-
-        const listed = await Payload.listReminders(db);
-        assert.deepStrictEqual(listed.reminders.map((r) => r.title), ['Future']);
-    });
-
-    test('a reminder can be taken back before its date', async () => {
-        const made = await Payload.createReminder(db, {
-            title: 'Wrong one', due: '2030-01-01T10:00:00.000Z', actor,
-        });
-
-        const gone = await Payload.deleteReminder(db, {reminderId: made.reminderId});
-        assert.strictEqual(gone.deleted.title, 'Wrong one');
-        assert.strictEqual((await Payload.listReminders(db)).count, 0);
-    });
 });

@@ -3080,3 +3080,80 @@ exports.publicForm = onCall(
       };
     },
 );
+
+/**
+ * Every write to a Task, from the browser (MS-79).
+ *
+ * ⚠ ONE DOOR, NOT SEVEN. The Tasks page and the assistant's `shep_*_task` tools
+ * change the same records, and the rules about them — a date is required, an
+ * assignee must be an Elder, ticking one month of a repeat writes that month
+ * alone, stopping a repeat keeps what was already done — are worth having in
+ * exactly one place. `task-writes.js` is that place; this is the browser's way
+ * in. A page writing Firestore directly would be a second implementation of
+ * every one of those rules, and the two would drift the first time one changed.
+ *
+ * It dispatches on `op` rather than exporting a callable each, because the
+ * argument checking, the elder gate and the Author resolution are identical for
+ * all of them and a callable each is seven places to forget one.
+ *
+ * The elder gate is the same one the MCP tools use, from mcp-actor.js, so a
+ * person refused in the app is refused in conversation for the same reason and
+ * with the same sentence.
+ */
+exports.shepherdingTask = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to change a task.");
+      }
+
+      const db = admin.firestore();
+      const Tasks = require("./task-writes.js");
+      const Actor = require("./mcp-actor.js");
+      const Firestore = require("./mcp-firestore.js");
+
+      // The write modules take their Firestore sentinels rather than reaching
+      // for firebase-admin, because functions/ carries its own copy and a
+      // sentinel from the wrong one cannot be serialised. See mcp-firestore.js.
+      Firestore.bind({
+        FieldValue: admin.firestore.FieldValue,
+        Timestamp: admin.firestore.Timestamp,
+      });
+
+      const userSnap = await db.collection("users").doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+      if (!Actor.isElder(user.permissionLevel || user.role)) {
+        throw new HttpsError(
+            "permission-denied", Actor.refusalFor(user.permissionLevel));
+      }
+
+      const {op} = request.data || {};
+      const args = Object.assign({}, request.data || {});
+      delete args.op;
+
+      const ops = {
+        create: Tasks.createTask,
+        edit: Tasks.editTask,
+        move: Tasks.moveTask,
+        complete: Tasks.completeTask,
+        reopen: Tasks.reopenTask,
+        skip: Tasks.skipOccurrence,
+        delete: Tasks.deleteTask,
+      };
+      if (!ops[op]) {
+        throw new HttpsError("invalid-argument", `"${op}" is not a task operation.`);
+      }
+
+      try {
+        // Every write records who made it, so nothing lands untraceably.
+        const actor = await Actor.requireActor(db, request.auth.uid);
+        return await ops[op](db, Object.assign(args, {actor}));
+      } catch (e) {
+        // A refusal from the write module is a sentence written for a person to
+        // read, so it is passed through rather than replaced with a code.
+        throw new HttpsError(
+            e && e.code === "shepherding-refused" ? "failed-precondition" : "internal",
+            (e && e.message) || "That did not work.");
+      }
+    },
+);

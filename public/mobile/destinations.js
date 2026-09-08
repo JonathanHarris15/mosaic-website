@@ -98,6 +98,11 @@
         // native port, so there is one library rather than two to keep in step
         // — the same trade the Calendar and the Roles Manager already make.
         forms: 'forms.html',
+        // Tasks & Reminders (MS-79) the same way. A task list is phone-shaped
+        // work — an elder ticks these off in a car park — but it is one list
+        // with one editor, and a native port would be a second place every
+        // rule about overdue and repeats had to be applied.
+        shepherdTasks: 'shepherding-tasks.html',
     };
 
     // True when a destination is visible to this user. No gate means everyone.

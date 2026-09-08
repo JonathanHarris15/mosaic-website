@@ -26,9 +26,9 @@
  *                    making a scratch view to answer a question has redecorated
  *                    everybody's landing page, so the tools say so.
  *
- * Follow-up Reminders are here too, being the landing page's other furniture.
- * They disappear on their own after their due date, which makes a wrong one
- * self-cleaning and is why they need no confirmation an agent cannot give.
+ * Follow-up Reminders used to be here too. They are gone: MS-79 replaced them
+ * with the Task, which does NOT disappear after its due date, and whose writes
+ * live in task-writes.js because there is a good deal more to say about them.
  */
 
 // ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
@@ -49,7 +49,6 @@ const Read = require("./shepherding-read.js");
 const DOCUMENTS = "elder_documents";
 const FORMS = "forms";
 const VIEWS = "shepherding_views";
-const REMINDERS = "shepherding_reminders";
 
 // The one column a Care List has before an elder adds any of their own.
 const DEFAULT_COLUMN = {id: "col_default", name: "Notes"};
@@ -452,7 +451,7 @@ async function writeCareListCell(db, {documentId, personId, columnId, markdown, 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Filtered Views and Follow-up Reminders
+//  Filtered Views
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -559,85 +558,6 @@ async function deleteView(db, {viewId}) {
   };
 }
 
-/**
- * The Follow-up Reminders still standing.
- *
- * Past ones are not listed because they are not there — a reminder disappears
- * on its own after its due date, which is the whole shape of the feature.
- *
- * @param {object} db the Firestore handle
- * @return {Promise<object>} { count, reminders }
- */
-async function listReminders(db) {
-  const snap = await db.collection(REMINDERS)
-      .where("dueDatetime", ">=", new Date())
-      .orderBy("dueDatetime", "asc").get();
-
-  return {
-    count: snap.docs.length,
-    reminders: snap.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        reminderId: doc.id,
-        title: data.title || "",
-        due: Read.isoOf(data.dueDatetime),
-        createdBy: data.createdByName || "",
-        writtenVia: data.writtenVia || "page",
-      };
-    }),
-  };
-}
-
-/**
- * A new Follow-up Reminder, visible to all elders.
- * @param {object} db the Firestore handle
- * @param {object} args title, due (ISO), personIds, actor
- * @return {Promise<object>} { ok, reminderId }
- */
-async function createReminder(db, {title, due, personIds, actor}) {
-  const label = String(title || "").trim();
-  if (!label) throw refuse("A reminder needs something to say.");
-
-  const when = new Date(due);
-  if (!due || isNaN(when.getTime())) {
-    throw refuse(`"${due}" is not a date and time. Use an ISO timestamp.`);
-  }
-
-  // Mentioned People are checked, not taken on trust — a reminder about
-  // somebody who is not in the directory is a reminder nobody can act on.
-  const mentioned = [];
-  for (const personId of (personIds || [])) {
-    const person = await loadPerson(db, personId);
-    mentioned.push({personId, name: person.data.name || ""});
-  }
-
-  const ref = await db.collection(REMINDERS).add(Object.assign({
-    title: label,
-    dueDatetime: F.timestampFrom(when),
-    mentions: mentioned,
-    createdBy: actor.uid,
-    createdByName: actor.name,
-    createdAt: F.now(),
-  }, Actor.provenance()));
-
-  return {ok: true, reminderId: ref.id, title: label, due: when.toISOString()};
-}
-
-/**
- * Delete a Follow-up Reminder.
- * @param {object} db the Firestore handle
- * @param {object} args reminderId
- * @return {Promise<object>} what was deleted
- */
-async function deleteReminder(db, {reminderId}) {
-  const ref = db.collection(REMINDERS).doc(reminderId);
-  const snap = await ref.get();
-  if (!snap.exists) throw refuse(`No Follow-up Reminder with id "${reminderId}".`);
-  const title = (snap.data() || {}).title || "";
-  await ref.delete();
-  return {ok: true, deleted: {reminderId, title}};
-}
-
 module.exports = {
   listFormTemplates,
   createFormDocument,
@@ -651,8 +571,5 @@ module.exports = {
   createView,
   updateView,
   deleteView,
-  listReminders,
-  createReminder,
-  deleteReminder,
   filterConfig,
 };
