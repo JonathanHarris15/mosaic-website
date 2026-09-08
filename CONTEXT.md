@@ -71,9 +71,37 @@ _Avoid_: Note (use Shepherding Note for standalone records), comment, reason
 A shared, elder-configured saved filter over the People list that appears as a table widget on every elder's Shepherd Landing Page. Any elder or super admin can create, edit, or delete one.
 _Avoid_: Custom table, saved search, widget
 
-**Follow-up Reminder**:
-A standalone dated reminder visible to all elders on the Shepherd Landing Page. Can optionally @mention one or more Persons. Any elder or super admin can create one. Automatically disappears after its due date. Push notification delivery to specific elders is a planned future feature.
-_Avoid_: Task, to-do, alert
+**Task** — MS-79:
+A piece of work an elder has to do, living on the [[Tasks & Reminders]] page and summarised on the Shepherd Landing Page. Carries a title, a rich body, a **due date** with an optional time, and its **Assignees**. Any elder or super admin can write, edit, tick, skip or delete any Task, including one that is somebody else's — elders are few and trust each other, and a Task locked to a man on holiday is worse than an accidental tick. Replaces the former **Follow-up Reminder**, which was a title, a date and nothing else.
+- **Finishing is the clock, not the date** ([ADR 0058](docs/adr/0058-finishing-is-the-clock-not-the-date.md)). An unfinished Task past its date does not disappear — it goes **overdue** and stays. A finished one draws struck through until the end of that day, then leaves the panel; it is **kept, never deleted**, so the page can still answer what the elders actually did. A **skip** stands one down without claiming it was done.
+- **A date is required; a time on it is not.** "Ring Dave on Thursday" is what an elder means, and forcing 5pm onto it makes the list slightly false. Without a date there is no overdue, so there is no such thing as an undated Task.
+- **It names who must do it, never who it is about** ([ADR 0059](docs/adr/0059-a-task-names-who-must-do-it-never-who-it-is-about.md)). People can be named in the body as ordinary `@` cross-references, and that is prose — nothing files a Task against them, nothing draws it on their profile, and finishing one writes nothing to the [[Pastoral Record]].
+- **Nothing tells you one landed on you.** You find out by looking. Being told is the [[Notification]] path's job (MS-189), and this becomes one more caller of it rather than a second private way to reach a person.
+_Avoid_: Follow-up Reminder (the entity this replaces), to-do, alert, and **reminder** as the entity — see below
+
+**Reminder**:
+Not a second entity. The everyday word for a [[Task]] that is just a date with nobody's name on it — which is why the page is called Tasks & Reminders and the elders are not wrong when they say it. There is one thing on the page, and its shape is the same whether or not anybody has picked it up.
+_Avoid_: treating it as a type, a flag, or a separate collection
+
+**Assignee**:
+An Elder responsible for a [[Task]]. A Task can have **any number, including none** — and none is a real, visible state meaning nobody has picked this up, not a blank. Only Elders and super admins can be assigned: the page is elder-only, so assigning anybody else hands out work they cannot see. The assignable set is exactly the Persons carrying the [[Elder Tag]].
+_Avoid_: owner, responsible party, mentioned person (a Task has no mentioned people)
+
+**Task series**:
+The standing commitment behind a repeating [[Task]] — "check on the widows every month". Carries the recurrence rule and everything true of every occurrence: title, body, and default [[Assignee]]s. Modelled on the [[Event series]] and using the **same rule vocabulary from the same shared core** — weekly, fortnightly, monthly, ending never / on a date / after a count ([ADR 0060](docs/adr/0060-a-repeating-task-is-a-series-and-its-dates-are-computed.md)). A one-off Task has no series, exactly as a one-off Event has none.
+- **Deleting a series stops the future and keeps the past.** Stopping a commitment and erasing the record of the times you kept it are two different intentions, and only one of them was asked for.
+_Avoid_: recurring task (the series is not itself a Task), schedule, rule
+
+**Task occurrence**:
+One dated instance of a [[Task series]]. **Sparse, exactly like an [[Event occurrence]]**: the dates are computed from the rule, and a document exists only once there is something to say about that date — a tick, a skip, a reassignment, or a nudge to another day. **A missed occurrence is computed, not stored**: a date the rule produced, now in the past, with no document, *is* an overdue Task. Nothing runs nightly to create it.
+- **What is true of every date is edited on the series.** One occurrence may only be ticked, skipped, reassigned or nudged — "Rob takes this month" is a real need; "rename it, but only in March" is not. The same rule as an Event, so elders learn it once.
+- **Missed ones pile up.** March's unfinished check sits beside April's. Three red months is the news.
+_Avoid_: instance, repeat, generated task
+
+**Tasks & Reminders**:
+The elder-only page the [[Task]]s live on, reached by a card on the Shepherd Landing Page beside Documents and People. Shows **every** elder's Tasks with room to write properly, filters **by [[Assignee]]** (there is no person-based view — see ADR 0059), and the **last thirty days** of finished work. One web page carrying the mobile skin rather than a second native screen, the same trade the [[Forms library]] and the [[Roles Manager]] make.
+- **The Shepherd Landing Page keeps a panel**, and it is a summary rather than a second home: **yours, the unassigned, and anything overdue**. Everything else, and everything you can do at length, is on the page.
+_Avoid_: task manager, task board, the tasks pane
 
 **Shepherding Tag**:
 A label that can be applied to a Person. Tags are the primary filter criterion for Filtered Views and the People list. Elders and super admins are the primary managers — any of them can create, delete, Rename, Merge, or apply/remove tags on a Person — but tags are not elder-only-*visible*: some tags (e.g. the Member tag, and any Membership Tag) are surfaced to ordinary members in the People directory. Visibility is governed per-tag, not by the tag concept itself, and there are two separate flags: `hidePeople` hides the *people* carrying the tag, while `hiddenFromOthers` hides the *tag* — its name — from everyone below elder. A hidden tag is therefore never offered as a serving rule in the [[Roles Manager]] and never named in one; an editor who meets a rule built on it is told only that it is private and still applies. Both flags are lifted for elders and super admins, who are who the tag hides things from everyone else *for*. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married". Membership Tags are a special, code-defined subset — see Membership Tag.
