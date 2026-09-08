@@ -125,7 +125,7 @@
     // documents are small enough that storing them whole costs nothing worth
     // saving.
     const VERSIONED_FIELDS = Object.freeze(
-        ['title', 'slug', 'summary', 'body', 'enabled']);
+        ['title', 'slug', 'summary', 'body', 'enabled', 'eldersOnly']);
 
     // Did the writing actually change?
     //
@@ -136,8 +136,9 @@
     function sameContent(a, b) {
         if (!a || !b) return false;
         return VERSIONED_FIELDS.every((f) => {
-            const left = f === 'enabled' ? (a[f] !== false) : String(a[f] || '');
-            const right = f === 'enabled' ? (b[f] !== false) : String(b[f] || '');
+            const bool = f === 'enabled' || f === 'eldersOnly';
+            const left = bool ? readFlag(f, a) : String(a[f] || '');
+            const right = bool ? readFlag(f, b) : String(b[f] || '');
             return left === right;
         });
     }
@@ -147,9 +148,18 @@
         const f = file || {};
         const out = {};
         VERSIONED_FIELDS.forEach((k) => {
-            out[k] = k === 'enabled' ? (f[k] !== false) : (f[k] || '');
+            out[k] = (k === 'enabled' || k === 'eldersOnly') ?
+                readFlag(k, f) : (f[k] || '');
         });
         return out;
+    }
+
+    // `enabled` defaults ON and `eldersOnly` defaults OFF, so "absent" means
+    // different things for the two of them. Read through one place rather than
+    // writing `!== false` in some spots and `=== true` in others.
+    function readFlag(name, file) {
+        const value = (file || {})[name];
+        return name === 'enabled' ? value !== false : value === true;
     }
 
     /** The stored shape, cleaned up. Assumes validate() passed. */
@@ -161,10 +171,21 @@
             summary: String(f.summary || '').trim(),
             body: String(f.body || '').trim(),
             enabled: f.enabled !== false,
+            // ⚠ ALWAYS WRITTEN, EVEN WHEN FALSE, AND THAT IS THE WHOLE POINT.
+            // A non-elder's browser has to CONSTRAIN its query to the files it
+            // may read — an unconstrained one does not return fewer rows, it
+            // errors (see firestore.rules). The constraint is
+            // `where('eldersOnly', '==', false)`, and an absent field matches
+            // no equality at all, so a file written without this would simply
+            // vanish for every editor. Default false: guidance was readable by
+            // any editor before the lock existed and must stay that way unless
+            // somebody says otherwise.
+            eldersOnly: f.eldersOnly === true,
         };
     }
 
     const McpGuidanceCore = {
+        readFlag,
         SOURCES,
         VERSIONED_FIELDS,
         sameContent,

@@ -790,9 +790,40 @@ service cloud.firestore {
     // assistant does. Editor+ is deliberate — the same people already
     // trusted to rewrite a Sunday directly — and it must not be widened to
     // members on the grounds that "it is only text".
+    // ⚠ A LOCKED FILE IS CLOSED TO EDITORS, NOT MERELY HIDDEN (MS-278).
+    // Guidance is instructions an assistant follows, so an elder-only file can
+    // name people and say how to handle them. Hiding it on the page while
+    // leaving it readable here would be a lock anyone could read past with the
+    // console open.
+    //
+    // ⚠ QUERY CONSTRAINT — read this before debugging an "empty" guidance list.
+    // Firestore evaluates these rules PER RETURNED DOCUMENT and fails the whole
+    // query if any document would fail. A non-elder client MUST therefore
+    // constrain its own query:
+    //     .where('eldersOnly', '==', false)
+    // An unconstrained query does not return fewer rows — it errors outright,
+    // and the error looks exactly like "this church has written no guidance".
+    //
+    // ⚠ AND `eldersOnly` MUST BE WRITTEN EVEN WHEN FALSE. An absent field
+    // matches no equality, so a file saved without it disappears for every
+    // editor. mcp-guidance-core.js's normalize() always writes it; the one file
+    // that predated the field was backfilled.
+    //
+    // Only an elder may LOCK a file. An editor may still write the ones they
+    // can see — guidance has always been an editor's job — but a lock they
+    // could lift is not a lock.
+    function guidanceLocked(data) {
+      return data.eldersOnly == true;
+    }
     match /mcp_guidance/{fileId} {
-      allow read: if isEditor();
-      allow create, update, delete: if isEditor();
+      allow read: if isElder() || (isEditor() && !guidanceLocked(resource.data));
+      allow create: if isElder() ||
+          (isEditor() && !guidanceLocked(request.resource.data));
+      allow update: if isElder() ||
+          (isEditor() && !guidanceLocked(resource.data) &&
+           !guidanceLocked(request.resource.data));
+      allow delete: if isElder() ||
+          (isEditor() && !guidanceLocked(resource.data));
 
       // The edit history. Editors READ it — that is the whole point, since
       // it is what lets a bad change be spotted and rewound — but nobody

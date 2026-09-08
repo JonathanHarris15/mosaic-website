@@ -417,6 +417,25 @@
                             </div>
                         </div>
 
+                        <!-- The lock. Elders only, because a lock an editor can
+                             lift is not a lock — and an editor never sees a
+                             locked file to begin with, so there is nothing here
+                             for them to be shown and refused. -->
+                        <div class="mcp-switchrow" x-show="isElder">
+                            <div style="flex:1 1 auto; min-width:0">
+                                <label class="m-check">
+                                    <input type="checkbox" x-model="draft.eldersOnly"
+                                           @change="markDirty()" />
+                                    <span>Elders only</span>
+                                </label>
+                                <p class="m-input-hint" style="margin-top:0">
+                                    Editors cannot read it, and neither can their
+                                    assistants. Use it for anything that names
+                                    people or says how to handle them.
+                                </p>
+                            </div>
+                        </div>
+
                         <!-- ── History ──────────────────────────────────────
                              What makes letting the assistant write guidance
                              safe. A bad edit changes every future Sunday and
@@ -533,20 +552,10 @@
                         </div>
                         <p class="m-input-hint" style="margin: 0 0 4px" x-text="g.what"></p>
 
-                        <!-- ⚠ SAID PLAINLY, BECAUSE THE LIST DOES NOT SHOW IT.
-                             Every tool is offered to every editor: one that
-                             could not be seen would answer "unknown tool",
-                             which reads as a broken server rather than a closed
-                             door. So an editor IS shown these, and would be
-                             refused by rank on the first call. Telling them
-                             their assistant can write a Shepherding Note when
-                             it cannot is worse than not listing it at all. -->
-                        <p x-show="g.eldersOnly && !isElder"
-                           class="m-input-hint" style="margin: 0 0 8px; color: var(--tertiary)">
-                            Elders only. Your assistant can see these and will be
-                            refused them — they are listed so you know they exist.
-                        </p>
-                        <p x-show="g.eldersOnly && isElder"
+                        <!-- An elder-only group reaches this markup only when
+                             an elder is reading: toolGroups filters the rest out
+                             entirely rather than listing them with a warning. -->
+                        <p x-show="g.eldersOnly"
                            class="m-input-hint" style="margin: 0 0 8px">
                             Elders only. Your assistant asks before using any
                             that change something.

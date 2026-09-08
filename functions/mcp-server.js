@@ -205,6 +205,13 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
 
   const isEditor = EDITOR_LEVELS.includes(auth && auth.permissionLevel);
 
+  // ⚠ WHAT THIS CALLER MAY READ, DECIDED ONCE. Guidance can be locked to
+  // elders (MS-278), and it is instructions an assistant FOLLOWS — elder-only
+  // guidance can name people and say how to handle them. Four places read
+  // guidance: the resource list, the resource itself, and the two tools. A
+  // rank threaded into three of them is a lock with a door left open.
+  const forCaller = {level: auth && auth.permissionLevel};
+
   server.registerTool("oos_get_hymn_history", {
     title: "Hymn history",
     description:
@@ -285,7 +292,7 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "guidance",
       new ResourceTemplate(GuidanceCore.URI_PREFIX + "{slug}", {
         list: async () => {
-          const files = await gs.listGuidance(db);
+          const files = await gs.listGuidance(db, forCaller);
           return {
             resources: files.map((f) => ({
               uri: GuidanceCore.uriFor(f.slug),
@@ -306,7 +313,7 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       async (uri, variables) => {
         const slug = GuidanceCore.slugFromUri(uri.href) ||
           String((variables && variables.slug) || "");
-        const file = await gs.getGuidance(db, slug);
+        const file = await gs.getGuidance(db, slug, forCaller);
         return {
           contents: [{
             uri: uri.href,
@@ -333,7 +340,7 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     inputSchema: {},
     annotations: {readOnlyHint: true},
   }, async () => {
-    const files = await gs.listGuidance(db);
+    const files = await gs.listGuidance(db, forCaller);
     if (!files.length) {
       return jsonResult({
         guidance: [],
@@ -357,7 +364,7 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     annotations: {readOnlyHint: true},
   }, async ({address}) => {
     const slug = GuidanceCore.slugFromUri(address) || String(address).trim();
-    const file = await gs.getGuidance(db, slug);
+    const file = await gs.getGuidance(db, slug, forCaller);
     if (!file) {
       // Named plainly rather than returned as an empty body: an assistant
       // handed nothing would follow no guidance and never say so.

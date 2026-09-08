@@ -13,9 +13,30 @@
  * is switched off for reading too. Leaving it readable-by-address would make
  * the toggle a suggestion, and an assistant that had been told a URI once
  * would keep following retired instructions.
+ *
+ * ⚠ AND SO ARE LOCKED ONES, FOR THE SAME REASON. A file marked elder-only is
+ * not merely left out of an editor's list — it cannot be fetched by address
+ * either. Guidance is instructions an assistant follows, so elder-only
+ * guidance can name people and say how to handle them; a lock that only hid
+ * the file from a listing would be a lock an assistant walks straight past the
+ * first time it is told the address.
+ *
+ * ⚠ THE FILTERING HERE IS THE REAL GATE FOR THE MCP. These run through the
+ * Admin SDK, which goes past firestore.rules entirely. The rules protect the
+ * BROWSER; this protects the assistant. Neither covers the other.
  */
 
 const GUIDANCE = "mcp_guidance";
+
+/**
+ * Whether this caller may read elder-only guidance.
+ * @param {object} [options] {level} the caller's permission level
+ * @return {boolean} true for an elder or a super admin
+ */
+function readsLocked(options) {
+  const level = options && options.level;
+  return level === "elder" || level === "super_admin";
+}
 
 /** The stored shape, as the MCP serves it. */
 function toRow(doc) {
@@ -28,6 +49,7 @@ function toRow(doc) {
     body: d.body || "",
     updatedAt: d.updatedAt || null,
     updatedByName: d.updatedByName || null,
+    eldersOnly: d.eldersOnly === true,
   };
 }
 
@@ -41,12 +63,15 @@ function toRow(doc) {
  * @param {object} db the Firestore handle
  * @return {Promise<Array<object>>} slug, title and summary for each
  */
-async function listGuidance(db) {
+async function listGuidance(db, options) {
   const snap = await db.collection(GUIDANCE)
       .where("enabled", "==", true)
       .get();
 
+  const locked = readsLocked(options);
+
   return snap.docs
+      .filter((doc) => locked || (doc.data() || {}).eldersOnly !== true)
       .map(toRow)
       .map(({body, ...rest}) => rest)
       .sort((a, b) => a.title.localeCompare(b.title));
@@ -64,14 +89,22 @@ async function listGuidance(db) {
  * @param {string} slug the file's address
  * @return {Promise<?object>} the file, or null
  */
-async function getGuidance(db, slug) {
+async function getGuidance(db, slug, options) {
   const snap = await db.collection(GUIDANCE)
       .where("slug", "==", String(slug || ""))
       .where("enabled", "==", true)
       .limit(1)
       .get();
 
-  return snap.empty ? null : toRow(snap.docs[0]);
+  if (snap.empty) return null;
+
+  // Locked and the caller is not an elder: the same answer as "no such file".
+  // Saying "that one is elder-only" would confirm it exists and hand over its
+  // address, which is most of what the lock is for.
+  const doc = snap.docs[0];
+  if ((doc.data() || {}).eldersOnly === true && !readsLocked(options)) return null;
+
+  return toRow(doc);
 }
 
-module.exports = {listGuidance, getGuidance, GUIDANCE};
+module.exports = {listGuidance, getGuidance, readsLocked, GUIDANCE};

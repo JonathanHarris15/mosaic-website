@@ -105,7 +105,15 @@ function mcpManager() {
         // ── Guidance files ───────────────────────────────────────────────
         async loadFiles() {
             try {
-                const snap = await db.collection('mcp_guidance').get();
+                // ⚠ CONSTRAINED FOR A NON-ELDER, AND IT HAS TO BE. The rules
+                // evaluate per returned document and fail the WHOLE query if
+                // one would fail, so an unconstrained read here does not return
+                // fewer files — it errors, and the error reads exactly like
+                // "this church has written no guidance". See firestore.rules.
+                const all = db.collection('mcp_guidance');
+                const snap = await (this.isElder
+                    ? all.get()
+                    : all.where('eldersOnly', '==', false).get());
                 this.files = snap.docs
                     .map(d => Object.assign({id: d.id}, d.data()))
                     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
@@ -120,6 +128,7 @@ function mcpManager() {
             this.selectedId = null;
             this.draft = {
                 title: '', slug: '', summary: '', body: '', enabled: true,
+                eldersOnly: false,
             };
             this.problems = [];
             this.dirty = false;
@@ -140,6 +149,7 @@ function mcpManager() {
                 summary: file.summary || '',
                 body: file.body || '',
                 enabled: file.enabled !== false,
+                eldersOnly: file.eldersOnly === true,
             };
             this.problems = [];
             this.dirty = false;
@@ -442,9 +452,26 @@ The current wording is not lost — ` +
             const order = known.filter(k => seen.indexOf(k) !== -1)
                 .concat(seen.filter(k => known.indexOf(k) === -1));
 
-            return order.map(key => {
+            // ⚠ NOT SHOWN AT ALL, RATHER THAN SHOWN WITH A WARNING. The
+            // earlier build listed the elder-only groups to an editor with a
+            // line saying they would be refused; the honest version of that is
+            // simply not offering them. What an editor reads here is what
+            // their assistant can do FOR THEM.
+            //
+            // Note this is the PAGE, not the protocol. The server still lists
+            // every tool to every caller and refuses by rank on the call —
+            // a tool an assistant cannot see answers "unknown tool", which
+            // reads as a broken server rather than a closed door.
+            const mine = this.isElder
+                ? order
+                : order.filter(key => tools.some(
+                    t => (t.group || 'other') === key && !t.eldersOnly));
+
+            return mine.map(key => {
                 const described = this.GROUPS.find(g => g.key === key);
-                const mine = tools.filter(t => (t.group || 'other') === key);
+                const mine = tools
+                    .filter(t => (t.group || 'other') === key)
+                    .filter(t => this.isElder || !t.eldersOnly);
                 return {
                     key: key,
                     title: (described && described.title) || key,

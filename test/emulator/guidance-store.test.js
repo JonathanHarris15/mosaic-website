@@ -186,3 +186,99 @@ suite('guidance files and the capability manifest', () => {
         assert.deepStrictEqual(caps.resources, []);
     });
 });
+
+// ── Guidance locked to elders (MS-278) ─────────────────────────────────────
+//
+// ⚠ GUIDANCE IS INSTRUCTIONS AN ASSISTANT FOLLOWS. An elder-only file can name
+// people and say how to handle them, so a lock that only hid the file from a
+// listing would be a lock an assistant walks straight past the first time it is
+// told the address — which is exactly the reasoning the `enabled` flag already
+// carries, applied to the second flag.
+//
+// ⚠ AND THIS FILTERING IS THE REAL GATE FOR THE MCP. These reads go through the
+// Admin SDK, which goes past firestore.rules entirely. The rules protect the
+// browser; this protects the assistant. Neither covers the other.
+
+const ELDER = {level: 'elder'};
+const EDITOR = {level: 'editor'};
+
+suite('guidance locked to elders', () => {
+    let db;
+
+    before(() => {
+        db = H.connect();
+    });
+
+    beforeEach(async () => {
+        await H.wipe();
+        await db.collection('mcp_guidance').doc('open').set({
+            slug: 'hymn-selection', title: 'Choosing hymns',
+            summary: 'How we pick.', body: 'Prefer something not sung lately.',
+            enabled: true, eldersOnly: false,
+        });
+        await db.collection('mcp_guidance').doc('locked').set({
+            slug: 'red-flags', title: 'Handling a red flag',
+            summary: 'What to do.', body: 'Ring the assigned elder first.',
+            enabled: true, eldersOnly: true,
+        });
+    });
+
+    test('an editor is not offered the locked file', async () => {
+        const listed = await gs.listGuidance(db, EDITOR);
+        assert.deepStrictEqual(listed.map(f => f.slug), ['hymn-selection']);
+    });
+
+    test('an elder is offered both', async () => {
+        const listed = await gs.listGuidance(db, ELDER);
+        assert.deepStrictEqual(
+            listed.map(f => f.slug).sort(), ['hymn-selection', 'red-flags']);
+    });
+
+    test('⚠ nor can an editor fetch it by its address', async () => {
+        // The whole point. A file an assistant has been told the address of
+        // once would otherwise keep answering.
+        assert.strictEqual(await gs.getGuidance(db, 'red-flags', EDITOR), null);
+        assert.ok(await gs.getGuidance(db, 'red-flags', ELDER));
+    });
+
+    test('the refusal is the same as for a file that does not exist', async () => {
+        // Saying "that one is elder-only" would confirm it exists and hand over
+        // its address, which is most of what the lock is for.
+        const locked = await gs.getGuidance(db, 'red-flags', EDITOR);
+        const missing = await gs.getGuidance(db, 'never-existed', EDITOR);
+        assert.strictEqual(locked, missing);
+    });
+
+    test('a caller with no rank at all gets only the open files', async () => {
+        assert.deepStrictEqual(
+            (await gs.listGuidance(db)).map(f => f.slug), ['hymn-selection']);
+        assert.strictEqual(await gs.getGuidance(db, 'red-flags'), null);
+    });
+
+    test('a file written before the lock existed stays readable', async () => {
+        // The field is absent on it. Absent must mean open, or turning the
+        // feature on would have hidden the guidance that was already there.
+        await db.collection('mcp_guidance').doc('old').set({
+            slug: 'from-before', title: 'Older file', summary: 's',
+            body: 'b', enabled: true,
+        });
+
+        const listed = await gs.listGuidance(db, EDITOR);
+        assert.ok(listed.some(f => f.slug === 'from-before'));
+        assert.ok(await gs.getGuidance(db, 'from-before', EDITOR));
+    });
+
+    test('switched off still beats the lock, both ways round', async () => {
+        await db.collection('mcp_guidance').doc('locked').update({enabled: false});
+        assert.strictEqual(await gs.getGuidance(db, 'red-flags', ELDER), null);
+        assert.deepStrictEqual(
+            (await gs.listGuidance(db, ELDER)).map(f => f.slug), ['hymn-selection']);
+    });
+
+    test('the row says whether it is locked, so the page can show it', async () => {
+        const file = await gs.getGuidance(db, 'red-flags', ELDER);
+        assert.strictEqual(file.eldersOnly, true);
+        const open = await gs.getGuidance(db, 'hymn-selection', EDITOR);
+        assert.strictEqual(open.eldersOnly, false);
+    });
+});

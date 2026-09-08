@@ -152,12 +152,39 @@ test('identical content files no new version', () => {
 });
 
 test('a change to any versioned field is a change', () => {
-    const base = {title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true};
+    const base = {title: 'T', slug: 's', summary: 'x', body: 'b',
+        enabled: true, eldersOnly: false};
+
+    // ⚠ A FLAG HAS TO BE FLIPPED, NOT SET TO A STRING. This used to write
+    // 'different' into every field but `enabled`, which for a second boolean
+    // (`eldersOnly`, MS-278) reads as false either way — so the test passed
+    // while claiming to have changed something. Asking the module which
+    // fields are flags keeps that from happening to a third one.
+    const FLAGS = ['enabled', 'eldersOnly'];
+
     Core.VERSIONED_FIELDS.forEach((field) => {
         const changed = Object.assign({}, base);
-        changed[field] = field === 'enabled' ? false : 'different';
+        changed[field] = FLAGS.includes(field) ?
+            !Core.readFlag(field, base) : 'different';
         assert.strictEqual(Core.sameContent(base, changed), false, field);
     });
+});
+
+test('the lock is versioned, so a change to it can be rewound', () => {
+    // It is a fact about the file, and the history exists so a bad change can
+    // be spotted and put back.
+    assert.ok(Core.VERSIONED_FIELDS.includes('eldersOnly'));
+    assert.strictEqual(Core.snapshotOf({
+        title: 'T', slug: 's', summary: 'x', body: 'b', eldersOnly: true,
+    }).eldersOnly, true);
+});
+
+test('the two flags default opposite ways', () => {
+    // `enabled` is on unless switched off; `eldersOnly` is open unless locked.
+    // Reading either with the other one's rule silently inverts it.
+    assert.strictEqual(Core.readFlag('enabled', {}), true);
+    assert.strictEqual(Core.readFlag('eldersOnly', {}), false);
+    assert.strictEqual(Core.normalize({title: 'T', slug: 's'}).eldersOnly, false);
 });
 
 test('a moved timestamp alone is not a change', () => {
