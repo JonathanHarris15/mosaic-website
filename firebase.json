@@ -95,6 +95,7 @@
       "predeploy": [
         "node scripts/sync-shared-to-functions.js"
       ],
+      "//discovery": "⚠ DEPLOYING MAY NEED FUNCTIONS_DISCOVERY_TIMEOUT. The CLI loads index.js and gives it 10 seconds to describe the backend. Since MS-278 the entry point pulls in the whole MCP tool surface — events-store, forms-core and the shepherding modules — and on a cold machine that can take longer than the budget. The failure says 'User code failed to load. Cannot determine backend specification. Timeout after 10000' and names nothing, which reads like broken code rather than a stopwatch. Deploy with FUNCTIONS_DISCOVERY_TIMEOUT=120 set in the environment. The lasting fix is to require the MCP modules lazily inside buildServer, so the other thirty functions stop paying for them at load.",
       "source": "functions",
       "codebase": "default",
       "disallowLegacyRuntimeConfig": true,
