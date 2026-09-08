@@ -1,5 +1,5 @@
 /**
- * The Order of Service MCP server (MS-262).
+ * The Mosaic MCP server (MS-262, widened by MS-278).
  *
  * What this is: a door an AI assistant (Claude Desktop, Claude Code) can
  * knock on to help an editor build a Sunday — look up what has been sung and
@@ -41,9 +41,16 @@ const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
 
+// ⚠ THE NAME AND THE TITLE ARE DIFFERENT THINGS, AND ONLY ONE IS SAFE TO
+// CHANGE. `name` is the identifier a connected client keys its own records
+// off; `title` is what a person reads in a list of connectors. MS-278 made
+// this server cover the Shepherding System and the Calendar as well, so the
+// TITLE was wrong and is fixed. The NAME is left exactly as it was: renaming
+// it buys nothing an elder can see and asks every already-connected assistant
+// to work out whether this is the same server it had.
 const SERVER_NAME = "mosaic-order-of-service";
 const SERVER_VERSION = "1.0.0";
-const SERVER_TITLE = "Mosaic Order of Service";
+const SERVER_TITLE = "Mosaic Church";
 
 /**
  * The church seal, as a connected assistant may draw it.

@@ -911,7 +911,15 @@ describe('the server\'s own identity', () => {
         const info = serverInfo(SITE_URL);
         // Renaming this orphans every client already configured against it.
         assert.strictEqual(info.name, 'mosaic-order-of-service');
-        assert.strictEqual(info.title, 'Mosaic Order of Service');
+
+        // ⚠ THE TITLE MOVED AND THE NAME DID NOT, ON PURPOSE (MS-278). The
+        // server covers the Shepherding System and the Calendar now, so the
+        // words a person reads in a connector list had to change. The
+        // identifier underneath did not: renaming it buys nothing an elder can
+        // see and asks every connected assistant to work out whether this is
+        // still the same server. The old name reading oddly is the price of an
+        // identifier being an identifier.
+        assert.strictEqual(info.title, 'Mosaic Church');
     });
 
     test('the seal is announced as an absolute URL on this server\'s origin', () => {
@@ -952,7 +960,7 @@ describe('the server\'s own identity', () => {
         // identity travels in the initialize response and nowhere else.
         const {client} = await connectAs('editor');
         const info = client.getServerVersion();
-        assert.strictEqual(info.title, 'Mosaic Order of Service');
+        assert.strictEqual(info.title, 'Mosaic Church');
         assert.match(info.icons[0].src, /\/mosaic-seal\.png$/);
     });
 });
@@ -986,7 +994,7 @@ describe('what the MCP Manager is told', () => {
     test('the server names itself for a person as well as for a client', async () => {
         const caps = await describeCapabilities(deps(SITE_URL));
         assert.strictEqual(caps.server.name, 'mosaic-order-of-service');
-        assert.strictEqual(caps.server.title, 'Mosaic Order of Service');
+        assert.strictEqual(caps.server.title, 'Mosaic Church');
     });
 
     test('⚠ with no origin the page is told nothing, not half an address', async () => {
@@ -1003,5 +1011,41 @@ describe('what the MCP Manager is told', () => {
         const writes = caps.tools.filter(t => t.writes).map(t => t.name);
         assert.ok(writes.includes('oos_update_liturgy'));
         assert.ok(!writes.includes('oos_get_service'));
+    });
+});
+
+// ── What a person is told before they hand it their account (MS-278) ────────
+
+describe('the consent screen', () => {
+    const {FirebaseOAuthProvider} = require(path.join(FUNCTIONS, 'mcp-auth.js'));
+
+    /** The sign-in page the provider serves during the OAuth hand-off. */
+    function consentPage() {
+        const provider = new FirebaseOAuthProvider({
+            db: DB,
+            auth: {},
+            issuerUrl: SITE_URL,
+            webConfig: {apiKey: 'k', authDomain: 'd', projectId: 'p'},
+        });
+        // Two positional arguments, not an object — the one caller passes
+        // the parked request id and the client's own name in that order.
+        return provider.signInPage('req1', 'Claude');
+    }
+
+    test('it says what is really being granted, not just Sundays', () => {
+        // ⚠ THIS IS THE ONE SCREEN AN ELDER READS BEFORE GIVING AN ASSISTANT
+        // THEIR ACCOUNT. It used to say "your church's Order of Service",
+        // which was true when that was all the server could reach. Since
+        // MS-278 the same grant reaches shepherding records — understating it
+        // here would be collecting consent for something narrower than what is
+        // handed over.
+        const html = consentPage();
+        assert.match(html, /shepherding records/i);
+        assert.match(html, /calendar/i);
+        assert.match(html, /whatever your own account can do/i);
+    });
+
+    test('it names the assistant that is asking', () => {
+        assert.match(consentPage(), /Claude/);
     });
 });

@@ -59,7 +59,13 @@ async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}
     provider,
     issuerUrl: new URL(base),
     resourceServerUrl: resourceUrl,
-    resourceName: "Mosaic Order of Service",
+    // What a client calls this when it asks somebody to authorise it.
+    resourceName: "Mosaic Church",
+    // ⚠ THE SCOPE STRING IS NOT A LABEL AND IS DELIBERATELY UNCHANGED. It is
+    // minted into every token already issued, and while nothing checks it
+    // today, changing what is advertised can send a connected client back
+    // round the consent flow for no gain. It reads oddly now; that is the
+    // price of a name that is written down in tokens.
     scopesSupported: ["order-of-service"],
   }));
 

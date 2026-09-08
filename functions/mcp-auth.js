@@ -1,5 +1,5 @@
 /**
- * The front door to the Order of Service MCP server (MS-262, ADR-0038).
+ * The front door to the Mosaic MCP server (MS-262, ADR-0038).
  *
  * ⚠ READ THIS BEFORE CHANGING ANYTHING HERE. This file decides who may read
  * and rewrite the church's Sundays from outside the website. Everything in
@@ -503,7 +503,9 @@ class FirebaseOAuthProvider {
   <img class="seal" src="/mosaic-seal.png" width="60" height="60" alt="">
   <h1>Connect to Mosaic</h1>
   <p class="sub"><strong>${safeName}</strong> is asking to read and edit your
-     church's Order of Service. Sign in with your usual Mosaic account to allow it.</p>
+     church's Sundays — and, if you are an elder, the shepherding records and
+     the calendar too. It can do whatever your own account can do. Sign in with
+     your usual Mosaic account to allow it.</p>
   <form id="f">
     <label for="e">Email</label>
     <input id="e" type="email" autocomplete="username" required>
