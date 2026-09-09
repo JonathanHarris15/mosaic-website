@@ -1459,18 +1459,10 @@
                                 </label>
                             </div>
 
-                            <label class="flex flex-col gap-1">
-                                <span class="font-label-md text-label-md text-on-surface-variant">
-                                    Who it's for <span class="opacity-70">— which profile it shows on</span>
-                                </span>
-                                <select x-model="form.aboutPersonId"
-                                    class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant text-on-surface">
-                                    <option value="">Nobody in particular</option>
-                                    <template x-for="p in people" :key="p.id">
-                                        <option :value="p.id" x-text="p.name"></option>
-                                    </template>
-                                </select>
-                            </label>
+                            <div data-person-picker
+                                 data-label="Who it's for"
+                                 data-hint="&mdash; which profile it shows on"
+                                 data-empty="Nobody in particular"></div>
 
                             <div class="flex flex-col gap-1">
                                 <span class="font-label-md text-label-md text-on-surface-variant">
@@ -1700,6 +1692,9 @@
          events-occurrence-core.js. -->
     <script src="events-occurrence-core.js"></script>
     <script src="tasks-core.js"></script>
+    <!-- Fills the data-person-picker placeholder in the task editor. After the
+         placeholder, before Alpine — the same timing roles-panel.js needs. -->
+    <script src="person-picker.js"></script>
     <script src="shepherding-tasks.js"></script>
     <!-- Loads the vendored TipTap bundle. Must come before the page
          script, which calls TiptapEditorLoader.ensureTipTap(). -->

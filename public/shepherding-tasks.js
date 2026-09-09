@@ -42,7 +42,10 @@ const CELEBRATE_MS = 620;
 const LEAVE_MS = 300;
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingTasks', (config = {}) => ({
+    // The Person Picker's behaviour is folded in over the component, so "who
+    // it's for" is chosen the way a Person is chosen everywhere else. Composed
+    // with descriptors, never spread — see person-picker.js.
+    Alpine.data('shepherdingTasks', (config = {}) => Object.defineProperties({
         loading: true,
         isElder: false,
         currentUser: null,
@@ -500,5 +503,17 @@ document.addEventListener('alpine:init', () => {
             this.toast = message;
             setTimeout(() => { this.toast = ''; }, 2500);
         },
-    }));
+
+        // ── The Person Picker's half of the contract ─────────────────────────
+        //
+        // The picker knows how to search, highlight and choose; it knows
+        // nothing about Tasks. These three say what it is choosing from, what is
+        // chosen, and where the answer goes.
+
+        get ppPeople() { return this.people; },
+
+        get ppSelectedId() { return this.form.aboutPersonId; },
+
+        ppSelect(person) { this.form.aboutPersonId = person ? person.id : ''; },
+    }, Object.getOwnPropertyDescriptors(PersonPicker.mixin())));
 });

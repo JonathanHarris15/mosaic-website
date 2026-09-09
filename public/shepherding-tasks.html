@@ -262,19 +262,14 @@
 
             <!-- Who it is FOR — a different question from who does it, and the
                  one that puts this Task on somebody's Shepherding Profile
-                 (ADR-0061). Optional, and most tasks leave it alone. -->
-            <label class="flex flex-col gap-1">
-                <span class="font-label-md text-label-md text-on-surface-variant">
-                    Who it's for <span class="opacity-70">— shows on their profile too</span>
-                </span>
-                <select x-model="form.aboutPersonId"
-                    class="px-md py-2 rounded-lg bg-surface-container border border-outline-variant text-on-surface">
-                    <option value="">Nobody in particular</option>
-                    <template x-for="p in people" :key="p.id">
-                        <option :value="p.id" x-text="p.name"></option>
-                    </template>
-                </select>
-            </label>
+                 (ADR-0061). Optional, and most tasks leave it alone.
+
+                 Filled in by person-picker.js, which is the one way this app
+                 asks anybody to choose a Person. -->
+            <div data-person-picker
+                 data-label="Who it's for"
+                 data-hint="&mdash; shows on their profile too"
+                 data-empty="Nobody in particular"></div>
 
             <div class="flex flex-col gap-1">
                 <span class="font-label-md text-label-md text-on-surface-variant">
@@ -351,6 +346,11 @@
          class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-md py-2 rounded-lg bg-inverse-surface text-inverse-on-surface text-sm"
          x-text="toast"></div>
 
+    <!-- Fills the data-person-picker placeholder above with the one shared way
+         of choosing a Person. It has to run AFTER that element exists and
+         BEFORE Alpine, which is deferred — so it sits at the end of the body,
+         not in the head with the rest. -->
+    <script src="person-picker.js"></script>
     <script src="shepherding-tasks.js"></script>
 </body>
 </html>
