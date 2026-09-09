@@ -72,19 +72,41 @@ async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}
   app.use(express.json({limit: "1mb"}));
   app.use(express.urlencoded({extended: false}));
 
+  // What a client calls this when it asks somebody to authorise it.
+  const resourceName = "Mosaic Church";
+  // ⚠ THE SCOPE STRING IS NOT A LABEL AND IS DELIBERATELY UNCHANGED. It is
+  // minted into every token already issued, and while nothing checks it
+  // today, changing what is advertised can send a connected client back
+  // round the consent flow for no gain. It reads oddly now; that is the
+  // price of a name that is written down in tokens.
+  const scopesSupported = ["order-of-service"];
+
   app.use(mcpAuthRouter({
     provider,
     issuerUrl: new URL(base),
     resourceServerUrl: resourceUrl,
-    // What a client calls this when it asks somebody to authorise it.
-    resourceName: "Mosaic Church",
-    // ⚠ THE SCOPE STRING IS NOT A LABEL AND IS DELIBERATELY UNCHANGED. It is
-    // minted into every token already issued, and while nothing checks it
-    // today, changing what is advertised can send a connected client back
-    // round the consent flow for no gain. It reads oddly now; that is the
-    // price of a name that is written down in tokens.
-    scopesSupported: ["order-of-service"],
+    resourceName,
+    scopesSupported,
   }));
+
+  // The SDK publishes this document at ONE address: the resource's own path
+  // appended to the well-known prefix, so /.well-known/oauth-protected-
+  // resource/mcp. That is what the spec tells a client to ask for, and what
+  // our 401 names in its WWW-Authenticate header. But a client that skips
+  // both and asks for the bare well-known path — several do — got a 404 and
+  // an HTML error page, and read that as "no OAuth here" rather than "wrong
+  // address". The same document at the older, unsuffixed address costs
+  // nothing and closes that door. Exact path, not `use`, so it cannot shadow
+  // the suffixed route the SDK already owns.
+  app.get("/.well-known/oauth-protected-resource", (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.json({
+      resource: resourceUrl.href,
+      authorization_servers: [new URL(base).href],
+      scopes_supported: scopesSupported,
+      resource_name: resourceName,
+    });
+  });
 
   // The hand-off from our own sign-in page. The browser has already talked
   // to Firebase Auth directly and holds a signed identity token; this turns

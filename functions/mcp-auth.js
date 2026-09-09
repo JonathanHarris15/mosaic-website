@@ -35,6 +35,35 @@
 
 const crypto = require("crypto");
 
+// ⚠ THROW THESE, NEVER A BARE `Error`. The SDK's token endpoint and bearer
+// middleware both end in the same shape: an OAuthError becomes the status it
+// names, and ANYTHING ELSE becomes a bare 500 "Internal Server Error" with no
+// WWW-Authenticate header. That difference is not cosmetic. A 401 tells an
+// assistant "your pass is stale, sign in again" and it recovers on its own; a
+// 500 tells it "this server is broken" and it gives up and reports an internal
+// error — which is exactly what a stale pass used to produce here, with no way
+// back short of the assistant's vendor clearing its own cache. Every refusal
+// below is a client mistake, so every one of them is a 4xx.
+//
+// ⚠ AND THEY MUST COME FROM `import()`, NOT `require()`. The SDK ships a
+// CommonJS build and an ESM build side by side, and Node loads them as two
+// unrelated modules with two unrelated sets of classes. The middleware that
+// turns our throw into a status code is reached by `import()` in mcp-app.js,
+// so its `instanceof` checks are against the ESM classes. A CommonJS
+// `InvalidTokenError` thrown from here is not an instance of the ESM one: it
+// falls through to the catch-all and comes back as the exact 500 this is
+// meant to prevent, while reading as completely correct in this file. There
+// is no way to see it except by watching the status code the server returns.
+let errorsPromise = null;
+
+/** @return {Promise<object>} the SDK's OAuth error classes, ESM copy */
+function oauthErrors() {
+  if (!errorsPromise) {
+    errorsPromise = import("@modelcontextprotocol/sdk/server/auth/errors.js");
+  }
+  return errorsPromise;
+}
+
 const CLIENTS = "mcp_clients";
 const AUTH_REQUESTS = "mcp_auth_requests";
 const AUTH_CODES = "mcp_auth_codes";
@@ -298,12 +327,13 @@ class FirebaseOAuthProvider {
    * @return {Promise<string>} the challenge
    */
   async challengeForAuthorizationCode(client, authorizationCode) {
+    const {InvalidGrantError} = await oauthErrors();
     const snap = await this.db.collection(AUTH_CODES)
         .doc(String(authorizationCode || "")).get();
-    if (!snap.exists) throw new Error("Unknown or already-used code.");
+    if (!snap.exists) throw new InvalidGrantError("Unknown or already-used code.");
     const data = snap.data();
     if (!safeEqual(data.clientId, client.client_id)) {
-      throw new Error("That code was not issued to this client.");
+      throw new InvalidGrantError("That code was not issued to this client.");
     }
     return data.codeChallenge;
   }
@@ -323,22 +353,23 @@ class FirebaseOAuthProvider {
    */
   async exchangeAuthorizationCode(
       client, authorizationCode, codeVerifier, redirectUri, resource) {
+    const {InvalidGrantError} = await oauthErrors();
     const codeRef = this.db.collection(AUTH_CODES)
         .doc(String(authorizationCode || ""));
 
     const claim = await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(codeRef);
-      if (!snap.exists) throw new Error("Unknown or already-used code.");
+      if (!snap.exists) throw new InvalidGrantError("Unknown or already-used code.");
       const data = snap.data();
       if (!safeEqual(data.clientId, client.client_id)) {
-        throw new Error("That code was not issued to this client.");
+        throw new InvalidGrantError("That code was not issued to this client.");
       }
       if (data.expiresAt < Date.now()) {
         tx.delete(codeRef);
-        throw new Error("That code has expired.");
+        throw new InvalidGrantError("That code has expired.");
       }
       if (redirectUri !== undefined && data.redirectUri !== redirectUri) {
-        throw new Error("Redirect URI does not match the one authorized.");
+        throw new InvalidGrantError("Redirect URI does not match the one authorized.");
       }
       tx.delete(codeRef);
       return data;
@@ -367,19 +398,20 @@ class FirebaseOAuthProvider {
    * @return {Promise<object>} OAuth tokens
    */
   async exchangeRefreshToken(client, refreshToken, scopes, resource) {
+    const {InvalidGrantError} = await oauthErrors();
     const ref = this.db.collection(TOKENS).doc(hashToken(String(refreshToken || "")));
 
     const claim = await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) throw new Error("Unknown or already-used refresh token.");
+      if (!snap.exists) throw new InvalidGrantError("Unknown or already-used refresh token.");
       const data = snap.data();
-      if (data.type !== "refresh") throw new Error("That is not a refresh token.");
+      if (data.type !== "refresh") throw new InvalidGrantError("That is not a refresh token.");
       if (!safeEqual(data.clientId, client.client_id)) {
-        throw new Error("That token was not issued to this client.");
+        throw new InvalidGrantError("That token was not issued to this client.");
       }
       if (data.expiresAt < Date.now()) {
         tx.delete(ref);
-        throw new Error("That refresh token has expired.");
+        throw new InvalidGrantError("That refresh token has expired.");
       }
       tx.delete(ref);
       return data;
@@ -389,7 +421,7 @@ class FirebaseOAuthProvider {
     // is exactly the wrong moment to skip the check.
     const level = await this.permissionLevelOf(claim.uid);
     if (!EDITOR_LEVELS.includes(level)) {
-      throw new Error("This account no longer has editor access.");
+      throw new InvalidGrantError("This account no longer has editor access.");
     }
 
     return this.issueTokens({
@@ -443,16 +475,21 @@ class FirebaseOAuthProvider {
    * @return {Promise<object>} AuthInfo for the SDK
    */
   async verifyAccessToken(token) {
+    const {InvalidTokenError} = await oauthErrors();
     const snap = await this.db.collection(TOKENS)
         .doc(hashToken(String(token || ""))).get();
-    if (!snap.exists) throw new Error("Invalid access token.");
+    if (!snap.exists) throw new InvalidTokenError("Invalid access token.");
     const data = snap.data();
-    if (data.type !== "access") throw new Error("Invalid access token.");
-    if (data.expiresAt < Date.now()) throw new Error("Access token expired.");
+    if (data.type !== "access") throw new InvalidTokenError("Invalid access token.");
+    if (data.expiresAt < Date.now()) throw new InvalidTokenError("Access token expired.");
 
     const level = await this.permissionLevelOf(data.uid);
     if (!EDITOR_LEVELS.includes(level)) {
-      throw new Error("This account no longer has editor access.");
+      // Not "forbidden": the pass itself is what has stopped being good, so
+      // say so as a 401 and let the assistant offer to sign in again. Whoever
+      // does will meet the plain explanation on the sign-in page rather than
+      // an assistant stuck reporting a server fault.
+      throw new InvalidTokenError("This account no longer has editor access.");
     }
 
     return {
@@ -594,6 +631,10 @@ class FirebaseOAuthProvider {
 
 module.exports = {
   FirebaseOAuthProvider,
+  // Exported so a test can check what class a refusal is against the SAME
+  // copy of the SDK this file throws from. Comparing against a `require`d
+  // copy passes or fails for reasons that have nothing to do with the code.
+  oauthErrors,
   FirebaseClientsStore,
   EDITOR_LEVELS,
   hashToken,
