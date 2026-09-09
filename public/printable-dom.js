@@ -85,7 +85,15 @@
         } else {
             const text = (values && typeof values.text === 'string') ? values.text : (node.text || '');
             el.textContent = text;
-            if (o.editing && !text) el.classList.add('pe-text-empty');
+            // ⚠ ONLY A TEXT ELEMENT IS "EMPTY". An empty <p> is a run somebody
+            // has not typed into yet, and the placeholder is how they find it.
+            // An empty BOX is not a mistake — a hairline rule, a spacer, the
+            // border frame on a page are all boxes that hold nothing on
+            // purpose, and marking those drew a dotted outline round half a
+            // page and stretched every 1px rule to a line's height (the class
+            // carries min-height: 1em). They are visible by their own border
+            // or background, and the layer tree still selects them.
+            if (o.editing && !text && Core.kindOf(node) === 'text') el.classList.add('pe-text-empty');
         }
         return el;
     }
