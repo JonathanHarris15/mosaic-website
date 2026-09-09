@@ -31,12 +31,21 @@
 //      through from the series, so changing the series changes every date that
 //      has not spoken up — the same rule an Event occurrence obeys.
 //
-//   4. A TASK NAMES WHO MUST DO IT (ADR-0059). Its only Person link is its
-//      Assignees, who are Elders. There is no "people it is about": a Person
-//      named in the body is a cross-reference, which is prose. This module
-//      builds its output objects field by field rather than spreading its
-//      input, so a stray `mentions` on an old record cannot leak through and
-//      quietly become a field again.
+//   4. A TASK HAS TWO PERSON LINKS AND THEY MEAN DIFFERENT THINGS (ADR-0061,
+//      which supersedes ADR-0059). Its **Assignees** are the Elders who must do
+//      it. Its **Subject** — `aboutPersonId`, at most one — is the Person the
+//      work is FOR, and it is what puts the Task on that person's Shepherding
+//      Profile, the same way `ownerPersonId` puts a document there. A Subject
+//      hides nothing: a Task with one is still on the Tasks & Reminders page,
+//      which is where a profile document and a Task part company.
+//
+//      The Subject belongs to the whole commitment, never to one date — "ring
+//      John monthly" cannot be about Rob in March — so an occurrence reads it
+//      through from the series and may not override it.
+//
+//      This module still builds its output objects field by field rather than
+//      spreading its input, so a stray `mentions` from the old reminder model
+//      cannot leak through and quietly become a field again.
 //
 // The recurrence vocabulary is the Calendar's, taken from `EventsOccurrenceCore`
 // rather than restated, so "fortnightly" cannot come to mean two things.
@@ -175,6 +184,10 @@
             dueTime: isTimeStr(row.dueTime) ? row.dueTime : null,
             assigneeIds: assigneeIds,
             isUnassigned: assigneeIds.length === 0,
+            // Who the work is FOR — not who does it. Empty string and undefined
+            // both mean nobody in particular, and both become null, so every
+            // surface can ask `=== null` and get the same answer.
+            aboutPersonId: row.aboutPersonId || null,
             state: stateOf(row, now),
             completedAt: completedAt,
             completedOn: completedAt === null ? null : dayOf(completedAt),
@@ -226,6 +239,10 @@
                 dueDate: (rec && isDateStr(rec.movedTo)) ? rec.movedTo : date,
                 dueTime: readThrough(rec, series, 'dueTime', series.dueTime),
                 assigneeIds: (rec && Array.isArray(rec.assigneeIds)) ? rec.assigneeIds : series.assigneeIds,
+                // ⚠ THE SERIES', NEVER THE OCCURRENCE'S. Who a standing
+                // commitment is for is true of every date of it, so it is not
+                // among the things one date may override.
+                aboutPersonId: series.aboutPersonId,
                 completedAt: rec ? rec.completedAt : null,
                 completedBy: rec ? rec.completedBy : null,
                 skippedAt: rec ? rec.skippedAt : null,
@@ -250,6 +267,7 @@
                 dueDate: isDateStr(rec.movedTo) ? rec.movedTo : rec.date,
                 dueTime: readThrough(rec, series, 'dueTime', series.dueTime),
                 assigneeIds: Array.isArray(rec.assigneeIds) ? rec.assigneeIds : series.assigneeIds,
+                aboutPersonId: series.aboutPersonId,
                 completedAt: rec.completedAt,
                 completedBy: rec.completedBy,
                 skippedAt: null,
@@ -308,6 +326,19 @@
         });
     }
 
+    // What belongs on one person's Shepherding Profile: the Tasks whose Subject
+    // is them, whoever has to do them (ADR-0061). Same order as the page, so an
+    // elder reads the two the same way.
+    //
+    // ⚠ THE SUBJECT ONLY. A Task assigned to John is John's WORK, not care
+    // toward him, and putting it on his profile would make the tab mean two
+    // things at once — which is the confusion ADR-0059 refused, and the reason
+    // the Subject is a field of its own rather than scraped from anywhere.
+    function forPerson(list, personId) {
+        if (!personId) return [];
+        return (list || []).filter(t => t.aboutPersonId === personId);
+    }
+
     // The finished work, newest first. `since` bounds how far back — the page
     // opens on thirty days and can reach further when somebody asks.
     function completed(list, opts) {
@@ -342,6 +373,7 @@
         msOf,
         // slices
         panelFor,
+        forPerson,
         completed,
         completedWindowStart,
     };

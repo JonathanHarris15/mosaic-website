@@ -1,10 +1,22 @@
-// The Tasks & Reminders page (MS-79).
+// The Tasks & Reminders page (MS-79) — and the Tasks tab on a Shepherding
+// Profile (ADR-0061), which is the same component in a smaller room:
+//
+//   • the whole page          → shepherdingTasks
+//   • a Person's profile tab  → shepherdingTasks({ aboutPersonId: <id>, embedded: true })
+//
+// The same trade `documentLibrary` makes for the Document Library and the
+// profile's Documents tab: one component, two scopes, so a rule about ticking
+// or overdue cannot come to mean two things depending on which screen you are
+// standing on. The difference is what the scope DOES — a profile document is
+// private to that profile until it is opted into the Library, while a Task with
+// a Subject is on the page as well, always. Tasks are not filed away.
 //
 // ⚠ IT DECIDES NOTHING. Every rule about a Task — when one is overdue, which
 // dates a repeat produces, what an occurrence may override, which of them
-// belong on the dashboard panel — lives in `tasks-core.js`, and every write
-// goes through the `shepherdingTask` callable so the page and the assistant
-// obey one set of rules rather than two. This file reads, draws, and asks.
+// belong on the dashboard panel or on one person's profile — lives in
+// `tasks-core.js`, and every write goes through the `shepherdingTask` callable
+// so the page and the assistant obey one set of rules rather than two. This
+// file reads, draws, and asks.
 //
 // ⚠ ONE-OFFS ARE NOT WINDOWED. A repeat's dates are computed inside a range; a
 // one-off is a stored row and is already the answer. Windowing it would hide an
@@ -30,13 +42,21 @@ const CELEBRATE_MS = 620;
 const LEAVE_MS = 300;
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingTasks', () => ({
+    Alpine.data('shepherdingTasks', (config = {}) => ({
         loading: true,
         isElder: false,
         currentUser: null,
         currentPersonId: null,
 
+        // ── Scope ────────────────────────────────────────────────────────────
+        // Empty on the page, a Person id on a profile. Everything the scope
+        // changes is downstream of these two: which Tasks are shown, and who a
+        // new one is for by default.
+        aboutPersonId: config.aboutPersonId || null,
+        embedded: !!config.embedded,
+
         tasks: [],
+        people: [],
         elders: [],
         // The resolved list drops the raw records, so the recurrence a row came
         // from is looked up here when the editor or a label needs it.
@@ -64,13 +84,21 @@ document.addEventListener('alpine:init', () => {
         bodyEditor: null,
 
         form: {
-            title: '', dueDate: '', dueTime: '', assigneeIds: [],
+            title: '', dueDate: '', dueTime: '', assigneeIds: [], aboutPersonId: '',
             repeats: false, freq: 'monthly', endsKind: 'never', endsDate: '', endsCount: 12,
         },
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
-                if (!user) { window.location.href = 'login.html'; return; }
+                // ⚠ A TAB DOES NOT NAVIGATE ITS HOST. On the page, a signed-out
+                // visitor is sent to log in; inside a profile the surrounding
+                // page has already answered that question, and a second redirect
+                // from a tab would fight it.
+                if (!user) {
+                    if (!this.embedded) window.location.href = 'login.html';
+                    this.loading = false;
+                    return;
+                }
 
                 // ⚠ THE READ OF WHO YOU ARE IS INSIDE THE GUARD. If it throws,
                 // the page has to say so and stop; a boot that fails silently
@@ -80,7 +108,11 @@ document.addEventListener('alpine:init', () => {
                     const userData = await getUserData(user.uid);
                     const level = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
                     this.isElder = ['elder', 'super_admin'].includes(level);
-                    if (!this.isElder) { window.location.href = 'index.html'; return; }
+                    if (!this.isElder) {
+                        if (!this.embedded) window.location.href = 'index.html';
+                        this.loading = false;
+                        return;
+                    }
 
                     this.currentUser = user;
                     // Which Person this elder IS, so "mine" can mean anything.
@@ -88,7 +120,7 @@ document.addEventListener('alpine:init', () => {
                     // their own, which is honest rather than an error.
                     this.currentPersonId = (userData && userData.personId) || null;
 
-                    await Promise.all([this.loadTasks(), this.loadElders()]);
+                    await Promise.all([this.loadTasks(), this.loadPeople()]);
                 } catch (e) {
                     console.error('Loading tasks:', e);
                     this.say('Could not load the tasks.');
@@ -125,17 +157,33 @@ document.addEventListener('alpine:init', () => {
             this.seriesById = byId;
         },
 
-        // Only Elders can be given a Task (ADR-0059), and the Elder Tag is
-        // already the canonical answer to who they are.
-        async loadElders() {
-            const snap = await firebase.firestore().collection('people')
-                .where('tags', 'array-contains', ELDER_TAG).get();
-            this.elders = snap.docs
-                .map(d => ({ id: d.id, name: (d.data() || {}).name || 'Unnamed' }))
+        // The directory once, and both lists cut from it.
+        //
+        // The whole of it, because a Task's Subject can be anybody — the care is
+        // toward them and they never open the page. Only Elders can be GIVEN one
+        // (ADR-0059 still stands on that), and the Elder Tag is the canonical
+        // answer to who they are, so they are filtered out of the same read
+        // rather than fetched again.
+        async loadPeople() {
+            const snap = await firebase.firestore().collection('people').get();
+            this.people = snap.docs
+                .map(d => ({
+                    id: d.id,
+                    name: (d.data() || {}).name || 'Unnamed',
+                    tags: (d.data() || {}).tags || [],
+                }))
                 .sort((a, b) => a.name.localeCompare(b.name));
+            this.elders = this.people.filter(p => (p.tags || []).indexOf(ELDER_TAG) >= 0);
         },
 
         // ── The three lists ──────────────────────────────────────────────────
+
+        // On a profile, only the Tasks that are FOR this person (ADR-0061) —
+        // never the ones merely assigned to them, which are their work rather
+        // than care toward them. On the page, everything.
+        scoped(list) {
+            return this.aboutPersonId ? TasksCore.forPerson(list, this.aboutPersonId) : list;
+        },
 
         matchesFilter(task) {
             if (this.assigneeFilter === 'all') return true;
@@ -147,18 +195,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         get overdue() {
-            return this.tasks.filter(t => t.state === TasksCore.STATES.OVERDUE && this.matchesFilter(t));
+            return this.scoped(this.tasks)
+                .filter(t => t.state === TasksCore.STATES.OVERDUE && this.matchesFilter(t));
         },
 
         get upcoming() {
-            return this.tasks.filter(t => t.state === TasksCore.STATES.OPEN && this.matchesFilter(t));
+            return this.scoped(this.tasks)
+                .filter(t => t.state === TasksCore.STATES.OPEN && this.matchesFilter(t));
         },
 
         get done() {
             const since = this.doneWindowDays
                 ? TasksCore.completedWindowStart(Date.now(), this.doneWindowDays)
                 : null;
-            return TasksCore.completed(this.tasks, since ? { since } : null)
+            return TasksCore.completed(this.scoped(this.tasks), since ? { since } : null)
                 .filter(t => this.matchesFilter(t));
         },
 
@@ -210,6 +260,18 @@ document.addEventListener('alpine:init', () => {
             return names;
         },
 
+        // Who the Task is FOR. Empty when it is about nobody in particular,
+        // which is most of them — and empty draws nothing rather than "none".
+        aboutLabel(task) {
+            if (!task.aboutPersonId) return '';
+            const person = this.people.find(p => p.id === task.aboutPersonId);
+            return (person && person.name) || 'Someone';
+        },
+
+        aboutHref(task) {
+            return 'shepherding-profile.html?id=' + encodeURIComponent(task.aboutPersonId || '');
+        },
+
         // ── The editor ───────────────────────────────────────────────────────
 
         get previewDates() {
@@ -239,6 +301,10 @@ document.addEventListener('alpine:init', () => {
             this.error = '';
             this.form = {
                 title: '', dueDate: TasksCore.dayOf(Date.now()), dueTime: '', assigneeIds: [],
+                // On a profile the answer is already known, and asking it again
+                // is how a Task ends up on the page but not on the tab it was
+                // written from.
+                aboutPersonId: this.aboutPersonId || '',
                 repeats: false, freq: 'monthly', endsKind: 'never', endsDate: '', endsCount: 12,
             };
             this.showModal = true;
@@ -258,6 +324,7 @@ document.addEventListener('alpine:init', () => {
                 dueDate: task.dueDate,
                 dueTime: task.dueTime || '',
                 assigneeIds: task.assigneeIds.slice(),
+                aboutPersonId: task.aboutPersonId || '',
                 // The pattern belongs to the commitment and is edited there, so
                 // opening one date does not offer to change it.
                 repeats: false,
@@ -317,6 +384,11 @@ document.addEventListener('alpine:init', () => {
                         body: body,
                         dueTime: this.form.dueTime || null,
                         assigneeIds: this.form.assigneeIds,
+                        // ⚠ ONLY WHEN THE WHOLE COMMITMENT IS BEING EDITED. Who
+                        // a Task is for is true of every date of it, and the
+                        // server refuses it on one date rather than letting
+                        // March be about somebody else.
+                        aboutPersonId: this.editingDate ? undefined : (this.form.aboutPersonId || null),
                     });
                     // ⚠ ONLY WHEN THE DAY ACTUALLY CHANGED. A nudge is its own
                     // write, and on a repeat it stores a record against that
@@ -337,6 +409,7 @@ document.addEventListener('alpine:init', () => {
                         due: this.form.dueDate,
                         dueTime: this.form.dueTime || null,
                         assigneeIds: this.form.assigneeIds,
+                        aboutPersonId: this.form.aboutPersonId || undefined,
                         recurrence: this.form.repeats ? this.recurrenceFromForm() : undefined,
                     });
                 }

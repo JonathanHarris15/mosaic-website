@@ -662,6 +662,96 @@
     </div>`;
   }
 
+  // ADR-0061: the Tasks the elders have to do TOWARD this person, on their
+  // profile — the phone's half of the web's Tasks tab.
+  //
+  // ⚠ THE SUBJECT, NOT THE ASSIGNEE. `getPersonTasks` asks TasksCore for the
+  // Tasks this person is FOR. A Task given to them is their workload and
+  // belongs on the dashboard panel, not here.
+  //
+  // Reading and finishing are the whole of it, plus writing a plain one down —
+  // repeats, bodies and handing work out are the long form, and the long form
+  // is the Tasks & Reminders page, which the shell opens whole.
+  function ProfileTasks(props) {
+    var pid = props.pid, showToast = props.showToast;
+    var loadingS = useState(true), tasksS = useState([]), addS = useState(null), savingS = useState(false);
+    var tasks = tasksS[0], add = addS[0];
+    var TC = window.TasksCore;
+
+    function reload() { return data.getPersonTasks(pid).then(tasksS[1]); }
+
+    useEffect(function () {
+      var alive = true;
+      data.getPersonTasks(pid).then(function (rows) {
+        if (!alive) return;
+        tasksS[1](rows); loadingS[1](false);
+      }).catch(function () { if (alive) loadingS[1](false); });
+      return function () { alive = false; };
+    }, [pid]);
+
+    function tick(t) {
+      data.completeShepherdingTask(t).then(function () {
+        reload(); showToast("Done");
+      }).catch(function (e) { showToast((e && e.message) || "Error completing task", "error"); });
+    }
+
+    function save() {
+      if (!add || !add.title.trim() || !add.due) return;
+      savingS[1](true);
+      data.createShepherdingTask({ title: add.title.trim(), due: add.due, aboutPersonId: pid })
+        .then(function () { addS[1](null); return reload(); })
+        .then(function () { showToast("Task added"); })
+        .catch(function (e) { showToast((e && e.message) || "Error saving task", "error"); })
+        .then(function () { savingS[1](false); });
+    }
+
+    var open = tasks.filter(function (t) { return t.state === "open" || t.state === "overdue"; });
+    var done = TC.completed(tasks, { since: TC.completedWindowStart(Date.now()) });
+
+    function row(t) {
+      var late = t.state === "overdue", finished = t.state === "done";
+      return html`<div key=${t.id + t.dueDate} style=${{ display: "flex", alignItems: "flex-start", gap: 10, background: "var(--surface-container)", borderRadius: "var(--radius)", padding: "12px 14px", opacity: finished ? 0.6 : 1 }}>
+        <button onClick=${function () { if (!finished) tick(t); }} disabled=${finished} aria-label=${"Mark " + t.title + " done"} style=${{ marginTop: 2, width: 18, height: 18, flexShrink: 0, borderRadius: 4, cursor: finished ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", border: finished ? "none" : "1px solid var(--outline)", background: finished ? "var(--primary)" : "transparent", color: "var(--on-primary)" }}>${finished ? Ic("check", 12) : null}</button>
+        <div style=${{ minWidth: 0, flex: 1 }}>
+          <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)", textDecoration: finished ? "line-through" : "none" }}>${t.title}</div>
+          <div style=${{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: late ? 600 : 400, color: late ? "var(--error)" : "var(--on-surface-variant)" }}>${Ic("clock", 13)} ${fmtTaskDue(t)}</div>
+          ${t.isUnassigned ? html`<div style=${{ marginTop: 2, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)" }}>Nobody has picked this up</div>` : null}
+        </div>
+      </div>`;
+    }
+
+    return html`<${Fragment}>
+      <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "20px 2px 12px" }}>
+        <h2 style=${SF_H2}>Tasks</h2>
+        <button onClick=${function () { addS[1]({ title: "", due: TC.dayOf(Date.now()) }); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} Add Task</button>
+      </div>
+
+      <p style=${{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", margin: "0 2px 12px" }}>
+        What the elders have to do for this person. These are on Tasks &amp; Reminders too.
+      </p>
+
+      ${loadingS[0] ? null
+        : open.length === 0 ? html`<p style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)", margin: 0 }}>Nothing outstanding for this person.</p>`
+        : html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>${open.map(row)}</div>`}
+
+      ${done.length ? html`<${Fragment}>
+        <div style=${{ margin: "20px 2px 10px" }}><span style=${OVER}>Done recently</span></div>
+        <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>${done.map(row)}</div>
+      </${Fragment}>` : null}
+
+      ${add ? html`<${Modal} onClose=${function () { addS[1](null); }} title="New Task"
+        footer=${html`<${Fragment}><button onClick=${function () { addS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${save} disabled=${savingS[0]} style=${pill()}>${savingS[0] ? "Saving…" : "Add Task"}</button></${Fragment}>`}>
+        <div style=${{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <${Field} label="What needs doing"><input value=${add.title} onInput=${function (e) { addS[1](Object.assign({}, add, { title: e.target.value })); }} placeholder="e.g. Visit after the operation" style=${inputStyle} /></${Field}>
+          <${Field} label="Due"><input type="date" value=${add.due} onInput=${function (e) { addS[1](Object.assign({}, add, { due: e.target.value })); }} style=${inputStyle} /></${Field}>
+          <p style=${{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", margin: 0 }}>
+            Nobody is given this yet — hand it out on the Tasks &amp; Reminders page.
+          </p>
+        </div>
+      </${Modal}>` : null}
+    </${Fragment}>`;
+  }
+
   // MS-98: per-person Documents directory shown in the profile's Documents tab.
   // Reuses the shared tree engine (window.ShepherdingDocsCore) over this Person's
   // own structure doc (person_<id>); documents carry ownerPersonId and can be
@@ -808,7 +898,7 @@
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
     var relGroupsS = useState([]);                          // Relationship Groups (ADR-0014)
-    var tabS = useState("record"); // MS-98: 'record' | 'documents'
+    var tabS = useState("record"); // 'record' | 'documents' (MS-98) | 'tasks' (ADR-0061)
     var drawerS = useState(false);  // details side drawer (member details/tags/track/status/relationships)
     // Quick-assign card (MS-104 parity): apply existing vocabulary to this Person.
     var qaModeS = useState(null);   // null | 'pairwise' | 'group' | 'family'
@@ -1281,10 +1371,11 @@
           </${Fragment}>` : null}
 
           <div style=${{ display: "flex", gap: 4, borderBottom: "1px solid var(--outline-variant)", margin: "18px 2px 0" }}>
-            ${[["record", "Pastoral Record"], ["documents", "Documents"]].map(function (t) { var on = tabS[0] === t[0]; return html`<button key=${t[0]} onClick=${function () { tabS[1](t[0]); }} style=${{ padding: "9px 12px", border: "none", borderBottom: on ? "2px solid var(--primary)" : "2px solid transparent", background: "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, marginBottom: -1 }}>${t[1]}</button>`; })}
+            ${[["record", "Pastoral Record"], ["documents", "Documents"], ["tasks", "Tasks"]].map(function (t) { var on = tabS[0] === t[0]; return html`<button key=${t[0]} onClick=${function () { tabS[1](t[0]); }} style=${{ padding: "9px 12px", border: "none", borderBottom: on ? "2px solid var(--primary)" : "2px solid transparent", background: "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, marginBottom: -1 }}>${t[1]}</button>`; })}
           </div>
 
-          ${tabS[0] === "documents" ? html`<${ProfileDocuments} pid=${pid} user=${user} nav=${props.nav} showToast=${showToast} />` : html`<${Fragment}>
+          ${tabS[0] === "documents" ? html`<${ProfileDocuments} pid=${pid} user=${user} nav=${props.nav} showToast=${showToast} />`
+            : tabS[0] === "tasks" ? html`<${ProfileTasks} pid=${pid} showToast=${showToast} />` : html`<${Fragment}>
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "20px 2px 12px" }}>
             <h2 style=${SF_H2}>Pastoral Record</h2>
             <div style=${{ display: "flex", gap: 6 }}>

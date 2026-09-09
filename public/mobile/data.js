@@ -313,13 +313,15 @@
   var TASK_LOOK_BACK_DAYS = 365;
   var TASK_LOOK_AHEAD_DAYS = 180;
 
-  function getShepherdingPanelTasks(user) {
+  // Every Task there is, resolved. Both slices below are cut from this, and
+  // both cut them with TasksCore rather than with a filter of their own.
+  function resolveAllTasks() {
     return Promise.all([
       get(db.collection("shepherding_tasks")).then(mapDocs).catch(function () { return []; }),
       get(db.collection("shepherding_task_occurrences")).then(mapDocs).catch(function () { return []; }),
     ]).then(function (both) {
       var rows = both[0], occurrences = both[1], now = Date.now();
-      var all = window.TasksCore.resolve({
+      return window.TasksCore.resolve({
         tasks: rows.filter(function (t) { return !t.recurrence; }),
         series: rows.filter(function (t) { return t.recurrence; }),
         occurrences: occurrences,
@@ -327,7 +329,21 @@
         from: window.TasksCore.dayOf(now - TASK_LOOK_BACK_DAYS * 86400000),
         to: window.TasksCore.dayOf(now + TASK_LOOK_AHEAD_DAYS * 86400000),
       });
-      return window.TasksCore.panelFor(all, (user && user.personId) || null, now);
+    });
+  }
+
+  function getShepherdingPanelTasks(user) {
+    return resolveAllTasks().then(function (all) {
+      return window.TasksCore.panelFor(all, (user && user.personId) || null, Date.now());
+    }).catch(function () { return []; });
+  }
+
+  // What the elders owe ONE person (ADR-0061) — the Tasks whose Subject is
+  // them, which is what their Shepherding Profile shows on the web. Not the
+  // ones assigned TO them: that is their workload, and it lives on the panel.
+  function getPersonTasks(personId) {
+    return resolveAllTasks().then(function (all) {
+      return window.TasksCore.forPerson(all, personId);
     }).catch(function () { return []; });
   }
 
@@ -338,6 +354,18 @@
       op: "complete",
       taskId: task.seriesId || task.id,
       date: task.seriesId ? task.dueDate : undefined,
+    });
+  }
+
+  // A new Task, from the phone. `aboutPersonId` is who the work is FOR, which
+  // is how one written on somebody's profile lands back on it.
+  function createShepherdingTask(fields) {
+    return firebase.functions().httpsCallable("shepherdingTask")({
+      op: "create",
+      title: fields.title,
+      due: fields.due,
+      aboutPersonId: fields.aboutPersonId || undefined,
+      assigneeIds: fields.assigneeIds || [],
     });
   }
 
@@ -1099,6 +1127,8 @@
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
     getNextService: getNextService,
     getShepherdingPanelTasks: getShepherdingPanelTasks,
+    getPersonTasks: getPersonTasks,
+    createShepherdingTask: createShepherdingTask,
     getShepherdingViews: getShepherdingViews,
     getShepherdingPeople: getShepherdingPeople,
     getShepherdingTags: getShepherdingTags,
