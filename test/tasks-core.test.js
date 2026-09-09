@@ -12,9 +12,12 @@ const Events = require('../public/events-occurrence-core.js');
 //
 //   ADR-0058  Finishing is the clock, not the date. An unfinished Task past its
 //             date is overdue and STAYS. Missed occurrences pile up.
-//   ADR-0059  A Task names its Assignees — Elders — and nobody else.
+//   ADR-0059  A Task names its Assignees, and they are Elders.
 //   ADR-0060  A repeating Task is a series whose dates are COMPUTED. A missed
 //             occurrence is a date the rule produced with no record against it.
+//   ADR-0061  A Task may also name a Subject — the Person it is FOR — and that
+//             is what puts it on their Shepherding Profile. Different from an
+//             Assignee, and the two must not blur.
 
 const NOW = '2026-09-08T09:00:00';          // a Tuesday morning
 const at = (iso) => new Date(iso).getTime();
@@ -447,4 +450,64 @@ test('overdue comes first, then soonest', () => {
 test('an occurrence id is derived from its series and date', () => {
     assert.strictEqual(Tasks.occurrenceIdFor('s1', '2026-08-04'), Tasks.occurrenceIdFor('s1', '2026-08-04'));
     assert.notStrictEqual(Tasks.occurrenceIdFor('s1', '2026-08-04'), Tasks.occurrenceIdFor('s1', '2026-09-01'));
+});
+
+
+// ── The Subject: who a Task is FOR (ADR-0061) ────────────────────────────────
+//
+// A second Person link, and the mistake to guard against is it collapsing into
+// the first. Assignees are who must do the work; the Subject is who the work is
+// for, and it is the Subject alone that puts a Task on a Shepherding Profile.
+
+test('a Task is for nobody in particular unless it says so', () => {
+    const [only] = resolve({ tasks: [task()] });
+    assert.strictEqual(only.aboutPersonId, null);
+});
+
+test('a Task carries the person it is for', () => {
+    const [only] = resolve({ tasks: [task({ aboutPersonId: 'john' })] });
+    assert.strictEqual(only.aboutPersonId, 'john');
+});
+
+test("a person's tasks are the ones they are FOR, not the ones they must do", () => {
+    const list = resolve({
+        tasks: [
+            task({ id: 'for-john', aboutPersonId: 'john' }),
+            task({ id: 'by-john', assigneeIds: ['john'] }),
+            task({ id: 'neither' }),
+        ],
+    });
+    assert.deepStrictEqual(
+        Tasks.forPerson(list, 'john').map(t => t.id), ['for-john'],
+        'a Task assigned to John is his work, not care toward him');
+});
+
+test('nobody in particular has no tasks', () => {
+    const list = resolve({ tasks: [task({ aboutPersonId: 'john' })] });
+    assert.deepStrictEqual(Tasks.forPerson(list, null), []);
+});
+
+test('every date of a repeat is for the same person', () => {
+    const dates = resolve({ series: [series({ aboutPersonId: 'john' })] });
+    assert.ok(dates.length > 1);
+    assert.ok(dates.every(d => d.aboutPersonId === 'john'));
+});
+
+test('one date of a repeat cannot be about somebody else', () => {
+    const dates = resolve({
+        series: [series({ aboutPersonId: 'john' })],
+        occurrences: [record('s1', '2026-07-07', { aboutPersonId: 'rob' })],
+    });
+    const july = dates.find(d => d.dueDate === '2026-07-07');
+    assert.strictEqual(july.aboutPersonId, 'john',
+        'who a standing commitment is for is true of every date of it');
+});
+
+test('a finished date of a stopped repeat still names who it was for', () => {
+    const dates = resolve({
+        series: [series({ aboutPersonId: 'john', stoppedOn: '2026-06-30' })],
+        occurrences: [record('s1', '2026-08-04', { completedAt: at('2026-08-04T10:00:00') })],
+    });
+    const kept = dates.find(d => d.dueDate === '2026-08-04');
+    assert.strictEqual(kept.aboutPersonId, 'john');
 });

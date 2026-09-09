@@ -14,16 +14,26 @@
  * overdue because the rule produced its date and nothing answered.
  *
  * WHAT AN OCCURRENCE MAY OVERRIDE. Title, body, assignees, time, and the day
- * itself — nothing else, and never the recurrence. "Rob takes this month" is a
- * real need; "repeat differently, but only in March" is not a thing a person
- * means. Same rule an Event occurrence obeys, so elders learn it once.
+ * itself — nothing else, and never the recurrence, and never the Subject. "Rob
+ * takes this month" is a real need; "repeat differently, but only in March" is
+ * not a thing a person means, and neither is "about somebody else in March".
+ * Same rule an Event occurrence obeys, so elders learn it once.
  *
- * WHO CAN BE GIVEN ONE (ADR-0059). Assignees are Elders, checked against the
- * Elder Tag rather than the directory. Handing a Task to somebody who cannot
+ * WHO CAN BE GIVEN ONE (ADR-0059, still). Assignees are Elders, checked against
+ * the Elder Tag rather than the directory. Handing a Task to somebody who cannot
  * open the page is a Task nobody will ever do, so it is refused at the door
- * rather than accepted and quietly lost. There is deliberately NO field for the
- * people a Task is about: a Person named in the body is a cross-reference,
- * which is prose.
+ * rather than accepted and quietly lost.
+ *
+ * WHO IT IS FOR (ADR-0061). A Task may also name a SUBJECT — `aboutPersonId`,
+ * at most one, ANY member of the directory rather than only an elder, because
+ * the care is toward them and they need no way to see it. That is what puts the
+ * Task on their Shepherding Profile, the way `ownerPersonId` puts a document
+ * there. It is optional and stays optional: most Tasks are about nobody.
+ *
+ * ⚠ THE TWO PERSON FIELDS ARE NOT INTERCHANGEABLE, and this is the mistake to
+ * watch for. `assigneeIds` is who must do it; `aboutPersonId` is who it is for.
+ * Ringing John is assigned to Rob and about John. A Person named in the body is
+ * still neither — it is a cross-reference, which is prose.
  *
  * WHO CAN CHANGE ONE. Any elder, anything, including somebody else's. The
  * elders are few and trust each other, and a Task locked to a man on holiday is
@@ -122,6 +132,24 @@ async function assigneesOf(db, assigneeIds) {
     if (checked.indexOf(personId) === -1) checked.push(personId);
   }
   return checked;
+}
+
+/**
+ * The Person a Task is FOR, checked against the directory, or null.
+ *
+ * ⚠ NOT CHECKED AGAINST THE ELDER TAG. An assignee has to be an elder because
+ * they must be able to open the page; a Subject never opens anything, and the
+ * whole point is that it is usually an ordinary member. Refusing an unknown id
+ * still matters: a Task filed against nobody would sit on no profile and never
+ * be found again.
+ * @param {object} db the Firestore handle
+ * @param {string} aboutPersonId a Person id, or empty for nobody in particular
+ * @return {Promise<string|null>} the id, once it is somebody
+ */
+async function aboutPersonOf(db, aboutPersonId) {
+  if (!aboutPersonId) return null;
+  await loadPerson(db, String(aboutPersonId));   // refuses an id nobody has
+  return String(aboutPersonId);
 }
 
 /**
@@ -238,13 +266,15 @@ async function writeToDate(db, taskId, date, patch) {
 /**
  * A new Task — a one-off, or a standing commitment when a recurrence is given.
  * @param {object} db the Firestore handle
- * @param {object} args title, body, due, dueTime, assigneeIds, recurrence, actor
+ * @param {object} args title, body, due, dueTime, assigneeIds, aboutPersonId,
+ *     recurrence, actor
  * @return {Promise<object>} { ok, taskId, title, due, repeats, nextDates }
  */
-async function createTask(db, {title, body, due, dueTime, assigneeIds, recurrence, actor}) {
+async function createTask(db, {title, body, due, dueTime, assigneeIds, aboutPersonId, recurrence, actor}) {
   const label = titleOf(title);
   const rule = recurrenceOf(recurrence);
   const assignees = await assigneesOf(db, assigneeIds);
+  const about = await aboutPersonOf(db, aboutPersonId);
 
   // A repeat's first date IS its due date — the rule owns the calendar, so
   // storing a second one would let the two disagree.
@@ -256,6 +286,7 @@ async function createTask(db, {title, body, due, dueTime, assigneeIds, recurrenc
     dueDate: dueDate,
     dueTime: dueTimeOf(dueTime),
     assigneeIds: assignees,
+    aboutPersonId: about,
     recurrence: rule,
     completedAt: null,
     completedBy: null,
@@ -269,6 +300,7 @@ async function createTask(db, {title, body, due, dueTime, assigneeIds, recurrenc
     taskId: ref.id,
     title: label,
     due: dueDate,
+    about: about,
     repeats: !!rule,
     // ⚠ A RULE DICTATED IN CONVERSATION IS EASY TO GET SUBTLY WRONG. "Every
     // other month" is ambiguous, and the mistake otherwise surfaces as a date
@@ -296,10 +328,11 @@ function upcomingDates(rule, howMany) {
  * alone. The recurrence itself is only ever changed on the series — a date
  * cannot repeat differently from the thing it is a date of.
  * @param {object} db the Firestore handle
- * @param {object} args taskId, date, title, body, dueTime, assigneeIds, recurrence
+ * @param {object} args taskId, date, title, body, dueTime, assigneeIds,
+ *     aboutPersonId, recurrence
  * @return {Promise<object>} what changed
  */
-async function editTask(db, {taskId, date, title, body, dueTime, assigneeIds, recurrence}) {
+async function editTask(db, {taskId, date, title, body, dueTime, assigneeIds, aboutPersonId, recurrence}) {
   const {ref} = await loadTask(db, taskId);
   const patch = {};
 
@@ -314,11 +347,24 @@ async function editTask(db, {taskId, date, title, body, dueTime, assigneeIds, re
           "A repeat is changed on the task itself, never on one of its dates " +
           "— one date cannot repeat differently from the rest.");
     }
+    // Same reason as the recurrence: who the work is for is true of the whole
+    // commitment, so changing it on one date would file March against somebody
+    // the other eleven months are not about.
+    if (aboutPersonId !== undefined) {
+      throw refuse(
+          "Who a task is for is changed on the task itself, never on one of " +
+          "its dates — every date of it is for the same person.");
+    }
     if (!Object.keys(patch).length) return {ok: true, taskId, date, changed: []};
     const out = await writeToDate(db, taskId, date, patch);
     return Object.assign({ok: true, changed: Object.keys(patch)}, out);
   }
 
+  // Passing null or "" clears it: a Task filed against the wrong person has to
+  // be able to come off that profile again.
+  if (aboutPersonId !== undefined) {
+    patch.aboutPersonId = await aboutPersonOf(db, aboutPersonId);
+  }
   if (recurrence !== undefined) {
     patch.recurrence = recurrenceOf(recurrence);
     if (patch.recurrence) patch.dueDate = dueDateOf(patch.recurrence.startDate);
@@ -473,14 +519,47 @@ async function resolveAll(db, opts) {
 }
 
 /**
- * What is outstanding — everything not finished and not stood down.
+ * The names behind a handful of Person ids, for reading a list back.
+ *
+ * An id in an answer is a thing the reader has to go and look up; a name is the
+ * answer. Only the ids actually used are fetched, which is a few even on a long
+ * list, so this stays cheaper than reading the directory.
  * @param {object} db the Firestore handle
+ * @param {Array<string>} ids Person ids, duplicates and blanks allowed
+ * @return {Promise<object>} id → name
+ */
+async function namesFor(db, ids) {
+  const wanted = [...new Set((ids || []).filter(Boolean))];
+  const byId = {};
+  await Promise.all(wanted.map(async (id) => {
+    const snap = await db.collection("people").doc(id).get();
+    if (snap.exists) byId[id] = (snap.data() || {}).name || id;
+  }));
+  return byId;
+}
+
+/**
+ * What is outstanding — everything not finished and not stood down.
+ *
+ * `personId` narrows it to the Tasks that are FOR that person (ADR-0061) — the
+ * same slice their Shepherding Profile shows. It is deliberately not "tasks
+ * assigned to them": that is what `assigneeIds` in the answer is for, and
+ * conflating the two is the whole confusion the Subject exists to avoid.
+ * @param {object} db the Firestore handle
+ * @param {object} opts personId
  * @return {Promise<object>} { count, tasks }
  */
-async function listTasks(db) {
+async function listTasks(db, opts) {
+  const personId = (opts && opts.personId) || null;
+  if (personId) await loadPerson(db, personId);   // refuses an id nobody has
+
   const all = await resolveAll(db);
-  const open = all.filter((t) => t.state === TasksCore.STATES.OPEN ||
+  const forOne = personId ? TasksCore.forPerson(all, personId) : all;
+  const open = forOne.filter((t) => t.state === TasksCore.STATES.OPEN ||
     t.state === TasksCore.STATES.OVERDUE);
+
+  const names = await namesFor(db, open.map((t) => t.aboutPersonId));
+
   return {
     count: open.length,
     overdue: open.filter((t) => t.state === TasksCore.STATES.OVERDUE).length,
@@ -493,6 +572,9 @@ async function listTasks(db) {
       repeats: !!t.seriesId,
       assigneeIds: t.assigneeIds,
       unassigned: t.isUnassigned,
+      // Who the work is FOR. Absent on most Tasks, and absent is not a gap.
+      aboutPersonId: t.aboutPersonId,
+      about: t.aboutPersonId ? (names[t.aboutPersonId] || null) : null,
     })),
   };
 }

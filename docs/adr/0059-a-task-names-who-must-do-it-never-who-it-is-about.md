@@ -1,8 +1,15 @@
 # ADR 0059 — A Task names who must do it, never who it is about
 
-**Status:** Accepted
+**Status:** Partly superseded by
+[ADR 0061](0061-a-task-may-name-the-person-it-is-for.md)
 **Date:** 2026-09-08
 **Ticket:** MS-79 (Tasks & Reminders)
+
+> **Read this first.** Everything below about **Assignees** still stands: they
+> are Elders, zero of them is a real state, and assignment is not delivery. What
+> is reversed is the refusal of a field for who a Task is *for*. A Task may now
+> carry one Subject, and it is what puts the Task on that Person's Shepherding
+> Profile. The paragraphs that say otherwise are struck through where they sit.
 
 ## Context
 
@@ -23,8 +30,10 @@ outstanding care, but an accident of which tasks happened to name him.
 
 ## Decision
 
-**The only Person a Task links to is a responsible elder. There is no field for
-who a Task is about.**
+**~~The only Person a Task links to is a responsible elder. There is no field for
+who a Task is about.~~** *(Superseded by
+[ADR 0061](0061-a-task-may-name-the-person-it-is-for.md): there are two Person
+links, and a Task may name the one Person it is for.)*
 
 So:
 
@@ -33,9 +42,12 @@ So:
 - Only elders and super admins can be assigned. The page is elder-only, so
   assigning anyone else hands out work they cannot see. The **Elder Tag** already
   supplies exactly that set of names ([ADR 0013](0013-elder-tag-projection-and-derived-relationships.md)).
-- **A Task never appears on a Shepherding Profile**, and finishing one writes
+- **~~A Task never appears on a Shepherding Profile~~**, and finishing one writes
   nothing to the Pastoral Record. A tick is not a pastoral event; a Shepherding
-  Note is what exists for the conversation that followed.
+  Note is what exists for the conversation that followed. *(Half superseded by
+  [ADR 0061](0061-a-task-may-name-the-person-it-is-for.md): a Task with a
+  Subject appears on that Person's profile, in a tab of its own. The Pastoral
+  Record half stands — a tick still writes nothing to it.)*
 - **People may be named in a Task's body**, as ordinary `@` cross-references, and
   they link and read like they do in a Shepherding Note. That is prose, not a
   field: nothing queries it, filters on it, or draws it as a chip.
@@ -60,9 +72,12 @@ kinds of "what is outstanding for this person" on one screen.
 
 ## Consequences
 
-- The Tasks & Reminders page filters by **assignee** only. There is no
+- The Tasks & Reminders page filters by **assignee** only. ~~There is no
   person-based view of tasks, and there is deliberately no route from a Person to
-  the tasks that mention them.
+  the tasks that mention them.~~ *(Superseded by
+  [ADR 0061](0061-a-task-may-name-the-person-it-is-for.md): the route from a
+  Person is the Tasks tab on their profile. It reads the Subject, never the
+  mentions — that half of this decision is why.)*
 - `shep_create_reminder`'s `personIds` parameter changes meaning and validation:
   it becomes the responsible elders, checked against the Elder Tag rather than
   against the directory. Any `mentions` already stored are ignored.

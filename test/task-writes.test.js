@@ -368,6 +368,84 @@ test('the outstanding list says what is late and what nobody has picked up', asy
 });
 
 
+// ── The Subject: who a Task is FOR (ADR-0061) ─────────────────────────────────
+
+test('a Task can name the person it is for', async () => {
+    const d = db();
+    const out = await Writes.createTask(d, {
+        title: 'Visit after the operation', due: '2026-09-10', aboutPersonId: 'dave', actor: ACTOR });
+    assert.strictEqual(d._store.shepherding_tasks[out.taskId].aboutPersonId, 'dave');
+    assert.strictEqual(out.about, 'dave');
+});
+
+test('the person a Task is for need not be an elder', async () => {
+    const d = db();
+    const out = await Writes.createTask(d, {
+        title: 'Visit Dave', due: '2026-09-10', aboutPersonId: 'dave', assigneeIds: ['rob'], actor: ACTOR });
+    const row = d._store.shepherding_tasks[out.taskId];
+    assert.strictEqual(row.aboutPersonId, 'dave', 'the care is toward Dave, who opens nothing');
+    assert.deepStrictEqual(row.assigneeIds, ['rob'], 'and the work is Rob’s');
+});
+
+test('a Task for nobody in particular stores nothing rather than an empty string', async () => {
+    const d = db();
+    const out = await Writes.createTask(d, { title: 'A', due: '2026-09-10', actor: ACTOR });
+    assert.strictEqual(d._store.shepherding_tasks[out.taskId].aboutPersonId, null);
+});
+
+test('a Task for somebody nobody has heard of is refused', async () => {
+    await refusal(
+        () => Writes.createTask(db(), { title: 'A', due: '2026-09-10', aboutPersonId: 'ghost', actor: ACTOR }),
+        /No Person with id/);
+});
+
+test('who a Task is for can be changed, and cleared', async () => {
+    const d = db();
+    const out = await Writes.createTask(d, { title: 'A', due: '2026-09-10', aboutPersonId: 'dave', actor: ACTOR });
+
+    await Writes.editTask(d, { taskId: out.taskId, aboutPersonId: 'rob' });
+    assert.strictEqual(d._store.shepherding_tasks[out.taskId].aboutPersonId, 'rob');
+
+    await Writes.editTask(d, { taskId: out.taskId, aboutPersonId: null });
+    assert.strictEqual(d._store.shepherding_tasks[out.taskId].aboutPersonId, null,
+        'a Task filed against the wrong person has to come off that profile again');
+});
+
+test('one date of a repeat cannot be about somebody else', async () => {
+    const d = db();
+    const out = await Writes.createTask(d, {
+        title: 'Check on Dave', recurrence: MONTHLY, aboutPersonId: 'dave', actor: ACTOR });
+    await refusal(
+        () => Writes.editTask(d, { taskId: out.taskId, date: '2026-07-07', aboutPersonId: 'rob' }),
+        /every date of it is for the same person/);
+});
+
+test('the list can be narrowed to what the elders owe one person', async () => {
+    const d = db();
+    await Writes.createTask(d, { title: 'For Dave', due: '2026-09-10', aboutPersonId: 'dave', actor: ACTOR });
+    await Writes.createTask(d, { title: 'Rob does it', due: '2026-09-10', assigneeIds: ['rob'], actor: ACTOR });
+
+    const all = await Writes.listTasks(d);
+    assert.strictEqual(all.count, 2);
+
+    const his = await Writes.listTasks(d, { personId: 'dave' });
+    assert.strictEqual(his.count, 1);
+    assert.strictEqual(his.tasks[0].title, 'For Dave');
+    assert.strictEqual(his.tasks[0].about, 'Dave', 'a name, not an id to go and look up');
+});
+
+test('a Task assigned to somebody is not a Task for them', async () => {
+    const d = db();
+    await Writes.createTask(d, { title: 'Rob does it', due: '2026-09-10', assigneeIds: ['rob'], actor: ACTOR });
+    const his = await Writes.listTasks(d, { personId: 'rob' });
+    assert.strictEqual(his.count, 0, 'his workload is not care toward him');
+});
+
+test('the list for somebody nobody has heard of is refused', async () => {
+    await refusal(() => Writes.listTasks(db(), { personId: 'ghost' }), /No Person with id/);
+});
+
+
 // ── The door itself ───────────────────────────────────────────────────────────
 //
 // The rules cannot be exercised from here — that needs a live project — but

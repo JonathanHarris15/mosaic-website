@@ -238,9 +238,16 @@ document.addEventListener('alpine:init', () => {
         personId: null,
         person: null,
 
-        // Which profile tab is showing (MS-98): the Pastoral Record or the
-        // per-person Documents directory.
-        activeTab: 'record', // 'record' | 'documents'
+        // Which profile tab is showing: the Pastoral Record, the per-person
+        // Documents directory (MS-98), or the Tasks the elders owe this person
+        // (ADR-0061).
+        activeTab: 'record', // 'record' | 'documents' | 'tasks'
+
+        // The Tasks tab reads the whole task collection to resolve repeats, so
+        // it is not built until somebody asks for it — and then it stays built,
+        // because a tab that reloaded every time you looked at it would lose
+        // whatever you had half-typed into it.
+        tasksTabOpened: false,
 
         fromPage: null,
         fromId: null,

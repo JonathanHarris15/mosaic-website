@@ -790,22 +790,29 @@ function register(server, deps) {
   // (ADR-0058), so "list" now has to say what is late, and there is something
   // to tick off where before there was only something to delete.
   //
-  // ⚠ THE PEOPLE ARGUMENT CHANGED MEANING. It used to be "people it is about",
-  // checked against the directory. A Task has no such field (ADR-0059) — it
-  // names who must DO it, and they must be elders, because anybody else would
-  // never see it. An old call passing the congregation will now be refused, and
-  // that is the correct outcome rather than a regression.
+  // ⚠ TWO PERSON FIELDS, AND THEY ARE NOT THE SAME ONE (ADR-0061).
+  // `assigneeIds` is who must DO the work, and they must be elders, because
+  // anybody else would never see it. `aboutPersonId` is who the work is FOR —
+  // any member — and it is what puts the Task on their Shepherding Profile.
+  // "Ring John" is assigned to Rob and about John. Putting John in assigneeIds
+  // is the mistake to avoid, and it is refused by name.
 
   tool("shep_list_tasks", {
     title: "What the elders still have to do",
     description:
-      "Every Task still outstanding, with who is responsible and which are " +
-      "overdue. Unlike the old reminders, a Task whose date has passed is " +
-      "still here — that is the point of it. A Task nobody has been given " +
-      "reads as unassigned, which means nobody has picked it up yet." + PRIVACY,
-    inputSchema: {},
+      "Every Task still outstanding, with who is responsible, who it is for, " +
+      "and which are overdue. Unlike the old reminders, a Task whose date has " +
+      "passed is still here — that is the point of it. A Task nobody has been " +
+      "given reads as unassigned, which means nobody has picked it up yet.\n\n" +
+      "Give personId to see what the elders owe ONE person — the same list " +
+      "their Shepherding Profile shows. That is who the work is FOR, not who " +
+      "has to do it; for somebody's own workload read assigneeIds." + PRIVACY,
+    inputSchema: {
+      personId: z.string().optional()
+          .describe("Only the Tasks that are FOR this Person"),
+    },
     annotations: read,
-  }, () => Tasks.listTasks(db));
+  }, (a) => Tasks.listTasks(db, a));
 
   tool("shep_create_task", {
     title: "Write a task down for the elders",
@@ -814,10 +821,14 @@ function register(server, deps) {
       "them down and hand some of them out in the same breath.\n\n" +
       "It needs a date: without one nothing can ever read as overdue. A time " +
       "on that date is optional and usually wrong to invent.\n\n" +
-      "assigneeIds are the ELDERS responsible for it — not the people it is " +
-      "about, which a Task does not record. They are checked, and somebody " +
-      "who is not an elder is refused by name. Leave it empty and the Task " +
-      "shows on every elder's dashboard as unclaimed.\n\n" +
+      "assigneeIds are the ELDERS responsible for it. They are checked, and " +
+      "somebody who is not an elder is refused by name. Leave it empty and the " +
+      "Task shows on every elder's dashboard as unclaimed.\n\n" +
+      "aboutPersonId is a different thing: the one person the work is FOR. Set " +
+      "it and the Task also appears on their Shepherding Profile, so \"ring " +
+      "John\" is about John and assigned to whichever elder is ringing. It is " +
+      "any member, not only an elder, and most Tasks have none — leave it out " +
+      "rather than guessing at one.\n\n" +
       "Give a recurrence to make it repeat. The reply names the next few " +
       "dates it computes, so a misread pattern is visible now rather than as " +
       "a date quietly missing in three months.",
@@ -827,6 +838,7 @@ function register(server, deps) {
       due: z.string().optional().describe("The day it is due, YYYY-MM-DD. Not needed for a repeat, which starts on its own first date"),
       dueTime: z.string().optional().describe("A time on that day, HH:MM. Leave out unless it genuinely matters"),
       assigneeIds: z.array(z.string()).optional().describe("The elders responsible — Person ids, checked against the Elder Tag"),
+      aboutPersonId: z.string().optional().describe("The one Person the work is FOR — puts it on their Shepherding Profile. Any member, not only an elder"),
       recurrence: z.object({
         freq: z.enum(["weekly", "fortnightly", "monthly"]).describe("How often"),
         startDate: z.string().describe("The first date, YYYY-MM-DD"),
