@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 const H = require('./harness.js');
 const {
-    FirebaseOAuthProvider, hashToken, COLLECTIONS,
+    FirebaseOAuthProvider, hashToken, COLLECTIONS, oauthErrors,
 } = require('../../functions/mcp-auth.js');
 
 // The front door to the Order of Service MCP server (MS-262, ADR-0038).
@@ -475,4 +475,94 @@ suite('the MCP front door', () => {
             {requestId: 'made-up', idToken: 't'});
         assert.ok(result.error);
     });
+
+    // ── How a refusal reaches the assistant ──────────────────────────────
+    //
+    // ⚠ THE CLASS OF THE ERROR IS THE WHOLE MESSAGE. The SDK turns an
+    // OAuthError into the status it names and ANYTHING ELSE into a bare 500
+    // "Internal Server Error". An assistant reads those two as opposite
+    // things: a 401 means "your pass is stale, send the person to sign in
+    // again" and it recovers by itself; a 500 means "this server is broken"
+    // and it stops, reports an internal error, and never tries the sign-in.
+    //
+    // This is not hypothetical tidying. Every refusal here once threw a bare
+    // Error, so a client holding a pass from before a redeploy got a 500 with
+    // no WWW-Authenticate header, concluded the server was down, and could
+    // not be talked back into signing in by removing and re-adding it. The
+    // messages below are already covered above; these tests exist only to
+    // pin the class, which is the part a client actually acts on.
+
+    /** @return {Promise<Error>} whatever `fn` threw */
+    async function thrownBy(fn) {
+        try {
+            await fn();
+        } catch (e) {
+            return e;
+        }
+        throw new Error('expected a refusal, got none');
+    }
+
+    test('⚠ a stale pass is a 401 an assistant can recover from, not a 500',
+        async () => {
+            const p = providerFor(UID);
+            const client = await aClient(p);
+            const tokens = await signInFully(p, client);
+
+            const {InvalidTokenError} = await oauthErrors();
+            const cases = {
+                'a made-up pass': () => p.verifyAccessToken('not-a-real-token'),
+                'a refresh token used as a pass':
+                    () => p.verifyAccessToken(tokens.refresh_token),
+                'a pass whose account was demoted': async () => {
+                    await db.collection('users').doc(UID)
+                        .update({permissionLevel: 'member'});
+                    return p.verifyAccessToken(tokens.access_token);
+                },
+            };
+
+            for (const [what, fn] of Object.entries(cases)) {
+                const err = await thrownBy(fn);
+                assert.ok(err instanceof InvalidTokenError,
+                    `${what} threw ${err.constructor.name} — the SDK turns ` +
+                    'anything but an InvalidTokenError here into a 500 with ' +
+                    'no WWW-Authenticate, and the assistant gives up');
+                assert.strictEqual(err.errorCode, 'invalid_token');
+            }
+        });
+
+    test('⚠ every refusal at the token endpoint is a 4xx, never a 500',
+        async () => {
+            const p = providerFor(UID);
+            const client = await aClient(p);
+            const other = await aClient(p, 'Theirs');
+            const tokens = await signInFully(p, client);
+            const redirect = 'https://client.example.test/callback';
+            const {OAuthError} = await oauthErrors();
+
+            const cases = {
+                'an unknown code': () => p.exchangeAuthorizationCode(
+                    client, 'no-such-code', 'v', redirect),
+                'a code read for its challenge':
+                    () => p.challengeForAuthorizationCode(client, 'no-such-code'),
+                'an unknown refresh token':
+                    () => p.exchangeRefreshToken(client, 'no-such-token'),
+                'a spent refresh token': async () => {
+                    await p.exchangeRefreshToken(client, tokens.refresh_token);
+                    return p.exchangeRefreshToken(client, tokens.refresh_token);
+                },
+                "somebody else's refresh token":
+                    () => p.exchangeRefreshToken(other, tokens.refresh_token),
+            };
+
+            for (const [what, fn] of Object.entries(cases)) {
+                const err = await thrownBy(fn);
+                assert.ok(err instanceof OAuthError,
+                    `${what} threw a bare ${err.constructor.name}, which the ` +
+                    'SDK reports as a 500 server_error — the client cannot ' +
+                    'tell its own stale state from our server falling over');
+                // ServerError is the one OAuthError that is still a 500.
+                assert.notStrictEqual(err.errorCode, 'server_error',
+                    `${what} is the client's mistake, not ours`);
+            }
+        });
 });
