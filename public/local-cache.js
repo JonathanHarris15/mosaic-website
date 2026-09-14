@@ -125,9 +125,14 @@
     // ⚠ THE UNTRIED FIX, NOW TRIED (MS-482). useFetchStreams: false moves the
     // listen stream off the Fetch API onto XMLHttpRequest, which is the thing
     // the WebView's refusal was of. Phone app only, and before anything else
-    // touches the handle — Firestore refuses settings after first use. Whether
-    // it works is answered on a real device (MS-485); live-read.js copes
-    // either way.
+    // touches the handle — Firestore refuses settings after first use.
+    //
+    // ✔ CONFIRMED ON A REAL PHONE (MS-485, 2026-09-14): with this set, the
+    // listen stream connects inside the native app — the drawer reads "Live
+    // updates: listening" and the live Shepherding Profile updates and locks
+    // across web and phone. live-read.js still falls back if a device ever
+    // stays silent. Whether it also clears the way to switching the cache back
+    // on (CACHE_ENABLED above) has NOT been tried.
     function configureLiveTransport(db) {
         if (!isMobile() || !db || !db.settings) return;
         try {
