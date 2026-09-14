@@ -25,6 +25,18 @@ let _mentionFolders  = [];
 let _docTypeById     = {}; // elder_document id → docType (e.g. 'care-list')
 let _mentionDataLoaded = false;
 
+// The live watches this page holds (MS-490), kept outside Alpine so they are not
+// proxied, and stopped when the page goes.
+let _profileWatches = [];
+// Source-document titles already asked for, so a feed that re-arrives does not
+// ask again while the first answer is still on its way.
+const _titlesAsked = new Set();
+
+function stopProfileWatches() {
+    _profileWatches.forEach(stop => { try { stop(); } catch (e) {} });
+    _profileWatches = [];
+}
+
 // ── Mention data ─────────────────────────────────────────────────────────────
 
 function _collectFolders(node, out) {
@@ -253,7 +265,11 @@ document.addEventListener('alpine:init', () => {
         fromId: null,
         fromTitle: null,
 
-        notes: [],
+        // What arrives live (MS-490). `notes` and the Pastoral Record are built
+        // from these by ShepherdingCore.combineProfile — the same function the
+        // phone uses — rather than kept as a second copy that could drift.
+        personNotes: [],
+        careListDocs: [],
         activity: [],
         sourceDocTitles: {},
         editingExplanation: {},
@@ -333,39 +349,144 @@ document.addEventListener('alpine:init', () => {
                     personId: userData && userData.personId,
                 });
 
-                await Promise.all([
-                    this.loadPerson(),
-                    this.loadNotes(),
-                    this.loadTags(),
-                    this.loadActivity(),
-                    this.loadRelationships(),
-                ]);
+                await this.watchProfile();
                 this.loading = false;
             });
         },
 
-        // ── Relationships (ADR-0012, MS-89; ADR-0013, MS-93) ─────────────────
-        async loadRelationships() {
-            try {
-                const [relSnap, typeSnap, peopleSnap, famSnap, groupSnap] = await Promise.all([
-                    db.collection('relationships').get(),
-                    db.collection('relationship_types').get(),
-                    db.collection('people').orderBy('name').get(),
-                    db.collection('families').get(),
-                    db.collection('relationship_groups').get(),
-                ]);
-                this.relationships = relSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                this.relationshipTypes = typeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                this.relGroups = groupSnap.docs.map(d => ({ id: d.id, leaderId: null, memberIds: [], ...d.data() }));
+        // ── Live (MS-490) ────────────────────────────────────────────────────
+        // Everything this page draws is watched rather than read once, through
+        // live-read.js — a listener on the web, and on the phone a listener that
+        // falls back to re-reading if it stays silent. Data about THIS person
+        // re-reads every few seconds in that fallback; church-wide lists every
+        // thirty, because re-reading the whole directory every three seconds
+        // would be a bill for nothing.
+        //
+        // ⚠ NOTHING RELOADS AFTER A SAVE ANY MORE. Each write still updates the
+        // page at once, so your own change shows immediately; the watch brings
+        // back the server's copy, which is the same. A reload after a save was
+        // the page's only way of hearing about anything, and now it is not.
+        //
+        // Resolves once the person has been read, so the page can stop its
+        // spinner — the rest arrives as it arrives.
+        watchProfile() {
+            const Live = window.MosaicLiveRead;
+            const PERSON = Live.PERSON_EVERY_MS;
+            const ROSTER = Live.ROSTER_EVERY_MS;
+            // serverTimestamps: 'estimate' — a note saved a moment ago carries a
+            // local guess at its time rather than null, so it lands at the top of
+            // the feed straight away instead of the bottom until the server answers.
+            const rows = snap => snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+
+            return new Promise(resolve => {
+                const watch = (ref, onNext, every, what) => {
+                    _profileWatches.push(Live.watch(ref, onNext, {
+                        fallbackEveryMs: every,
+                        onError: e => { console.error('Could not keep ' + what + ' current:', e); if (what === 'person') resolve(); },
+                    }));
+                };
+
+                const person = db.collection('people').doc(this.personId);
+
+                watch(person, doc => {
+                    if (!doc.exists) {
+                        // Deleted here or somewhere else: either way there is no
+                        // profile to show.
+                        if (!this.isDeleting) window.location.href = 'shepherding-dashboard.html';
+                        return;
+                    }
+                    this.person = { id: doc.id, ...doc.data({ serverTimestamps: 'estimate' }) };
+                    resolve();
+                }, PERSON, 'person');
+
+                watch(person.collection('shepherding_notes').orderBy('createdAt', 'desc'), snap => {
+                    this.personNotes = rows(snap);
+                    this.fillSourceTitles();
+                }, PERSON, 'notes');
+
+                watch(person.collection('shepherding_activity').orderBy('createdAt', 'desc'), snap => {
+                    this.activity = rows(snap);
+                    this.fillSourceTitles();
+                }, PERSON, 'the Pastoral Record');
+
+                // Every Care List, for the cells about this person. Church-wide,
+                // so the slow pace.
+                watch(db.collection('elder_documents').where('docType', '==', 'care-list'), snap => {
+                    this.careListDocs = rows(snap);
+                    this.fillSourceTitles();
+                }, ROSTER, 'Care List cells');
+
+                watch(db.collection('people_tags').orderBy('name', 'asc'), snap => {
+                    this.shepherdingTags = snap.docs.map(doc => ({
+                        id: doc.id,
+                        name: doc.data().name || doc.id,
+                        hiddenFromOthers: doc.data().hiddenFromOthers || false,
+                        hidePeople: doc.data().hidePeople || false,
+                    }));
+                }, ROSTER, 'tags');
+
+                // Relationships (ADR-0012, MS-89; ADR-0013, MS-93).
+                watch(db.collection('relationships'), snap => {
+                    this.relationships = rows(snap);
+                }, ROSTER, 'relationships');
+                watch(db.collection('relationship_types'), snap => {
+                    this.relationshipTypes = rows(snap);
+                }, ROSTER, 'relationship types');
+                watch(db.collection('relationship_groups'), snap => {
+                    this.relGroups = snap.docs.map(d => ({ id: d.id, leaderId: null, memberIds: [], ...d.data() }));
+                }, ROSTER, 'relationship groups');
+                watch(db.collection('families'), snap => {
+                    this.families = rows(snap);
+                }, ROSTER, 'families');
                 // Carry `sex` for the Family projection's gendered labels, `tags`
                 // so the Assigned-Elder picker can find Elder-Tag People, and
                 // `shepherding` so an elder's Care Group (reverse query) resolves.
-                this.allPeople = peopleSnap.docs.map(d => ({ id: d.id, name: (d.data().name || '(Unnamed)'), sex: d.data().sex || null, tags: d.data().tags || [], shepherding: d.data().shepherding || {} }));
-                this.families = famSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            } catch (e) {
-                console.error('Error loading relationships:', e);
-            }
+                watch(db.collection('people').orderBy('name'), snap => {
+                    this.allPeople = snap.docs.map(d => ({ id: d.id, name: (d.data().name || '(Unnamed)'), sex: d.data().sex || null, tags: d.data().tags || [], shepherding: d.data().shepherding || {} }));
+                }, ROSTER, 'the directory');
+
+                // A page that is gone stops listening — on the phone, a screen
+                // left behind would otherwise keep re-reading in the background.
+                window.addEventListener('pagehide', stopProfileWatches);
+            });
         },
+
+        // The title of each document a note or change came from. Titles barely
+        // change, so each is read once, when an entry first names it.
+        async fillSourceTitles() {
+            const wanted = [...new Set([
+                ...this.notes.map(n => n.sourceDocumentId),
+                ...this.activity.map(a => a.sourceDocumentId),
+            ].filter(Boolean))].filter(id => !(id in this.sourceDocTitles) && !_titlesAsked.has(id));
+            if (!wanted.length) return;
+            wanted.forEach(id => _titlesAsked.add(id));
+            const results = await Promise.allSettled(
+                wanted.map(id => db.collection('elder_documents').doc(id).get())
+            );
+            const titles = { ...this.sourceDocTitles };
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled' && r.value.exists) {
+                    titles[wanted[i]] = r.value.data().title || 'Untitled Document';
+                }
+            });
+            this.sourceDocTitles = titles;
+        },
+
+        // The profile, combined: notes (with Care List cells), the Pastoral
+        // Record, and what has happened under an open note editor.
+        get combined() {
+            return ShepherdingCore.combineProfile({
+                personId: this.personId,
+                personNotes: this.personNotes,
+                careListDocs: this.careListDocs,
+                activity: this.activity,
+                editor: this.showNoteEditor ? { kind: 'note', openedWith: this.editingNote } : null,
+            });
+        },
+
+        get notes() { return this.combined.notes; },
+
+        // ── Relationships (ADR-0012, MS-89; ADR-0013, MS-93) ─────────────────
 
         relPersonName(id) {
             const p = this.allPeople.find(x => x.id === id);
@@ -432,7 +553,6 @@ document.addEventListener('alpine:init', () => {
                 });
                 if (!this.person.shepherding) this.person.shepherding = {};
                 this.person.shepherding.assignedElderId = newId;
-                await this.loadActivity();  // surface the new Assignment Change in the feed
                 this.showToast(newId ? `Assigned to ${this.relPersonName(newId)}` : 'Assignment cleared');
             } catch (e) {
                 console.error('Error updating elder assignment:', e);
@@ -504,7 +624,6 @@ document.addEventListener('alpine:init', () => {
                 const newTags = ShepherdingCore.applyMembershipTags(person.tags || [], next);
                 person.membership = { ...(person.membership || {}), stage: next.stage, inactive: next.inactive };
                 person.tags = newTags;
-                await this.loadActivity();
                 this.showToast(ShepherdingCore.describeMembershipChange(
                     ShepherdingCore.buildMembershipChange({ previous, next })
                 ));
@@ -536,143 +655,13 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async loadPerson() {
-            try {
-                const doc = await db.collection('people').doc(this.personId).get();
-                if (!doc.exists) {
-                    window.location.href = 'shepherding-dashboard.html';
-                    return;
-                }
-                this.person = { id: doc.id, ...doc.data() };
-            } catch (e) {
-                console.error('Error loading person:', e);
-            }
-        },
-
-        async loadNotes() {
-            try {
-                const [notesSnap, careListNotes] = await Promise.all([
-                    db.collection('people').doc(this.personId)
-                        .collection('shepherding_notes')
-                        .orderBy('createdAt', 'desc')
-                        .get(),
-                    this.loadCareListNotes()
-                ]);
-
-                this.notes = [
-                    ...notesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                    ...careListNotes
-                ];
-
-                const sourceIds = [...new Set(this.notes.map(n => n.sourceDocumentId).filter(Boolean))];
-                if (sourceIds.length > 0) {
-                    const results = await Promise.allSettled(
-                        sourceIds.map(id => db.collection('elder_documents').doc(id).get())
-                    );
-                    const titles = {};
-                    results.forEach((r, i) => {
-                        if (r.status === 'fulfilled' && r.value.exists) {
-                            titles[sourceIds[i]] = r.value.data().title || 'Untitled Document';
-                        }
-                    });
-                    this.sourceDocTitles = titles;
-                }
-            } catch (e) {
-                console.error('Error loading notes:', e);
-            }
-        },
-
-        async loadCareListNotes() {
-            try {
-                const snap = await db.collection('elder_documents')
-                    .where('docType', '==', 'care-list')
-                    .get();
-
-                const careListNotes = [];
-                snap.docs.forEach(doc => {
-                    const data = doc.data();
-                    const personCells = data.careListData?.[this.personId];
-                    if (personCells) {
-                        const columns = data.careListColumns || [];
-                        Object.entries(personCells).forEach(([colId, contentJson]) => {
-                            if (contentJson && contentJson.content && contentJson.content.length > 0) {
-                                // Basic check for non-empty TipTap doc
-                                const hasText = contentJson.content.some(n => n.content && n.content.length > 0 || n.type === 'table');
-                                if (hasText) {
-                                    const col = columns.find(c => c.id === colId);
-                                    careListNotes.push({
-                                        id: `carelist-${doc.id}-${colId}`,
-                                        type: 'Care List',
-                                        subject: col ? col.name : 'Notes',
-                                        contentJson: contentJson,
-                                        createdAt: data.updatedAt || data.createdAt,
-                                        authorName: data.updatedByName || 'Elder',
-                                        sourceDocumentId: doc.id,
-                                        isCareList: true
-                                    });
-                                }
-                            }
-                        });
-                    }
-                });
-                return careListNotes;
-            } catch (e) {
-                console.error('Error loading Care List notes:', e);
-                return [];
-            }
-        },
-
-        async loadActivity() {
-            try {
-                const snap = await db.collection('people').doc(this.personId)
-                    .collection('shepherding_activity')
-                    .orderBy('createdAt', 'desc')
-                    .get();
-                this.activity = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                const actSourceIds = [...new Set(
-                    this.activity.filter(a => a.sourceDocumentId).map(a => a.sourceDocumentId)
-                )].filter(id => !this.sourceDocTitles[id]);
-                if (actSourceIds.length > 0) {
-                    const results = await Promise.allSettled(
-                        actSourceIds.map(id => db.collection('elder_documents').doc(id).get())
-                    );
-                    const titles = { ...this.sourceDocTitles };
-                    results.forEach((r, i) => {
-                        if (r.status === 'fulfilled' && r.value.exists) {
-                            titles[actSourceIds[i]] = r.value.data().title || 'Untitled Document';
-                        }
-                    });
-                    this.sourceDocTitles = titles;
-                }
-            } catch (e) {
-                console.error('Error loading activity:', e);
-            }
-        },
-
         get pastoralRecord() {
-            return ShepherdingCore.assemblePastoralRecord(this.notes, this.activity, {
-                editingNoteId: this.editingNote ? this.editingNote.id : null,
-            });
+            return this.combined.record;
         },
 
         get displayRecord() {
             if (!this.collapseStatusChanges) return this.pastoralRecord;
             return ShepherdingCore.collapsePastoralRecord(this.pastoralRecord);
-        },
-
-        async loadTags() {
-            try {
-                const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-                this.shepherdingTags = snap.docs.map(doc => ({
-                    id: doc.id,
-                    name: doc.data().name || doc.id,
-                    hiddenFromOthers: doc.data().hiddenFromOthers || false,
-                    hidePeople: doc.data().hidePeople || false,
-                }));
-            } catch (e) {
-                console.error('Error loading tags:', e);
-            }
         },
 
         // ── Editor ────────────────────────────────────────────────────────────
@@ -843,7 +832,6 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 this.closeEditor();
-                await this.loadNotes();
             } catch (e) {
                 console.error('Error saving note:', e);
                 this.showToast('Error saving note', 'error');
@@ -873,7 +861,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 await db.collection('people').doc(this.personId)
                     .collection('shepherding_notes').doc(id).delete();
-                this.notes = this.notes.filter(n => n.id !== id);
+                this.personNotes = this.personNotes.filter(n => n.id !== id);
                 this.showToast('Note deleted');
             } catch (e) {
                 console.error('Error deleting note:', e);
@@ -964,7 +952,6 @@ document.addEventListener('alpine:init', () => {
                     source: 'profile',
                 }));
                 this.person.tags = newTags;
-                await this.loadActivity();
             } catch (e) {
                 console.error('Error toggling tag:', e);
                 this.showToast('Error updating tags', 'error');
@@ -1033,7 +1020,10 @@ document.addEventListener('alpine:init', () => {
                     'contact.address': (this.selectedPerson.contact?.address || '').trim(),
                     birthday: this.selectedPerson.birthday || null,
                     sex: this.selectedPerson.sex || null,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    // Who saved it, so another elder with the details open can
+                    // be told by name that they changed (MS-490).
+                    updatedByName: this.currentUserName,
                 };
 
                 await personRef.update(updates);
@@ -1116,7 +1106,6 @@ document.addEventListener('alpine:init', () => {
                 snap.docs.forEach(doc => batch.delete(doc.ref));
                 await batch.commit();
 
-                await this.loadActivity();
                 this.showToast('Status and tag history deleted.');
             } catch (e) {
                 console.error('Error deleting status/tag history:', e);
@@ -1146,7 +1135,6 @@ document.addEventListener('alpine:init', () => {
                     source: 'profile',
                 }));
                 this.person.shepherdingStatus = newStatus;
-                await this.loadActivity();
                 this.showToast(clearing ? 'Status cleared' : 'Status updated');
             } catch (e) {
                 console.error('Error updating status:', e);
@@ -1180,7 +1168,6 @@ document.addEventListener('alpine:init', () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 }, entry.id);
                 this.person.shepherdingStatus = restored;
-                await this.loadActivity();
                 this.showToast('Status change undone');
             } catch (e) {
                 console.error('Error undoing status change:', e);

@@ -680,13 +680,13 @@
 
     function reload() { return data.getPersonTasks(pid).then(tasksS[1]); }
 
+    // Live (MS-490). The reload after a tick or a new Task stays: those writes
+    // go through a callable, so nothing lands on this device first and the
+    // watch would bring them back a beat late.
     useEffect(function () {
-      var alive = true;
-      data.getPersonTasks(pid).then(function (rows) {
-        if (!alive) return;
+      return data.watchPersonTasks(pid, function (rows) {
         tasksS[1](rows); loadingS[1](false);
-      }).catch(function () { if (alive) loadingS[1](false); });
-      return function () { alive = false; };
+      });
     }, [pid]);
 
     function tick(t) {
@@ -914,20 +914,28 @@
     function relTypeById(id) { for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === id) return relTypes[i]; } return null; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
-    function reloadNotes() { return data.getShepherdingNotes(pid).then(notesS[1]); }
-    function reloadActivity() { return data.getShepherdingActivity(pid).then(activityS[1]); }
-
+    // Live (MS-490): everything on this screen is watched rather than read
+    // once, the way the web profile is, so another elder's note, status or tag
+    // shows up here without leaving and coming back. Leaving the screen stops
+    // every watch. Nothing reloads after a save any more — the watch brings the
+    // change back, and each write still updates the screen at once.
     useEffect(function () {
-      var alive = true;
       if (!pid) { errS[1](true); loadingS[1](false); return; }
-      data.getPerson(pid).then(function (p) {
-        if (!alive) return;
-        if (!p) { errS[1](true); loadingS[1](false); return; }
-        personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes(), data.getRelationshipGroups()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); relGroupsS[1](r[7]); loadingS[1](false); });
-      }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      var stops = [
+        data.watchPerson(pid, function (p) {
+          if (!p) { errS[1](true); loadingS[1](false); return; }
+          personS[1](p); loadingS[1](false);
+        }, function () { errS[1](true); loadingS[1](false); }),
+        data.watchShepherdingNotes(pid, notesS[1]),
+        data.watchShepherdingActivity(pid, activityS[1]),
+        data.watchShepherdingTags(tagsS[1]),
+        data.watchFamilies(familiesS[1]),
+        data.watchPeople(rosterS[1]),
+        data.watchRelationships(relsS[1]),
+        data.watchRelationshipTypes(relTypesS[1]),
+        data.watchRelationshipGroups(relGroupsS[1]),
+      ];
+      return function () { stops.forEach(function (stop) { stop(); }); };
     }, [pid]);
 
     function setStatus(urg, imp) {
@@ -935,7 +943,7 @@
       var same = cur && cur.urgency === urg && cur.importance === imp;
       var next = same ? null : { urgency: urg, importance: imp };
       data.setShepherdingStatus(pid, next, cur || null, user).then(function () {
-        personS[1](Object.assign({}, person, { shepherdingStatus: next })); reloadActivity(); showToast(same ? "Status cleared" : "Status updated");
+        personS[1](Object.assign({}, person, { shepherdingStatus: next })); showToast(same ? "Status cleared" : "Status updated");
       }).catch(function () { showToast("Error updating status", "error"); });
     }
     // Move this Person along the Membership Track (ADR-0012). The stage is the
@@ -948,7 +956,6 @@
       data.setMembership(pid, person.tags || [], previous, next, user, "profile").then(function () {
         var newTags = Core.applyMembershipTags(person.tags || [], next);
         personS[1](Object.assign({}, person, { membership: Object.assign({}, m, { stage: next.stage, inactive: next.inactive }), tags: newTags }));
-        reloadActivity();
         showToast(Core.describeMembershipChange(Core.buildMembershipChange({ previous: previous, next: next })));
       }).catch(function () { showToast("Error updating membership", "error"); });
     }
@@ -967,7 +974,7 @@
       var hid = hiddenIdsFrom(tags);
       var shepherdingHidden = newTags.some(function (id) { return !!hid[id]; });
       data.toggleShepherdingTag(pid, tagId, tagName(tagId), !has, shepherdingHidden, user, "profile").then(function () {
-        personS[1](Object.assign({}, person, { tags: newTags, shepherdingHidden: shepherdingHidden })); reloadActivity();
+        personS[1](Object.assign({}, person, { tags: newTags, shepherdingHidden: shepherdingHidden }));
       }).catch(function () { showToast("Error updating tags", "error"); });
     }
     function createTag() {
@@ -981,7 +988,7 @@
         var hid = hiddenIdsFrom(tags.concat([tag]));
         var shepherdingHidden = newTags.some(function (id) { return !!hid[id]; });
         data.toggleShepherdingTag(pid, tag.id, tag.name, true, shepherdingHidden, user, "profile").then(function () {
-          personS[1](Object.assign({}, person, { tags: newTags })); reloadActivity();
+          personS[1](Object.assign({}, person, { tags: newTags }));
         });
       }).catch(function () { showToast("Error creating tag", "error"); });
     }
@@ -991,7 +998,7 @@
       if (!body.trim()) return;
       var payload = { type: ed.type, subject: (ed.subject || "").trim(), contentJson: textToTiptap(body), content: body };
       var op = ed.id ? data.updateShepherdingNote(pid, ed.id, payload, user) : data.addShepherdingNote(pid, payload, user);
-      op.then(function () { editorS[1](null); reloadNotes(); showToast(ed.id ? "Note updated" : "Note added"); })
+      op.then(function () { editorS[1](null); showToast(ed.id ? "Note updated" : "Note added"); })
         .catch(function () { showToast("Error saving note", "error"); });
     }
     function deleteNote(id) {
@@ -1002,12 +1009,12 @@
     function saveExpl(id) {
       var draft = explEditS[0][id] || "";
       data.saveShepherdingExplanation(pid, id, draft.trim()).then(function () {
-        reloadActivity(); var n = Object.assign({}, explEditS[0]); delete n[id]; explEditS[1](n); showToast("Explanation saved");
+        var n = Object.assign({}, explEditS[0]); delete n[id]; explEditS[1](n); showToast("Explanation saved");
       }).catch(function () { showToast("Error saving explanation", "error"); });
     }
     function saveProfileDetails() {
       var ep = editProfileS[0];
-      data.updateShepherdingPersonDetails(pid, ep).then(function () {
+      data.updateShepherdingPersonDetails(pid, ep, user).then(function () {
         personS[1](Object.assign({}, person, { contact: { email: ep.email, phone: ep.phone, address: ep.address }, birthday: ep.birthday })); editProfileS[1](null); showToast("Details saved");
       }).catch(function () { showToast("Error saving details", "error"); });
     }
@@ -1148,7 +1155,7 @@
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, color: "var(--on-surface-variant)" }}>Couldn't load this person.</p></${Body}></${Screen}>`;
     }
 
-    var record = Core.assemblePastoralRecord(notes, activity, {});
+    var record = Core.combineProfile({ personId: pid, personNotes: notes, activity: activity }).record;
     var visible = collapseS[0] ? record.filter(function (e) { return e._entryKind === "note"; }) : record;
     var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isProjectedTagId(t.id); });
     var mLabel = membershipLabel(person.membership);

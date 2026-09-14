@@ -230,7 +230,9 @@
   function getHymns() { return remembered("hymns", loadHymns); }
 
   function getPeople() {
-    return get(db.collection("people")).then(function (snap) {
+    return get(db.collection("people")).then(peopleFromSnap);
+  }
+  function peopleFromSnap(snap) {
       var out = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
@@ -263,7 +265,6 @@
       });
       out.sort(function (a, b) { return a.name.localeCompare(b.name); });
       return out;
-    });
   }
 
   // ⚠ A SERVICE IS KEYED BY ITS DATE AND HAS NO DATE FIELD. Every document id
@@ -378,12 +379,13 @@
   }
   function getShepherdingTags() {
     return get(db.collection("people_tags").orderBy("name", "asc"))
-      .then(function (snap) {
-        return snap.docs.map(function (d) {
-          var t = d.data() || {};
-          return { id: d.id, name: t.name || d.id, hiddenFromOthers: !!t.hiddenFromOthers, hidePeople: !!t.hidePeople };
-        });
-      }).catch(function () { return []; });
+      .then(tagsFromSnap).catch(function () { return []; });
+  }
+  function tagsFromSnap(snap) {
+    return snap.docs.map(function (d) {
+      var t = d.data() || {};
+      return { id: d.id, name: t.name || d.id, hiddenFromOthers: !!t.hiddenFromOthers, hidePeople: !!t.hidePeople };
+    });
   }
   // Tag-Hold history (ADR-0011): one collection-group pass over tag_change
   // activity, grouped by person, derived via ShepherdingCore. Only needed when a
@@ -457,6 +459,89 @@
   function getShepherdingActivity(personId) {
     return db.collection("people").doc(personId).collection("shepherding_activity")
       .orderBy("createdAt", "desc").get().then(mapDocs).catch(function () { return []; });
+  }
+
+  // ── The profile, live (MS-490) ──
+  // The same reads as above, kept current. Each returns a function that stops
+  // it, which a screen calls when it goes. Read through live-read.js, so inside
+  // the app a listen stream that stays silent falls back to re-reading: every
+  // few seconds for data about the person on screen, every thirty for
+  // church-wide lists.
+  //
+  // serverTimestamps: 'estimate' — something saved a moment ago carries a local
+  // guess at its time rather than null, so a new note lands at the top of the
+  // feed at once instead of the bottom until the server answers.
+  function liveRows(snap) {
+    return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); });
+  }
+  function watch(query, map, onValue, every, onError) {
+    return window.MosaicLiveRead.watch(query, function (snap) { onValue(map(snap)); }, {
+      fallbackEveryMs: every,
+      onError: function (e) {
+        console.warn("Could not keep this current:", e && e.code);
+        if (onError) onError(e);
+      },
+    });
+  }
+  function personEvery() { return window.MosaicLiveRead.PERSON_EVERY_MS; }
+  function rosterEvery() { return window.MosaicLiveRead.ROSTER_EVERY_MS; }
+
+  // `onError` so a screen waiting on the person can stop its spinner and say
+  // so, rather than spin forever on a read that was refused.
+  function watchPerson(id, onPerson, onError) {
+    return watch(db.collection("people").doc(id), function (d) {
+      return d.exists ? Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })) : null;
+    }, onPerson, personEvery(), onError);
+  }
+  function watchShepherdingNotes(personId, onNotes) {
+    return watch(db.collection("people").doc(personId).collection("shepherding_notes").orderBy("createdAt", "desc"),
+      liveRows, onNotes, personEvery());
+  }
+  function watchShepherdingActivity(personId, onActivity) {
+    return watch(db.collection("people").doc(personId).collection("shepherding_activity").orderBy("createdAt", "desc"),
+      liveRows, onActivity, personEvery());
+  }
+  function watchShepherdingTags(onTags) {
+    return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery());
+  }
+  function watchPeople(onPeople) {
+    return watch(db.collection("people"), peopleFromSnap, onPeople, rosterEvery());
+  }
+  function watchFamilies(onFamilies) {
+    return watch(db.collection("families"), mapDocs, onFamilies, rosterEvery());
+  }
+  function watchRelationships(onRels) {
+    return watch(db.collection("relationships"), mapDocs, onRels, rosterEvery());
+  }
+  function watchRelationshipTypes(onTypes) {
+    return watch(db.collection("relationship_types"), mapDocs, onTypes, rosterEvery());
+  }
+  function watchRelationshipGroups(onGroups) {
+    return watch(db.collection("relationship_groups"), groupsFromSnap, onGroups, rosterEvery());
+  }
+
+  // The Tasks this person is FOR (ADR-0061), kept current. Two collections feed
+  // one answer, so it is resolved again whenever either arrives.
+  function watchPersonTasks(personId, onTasks) {
+    var rows = null, occurrences = null;
+    function resolveNow() {
+      if (!rows || !occurrences) return;
+      var now = Date.now();
+      var all = window.TasksCore.resolve({
+        tasks: rows.filter(function (t) { return !t.recurrence; }),
+        series: rows.filter(function (t) { return t.recurrence; }),
+        occurrences: occurrences,
+        now: now,
+        from: window.TasksCore.dayOf(now - TASK_LOOK_BACK_DAYS * 86400000),
+        to: window.TasksCore.dayOf(now + TASK_LOOK_AHEAD_DAYS * 86400000),
+      });
+      onTasks(window.TasksCore.forPerson(all, personId));
+    }
+    var stops = [
+      watch(db.collection("shepherding_tasks"), mapDocs, function (r) { rows = r; resolveNow(); }, personEvery()),
+      watch(db.collection("shepherding_task_occurrences"), mapDocs, function (o) { occurrences = o; resolveNow(); }, personEvery()),
+    ];
+    return function () { stops.forEach(function (stop) { stop(); }); };
   }
   function addShepherdingNote(personId, note, user) {
     return db.collection("people").doc(personId).collection("shepherding_notes").add({
@@ -594,13 +679,16 @@
         return commitTagOpsInChunks(ops);
       });
   }
-  function updateShepherdingPersonDetails(personId, d) {
+  function updateShepherdingPersonDetails(personId, d, user) {
     return db.collection("people").doc(personId).update({
       "contact.email": (d.email || "").trim(),
       "contact.phone": (d.phone || "").trim(),
       "contact.address": (d.address || "").trim(),
       birthday: d.birthday || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      // Who saved it, so an elder with the details open elsewhere is told by
+      // name that they changed (MS-490).
+      updatedByName: (user && user.name) || "",
     });
   }
 
@@ -653,12 +741,13 @@
 
   function getRelationshipGroups() {
     return get(db.collection("relationship_groups"))
-      .then(function (snap) {
-        return snap.docs.map(function (d) {
-          return Object.assign({ id: d.id, leaderId: null, memberIds: [] }, d.data());
-        });
-      })
+      .then(groupsFromSnap)
       .catch(function () { return []; });
+  }
+  function groupsFromSnap(snap) {
+    return snap.docs.map(function (d) {
+      return Object.assign({ id: d.id, leaderId: null, memberIds: [] }, d.data());
+    });
   }
 
   // The doc is canonicalised first, so a type edited down to Non-Prioritized does
@@ -1128,6 +1217,16 @@
     getNextService: getNextService,
     getShepherdingPanelTasks: getShepherdingPanelTasks,
     getPersonTasks: getPersonTasks,
+    watchPersonTasks: watchPersonTasks,
+    watchPerson: watchPerson,
+    watchShepherdingNotes: watchShepherdingNotes,
+    watchShepherdingActivity: watchShepherdingActivity,
+    watchShepherdingTags: watchShepherdingTags,
+    watchPeople: watchPeople,
+    watchFamilies: watchFamilies,
+    watchRelationships: watchRelationships,
+    watchRelationshipTypes: watchRelationshipTypes,
+    watchRelationshipGroups: watchRelationshipGroups,
     createShepherdingTask: createShepherdingTask,
     getShepherdingViews: getShepherdingViews,
     getShepherdingPeople: getShepherdingPeople,

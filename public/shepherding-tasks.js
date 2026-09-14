@@ -41,6 +41,14 @@ const ELDER_TAG = 'Elder';
 const CELEBRATE_MS = 620;
 const LEAVE_MS = 300;
 
+// The live watches the component holds (MS-490). Kept outside Alpine so they are
+// not proxied, and stopped when the page goes or the profile tab is taken down.
+let _taskWatches = [];
+function stopTaskWatches() {
+    _taskWatches.forEach(stop => { try { stop(); } catch (e) {} });
+    _taskWatches = [];
+}
+
 document.addEventListener('alpine:init', () => {
     // The Person Picker's behaviour is folded in over the component, so "who
     // it's for" is chosen the way a Person is chosen everywhere else. Composed
@@ -123,7 +131,7 @@ document.addEventListener('alpine:init', () => {
                     // their own, which is honest rather than an error.
                     this.currentPersonId = (userData && userData.personId) || null;
 
-                    await Promise.all([this.loadTasks(), this.loadPeople()]);
+                    await this.watchTasks();
                 } catch (e) {
                     console.error('Loading tasks:', e);
                     this.say('Could not load the tasks.');
@@ -136,20 +144,88 @@ document.addEventListener('alpine:init', () => {
         },
 
         // ── Reading ──────────────────────────────────────────────────────────
+        //
+        // Live (MS-490): a Task another elder adds, ticks, skips or deletes
+        // arrives without a reload — on the page and on a profile's Tasks tab,
+        // because they are this one component. Read through live-read.js, so
+        // inside the phone app a silent stream falls back to re-reading.
 
-        async loadTasks() {
+        // The raw rows as they last arrived. Resolving them into dated rows is
+        // TasksCore's job and happens in applyTasks.
+        taskRows: [],
+        occurrenceRows: [],
+
+        watchTasks() {
+            const Live = window.MosaicLiveRead;
             const db = firebase.firestore();
-            const [taskSnap, occSnap] = await Promise.all([
-                db.collection(TASKS_COLLECTION).get(),
-                db.collection(OCCURRENCES_COLLECTION).get(),
-            ]);
+            const rows = snap => snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
 
-            const rows = taskSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            return new Promise(resolve => {
+                let tasksIn = false;
+                let occurrencesIn = false;
+                const arrived = () => {
+                    if (!tasksIn || !occurrencesIn) return;
+                    this.applyTasks();
+                    resolve();
+                };
+                const failed = (what, flag) => e => {
+                    console.error('Could not keep ' + what + ' current:', e);
+                    flag();
+                    arrived();
+                };
+
+                _taskWatches.push(Live.watch(db.collection(TASKS_COLLECTION), snap => {
+                    this.taskRows = rows(snap);
+                    tasksIn = true;
+                    arrived();
+                }, { fallbackEveryMs: Live.PERSON_EVERY_MS, onError: failed('tasks', () => { tasksIn = true; }) }));
+
+                _taskWatches.push(Live.watch(db.collection(OCCURRENCES_COLLECTION), snap => {
+                    this.occurrenceRows = rows(snap);
+                    occurrencesIn = true;
+                    arrived();
+                }, { fallbackEveryMs: Live.PERSON_EVERY_MS, onError: failed('task dates', () => { occurrencesIn = true; }) }));
+
+                // The directory, and both lists cut from it.
+                //
+                // The whole of it, because a Task's Subject can be anybody — the
+                // care is toward them and they never open the page. Only Elders
+                // can be GIVEN one (ADR-0059 still stands on that), and the Elder
+                // Tag is the canonical answer to who they are, so they are
+                // filtered out of the same read rather than fetched again.
+                _taskWatches.push(Live.watch(db.collection('people'), snap => {
+                    this.people = snap.docs
+                        .map(d => ({
+                            id: d.id,
+                            name: (d.data() || {}).name || 'Unnamed',
+                            tags: (d.data() || {}).tags || [],
+                        }))
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    this.elders = this.people.filter(p => (p.tags || []).indexOf(ELDER_TAG) >= 0);
+                }, { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: e => console.error('Could not keep the directory current:', e) }));
+
+                window.addEventListener('pagehide', stopTaskWatches);
+            });
+        },
+
+        // Resolve the last rows that arrived into the page's dated list.
+        //
+        // ⚠ NOT WHILE A CARD IS FOLDING UP. A tick's own write comes back live
+        // part-way through its little celebration, and redrawing then would
+        // pull the row out from under the animation. The arrival is held, and
+        // the tick applies it once the card has gone.
+        applyTasks() {
+            if (Object.keys(this.finishing).length) {
+                this.tasksHeld = true;
+                return;
+            }
+            this.tasksHeld = false;
+            const rows = this.taskRows;
             const now = Date.now();
             this.tasks = TasksCore.resolve({
                 tasks: rows.filter(t => !t.recurrence),
                 series: rows.filter(t => t.recurrence),
-                occurrences: occSnap.docs.map(d => Object.assign({ id: d.id }, d.data())),
+                occurrences: this.occurrenceRows,
                 now: now,
                 from: TasksCore.dayOf(now - LOOK_BACK_DAYS * 86400000),
                 to: TasksCore.dayOf(now + LOOK_AHEAD_DAYS * 86400000),
@@ -159,24 +235,32 @@ document.addEventListener('alpine:init', () => {
             rows.filter(t => t.recurrence).forEach(s => { byId[s.id] = s; });
             this.seriesById = byId;
         },
+        tasksHeld: false,
 
-        // The directory once, and both lists cut from it.
-        //
-        // The whole of it, because a Task's Subject can be anybody — the care is
-        // toward them and they never open the page. Only Elders can be GIVEN one
-        // (ADR-0059 still stands on that), and the Elder Tag is the canonical
-        // answer to who they are, so they are filtered out of the same read
-        // rather than fetched again.
-        async loadPeople() {
-            const snap = await firebase.firestore().collection('people').get();
-            this.people = snap.docs
-                .map(d => ({
-                    id: d.id,
-                    name: (d.data() || {}).name || 'Unnamed',
-                    tags: (d.data() || {}).tags || [],
-                }))
-                .sort((a, b) => a.name.localeCompare(b.name));
-            this.elders = this.people.filter(p => (p.tags || []).indexOf(ELDER_TAG) >= 0);
+        // One fresh read, for the one moment a watch may not have caught up yet:
+        // the end of a tick, where the row must not flash back at full size.
+        async loadTasks() {
+            const db = firebase.firestore();
+            const [taskSnap, occSnap] = await Promise.all([
+                db.collection(TASKS_COLLECTION).get(),
+                db.collection(OCCURRENCES_COLLECTION).get(),
+            ]);
+            this.taskRows = taskSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            this.occurrenceRows = occSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        },
+
+        // After one of our own writes. The writes go through a callable, so the
+        // server makes them and nothing is applied on this device first — the
+        // watch would bring the change back, but a beat later. One fresh read
+        // makes your own change show at once, as it always did.
+        async refreshAfterWrite() {
+            await this.loadTasks();
+            this.applyTasks();
+        },
+
+        // A profile tab that is closed stops listening.
+        destroy() {
+            stopTaskWatches();
         },
 
         // ── The three lists ──────────────────────────────────────────────────
@@ -417,7 +501,7 @@ document.addEventListener('alpine:init', () => {
                     });
                 }
                 this.closeModal();
-                await this.loadTasks();
+                await this.refreshAfterWrite();
                 this.say('Saved');
             } catch (e) {
                 // A refusal from the server is a sentence written for a person
@@ -453,11 +537,12 @@ document.addEventListener('alpine:init', () => {
 
             const failure = await saved;
             try {
-                await this.loadTasks();
+                await this.refreshAfterWrite();
             } finally {
-                // Cleared only after the redraw, so the row cannot flash back
-                // into view at full size on its way out.
+                // Cleared, and the list redrawn, in one step, so the row cannot
+                // flash back into view at full size on its way out.
                 delete this.finishing[key];
+                this.applyTasks();
             }
             this.say(failure ? (failure.message || 'That did not save.') : 'Done');
         },
@@ -472,7 +557,7 @@ document.addEventListener('alpine:init', () => {
         async untick(task) {
             try {
                 await this.call('reopen', { taskId: task.seriesId || task.id, date: task.seriesId ? task.dueDate : undefined });
-                await this.loadTasks();
+                await this.refreshAfterWrite();
                 this.say('Put back');
             } catch (e) { this.say((e && e.message) || 'That did not save.'); }
         },
@@ -481,7 +566,7 @@ document.addEventListener('alpine:init', () => {
             if (!confirm('Skip this one without marking it done?')) return;
             try {
                 await this.call('skip', { taskId: task.seriesId, date: task.dueDate });
-                await this.loadTasks();
+                await this.refreshAfterWrite();
                 this.say('Skipped');
             } catch (e) { this.say((e && e.message) || 'That did not save.'); }
         },
@@ -494,7 +579,7 @@ document.addEventListener('alpine:init', () => {
             if (!confirm(question)) return;
             try {
                 const out = await this.call('delete', { taskId: task.seriesId || task.id });
-                await this.loadTasks();
+                await this.refreshAfterWrite();
                 this.say(out && out.stopped ? 'Stopped — what was done is kept' : 'Deleted');
             } catch (e) { this.say((e && e.message) || 'That did not save.'); }
         },
