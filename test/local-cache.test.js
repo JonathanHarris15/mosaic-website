@@ -261,12 +261,18 @@ test('the cache ships off, and nothing touches Firestore while it is', () => {
         assert.deepEqual(q.calls, ['plain'],
             'a read was answered from the device while the cache is supposed to be off');
 
+        // The one setting allowed while the cache is off is the listen
+        // transport (MS-482) — it is not part of the cache, and it has to land
+        // before first use or not at all.
         let touched = false;
+        const settings = [];
         const db = { enablePersistence: () => { touched = true; return Promise.resolve(); },
-                     settings: () => { touched = true; } };
+                     settings: (s) => { settings.push(s); } };
         return Cache.enable(db).then(on => {
             assert.equal(on, false, 'persistence was switched on');
-            assert.equal(touched, false, 'the Firestore handle was configured anyway');
+            assert.equal(touched, false, 'persistence was touched anyway');
+            assert.deepEqual(settings, [{ useFetchStreams: false, merge: true }],
+                'the Firestore handle was configured for the cache anyway');
         });
     });
 });

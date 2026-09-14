@@ -370,7 +370,7 @@ test('a cell somebody else is in cannot be clicked into', () => {
 
     withPresence(sb, [{
         uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee',
-        surface: 'calendar', dateKey: '2026-08-16', fieldKey: 'liturgy.hymn1',
+        surface: 'calendar', scopeKey: '2026-08-16', boxKey: 'liturgy.hymn1',
         updatedAt: { toMillis: () => Date.now() },
     }]);
 
@@ -401,7 +401,7 @@ test('a cell held on a DIFFERENT Sunday is still mine to edit', () => {
 
     withPresence(sb, [{
         uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee',
-        surface: 'calendar', dateKey: '2026-08-23', fieldKey: 'liturgy.hymn1',
+        surface: 'calendar', scopeKey: '2026-08-23', boxKey: 'liturgy.hymn1',
         updatedAt: { toMillis: () => Date.now() },
     }]);
 

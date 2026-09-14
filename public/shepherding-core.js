@@ -196,6 +196,123 @@
         return result;
     }
 
+    // ── The profile, live (MS-490) ───────────────────────────────────────────
+    // The profile's data arrives piecemeal and keeps arriving — notes, changes,
+    // Care List cells — on the web page and the phone screen alike. What an
+    // arrival MEANS is decided here, once, so the two cannot come to disagree.
+
+    // The Care List cells about one person, as notes on their profile. A cell
+    // with nothing typed in it is not a note.
+    function careListNotesFor(personId, careListDocs) {
+        const out = [];
+        (careListDocs || []).forEach(doc => {
+            const cells = doc && doc.careListData && doc.careListData[personId];
+            if (!cells) return;
+            const columns = doc.careListColumns || [];
+            Object.keys(cells).forEach(colId => {
+                const contentJson = cells[colId];
+                if (!contentJson || !contentJson.content || !contentJson.content.length) return;
+                const hasText = contentJson.content.some(n => (n.content && n.content.length > 0) || n.type === 'table');
+                if (!hasText) return;
+                const col = columns.find(c => c.id === colId);
+                out.push({
+                    id: `carelist-${doc.id}-${colId}`,
+                    type: 'Care List',
+                    subject: col ? col.name : 'Notes',
+                    contentJson,
+                    createdAt: doc.updatedAt || doc.createdAt,
+                    authorName: doc.updatedByName || 'Elder',
+                    sourceDocumentId: doc.id,
+                    isCareList: true,
+                });
+            });
+        });
+        return out;
+    }
+
+    // What an editor edits, per kind of record. A change to anything else —
+    // a tag added to the person, the clock turning a Task overdue — is not a
+    // change to what somebody has open.
+    const EDITED_FIELDS = {
+        note: r => [r.type || '', r.subject || '', r.content || '', r.contentJson || null],
+        details: r => {
+            const c = r.contact || {};
+            return [r.name || '', c.email || '', c.phone || '', c.address || '', r.birthday || null, r.sex || null];
+        },
+        task: r => [
+            r.title || '', r.body || '', r.dueDate || '', r.dueTime || '',
+            (r.assigneeIds || []).slice().sort(), r.aboutPersonId || null,
+            r.completedOn || null, r.state === 'done' || r.state === 'skipped' ? r.state : 'open',
+        ],
+    };
+
+    // Has the record under an open editor moved since it was opened?
+    //   { state: 'unchanged' }            — carry on
+    //   { state: 'changed', by: 'Name' }  — somebody else saved it
+    //   { state: 'deleted' }              — it is gone
+    // A brand-new record (openedWith null) has nothing under it to change.
+    function openRecordState(kind, openedWith, current) {
+        const fields = EDITED_FIELDS[kind];
+        if (!fields) throw new Error('No editor is known for a ' + kind);
+        if (!openedWith) return { state: 'unchanged' };
+        if (!current) return { state: 'deleted' };
+        if (JSON.stringify(fields(openedWith)) === JSON.stringify(fields(current))) {
+            return { state: 'unchanged' };
+        }
+        return { state: 'changed', by: current.updatedByName || current.authorName || '' };
+    }
+
+    // Everything an open editor needs to know, in one answer (MS-491):
+    //   { kind, openedWith, current, holder, lost }
+    // `holder` is whoever else holds this editor's box now; `lost` is the store
+    // saying the box was taken from us. Either way it is 'taken', and that
+    // outranks what happened to the record: the other elder is in it.
+    function editorState(input) {
+        const i = input || {};
+        if (i.holder || i.lost) return { state: 'taken', by: (i.holder && i.holder.name) || '' };
+        return openRecordState(i.kind, i.openedWith, i.current);
+    }
+
+    // What an editor says about that, in words; empty when there is nothing to
+    // say. The typing stays on screen in every case, and only Save is refused.
+    function editorWarning(state, what) {
+        if (!state || state.state === 'unchanged') return '';
+        const who = String(state.by || '').trim() || 'Somebody';
+        const keep = " What you typed is still here to copy, but it can't be saved over theirs.";
+        if (state.state === 'taken') return who + ' is editing this ' + what + ' now.' + keep;
+        if (state.state === 'changed') return who + ' changed this ' + what + ' while you had it open.' + keep;
+        return 'This ' + what + ' was deleted while you had it open. What you typed is still here to copy.';
+    }
+
+    // One arrival, combined:
+    //   input  { personId, personNotes, careListDocs, activity,
+    //            editor: { kind: 'note', openedWith } | null }
+    //   output { notes, record, editor }
+    // `record` is the Pastoral Record, newest first, without the note that is
+    // open in the editor. `editor` reports what happened under it; the draft
+    // itself is never touched.
+    function combineProfile(input) {
+        const i = input || {};
+        const notes = [
+            ...(i.personNotes || []),
+            ...careListNotesFor(i.personId, i.careListDocs),
+        ];
+        const openedWith = i.editor && i.editor.openedWith;
+        const editingNoteId = i.editor && i.editor.kind === 'note' && openedWith ? openedWith.id : null;
+        const record = assemblePastoralRecord(notes, i.activity || [], { editingNoteId });
+        let editor = null;
+        if (i.editor) {
+            const current = i.editor.kind === 'note' && openedWith
+                ? notes.find(n => n.id === openedWith.id) || null
+                : null;
+            editor = editorState({
+                kind: i.editor.kind, openedWith, current,
+                holder: i.editor.holder, lost: i.editor.lost,
+            });
+        }
+        return { notes, record, editor };
+    }
+
     // ── Tag Hold derivation (pure) — ADR-0011 ────────────────────────────────
     // A Shepherding Tag has a stable identity independent of its name, so Hold
     // Duration (how long a Person has continuously carried a tag) is derived from
@@ -718,6 +835,11 @@
         pastoralEntryTime,
         assemblePastoralRecord,
         collapsePastoralRecord,
+        careListNotesFor,
+        openRecordState,
+        editorState,
+        editorWarning,
+        combineProfile,
         deriveTagHolds,
         formatHoldDuration,
         holdMeetsMinimum,

@@ -365,6 +365,17 @@
   }
 
   // ── Drawer ───────────────────────────────────────────────
+  // Which way this phone gets live updates (MS-482). Here, in plain words, so
+  // somebody checking on a real device (MS-485) can read it without a laptop
+  // and a web inspector. Nothing is shown until a screen has asked for one.
+  function liveUpdatesLine() {
+    var live = window.MosaicLiveRead;
+    var mode = live && live.status ? live.status().mode : "pending";
+    if (mode === "pending") return null;
+    var said = mode === "live" ? "Live updates: listening" : "Live updates: checking every few seconds";
+    return html`<div style=${{ padding: "4px 14px 0", fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)" }}>${said}</div>`;
+  }
+
   function Drawer(props) {
     // Own mount/visibility lifecycle so the panel slides in (and out) rather
     // than popping. `render` keeps us in the DOM through the close animation;
@@ -431,6 +442,7 @@
             <button onClick=${function () { setGuest(false); data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
               ${Ic("log-out", 20)}Sign Out
             </button>
+            ${liveUpdatesLine()}
           </div>
         </nav>
       </${M.Fragment}>`;

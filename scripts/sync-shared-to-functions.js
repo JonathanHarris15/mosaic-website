@@ -93,6 +93,11 @@ const MODULES = [
     // holds nothing elder-only, which is exactly why it is safe to hand over.
     'printable-core.js',
     'printable-data-core.js',
+    // MS-489 / MS-433. The assistant is refused at a box an elder holds, and
+    // "is this box held" has to be the page's answer — heartbeat expiry, the
+    // Shepherding idle rule, your own claim never blocking you — or the server
+    // and the screen will disagree about who has a note open.
+    'presence-core.js',
 ];
 
 const BANNER = [

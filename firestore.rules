@@ -762,6 +762,21 @@ service cloud.firestore {
       allow write, delete: if isEditor() && request.auth.uid == uid;
     }
 
+    // Who is on a Shepherding page, and which note, Task or details editor they
+    // have open (MS-429). The same shape as /presence — the document id is the
+    // lock, so you write your own and nobody else's — with one difference that
+    // is the whole reason it is a separate collection:
+    //
+    // ⚠ ELDERS ONLY. A Shepherding claim says WHICH PERSON an elder is looking
+    // at. That is pastoral attention, and an editor who is not an elder has no
+    // business learning it. Folding this into /presence would publish it to
+    // every editor, and narrowing /presence's read would break the Order of
+    // Service's listener for the editors who write guides (MS-477).
+    match /shepherding_presence/{uid} {
+      allow read: if isElder();
+      allow write, delete: if isElder() && request.auth.uid == uid;
+    }
+
     // ── The MCP server's front door (MS-262, ADR-0038) ──────────────────
     //
     // ⚠ NO CLIENT MAY TOUCH ANY OF THESE, EVER — not even an admin, and not

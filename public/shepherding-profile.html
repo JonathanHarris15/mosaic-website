@@ -50,6 +50,8 @@
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
+    <!-- Live reads, with a re-read fallback inside the phone app (MS-482). -->
+    <script src="live-read.js"></script>
     <script src="auth.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -136,6 +138,20 @@
                     </template>
                 </div>
             </div>
+            <!-- Who else is on this profile right now (MS-491). -->
+            <div x-show="othersHere.length" x-cloak class="flex items-center gap-2">
+                <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">Also here</span>
+                <template x-for="p in othersHere" :key="p.uid">
+                    <span class="m-avatar m-avatar--sm" :title="p.name">
+                        <template x-if="p.photoUrl">
+                            <img :src="p.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(p.photoCrop)">
+                        </template>
+                        <template x-if="!p.photoUrl">
+                            <span x-text="PersonPhotoCore.initialsOf(p.name)"></span>
+                        </template>
+                    </span>
+                </template>
+            </div>
         </div>
 
         <!-- Tabs (MS-98) -->
@@ -165,7 +181,21 @@
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
                     <div class="flex items-center justify-between mb-1">
                         <h2 class="font-headline-md text-headline-md text-primary">Member Details</h2>
-                        <button @click="openEditProfile()" class="text-secondary hover:text-primary transition-colors flex items-center gap-1 font-label-md text-label-md">
+                        <template x-if="detailsHolder">
+                            <span class="held-badge flex items-center gap-1.5" :title="holderTitle(detailsHolder)">
+                                <span class="m-avatar m-avatar--sm">
+                                    <template x-if="detailsHolder.photoUrl">
+                                        <img :src="detailsHolder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(detailsHolder.photoCrop)">
+                                    </template>
+                                    <template x-if="!detailsHolder.photoUrl">
+                                        <span x-text="PersonPhotoCore.initialsOf(detailsHolder.name)"></span>
+                                    </template>
+                                </span>
+                                <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(detailsHolder)"></span>
+                                <span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+                            </span>
+                        </template>
+                        <button x-show="!detailsHolder" @click="openEditProfile()" class="text-secondary hover:text-primary transition-colors flex items-center gap-1 font-label-md text-label-md">
                             <span class="material-symbols-outlined text-[18px]">edit</span>
                             <span>Edit</span>
                         </button>
@@ -624,7 +654,7 @@
                         <label class="flex flex-col gap-xs flex-shrink-0">
                             <span class="font-label-md text-label-md text-on-surface-variant">Note type</span>
                             <select x-model="noteForm.type"
-                                    @change="handleNoteTypeChange()"
+                                    @change="handleNoteTypeChange(); touchNote()"
                                     class="border border-outline-variant rounded-lg pl-sm pr-8 py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
                                 <template x-for="type in noteTypes" :key="type">
                                     <option :value="type" x-text="type"></option>
@@ -636,6 +666,7 @@
                                 Title <span class="opacity-50 normal-case">(optional)</span>
                             </span>
                             <input type="text" x-model="noteForm.subject"
+                                   @input="touchNote()"
                                    placeholder="Brief title…"
                                    class="border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
                         </label>
@@ -787,14 +818,20 @@
                          @click="focusEditor()">
                     </div>
 
+                    <!-- The record moved under this editor (MS-491). The text stays;
+                         only Save is refused, so nobody's work is overwritten. -->
+                    <div x-show="noteSaveBlocked" x-cloak role="alert"
+                         class="mx-lg mt-md px-md py-sm rounded-lg bg-error-container text-on-error-container text-sm"
+                         x-text="editorWarning(noteEditorState, 'note')"></div>
+
                     <!-- Actions -->
                     <div class="flex justify-end gap-sm px-lg py-md border-t border-outline-variant">
                         <button @click="closeEditor()"
                             class="m-btn m-btn--quiet m-btn--sm">
                             Cancel
                         </button>
-                        <button @click="saveNote()"
-                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                        <button @click="saveNote()" :disabled="noteSaveBlocked"
+                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                             <span x-text="editingNote ? 'Save Changes' : 'Add Note'"></span>
                         </button>
                     </div>
@@ -825,7 +862,21 @@
                                                 <span class="font-label-md text-label-md text-outline italic">(edited)</span>
                                             </template>
                                         </div>
-                                        <div class="flex items-center gap-xs flex-shrink-0" x-show="!entry.isCareList">
+                                        <template x-if="noteHolder(entry)">
+                                            <span class="held-badge flex items-center gap-1.5" :title="holderTitle(noteHolder(entry))">
+                                <span class="m-avatar m-avatar--sm">
+                                    <template x-if="noteHolder(entry).photoUrl">
+                                        <img :src="noteHolder(entry).photoUrl" alt="" :style="PersonPhotoCore.frameStyle(noteHolder(entry).photoCrop)">
+                                    </template>
+                                    <template x-if="!noteHolder(entry).photoUrl">
+                                        <span x-text="PersonPhotoCore.initialsOf(noteHolder(entry).name)"></span>
+                                    </template>
+                                </span>
+                                <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(noteHolder(entry))"></span>
+                                <span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+                            </span>
+                                        </template>
+                                        <div class="flex items-center gap-xs flex-shrink-0" x-show="!entry.isCareList && !noteHolder(entry)">
                                             <button @click="openEditNote(entry)"
                                                 class="text-on-surface-variant hover:text-primary transition-colors">
                                                 <span class="material-symbols-outlined text-[18px]">edit</span>
@@ -1332,7 +1383,7 @@
                                             <span class="task__sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
                                         </button>
                                         <div class="flex-1 min-w-0" @click="openEdit(task)">
-                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div><template x-if="taskHolder(task)"><span class="flex items-center gap-1.5 mt-1" :title="holderTitle(taskHolder(task))"><span class="m-avatar m-avatar--sm"><template x-if="taskHolder(task).photoUrl"><img :src="taskHolder(task).photoUrl" alt="" :style="PersonPhotoCore.frameStyle(taskHolder(task).photoCrop)"></template><template x-if="!taskHolder(task).photoUrl"><span x-text="PersonPhotoCore.initialsOf(taskHolder(task).name)"></span></template></span><span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(taskHolder(task))"></span><span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span></span></template>
                                             <div class="flex flex-wrap items-center gap-2 mt-1">
                                                 <span class="task__due text-sm" x-text="dueLabel(task)"></span>
                                                 <span x-show="task.seriesId" class="text-xs text-on-surface-variant flex items-center gap-0.5">
@@ -1372,7 +1423,7 @@
                                             <span class="task__sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
                                         </button>
                                         <div class="flex-1 min-w-0" @click="openEdit(task)">
-                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div><template x-if="taskHolder(task)"><span class="flex items-center gap-1.5 mt-1" :title="holderTitle(taskHolder(task))"><span class="m-avatar m-avatar--sm"><template x-if="taskHolder(task).photoUrl"><img :src="taskHolder(task).photoUrl" alt="" :style="PersonPhotoCore.frameStyle(taskHolder(task).photoCrop)"></template><template x-if="!taskHolder(task).photoUrl"><span x-text="PersonPhotoCore.initialsOf(taskHolder(task).name)"></span></template></span><span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(taskHolder(task))"></span><span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span></span></template>
                                             <div class="flex flex-wrap items-center gap-2 mt-1">
                                                 <span class="task__due text-sm text-on-surface-variant" x-text="dueLabel(task)"></span>
                                                 <span x-show="task.seriesId" class="text-xs text-on-surface-variant flex items-center gap-0.5">
@@ -1412,7 +1463,7 @@
                                             <span class="material-symbols-outlined text-[14px]">check</span>
                                         </button>
                                         <div class="flex-1 min-w-0">
-                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div>
+                                            <div class="task__title font-body-md text-on-surface" x-text="task.title"></div><template x-if="taskHolder(task)"><span class="flex items-center gap-1.5 mt-1" :title="holderTitle(taskHolder(task))"><span class="m-avatar m-avatar--sm"><template x-if="taskHolder(task).photoUrl"><img :src="taskHolder(task).photoUrl" alt="" :style="PersonPhotoCore.frameStyle(taskHolder(task).photoCrop)"></template><template x-if="!taskHolder(task).photoUrl"><span x-text="PersonPhotoCore.initialsOf(taskHolder(task).name)"></span></template></span><span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(taskHolder(task))"></span><span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span></span></template>
                                             <div class="text-xs text-on-surface-variant mt-1" x-text="doneLabel(task)"></div>
                                         </div>
                                     </div>
@@ -1428,7 +1479,7 @@
                     <div x-show="showModal" x-cloak
                          class="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
                          @click.self="closeModal()">
-                        <div class="bg-surface-container-lowest w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl p-margin flex flex-col gap-md max-h-[95vh] overflow-y-auto">
+                        <div class="bg-surface-container-lowest w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl p-margin flex flex-col gap-md max-h-[95vh] overflow-y-auto" @input="touchTask()" @change="touchTask()">
                             <h2 class="font-headline-md text-headline-md text-primary" x-text="editingId ? 'Edit task' : 'New task'"></h2>
 
                             <label class="flex flex-col gap-1">
@@ -1520,12 +1571,12 @@
                                 </p>
                             </div>
 
-                            <p x-show="error" x-text="error" class="text-error text-sm"></p>
+                            <p x-show="taskSaveBlocked" x-cloak role="alert" x-text="taskWarning" class="px-md py-sm rounded-lg bg-error-container text-on-error-container text-sm"></p><p x-show="error" x-text="error" class="text-error text-sm"></p>
 
                             <div class="flex justify-end gap-2 pt-2">
                                 <button @click="closeModal()"
                                     class="px-md py-xs rounded-lg text-on-surface-variant hover:bg-surface-container">Cancel</button>
-                                <button @click="save()" :disabled="saving || !form.title.trim() || !form.dueDate"
+                                <button @click="save()" :disabled="saving || taskSaveBlocked || !form.title.trim() || !form.dueDate"
                                     class="px-md py-xs rounded-lg bg-primary text-on-primary disabled:opacity-40">
                                     <span x-text="saving ? 'Saving…' : (editingId ? 'Save' : 'Add task')"></span>
                                 </button>
@@ -1569,15 +1620,18 @@
         <!-- Edit Profile Modal -->
         <template x-if="showEditProfileModal">
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showEditProfileModal = false"></div>
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeEditProfile()"></div>
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh]">
                     <header class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
                         <h3 class="font-headline text-lg text-primary font-bold">Edit Profile</h3>
-                        <button @click="showEditProfileModal = false" class="text-on-surface-variant hover:text-error transition-colors">
+                        <button @click="closeEditProfile()" class="text-on-surface-variant hover:text-error transition-colors">
                             <span class="material-symbols-outlined">close</span>
                         </button>
                     </header>
-                    <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                    <div class="p-6 overflow-y-auto custom-scrollbar space-y-4" @input="touchDetails()" @change="touchDetails()">
+                        <div x-show="detailsSaveBlocked" x-cloak role="alert"
+                             class="px-md py-sm rounded-lg bg-error-container text-on-error-container text-sm"
+                             x-text="editorWarning(detailsEditorState, 'person\'s details')"></div>
                         <div class="flex flex-col gap-xs">
                             <label class="m-label">Full Name</label>
                             <input type="text" x-model="selectedPerson.name" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
@@ -1608,8 +1662,8 @@
                         </div>
                     </div>
                     <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end gap-3">
-                        <button @click="showEditProfileModal = false" class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all">Cancel</button>
-                        <button @click="saveProfile()" :disabled="isSubmitting" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
+                        <button @click="closeEditProfile()" class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all">Cancel</button>
+                        <button @click="saveProfile()" :disabled="isSubmitting || detailsSaveBlocked" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
                             <span x-show="isSubmitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                             <span x-text="isSubmitting ? 'Saving...' : 'Save Changes'"></span>
                         </button>
@@ -1676,6 +1730,11 @@
         <span x-text="toast.message"></span>
     </div>
 
+    <!-- Who else is here, and which editor they have open (MS-491). -->
+    <script src="person-photo-core.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="presence-core.js"></script>
+    <script src="shepherding-presence.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="relationship-core.js"></script>
     <script src="family-core.js"></script>

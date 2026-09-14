@@ -53,6 +53,9 @@
   <!-- On-device cache + cache-first reads. Must load before data.js, which
        switches persistence on the moment it builds its Firestore handle. -->
   <script src="local-cache.js"></script>
+  <!-- Live reads that fall back to re-reading when the listen stream stays
+       silent inside the app (MS-482). -->
+  <script src="live-read.js"></script>
 
   <!-- Firebase (vendored) -->
   <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -66,6 +69,9 @@
   <!-- Shepherding Status value model + Tag-Hold logic (single source of truth,
        shared with the desktop pages). Used by the native Shepherd Dashboard. -->
   <script src="shepherding-core.js"></script>
+  <!-- What a Note Body says, in words — so a Care List cell, which carries only
+       rich text, reads on the phone profile as it does on the web. -->
+  <script src="document-body-core.js"></script>
   <!-- The Task model (MS-79). The Shepherd screen's panel asks it which Tasks
        belong there rather than deciding itself, so the phone and the desktop
        dashboard cannot disagree. events-occurrence-core.js first: tasks-core.js
@@ -75,6 +81,10 @@
   <!-- Family model (ADR-0012, MS-88): pure household traversal, shared with web. -->
   <script src="family-core.js"></script>
   <script src="person-photo-core.js"></script>
+  <!-- Who else is on a Shepherding profile, and which editor they have open
+       (MS-491) — the same store and box names as the web. -->
+  <script src="presence-core.js"></script>
+  <script src="shepherding-presence.js"></script>
   <!-- Relationship model (ADR-0012, MS-89): elder-only edge graph, shared with web. -->
   <script src="relationship-core.js"></script>
   <script src="relationship-group-core.js"></script>

@@ -680,13 +680,13 @@
 
     function reload() { return data.getPersonTasks(pid).then(tasksS[1]); }
 
+    // Live (MS-490). The reload after a tick or a new Task stays: those writes
+    // go through a callable, so nothing lands on this device first and the
+    // watch would bring them back a beat late.
     useEffect(function () {
-      var alive = true;
-      data.getPersonTasks(pid).then(function (rows) {
-        if (!alive) return;
+      return data.watchPersonTasks(pid, function (rows) {
         tasksS[1](rows); loadingS[1](false);
-      }).catch(function () { if (alive) loadingS[1](false); });
-      return function () { alive = false; };
+      });
     }, [pid]);
 
     function tick(t) {
@@ -894,6 +894,7 @@
     var pid = (props.params && props.params.id) || null;
     var loadingS = useState(true), errS = useState(false);
     var personS = useState(null), notesS = useState([]), activityS = useState([]), tagsS = useState([]);
+    var careListsS = useState([]); // Care Lists, for the cells about this person
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
@@ -914,28 +915,142 @@
     function relTypeById(id) { for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === id) return relTypes[i]; } return null; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
-    function reloadNotes() { return data.getShepherdingNotes(pid).then(notesS[1]); }
-    function reloadActivity() { return data.getShepherdingActivity(pid).then(activityS[1]); }
-
+    // Live (MS-490): everything on this screen is watched rather than read
+    // once, the way the web profile is, so another elder's note, status or tag
+    // shows up here without leaving and coming back. Leaving the screen stops
+    // every watch. Nothing reloads after a save any more — the watch brings the
+    // change back, and each write still updates the screen at once.
     useEffect(function () {
-      var alive = true;
       if (!pid) { errS[1](true); loadingS[1](false); return; }
-      data.getPerson(pid).then(function (p) {
-        if (!alive) return;
-        if (!p) { errS[1](true); loadingS[1](false); return; }
-        personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes(), data.getRelationshipGroups()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); relGroupsS[1](r[7]); loadingS[1](false); });
-      }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      var stops = [
+        data.watchPerson(pid, function (p) {
+          if (!p) { errS[1](true); loadingS[1](false); return; }
+          personS[1](p); loadingS[1](false);
+        }, function () { errS[1](true); loadingS[1](false); }),
+        data.watchShepherdingNotes(pid, notesS[1]),
+        data.watchShepherdingActivity(pid, activityS[1]),
+        data.watchCareLists(careListsS[1]),
+        data.watchShepherdingTags(tagsS[1]),
+        data.watchFamilies(familiesS[1]),
+        data.watchPeople(rosterS[1]),
+        data.watchRelationships(relsS[1]),
+        data.watchRelationshipTypes(relTypesS[1]),
+        data.watchRelationshipGroups(relGroupsS[1]),
+      ];
+      return function () { stops.forEach(function (stop) { stop(); }); };
     }, [pid]);
+
+    // ── Presence and the Box lock (MS-491, ADR-0035, ADR-0062) ──────────────
+    // The note editor and the details editor are boxes, exactly as on the web
+    // and with the same box names, so a note open on a laptop is locked here.
+    //
+    // ⚠ PRESENCE MAY REMOVE A LOCK, NEVER AN EDITOR: it cannot throw, and while
+    // it is not running every editor opens.
+    var presenceS = useState([]), tickS = useState(0);
+    var noteLostS = useState(false), detailsLostS = useState(false), detailsOpenedS = useState(null);
+    // Our own save is on its way, so our own change arriving is not "somebody
+    // changed this".
+    var savingOwnS = useState(false);
+    var myUid = props.user && props.user.uid;
+    useEffect(function () {
+      if (!pid || !props.user || !window.ShepherdingPresence) return;
+      var SP = window.ShepherdingPresence;
+      var unsubscribe = function () {};
+      var ticker = null;
+      try {
+        unsubscribe = SP.subscribe(presenceS[1]);
+        SP.start({
+          db: data.db,
+          uid: props.user.uid,
+          identity: { id: props.user.personId || null, name: props.user.name || "", photoUrl: props.user.photoUrl || null, photoCrop: props.user.photoCrop || null },
+          surface: "shepherding-profile",
+          pageKey: pid,
+          stamp: function () { return firebase.firestore.FieldValue.serverTimestamp(); },
+        });
+        // So a quiet hold, or one whose page died, stops showing as held.
+        ticker = setInterval(function () { tickS[1](function (n) { return n + 1; }); }, window.PresenceCore.HEARTBEAT_MS);
+      } catch (e) {
+        console.warn("Presence could not start on this profile; carrying on without it:", e);
+      }
+      // leave(), not release(): gone means gone, not freshly here.
+      return function () { unsubscribe(); if (ticker) clearInterval(ticker); SP.leave(); SP.stop(); };
+    }, [pid, myUid]);
+
+    function holderOf(box) {
+      return window.ShepherdingPresence ? window.ShepherdingPresence.holderIn(presenceS[0], myUid, box, Date.now()) : null;
+    }
+    function noteHolder(e) {
+      return e && !e.isCareList && window.ShepherdingPresence ? holderOf(window.ShepherdingPresence.box.note(pid, e.id)) : null;
+    }
+    function detailsHolder() {
+      return window.ShepherdingPresence ? holderOf(window.ShepherdingPresence.box.details(pid)) : null;
+    }
+    function othersHere() {
+      if (!myUid || !window.PresenceCore) return [];
+      return window.PresenceCore.peopleHere(presenceS[0], myUid, "shepherding-profile", pid, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS });
+    }
+    function claim(box) { return !window.ShepherdingPresence || window.ShepherdingPresence.claimBox(box); }
+    function release() { if (window.ShepherdingPresence) window.ShepherdingPresence.release(); }
+    function touch() { return !window.ShepherdingPresence || window.ShepherdingPresence.touch(); }
+
+    var editorWarning = Core.editorWarning;
+
+    function openNoteEditor(e) {
+      if (window.ShepherdingPresence && !claim(window.ShepherdingPresence.box.note(pid, e.id))) {
+        showToast(window.PresenceCore.holderTitle(noteHolder(e)) || "Someone is editing this", "error");
+        return;
+      }
+      noteLostS[1](false);
+      editorS[1]({ id: e.id, type: e.type || NOTE_TYPES[0], subject: e.subject || "", body: e.content || "", opened: e });
+    }
+    function closeNoteEditor() {
+      if (editorS[0] && editorS[0].id) release();
+      noteLostS[1](false);
+      editorS[1](null);
+    }
+    // Every keystroke in an open editor, before the change is kept.
+    function editNote(patch) {
+      var ed = editorS[0];
+      if (ed && ed.id && !touch()) noteLostS[1](true);
+      editorS[1](Object.assign({}, ed, patch));
+    }
+    function noteState() {
+      var ed = editorS[0];
+      if (!ed || !ed.id || savingOwnS[0]) return { state: "unchanged" };
+      var current = notesS[0].filter(function (n) { return n.id === ed.id; })[0] || null;
+      return Core.editorState({ kind: "note", openedWith: ed.opened, current: current, holder: noteHolder(ed.opened), lost: noteLostS[0] });
+    }
+
+    function openDetailsEditor() {
+      if (window.ShepherdingPresence && !claim(window.ShepherdingPresence.box.details(pid))) {
+        showToast(window.PresenceCore.holderTitle(detailsHolder()) || "Someone is editing this", "error");
+        return;
+      }
+      detailsLostS[1](false);
+      detailsOpenedS[1](JSON.parse(JSON.stringify(personS[0])));
+      editProfileS[1](Object.assign({}, personS[0].contact || {}, { birthday: personS[0].birthday || "" }));
+    }
+    function closeDetailsEditor() {
+      if (editProfileS[0]) release();
+      detailsLostS[1](false);
+      detailsOpenedS[1](null);
+      editProfileS[1](null);
+    }
+    function editDetails(patch) {
+      if (!touch()) detailsLostS[1](true);
+      editProfileS[1](Object.assign({}, editProfileS[0], patch));
+    }
+    function detailsState() {
+      if (!editProfileS[0] || savingOwnS[0]) return { state: "unchanged" };
+      return Core.editorState({ kind: "details", openedWith: detailsOpenedS[0], current: personS[0], holder: detailsHolder(), lost: detailsLostS[0] });
+    }
 
     function setStatus(urg, imp) {
       var cur = person.shepherdingStatus;
       var same = cur && cur.urgency === urg && cur.importance === imp;
       var next = same ? null : { urgency: urg, importance: imp };
       data.setShepherdingStatus(pid, next, cur || null, user).then(function () {
-        personS[1](Object.assign({}, person, { shepherdingStatus: next })); reloadActivity(); showToast(same ? "Status cleared" : "Status updated");
+        personS[1](Object.assign({}, person, { shepherdingStatus: next })); showToast(same ? "Status cleared" : "Status updated");
       }).catch(function () { showToast("Error updating status", "error"); });
     }
     // Move this Person along the Membership Track (ADR-0012). The stage is the
@@ -948,7 +1063,6 @@
       data.setMembership(pid, person.tags || [], previous, next, user, "profile").then(function () {
         var newTags = Core.applyMembershipTags(person.tags || [], next);
         personS[1](Object.assign({}, person, { membership: Object.assign({}, m, { stage: next.stage, inactive: next.inactive }), tags: newTags }));
-        reloadActivity();
         showToast(Core.describeMembershipChange(Core.buildMembershipChange({ previous: previous, next: next })));
       }).catch(function () { showToast("Error updating membership", "error"); });
     }
@@ -967,7 +1081,7 @@
       var hid = hiddenIdsFrom(tags);
       var shepherdingHidden = newTags.some(function (id) { return !!hid[id]; });
       data.toggleShepherdingTag(pid, tagId, tagName(tagId), !has, shepherdingHidden, user, "profile").then(function () {
-        personS[1](Object.assign({}, person, { tags: newTags, shepherdingHidden: shepherdingHidden })); reloadActivity();
+        personS[1](Object.assign({}, person, { tags: newTags, shepherdingHidden: shepherdingHidden }));
       }).catch(function () { showToast("Error updating tags", "error"); });
     }
     function createTag() {
@@ -981,7 +1095,7 @@
         var hid = hiddenIdsFrom(tags.concat([tag]));
         var shepherdingHidden = newTags.some(function (id) { return !!hid[id]; });
         data.toggleShepherdingTag(pid, tag.id, tag.name, true, shepherdingHidden, user, "profile").then(function () {
-          personS[1](Object.assign({}, person, { tags: newTags })); reloadActivity();
+          personS[1](Object.assign({}, person, { tags: newTags }));
         });
       }).catch(function () { showToast("Error creating tag", "error"); });
     }
@@ -989,10 +1103,13 @@
       var ed = editorS[0]; if (!ed) return;
       var body = ed.body || "";
       if (!body.trim()) return;
+      if (ed.id && !touch()) { noteLostS[1](true); return; }
+      if (noteState().state !== "unchanged") return;
+      savingOwnS[1](true);
       var payload = { type: ed.type, subject: (ed.subject || "").trim(), contentJson: textToTiptap(body), content: body };
       var op = ed.id ? data.updateShepherdingNote(pid, ed.id, payload, user) : data.addShepherdingNote(pid, payload, user);
-      op.then(function () { editorS[1](null); reloadNotes(); showToast(ed.id ? "Note updated" : "Note added"); })
-        .catch(function () { showToast("Error saving note", "error"); });
+      op.then(function () { savingOwnS[1](false); closeNoteEditor(); showToast(ed.id ? "Note updated" : "Note added"); })
+        .catch(function () { savingOwnS[1](false); showToast("Error saving note", "error"); });
     }
     function deleteNote(id) {
       if (!window.confirm("Delete this note? This cannot be undone.")) return;
@@ -1002,14 +1119,17 @@
     function saveExpl(id) {
       var draft = explEditS[0][id] || "";
       data.saveShepherdingExplanation(pid, id, draft.trim()).then(function () {
-        reloadActivity(); var n = Object.assign({}, explEditS[0]); delete n[id]; explEditS[1](n); showToast("Explanation saved");
+        var n = Object.assign({}, explEditS[0]); delete n[id]; explEditS[1](n); showToast("Explanation saved");
       }).catch(function () { showToast("Error saving explanation", "error"); });
     }
     function saveProfileDetails() {
       var ep = editProfileS[0];
-      data.updateShepherdingPersonDetails(pid, ep).then(function () {
-        personS[1](Object.assign({}, person, { contact: { email: ep.email, phone: ep.phone, address: ep.address }, birthday: ep.birthday })); editProfileS[1](null); showToast("Details saved");
-      }).catch(function () { showToast("Error saving details", "error"); });
+      if (!touch()) { detailsLostS[1](true); return; }
+      if (detailsState().state !== "unchanged") return;
+      savingOwnS[1](true);
+      data.updateShepherdingPersonDetails(pid, ep, user).then(function () {
+        personS[1](Object.assign({}, person, { contact: { email: ep.email, phone: ep.phone, address: ep.address }, birthday: ep.birthday })); savingOwnS[1](false); closeDetailsEditor(); showToast("Details saved");
+      }).catch(function () { savingOwnS[1](false); showToast("Error saving details", "error"); });
     }
 
     // ── Quick-assign (MS-104, ADR-0014) ──────────────────────────────────────
@@ -1132,6 +1252,16 @@
 
     var userKnown = props.user !== undefined;
     var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    // A face, a first name and a lock: "you can't open this" answered before
+    // it is asked.
+    function heldBadge(holder) {
+      return html`<span title=${window.PresenceCore.holderTitle(holder)} style=${{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, color: "var(--on-surface-variant)" }}>
+        <${ui.Avatar} name=${holder.name} photoUrl=${holder.photoUrl} photoCrop=${holder.photoCrop} size=${22} />
+        <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>${window.PresenceCore.holderLabel(holder)}</span>
+        ${Ic("lock", 13)}
+      </span>`;
+    }
+
     var fromLabel = (props.params && props.params.from === "dashboard") ? "Dashboard" : "People";
     var editor = editorS[0], editProfile = editProfileS[0];
 
@@ -1148,7 +1278,7 @@
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, color: "var(--on-surface-variant)" }}>Couldn't load this person.</p></${Body}></${Screen}>`;
     }
 
-    var record = Core.assemblePastoralRecord(notes, activity, {});
+    var record = Core.combineProfile({ personId: pid, personNotes: notes, careListDocs: careListsS[0], activity: activity }).record;
     var visible = collapseS[0] ? record.filter(function (e) { return e._entryKind === "note"; }) : record;
     var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isProjectedTagId(t.id); });
     var mLabel = membershipLabel(person.membership);
@@ -1170,6 +1300,10 @@
               <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", textTransform: "capitalize" }}>${person.sex || "Unknown"}</span>
               ${mLabel ? html`<span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", background: "rgba(62,97,129,0.12)", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(62,97,129,0.2)" }}>${mLabel}</span>` : null}
             </div>
+            ${othersHere().length ? html`<div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>Also here</span>
+              ${othersHere().map(function (p) { return html`<span key=${p.uid} title=${p.name}><${ui.Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${26} /></span>`; })}
+            </div>` : null}
           </div>
 
           ${drawerS[0] ? html`<${Fragment}>
@@ -1186,7 +1320,7 @@
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h2 style=${SF_H2}>Member Details</h2>
-              <button onClick=${function () { editProfileS[1](Object.assign({}, person.contact || {}, { birthday: person.birthday || "" })); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--secondary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("pencil", 15)} Edit</button>
+              ${detailsHolder() ? heldBadge(detailsHolder()) : html`<button onClick=${openDetailsEditor} style=${{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--secondary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("pencil", 15)} Edit</button>`}
             </div>
             ${details.length ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 11 }}>
               ${details.map(function (d, i) { return html`<div key=${i} style=${{ display: "flex", alignItems: "flex-start", gap: 11, color: d.tone || "var(--on-surface-variant)" }}>
@@ -1394,13 +1528,13 @@
                       <span style=${{ padding: "3px 9px", borderRadius: "var(--radius-sm)", background: "var(--secondary-container)", color: "var(--on-secondary-container)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 600 }}>${e.type}</span>
                       ${e.subject ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, color: "var(--on-surface)" }}>${e.subject}</span>` : null}
                     </div>
-                    ${e.isCareList ? null : html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
-                      <button onClick=${function () { editorS[1]({ id: e.id, type: e.type || NOTE_TYPES[0], subject: e.subject || "", body: e.content || "" }); }} aria-label="Edit note" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
+                    ${e.isCareList ? null : noteHolder(e) ? heldBadge(noteHolder(e)) : html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
+                      <button onClick=${function () { openNoteEditor(e); }} aria-label="Edit note" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
                       <button onClick=${function () { deleteNote(e.id); }} aria-label="Delete note" style=${Object.assign({}, iconBtn, { width: 30, height: 30, color: "var(--error)" })}>${Ic("trash-2", 15)}</button>
                     </div>`}
                   </div>
                   <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)", marginTop: 6 }}>${fmtEntryDate(e.createdAt)} · by ${e.authorName || "Elder"}${e.updatedAt ? " · (edited)" : ""}</div>
-                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.55, color: "var(--on-surface)", marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--outline-variant)", whiteSpace: "pre-wrap" }}>${e.content || ""}</div>
+                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.55, color: "var(--on-surface)", marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--outline-variant)", whiteSpace: "pre-wrap" }}>${e.content || (window.DocumentBodyCore ? window.DocumentBodyCore.plainText(e.contentJson) : "")}</div>
                 </div>`;
               }
               if (e._entryKind === "status_change") {
@@ -1450,34 +1584,36 @@
           </${Fragment}>`}
         </${Body}>
 
-        ${editor ? html`<${Modal} onClose=${function () { editorS[1](null); }} title=${editor.id ? "Edit Note" : "New Note"}
-          footer=${html`<${Fragment}><button onClick=${function () { editorS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveNote} style=${pill()}>${editor.id ? "Save Changes" : "Add Note"}</button></${Fragment}>`}>
+        ${editor ? html`<${Modal} onClose=${closeNoteEditor} title=${editor.id ? "Edit Note" : "New Note"}
+          footer=${html`<${Fragment}><button onClick=${closeNoteEditor} style=${pill("ghost")}>Cancel</button><button onClick=${saveNote} disabled=${noteState().state !== "unchanged"} style=${Object.assign({}, pill(), noteState().state !== "unchanged" ? { opacity: 0.4, cursor: "not-allowed" } : {})}>${editor.id ? "Save Changes" : "Add Note"}</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 14 }}>
+            ${noteState().state !== "unchanged" ? html`<div role="alert" style=${{ padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${editorWarning(noteState(), "note")}</div>` : null}
             <${Field} label="Note type">
               <div style=${{ position: "relative" }}>
-                <select value=${editor.type} onChange=${function (e) { editorS[1](Object.assign({}, editor, { type: e.target.value })); }} style=${Object.assign({}, inputStyle, { appearance: "none", WebkitAppearance: "none", paddingRight: 36, cursor: "pointer" })}>
+                <select value=${editor.type} onChange=${function (e) { editNote({ type: e.target.value }); }} style=${Object.assign({}, inputStyle, { appearance: "none", WebkitAppearance: "none", paddingRight: 36, cursor: "pointer" })}>
                   ${NOTE_TYPES.map(function (t) { return html`<option key=${t} value=${t}>${t}</option>`; })}
                 </select>
                 <span style=${{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--on-surface-variant)" }}>${Ic("chevron-down", 16)}</span>
               </div>
             </${Field}>
-            <${Field} label="Title (optional)"><input value=${editor.subject} onInput=${function (e) { editorS[1](Object.assign({}, editor, { subject: e.target.value })); }} placeholder="Brief title…" style=${inputStyle} /></${Field}>
+            <${Field} label="Title (optional)"><input value=${editor.subject} onInput=${function (e) { editNote({ subject: e.target.value }); }} placeholder="Brief title…" style=${inputStyle} /></${Field}>
             <div style=${{ display: "flex", flexDirection: "column" }}>
               <div style=${{ display: "flex", gap: 2, padding: "6px 8px", background: "var(--surface-container)", border: "1px solid var(--outline-variant)", borderBottom: "none", borderRadius: "var(--radius) var(--radius) 0 0" }}>
                 ${["bold", "italic", "underline", "list", "list-ordered", "highlighter"].map(function (ic) { return html`<span key=${ic} style=${{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-surface-variant)" }}>${Ic(ic, 16)}</span>`; })}
               </div>
-              <textarea value=${editor.body} onInput=${function (e) { editorS[1](Object.assign({}, editor, { body: e.target.value })); }} placeholder="Write the note…" rows=${6} style=${Object.assign({}, inputStyle, { borderRadius: "0 0 var(--radius) var(--radius)", resize: "vertical", lineHeight: 1.5, fontFamily: "var(--font-serif)", fontSize: 14.5 })}></textarea>
+              <textarea value=${editor.body} onInput=${function (e) { editNote({ body: e.target.value }); }} placeholder="Write the note…" rows=${6} style=${Object.assign({}, inputStyle, { borderRadius: "0 0 var(--radius) var(--radius)", resize: "vertical", lineHeight: 1.5, fontFamily: "var(--font-serif)", fontSize: 14.5 })}></textarea>
             </div>
           </div>
         </${Modal}>` : null}
 
-        ${editProfile ? html`<${Modal} onClose=${function () { editProfileS[1](null); }} title="Edit Member Details"
-          footer=${html`<${Fragment}><button onClick=${function () { editProfileS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveProfileDetails} style=${pill()}>Save</button></${Fragment}>`}>
+        ${editProfile ? html`<${Modal} onClose=${closeDetailsEditor} title="Edit Member Details"
+          footer=${html`<${Fragment}><button onClick=${closeDetailsEditor} style=${pill("ghost")}>Cancel</button><button onClick=${saveProfileDetails} disabled=${detailsState().state !== "unchanged"} style=${Object.assign({}, pill(), detailsState().state !== "unchanged" ? { opacity: 0.4, cursor: "not-allowed" } : {})}>Save</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <${Field} label="Email"><input type="email" value=${editProfile.email || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { email: e.target.value })); }} style=${inputStyle} /></${Field}>
-            <${Field} label="Phone"><input type="tel" value=${editProfile.phone || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { phone: e.target.value })); }} style=${inputStyle} /></${Field}>
-            <${Field} label="Address"><textarea rows=${2} value=${editProfile.address || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { address: e.target.value })); }} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea></${Field}>
-            <${Field} label="Birthday"><input type="date" value=${editProfile.birthday || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { birthday: e.target.value })); }} style=${inputStyle} /></${Field}>
+            ${detailsState().state !== "unchanged" ? html`<div role="alert" style=${{ padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${editorWarning(detailsState(), "person's details")}</div>` : null}
+            <${Field} label="Email"><input type="email" value=${editProfile.email || ""} onInput=${function (e) { editDetails({ email: e.target.value }); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Phone"><input type="tel" value=${editProfile.phone || ""} onInput=${function (e) { editDetails({ phone: e.target.value }); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Address"><textarea rows=${2} value=${editProfile.address || ""} onInput=${function (e) { editDetails({ address: e.target.value }); }} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea></${Field}>
+            <${Field} label="Birthday"><input type="date" value=${editProfile.birthday || ""} onInput=${function (e) { editDetails({ birthday: e.target.value }); }} style=${inputStyle} /></${Field}>
           </div>
         </${Modal}>` : null}
 
