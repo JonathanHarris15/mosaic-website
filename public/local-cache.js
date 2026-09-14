@@ -47,9 +47,9 @@
 
     // ⚠ OFF, because switching it on breaks the app inside the WebView.
     //
-    // The cache is kept in sync by a Firestore listen stream. No page here has
-    // ever used onSnapshot, so no page had ever opened one — and inside the
-    // Capacitor WebView that stream is refused:
+    // The cache is kept in sync by a Firestore listen stream. When this was
+    // written no page used onSnapshot, so no page had opened one — and inside
+    // the Capacitor WebView that stream is refused:
     //
     //   Fetch API cannot load https://firestore.googleapis.com/…/Listen/channel
     //   … due to access control checks
@@ -97,11 +97,12 @@
     // back to exactly today's behaviour — so it never rejects.
     // ⚠ THE CACHE CANNOT BE TURNED ON WITHOUT THIS.
     //
-    // Firestore's default transport is a streaming WebChannel. Nothing in this
-    // app ever opened one — no page uses onSnapshot — so no page ever needed it
-    // to work, and it never had to. Switching the cache on changes that: the
-    // cache is kept in sync by a listen stream, so the first read opens the
-    // WebChannel.
+    // Firestore's default transport is a streaming WebChannel. When the cache
+    // was first tried, nothing in this app had opened one. That is no longer
+    // true — the Order of Service and Services page listen (MS-244), both open
+    // inside the phone app, and MS-429 makes Shepherding listen too, through
+    // live-read.js, which falls back to re-reading when a stream stays silent.
+    // Switching the cache on also opens a listen stream on the first read.
     //
     // Inside the Capacitor WebView the page's origin is capacitor://localhost,
     // which that stream's CORS check rejects outright ("Fetch API cannot load …
@@ -121,7 +122,23 @@
         }
     }
 
+    // ⚠ THE UNTRIED FIX, NOW TRIED (MS-482). useFetchStreams: false moves the
+    // listen stream off the Fetch API onto XMLHttpRequest, which is the thing
+    // the WebView's refusal was of. Phone app only, and before anything else
+    // touches the handle — Firestore refuses settings after first use. Whether
+    // it works is answered on a real device (MS-485); live-read.js copes
+    // either way.
+    function configureLiveTransport(db) {
+        if (!isMobile() || !db || !db.settings) return;
+        try {
+            db.settings({ useFetchStreams: false, merge: true });
+        } catch (e) {
+            console.warn("Could not move the listen stream off fetch:", e && e.message);
+        }
+    }
+
     function enable(db) {
+        configureLiveTransport(db);
         if (!CACHE_ENABLED) return Promise.resolve(false);
         if (!isMobile() || !db || !db.enablePersistence) return Promise.resolve(false);
         if (ready) return ready;

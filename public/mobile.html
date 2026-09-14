@@ -53,6 +53,9 @@
   <!-- On-device cache + cache-first reads. Must load before data.js, which
        switches persistence on the moment it builds its Firestore handle. -->
   <script src="local-cache.js"></script>
+  <!-- Live reads that fall back to re-reading when the listen stream stays
+       silent inside the app (MS-482). -->
+  <script src="live-read.js"></script>
 
   <!-- Firebase (vendored) -->
   <script src="vendor/firebase/firebase-app-compat.js"></script>
