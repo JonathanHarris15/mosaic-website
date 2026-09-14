@@ -34,8 +34,8 @@ function entry(overrides = {}) {
         photoCrop: null,
         surface: 'order-of-service',
         pageKey: '2026-08-16',
-        dateKey: '2026-08-16',
-        fieldKey: 'liturgy.hymn1',
+        scopeKey: '2026-08-16',
+        boxKey: 'liturgy.hymn1',
         updatedAt: ts(NOW - 1000),
     }, overrides);
 }
@@ -69,7 +69,7 @@ test('your own claim never locks you out', () => {
 });
 
 test('somebody present but not in any box holds nothing', () => {
-    const idle = entry({ fieldKey: null, dateKey: null });
+    const idle = entry({ boxKey: null, scopeKey: null });
     assert.deepStrictEqual(ServicePresence.claimsByBox([idle], ME, NOW), {});
 });
 
@@ -114,7 +114,7 @@ test('timestamps in any of the shapes Firestore returns are understood', () => {
 test('everybody here is listed, whether or not they hold a box', () => {
     const people = ServicePresence.peopleHere([
         entry({ uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee' }),
-        entry({ uid: 'uid-ben', personId: 'p-ben', name: 'Ben Ross', fieldKey: null }),
+        entry({ uid: 'uid-ben', personId: 'p-ben', name: 'Ben Ross', boxKey: null }),
     ], ME, 'order-of-service', '2026-08-16', NOW);
 
     assert.deepStrictEqual(people.map(p => p.name), ['Ann Lee', 'Ben Ross']);
@@ -199,7 +199,7 @@ test('arriving on a page announces you before you touch anything', () => {
     // out from under them.
     const store = fakeStore();
     assert.strictEqual(store.writes.length, 1);
-    assert.strictEqual(store.writes[0].fieldKey, null);
+    assert.strictEqual(store.writes[0].boxKey, null);
     assert.strictEqual(store.writes[0].name, 'Bill Smith');
     PresenceStore.stop();
 });
@@ -210,8 +210,8 @@ test('taking a free box succeeds and records the claim', () => {
 
     assert.strictEqual(PresenceStore.claim('2026-08-16', 'liturgy.hymn1'), true);
     const last = store.writes[store.writes.length - 1];
-    assert.strictEqual(last.fieldKey, 'liturgy.hymn1');
-    assert.strictEqual(last.dateKey, '2026-08-16');
+    assert.strictEqual(last.boxKey, 'liturgy.hymn1');
+    assert.strictEqual(last.scopeKey, '2026-08-16');
     PresenceStore.stop();
 });
 
@@ -241,8 +241,8 @@ test('letting go frees the box', () => {
 
     PresenceStore.release();
     const last = store.writes[store.writes.length - 1];
-    assert.strictEqual(last.fieldKey, null);
-    assert.strictEqual(last.dateKey, null);
+    assert.strictEqual(last.boxKey, null);
+    assert.strictEqual(last.scopeKey, null);
     PresenceStore.stop();
 });
 
@@ -253,7 +253,7 @@ test('the beat keeps the box you are holding', () => {
 
     store.beat();
     const last = store.writes[store.writes.length - 1];
-    assert.strictEqual(last.fieldKey, 'liturgy.hymn1',
+    assert.strictEqual(last.boxKey, 'liturgy.hymn1',
         'the beat must re-assert the claim, not drop it');
     PresenceStore.stop();
 });
@@ -265,7 +265,7 @@ test('the beat carries on when you hold nothing, so your face stays up', () => {
 
     store.beat();
     assert.ok(store.writes.length > before);
-    assert.strictEqual(store.writes[store.writes.length - 1].fieldKey, null);
+    assert.strictEqual(store.writes[store.writes.length - 1].boxKey, null);
     PresenceStore.stop();
 });
 
@@ -278,7 +278,7 @@ test('moving to another box lets the first one go', () => {
     PresenceStore.claim('2026-08-16', 'liturgy.hymn2');
 
     const last = store.writes[store.writes.length - 1];
-    assert.strictEqual(last.fieldKey, 'liturgy.hymn2');
+    assert.strictEqual(last.boxKey, 'liturgy.hymn2');
     assert.deepStrictEqual(
         Object.keys(ServicePresence.claimsByBox([
             Object.assign({}, last, { uid: ME })
@@ -429,7 +429,7 @@ test('the timers are wrapped rather than referenced', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const src = fs.readFileSync(
-        path.join(__dirname, '..', 'public', 'service-presence.js'), 'utf8');
+        path.join(__dirname, '..', 'public', 'presence-core.js'), 'utf8');
 
     assert.ok(!/deps\.setInterval \|\| setInterval;/.test(src),
         'a bare reference is called with the wrong `this` in a browser');
@@ -479,19 +479,19 @@ test('editing rights are granted before presence is started', () => {
 // be on everything tells you nothing.
 
 test('somebody on another Sunday is not here', () => {
-    const elsewhere = entry({ pageKey: '2026-08-23', dateKey: '2026-08-23' });
+    const elsewhere = entry({ pageKey: '2026-08-23', scopeKey: '2026-08-23' });
     assert.deepStrictEqual(
         ServicePresence.peopleHere([elsewhere], ME, 'order-of-service', '2026-08-16', NOW), []);
 });
 
 test('somebody on the calendar is not on your Sunday', () => {
-    const onCalendar = entry({ surface: 'calendar', pageKey: null, fieldKey: null, dateKey: null });
+    const onCalendar = entry({ surface: 'calendar', pageKey: null, boxKey: null, scopeKey: null });
     assert.deepStrictEqual(
         ServicePresence.peopleHere([onCalendar], ME, 'order-of-service', '2026-08-16', NOW), []);
 });
 
 test('somebody merely signed in elsewhere is not here', () => {
-    const stray = entry({ surface: null, pageKey: null, fieldKey: null, dateKey: null });
+    const stray = entry({ surface: null, pageKey: null, boxKey: null, scopeKey: null });
     assert.deepStrictEqual(
         ServicePresence.peopleHere([stray], ME, 'order-of-service', '2026-08-16', NOW), []);
 });
@@ -503,7 +503,7 @@ test('somebody on the same Sunday IS here', () => {
 
 test('everyone on the calendar shares one page', () => {
     // It is a single screen covering every Sunday, so it has no page key.
-    const onCalendar = entry({ surface: 'calendar', pageKey: null, fieldKey: null, dateKey: null });
+    const onCalendar = entry({ surface: 'calendar', pageKey: null, boxKey: null, scopeKey: null });
     const people = ServicePresence.peopleHere([onCalendar], ME, 'calendar', null, NOW);
     assert.strictEqual(people.length, 1);
 });
@@ -513,7 +513,7 @@ test('a lock still crosses surfaces, even though presence does not', () => {
     // Planning view must lock that hymn on the Order of Service page too.
     const fromCalendar = entry({
         surface: 'calendar', pageKey: null,
-        dateKey: '2026-08-16', fieldKey: 'liturgy.hymn1',
+        scopeKey: '2026-08-16', boxKey: 'liturgy.hymn1',
     });
     assert.ok(ServicePresence.holderOf(
         [fromCalendar], ME, '2026-08-16', 'liturgy.hymn1', NOW),
