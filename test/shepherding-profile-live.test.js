@@ -159,3 +159,38 @@ test('a Task is compared on what its editor edits', () => {
     const ticked = Object.assign({}, opened, { state: 'done', completedOn: '2026-09-19' });
     assert.strictEqual(Core.openRecordState('task', opened, ticked).state, 'changed');
 });
+
+// ── One answer for an open editor, and one way of saying it (MS-491) ─────────
+
+test('somebody else holding the box outranks what happened to the record', () => {
+    const opened = note('n1', 100, { content: 'Hi' });
+    const state = Core.editorState({
+        kind: 'note', openedWith: opened, current: null,
+        holder: { name: 'Sam Jones' },
+    });
+    assert.deepStrictEqual(state, { state: 'taken', by: 'Sam Jones' });
+});
+
+test('a box the store says was taken reads as taken even before its holder arrives', () => {
+    const opened = note('n1', 100);
+    assert.strictEqual(Core.editorState({ kind: 'note', openedWith: opened, current: opened, lost: true }).state, 'taken');
+});
+
+test('with nobody in the box, the editor reports what happened to the record', () => {
+    const opened = note('n1', 100, { content: 'Hi' });
+    assert.strictEqual(Core.editorState({ kind: 'note', openedWith: opened, current: opened }).state, 'unchanged');
+    assert.strictEqual(Core.editorState({ kind: 'note', openedWith: opened, current: null }).state, 'deleted');
+});
+
+test('the warning names who, keeps the text, and says nothing when there is nothing to say', () => {
+    assert.strictEqual(Core.editorWarning({ state: 'unchanged' }, 'note'), '');
+    const taken = Core.editorWarning({ state: 'taken', by: 'Sam Jones' }, 'note');
+    assert.match(taken, /^Sam Jones is editing this note now\./);
+    assert.match(taken, /still here/);
+    assert.match(Core.editorWarning({ state: 'changed', by: '' }, 'task'), /^Somebody changed this task/);
+    assert.match(Core.editorWarning({ state: 'deleted' }, "person's details"), /was deleted/);
+});
+
+test('an editor nobody has defined is a mistake, not a note', () => {
+    assert.throws(() => Core.openRecordState('document', { id: 'd1' }, { id: 'd1' }));
+});

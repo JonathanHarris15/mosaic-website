@@ -991,18 +991,10 @@
     function release() { if (window.ShepherdingPresence) window.ShepherdingPresence.release(); }
     function touch() { return !window.ShepherdingPresence || window.ShepherdingPresence.touch(); }
 
-    // What an editor says when the record under it moved while it was open.
-    // The typing stays on screen; only Save is refused.
-    function editorWarning(state, what) {
-      if (!state || state.state === "unchanged") return "";
-      var who = (state.by || "").trim() || "Somebody";
-      if (state.state === "taken") return who + " is editing this " + what + " now. Your text is still here, but it can't be saved over theirs.";
-      if (state.state === "changed") return who + " changed this " + what + " while you had it open. Your text is still here, but it can't be saved over theirs.";
-      return "This " + what + " was deleted while you had it open. Your text is still here.";
-    }
+    var editorWarning = Core.editorWarning;
 
     function openNoteEditor(e) {
-      if (!claim(window.ShepherdingPresence.box.note(pid, e.id))) {
+      if (window.ShepherdingPresence && !claim(window.ShepherdingPresence.box.note(pid, e.id))) {
         showToast(window.PresenceCore.holderTitle(noteHolder(e)) || "Someone is editing this", "error");
         return;
       }
@@ -1023,13 +1015,12 @@
     function noteState() {
       var ed = editorS[0];
       if (!ed || !ed.id || savingOwnS[0]) return { state: "unchanged" };
-      if (noteLostS[0]) { var h = noteHolder(ed.opened); return { state: "taken", by: h ? h.name : "" }; }
       var current = notesS[0].filter(function (n) { return n.id === ed.id; })[0] || null;
-      return Core.openRecordState("note", ed.opened, current);
+      return Core.editorState({ kind: "note", openedWith: ed.opened, current: current, holder: noteHolder(ed.opened), lost: noteLostS[0] });
     }
 
     function openDetailsEditor() {
-      if (!claim(window.ShepherdingPresence.box.details(pid))) {
+      if (window.ShepherdingPresence && !claim(window.ShepherdingPresence.box.details(pid))) {
         showToast(window.PresenceCore.holderTitle(detailsHolder()) || "Someone is editing this", "error");
         return;
       }
@@ -1049,8 +1040,7 @@
     }
     function detailsState() {
       if (!editProfileS[0] || savingOwnS[0]) return { state: "unchanged" };
-      if (detailsLostS[0]) { var h = detailsHolder(); return { state: "taken", by: h ? h.name : "" }; }
-      return Core.openRecordState("details", detailsOpenedS[0], personS[0]);
+      return Core.editorState({ kind: "details", openedWith: detailsOpenedS[0], current: personS[0], holder: detailsHolder(), lost: detailsLostS[0] });
     }
 
     function setStatus(urg, imp) {

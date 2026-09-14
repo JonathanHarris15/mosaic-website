@@ -76,7 +76,11 @@ function query(opts = {}) {
         next: null,
         error: null,
         value: opts.value || { n: 1 },
-        onSnapshot(onNext, onError) {
+        onSnapshot(optionsOrNext, next, error) {
+            const opts = typeof optionsOrNext === 'function' ? {} : optionsOrNext;
+            const onNext = typeof optionsOrNext === 'function' ? optionsOrNext : next;
+            const onError = typeof optionsOrNext === 'function' ? next : error;
+            q.options = opts;
             q.listening++;
             q.next = onNext;
             q.error = onError;
@@ -263,6 +267,51 @@ test('the setting can hold the app on a listener however long it takes', async (
     await settle();
     assert.strictEqual(q.reads, 0);
     assert.strictEqual(q.unsubscribed, 0);
+});
+
+test('what the device already had is shown, but does not count as the stream working', async () => {
+    // Presence writes its own record the moment it starts, and the listener
+    // echoes that write back before the server has said anything. Treating the
+    // echo as an answer would leave a phone whose stream never connects sitting
+    // on it, "listening", for good.
+    const { live, clock: c } = helper({ isNativeApp: () => true });
+    const q = query();
+    const seen = [];
+    live.watch(q, s => seen.push(s.data()), { fallbackEveryMs: 3000 });
+    assert.deepStrictEqual(q.options, { includeMetadataChanges: true });
+
+    q.next(Object.assign(snap({ n: 'mine' }), { metadata: { fromCache: true } }));
+    assert.deepStrictEqual(seen, [{ n: 'mine' }], 'the local copy is still handed on');
+
+    c.advance(5000);
+    await settle();
+    assert.strictEqual(q.unsubscribed, 1, 'no server answer, so the stream is given up on');
+    assert.strictEqual(live.status().mode, 'reread');
+});
+
+test('the server answering after a local copy keeps the listener', async () => {
+    const { live, clock: c } = helper({ isNativeApp: () => true });
+    const q = query();
+    live.watch(q, () => {}, { fallbackEveryMs: 3000 });
+    q.next(Object.assign(snap({ n: 1 }), { metadata: { fromCache: true } }));
+    c.advance(2000);
+    q.next(Object.assign(snap({ n: 1 }), { metadata: { fromCache: false } }));
+    c.advance(10000);
+    await settle();
+    assert.strictEqual(q.unsubscribed, 0);
+    assert.strictEqual(q.reads, 0);
+    assert.strictEqual(live.status().mode, 'live');
+});
+
+test('a listener that cannot even be opened falls back instead of throwing at the page', async () => {
+    const { live } = helper();
+    const q = query();
+    q.onSnapshot = () => { throw Object.assign(new Error('bad query'), { code: 'invalid-argument' }); };
+    const errors = [];
+    assert.doesNotThrow(() => live.watch(q, () => {}, { fallbackEveryMs: 3000, onError: e => errors.push(e.code) }));
+    await settle();
+    assert.deepStrictEqual(errors, ['invalid-argument']);
+    assert.strictEqual(q.reads, 1);
 });
 
 // ── When the listener fails outright ─────────────────────────────────────────

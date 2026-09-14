@@ -252,13 +252,36 @@
     //   { state: 'deleted' }              — it is gone
     // A brand-new record (openedWith null) has nothing under it to change.
     function openRecordState(kind, openedWith, current) {
+        const fields = EDITED_FIELDS[kind];
+        if (!fields) throw new Error('No editor is known for a ' + kind);
         if (!openedWith) return { state: 'unchanged' };
         if (!current) return { state: 'deleted' };
-        const fields = EDITED_FIELDS[kind] || EDITED_FIELDS.note;
         if (JSON.stringify(fields(openedWith)) === JSON.stringify(fields(current))) {
             return { state: 'unchanged' };
         }
         return { state: 'changed', by: current.updatedByName || current.authorName || '' };
+    }
+
+    // Everything an open editor needs to know, in one answer (MS-491):
+    //   { kind, openedWith, current, holder, lost }
+    // `holder` is whoever else holds this editor's box now; `lost` is the store
+    // saying the box was taken from us. Either way it is 'taken', and that
+    // outranks what happened to the record: the other elder is in it.
+    function editorState(input) {
+        const i = input || {};
+        if (i.holder || i.lost) return { state: 'taken', by: (i.holder && i.holder.name) || '' };
+        return openRecordState(i.kind, i.openedWith, i.current);
+    }
+
+    // What an editor says about that, in words; empty when there is nothing to
+    // say. The typing stays on screen in every case, and only Save is refused.
+    function editorWarning(state, what) {
+        if (!state || state.state === 'unchanged') return '';
+        const who = String(state.by || '').trim() || 'Somebody';
+        const keep = " What you typed is still here to copy, but it can't be saved over theirs.";
+        if (state.state === 'taken') return who + ' is editing this ' + what + ' now.' + keep;
+        if (state.state === 'changed') return who + ' changed this ' + what + ' while you had it open.' + keep;
+        return 'This ' + what + ' was deleted while you had it open. What you typed is still here to copy.';
     }
 
     // One arrival, combined:
@@ -282,7 +305,10 @@
             const current = i.editor.kind === 'note' && openedWith
                 ? notes.find(n => n.id === openedWith.id) || null
                 : null;
-            editor = openRecordState(i.editor.kind, openedWith, current);
+            editor = editorState({
+                kind: i.editor.kind, openedWith, current,
+                holder: i.editor.holder, lost: i.editor.lost,
+            });
         }
         return { notes, record, editor };
     }
@@ -811,6 +837,8 @@
         collapsePastoralRecord,
         careListNotesFor,
         openRecordState,
+        editorState,
+        editorWarning,
         combineProfile,
         deriveTagHolds,
         formatHoldDuration,

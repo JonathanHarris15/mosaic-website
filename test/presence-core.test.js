@@ -266,6 +266,35 @@ test('coming back to a box somebody else took is refused', () => {
     s.store.stop();
 });
 
+test('a box somebody took while this tab was asleep is not typed into, or beaten back', () => {
+    // Their clock said the hold had gone quiet before ours did. They took it.
+    const s = shepherdStore();
+    s.fake.deliver([]);
+    s.store.claim('person:p-bob', 'note:n1');
+    s.advance(20000);
+    s.fake.deliver([entry({ updatedAt: ts(NOW + 20000), activeAt: ts(NOW + 20000) })]);
+    const writes = s.fake.writes.length;
+
+    assert.strictEqual(s.store.touch(), false, 'the keystroke must be refused');
+    assert.strictEqual(s.store.isHolding('person:p-bob', 'note:n1'), false);
+    assert.strictEqual(s.last().record.boxKey, null, 'our claim is withdrawn, not left over theirs');
+    assert.strictEqual(s.fake.writes.length, writes + 1);
+    s.store.stop();
+});
+
+test('a heartbeat does not re-assert a box somebody else now holds', () => {
+    const s = shepherdStore();
+    s.fake.deliver([]);
+    s.store.claim('person:p-bob', 'note:n1');
+    s.advance(20000);
+    s.store.touch();
+    s.fake.deliver([entry({ updatedAt: ts(NOW + 20000), activeAt: ts(NOW + 20000) })]);
+    s.beat();
+    assert.strictEqual(s.last().record.boxKey, null);
+    assert.strictEqual(s.store.isHolding('person:p-bob', 'note:n1'), false);
+    s.store.stop();
+});
+
 test('typing in something that was never a box is always fine', () => {
     const s = shepherdStore();
     s.fake.deliver([]);

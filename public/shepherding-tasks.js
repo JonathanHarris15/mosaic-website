@@ -284,8 +284,11 @@ document.addEventListener('alpine:init', () => {
         // and while it is not running every Task opens.
         startPresence(user) {
             try {
-                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
-                setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS);
+                // Both kept, so a profile tab that is taken down stops listening
+                // and stops ticking rather than piling up one of each per visit.
+                _taskWatches.push(ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; }));
+                const ticker = setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS);
+                _taskWatches.push(() => clearInterval(ticker));
                 if (this.embedded) return;
                 const db = firebase.firestore();
                 MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
@@ -297,7 +300,7 @@ document.addEventListener('alpine:init', () => {
                         pageKey: null,
                         stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
                     });
-                });
+                }).catch(e => console.warn('Presence could not work out who you are:', e));
                 const leave = () => ShepherdingPresence.leave();
                 window.addEventListener('beforeunload', leave);
                 window.addEventListener('pagehide', leave);
@@ -338,23 +341,15 @@ document.addEventListener('alpine:init', () => {
 
         get taskEditorState() {
             if (!this.showModal || !this.editingId || this.saving) return { state: 'unchanged' };
-            if (this.taskLost) {
-                const holder = this.taskHolder(this.taskOpenedWith);
-                return { state: 'taken', by: holder ? holder.name : '' };
-            }
-            return ShepherdingCore.openRecordState('task', this.taskOpenedWith, this.taskUnderEditor);
+            return ShepherdingCore.editorState({
+                kind: 'task', openedWith: this.taskOpenedWith, current: this.taskUnderEditor,
+                holder: this.taskHolder(this.taskOpenedWith), lost: this.taskLost,
+            });
         },
 
         get taskSaveBlocked() { return this.taskEditorState.state !== 'unchanged'; },
 
-        get taskWarning() {
-            const state = this.taskEditorState;
-            if (state.state === 'unchanged') return '';
-            const who = (state.by || '').trim() || 'Somebody';
-            if (state.state === 'taken') return who + ' is editing this task now. What you typed is still here to copy, but it can\'t be saved over theirs.';
-            if (state.state === 'changed') return who + ' changed this task while you had it open. What you typed is still here to copy, but it can\'t be saved over theirs.';
-            return 'This task was deleted while you had it open. What you typed is still here to copy.';
-        },
+        get taskWarning() { return ShepherdingCore.editorWarning(this.taskEditorState, 'task'); },
 
         // ── The three lists ──────────────────────────────────────────────────
 

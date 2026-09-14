@@ -213,7 +213,6 @@ var PresenceCore = (function () {
         SHEPHERDING_IDLE_MS: SHEPHERDING_IDLE_MS,
         shepherdingBox: shepherdingBox,
         holdKey: holdKey,
-        boxKey: holdKey,
         isStale: isStale,
         isIdle: isIdle,
         isLiveClaim: isLiveClaim,
@@ -337,7 +336,10 @@ function createPresenceStore(config) {
         // keep working when the phone falls back to re-reading.
         var watch = deps.watch || liveReadWatch();
         state.unsubscribe = watch
-            ? watch(ref, onNext, { fallbackEveryMs: 3000, onError: onError })
+            ? watch(ref, onNext, {
+                fallbackEveryMs: (typeof MosaicLiveRead !== 'undefined' && MosaicLiveRead.PERSON_EVERY_MS) || 3000,
+                onError: onError
+            })
             : ref.onSnapshot(onNext, onError);
 
         // The beat runs the whole time the page is open, not only while a box
@@ -347,15 +349,32 @@ function createPresenceStore(config) {
         write(null, null, IDLE_MS ? null : undefined);
     }
 
+    // Give up the box this store holds, remembering it so a keystroke can ask
+    // for it back. The page is told, so it can redraw.
+    function letGo() {
+        state.idleReleased = { scopeKey: state.scopeKey, boxKey: state.boxKey };
+        state.scopeKey = null;
+        state.boxKey = null;
+        state.typedSinceBeat = false;
+        write(null, null, null);
+        state.onChange(state.entries);
+    }
+
+    // ⚠ WITH AN IDLE RULE, READERS AND THE HOLDER CAN DISAGREE. A reader
+    // decides a hold has gone quiet by its own clock; this store decides by
+    // its own, and a tab asleep in a bag fires its timers late. So another
+    // elder can take the box a moment before this store notices it went quiet.
+    // When that has happened, this store must not beat its old claim back over
+    // theirs, and must not let a keystroke through as though it still held it.
+    function takenFromUs() {
+        return !!(IDLE_MS && state.boxKey && holder(state.scopeKey, state.boxKey));
+    }
+
     function beat() {
         if (!state.started) return;
-        if (IDLE_MS && state.boxKey && (state.now() - state.lastTouch) >= IDLE_MS) {
-            state.idleReleased = { scopeKey: state.scopeKey, boxKey: state.boxKey };
-            state.scopeKey = null;
-            state.boxKey = null;
-            state.typedSinceBeat = false;
-            write(null, null, null);
-            state.onChange(state.entries);
+        if (IDLE_MS && state.boxKey &&
+            ((state.now() - state.lastTouch) >= IDLE_MS || takenFromUs())) {
+            letGo();
             return;
         }
         var activeAt;
@@ -403,6 +422,10 @@ function createPresenceStore(config) {
         if (!state.started) return true;
         state.lastTouch = state.now();
         if (state.boxKey) {
+            if (takenFromUs()) {
+                letGo();
+                return false;
+            }
             state.typedSinceBeat = true;
             return true;
         }

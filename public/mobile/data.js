@@ -233,38 +233,38 @@
     return get(db.collection("people")).then(peopleFromSnap);
   }
   function peopleFromSnap(snap) {
-      var out = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        var name = d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "(no name)";
-        out.push({
-          id: doc.id,
-          name: name,
-          // sex seats a Person in a Family (husband/wife) and genders the Family
-          // role labels — the quick-assign card on the profile needs it.
-          sex: d.sex || null,
-          role: d.role || d.title || "",
-          status: d.status || "member",
-          membership: d.membership || null,
-          email: d.email || (d.contact && d.contact.email) || "",
-          phone: d.phone || d.phoneNumber || (d.contact && d.contact.phone) || "",
-          address: (d.contact && d.contact.address) || d.address || "",
-          // Directory Photo (ADR-0029) and its framing, so the phone's avatars
-          // show the same picture, positioned the same way, as the web.
-          photoUrl: d.photoUrl || null,
-          photoCrop: d.photoCrop || null,
-          birthday: d.birthday || "",
-          tags: Array.isArray(d.tags) ? d.tags : [],
-          involvements: typeof d.involvements === "number" ? d.involvements : 0,
-          lastPrayed: d.lastPrayed || d.lastPrayedFor || null,
-          shepherding: d.shepherding || (d.urgency ? { urgency: d.urgency, importance: d.importance } : null),
-          // Shepherding visibility (mirrors desktop): people carrying a hidePeople
-          // tag are flagged hidden and suppressed from the directory for non-admins.
-          shepherdingHidden: !!d.shepherdingHidden,
-        });
+    var out = [];
+    snap.forEach(function (doc) {
+      var d = doc.data() || {};
+      var name = d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "(no name)";
+      out.push({
+        id: doc.id,
+        name: name,
+        // sex seats a Person in a Family (husband/wife) and genders the Family
+        // role labels — the quick-assign card on the profile needs it.
+        sex: d.sex || null,
+        role: d.role || d.title || "",
+        status: d.status || "member",
+        membership: d.membership || null,
+        email: d.email || (d.contact && d.contact.email) || "",
+        phone: d.phone || d.phoneNumber || (d.contact && d.contact.phone) || "",
+        address: (d.contact && d.contact.address) || d.address || "",
+        // Directory Photo (ADR-0029) and its framing, so the phone's avatars
+        // show the same picture, positioned the same way, as the web.
+        photoUrl: d.photoUrl || null,
+        photoCrop: d.photoCrop || null,
+        birthday: d.birthday || "",
+        tags: Array.isArray(d.tags) ? d.tags : [],
+        involvements: typeof d.involvements === "number" ? d.involvements : 0,
+        lastPrayed: d.lastPrayed || d.lastPrayedFor || null,
+        shepherding: d.shepherding || (d.urgency ? { urgency: d.urgency, importance: d.importance } : null),
+        // Shepherding visibility (mirrors desktop): people carrying a hidePeople
+        // tag are flagged hidden and suppressed from the directory for non-admins.
+        shepherdingHidden: !!d.shepherdingHidden,
       });
-      out.sort(function (a, b) { return a.name.localeCompare(b.name); });
-      return out;
+    });
+    out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return out;
   }
 
   // ⚠ A SERVICE IS KEYED BY ITS DATE AND HAS NO DATE FIELD. Every document id

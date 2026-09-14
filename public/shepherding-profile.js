@@ -295,6 +295,8 @@ document.addEventListener('alpine:init', () => {
         // was taken while it was open.
         detailsOpenedWith: null,
         detailsLost: false,
+        // Your name as the church knows it, once presence has resolved it.
+        myName: '',
 
         showEditProfileModal: false,
         selectedPerson: null,
@@ -501,7 +503,12 @@ document.addEventListener('alpine:init', () => {
                 personNotes: this.personNotes,
                 careListDocs: this.careListDocs,
                 activity: this.activity,
-                editor: this.showNoteEditor ? { kind: 'note', openedWith: this.editingNote } : null,
+                editor: this.showNoteEditor ? {
+                    kind: 'note',
+                    openedWith: this.editingNote,
+                    holder: this.editingNote ? this.noteHolder(this.editingNote) : null,
+                    lost: this.noteLost,
+                } : null,
             });
         },
 
@@ -518,6 +525,8 @@ document.addEventListener('alpine:init', () => {
             try {
                 ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
                 MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    // Your name as the church knows it, for "Sam changed this".
+                    if (identity && identity.name) this.myName = identity.name;
                     ShepherdingPresence.start({
                         db,
                         uid: user.uid,
@@ -526,7 +535,7 @@ document.addEventListener('alpine:init', () => {
                         pageKey: this.personId,
                         stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
                     });
-                });
+                }).catch(e => console.warn('Presence could not work out who you are:', e));
                 setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS);
                 // leave(), not release(): release writes a fresh timestamp and
                 // would leave you looking present for half a minute after going.
@@ -566,16 +575,7 @@ document.addEventListener('alpine:init', () => {
         holderLabel(holder) { return PresenceCore.holderLabel(holder); },
         holderTitle(holder) { return PresenceCore.holderTitle(holder); },
 
-        // What an editor has to say when the record under it moved while it was
-        // open — its box taken after you went quiet, somebody else's save, or
-        // a deletion. Your text stays on screen; only Save is refused.
-        editorWarning(state, what) {
-            if (!state || state.state === 'unchanged') return '';
-            const who = (state.by || '').trim() || 'Somebody';
-            if (state.state === 'taken') return who + ' is editing this ' + what + ' now. Your text is still here to copy, but it can\'t be saved over theirs.';
-            if (state.state === 'changed') return who + ' changed this ' + what + ' while you had it open. Your text is still here to copy, but it can\'t be saved over theirs.';
-            return 'This ' + what + ' was deleted while you had it open. Your text is still here to copy.';
-        },
+        editorWarning(state, what) { return ShepherdingCore.editorWarning(state, what); },
 
         // Every keystroke in an open editor. False back from the store means
         // somebody took the box while you were away.
@@ -589,10 +589,6 @@ document.addEventListener('alpine:init', () => {
 
         get noteEditorState() {
             if (!this.showNoteEditor || !this.editingNote || this.savingNote) return { state: 'unchanged' };
-            if (this.noteLost) {
-                const holder = this.noteHolder(this.editingNote);
-                return { state: 'taken', by: holder ? holder.name : '' };
-            }
             return this.combined.editor || { state: 'unchanged' };
         },
 
@@ -600,11 +596,10 @@ document.addEventListener('alpine:init', () => {
 
         get detailsEditorState() {
             if (!this.showEditProfileModal || this.isSubmitting) return { state: 'unchanged' };
-            if (this.detailsLost) {
-                const holder = this.detailsHolder;
-                return { state: 'taken', by: holder ? holder.name : '' };
-            }
-            return ShepherdingCore.openRecordState('details', this.detailsOpenedWith, this.person);
+            return ShepherdingCore.editorState({
+                kind: 'details', openedWith: this.detailsOpenedWith, current: this.person,
+                holder: this.detailsHolder, lost: this.detailsLost,
+            });
         },
 
         get detailsSaveBlocked() { return this.detailsEditorState.state !== 'unchanged'; },
@@ -957,7 +952,7 @@ document.addEventListener('alpine:init', () => {
                         ...payload,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                         updatedBy: this.currentUser && this.currentUser.uid,
-                        updatedByName: this.currentUserName,
+                        updatedByName: this.myName || this.currentUserName,
                     });
                     this.showToast('Note updated');
                 } else {
@@ -1179,7 +1174,7 @@ document.addEventListener('alpine:init', () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     // Who saved it, so another elder with the details open can
                     // be told by name that they changed (MS-490).
-                    updatedByName: this.currentUserName,
+                    updatedByName: this.myName || this.currentUserName,
                 };
 
                 await personRef.update(updates);

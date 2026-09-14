@@ -106,10 +106,13 @@
             var inFlight = false;
             var lastSeen = null;
 
+            // An arrival that says nothing new is not handed on. Re-reading every
+            // three seconds must not redraw the page every three seconds, and a
+            // listener told about metadata alone has nothing to redraw either.
             function deliver(snap) {
                 if (stopped) return;
                 var sig = signatureOf(snap);
-                if (polling && sig === lastSeen) return;
+                if (sig === lastSeen) return;
                 lastSeen = sig;
                 onNext(snap);
             }
@@ -153,24 +156,41 @@
                 readOnce();
             }
 
+            function listenerFailed(e) {
+                if (stopped) return;
+                onError(e);
+                // Refused is refused. Re-reading would only be refused again.
+                if (e && e.code === "permission-denied") return;
+                startPolling();
+            }
+
             if (chosen === "reread") {
                 startPolling();
             } else {
-                unsubscribe = ref.onSnapshot(
-                    function (snap) {
-                        if (waitTimer) { clearT(waitTimer); waitTimer = null; }
-                        report("live");
-                        deliver(snap);
-                    },
-                    function (e) {
-                        if (stopped) return;
-                        onError(e);
-                        // Refused is refused. Re-reading would only be refused again.
-                        if (e && e.code === "permission-denied") return;
-                        startPolling();
-                    }
-                );
-                if (native && chosen === "auto") {
+                // ⚠ ONLY THE SERVER'S ANSWER COUNTS AS AN ANSWER. A listener also
+                // fires with what this device already has — our own write that has
+                // not reached the server, say, which is exactly what presence does
+                // the moment it starts. That is handed on, but it is not proof the
+                // stream works: a phone whose stream never connects would sit on
+                // it, "listening", forever. includeMetadataChanges is what tells
+                // us when the server's answer does arrive.
+                try {
+                    unsubscribe = ref.onSnapshot(
+                        { includeMetadataChanges: true },
+                        function (snap) {
+                            var fromServer = !(snap && snap.metadata && snap.metadata.fromCache);
+                            if (fromServer) {
+                                if (waitTimer) { clearT(waitTimer); waitTimer = null; }
+                                report("live");
+                            }
+                            deliver(snap);
+                        },
+                        listenerFailed
+                    );
+                } catch (e) {
+                    listenerFailed(e);
+                }
+                if (native && chosen === "auto" && !polling) {
                     waitTimer = setT(function () { waitTimer = null; startPolling(); }, WAIT_MS);
                 }
             }

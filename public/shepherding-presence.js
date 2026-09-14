@@ -66,8 +66,6 @@ var ShepherdingPresence = (function () {
 
     function claimBox(box) { return store.claim(box.scopeKey, box.boxKey); }
 
-    function isRunning() { return !!store._state.started; }
-
     return {
         start: start,
         stop: function () { store.stop(); tell([]); },
@@ -80,7 +78,6 @@ var ShepherdingPresence = (function () {
         holder: store.holder,
         here: store.here,
         isHolding: store.isHolding,
-        isRunning: isRunning,
         holderIn: holderIn,
         box: Core.shepherdingBox
     };
