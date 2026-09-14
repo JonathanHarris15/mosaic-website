@@ -69,6 +69,9 @@
   <!-- Shepherding Status value model + Tag-Hold logic (single source of truth,
        shared with the desktop pages). Used by the native Shepherd Dashboard. -->
   <script src="shepherding-core.js"></script>
+  <!-- What a Note Body says, in words — so a Care List cell, which carries only
+       rich text, reads on the phone profile as it does on the web. -->
+  <script src="document-body-core.js"></script>
   <!-- The Task model (MS-79). The Shepherd screen's panel asks it which Tasks
        belong there rather than deciding itself, so the phone and the desktop
        dashboard cannot disagree. events-occurrence-core.js first: tasks-core.js

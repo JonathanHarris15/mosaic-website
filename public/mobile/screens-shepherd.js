@@ -894,6 +894,7 @@
     var pid = (props.params && props.params.id) || null;
     var loadingS = useState(true), errS = useState(false);
     var personS = useState(null), notesS = useState([]), activityS = useState([]), tagsS = useState([]);
+    var careListsS = useState([]); // Care Lists, for the cells about this person
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
@@ -928,6 +929,7 @@
         }, function () { errS[1](true); loadingS[1](false); }),
         data.watchShepherdingNotes(pid, notesS[1]),
         data.watchShepherdingActivity(pid, activityS[1]),
+        data.watchCareLists(careListsS[1]),
         data.watchShepherdingTags(tagsS[1]),
         data.watchFamilies(familiesS[1]),
         data.watchPeople(rosterS[1]),
@@ -1276,7 +1278,7 @@
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, color: "var(--on-surface-variant)" }}>Couldn't load this person.</p></${Body}></${Screen}>`;
     }
 
-    var record = Core.combineProfile({ personId: pid, personNotes: notes, activity: activity }).record;
+    var record = Core.combineProfile({ personId: pid, personNotes: notes, careListDocs: careListsS[0], activity: activity }).record;
     var visible = collapseS[0] ? record.filter(function (e) { return e._entryKind === "note"; }) : record;
     var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isProjectedTagId(t.id); });
     var mLabel = membershipLabel(person.membership);
@@ -1532,7 +1534,7 @@
                     </div>`}
                   </div>
                   <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)", marginTop: 6 }}>${fmtEntryDate(e.createdAt)} · by ${e.authorName || "Elder"}${e.updatedAt ? " · (edited)" : ""}</div>
-                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.55, color: "var(--on-surface)", marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--outline-variant)", whiteSpace: "pre-wrap" }}>${e.content || ""}</div>
+                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.55, color: "var(--on-surface)", marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--outline-variant)", whiteSpace: "pre-wrap" }}>${e.content || (window.DocumentBodyCore ? window.DocumentBodyCore.plainText(e.contentJson) : "")}</div>
                 </div>`;
               }
               if (e._entryKind === "status_change") {

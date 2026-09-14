@@ -501,6 +501,12 @@
     return watch(db.collection("people").doc(personId).collection("shepherding_activity").orderBy("createdAt", "desc"),
       liveRows, onActivity, personEvery());
   }
+  // Every Care List, for the cells about the person on screen: a filled cell
+  // shows on their profile as a read-only entry (CONTEXT.md, Care List), the
+  // same as on the web. Church-wide, so the slow pace.
+  function watchCareLists(onDocs) {
+    return watch(db.collection("elder_documents").where("docType", "==", "care-list"), liveRows, onDocs, rosterEvery());
+  }
   function watchShepherdingTags(onTags) {
     return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery());
   }
@@ -1222,6 +1228,7 @@
     watchShepherdingNotes: watchShepherdingNotes,
     watchShepherdingActivity: watchShepherdingActivity,
     watchShepherdingTags: watchShepherdingTags,
+    watchCareLists: watchCareLists,
     watchPeople: watchPeople,
     watchFamilies: watchFamilies,
     watchRelationships: watchRelationships,

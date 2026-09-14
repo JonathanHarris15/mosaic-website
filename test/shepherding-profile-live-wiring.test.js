@@ -89,7 +89,7 @@ test('a tick\'s celebration is not cut short by its own write arriving', () => {
 
 test('the phone data layer offers a watch for everything the profile draws', () => {
     const src = read('mobile/data.js');
-    ['watchPerson', 'watchShepherdingNotes', 'watchShepherdingActivity', 'watchShepherdingTags',
+    ['watchPerson', 'watchShepherdingNotes', 'watchShepherdingActivity', 'watchShepherdingTags', 'watchCareLists',
         'watchPeople', 'watchFamilies', 'watchRelationships', 'watchRelationshipTypes',
         'watchRelationshipGroups', 'watchPersonTasks'].forEach(name => {
         assert.match(src, new RegExp('function ' + name + '\\('), name + ' is not defined');
@@ -110,6 +110,8 @@ test('the phone profile screen watches, and stops every watch when it goes', () 
 test('the phone builds its feed with the same combine function as the web', () => {
     const src = read('mobile/screens-shepherd.js');
     assert.match(src, /Core\.combineProfile\(\{ personId: pid/);
+    assert.match(src, /careListDocs: careListsS\[0\]/,
+        'a Care List cell shows on the phone profile as it does on the web');
 });
 
 test('the phone Tasks tab watches', () => {
