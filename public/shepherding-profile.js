@@ -279,6 +279,23 @@ document.addEventListener('alpine:init', () => {
         noteForm: { type: 'Elder Check-in', subject: '', contentJson: null },
         editorUpdated: 0,
 
+        // ── Presence (MS-491) ───────────────────────────────────────────────
+        // Everybody's presence as it last arrived, so the page redraws when
+        // somebody opens or closes an editor. The store's own list is the truth.
+        presenceEntries: [],
+        // Bumped every heartbeat, so a hold whose holder has gone quiet or whose
+        // page died stops showing as held even when nothing new arrives.
+        presenceTick: 0,
+        // The note editor's box was taken by somebody else while it was open.
+        noteLost: false,
+        // Our own save is on its way, so our own change arriving is not
+        // "somebody changed this".
+        savingNote: false,
+        // The details as they were when the editor opened, and whether its box
+        // was taken while it was open.
+        detailsOpenedWith: null,
+        detailsLost: false,
+
         showEditProfileModal: false,
         selectedPerson: null,
         isSubmitting: false,
@@ -351,6 +368,10 @@ document.addEventListener('alpine:init', () => {
 
                 await this.watchProfile();
                 this.loading = false;
+
+                // After editing rights and after the person — and it cannot
+                // throw at this handler (ADR-0035 section 3).
+                this.startPresence(user);
             });
         },
 
@@ -485,6 +506,108 @@ document.addEventListener('alpine:init', () => {
         },
 
         get notes() { return this.combined.notes; },
+
+        // ── Presence and the Box lock (MS-491, ADR-0035, ADR-0062) ──────────
+        // The note editor, the details editor and the Task editor on this page
+        // are boxes: one elder at a time, their face on it for everyone else,
+        // and the hold lets go after a minute without typing.
+        //
+        // ⚠ PRESENCE MAY REMOVE A LOCK, NEVER AN EDITOR. Starting it cannot
+        // throw, and while it is not running every editor simply opens.
+        startPresence(user) {
+            try {
+                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
+                MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    ShepherdingPresence.start({
+                        db,
+                        uid: user.uid,
+                        identity,
+                        surface: 'shepherding-profile',
+                        pageKey: this.personId,
+                        stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                });
+                setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS);
+                // leave(), not release(): release writes a fresh timestamp and
+                // would leave you looking present for half a minute after going.
+                const leave = () => ShepherdingPresence.leave();
+                window.addEventListener('beforeunload', leave);
+                window.addEventListener('pagehide', leave);
+            } catch (e) {
+                console.warn('Presence could not start on this profile; carrying on without it:', e);
+            }
+        },
+
+        // Whoever else holds this box, or null.
+        heldBy(box) {
+            this.presenceTick; // read, so a quiet hold is redrawn as free
+            return ShepherdingPresence.holderIn(
+                this.presenceEntries, this.currentUser && this.currentUser.uid, box, Date.now());
+        },
+
+        noteHolder(entry) {
+            if (!entry || entry.isCareList) return null;
+            return this.heldBy(ShepherdingPresence.box.note(this.personId, entry.id));
+        },
+
+        get detailsHolder() {
+            return this.heldBy(ShepherdingPresence.box.details(this.personId));
+        },
+
+        // The other elders on THIS person's profile — the row of faces.
+        get othersHere() {
+            this.presenceTick;
+            if (!this.currentUser) return [];
+            return PresenceCore.peopleHere(
+                this.presenceEntries, this.currentUser.uid, 'shepherding-profile', this.personId,
+                Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS });
+        },
+
+        holderLabel(holder) { return PresenceCore.holderLabel(holder); },
+        holderTitle(holder) { return PresenceCore.holderTitle(holder); },
+
+        // What an editor has to say when the record under it moved while it was
+        // open — its box taken after you went quiet, somebody else's save, or
+        // a deletion. Your text stays on screen; only Save is refused.
+        editorWarning(state, what) {
+            if (!state || state.state === 'unchanged') return '';
+            const who = (state.by || '').trim() || 'Somebody';
+            if (state.state === 'taken') return who + ' is editing this ' + what + ' now. Your text is still here to copy, but it can\'t be saved over theirs.';
+            if (state.state === 'changed') return who + ' changed this ' + what + ' while you had it open. Your text is still here to copy, but it can\'t be saved over theirs.';
+            return 'This ' + what + ' was deleted while you had it open. Your text is still here to copy.';
+        },
+
+        // Every keystroke in an open editor. False back from the store means
+        // somebody took the box while you were away.
+        touchNote() {
+            if (this.editingNote && !ShepherdingPresence.touch()) this.noteLost = true;
+        },
+
+        touchDetails() {
+            if (this.showEditProfileModal && !ShepherdingPresence.touch()) this.detailsLost = true;
+        },
+
+        get noteEditorState() {
+            if (!this.showNoteEditor || !this.editingNote || this.savingNote) return { state: 'unchanged' };
+            if (this.noteLost) {
+                const holder = this.noteHolder(this.editingNote);
+                return { state: 'taken', by: holder ? holder.name : '' };
+            }
+            return this.combined.editor || { state: 'unchanged' };
+        },
+
+        get noteSaveBlocked() { return this.noteEditorState.state !== 'unchanged'; },
+
+        get detailsEditorState() {
+            if (!this.showEditProfileModal || this.isSubmitting) return { state: 'unchanged' };
+            if (this.detailsLost) {
+                const holder = this.detailsHolder;
+                return { state: 'taken', by: holder ? holder.name : '' };
+            }
+            return ShepherdingCore.openRecordState('details', this.detailsOpenedWith, this.person);
+        },
+
+        get detailsSaveBlocked() { return this.detailsEditorState.state !== 'unchanged'; },
 
         // ── Relationships (ADR-0012, MS-89; ADR-0013, MS-93) ─────────────────
 
@@ -674,6 +797,13 @@ document.addEventListener('alpine:init', () => {
         },
 
         openEditNote(note) {
+            // A note somebody else has open does not open (ADR-0035).
+            const box = ShepherdingPresence.box.note(this.personId, note.id);
+            if (!ShepherdingPresence.claimBox(box)) {
+                this.showToast(this.holderTitle(this.noteHolder(note)) || 'Someone is editing this', 'error');
+                return;
+            }
+            this.noteLost = false;
             this.editingNote = note;
             this.noteForm = {
                 type: note.type || 'Elder Check-in',
@@ -685,6 +815,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         closeEditor() {
+            if (this.editingNote) ShepherdingPresence.release();
+            this.noteLost = false;
             this.showNoteEditor = false;
             this.editingNote = null;
             if (_noteEditor) {
@@ -755,6 +887,7 @@ document.addEventListener('alpine:init', () => {
                 ],
                 content: content || '',
                 onTransaction() { self.editorUpdated++; },
+                onUpdate() { self.touchNote(); },
             });
         },
 
@@ -803,6 +936,12 @@ document.addEventListener('alpine:init', () => {
             const contentText = _noteEditor.getText().trim();
             if (!contentText) return;
 
+            // Never over somebody else's work. The warning above Save already
+            // says why; the text stays in the editor.
+            this.touchNote();
+            if (this.noteSaveBlocked) return;
+
+            this.savingNote = true;
             try {
                 const notesRef = db.collection('people').doc(this.personId)
                     .collection('shepherding_notes');
@@ -835,6 +974,8 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Error saving note:', e);
                 this.showToast('Error saving note', 'error');
+            } finally {
+                this.savingNote = false;
             }
         },
 
@@ -1003,13 +1144,28 @@ document.addEventListener('alpine:init', () => {
         // ── Profile Editing ──────────────────────────────────────────────────
 
         openEditProfile() {
+            if (!ShepherdingPresence.claimBox(ShepherdingPresence.box.details(this.personId))) {
+                this.showToast(this.holderTitle(this.detailsHolder) || 'Someone is editing this', 'error');
+                return;
+            }
+            this.detailsLost = false;
+            this.detailsOpenedWith = JSON.parse(JSON.stringify(this.person));
             this.selectedPerson = JSON.parse(JSON.stringify(this.person));
             if (!this.selectedPerson.contact) this.selectedPerson.contact = {};
             this.showEditProfileModal = true;
         },
 
+        closeEditProfile() {
+            if (this.showEditProfileModal) ShepherdingPresence.release();
+            this.showEditProfileModal = false;
+            this.detailsLost = false;
+            this.detailsOpenedWith = null;
+        },
+
         async saveProfile() {
             if (!this.selectedPerson) return;
+            this.touchDetails();
+            if (this.detailsSaveBlocked) return;
             this.isSubmitting = true;
             try {
                 const personRef = db.collection('people').doc(this.personId);
@@ -1028,7 +1184,7 @@ document.addEventListener('alpine:init', () => {
 
                 await personRef.update(updates);
                 this.person = { ...this.person, ...this.selectedPerson };
-                this.showEditProfileModal = false;
+                this.closeEditProfile();
                 this.showToast('Profile updated');
             } catch (e) {
                 console.error('Error updating profile:', e);

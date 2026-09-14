@@ -94,6 +94,16 @@ document.addEventListener('alpine:init', () => {
         toast: '',
         bodyEditor: null,
 
+        // ── Presence (MS-491) ───────────────────────────────────────────────
+        // A Task editor is a box: a Task held on the profile is held here, and
+        // the other way round, because the box names the Task, not the page.
+        presenceEntries: [],
+        presenceTick: 0,
+        // The editor's box was taken by somebody else while it was open.
+        taskLost: false,
+        // The row as it was when the editor opened.
+        taskOpenedWith: null,
+
         form: {
             title: '', dueDate: '', dueTime: '', assigneeIds: [], aboutPersonId: '',
             repeats: false, freq: 'monthly', endsKind: 'never', endsDate: '', endsCount: 12,
@@ -132,6 +142,7 @@ document.addEventListener('alpine:init', () => {
                     this.currentPersonId = (userData && userData.personId) || null;
 
                     await this.watchTasks();
+                    this.startPresence(user);
                 } catch (e) {
                     console.error('Loading tasks:', e);
                     this.say('Could not load the tasks.');
@@ -261,6 +272,88 @@ document.addEventListener('alpine:init', () => {
         // A profile tab that is closed stops listening.
         destroy() {
             stopTaskWatches();
+        },
+
+        // ── Presence and the Box lock (MS-491, ADR-0035, ADR-0062) ──────────
+        //
+        // One store per page (shepherding-presence.js). On a profile, the page
+        // has started it already and this tab only listens; on its own page,
+        // this component starts it.
+        //
+        // ⚠ PRESENCE MAY REMOVE A LOCK, NEVER AN EDITOR. It cannot throw here,
+        // and while it is not running every Task opens.
+        startPresence(user) {
+            try {
+                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
+                setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS);
+                if (this.embedded) return;
+                const db = firebase.firestore();
+                MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    ShepherdingPresence.start({
+                        db,
+                        uid: user.uid,
+                        identity,
+                        surface: 'shepherding-tasks',
+                        pageKey: null,
+                        stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                });
+                const leave = () => ShepherdingPresence.leave();
+                window.addEventListener('beforeunload', leave);
+                window.addEventListener('pagehide', leave);
+            } catch (e) {
+                console.warn('Presence could not start for Tasks; carrying on without it:', e);
+            }
+        },
+
+        // A repeat is one commitment, so its box is the series whichever date
+        // was opened.
+        taskBox(task) {
+            return ShepherdingPresence.box.task(task.seriesId || task.id);
+        },
+
+        taskHolder(task) {
+            this.presenceTick; // read, so a quiet hold is redrawn as free
+            if (!task || !this.currentUser) return null;
+            return ShepherdingPresence.holderIn(
+                this.presenceEntries, this.currentUser.uid, this.taskBox(task), Date.now());
+        },
+
+        holderLabel(holder) { return PresenceCore.holderLabel(holder); },
+        holderTitle(holder) { return PresenceCore.holderTitle(holder); },
+
+        // Every keystroke and change in an open editor.
+        touchTask() {
+            if (this.showModal && this.editingId && !ShepherdingPresence.touch()) this.taskLost = true;
+        },
+
+        // The row the editor was opened on, as it is now — or null if it is gone.
+        get taskUnderEditor() {
+            if (!this.taskOpenedWith) return null;
+            const opened = this.taskOpenedWith;
+            return this.tasks.find(t => opened.seriesId
+                ? t.seriesId === opened.seriesId && t.dueDate === opened.dueDate
+                : !t.seriesId && t.id === opened.id) || null;
+        },
+
+        get taskEditorState() {
+            if (!this.showModal || !this.editingId || this.saving) return { state: 'unchanged' };
+            if (this.taskLost) {
+                const holder = this.taskHolder(this.taskOpenedWith);
+                return { state: 'taken', by: holder ? holder.name : '' };
+            }
+            return ShepherdingCore.openRecordState('task', this.taskOpenedWith, this.taskUnderEditor);
+        },
+
+        get taskSaveBlocked() { return this.taskEditorState.state !== 'unchanged'; },
+
+        get taskWarning() {
+            const state = this.taskEditorState;
+            if (state.state === 'unchanged') return '';
+            const who = (state.by || '').trim() || 'Somebody';
+            if (state.state === 'taken') return who + ' is editing this task now. What you typed is still here to copy, but it can\'t be saved over theirs.';
+            if (state.state === 'changed') return who + ' changed this task while you had it open. What you typed is still here to copy, but it can\'t be saved over theirs.';
+            return 'This task was deleted while you had it open. What you typed is still here to copy.';
         },
 
         // ── The three lists ──────────────────────────────────────────────────
@@ -399,6 +492,13 @@ document.addEventListener('alpine:init', () => {
         },
 
         openEdit(task) {
+            // A Task somebody else has open does not open (ADR-0035).
+            if (!ShepherdingPresence.claimBox(this.taskBox(task))) {
+                this.say(this.holderTitle(this.taskHolder(task)) || 'Someone is editing this');
+                return;
+            }
+            this.taskLost = false;
+            this.taskOpenedWith = task;
             const series = this.seriesById && this.seriesById[task.seriesId];
             this.editingId = task.seriesId || task.id;
             // ⚠ A DATE IS EDITED AS A DATE. With one, the write lands on that
@@ -432,6 +532,7 @@ document.addEventListener('alpine:init', () => {
                     element: this.$refs.bodyEditor,
                     extensions: [T.StarterKit, T.Underline, T.Link.configure({ openOnClick: false, autolink: true })],
                     content: content || '',
+                    onUpdate: () => this.touchTask(),
                 });
             } catch (e) {
                 // The editor is a nicety; the Task is not. A page that will not
@@ -442,7 +543,10 @@ document.addEventListener('alpine:init', () => {
 
         closeModal() {
             if (this.bodyEditor) { this.bodyEditor.destroy(); this.bodyEditor = null; }
+            if (this.editingId) ShepherdingPresence.release();
             this.showModal = false;
+            this.taskLost = false;
+            this.taskOpenedWith = null;
         },
 
         toggleAssignee(personId) {
@@ -459,6 +563,9 @@ document.addEventListener('alpine:init', () => {
         },
 
         async save() {
+            // Never over somebody else's work; the warning says why.
+            this.touchTask();
+            if (this.taskSaveBlocked) return;
             this.saving = true;
             this.error = '';
             const body = this.bodyEditor ? this.bodyEditor.getHTML() : '';

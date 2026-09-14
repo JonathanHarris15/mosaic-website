@@ -189,10 +189,29 @@ var PresenceCore = (function () {
         return record;
     }
 
+    // The Shepherding boxes (MS-429). Each names the RECORD being edited, so a
+    // Task held on a profile is held on the Tasks page, and the assistant's
+    // server check (MS-433) builds exactly the key the page claimed. Later
+    // tickets add their own kinds beside these; the scopes do not change.
+    var shepherdingBox = {
+        note: function (personId, noteId) {
+            return { scopeKey: 'person:' + personId, boxKey: 'note:' + noteId };
+        },
+        details: function (personId) {
+            return { scopeKey: 'person:' + personId, boxKey: 'details' };
+        },
+        // A repeating Task is one commitment: its editor edits the series, so
+        // the box is the series id whichever date was opened.
+        task: function (taskId) {
+            return { scopeKey: 'task:' + taskId, boxKey: 'editor' };
+        }
+    };
+
     return {
         TTL_MS: TTL_MS,
         HEARTBEAT_MS: HEARTBEAT_MS,
         SHEPHERDING_IDLE_MS: SHEPHERDING_IDLE_MS,
+        shepherdingBox: shepherdingBox,
         holdKey: holdKey,
         boxKey: holdKey,
         isStale: isStale,

@@ -938,6 +938,121 @@
       return function () { stops.forEach(function (stop) { stop(); }); };
     }, [pid]);
 
+    // ── Presence and the Box lock (MS-491, ADR-0035, ADR-0062) ──────────────
+    // The note editor and the details editor are boxes, exactly as on the web
+    // and with the same box names, so a note open on a laptop is locked here.
+    //
+    // ⚠ PRESENCE MAY REMOVE A LOCK, NEVER AN EDITOR: it cannot throw, and while
+    // it is not running every editor opens.
+    var presenceS = useState([]), tickS = useState(0);
+    var noteLostS = useState(false), detailsLostS = useState(false), detailsOpenedS = useState(null);
+    // Our own save is on its way, so our own change arriving is not "somebody
+    // changed this".
+    var savingOwnS = useState(false);
+    var myUid = props.user && props.user.uid;
+    useEffect(function () {
+      if (!pid || !props.user || !window.ShepherdingPresence) return;
+      var SP = window.ShepherdingPresence;
+      var unsubscribe = function () {};
+      var ticker = null;
+      try {
+        unsubscribe = SP.subscribe(presenceS[1]);
+        SP.start({
+          db: data.db,
+          uid: props.user.uid,
+          identity: { id: props.user.personId || null, name: props.user.name || "", photoUrl: props.user.photoUrl || null, photoCrop: props.user.photoCrop || null },
+          surface: "shepherding-profile",
+          pageKey: pid,
+          stamp: function () { return firebase.firestore.FieldValue.serverTimestamp(); },
+        });
+        // So a quiet hold, or one whose page died, stops showing as held.
+        ticker = setInterval(function () { tickS[1](function (n) { return n + 1; }); }, window.PresenceCore.HEARTBEAT_MS);
+      } catch (e) {
+        console.warn("Presence could not start on this profile; carrying on without it:", e);
+      }
+      // leave(), not release(): gone means gone, not freshly here.
+      return function () { unsubscribe(); if (ticker) clearInterval(ticker); SP.leave(); SP.stop(); };
+    }, [pid, myUid]);
+
+    function holderOf(box) {
+      return window.ShepherdingPresence ? window.ShepherdingPresence.holderIn(presenceS[0], myUid, box, Date.now()) : null;
+    }
+    function noteHolder(e) {
+      return e && !e.isCareList && window.ShepherdingPresence ? holderOf(window.ShepherdingPresence.box.note(pid, e.id)) : null;
+    }
+    function detailsHolder() {
+      return window.ShepherdingPresence ? holderOf(window.ShepherdingPresence.box.details(pid)) : null;
+    }
+    function othersHere() {
+      if (!myUid || !window.PresenceCore) return [];
+      return window.PresenceCore.peopleHere(presenceS[0], myUid, "shepherding-profile", pid, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS });
+    }
+    function claim(box) { return !window.ShepherdingPresence || window.ShepherdingPresence.claimBox(box); }
+    function release() { if (window.ShepherdingPresence) window.ShepherdingPresence.release(); }
+    function touch() { return !window.ShepherdingPresence || window.ShepherdingPresence.touch(); }
+
+    // What an editor says when the record under it moved while it was open.
+    // The typing stays on screen; only Save is refused.
+    function editorWarning(state, what) {
+      if (!state || state.state === "unchanged") return "";
+      var who = (state.by || "").trim() || "Somebody";
+      if (state.state === "taken") return who + " is editing this " + what + " now. Your text is still here, but it can't be saved over theirs.";
+      if (state.state === "changed") return who + " changed this " + what + " while you had it open. Your text is still here, but it can't be saved over theirs.";
+      return "This " + what + " was deleted while you had it open. Your text is still here.";
+    }
+
+    function openNoteEditor(e) {
+      if (!claim(window.ShepherdingPresence.box.note(pid, e.id))) {
+        showToast(window.PresenceCore.holderTitle(noteHolder(e)) || "Someone is editing this", "error");
+        return;
+      }
+      noteLostS[1](false);
+      editorS[1]({ id: e.id, type: e.type || NOTE_TYPES[0], subject: e.subject || "", body: e.content || "", opened: e });
+    }
+    function closeNoteEditor() {
+      if (editorS[0] && editorS[0].id) release();
+      noteLostS[1](false);
+      editorS[1](null);
+    }
+    // Every keystroke in an open editor, before the change is kept.
+    function editNote(patch) {
+      var ed = editorS[0];
+      if (ed && ed.id && !touch()) noteLostS[1](true);
+      editorS[1](Object.assign({}, ed, patch));
+    }
+    function noteState() {
+      var ed = editorS[0];
+      if (!ed || !ed.id || savingOwnS[0]) return { state: "unchanged" };
+      if (noteLostS[0]) { var h = noteHolder(ed.opened); return { state: "taken", by: h ? h.name : "" }; }
+      var current = notesS[0].filter(function (n) { return n.id === ed.id; })[0] || null;
+      return Core.openRecordState("note", ed.opened, current);
+    }
+
+    function openDetailsEditor() {
+      if (!claim(window.ShepherdingPresence.box.details(pid))) {
+        showToast(window.PresenceCore.holderTitle(detailsHolder()) || "Someone is editing this", "error");
+        return;
+      }
+      detailsLostS[1](false);
+      detailsOpenedS[1](JSON.parse(JSON.stringify(personS[0])));
+      editProfileS[1](Object.assign({}, personS[0].contact || {}, { birthday: personS[0].birthday || "" }));
+    }
+    function closeDetailsEditor() {
+      if (editProfileS[0]) release();
+      detailsLostS[1](false);
+      detailsOpenedS[1](null);
+      editProfileS[1](null);
+    }
+    function editDetails(patch) {
+      if (!touch()) detailsLostS[1](true);
+      editProfileS[1](Object.assign({}, editProfileS[0], patch));
+    }
+    function detailsState() {
+      if (!editProfileS[0] || savingOwnS[0]) return { state: "unchanged" };
+      if (detailsLostS[0]) { var h = detailsHolder(); return { state: "taken", by: h ? h.name : "" }; }
+      return Core.openRecordState("details", detailsOpenedS[0], personS[0]);
+    }
+
     function setStatus(urg, imp) {
       var cur = person.shepherdingStatus;
       var same = cur && cur.urgency === urg && cur.importance === imp;
@@ -996,10 +1111,13 @@
       var ed = editorS[0]; if (!ed) return;
       var body = ed.body || "";
       if (!body.trim()) return;
+      if (ed.id && !touch()) { noteLostS[1](true); return; }
+      if (noteState().state !== "unchanged") return;
+      savingOwnS[1](true);
       var payload = { type: ed.type, subject: (ed.subject || "").trim(), contentJson: textToTiptap(body), content: body };
       var op = ed.id ? data.updateShepherdingNote(pid, ed.id, payload, user) : data.addShepherdingNote(pid, payload, user);
-      op.then(function () { editorS[1](null); showToast(ed.id ? "Note updated" : "Note added"); })
-        .catch(function () { showToast("Error saving note", "error"); });
+      op.then(function () { savingOwnS[1](false); closeNoteEditor(); showToast(ed.id ? "Note updated" : "Note added"); })
+        .catch(function () { savingOwnS[1](false); showToast("Error saving note", "error"); });
     }
     function deleteNote(id) {
       if (!window.confirm("Delete this note? This cannot be undone.")) return;
@@ -1014,9 +1132,12 @@
     }
     function saveProfileDetails() {
       var ep = editProfileS[0];
+      if (!touch()) { detailsLostS[1](true); return; }
+      if (detailsState().state !== "unchanged") return;
+      savingOwnS[1](true);
       data.updateShepherdingPersonDetails(pid, ep, user).then(function () {
-        personS[1](Object.assign({}, person, { contact: { email: ep.email, phone: ep.phone, address: ep.address }, birthday: ep.birthday })); editProfileS[1](null); showToast("Details saved");
-      }).catch(function () { showToast("Error saving details", "error"); });
+        personS[1](Object.assign({}, person, { contact: { email: ep.email, phone: ep.phone, address: ep.address }, birthday: ep.birthday })); savingOwnS[1](false); closeDetailsEditor(); showToast("Details saved");
+      }).catch(function () { savingOwnS[1](false); showToast("Error saving details", "error"); });
     }
 
     // ── Quick-assign (MS-104, ADR-0014) ──────────────────────────────────────
@@ -1139,6 +1260,16 @@
 
     var userKnown = props.user !== undefined;
     var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    // A face, a first name and a lock: "you can't open this" answered before
+    // it is asked.
+    function heldBadge(holder) {
+      return html`<span title=${window.PresenceCore.holderTitle(holder)} style=${{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, color: "var(--on-surface-variant)" }}>
+        <${ui.Avatar} name=${holder.name} photoUrl=${holder.photoUrl} photoCrop=${holder.photoCrop} size=${22} />
+        <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>${window.PresenceCore.holderLabel(holder)}</span>
+        ${Ic("lock", 13)}
+      </span>`;
+    }
+
     var fromLabel = (props.params && props.params.from === "dashboard") ? "Dashboard" : "People";
     var editor = editorS[0], editProfile = editProfileS[0];
 
@@ -1177,6 +1308,10 @@
               <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", textTransform: "capitalize" }}>${person.sex || "Unknown"}</span>
               ${mLabel ? html`<span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", background: "rgba(62,97,129,0.12)", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(62,97,129,0.2)" }}>${mLabel}</span>` : null}
             </div>
+            ${othersHere().length ? html`<div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>Also here</span>
+              ${othersHere().map(function (p) { return html`<span key=${p.uid} title=${p.name}><${ui.Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${26} /></span>`; })}
+            </div>` : null}
           </div>
 
           ${drawerS[0] ? html`<${Fragment}>
@@ -1193,7 +1328,7 @@
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h2 style=${SF_H2}>Member Details</h2>
-              <button onClick=${function () { editProfileS[1](Object.assign({}, person.contact || {}, { birthday: person.birthday || "" })); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--secondary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("pencil", 15)} Edit</button>
+              ${detailsHolder() ? heldBadge(detailsHolder()) : html`<button onClick=${openDetailsEditor} style=${{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--secondary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("pencil", 15)} Edit</button>`}
             </div>
             ${details.length ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 11 }}>
               ${details.map(function (d, i) { return html`<div key=${i} style=${{ display: "flex", alignItems: "flex-start", gap: 11, color: d.tone || "var(--on-surface-variant)" }}>
@@ -1401,8 +1536,8 @@
                       <span style=${{ padding: "3px 9px", borderRadius: "var(--radius-sm)", background: "var(--secondary-container)", color: "var(--on-secondary-container)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 600 }}>${e.type}</span>
                       ${e.subject ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, color: "var(--on-surface)" }}>${e.subject}</span>` : null}
                     </div>
-                    ${e.isCareList ? null : html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
-                      <button onClick=${function () { editorS[1]({ id: e.id, type: e.type || NOTE_TYPES[0], subject: e.subject || "", body: e.content || "" }); }} aria-label="Edit note" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
+                    ${e.isCareList ? null : noteHolder(e) ? heldBadge(noteHolder(e)) : html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
+                      <button onClick=${function () { openNoteEditor(e); }} aria-label="Edit note" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
                       <button onClick=${function () { deleteNote(e.id); }} aria-label="Delete note" style=${Object.assign({}, iconBtn, { width: 30, height: 30, color: "var(--error)" })}>${Ic("trash-2", 15)}</button>
                     </div>`}
                   </div>
@@ -1457,34 +1592,36 @@
           </${Fragment}>`}
         </${Body}>
 
-        ${editor ? html`<${Modal} onClose=${function () { editorS[1](null); }} title=${editor.id ? "Edit Note" : "New Note"}
-          footer=${html`<${Fragment}><button onClick=${function () { editorS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveNote} style=${pill()}>${editor.id ? "Save Changes" : "Add Note"}</button></${Fragment}>`}>
+        ${editor ? html`<${Modal} onClose=${closeNoteEditor} title=${editor.id ? "Edit Note" : "New Note"}
+          footer=${html`<${Fragment}><button onClick=${closeNoteEditor} style=${pill("ghost")}>Cancel</button><button onClick=${saveNote} disabled=${noteState().state !== "unchanged"} style=${Object.assign({}, pill(), noteState().state !== "unchanged" ? { opacity: 0.4, cursor: "not-allowed" } : {})}>${editor.id ? "Save Changes" : "Add Note"}</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 14 }}>
+            ${noteState().state !== "unchanged" ? html`<div role="alert" style=${{ padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${editorWarning(noteState(), "note")}</div>` : null}
             <${Field} label="Note type">
               <div style=${{ position: "relative" }}>
-                <select value=${editor.type} onChange=${function (e) { editorS[1](Object.assign({}, editor, { type: e.target.value })); }} style=${Object.assign({}, inputStyle, { appearance: "none", WebkitAppearance: "none", paddingRight: 36, cursor: "pointer" })}>
+                <select value=${editor.type} onChange=${function (e) { editNote({ type: e.target.value }); }} style=${Object.assign({}, inputStyle, { appearance: "none", WebkitAppearance: "none", paddingRight: 36, cursor: "pointer" })}>
                   ${NOTE_TYPES.map(function (t) { return html`<option key=${t} value=${t}>${t}</option>`; })}
                 </select>
                 <span style=${{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--on-surface-variant)" }}>${Ic("chevron-down", 16)}</span>
               </div>
             </${Field}>
-            <${Field} label="Title (optional)"><input value=${editor.subject} onInput=${function (e) { editorS[1](Object.assign({}, editor, { subject: e.target.value })); }} placeholder="Brief title…" style=${inputStyle} /></${Field}>
+            <${Field} label="Title (optional)"><input value=${editor.subject} onInput=${function (e) { editNote({ subject: e.target.value }); }} placeholder="Brief title…" style=${inputStyle} /></${Field}>
             <div style=${{ display: "flex", flexDirection: "column" }}>
               <div style=${{ display: "flex", gap: 2, padding: "6px 8px", background: "var(--surface-container)", border: "1px solid var(--outline-variant)", borderBottom: "none", borderRadius: "var(--radius) var(--radius) 0 0" }}>
                 ${["bold", "italic", "underline", "list", "list-ordered", "highlighter"].map(function (ic) { return html`<span key=${ic} style=${{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-surface-variant)" }}>${Ic(ic, 16)}</span>`; })}
               </div>
-              <textarea value=${editor.body} onInput=${function (e) { editorS[1](Object.assign({}, editor, { body: e.target.value })); }} placeholder="Write the note…" rows=${6} style=${Object.assign({}, inputStyle, { borderRadius: "0 0 var(--radius) var(--radius)", resize: "vertical", lineHeight: 1.5, fontFamily: "var(--font-serif)", fontSize: 14.5 })}></textarea>
+              <textarea value=${editor.body} onInput=${function (e) { editNote({ body: e.target.value }); }} placeholder="Write the note…" rows=${6} style=${Object.assign({}, inputStyle, { borderRadius: "0 0 var(--radius) var(--radius)", resize: "vertical", lineHeight: 1.5, fontFamily: "var(--font-serif)", fontSize: 14.5 })}></textarea>
             </div>
           </div>
         </${Modal}>` : null}
 
-        ${editProfile ? html`<${Modal} onClose=${function () { editProfileS[1](null); }} title="Edit Member Details"
-          footer=${html`<${Fragment}><button onClick=${function () { editProfileS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveProfileDetails} style=${pill()}>Save</button></${Fragment}>`}>
+        ${editProfile ? html`<${Modal} onClose=${closeDetailsEditor} title="Edit Member Details"
+          footer=${html`<${Fragment}><button onClick=${closeDetailsEditor} style=${pill("ghost")}>Cancel</button><button onClick=${saveProfileDetails} disabled=${detailsState().state !== "unchanged"} style=${Object.assign({}, pill(), detailsState().state !== "unchanged" ? { opacity: 0.4, cursor: "not-allowed" } : {})}>Save</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <${Field} label="Email"><input type="email" value=${editProfile.email || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { email: e.target.value })); }} style=${inputStyle} /></${Field}>
-            <${Field} label="Phone"><input type="tel" value=${editProfile.phone || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { phone: e.target.value })); }} style=${inputStyle} /></${Field}>
-            <${Field} label="Address"><textarea rows=${2} value=${editProfile.address || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { address: e.target.value })); }} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea></${Field}>
-            <${Field} label="Birthday"><input type="date" value=${editProfile.birthday || ""} onInput=${function (e) { editProfileS[1](Object.assign({}, editProfile, { birthday: e.target.value })); }} style=${inputStyle} /></${Field}>
+            ${detailsState().state !== "unchanged" ? html`<div role="alert" style=${{ padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${editorWarning(detailsState(), "person's details")}</div>` : null}
+            <${Field} label="Email"><input type="email" value=${editProfile.email || ""} onInput=${function (e) { editDetails({ email: e.target.value }); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Phone"><input type="tel" value=${editProfile.phone || ""} onInput=${function (e) { editDetails({ phone: e.target.value }); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Address"><textarea rows=${2} value=${editProfile.address || ""} onInput=${function (e) { editDetails({ address: e.target.value }); }} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea></${Field}>
+            <${Field} label="Birthday"><input type="date" value=${editProfile.birthday || ""} onInput=${function (e) { editDetails({ birthday: e.target.value }); }} style=${inputStyle} /></${Field}>
           </div>
         </${Modal}>` : null}
 
