@@ -857,15 +857,28 @@
     return db.collection("elder_documents").doc(docId).get()
       .then(function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; });
   }
-  // .update() (not .set()) so filterId, authorName, createdAt, docType survive.
-  function saveCareList(docId, payload, user) {
-    return db.collection("elder_documents").doc(docId).update({
-      title: (payload.title || "").trim() || "Untitled Care List",
-      careListColumns: payload.careListColumns,
-      careListData: payload.careListData,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedByName: (user && user.name) || "",
-    });
+  // ── Care List writes and live reads (MS-445) ──
+  // Through CareListCore, exactly as the web page: a save writes only the cells
+  // typed into, each to its own field, and a column change is one change
+  // against the latest list. The old whole-map save put back every cell
+  // another elder had written since this screen opened.
+  function saveCareListEdits(docId, edits, user) {
+    return window.CareListCore.saveEdits(db, firebase.firestore, docId,
+      Object.assign({}, edits, { byName: (user && user.name) || "" }));
+  }
+  function changeCareListColumn(docId, change, user) {
+    return window.CareListCore.changeColumn(db, firebase.firestore, docId, change, (user && user.name) || "");
+  }
+  function watchCareList(docId, onData) {
+    return window.CareListCore.watch(db, docId, onData);
+  }
+  function watchShepherdingView(id, onView) {
+    return watch(db.collection("shepherding_views").doc(id),
+      function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; }, onView, rosterEvery());
+  }
+  // Whole records — the Care List filters on tags, status and membership.
+  function watchShepherdingPeople(onPeople) {
+    return watch(db.collection("people"), mapDocs, onPeople, rosterEvery());
   }
 
   // ── Document Library (elder_documents + elder_document_structure) ────────────
@@ -1277,7 +1290,11 @@
     revertShepherdingStatus: revertShepherdingStatus,
     getShepherdingView: getShepherdingView,
     getCareList: getCareList,
-    saveCareList: saveCareList,
+    saveCareListEdits: saveCareListEdits,
+    changeCareListColumn: changeCareListColumn,
+    watchCareList: watchCareList,
+    watchShepherdingView: watchShepherdingView,
+    watchShepherdingPeople: watchShepherdingPeople,
     getElderDocuments: getElderDocuments,
     getDocumentStructure: getDocumentStructure,
     saveDocumentStructure: saveDocumentStructure,

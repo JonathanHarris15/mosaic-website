@@ -211,6 +211,22 @@
             return new Set(copy.columns.map(c => c.id));
         }
 
+        // Move this copy onto a column list, forgetting the cells (and the
+        // unsaved marks) of any column that went.
+        function takeColumns(next) {
+            if (sameContent(saved.columns, next)) return { changed: false, addedColumns: [], removedColumns: [] };
+            const before = columnIds(saved);
+            const after = new Set(next.map(c => c.id));
+            const addedColumns = next.map(c => c.id).filter(id => !before.has(id));
+            const removedColumns = saved.columns.map(c => c.id).filter(id => !after.has(id));
+            removedColumns.forEach(cid => {
+                Array.from(dirty).forEach(k => { if (k.slice(k.lastIndexOf('/') + 1) === cid) dirty.delete(k); });
+                Object.keys(saved.cells).forEach(pid => setSaved(pid, cid, null));
+            });
+            saved.columns = next.map(c => ({ id: c.id, name: c.name }));
+            return { changed: true, addedColumns, removedColumns };
+        }
+
         return {
             title: () => saved.title,
             columns: () => saved.columns.slice(),
@@ -249,6 +265,23 @@
                 return { cells, title };
             },
 
+            // This editor changed the columns itself (changeColumn resolved
+            // with them), so a cell typed into a new column before the list
+            // arrives back is still saved. Returns { addedColumns,
+            // removedColumns }.
+            columnsChanged(columns) {
+                const moved = takeColumns(columnsOf({ careListColumns: columns }));
+                return { addedColumns: moved.addedColumns, removedColumns: moved.removedColumns };
+            },
+
+            // Somebody else has this cell now: what this editor typed into it
+            // since its last save is not to be written over theirs. Returns
+            // the stored copy, for the page to put back on screen.
+            discard(pid, cid) {
+                dirty.delete(key(pid, cid));
+                return storedCell(saved, pid, cid);
+            },
+
             saveFailed(save) {
                 ((save && save.cells) || []).forEach(c => dirty.add(key(c.personId, c.columnId)));
                 if (save && save.title !== null && save.title !== undefined) titleDirty = true;
@@ -266,21 +299,10 @@
                 latest = { title: (remote && remote.title) || '', columns: columnsOf(remote), cells: cellsOf(remote) };
                 old = isOldShape(remote);
 
-                let columns = null;
-                let addedColumns = [];
-                let removedColumns = [];
-                if (!sameContent(saved.columns, latest.columns)) {
-                    const before = columnIds(saved);
-                    const after = columnIds(latest);
-                    addedColumns = latest.columns.map(c => c.id).filter(id => !before.has(id));
-                    removedColumns = saved.columns.map(c => c.id).filter(id => !after.has(id));
-                    removedColumns.forEach(cid => {
-                        Array.from(dirty).forEach(k => { if (k.slice(k.lastIndexOf('/') + 1) === cid) dirty.delete(k); });
-                        Object.keys(saved.cells).forEach(pid => setSaved(pid, cid, null));
-                    });
-                    saved.columns = latest.columns;
-                    columns = latest.columns.slice();
-                }
+                const moved = takeColumns(latest.columns);
+                const columns = moved.changed ? latest.columns.slice() : null;
+                const addedColumns = moved.addedColumns;
+                const removedColumns = moved.removedColumns;
 
                 const live = columnIds(latest);
                 const people = new Set(Object.keys(saved.cells).concat(Object.keys(latest.cells)));

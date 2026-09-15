@@ -152,18 +152,38 @@ function createDocMentionSuggestion() {
     };
 }
 
+// ── Live Care List state (MS-439 / MS-443 / MS-448) ───────────────────────────
+// Kept outside Alpine: none of it is drawn, and a proxy around the session or
+// the watch handles would only slow every keystroke down.
+const _careList = {
+    session: null,   // CareListCore session: the stored copy and what is unsaved
+    focus: null,     // { personId, columnId } while the cursor is in a cell
+    inTitle: false,  // while the cursor is in the title
+    watches: [],     // functions that stop a live read
+    ticker: null,
+};
+
+function stopCareListWatches() {
+    _careList.watches.forEach(stop => { try { stop(); } catch (e) {} });
+    _careList.watches = [];
+    if (_careList.ticker) { clearInterval(_careList.ticker); _careList.ticker = null; }
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('careListEditor', () => ({
         loading: true,
         currentUser: null,
         currentPermissionLevel: null,
         currentUserName: '',
+        // Your name as the church knows it, once presence has resolved it.
+        myName: '',
 
         docId: null,
         doc: null,
         title: '',
         filterId: null,
         filterTitle: '…',
+        viewConfig: null,
 
         people: [],
         filteredPeople: [],
@@ -180,6 +200,11 @@ document.addEventListener('alpine:init', () => {
 
         saveStatus: 'saved',
         _saveTimer: null,
+
+        // Presence (MS-443): everybody's claims, and a tick so a hold that
+        // went quiet is redrawn as free without anybody writing anything.
+        presenceEntries: [],
+        presenceTick: 0,
 
         toast: { show: false, message: '', type: 'success' },
 
@@ -206,12 +231,19 @@ document.addEventListener('alpine:init', () => {
                     personId: userData && userData.personId,
                 });
 
-                await Promise.all([this.loadDoc(), this.loadPeople(), this.loadTags()]);
-                this.applyFilter();
-
+                await Promise.all([this.loadDoc(), this.loadTags()]);
                 this.loading = false;
-
                 this.$nextTick(() => this.initEditors());
+
+                // Editing is already open by here. Presence only ever takes a
+                // box away, and if it fails every box stays open (ADR-0035 §3).
+                this.watchCareList();
+                this.startPresence(user);
+            });
+
+            window.addEventListener('pagehide', () => {
+                stopCareListWatches();
+                try { ShepherdingPresence.leave(); } catch (e) {}
             });
         },
 
@@ -220,9 +252,15 @@ document.addEventListener('alpine:init', () => {
                 const snap = await db.collection('elder_documents').doc(this.docId).get();
                 if (!snap.exists) { window.location.href = 'shepherding-documents.html'; return; }
                 this.doc = { id: snap.id, ...snap.data() };
-                this.title = this.doc.title || '';
-                
+                // The session reads an old-shaped list as one Notes column. It
+                // is only WRITTEN in the column shape by the first save
+                // (CareListCore.saveEdits), so opening a list writes nothing.
+                _careList.session = CareListCore.createSession(this.doc);
+                this.title = _careList.session.title();
+                this.careListColumns = _careList.session.columns();
+
                 if (this.doc.filterId) {
+                    this.filterId = this.doc.filterId;
                     const viewSnap = await db.collection('shepherding_views').doc(this.doc.filterId).get();
                     if (viewSnap.exists) {
                         this.filterTitle = viewSnap.data().title || 'Untitled Filter';
@@ -232,35 +270,9 @@ document.addEventListener('alpine:init', () => {
                     this.filterTitle = 'Custom Filter';
                     this.viewConfig = this.doc.filterConfig;
                 }
-
-                // Process columns — backward compat: old format has no careListColumns
-                if (this.doc.careListColumns && this.doc.careListColumns.length > 0) {
-                    this.careListColumns = this.doc.careListColumns;
-                } else {
-                    this.careListColumns = [{ id: 'col_default', name: 'Notes' }];
-                    // Migrate careListData: { personId: tiptapJson } → { personId: { col_default: tiptapJson } }
-                    if (this.doc.careListData) {
-                        const migrated = {};
-                        Object.entries(this.doc.careListData).forEach(([pid, val]) => {
-                            migrated[pid] = (val && typeof val === 'object' && val.type === 'doc')
-                                ? { col_default: val }
-                                : (val || {});
-                        });
-                        this.doc.careListData = migrated;
-                    }
-                }
             } catch (e) {
                 console.error('Error loading document:', e);
                 this.showToast('Error loading document', 'error');
-            }
-        },
-
-        async loadPeople() {
-            try {
-                const snap = await db.collection('people').get();
-                this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                console.error('Error loading people:', e);
             }
         },
 
@@ -277,34 +289,96 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        applyFilter() {
-            if (!this.viewConfig) {
-                this.filteredPeople = this.people;
+        // ── Live (MS-439 / MS-448) ────────────────────────────────────────────
+        // The list itself, who is on it, and the Filtered View it reads all
+        // arrive as they change. Somebody else's cell goes into its editor
+        // without counting as an edit, so it is never saved back; a cell this
+        // page has typed into and not saved is left alone (CareListCore).
+        watchCareList() {
+            const Live = window.MosaicLiveRead;
+            _careList.watches.push(CareListCore.watch(db, this.docId, data => this.adoptRemote(data)));
+
+            const people = snap => {
+                this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.applyFilter();
+            };
+            const failed = what => e => console.error('Could not keep ' + what + ' current:', e);
+            _careList.watches.push(Live.watch(db.collection('people'), people, {
+                fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('the people on this list'),
+            }));
+
+            if (this.filterId) {
+                _careList.watches.push(Live.watch(db.collection('shepherding_views').doc(this.filterId), snap => {
+                    if (!snap.exists) return;
+                    this.viewConfig = snap.data();
+                    this.filterTitle = this.viewConfig.title || 'Untitled Filter';
+                    this.applyFilter();
+                }, { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('this list\'s filter') }));
+            }
+        },
+
+        adoptRemote(data) {
+            const session = _careList.session;
+            if (!session) return;
+            if (!data) {
+                this.showToast('This Care List was deleted', 'error');
+                setTimeout(() => { window.location.href = 'shepherding-documents.html'; }, 1500);
                 return;
             }
+            if (data.filterConfig && !this.filterId) this.viewConfig = data.filterConfig;
+            const out = session.adopt(data, { inCell: _careList.focus, inTitle: _careList.inTitle });
+            if (out.title !== null) this.title = out.title;
+            out.cells.forEach(cell => this.putCell(cell.personId, cell.columnId, cell.value));
+            if (out.columns) {
+                this.careListColumns = out.columns;
+                this.$nextTick(() => this.syncEditors());
+            }
+        },
 
-            const view = this.viewConfig;
-            let result = this.people.filter(p => !ShepherdingCore.isInactiveMembership(p.membership));
+        // Somebody else's value into a cell's editor, without it counting as
+        // an edit: setContent's second argument keeps onUpdate quiet.
+        putCell(personId, colId, value) {
+            const editor = this.editors[personId] && this.editors[personId][colId];
+            if (editor) editor.commands.setContent(value || '', false);
+        },
 
-            if (view.filterTags && view.filterTags.length > 0) {
-                result = result.filter(p => {
-                    const personTags = p.tags || [];
-                    if (view.filterMode === 'all') {
-                        return view.filterTags.every(t => personTags.includes(t));
-                    }
-                    return view.filterTags.some(t => personTags.includes(t));
-                });
+        applyFilter() {
+            let result;
+            if (!this.viewConfig) {
+                result = this.people.slice();
+            } else {
+                const view = this.viewConfig;
+                result = this.people.filter(p => !ShepherdingCore.isInactiveMembership(p.membership));
+
+                if (view.filterTags && view.filterTags.length > 0) {
+                    result = result.filter(p => {
+                        const personTags = p.tags || [];
+                        if (view.filterMode === 'all') {
+                            return view.filterTags.every(t => personTags.includes(t));
+                        }
+                        return view.filterTags.some(t => personTags.includes(t));
+                    });
+                }
+
+                if (view.statusZoneFilters && view.statusZoneFilters.length > 0) {
+                    result = result.filter(p => {
+                        if (!p.shepherdingStatus) return false;
+                        const key = `${p.shepherdingStatus.urgency}__${p.shepherdingStatus.importance}`;
+                        return view.statusZoneFilters.includes(key);
+                    });
+                }
             }
 
-            if (view.statusZoneFilters && view.statusZoneFilters.length > 0) {
-                result = result.filter(p => {
-                    if (!p.shepherdingStatus) return false;
-                    const key = `${p.shepherdingStatus.urgency}__${p.shepherdingStatus.importance}`;
-                    return view.statusZoneFilters.includes(key);
-                });
+            // A row that leaves the filter while you are typing in it stays
+            // until you leave the cell — it is never pulled out from under you.
+            const focus = _careList.focus;
+            if (focus && !result.some(p => p.id === focus.personId)) {
+                const kept = this.people.find(p => p.id === focus.personId);
+                if (kept) result.push(kept);
             }
 
             this.filteredPeople = result.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            this.$nextTick(() => this.syncEditors());
         },
 
         async initEditors() {
@@ -318,12 +392,36 @@ document.addEventListener('alpine:init', () => {
 
             await loadDocMentionData();
 
-            this.filteredPeople.forEach(person => {
-                if (!this.editors[person.id]) this.editors[person.id] = {};
-                this.careListColumns.forEach(col => {
-                    this._mountCellEditor(person, col.id);
+            this.syncEditors();
+        },
+
+        // Every row on the list and every column has an editor; nothing else
+        // does. A cell with unsaved typing is saved before its editor goes.
+        syncEditors() {
+            if (!window._TipTap) return;
+            const rows = new Set(this.filteredPeople.map(p => p.id));
+            const cols = new Set(this.careListColumns.map(c => c.id));
+            const going = [];
+            Object.keys(this.editors).forEach(personId => {
+                Object.keys(this.editors[personId]).forEach(colId => {
+                    if (!rows.has(personId) || !cols.has(colId)) going.push([personId, colId]);
                 });
             });
+            const session = _careList.session;
+            if (session && going.some(([p, c]) => session.isDirty(p, c))) this.save();
+            going.forEach(([personId, colId]) => {
+                try { this.editors[personId][colId].destroy(); } catch (e) {}
+                delete this.editors[personId][colId];
+            });
+
+            this.filteredPeople.forEach(person => {
+                this.careListColumns.forEach(col => {
+                    if (!this.editors[person.id] || !this.editors[person.id][col.id]) {
+                        this._mountCellEditor(person, col.id);
+                    }
+                });
+            });
+            this.refreshHeld();
         },
 
         _makeTriggerExt(person) {
@@ -334,9 +432,10 @@ document.addEventListener('alpine:init', () => {
                 getPersonTags:  () => { const p = self.people.find(x => x.id === person.id); return p?.tags || []; },
                 getCurrentStatus: () => { const p = self.people.find(x => x.id === person.id); return p?.shepherdingStatus || null; },
                 createTag:      (name) => self.createNewTag(name),
-                onTagAdd:       (tagId, tagName) => self.handleTagAdd(person.id, tagId, tagName),
-                onTagRemove:    (tagId, tagName) => self.handleTagRemove(person.id, tagId, tagName),
-                onStatusChange: (urg, imp) => self.handleStatusChange(person.id, urg, imp),
+                // A trigger pick is activity too, for the one-minute rule.
+                onTagAdd:       (tagId, tagName) => { self.touchCell(); return self.handleTagAdd(person.id, tagId, tagName); },
+                onTagRemove:    (tagId, tagName) => { self.touchCell(); return self.handleTagRemove(person.id, tagId, tagName); },
+                onStatusChange: (urg, imp) => { self.touchCell(); return self.handleStatusChange(person.id, urg, imp); },
                 onStatusUndo: (activityId, urg, imp) => self.handleStatusUndo(person.id, activityId, urg, imp),
             });
         },
@@ -346,7 +445,7 @@ document.addEventListener('alpine:init', () => {
             if (!el || !window._TipTap) return;
             const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell, Image, Link, TextAlign } = window._TipTap;
             const self = this;
-            const content = this.doc.careListData?.[person.id]?.[colId] || '';
+            const content = (_careList.session && _careList.session.cell(person.id, colId)) || '';
             if (!this.editors[person.id]) this.editors[person.id] = {};
             this.editors[person.id][colId] = new Editor({
                 element: el,
@@ -364,9 +463,163 @@ document.addEventListener('alpine:init', () => {
                     this._makeTriggerExt(person),
                 ],
                 content,
-                onUpdate() { self.editorUpdated++; self.scheduleSave(); },
-                onFocus()  { self.activePersonId = person.id; self.activeColId = colId; },
+                onUpdate() { self.cellEdited(person.id, colId); },
+                onFocus()  { self.enterCell(person.id, colId); },
+                onBlur()   { self.leaveCell(person.id, colId); },
             });
+        },
+
+        // ── Boxes (MS-443) ────────────────────────────────────────────────────
+
+        cellEdited(personId, colId) {
+            const session = _careList.session;
+            if (!session) return;
+            this.editorUpdated++;
+            session.edited(personId, colId);
+            if (!this.touchCell()) return;
+            this.scheduleSave();
+        },
+
+        // Every keystroke in a held box. False means somebody else took it
+        // after you went quiet: what you just typed goes back to what is stored,
+        // and is not saved over theirs.
+        touchCell() {
+            const focus = _careList.focus;
+            if (!focus) return true;
+            if (ShepherdingPresence.touch()) return true;
+            const stored = _careList.session.discard(focus.personId, focus.columnId);
+            this.putCell(focus.personId, focus.columnId, stored);
+            const holder = this.cellHolder(focus.personId, focus.columnId);
+            const editor = this.editors[focus.personId] && this.editors[focus.personId][focus.columnId];
+            if (editor) editor.commands.blur();
+            this.showToast((holder ? holder.name : 'Somebody') + ' is editing this cell now', 'error');
+            return false;
+        },
+
+        enterCell(personId, colId) {
+            const box = CareListCore.box.cell(this.docId, personId, colId);
+            if (!ShepherdingPresence.claimBox(box)) {
+                const editor = this.editors[personId] && this.editors[personId][colId];
+                if (editor) editor.commands.blur();
+                this.sayHeld(this.cellHolder(personId, colId), 'cell');
+                return;
+            }
+            _careList.focus = { personId, columnId: colId };
+            this.activePersonId = personId;
+            this.activeColId = colId;
+        },
+
+        // The hold goes only once this cell's pending save has — so letting go
+        // never strands unsaved text. Then whatever arrived while you were in
+        // it goes in, and a row that left the filter meanwhile can go.
+        async leaveCell(personId, colId) {
+            const focus = _careList.focus;
+            if (!focus || focus.personId !== personId || focus.columnId !== colId) return;
+            _careList.focus = null;
+            const session = _careList.session;
+            if (session && session.isDirty(personId, colId)) await this.save();
+            const arrived = session && session.leftCell(personId, colId);
+            if (arrived) this.putCell(personId, colId, arrived.value);
+            // Already in another cell, which claimed its own box: releasing
+            // now would let go of that one.
+            if (!_careList.focus && !_careList.inTitle) ShepherdingPresence.release();
+            this.applyFilter();
+        },
+
+        enterTitle(event) {
+            if (!ShepherdingPresence.claimBox(CareListCore.box.title(this.docId))) {
+                event.target.blur();
+                this.sayHeld(this.titleHolder, 'title');
+                return;
+            }
+            _careList.inTitle = true;
+        },
+
+        async leaveTitle() {
+            if (!_careList.inTitle) return;
+            _careList.inTitle = false;
+            const session = _careList.session;
+            if (session && session.hasUnsaved()) await this.save();
+            const arrived = session && session.leftTitle();
+            if (arrived !== null && arrived !== undefined) this.title = arrived;
+            if (!_careList.focus && !_careList.inTitle) ShepherdingPresence.release();
+        },
+
+        startPresence(user) {
+            try {
+                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; this.refreshHeld(); });
+                MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    if (identity && identity.name) this.myName = identity.name;
+                    ShepherdingPresence.start({
+                        db,
+                        uid: user.uid,
+                        identity,
+                        // The phone's Care List screen says the same, so web and
+                        // phone count as being on one list.
+                        surface: 'shepherding-care-list',
+                        pageKey: this.docId,
+                        stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                }).catch(e => console.warn('Presence could not work out who you are:', e));
+                _careList.ticker = setInterval(() => { this.presenceTick++; this.refreshHeld(); }, PresenceCore.HEARTBEAT_MS);
+                // leave(), not release(): release writes a fresh timestamp and
+                // would leave you looking present for half a minute after going.
+                window.addEventListener('beforeunload', () => ShepherdingPresence.leave());
+            } catch (e) {
+                console.warn('Presence could not start on this Care List; carrying on without it:', e);
+            }
+        },
+
+        // Whoever else holds this box, or null.
+        heldBy(box) {
+            this.presenceTick; // read, so a quiet hold is redrawn as free
+            return ShepherdingPresence.holderIn(
+                this.presenceEntries, this.currentUser && this.currentUser.uid, box, Date.now());
+        },
+
+        cellHolder(personId, colId) {
+            return this.heldBy(CareListCore.box.cell(this.docId, personId, colId));
+        },
+
+        get titleHolder() {
+            return this.heldBy(CareListCore.box.title(this.docId));
+        },
+
+        // The other elders on this Care List — the row of faces.
+        get othersHere() {
+            this.presenceTick;
+            if (!this.currentUser) return [];
+            return PresenceCore.peopleHere(
+                this.presenceEntries, this.currentUser.uid, 'shepherding-care-list', this.docId,
+                Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS });
+        },
+
+        holderLabel(holder) { return PresenceCore.holderLabel(holder); },
+        holderTitle(holder) { return PresenceCore.holderTitle(holder); },
+
+        // A cell somebody else holds cannot be typed into. setEditable's
+        // second argument keeps it from firing an update, which would read as
+        // an edit and save the cell.
+        refreshHeld() {
+            Object.keys(this.editors).forEach(personId => {
+                Object.keys(this.editors[personId]).forEach(colId => {
+                    const editor = this.editors[personId][colId];
+                    const open = !this.cellHolder(personId, colId);
+                    if (editor && editor.isEditable !== open) editor.setEditable(open, false);
+                });
+            });
+        },
+
+        // A click on a held cell says who has it.
+        onCellPointer(event, personId, colId) {
+            const holder = this.cellHolder(personId, colId);
+            if (!holder) return;
+            event.preventDefault();
+            this.sayHeld(holder, 'cell');
+        },
+
+        sayHeld(holder, what) {
+            this.showToast((holder ? holder.name : 'Somebody') + ' is editing this ' + what, 'error');
         },
 
         getActiveEditor() {
@@ -381,8 +634,8 @@ document.addEventListener('alpine:init', () => {
 
         editorCmd(command, ...args) {
             const editor = this.getActiveEditor();
-            if (!editor) return;
-            
+            if (!editor || !editor.isEditable) return;
+
             if (command === 'setFontFamily') {
                 const family = args[0];
                 family ? editor.chain().focus().setFontFamily(family).run()
@@ -401,7 +654,13 @@ document.addEventListener('alpine:init', () => {
         },
 
         onTitleInput() {
-            this.saveStatus = 'unsaved';
+            if (!_careList.session) return;
+            if (!ShepherdingPresence.touch()) {
+                this.title = _careList.session.title();
+                this.sayHeld(this.titleHolder, 'title');
+                return;
+            }
+            _careList.session.titleEdited();
             this.scheduleSave();
         },
 
@@ -411,44 +670,66 @@ document.addEventListener('alpine:init', () => {
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
 
+        // Writes the cells typed into since the last save, each to its own
+        // field, and the title if it was typed into — nothing else, so a cell
+        // somebody else saved, or one belonging to a person outside the filter,
+        // is never written back (MS-439).
         async save() {
-            if (!this.docId) return;
+            const session = _careList.session;
+            if (!this.docId || !session) return;
+            clearTimeout(this._saveTimer);
+
+            const edits = session.takeSave(
+                (personId, colId) => {
+                    const editor = this.editors[personId] && this.editors[personId][colId];
+                    return editor ? editor.getJSON() : session.cell(personId, colId);
+                },
+                () => this.title.trim() || 'Untitled Care List');
+            if (!edits.cells.length && edits.title === null) {
+                if (!session.hasUnsaved()) this.saveStatus = 'saved';
+                return;
+            }
+
             this.saveStatus = 'saving';
-
-            const careListData = {};
-            Object.keys(this.editors).forEach(personId => {
-                careListData[personId] = {};
-                Object.keys(this.editors[personId]).forEach(colId => {
-                    careListData[personId][colId] = this.editors[personId][colId].getJSON();
-                });
-            });
-
             try {
-                await db.collection('elder_documents').doc(this.docId).update({
-                    title: this.title.trim() || 'Untitled Care List',
-                    careListColumns: this.careListColumns,
-                    careListData,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedByName: this.currentUserName,
-                });
-                this.saveStatus = 'saved';
+                await CareListCore.saveEdits(db, firebase.firestore, this.docId, Object.assign({}, edits, {
+                    byName: this.myName || this.currentUserName,
+                    oldShape: session.oldShape(),
+                }));
+                session.normalised();
+                this.saveStatus = session.hasUnsaved() ? 'unsaved' : 'saved';
             } catch (e) {
                 console.error('Error saving:', e);
+                session.saveFailed(edits);
                 this.saveStatus = 'unsaved';
                 this.showToast('Error saving care list', 'error');
             }
         },
 
         // ── Column management ─────────────────────────────────────────────────
+        // Each is ONE change applied to the latest stored list in a
+        // transaction, so two elders' column changes both stand (ADR-0039).
+
+        async changeColumn(change) {
+            try {
+                const out = await CareListCore.changeColumn(db, firebase.firestore, this.docId, change,
+                    this.myName || this.currentUserName);
+                _careList.session.columnsChanged(out.columns);
+                this.careListColumns = out.columns;
+                await this.$nextTick();
+                this.syncEditors();
+                return out;
+            } catch (e) {
+                console.error('Error changing column:', e);
+                this.showToast(e && e.message && /last column/.test(e.message)
+                    ? 'Cannot delete the last column' : 'Error changing column', 'error');
+                return null;
+            }
+        },
 
         async addColumn() {
-            const id = 'col_' + Date.now();
-            const name = 'Column ' + (this.careListColumns.length + 1);
-            this.careListColumns = [...this.careListColumns, { id, name }];
-            await this.$nextTick();
-            this.filteredPeople.forEach(person => this._mountCellEditor(person, id));
-            this.startEditColumnName(id, name);
-            this.scheduleSave();
+            const out = await this.changeColumn({ kind: 'add', name: 'Column ' + (this.careListColumns.length + 1) });
+            if (out && out.column) this.startEditColumnName(out.column.id, out.column.name);
         },
 
         startEditColumnName(id, currentName) {
@@ -461,23 +742,26 @@ document.addEventListener('alpine:init', () => {
         },
 
         saveColumnName(id) {
+            if (this.editingColumnId !== id) return;
             const name = this.editingColumnName.trim() || 'Untitled';
-            this.careListColumns = this.careListColumns.map(c => c.id === id ? { ...c, name } : c);
             this.editingColumnId = null;
-            this.scheduleSave();
+            this.careListColumns = this.careListColumns.map(c => c.id === id ? { ...c, name } : c);
+            this.changeColumn({ kind: 'rename', columnId: id, name });
         },
 
         deleteColumn(id) {
             if (this.careListColumns.length <= 1) { this.showToast('Cannot delete the last column', 'error'); return; }
+            // Removing a column deletes every cell in it, so not while somebody
+            // is writing in one of them.
+            const claims = this.currentUser ? PresenceCore.claimsByBox(this.presenceEntries, this.currentUser.uid,
+                Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS }) : {};
+            const holder = CareListCore.columnHolder(claims, this.docId, id);
+            if (holder) {
+                this.showToast(holder.name + ' is writing in this column — it can\'t be deleted now', 'error');
+                return;
+            }
             if (!confirm('Delete this column? Its content will be permanently lost.')) return;
-            Object.keys(this.editors).forEach(personId => {
-                if (this.editors[personId][id]) {
-                    this.editors[personId][id].destroy();
-                    delete this.editors[personId][id];
-                }
-            });
-            this.careListColumns = this.careListColumns.filter(c => c.id !== id);
-            this.scheduleSave();
+            this.changeColumn({ kind: 'remove', columnId: id });
         },
 
         // ── Tag / status helpers ──────────────────────────────────────────────
