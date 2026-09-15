@@ -41,6 +41,7 @@ const F = require("./mcp-firestore.js");
 const FormsCore = require("./shared/forms-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const NoteMarkdownCore = require("./shared/note-markdown-core.js");
+const CareListCore = require("./shared/care-list-core.js");
 const Actor = require("./mcp-actor.js");
 const {refuse, loadPerson} = require("./shepherding-writes.js");
 const {loadDocument, withTree} = require("./shepherding-doc-writes.js");
@@ -51,7 +52,7 @@ const FORMS = "forms";
 const VIEWS = "shepherding_views";
 
 // The one column a Care List has before an elder adds any of their own.
-const DEFAULT_COLUMN = {id: "col_default", name: "Notes"};
+const DEFAULT_COLUMN = CareListCore.DEFAULT_COLUMN;
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Form Documents
@@ -342,8 +343,7 @@ async function loadCareList(db, documentId) {
 
 /** The Care List's columns, in the shape the editor stores them. */
 function columnsOf(data) {
-  return (data.careListColumns && data.careListColumns.length) ?
-    data.careListColumns : [Object.assign({}, DEFAULT_COLUMN)];
+  return CareListCore.columnsOf(data);
 }
 
 /**
@@ -369,7 +369,7 @@ async function getCareList(db, {documentId}) {
     limit: 500,
   }) : {people: []};
 
-  const cells = data.careListData || {};
+  const cells = CareListCore.cellsOf(data);
   return {
     documentId,
     title: data.title || "",
@@ -396,25 +396,18 @@ async function getCareList(db, {documentId}) {
  * @return {Promise<object>} { ok, columns }
  */
 async function addCareListColumn(db, {documentId, name, actor}) {
-  const {ref, data} = await loadCareList(db, documentId);
+  await loadCareList(db, documentId);
   const label = String(name || "").trim();
   if (!label) throw refuse("A column needs a name.");
 
-  const columns = columnsOf(data);
-  // Ids are positional and must not collide with one already in use, including
-  // one whose column was removed — a reused id would inherit its old cells.
-  const used = new Set(columns.map((c) => c.id));
-  let n = columns.length + 1;
-  while (used.has("col_" + n)) n += 1;
+  // ⚠ AGAINST THE LATEST LIST, IN A TRANSACTION (MS-437). Writing back the
+  // list this read loaded undid a column an elder added or renamed a moment
+  // before. The id also skips any id a removed column left cells under — a
+  // reused id would inherit them.
+  const out = await CareListCore.changeColumn(db, F.namespace(), documentId,
+      {kind: "add", name: label}, actor.name, Actor.provenance());
 
-  const added = {id: "col_" + n, name: label};
-  await ref.update(Object.assign({
-    careListColumns: columns.concat([added]),
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
-
-  return {ok: true, documentId, column: added, columns: columns.concat([added])};
+  return {ok: true, documentId, column: out.column, columns: out.columns};
 }
 
 /**
@@ -424,7 +417,7 @@ async function addCareListColumn(db, {documentId, name, actor}) {
  * @return {Promise<object>} { ok }
  */
 async function writeCareListCell(db, {documentId, personId, columnId, markdown, actor}) {
-  const {ref, data} = await loadCareList(db, documentId);
+  const {data} = await loadCareList(db, documentId);
   await loadPerson(db, personId);
 
   const columns = columnsOf(data);
@@ -436,16 +429,20 @@ async function writeCareListCell(db, {documentId, personId, columnId, markdown, 
         columns.map((c) => `${c.id} (${c.name})`).join(", ") + ".");
   }
 
-  const cells = Object.assign({}, data.careListData || {});
-  cells[personId] = Object.assign({}, cells[personId] || {}, {
-    [column.id]: NoteMarkdownCore.fromMarkdown(String(markdown || "")),
+  // ⚠ THIS ONE CELL'S FIELD, NOTHING ELSE (MS-437). Rewriting the whole cell
+  // map put back every cell an elder had written since this read. An
+  // old-shaped list is normalised first, or the cell would land inside
+  // somebody's note.
+  await CareListCore.saveEdits(db, F.namespace(), documentId, {
+    cells: [{
+      personId,
+      columnId: column.id,
+      value: NoteMarkdownCore.fromMarkdown(String(markdown || "")),
+    }],
+    byName: actor.name,
+    oldShape: CareListCore.isOldShape(data),
+    extra: Actor.provenance(),
   });
-
-  await ref.update(Object.assign({
-    careListData: cells,
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
 
   return {ok: true, documentId, personId, columnId: column.id};
 }

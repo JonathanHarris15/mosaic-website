@@ -98,6 +98,11 @@ const MODULES = [
     // Shepherding idle rule, your own claim never blocking you — or the server
     // and the screen will disagree about who has a note open.
     'presence-core.js',
+    // MS-435 / MS-437. Where a Care List cell lives, the old shape's
+    // normaliser, and one column change against the latest list. The assistant
+    // writing a cell has to follow exactly the page's rules, or its write lands
+    // somewhere the page does not read — or wipes what the page wrote.
+    'care-list-core.js',
 ];
 
 const BANNER = [
