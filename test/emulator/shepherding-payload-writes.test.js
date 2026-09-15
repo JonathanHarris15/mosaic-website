@@ -288,7 +288,7 @@ suite('the payload-carrying shepherding tools', () => {
 
         const list = await Payload.getCareList(db, {documentId: made.documentId});
         assert.strictEqual(list.rows[0].cells.col_default, 'Visited **Tuesday**.');
-        assert.match(list.note, /does not reach/);
+        assert.match(list.note, /shows, read-only, on that person's Shepherding Profile/);
     });
 
     test('a column that is not on the list is refused, listing the ones that are', async () => {

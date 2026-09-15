@@ -284,18 +284,19 @@
                                      class="h-full min-h-[100px]"
                                      :class="[ShepherdingBlur.pastoralClass(), cellHolder(person.id, col.id) ? 'cursor-not-allowed opacity-70' : 'cursor-text']"></div>
                                 <!-- Somebody else is in this cell: their face and first name (MS-443). -->
-                                <template x-if="cellHolder(person.id, col.id)">
+                                <!-- x-for over [holder] asks once per redraw, not six times. -->
+                                <template x-for="holder in [cellHolder(person.id, col.id)].filter(Boolean)" :key="holder.uid">
                                     <span class="held-badge absolute top-1 right-1 flex items-center gap-1.5 bg-surface-container-lowest rounded-full pr-2"
-                                          :title="holderTitle(cellHolder(person.id, col.id))">
+                                          :title="holderTitle(holder)">
                                         <span class="m-avatar m-avatar--sm">
-                                            <template x-if="cellHolder(person.id, col.id).photoUrl">
-                                                <img :src="cellHolder(person.id, col.id).photoUrl" alt="" :style="PersonPhotoCore.frameStyle(cellHolder(person.id, col.id).photoCrop)">
+                                            <template x-if="holder.photoUrl">
+                                                <img :src="holder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(holder.photoCrop)">
                                             </template>
-                                            <template x-if="!cellHolder(person.id, col.id).photoUrl">
-                                                <span x-text="PersonPhotoCore.initialsOf(cellHolder(person.id, col.id).name)"></span>
+                                            <template x-if="!holder.photoUrl">
+                                                <span x-text="PersonPhotoCore.initialsOf(holder.name)"></span>
                                             </template>
                                         </span>
-                                        <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(cellHolder(person.id, col.id))"></span>
+                                        <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(holder)"></span>
                                         <span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
                                     </span>
                                 </template>

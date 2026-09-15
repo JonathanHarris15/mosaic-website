@@ -137,6 +137,8 @@
     var presenceRef = useRef([]);
     var userRef = useRef(user);
     var saveTimerRef = useRef(null);
+    var savingRef = useRef(null);     // the save on its way, if one is
+    var viewIdRef = useRef(null);     // the Filtered View this list reads, if any
     var activeEditorRef = useRef(null);
 
     peopleRef.current = peopleS[0]; tagsRef.current = tagsS[0]; userRef.current = user;
@@ -175,6 +177,7 @@
           watches.push(data.watchShepherdingPeople(function (people) { if (alive) peopleS[1](people); }));
 
           var viewId = doc.filterId || null;
+          viewIdRef.current = viewId;
           if (viewId) {
             var first = true;
             watches.push(data.watchShepherdingView(viewId, function (v) {
@@ -202,6 +205,10 @@
       var session = sessionRef.current;
       if (!session) return;
       if (!remote) { showToast("This care list was deleted", "error"); return; }
+      // A list with its own filter, rather than a Filtered View, carries it.
+      if (!viewIdRef.current && remote.filterConfig) {
+        viewS[1](function (cur) { return CL.sameContent(cur, remote.filterConfig) ? cur : remote.filterConfig; });
+      }
       var out = session.adopt(remote, { inCell: focusRef.current, inTitle: inTitleRef.current });
       if (out.title !== null) titleS[1](out.title);
       out.cells.forEach(function (c) { putCell(c.personId, c.columnId, c.value); });
@@ -291,9 +298,12 @@
         return Promise.resolve();
       }
       saveStatusS[1]("saving");
-      return data.saveCareListEdits(docId, Object.assign({}, edits, { oldShape: session.oldShape() }), userRef.current)
-        .then(function () { session.normalised(); saveStatusS[1](session.hasUnsaved() ? "unsaved" : "saved"); })
-        .catch(function () { session.saveFailed(edits); saveStatusS[1]("unsaved"); showToast("Error saving care list", "error"); });
+      var saving = data.saveCareListEdits(docId, Object.assign({}, edits, { oldShape: session.oldShape() }), userRef.current)
+        .then(function () { session.markNormalised(); saveStatusS[1](session.hasUnsaved() ? "unsaved" : "saved"); },
+          function () { session.saveFailed(edits); saveStatusS[1]("unsaved"); showToast("Error saving care list", "error"); })
+        .then(function () { if (savingRef.current === saving) savingRef.current = null; });
+      savingRef.current = saving;
+      return saving;
     }
 
     // ── Boxes: a cell, and the title ──
@@ -318,6 +328,10 @@
       focusRef.current = { personId: pid, columnId: cid };
       activeEditorRef.current = ed;
       activeCellS[1]({ personId: pid, colId: cid });
+      // Somebody else's save may have arrived while they held it: start from
+      // that, not from the older copy on screen.
+      var arrived = sessionRef.current && sessionRef.current.catchUpCell(pid, cid);
+      if (arrived) putCell(pid, cid, arrived.value);
     }
     // The hold goes only once this cell's pending save has, so letting go never
     // strands unsaved text. Then whatever arrived meanwhile goes in, and a row
@@ -327,9 +341,10 @@
       if (!f || f.personId !== pid || f.columnId !== cid) return;
       focusRef.current = null;
       var session = sessionRef.current;
-      var pending = session && session.isDirty(pid, cid) ? doSave() : Promise.resolve();
+      // This cell's save — the one still to start, or the one on its way.
+      var pending = session && session.isDirty(pid, cid) ? doSave() : (savingRef.current || Promise.resolve());
       pending.then(function () {
-        var arrived = session && session.leftCell(pid, cid);
+        var arrived = session && session.catchUpCell(pid, cid);
         if (arrived) putCell(pid, cid, arrived.value);
         if (!focusRef.current && !inTitleRef.current && SP) SP.release();
         rowsTickS[1](function (n) { return n + 1; });
@@ -338,11 +353,15 @@
     function enterTitle(e) {
       if (!claim(CL.box.title(docId))) { e.target.blur(); sayHeld(titleHolder(), "title"); return; }
       inTitleRef.current = true;
+      var arrived = sessionRef.current && sessionRef.current.catchUpTitle();
+      if (arrived !== null && arrived !== undefined) titleS[1](arrived);
     }
     function onTitleInput(e) {
       var session = sessionRef.current;
       if (!session) return;
-      if (SP && !SP.touch()) { titleS[1](session.title()); sayHeld(titleHolder(), "title"); return; }
+      // Put straight onto the input: the state already holds this title, so
+      // setting it again would not redraw, and the refused typing would stay.
+      if (SP && !SP.touch()) { e.target.value = session.title(); sayHeld(titleHolder(), "title"); return; }
       titleRef.current = e.target.value;
       titleS[1](e.target.value);
       session.titleEdited();
@@ -352,9 +371,9 @@
       if (!inTitleRef.current) return;
       inTitleRef.current = false;
       var session = sessionRef.current;
-      var pending = session && session.hasUnsaved() ? doSave() : Promise.resolve();
+      var pending = session && session.hasUnsaved() ? doSave() : (savingRef.current || Promise.resolve());
       pending.then(function () {
-        var arrived = session && session.leftTitle();
+        var arrived = session && session.catchUpTitle();
         if (arrived !== null && arrived !== undefined) titleS[1](arrived);
         if (!focusRef.current && !inTitleRef.current && SP) SP.release();
       });
@@ -373,8 +392,9 @@
     // ── Trigger callbacks (wired to real dual-writes, source: 'document') ──
     function computeHidden(newTags) { var h = hiddenIds(tagsRef.current); return newTags.some(function (id) { return !!h[id]; }); }
     function patchPerson(pid, patch) { peopleS[1](peopleRef.current.map(function (p) { return p.id === pid ? Object.assign({}, p, patch) : p; })); }
+    // A pick in a cell somebody took from you is not recorded.
     function onTagAdd(pid, tagId, tagName) {
-      touchCell();
+      if (!touchCell()) return;
       var cur = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).tags || [];
       if (cur.indexOf(tagId) !== -1) return;
       var newTags = cur.concat([tagId]);
@@ -383,7 +403,7 @@
         .catch(function () { showToast("Error adding tag", "error"); });
     }
     function onTagRemove(pid, tagId, tagName) {
-      touchCell();
+      if (!touchCell()) return;
       var cur = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).tags || [];
       var newTags = cur.filter(function (t) { return t !== tagId; });
       data.toggleShepherdingTag(pid, tagId, tagName, false, computeHidden(newTags), userRef.current, "document", docId)
@@ -391,7 +411,7 @@
         .catch(function () { showToast("Error removing tag", "error"); });
     }
     function onStatusChange(pid, urg, imp) {
-      touchCell();
+      if (!touchCell()) return Promise.resolve(null);
       var prev = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).shepherdingStatus || null;
       var next = (urg && imp) ? { urgency: urg, importance: imp } : null;
       return data.setShepherdingStatus(pid, next, prev, userRef.current, "document", docId)
@@ -458,6 +478,13 @@
       // Unsaved typing is read out of the editor (takeSave is synchronous)
       // before it goes — switching column must not lose it.
       if (sessionRef.current && sessionRef.current.isDirty(pid, cid)) doSave();
+      // Its column removed under the cursor: TipTap reports no blur on
+      // destroy, so let go of the cell here.
+      var f = focusRef.current;
+      if (f && f.personId === pid && f.columnId === cid) {
+        focusRef.current = null;
+        if (!inTitleRef.current && SP) SP.release();
+      }
       try { ed.destroy(); } catch (e) {}
       delete editorsRef.current[pid][cid];
     }
@@ -494,6 +521,8 @@
           return out;
         })
         .catch(function (e) {
+          // A rename shown before it was written goes back.
+          if (sessionRef.current) columnsS[1](sessionRef.current.columns());
           showToast(e && /last column/.test(e.message || "") ? "Cannot delete the last column" : "Error changing column", "error");
           return null;
         });
@@ -517,11 +546,18 @@
       if (columnsS[0].length <= 1) { showToast("Cannot delete the last column", "error"); return; }
       // Removing a column deletes every cell in it — not while somebody is
       // writing in one.
-      var claims = (myUid && window.PresenceCore) ? window.PresenceCore.claimsByBox(presenceS[0], myUid, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS }) : {};
-      var holder = CL.columnHolder(claims, docId, id);
-      if (holder) { showToast(holder.name + " is writing in this column — it can't be deleted now", "error"); return; }
+      if (refuseWhileWritten(id)) return;
       if (!window.confirm("Delete this column? Its content will be permanently lost.")) return;
+      // Asked again: somebody may have stepped into a cell while the question was open.
+      if (refuseWhileWritten(id)) return;
       changeColumn({ kind: "remove", columnId: id });
+    }
+    function refuseWhileWritten(id) {
+      var claims = (myUid && window.PresenceCore) ? window.PresenceCore.claimsByBox(presenceRef.current, myUid, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS }) : {};
+      var holder = CL.columnHolder(claims, docId, id);
+      if (!holder) return false;
+      showToast(holder.name + " is writing in this column — it can't be deleted now", "error");
+      return true;
     }
 
     // A face, a first name and a lock: "you can't open this" answered before

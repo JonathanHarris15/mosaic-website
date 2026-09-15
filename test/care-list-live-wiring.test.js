@@ -81,8 +81,8 @@ test('both follow the list and adopt with where the cursor is', () => {
     assert.match(DATA, /CareListCore\.watch\(/);
     for (const src of [WEB, PHONE]) {
         assert.match(src, /\.adopt\([^)]*inCell:[^)]*inTitle:/);
-        assert.match(src, /\.leftCell\(/);
-        assert.match(src, /\.leftTitle\(/);
+        assert.match(src, /\.catchUpCell\(/);
+        assert.match(src, /\.catchUpTitle\(/);
     }
 });
 

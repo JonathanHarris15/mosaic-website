@@ -14,12 +14,11 @@
  *                    already written (ADR-0055).
  *
  *   CARE LISTS       a filtered list of People with elder-written cells beside
- *                    each. ⚠ Cell content is PRIVATE TO THE DOCUMENT and does
- *                    not reach anybody's Shepherding Profile. That was raised
- *                    as the weakest reason to give an assistant a tool and
- *                    accepted anyway (2026-09-04), so the tool descriptions
- *                    point at shep_write_note for anything that should be
- *                    findable from the Person's side.
+ *                    each. ⚠ Cell content LIVES IN THE DOCUMENT: a filled cell
+ *                    is SHOWN on that person's Shepherding Profile, read-only,
+ *                    but never copied there (MS-429). The tool descriptions
+ *                    still point at shep_write_note for a note that belongs
+ *                    to the person.
  *
  *   FILTERED VIEWS   ⚠ SHARED, NOT PERSONAL. A view appears as a table widget
  *                    on EVERY elder's Shepherd Landing Page. An assistant
@@ -51,8 +50,6 @@ const DOCUMENTS = "elder_documents";
 const FORMS = "forms";
 const VIEWS = "shepherding_views";
 
-// The one column a Care List has before an elder adds any of their own.
-const DEFAULT_COLUMN = CareListCore.DEFAULT_COLUMN;
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Form Documents
@@ -310,7 +307,7 @@ async function createCareList(db, {title, filter, viewId, columns, folderId, act
 
   record.careListColumns = (columns || []).length ?
     columns.map((name, i) => ({id: "col_" + (i + 1), name: String(name)})) :
-    [Object.assign({}, DEFAULT_COLUMN)];
+    [Object.assign({}, CareListCore.DEFAULT_COLUMN)];
   record.careListData = {};
 
   const ref = db.collection(DOCUMENTS).doc();
@@ -341,11 +338,6 @@ async function loadCareList(db, documentId) {
   return {ref, data};
 }
 
-/** The Care List's columns, in the shape the editor stores them. */
-function columnsOf(data) {
-  return CareListCore.columnsOf(data);
-}
-
 /**
  * A Care List: who is on it, and what each cell says.
  * @param {object} db the Firestore handle
@@ -361,7 +353,7 @@ async function getCareList(db, {documentId}) {
     filter = view.exists ? view.data() : null;
   }
 
-  const columns = columnsOf(data);
+  const columns = CareListCore.columnsOf(data);
   const listed = filter ? await Read.listPeople(db, {
     tagIds: filter.filterTags || [],
     tagMode: filter.filterMode || "any",
@@ -383,9 +375,9 @@ async function getCareList(db, {documentId}) {
         return out;
       }, {}),
     })),
-    note: "Cell content lives in this document only — it does not reach " +
-      "anybody's Shepherding Profile. Use shep_write_note for anything that " +
-      "should be findable from the Person's side.",
+    note: "Cell content lives in this document. A filled cell shows, " +
+      "read-only, on that person's Shepherding Profile and links back here. " +
+      "Use shep_write_note for a note that belongs to the person.",
   };
 }
 
@@ -420,7 +412,7 @@ async function writeCareListCell(db, {documentId, personId, columnId, markdown, 
   const {data} = await loadCareList(db, documentId);
   await loadPerson(db, personId);
 
-  const columns = columnsOf(data);
+  const columns = CareListCore.columnsOf(data);
   const column = columnId ?
     columns.find((c) => c.id === columnId) : columns[0];
   if (!column) {

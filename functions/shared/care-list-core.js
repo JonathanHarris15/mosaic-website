@@ -194,26 +194,33 @@
     }
 
     // What one open Care List editor knows: the copy it last loaded, saved or
-    // adopted, and which cells (and whether the title) it has typed into since.
+    // adopted (`saved`), the last copy of the list that arrived (`latest`),
+    // and which cells — and whether the title — it has typed into since.
     function createSession(data) {
-        let saved = { title: (data && data.title) || '', columns: columnsOf(data), cells: cellsOf(data) };
-        // A separate object: `saved` is changed in place as cells save.
+        const saved = { title: (data && data.title) || '', columns: columnsOf(data), cells: cellsOf(data) };
+        // A separate object: both are changed in place as cells save and arrive.
         let latest = { title: saved.title, columns: saved.columns, cells: saved.cells };
-        let old = isOldShape(data);
+        let oldShaped = isOldShape(data);
         const dirty = new Set();
         let titleDirty = false;
+        // What each cell and the title held before the save now on its way,
+        // so a failed save can put the stored copy back.
+        const beforeSave = new Map();
+        let titleBeforeSave = null;
 
         function storedCell(copy, pid, cid) {
             const row = copy.cells[pid];
             return row && Object.prototype.hasOwnProperty.call(row, cid) ? row[cid] : null;
         }
 
-        function setSaved(pid, cid, value) {
-            const row = Object.assign({}, saved.cells[pid] || {});
+        function setCell(copy, pid, cid, value) {
+            const row = Object.assign({}, copy.cells[pid] || {});
             if (value === null || value === undefined) delete row[cid];
             else row[cid] = value;
-            saved.cells = Object.assign({}, saved.cells, { [pid]: row });
+            copy.cells = Object.assign({}, copy.cells, { [pid]: row });
         }
+
+        function setSaved(pid, cid, value) { setCell(saved, pid, cid, value); }
 
         function columnIds(copy) {
             return new Set(copy.columns.map(c => c.id));
@@ -239,9 +246,9 @@
             title: () => saved.title,
             columns: () => saved.columns.slice(),
             cell: (pid, cid) => storedCell(saved, pid, cid),
-            oldShape: () => old,
-            // Whoever wrote first has normalised it (saveEdits does, when told).
-            normalised() { old = false; },
+            oldShape: () => oldShaped,
+            // A save has written the column shape (saveEdits normalises first).
+            markNormalised() { oldShaped = false; },
 
             edited(pid, cid) { dirty.add(key(pid, cid)); },
             titleEdited() { titleDirty = true; },
@@ -249,8 +256,9 @@
             hasUnsaved: () => dirty.size > 0 || titleDirty,
 
             // What to write now: the dirty cells, read out of their editors,
-            // and the title if it was typed into. Taking it moves the saved
-            // copy and clears the marks; a failure hands it back.
+            // and the title if it was typed into. Taking it clears the marks
+            // and moves BOTH copies — ours is now the latest word on those
+            // cells, so catching up after it never puts the older text back.
             takeSave(readCell, readTitle) {
                 const live = columnIds(saved);
                 const cells = [];
@@ -259,15 +267,23 @@
                     const personId = k.slice(0, slash);
                     const columnId = k.slice(slash + 1);
                     if (!live.has(columnId)) return;
-                    const value = readCell(personId, columnId);
-                    cells.push({ personId, columnId, value: value === undefined ? null : value });
-                    setSaved(personId, columnId, value);
+                    const read = readCell(personId, columnId);
+                    const value = read === undefined ? null : read;
+                    beforeSave.set(k, {
+                        saved: storedCell(saved, personId, columnId),
+                        latest: storedCell(latest, personId, columnId),
+                    });
+                    cells.push({ personId, columnId, value });
+                    setCell(saved, personId, columnId, value);
+                    setCell(latest, personId, columnId, value);
                 });
                 dirty.clear();
                 let title = null;
                 if (titleDirty) {
                     title = String(readTitle() || '');
+                    titleBeforeSave = { saved: saved.title, latest: latest.title };
                     saved.title = title;
+                    latest.title = title;
                     titleDirty = false;
                 }
                 return { cells, title };
@@ -279,6 +295,7 @@
             // removedColumns }.
             columnsChanged(columns) {
                 const moved = takeColumns(columnsOf({ careListColumns: columns }));
+                latest.columns = saved.columns;
                 return { addedColumns: moved.addedColumns, removedColumns: moved.removedColumns };
             },
 
@@ -290,9 +307,25 @@
                 return storedCell(saved, pid, cid);
             },
 
+            // The save did not land: its cells are unsaved again, and both
+            // copies go back to what was stored before it.
             saveFailed(save) {
-                ((save && save.cells) || []).forEach(c => dirty.add(key(c.personId, c.columnId)));
-                if (save && save.title !== null && save.title !== undefined) titleDirty = true;
+                ((save && save.cells) || []).forEach(c => {
+                    const k = key(c.personId, c.columnId);
+                    const before = beforeSave.get(k);
+                    if (before) {
+                        setCell(saved, c.personId, c.columnId, before.saved);
+                        setCell(latest, c.personId, c.columnId, before.latest);
+                    }
+                    dirty.add(k);
+                });
+                if (save && save.title !== null && save.title !== undefined) {
+                    if (titleBeforeSave) {
+                        saved.title = titleBeforeSave.saved;
+                        latest.title = titleBeforeSave.latest;
+                    }
+                    titleDirty = true;
+                }
             },
 
             // Somebody else's version of the list. Returns what the page must
@@ -300,12 +333,12 @@
             // removedColumns }. Never marks anything dirty.
             //
             // `inCell` / `inTitle` say where this editor's cursor is. That box
-            // is never rewritten under them; leftCell / leftTitle hand over
-            // what arrived once they leave.
+            // is never rewritten under them; catchUpCell / catchUpTitle hand
+            // over what arrived when they enter or leave it.
             adopt(remote, where) {
                 const w = where || {};
                 latest = { title: (remote && remote.title) || '', columns: columnsOf(remote), cells: cellsOf(remote) };
-                old = isOldShape(remote);
+                oldShaped = isOldShape(remote);
 
                 const moved = takeColumns(latest.columns);
                 const columns = moved.changed ? latest.columns.slice() : null;
@@ -334,7 +367,10 @@
                 return { cells, title, columns, addedColumns, removedColumns };
             },
 
-            leftCell(pid, cid) {
+            // What arrived for this cell while the cursor was kept out of it,
+            // as { value }, or null. Asked on entering a cell as well as on
+            // leaving it, so nobody starts typing on top of an older copy.
+            catchUpCell(pid, cid) {
                 if (dirty.has(key(pid, cid))) return null;
                 if (!columnIds(latest).has(cid)) return null;
                 const theirs = storedCell(latest, pid, cid);
@@ -343,7 +379,7 @@
                 return { value: theirs };
             },
 
-            leftTitle() {
+            catchUpTitle() {
                 if (titleDirty || saved.title === latest.title) return null;
                 saved.title = latest.title;
                 return latest.title;

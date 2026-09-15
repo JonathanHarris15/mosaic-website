@@ -65,6 +65,22 @@ test('a Care List cell about this person joins the feed as a note', () => {
     assert.strictEqual(out.notes.filter(n => n.isCareList).length, 1, 'only cells about THIS person');
 });
 
+test('a cell left under a column that was removed is not on the profile (MS-430)', () => {
+    const out = Core.combineProfile({
+        personId: BOB,
+        careListDocs: [careList('cl1', { [BOB]: { c1: TEXT, c_gone: TEXT } })],
+    });
+    assert.deepStrictEqual(out.notes.map(n => n.subject), ['Needs']);
+});
+
+test('a Care List from before columns shows its cell as Notes', () => {
+    const out = Core.combineProfile({
+        personId: BOB,
+        careListDocs: [careList('cl1', { [BOB]: TEXT }, { careListColumns: undefined })],
+    });
+    assert.deepStrictEqual(out.notes.map(n => n.subject), ['Notes']);
+});
+
 test('an empty Care List cell is not a note', () => {
     const out = Core.combineProfile({
         personId: BOB,

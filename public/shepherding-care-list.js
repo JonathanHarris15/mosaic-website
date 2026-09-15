@@ -161,6 +161,7 @@ const _careList = {
     inTitle: false,  // while the cursor is in the title
     watches: [],     // functions that stop a live read
     ticker: null,
+    saving: null,    // the save on its way, if one is
 };
 
 function stopCareListWatches() {
@@ -242,6 +243,8 @@ document.addEventListener('alpine:init', () => {
             });
 
             window.addEventListener('pagehide', () => {
+                // Anything typed in the last second and a half goes first.
+                this.save();
                 stopCareListWatches();
                 try { ShepherdingPresence.leave(); } catch (e) {}
             });
@@ -325,7 +328,11 @@ document.addEventListener('alpine:init', () => {
                 setTimeout(() => { window.location.href = 'shepherding-documents.html'; }, 1500);
                 return;
             }
-            if (data.filterConfig && !this.filterId) this.viewConfig = data.filterConfig;
+            if (data.filterConfig && !this.filterId &&
+                !CareListCore.sameContent(data.filterConfig, this.viewConfig)) {
+                this.viewConfig = data.filterConfig;
+                this.applyFilter();
+            }
             const out = session.adopt(data, { inCell: _careList.focus, inTitle: _careList.inTitle });
             if (out.title !== null) this.title = out.title;
             out.cells.forEach(cell => this.putCell(cell.personId, cell.columnId, cell.value));
@@ -409,6 +416,13 @@ document.addEventListener('alpine:init', () => {
             });
             const session = _careList.session;
             if (session && going.some(([p, c]) => session.isDirty(p, c))) this.save();
+            // The cell under the cursor can go too — its column removed. TipTap
+            // does not report a blur on destroy, so let go of it here.
+            const focus = _careList.focus;
+            if (focus && going.some(([p, c]) => p === focus.personId && c === focus.columnId)) {
+                _careList.focus = null;
+                if (!_careList.inTitle) ShepherdingPresence.release();
+            }
             going.forEach(([personId, colId]) => {
                 try { this.editors[personId][colId].destroy(); } catch (e) {}
                 delete this.editors[personId][colId];
@@ -433,9 +447,10 @@ document.addEventListener('alpine:init', () => {
                 getCurrentStatus: () => { const p = self.people.find(x => x.id === person.id); return p?.shepherdingStatus || null; },
                 createTag:      (name) => self.createNewTag(name),
                 // A trigger pick is activity too, for the one-minute rule.
-                onTagAdd:       (tagId, tagName) => { self.touchCell(); return self.handleTagAdd(person.id, tagId, tagName); },
-                onTagRemove:    (tagId, tagName) => { self.touchCell(); return self.handleTagRemove(person.id, tagId, tagName); },
-                onStatusChange: (urg, imp) => { self.touchCell(); return self.handleStatusChange(person.id, urg, imp); },
+                // One in a cell somebody took from you is not recorded.
+                onTagAdd:       (tagId, tagName) => self.touchCell() ? self.handleTagAdd(person.id, tagId, tagName) : undefined,
+                onTagRemove:    (tagId, tagName) => self.touchCell() ? self.handleTagRemove(person.id, tagId, tagName) : undefined,
+                onStatusChange: (urg, imp) => self.touchCell() ? self.handleStatusChange(person.id, urg, imp) : Promise.resolve(null),
                 onStatusUndo: (activityId, urg, imp) => self.handleStatusUndo(person.id, activityId, urg, imp),
             });
         },
@@ -507,6 +522,10 @@ document.addEventListener('alpine:init', () => {
             _careList.focus = { personId, columnId: colId };
             this.activePersonId = personId;
             this.activeColId = colId;
+            // Somebody else's save may have arrived while they held it: start
+            // from that, not from the older copy on screen.
+            const arrived = _careList.session && _careList.session.catchUpCell(personId, colId);
+            if (arrived) this.putCell(personId, colId, arrived.value);
         },
 
         // The hold goes only once this cell's pending save has — so letting go
@@ -517,8 +536,11 @@ document.addEventListener('alpine:init', () => {
             if (!focus || focus.personId !== personId || focus.columnId !== colId) return;
             _careList.focus = null;
             const session = _careList.session;
+            // Wait for this cell's save — the one still to start, or the one
+            // already on its way — before the hold goes.
             if (session && session.isDirty(personId, colId)) await this.save();
-            const arrived = session && session.leftCell(personId, colId);
+            else if (_careList.saving) await _careList.saving;
+            const arrived = session && session.catchUpCell(personId, colId);
             if (arrived) this.putCell(personId, colId, arrived.value);
             // Already in another cell, which claimed its own box: releasing
             // now would let go of that one.
@@ -533,6 +555,8 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             _careList.inTitle = true;
+            const arrived = _careList.session && _careList.session.catchUpTitle();
+            if (arrived !== null && arrived !== undefined) this.title = arrived;
         },
 
         async leaveTitle() {
@@ -540,7 +564,8 @@ document.addEventListener('alpine:init', () => {
             _careList.inTitle = false;
             const session = _careList.session;
             if (session && session.hasUnsaved()) await this.save();
-            const arrived = session && session.leftTitle();
+            else if (_careList.saving) await _careList.saving;
+            const arrived = session && session.catchUpTitle();
             if (arrived !== null && arrived !== undefined) this.title = arrived;
             if (!_careList.focus && !_careList.inTitle) ShepherdingPresence.release();
         },
@@ -560,6 +585,12 @@ document.addEventListener('alpine:init', () => {
                         pageKey: this.docId,
                         stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
                     });
+                    // Presence waits on who you are; editing does not. A box
+                    // entered before it started was let in unrecorded, so
+                    // record it now or nobody else would see the lock.
+                    const focus = _careList.focus;
+                    if (focus) ShepherdingPresence.claimBox(CareListCore.box.cell(this.docId, focus.personId, focus.columnId));
+                    else if (_careList.inTitle) ShepherdingPresence.claimBox(CareListCore.box.title(this.docId));
                 }).catch(e => console.warn('Presence could not work out who you are:', e));
                 _careList.ticker = setInterval(() => { this.presenceTick++; this.refreshHeld(); }, PresenceCore.HEARTBEAT_MS);
                 // leave(), not release(): release writes a fresh timestamp and
@@ -691,19 +722,20 @@ document.addEventListener('alpine:init', () => {
             }
 
             this.saveStatus = 'saving';
-            try {
-                await CareListCore.saveEdits(db, firebase.firestore, this.docId, Object.assign({}, edits, {
-                    byName: this.myName || this.currentUserName,
-                    oldShape: session.oldShape(),
-                }));
-                session.normalised();
+            const saving = CareListCore.saveEdits(db, firebase.firestore, this.docId, Object.assign({}, edits, {
+                byName: this.myName || this.currentUserName,
+                oldShape: session.oldShape(),
+            })).then(() => {
+                session.markNormalised();
                 this.saveStatus = session.hasUnsaved() ? 'unsaved' : 'saved';
-            } catch (e) {
+            }, e => {
                 console.error('Error saving:', e);
                 session.saveFailed(edits);
                 this.saveStatus = 'unsaved';
                 this.showToast('Error saving care list', 'error');
-            }
+            }).then(() => { if (_careList.saving === saving) _careList.saving = null; });
+            _careList.saving = saving;
+            await saving;
         },
 
         // ── Column management ─────────────────────────────────────────────────
@@ -721,6 +753,8 @@ document.addEventListener('alpine:init', () => {
                 return out;
             } catch (e) {
                 console.error('Error changing column:', e);
+                // A rename shown before it was written goes back.
+                this.careListColumns = _careList.session.columns();
                 this.showToast(e && e.message && /last column/.test(e.message)
                     ? 'Cannot delete the last column' : 'Error changing column', 'error');
                 return null;
@@ -753,15 +787,21 @@ document.addEventListener('alpine:init', () => {
             if (this.careListColumns.length <= 1) { this.showToast('Cannot delete the last column', 'error'); return; }
             // Removing a column deletes every cell in it, so not while somebody
             // is writing in one of them.
+            if (this.refuseWhileWritten(id)) return;
+            if (!confirm('Delete this column? Its content will be permanently lost.')) return;
+            // Asked again: somebody may have stepped into a cell while the
+            // question was open.
+            if (this.refuseWhileWritten(id)) return;
+            this.changeColumn({ kind: 'remove', columnId: id });
+        },
+
+        refuseWhileWritten(columnId) {
             const claims = this.currentUser ? PresenceCore.claimsByBox(this.presenceEntries, this.currentUser.uid,
                 Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS }) : {};
-            const holder = CareListCore.columnHolder(claims, this.docId, id);
-            if (holder) {
-                this.showToast(holder.name + ' is writing in this column — it can\'t be deleted now', 'error');
-                return;
-            }
-            if (!confirm('Delete this column? Its content will be permanently lost.')) return;
-            this.changeColumn({ kind: 'remove', columnId: id });
+            const holder = CareListCore.columnHolder(claims, this.docId, columnId);
+            if (!holder) return false;
+            this.showToast(holder.name + ' is writing in this column — it can\'t be deleted now', 'error');
+            return true;
         },
 
         // ── Tag / status helpers ──────────────────────────────────────────────
