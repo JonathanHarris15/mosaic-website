@@ -77,7 +77,12 @@ test('an ordinary document is completely unaffected', () => {
         title: 'Notes', docType: 'note', author, timestamp: STAMP,
     });
     assert.strictEqual(note.docType, 'note');
-    assert.strictEqual(note.contentJson, null);
+    // A note starts as Blocks: one empty paragraph (MS-501).
+    const blocks = Object.values(note.blocks);
+    assert.strictEqual(blocks.length, 1);
+    assert.deepStrictEqual(blocks[0], { type: 'paragraph', parent: null, order: 'i' });
+    assert.match(Object.keys(note.blocks)[0], /^[a-z][a-z0-9]{9}$/);
+    assert.strictEqual('contentJson' in note, false);
     assert.ok(!('questions' in note), 'a blank document grew form fields');
     assert.ok(!('answers' in note));
 });

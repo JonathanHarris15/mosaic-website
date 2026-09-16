@@ -40,6 +40,7 @@ suite('the calendar tools', () => {
         require('../../functions/mcp-firestore.js').bind({
             FieldValue: admin.firestore.FieldValue,
             Timestamp: admin.firestore.Timestamp,
+            FieldPath: admin.firestore.FieldPath,
         });
     });
 

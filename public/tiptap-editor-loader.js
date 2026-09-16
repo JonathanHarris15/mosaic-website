@@ -93,7 +93,12 @@
         loadPromise = loadScript('vendor/tiptap/tiptap.bundle.js').then(function () {
             const lib = global._TipTapLib;
             if (!lib) throw new Error('the TipTap bundle loaded but did not initialise');
-            global._TipTap = Object.assign({}, lib, { FontSize: createFontSize(lib.Extension) });
+            global._TipTap = Object.assign({}, lib, {
+                FontSize: createFontSize(lib.Extension),
+                // Block ids, for the Elder Document editor only (MS-500). Null
+                // on a page that has not loaded block-id-extension.js.
+                BlockId: (typeof BlockIdExtension !== 'undefined') ? BlockIdExtension.create(lib) : null,
+            });
             return global._TipTap;
         }).catch(function (e) {
             loadPromise = null;

@@ -54,7 +54,11 @@
           };
         },
       });
-      window._TipTap = Object.assign({}, L, { FontSize: FontSize });
+      window._TipTap = Object.assign({}, L, {
+        FontSize: FontSize,
+        // Block ids, for the Elder Document editor only (MS-500).
+        BlockId: (typeof window.BlockIdExtension !== "undefined") ? window.BlockIdExtension.create(L) : null,
+      });
       return loadScript("shepherding-inline-triggers.js");
     });
     return _loadPromise;

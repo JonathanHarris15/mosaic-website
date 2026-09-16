@@ -96,7 +96,12 @@ test('outside profile scope the document has neither owning Person nor Library f
 test('a note is blank, a care list carries its filter', () => {
     const note = build();
     assert.strictEqual(note.docType, 'note');
-    assert.strictEqual(note.contentJson, null);
+    // A note starts as Blocks: one empty paragraph (MS-501).
+    const blocks = Object.values(note.blocks);
+    assert.strictEqual(blocks.length, 1);
+    assert.deepStrictEqual(blocks[0], { type: 'paragraph', parent: null, order: 'i' });
+    assert.match(Object.keys(note.blocks)[0], /^[a-z][a-z0-9]{9}$/);
+    assert.strictEqual('contentJson' in note, false);
     assert.strictEqual('careListData' in note, false);
 
     const preset = build({ docType: 'care-list', title: 'New Care List', filterId: 'view-1' });
@@ -120,11 +125,11 @@ test('the timestamp the caller supplies is used for both stamps', () => {
 
 test('the payload is otherwise unchanged from what the Library wrote before', () => {
     assert.deepStrictEqual(Object.keys(build()).sort(), [
-        'authorName', 'authorUid', 'contentJson', 'createdAt',
+        'authorName', 'authorUid', 'blocks', 'createdAt',
         'docType', 'title', 'updatedAt', 'updatedByName',
     ]);
     assert.deepStrictEqual(Object.keys(build({ ownerPersonId: 'person-7' })).sort(), [
-        'authorName', 'authorUid', 'contentJson', 'createdAt', 'docType',
+        'authorName', 'authorUid', 'blocks', 'createdAt', 'docType',
         'inLibrary', 'ownerPersonId', 'title', 'updatedAt', 'updatedByName',
     ]);
 });

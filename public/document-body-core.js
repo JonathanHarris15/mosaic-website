@@ -589,6 +589,62 @@
         return { write: replacement, remove: [panelId] };
     }
 
+    // ── Ids inside the editor (MS-500) ────────────────────────────────────────
+
+    // After a change to the editor's document: which blocks need an id.
+    // `entries` are the document's blocks in order, as { key, id } (the key is
+    // the node's position); `keepers` maps an id to the position the block
+    // that already had it was mapped to by the change. A block with no id gets
+    // one; when a change leaves two blocks with one id — Enter splitting a
+    // paragraph, a paste of copied blocks, an undo — the block that was
+    // already there keeps it and the newcomer gets a fresh one, so a split or
+    // paste never re-keys a block somebody else is holding. Returns the
+    // changes as { key, id }.
+    function resolveBlockIds(entries, keepers, mint) {
+        const minter = mint || newBlockId;
+        const list = entries || [];
+        const used = new Set(list.map(e => e.id).filter(Boolean));
+        const byId = {};
+        list.forEach(e => { if (e.id) (byId[e.id] = byId[e.id] || []).push(e.key); });
+        const keeperOf = {};
+        Object.keys(byId).forEach(id => {
+            const keys = byId[id];
+            const kept = keepers && keepers[id];
+            keeperOf[id] = (kept !== undefined && keys.includes(kept)) ? kept : keys[0];
+        });
+        const fresh = () => {
+            let id = minter();
+            while (!id || used.has(id)) id = minter();
+            used.add(id);
+            return id;
+        };
+        const changes = [];
+        list.forEach(e => {
+            if (!e.id) changes.push({ key: e.key, id: fresh() });
+            else if (byId[e.id].length > 1 && keeperOf[e.id] !== e.key) changes.push({ key: e.key, id: fresh() });
+        });
+        return changes;
+    }
+
+    // ── Writing Blocks ────────────────────────────────────────────────────────
+
+    // A change to Blocks as field/value pairs for one update: each written
+    // block at its own `blocks.<id>` path, each removed one deleted. `fs` holds
+    // FieldPath and FieldValue (`firebase.firestore` in a browser,
+    // `admin.firestore` on the server). Two writers changing different blocks
+    // produce disjoint paths (ADR-0034).
+    function blockUpdatePairs(fs, change) {
+        const pairs = [];
+        const c = change || {};
+        Object.keys(c.write || {}).forEach(id => {
+            pairs.push(new fs.FieldPath('blocks', id), c.write[id]);
+        });
+        (c.remove || []).forEach(id => {
+            pairs.push(new fs.FieldPath('blocks', id), fs.FieldValue.delete());
+        });
+        return pairs;
+    }
+
     // ── One page's copy of the Blocks ─────────────────────────────────────────
 
     // What one open document editor knows. `stored` is the Blocks as the
@@ -707,6 +763,8 @@
         appendBlocks,
         orphanPanelReplacement,
         createBlocksSession,
+        resolveBlockIds,
+        blockUpdatePairs,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

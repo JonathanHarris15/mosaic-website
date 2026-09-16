@@ -244,7 +244,12 @@
             // tell what kind of document it is holding without asking anybody.
             if (shepherdingDoc) record.shepherdingDoc = true;
         } else {
-            record.contentJson = null;
+            // ⚠ BLOCKS, NOT A BODY VALUE (MS-501). A note's body is stored as
+            // Blocks, one record per block, so two elders in two paragraphs
+            // save different fields. A new document is one empty paragraph.
+            // (The Blocks rules are DocumentBodyCore's; this module does not
+            // load it, so the one block is written out here.)
+            record.blocks = { [emptyBlockId()]: { type: 'paragraph', parent: null, order: 'i' } };
         }
 
         return record;
@@ -252,6 +257,15 @@
 
     // Put a document at the top of a structure, unless it is already somewhere
     // in it. Returns whether anything changed, so a caller can skip the write.
+    // A Block id: a letter, then letters and digits (DocumentBodyCore.newBlockId).
+    function emptyBlockId() {
+        const letters = 'abcdefghijklmnopqrstuvwxyz';
+        const chars = letters + '0123456789';
+        let id = letters[Math.floor(Math.random() * letters.length)];
+        for (let i = 0; i < 9; i++) id += chars[Math.floor(Math.random() * chars.length)];
+        return id;
+    }
+
     function fileInRoot(root, docId) {
         if (!root || containsDoc(root, docId)) return false;
         if (!root.children) root.children = [];

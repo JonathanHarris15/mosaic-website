@@ -431,3 +431,35 @@ test('an orphaned Person Panel is replaced the same way by everybody who does it
     one.remove.forEach(id => delete after[id]);
     assert.strictEqual(Core.plainText(Core.bodyOfBlocks(after)), 'Before Bob — Elder Meeting Doing better. After');
 });
+
+// ── Ids inside the editor (MS-500) ───────────────────────────────────────────
+
+test('a block without an id gets one, and ids already unique are left alone', () => {
+    const changes = Core.resolveBlockIds([
+        { key: 0, id: 'a' }, { key: 5, id: null }, { key: 9, id: 'b' },
+    ], {}, counter('n'));
+    assert.deepStrictEqual(changes, [{ key: 5, id: 'n1' }]);
+});
+
+test('when a change leaves two blocks with one id, the block that was already there keeps it', () => {
+    // Pasting a copy of block "a" ABOVE the original: the original moved from
+    // 0 to 7, and the copy now sits at 0.
+    const changes = Core.resolveBlockIds([
+        { key: 0, id: 'a' }, { key: 7, id: 'a' },
+    ], { a: 7 }, counter('n'));
+    assert.deepStrictEqual(changes, [{ key: 0, id: 'n1' }]);
+});
+
+test('with no record of where an id was, the first block holding it keeps it', () => {
+    const changes = Core.resolveBlockIds([
+        { key: 0, id: 'a' }, { key: 4, id: 'a' }, { key: 8, id: 'a' },
+    ], {}, counter('n'));
+    assert.deepStrictEqual(changes, [{ key: 4, id: 'n1' }, { key: 8, id: 'n2' }]);
+});
+
+test('a minted id never repeats one already in the document', () => {
+    let n = 0;
+    const mint = () => ['a', 'a', 'b', 'c'][n++];
+    const changes = Core.resolveBlockIds([{ key: 0, id: 'a' }, { key: 3, id: 'b' }, { key: 6, id: null }], {}, mint);
+    assert.deepStrictEqual(changes, [{ key: 6, id: 'c' }]);
+});
