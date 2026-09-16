@@ -156,7 +156,35 @@ test('a change of our own still on its way stays on screen when somebody else\'s
 
     sandbox._resolve({ ok: true, changed: true });
     await saving;
+    assert.ok(page.structure.children.some(c => c.id === 'N'), 'a confirmed change flickered out before its tree arrived');
+
+    // The next tree carries it; after that it is no longer laid on top.
+    const withOurs = JSON.parse(JSON.stringify(theirs));
+    withOurs.children.unshift({ type: 'folder', id: 'N', name: 'New Folder', children: [] });
+    page.adoptTree(withOurs);
     assert.strictEqual(page.pendingTree.length, 0);
+});
+
+test('a change somebody overwrote after ours was confirmed does not stay on screen', async () => {
+    const { page, sandbox } = loadDirectory();
+    page.adoptTree(tree());
+    const saving = page.changeTree({ op: 'renameFolder', folderId: 'A', name: 'Foo' });
+    sandbox._resolve({ ok: true, changed: true });
+    await saving;
+    const overwritten = tree();
+    overwritten.children[0].name = 'Bar';
+    page.adoptTree(overwritten);
+    assert.strictEqual(page.structure.children[0].name, 'Bar');
+});
+
+test('a refused change comes off the screen straight away', async () => {
+    const { page, sandbox } = loadDirectory();
+    page.adoptTree(tree());
+    sandbox.DocumentTree.change = () => Promise.reject(new Error('That folder no longer exists.'));
+    const ok = await page.changeTree({ op: 'createFolder', parentId: '__root__', folderId: 'N', name: 'New Folder' });
+    assert.strictEqual(ok, false);
+    assert.ok(!page.structure.children.some(c => c.id === 'N'));
+    assert.match(page.toasts[0].message, /no longer exists/);
 });
 
 test('a profile tab sends its changes to that person\'s tree', () => {

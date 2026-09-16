@@ -165,11 +165,14 @@
     var activityS = useState(null);
     useEffect(function () {
       var alive = true;
-      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      function keep(set) { return function (v) { if (alive) set(v); }; }
+      // The load is the People arriving — or failing, which must not leave a
+      // spinner up (the rest simply stay as they are).
+      function done() { if (alive) loadingS[1](false); }
       var stops = [
         data.watchShepherdingPanelTasks(user, keep(tasksS[1])),
         data.watchShepherdingViews(keep(viewsS[1])),
-        data.watchShepherdingPeople(keep(peopleS[1])),
+        data.watchShepherdingPeople(function (v) { if (alive) { peopleS[1](v); done(); } }, done),
         data.watchShepherdingTags(keep(tagsS[1])),
       ];
       return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
@@ -236,7 +239,7 @@
     function completeTask(t) {
       data.completeShepherdingTask(t).then(function () {
         // Off the panel at once; the next delivery brings the truth.
-        tasksS[1](tasksS[0].filter(function (x) { return x !== t; }));
+        tasksS[1](function (list) { return list.filter(function (x) { return x.id !== t.id || x.dueDate !== t.dueDate; }); });
         showToast("Done");
       }).catch(function (e) { showToast((e && e.message) || "Error completing task", "error"); });
     }
@@ -445,9 +448,10 @@
     // screen's own state and survive every delivery.
     useEffect(function () {
       var alive = true;
-      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      function keep(set) { return function (v) { if (alive) set(v); }; }
+      function done() { if (alive) loadingS[1](false); }
       var stops = [
-        data.watchShepherdingPeople(keep(peopleS[1])),
+        data.watchShepherdingPeople(function (v) { if (alive) { peopleS[1](v); done(); } }, done),
         data.watchShepherdingLastNoteDates(keep(notesDatesS[1])),
         data.watchShepherdingTags(keep(tagsS[1])),
         data.watchShepherdingViews(keep(viewsS[1])),
@@ -783,6 +787,8 @@
     var structDocId = "person_" + pid;
     var pathS = useState([]), renameIdS = useState(null), renameValS = useState("");
     var moveS = useState(null), deleteS = useState(null);
+    // Another person's tab starts at the top, not in the last person's folder.
+    useEffect(function () { pathS[1]([]); renameIdS[1](null); }, [pid]);
     // Live, and changed one change at a time through the server (MS-493 /
     // MS-496) — see mobile/document-tree.js.
     var tree = M.documentTree.useDocumentTree({ treeId: structDocId, pathS: pathS, renameIdS: renameIdS, showToast: showToast });
@@ -803,7 +809,9 @@
     function openDoc(id) { nav("documentEditor", { id: id }); }
     function createDoc() {
       data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
-        tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) { if (ok) nav("documentEditor", { id: id }); });
+        tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) {
+          return ok || (currentFolderId !== DC.ROOT && tree.change({ op: "file", docId: id, folderId: DC.ROOT }));
+        }).then(function (ok) { if (ok) nav("documentEditor", { id: id }); });
       }).catch(function (e) {
         console.error("Error creating document:", e);
         showToast(data.documentCreateFailure(e), "error");

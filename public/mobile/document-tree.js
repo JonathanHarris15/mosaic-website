@@ -30,12 +30,18 @@
     var structureS = useState({ children: [] });
     var loadedS = useState(false);
     var pendingRef = useRef([]);   // this screen's changes the server has not confirmed yet
+    var confirmedRef = useRef([]); // of those, the ones the server confirmed
+    var lastTreeRef = useRef(null); // the last tree that arrived, as the server has it
+    var shownRef = useRef({ children: [] }); // what is on screen now
     var optsRef = useRef(opts);
     optsRef.current = opts;
 
-    function show(tree) {
-      var mine = clone(tree || { children: [] });
+    // The last tree that arrived, with this screen's own changes still on
+    // their way laid over it.
+    function redraw() {
+      var mine = clone(lastTreeRef.current || shownRef.current);
       pendingRef.current.forEach(function (c) { try { DC.applyTreeChange(mine, c); } catch (e) {} });
+      shownRef.current = mine;
       structureS[1](mine);
       keepPlace(mine);
     }
@@ -59,32 +65,43 @@
     useEffect(function () {
       var alive = true;
       pendingRef.current = [];
+      lastTreeRef.current = null;
       var stop = data.watchDocumentStructure(opts.treeId, function (tree) {
         if (!alive) return;
-        show(tree);
+        lastTreeRef.current = tree;
+        // A change confirmed before this tree arrived is in it (or overwritten
+        // by somebody since): stop laying it on top.
+        if (confirmedRef.current.length) {
+          var confirmed = confirmedRef.current;
+          pendingRef.current = pendingRef.current.filter(function (c) { return confirmed.indexOf(c) === -1; });
+          confirmedRef.current = [];
+        }
+        redraw();
         loadedS[1](true);
       }, function () { if (alive) loadedS[1](true); });
       return function () { alive = false; stop(); };
     }, [opts.treeId]);
 
+    // Applied to what is on screen NOW (a ref, not the value this render
+    // closed over — a create calls this after a round trip), and sent.
     function change(treeChange) {
-      var next = clone(structureS[0]);
+      var next = clone(shownRef.current);
       var local = DC.applyTreeChange(next, treeChange);
       if (local.refused) { optsRef.current.showToast(local.refused, "error"); return Promise.resolve(false); }
+      shownRef.current = next;
       structureS[1](next);
       pendingRef.current = pendingRef.current.concat([treeChange]);
-      function settled() {
-        pendingRef.current = pendingRef.current.filter(function (c) { return c !== treeChange; });
-      }
       return data.changeDocumentTree(opts.treeId, treeChange).then(function () {
-        settled();
+        // Kept on screen until the next tree arrives, which carries it.
+        confirmedRef.current = confirmedRef.current.concat([treeChange]);
         return true;
       }, function (e) {
-        settled();
         optsRef.current.showToast((e && e.message) || "That did not save", "error");
-        // Put the screen back to the tree as it is; no delivery will, when
-        // nothing changed on the server.
-        return data.getDocumentStructure(opts.treeId).then(function (tree) { show(tree); return false; });
+        // Refused: nothing changed on the server, so no tree will arrive to
+        // take it off the screen. Draw again without it.
+        pendingRef.current = pendingRef.current.filter(function (c) { return c !== treeChange; });
+        if (lastTreeRef.current) redraw();
+        return false;
       });
     }
 

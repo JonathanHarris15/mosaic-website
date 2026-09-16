@@ -118,6 +118,8 @@ document.addEventListener('alpine:init', () => {
                 this.loading = false;
             });
             window.addEventListener('pagehide', stopPeopleWatches);
+            // Brought back from the back/forward cache with its watches stopped.
+            window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
         },
 
         // ── Live (MS-495) ────────────────────────────────────────────────────

@@ -225,7 +225,10 @@
         elderDocs.patch(id, { id: id, title: opts.title || (c.type === "care-list" ? "New Care List" : "New Document"), docType: c.type, authorName: (props.user && props.user.name) || "" });
         // Route by the type we just created — the docs map closure here is stale
         // (doesn't yet contain the new doc), so don't rely on openDoc's lookup.
+        // Never filed nowhere: if the folder went meanwhile, it lands at the top.
         tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) {
+          return ok || (currentFolderId !== DC.ROOT && tree.change({ op: "file", docId: id, folderId: DC.ROOT }));
+        }).then(function (ok) {
           if (ok) props.nav(c.type === "care-list" ? "careList" : "documentEditor", { id: id });
         });
       // Say WHICH failure. A refusal for a missing author is a different

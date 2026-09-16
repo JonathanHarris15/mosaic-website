@@ -12,6 +12,9 @@ const PERMISSION_DENIED = 'permission-denied';
 // The live reads this page holds open, stopped when it goes (MS-496). Kept
 // outside Alpine: a proxy around a stop function is no use to anybody.
 const _libraryWatches = [];
+// The last tree that arrived, as the server has it — what the screen is drawn
+// from again when one of this page's own changes settles or is refused.
+let _lastLibraryTree = null;
 function stopLibraryWatches() {
     _libraryWatches.splice(0).forEach(stop => { try { stop(); } catch (e) {} });
 }
@@ -63,6 +66,9 @@ document.addEventListener('alpine:init', () => {
         // A tree that arrives in the meantime has them applied on top, so an
         // elder's own click never flickers out and back (MS-493).
         pendingTree: [],
+        // Of those, the ones the server has confirmed, dropped when the next
+        // tree arrives.
+        confirmedTree: [],
 
         currentPath: [],
 
@@ -253,12 +259,28 @@ document.addEventListener('alpine:init', () => {
                     { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('the tags') }));
             }
             window.addEventListener('pagehide', stopLibraryWatches);
+            // Brought back from the browser's back/forward cache with its
+            // watches stopped: start again rather than sit there stale.
+            window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
         },
 
         adoptTree(data) {
-            const tree = (data && Array.isArray(data.children))
+            _lastLibraryTree = (data && Array.isArray(data.children))
                 ? JSON.parse(JSON.stringify({ children: data.children })) : { children: [] };
-            // This page's own changes still on their way stay on screen.
+            // A change the server confirmed before this tree arrived is in it
+            // (or already overwritten by somebody later): stop laying it on top.
+            const confirmed = this.confirmedTree;
+            if (confirmed.length) {
+                this.pendingTree = this.pendingTree.filter(c => !confirmed.includes(c));
+                this.confirmedTree = [];
+            }
+            this.redrawTree();
+        },
+
+        // The last tree that arrived, with this page's own changes still on
+        // their way laid over it.
+        redrawTree() {
+            const tree = JSON.parse(JSON.stringify(_lastLibraryTree || this.structure));
             this.pendingTree.forEach(change => { try { Docs.applyTreeChange(tree, change); } catch (e) {} });
             this.structure = tree;
             this.keepPlaceIn(tree);
@@ -304,25 +326,18 @@ document.addEventListener('alpine:init', () => {
             this.pendingTree.push(change);
             try {
                 await DocumentTree.change(this.structureDocId, change);
+                // Kept on screen until the next tree arrives, which carries it
+                // (a change laid over a tree that already has it changes nothing).
+                this.confirmedTree.push(change);
                 return true;
             } catch (e) {
                 console.error('Error changing the folders:', e);
                 this.showToast((e && e.message) || 'That did not save', 'error');
-                await this.reloadTree();
-                return false;
-            } finally {
+                // Refused: nothing changed on the server, so no tree will
+                // arrive to take it off the screen. Draw again without it.
                 this.pendingTree = this.pendingTree.filter(c => c !== change);
-            }
-        },
-
-        // The tree as the server has it, when a change of ours was refused and
-        // no delivery would put the screen right.
-        async reloadTree() {
-            try {
-                const snap = await db.collection('elder_document_structure').doc(this.structureDocId).get();
-                this.adoptTree(snap.exists ? snap.data() : null);
-            } catch (e) {
-                console.error('Error reloading the folders:', e);
+                if (_lastLibraryTree) this.redrawTree();
+                return false;
             }
         },
 
@@ -530,7 +545,12 @@ document.addEventListener('alpine:init', () => {
                     inLibrary: shepherding ? true : false,
                 };
 
-                await this.changeTree({ op: 'file', docId: docRef.id, folderId: this.currentFolderId });
+                // A document is never left filed nowhere: if the folder went
+                // while it was being made, it lands at the top instead.
+                const filed = await this.changeTree({ op: 'file', docId: docRef.id, folderId: this.currentFolderId })
+                    || (this.currentFolderId !== Docs.ROOT
+                        && await this.changeTree({ op: 'file', docId: docRef.id, folderId: Docs.ROOT }));
+                if (!filed) return;
 
                 // The other half of "both places". Only when it was started on
                 // a profile: from the Library there is nobody to file it under
@@ -660,11 +680,11 @@ document.addEventListener('alpine:init', () => {
                     db.collection('elder_documents').doc(id).update({ inLibrary: false })));
                 toOptOut.forEach(id => { if (this.allDocs[id]) this.allDocs[id].inLibrary = false; });
 
-                await this.changeTree({ op: 'remove', itemId: item.id });
+                const removed = await this.changeTree({ op: 'remove', itemId: item.id });
 
                 if (toPruneFromLibrary.length) await this.pruneFromLibraryRoot(toPruneFromLibrary);
 
-                this.showToast('Deleted successfully');
+                if (removed) this.showToast('Deleted successfully');
             } catch (e) {
                 console.error('Error deleting:', e);
                 this.showToast('Error deleting', 'error');

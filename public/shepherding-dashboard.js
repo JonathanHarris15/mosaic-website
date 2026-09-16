@@ -79,6 +79,8 @@ document.addEventListener('alpine:init', () => {
                 this.loading = false;
             });
             window.addEventListener('pagehide', stopDashWatches);
+            // Brought back from the back/forward cache with its watches stopped.
+            window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
         },
 
         // ── Live (MS-494) ────────────────────────────────────────────────────
@@ -202,6 +204,13 @@ document.addEventListener('alpine:init', () => {
                     createdByName: this.currentUserName,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
+                // On screen at once; the next delivery brings the server's copy.
+                if (!this.views.some(v => v.id === docRef.id)) {
+                    this.views = this.views.concat([{ id: docRef.id, title: this.newView.title.trim(),
+                        filterTags: [...this.newView.filterTags], filterMode: this.newView.filterMode,
+                        statusZoneFilters: [...this.newView.statusZoneFilters],
+                        tagHoldFilters: this.cleanHoldFilters(), tagHoldCmp: this.cleanHoldCmp() }]);
+                }
                 this.newView = this.blankView();
                 this.showViewModal = false;
                 this.selectedViewId = docRef.id;

@@ -507,8 +507,8 @@
   function watchCareLists(onDocs) {
     return watch(db.collection("elder_documents").where("docType", "==", "care-list"), liveRows, onDocs, rosterEvery());
   }
-  function watchShepherdingTags(onTags) {
-    return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery());
+  function watchShepherdingTags(onTags, onError) {
+    return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery(), onError);
   }
   function watchPeople(onPeople) {
     return watch(db.collection("people"), peopleFromSnap, onPeople, rosterEvery());
@@ -920,8 +920,8 @@
       function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; }, onView, rosterEvery());
   }
   // Whole records — the Care List filters on tags, status and membership.
-  function watchShepherdingPeople(onPeople) {
-    return watch(db.collection("people"), mapDocs, onPeople, rosterEvery());
+  function watchShepherdingPeople(onPeople, onError) {
+    return watch(db.collection("people"), mapDocs, onPeople, rosterEvery(), onError);
   }
 
   // ── Document Library (elder_documents + elder_document_structure) ────────────

@@ -70,6 +70,11 @@ async function withTree(db, change, treeId) {
     const data = snap.exists ? snap.data() : null;
     const tree = (data && data.children) ? data : {children: []};
     result = change(tree);
+    // A tree change that changed nothing (refused, or already so) writes
+    // nothing (MS-493).
+    if (result && typeof result === "object" && result.changed === false) {
+      return;
+    }
     tx.set(ref, {children: tree.children});
   });
   return result;

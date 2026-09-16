@@ -86,6 +86,8 @@ document.addEventListener('alpine:init', () => {
                     resolve();
                 } });
                 window.addEventListener('pagehide', () => { try { stop(); } catch (e) {} });
+                // Brought back from the back/forward cache with its watch stopped.
+                window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
             });
         },
 

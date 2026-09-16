@@ -63,10 +63,11 @@
     // screen is open, and stop when it goes.
     useEffect(function () {
       var alive = true;
-      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      function done() { if (alive) loadingS[1](false); }
       var stops = [
-        data.watchShepherdingPeople(keep(peopleS[1])),
-        data.watchShepherdingTags(keep(tagsS[1])),
+        data.watchShepherdingPeople(function (v) { if (alive) peopleS[1](v); }),
+        // The load is the tags arriving, or failing — never a spinner forever.
+        data.watchShepherdingTags(function (v) { if (alive) { tagsS[1](v); done(); } }, done),
       ];
       return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
     }, []);
