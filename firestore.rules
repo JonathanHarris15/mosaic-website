@@ -677,7 +677,17 @@ service cloud.firestore {
     }
 
     match /elder_documents/{docId} {
-      allow read, write: if isElder();
+      allow read, create, delete: if isElder();
+      // ⚠ A DOCUMENT STORED AS BLOCKS NEVER TAKES A WHOLE BODY BACK (MS-501,
+      // ADR-0065). An Elder Document is saved block by block, so two elders in
+      // two paragraphs write different fields. A page from before that change
+      // still saves the whole body as `contentJson`; let through, it would sit
+      // beside the Blocks unread while its writer believed it saved. Refused,
+      // that page says it could not save, and a reload brings the live editor.
+      allow update: if isElder()
+        && !('blocks' in resource.data
+             && 'contentJson' in request.resource.data
+             && request.resource.data.contentJson != null);
     }
 
     match /elder_document_structure/{docId} {
