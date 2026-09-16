@@ -239,6 +239,78 @@ suite('the payload-carrying shepherding tools', () => {
         assert.strictEqual(stored.answers.q_ready, 'Yes');
     });
 
+    // ── MS-484: the assistant answers one question at a time ──────────────
+
+    test('an answer another writer saved after the assistant read is still there afterwards', async () => {
+        await seedTemplate('interview');
+        const made = await Payload.createFormDocument(db, {
+            templateId: 'interview', personId: A, actor,
+        });
+        const ref = db.collection('elder_documents').doc(made.documentId);
+        // An elder's page saves one answer — the map the assistant reads next
+        // is not the map it writes into.
+        await ref.update(new (require('firebase-admin').firestore.FieldPath)('answers', 'q_story'),
+            'His neighbour invited him.');
+
+        await Payload.answerFormDocument(db, {
+            documentId: made.documentId, answers: {q_ready: 'Yes'}, actor,
+        });
+
+        const stored = (await ref.get()).data().answers;
+        assert.strictEqual(stored.q_story, 'His neighbour invited him.');
+        assert.strictEqual(stored.q_ready, 'Yes');
+    });
+
+    test('changing who a personal shepherding document is about moves it between profiles', async () => {
+        await seedTemplate('interview', {shepherdingDoc: true, questions: [
+            // A real shepherding template always carries the subject question
+            // first (FormsCore.withSubjectFirst); a bare seed would not.
+            {id: FormsCore.SUBJECT_QUESTION_ID, type: 'person', text: 'Who is this document for?'},
+            {id: 'q_ready', type: 'choice_one', text: 'Ready?', options: ['Yes', 'Not yet']},
+        ]});
+        const made = await Payload.createFormDocument(db, {
+            templateId: 'interview', personId: A, actor,
+        });
+        const trees = db.collection('elder_document_structure');
+        await trees.doc('person_' + A).set({children: [{type: 'document', id: made.documentId}]});
+
+        await Payload.answerFormDocument(db, {
+            documentId: made.documentId,
+            answers: {[FormsCore.SUBJECT_QUESTION_ID]: {personId: B, name: 'Tom Reed'}},
+            actor,
+        });
+
+        assert.deepStrictEqual((await trees.doc('person_' + A).get()).data().children, []);
+        assert.deepStrictEqual((await trees.doc('person_' + B).get()).data().children
+            .map((c) => c.id), [made.documentId]);
+        const stored = (await db.collection('elder_documents').doc(made.documentId).get()).data();
+        assert.strictEqual(stored.ownerPersonId, B);
+    });
+
+    test('answering any other question leaves where it is filed alone', async () => {
+        await seedTemplate('interview', {shepherdingDoc: true, questions: [
+            // A real shepherding template always carries the subject question
+            // first (FormsCore.withSubjectFirst); a bare seed would not.
+            {id: FormsCore.SUBJECT_QUESTION_ID, type: 'person', text: 'Who is this document for?'},
+            {id: 'q_ready', type: 'choice_one', text: 'Ready?', options: ['Yes', 'Not yet']},
+        ]});
+        const made = await Payload.createFormDocument(db, {
+            templateId: 'interview', personId: A, actor,
+        });
+        const trees = db.collection('elder_document_structure');
+        await trees.doc('person_' + A).set({children: [{type: 'document', id: made.documentId}]});
+
+        await Payload.answerFormDocument(db, {
+            documentId: made.documentId, answers: {q_ready: 'Yes'}, actor,
+        });
+
+        assert.deepStrictEqual((await trees.doc('person_' + A).get()).data().children
+            .map((c) => c.id), [made.documentId]);
+        assert.strictEqual((await trees.doc('person_' + B).get()).exists, false);
+        const stored = (await db.collection('elder_documents').doc(made.documentId).get()).data();
+        assert.strictEqual(stored.ownerPersonId, A);
+    });
+
     test('a note document is not a form document', async () => {
         const Docs = require('../../functions/shepherding-doc-writes.js');
         const {documentId} = await Docs.createDocument(db, {title: 'Minutes', actor});

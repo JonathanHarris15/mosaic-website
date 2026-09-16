@@ -176,11 +176,13 @@ test('started from a profile, it is filed in the Library as well', () => {
 });
 
 test('answering the first question files it on that person, and changing it moves it', () => {
+    // Off the old profile before onto the new one is pinned where the rule
+    // lives, in form-document-core.test.js (MS-483).
     const js = read('public', 'shepherding-form-document.js');
-    assert.match(js, /async refileForSubject\(\)/, 'nothing files it on a profile');
-    assert.match(js, /if \(was\) await this\.unfileFrom/, 'changing the answer leaves it on two profiles');
-    assert.ok(js.indexOf('unfileFrom(') < js.indexOf('fileOn(\'person_\' + now)'),
-        'it is added to the new profile before being taken off the old one');
+    assert.match(js, /async refileForSubject\(subject\)/, 'nothing files it on a profile');
+    assert.match(js, /if \(edits\.subject\) await this\.refileForSubject/,
+        'it re-files on saves that did not change who it is about');
+    assert.match(js, /FormDocumentCore\.refile\(/, 'it files through its own writes instead of the shared rule');
     assert.match(js, /this\.doc && this\.doc\.shepherdingDoc/,
         'it reads the template rather than the stamp on the record');
 });

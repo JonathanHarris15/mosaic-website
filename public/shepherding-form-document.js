@@ -23,6 +23,14 @@
 // already written.
 
 function formDocumentPage() {
+    // Kept outside Alpine: none of it is drawn (MS-486 / MS-487).
+    const live = {
+        session: null,   // FormDocumentCore session: what this page last saved or took in
+        focus: null,     // the question id under the cursor
+        inTitle: false,  // the cursor is in the title
+        saving: null,    // the save on its way, if one is
+        stops: [],       // what stops a live read or a ticker
+    };
     const page = {
         loading: true,
         problem: '',
@@ -36,7 +44,14 @@ function formDocumentPage() {
         directory: [],
         fileFaults: {},
         currentUserName: '',
+        currentUser: null,
         _saveTimer: null,
+        // Presence (MS-487): everybody's claims, and a tick so a quiet hold is
+        // redrawn as free without anybody writing anything.
+        presenceEntries: [],
+        presenceTick: 0,
+        heldNotice: '',
+        _heldTimer: null,
 
         get inShell() {
             return new URLSearchParams(location.search).get('shell') === 'mobile'
@@ -93,7 +108,7 @@ function formDocumentPage() {
         pickPerson(q, person) {
             this.answers[q.id] = person ? { personId: person.id, name: person.name } : null;
             this.personQueries[q.id] = '';
-            this.touch();
+            this.touch(q);
         },
 
         // Whoever has a Form Document open is a signed-in elder, and an elder
@@ -203,6 +218,7 @@ function formDocumentPage() {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
                     const userData = await getUserData(user.uid);
+                    this.currentUser = user;
                     this.currentUserName = (userData && userData.name) || user.displayName || user.email || 'Somebody';
 
                     const snap = await db.collection('elder_documents').doc(this.docId).get();
@@ -216,6 +232,9 @@ function formDocumentPage() {
                     // The document's OWN questions. Never the template's.
                     this.questions = Array.isArray(data.questions) ? data.questions : [];
                     this.answers = Object.assign({}, data.answers || {});
+                    // What this page last saved or took in (MS-486). Made before
+                    // the empty lists below, which are no answer and never saved.
+                    live.session = FormDocumentCore.createSession(data);
                     this.readyForLists();
                     this.loadDirectory();
                 } catch (e) {
@@ -223,7 +242,22 @@ function formDocumentPage() {
                 } finally {
                     this.loading = false;
                 }
+                // Editing is open by here. Presence only ever takes a box away,
+                // and if it fails every box stays open (ADR-0035 §3).
+                if (live.session) {
+                    this.watchDocument();
+                    this.startPresence(user);
+                }
             });
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('pagehide', () => {
+                    // Anything picked in the last second and a half goes first.
+                    this.save();
+                    live.stops.forEach(stop => { try { stop(); } catch (e) {} });
+                    live.stops = [];
+                    try { ShepherdingPresence.leave(); } catch (e) {}
+                });
+            }
         },
 
         // A select-all answer is a list, and it has to already BE one before the
@@ -237,6 +271,37 @@ function formDocumentPage() {
             });
         },
 
+        // ── Live (MS-486) ────────────────────────────────────────────────────
+        //
+        // The document is followed while it is open. An answer, the title or
+        // where it is filed that somebody else changed arrives; an answer this
+        // page has changed and not yet saved is left alone (FormDocumentCore).
+        // Our own write echoing back before the server confirms it is skipped.
+        watchDocument() {
+            const ref = db.collection('elder_documents').doc(this.docId);
+            const onNext = (snap) => {
+                if (!snap) return;
+                if (!snap.exists) { this.problem = 'This document was deleted.'; return; }
+                if (snap.metadata && snap.metadata.hasPendingWrites) return;
+                this.adoptRemote(snap.data());
+            };
+            const onError = (e) => console.warn('Lost the live connection to this document:', e);
+            const Live = typeof MosaicLiveRead !== 'undefined' ? MosaicLiveRead : null;
+            live.stops.push(Live
+                ? Live.watch(ref, onNext, { fallbackEveryMs: Live.PERSON_EVERY_MS, onError })
+                : ref.onSnapshot(onNext, onError));
+        },
+
+        adoptRemote(data) {
+            if (!live.session || !data) return;
+            const out = live.session.adopt(data, this.answers,
+                { inQuestion: live.focus, inTitle: live.inTitle }, this.title);
+            out.answers.forEach(a => { this.answers[a.questionId] = a.value; });
+            this.readyForLists();
+            if (out.title !== null) this.title = out.title;
+            if (out.ownerPersonId !== undefined && this.doc) this.doc.ownerPersonId = out.ownerPersonId || null;
+        },
+
         // ── Saving ───────────────────────────────────────────────────────────
         //
         // The document editor's saving, not a third behaviour invented here:
@@ -244,34 +309,60 @@ function formDocumentPage() {
         // the Elder Document both show (ADR-0032). A failed save says so and
         // keeps what is on screen — nothing typed is ever thrown away to make
         // the indicator tidy.
+        //
+        // It writes only the answers that changed, each to its own field, and
+        // the title if it changed (MS-486) — never the whole map, which put
+        // back every answer another elder or the assistant had saved since.
 
-        touch() {
+        // Every keystroke, pick or search in a question. False back from
+        // presence means somebody took the question after you went quiet: the
+        // stored answer goes back on screen and nothing is saved over theirs.
+        touch(q) {
+            if (q && live.session && typeof ShepherdingPresence !== 'undefined' && !ShepherdingPresence.touch()) {
+                this.answers[q.id] = live.session.answer(q.id);
+                this.readyForLists();
+                this.sayHeld(this.questionHolder(q), 'question');
+                return;
+            }
             this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
 
-        onTitleInput() { this.touch(); },
+        onTitleInput() {
+            if (live.session && typeof ShepherdingPresence !== 'undefined' && !ShepherdingPresence.touch()) {
+                this.title = live.session.title();
+                this.sayHeld(this.titleHolder, 'title');
+                return;
+            }
+            this.touch();
+        },
 
         async save() {
-            if (!this.docId) return;
+            if (!this.docId || !live.session) return;
+            clearTimeout(this._saveTimer);
+            const edits = live.session.takeSave(this.answers, this.title);
+            if (!edits.answers.length && edits.title === null) {
+                if (!live.saving) this.saveStatus = 'saved';
+                return;
+            }
             this.saveStatus = 'saving';
-            try {
-                await db.collection('elder_documents').doc(this.docId).update({
-                    title: this.title.trim() || 'Untitled',
-                    // Only the answers move. The questions are the record's own
-                    // and are never rewritten from here.
-                    answers: JSON.parse(JSON.stringify(this.answers)),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedByName: this.currentUserName,
-                });
+            const saving = FormDocumentCore.saveEdits(db, firebase.firestore, this.docId, {
+                answers: edits.answers,
+                title: edits.title,
+                byName: this.currentUserName,
+            }).then(async () => {
                 this.saveStatus = 'saved';
-                await this.refileForSubject();
-            } catch (e) {
+                // Only the save that changed who this is about re-files it.
+                if (edits.subject) await this.refileForSubject(edits.subject);
+            }, (e) => {
                 console.error('Error saving form document:', e);
+                live.session.saveFailed(edits);
                 this.saveStatus = 'unsaved';
                 this.problem = 'That did not save. What is on screen is still here — try again in a moment.';
-            }
+            }).then(() => { if (live.saving === saving) live.saving = null; });
+            live.saving = saving;
+            await saving;
         },
 
         // ── Filed by its first answer (MS-405) ───────────────────────────────
@@ -280,12 +371,17 @@ function formDocumentPage() {
         // it lives in two places at once: the Document Library, and the
         // Documents tab of the Shepherding Profile of whoever the first
         // question names. Answer that question and it appears there; change the
-        // answer and it moves.
+        // answer and it moves — off the old profile first, so it is never on
+        // two (FormDocumentCore.refile).
         //
         // ⚠ IT READS THE ANSWER, NOT THE TEMPLATE. A document keeps a copy of
         // its questions and never looks at its template again (ADR-0055), so
         // the fact that this IS a shepherding document is stamped on the record
         // and the subject is read from the answers under a fixed id.
+        //
+        // ⚠ ONLY WHEN THIS PAGE'S OWN SAVE CHANGED THE SUBJECT (MS-486). A page
+        // that heard somebody else change it takes in where it is now filed
+        // and leaves the filing alone.
         //
         // The Library entry is never touched. It is in both places by
         // construction, so there is nothing here to opt into and nothing to
@@ -294,22 +390,12 @@ function formDocumentPage() {
             return FormsCore.subjectPersonId({ answers: this.answers });
         },
 
-        async refileForSubject() {
+        async refileForSubject(subject) {
             if (!(this.doc && this.doc.shepherdingDoc)) return;
-            const now = this.subjectPersonId;
-            const was = String((this.doc && this.doc.ownerPersonId) || '');
-            if (now === was) return;
             try {
-                // Off the old profile first. The other order would, for a
-                // moment, have one document on two people's profiles — and if
-                // the second write failed, permanently.
-                if (was) await this.unfileFrom('person_' + was);
-                if (now) await this.fileOn('person_' + now);
-                await db.collection('elder_documents').doc(this.docId).update({
-                    ownerPersonId: now || null,
-                    inLibrary: true,
-                });
-                this.doc.ownerPersonId = now || null;
+                await FormDocumentCore.refile(db, ShepherdingDocsCore, this.docId, subject.before, subject.after);
+                live.session.filedUnder(subject.after);
+                this.doc.ownerPersonId = subject.after || null;
             } catch (e) {
                 // The answer is saved either way — this is where the document
                 // is SHOWN, not what it says. Saying so beats a silent miss.
@@ -319,21 +405,137 @@ function formDocumentPage() {
             }
         },
 
-        async fileOn(structureId) {
-            const ref = db.collection('elder_document_structure').doc(structureId);
-            const snap = await ref.get();
-            const structure = snap.exists && snap.data().children ? snap.data() : { children: [] };
-            if (!ShepherdingDocsCore.fileInRoot(structure, this.docId)) return;
-            await ref.set(JSON.parse(JSON.stringify(structure)));
+        // ── One person per question (MS-487) ────────────────────────────────
+        //
+        // Each question that asks something is a box, and so is the title.
+        // Drawn by this page AROUND the shared question markup, never inside
+        // it, so the public fill-in page a stranger answers is untouched.
+
+        enterQuestion(q) {
+            if (!q || !FormDocumentCore.isBox(q) || live.focus === q.id) return;
+            if (typeof ShepherdingPresence === 'undefined') return;
+            if (!ShepherdingPresence.claimBox(FormDocumentCore.box.question(this.docId, q.id))) {
+                if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                this.sayHeld(this.questionHolder(q), 'question');
+                return;
+            }
+            // Moving straight from one question to the next: whatever was
+            // changed in the last one goes now.
+            if (live.focus && live.session.unsaved(this.answers).includes(live.focus)) this.save();
+            live.focus = q.id;
+            live.inTitle = false;
+            const arrived = live.session.catchUpQuestion(q.id, this.answers);
+            if (arrived) { this.answers[q.id] = arrived.value; this.readyForLists(); }
         },
 
-        async unfileFrom(structureId) {
-            const ref = db.collection('elder_document_structure').doc(structureId);
-            const snap = await ref.get();
-            if (!snap.exists || !snap.data().children) return;
-            const structure = snap.data();
-            if (!ShepherdingDocsCore.removeFromTree(structure, this.docId)) return;
-            await ref.set(JSON.parse(JSON.stringify(structure)));
+        // Out of a question and into nothing else on the form. The hold goes
+        // once this question's save has — so letting go never strands an answer.
+        async leaveQuestion(q, event) {
+            if (!q || live.focus !== q.id) return;
+            const next = event && event.relatedTarget;
+            if (next && next.closest && next.closest('.fa-q, .fd-title, .np-card')) return;
+            live.focus = null;
+            if (live.session.unsaved(this.answers).includes(q.id)) await this.save();
+            else if (live.saving) await live.saving;
+            const arrived = live.session.catchUpQuestion(q.id, this.answers);
+            if (arrived) { this.answers[q.id] = arrived.value; this.readyForLists(); }
+            if (!live.focus && !live.inTitle) ShepherdingPresence.release();
+        },
+
+        enterTitle(event) {
+            if (typeof ShepherdingPresence === 'undefined') return;
+            if (!ShepherdingPresence.claimBox(FormDocumentCore.box.title(this.docId))) {
+                event.target.blur();
+                this.sayHeld(this.titleHolder, 'title');
+                return;
+            }
+            if (live.focus && live.session.unsaved(this.answers).includes(live.focus)) this.save();
+            live.focus = null;
+            live.inTitle = true;
+            const arrived = live.session.catchUpTitle(this.title);
+            if (arrived !== null) this.title = arrived;
+        },
+
+        async leaveTitle() {
+            if (!live.inTitle) return;
+            live.inTitle = false;
+            if (FormDocumentCore.titleValue(this.title) !== live.session.title()) await this.save();
+            else if (live.saving) await live.saving;
+            const arrived = live.session.catchUpTitle(this.title);
+            if (arrived !== null) this.title = arrived;
+            if (!live.focus && !live.inTitle) ShepherdingPresence.release();
+        },
+
+        startPresence(user) {
+            if (typeof ShepherdingPresence === 'undefined') return;
+            try {
+                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
+                MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    ShepherdingPresence.start({
+                        db,
+                        uid: user.uid,
+                        identity,
+                        // The same page on web and in the phone app, so both
+                        // count as being on this document.
+                        surface: 'shepherding-form-document',
+                        pageKey: this.docId,
+                        stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    // Presence waits on who you are; answering does not. A box
+                    // entered before it started was let in unrecorded.
+                    if (live.focus) ShepherdingPresence.claimBox(FormDocumentCore.box.question(this.docId, live.focus));
+                    else if (live.inTitle) ShepherdingPresence.claimBox(FormDocumentCore.box.title(this.docId));
+                }).catch(e => console.warn('Presence could not work out who you are:', e));
+                live.stops.push((ticker => () => clearInterval(ticker))(
+                    setInterval(() => { this.presenceTick++; }, PresenceCore.HEARTBEAT_MS)));
+                // leave(), not release(): release writes a fresh timestamp and
+                // would leave you looking present for half a minute after going.
+                window.addEventListener('beforeunload', () => ShepherdingPresence.leave());
+            } catch (e) {
+                console.warn('Presence could not start on this document; carrying on without it:', e);
+            }
+        },
+
+        // Whoever else holds this box, or null.
+        heldBy(box) {
+            this.presenceTick; // read, so a quiet hold is redrawn as free
+            if (typeof ShepherdingPresence === 'undefined') return null;
+            return ShepherdingPresence.holderIn(
+                this.presenceEntries, this.currentUser && this.currentUser.uid, box, Date.now());
+        },
+
+        questionHolder(q) {
+            if (!q || !FormDocumentCore.isBox(q)) return null;
+            return this.heldBy(FormDocumentCore.box.question(this.docId, q.id));
+        },
+
+        get titleHolder() {
+            return this.heldBy(FormDocumentCore.box.title(this.docId));
+        },
+
+        // The other elders on this document — the row of faces.
+        get othersHere() {
+            this.presenceTick;
+            if (!this.currentUser || typeof PresenceCore === 'undefined') return [];
+            return PresenceCore.peopleHere(
+                this.presenceEntries, this.currentUser.uid, 'shepherding-form-document', this.docId,
+                Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS });
+        },
+
+        holderLabel(holder) { return PresenceCore.holderLabel(holder); },
+        holderTitle(holder) { return PresenceCore.holderTitle(holder); },
+
+        // Trying a question somebody else holds says who has it.
+        onQuestionPointer(q) {
+            const holder = this.questionHolder(q);
+            if (holder) this.sayHeld(holder, 'question');
+            else this.enterQuestion(q);
+        },
+
+        sayHeld(holder, what) {
+            this.heldNotice = (holder ? holder.name : 'Somebody') + ' is answering this ' + what + ' right now.';
+            clearTimeout(this._heldTimer);
+            this._heldTimer = setTimeout(() => { this.heldNotice = ''; }, 3000);
         },
     };
     // The new-person card brings its own state and its own Save; this page
