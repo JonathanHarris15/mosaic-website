@@ -2,11 +2,16 @@
    screens-document-editor.js — native Elder Document (note) editor for
    the mobile shell. Full-fidelity port of the desktop editor
    (shepherding-document.js): a real TipTap document bound to
-   elder_documents/{id}.contentJson, with linked Person Panels (each a
+   elder_documents/{id} as Blocks, with linked Person Panels (each a
    nested editor over a person's shepherding_note, with inline #/-#/$$
    triggers + a status matrix), a `/` slash picker to insert panels,
    grouped @-mentions (people/notes/docs/folders), auto-save, panel
-   delete/unlink, cross-tab sync and orphan recovery.
+   delete/unlink and orphan recovery.
+
+   Live (MS-501/505/506), through elder-document-live.js, the same layer
+   the web page sits on: only changed blocks are saved, other elders'
+   blocks arrive while the screen is open, and one person edits each
+   paragraph, list item, cell, Person Panel or the title at a time.
 
    Uses the offline TipTap bundle (M.ensureTipTap) + the shared
    inline-triggers extension, exactly like screens-carelist.js, so
@@ -23,6 +28,10 @@
   // Loaded doc kept outside component state (the editor reads it once at mount).
   var _docLoaded = {};
   var _currentDocId = null, _currentDocTitle = "", _user = null, _nav = null;
+  // The open document, live (elder-document-live.js).
+  var _live = null;
+  // "Ann is editing this", said by the screen that is open.
+  var _sayHeld = function () {};
   var _mentionPeople = [], _mentionNotes = [], _mentionDocs = [], _mentionFolders = [];
   var _peopleList = [], _docTypeById = {}, _allTagsList = [];
   var NOTE_TYPES_ALL = ["Elder Check-in", "Elder Interview", "Elder Meeting", "Life Update", "Prayer Request", "Other", "Create New Note Type"];
@@ -49,9 +58,37 @@
       + ".person-panel-status{font-family:var(--font-sans);font-size:12px;color:var(--on-surface-variant);background:transparent;border:1px solid var(--outline-variant);border-radius:4px;padding:3px 6px;cursor:pointer;white-space:nowrap;}"
       + ".person-panel-view-link{font-family:var(--font-sans);font-size:12px;color:var(--secondary);text-decoration:none;margin-left:auto;white-space:nowrap;cursor:pointer;}"
       + ".person-panel-delete{background:transparent;border:none;cursor:pointer;color:var(--on-surface-variant);padding:2px;display:flex;align-items:center;line-height:1;flex-shrink:0;}"
-      + ".person-panel-body{background:var(--surface-container-lowest);} .person-panel-body .ProseMirror{min-height:72px;padding:12px;box-sizing:border-box;font-family:var(--font-serif);font-size:14.5px;line-height:1.55;color:var(--on-surface);}";
+      + ".person-panel-body{background:var(--surface-container-lowest);} .person-panel-body .ProseMirror{min-height:72px;padding:12px;box-sizing:border-box;font-family:var(--font-serif);font-size:14.5px;line-height:1.55;color:var(--on-surface);}"
+      // Who holds what (MS-505/506).
+      + ".doc-held-layer{position:absolute;top:0;left:0;width:0;height:0;z-index:5;pointer-events:none;}"
+      + ".doc-held-bar{background:var(--secondary);opacity:.6;}"
+      + ".doc-held{display:inline-flex;align-items:center;gap:5px;color:var(--on-surface-variant);background:var(--surface-container-lowest);border-radius:999px;padding:2px 8px 2px 2px;white-space:nowrap;font-family:var(--font-sans);}"
+      + ".doc-held--inline{background:transparent;padding:0;}"
+      + ".doc-held__face{width:22px;height:22px;border-radius:50%;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:var(--primary-fixed);color:var(--primary);font-size:10px;font-weight:600;}"
+      + ".doc-held__face img{width:100%;height:100%;object-fit:cover;}"
+      + ".doc-held__name{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}";
     var el = document.createElement("style"); el.id = "doc-editor-styles"; el.textContent = css;
     document.head.appendChild(el);
+  }
+
+  // A face for whoever holds a box: photo or initials, and first name.
+  function faceFor(holder, inline) {
+    var PC = window.PresenceCore, Photo = window.PersonPhotoCore;
+    var badge = document.createElement("span");
+    badge.className = "doc-held" + (inline ? " doc-held--inline" : "");
+    badge.title = PC ? PC.holderTitle(holder) : "";
+    var face = document.createElement("span"); face.className = "doc-held__face";
+    if (holder.photoUrl) {
+      var img = document.createElement("img"); img.src = holder.photoUrl; img.alt = "";
+      if (Photo && Photo.frameStyle) img.setAttribute("style", Photo.frameStyle(holder.photoCrop));
+      face.appendChild(img);
+    } else {
+      face.textContent = Photo && Photo.initialsOf ? Photo.initialsOf(holder.name) : String(holder.name || "?").charAt(0);
+    }
+    var name = document.createElement("span"); name.className = "doc-held__name";
+    name.textContent = PC ? PC.holderLabel(holder) : (holder.name || "");
+    badge.appendChild(face); badge.appendChild(name);
+    return badge;
   }
 
   // ── Grouped @-mention suggestion (self-built popup) ─────────────────────────
@@ -253,6 +290,7 @@
     nameBtn.textContent = node.attrs.personName || "Unknown Person"; nameBtn.title = "Change person";
     nameBtn.addEventListener("mousedown", function (e) {
       e.preventDefault(); e.stopPropagation();
+      if (panelIsHeld()) return;
       document.dispatchEvent(new CustomEvent("open-person-picker", { detail: { mode: "reattach", pos: getPos(), currentPersonId: currentAttrs.personId, currentNoteId: currentAttrs.noteId } }));
     });
 
@@ -270,6 +308,7 @@
         if (prompted && prompted.trim()) { newType = prompted.trim(); if (NOTE_TYPES_ALL.indexOf(newType) === -1) { var base = NOTE_TYPES_ALL.filter(function (t) { return t !== "Create New Note Type"; }); NOTE_TYPES_ALL = base.concat([newType, "Create New Note Type"]); } }
         else { typeSelect.value = currentAttrs.noteType || "Elder Meeting"; return; }
       }
+      if (panelIsHeld()) { typeSelect.value = currentAttrs.noteType || "Elder Meeting"; return; }
       if (typeof getPos === "function") editor.view.dispatch(editor.view.state.tr.setNodeMarkup(getPos(), null, Object.assign({}, currentAttrs, { noteType: newType })));
       data.updatePanelNoteType(currentAttrs.personId, currentAttrs.noteId, newType, _user).catch(function (err) { console.error("Error updating note type:", err); });
     });
@@ -351,6 +390,7 @@
     deleteBtn.innerHTML = "&#10005;";
     deleteBtn.addEventListener("mousedown", function (e) {
       e.preventDefault(); e.stopPropagation();
+      if (panelIsHeld()) return;
       document.dispatchEvent(new CustomEvent("panel-delete-request", { detail: { pos: getPos(), personId: currentAttrs.personId, noteId: currentAttrs.noteId, personName: currentAttrs.personName } }));
     });
 
@@ -359,25 +399,39 @@
     dom.appendChild(header); dom.appendChild(bodyMount);
 
     var bodyEditor = null, bodyTimer = null;
+    var bodyDirty = false, bodySaving = null, stopNoteWatch = null, panelHeldBy = null;
+
+    // Somebody else has this note open — here, in another document, or on a
+    // profile: the body is read-only and says who (MS-506).
+    var heldBadge = document.createElement("span"); heldBadge.hidden = true;
+    header.insertBefore(heldBadge, viewLink);
+    function showPanelHolder() {
+      var holder = _live ? _live.panelHolder(currentAttrs.personId, currentAttrs.noteId) : null;
+      var same = (holder && holder.uid) === (panelHeldBy && panelHeldBy.uid);
+      panelHeldBy = holder;
+      if (!same) {
+        heldBadge.hidden = !holder; heldBadge.innerHTML = "";
+        if (holder) heldBadge.appendChild(faceFor(holder, true));
+      }
+      if (bodyEditor && !bodyEditor.isDestroyed) bodyEditor.setEditable(!holder && !(_live && _live.readOnly));
+    }
+    function panelIsHeld() {
+      var holder = _live ? _live.panelHolder(currentAttrs.personId, currentAttrs.noteId) : null;
+      if (holder) _sayHeld(holder);
+      return !!holder;
+    }
+    // A panel whose note has gone is replaced the same way on every page, as
+    // Blocks the live watch brings back to everybody.
+    function replaceOrphan(attrs) { if (_live && attrs.blockId) _live.replaceOrphanPanel(attrs.blockId, null); }
+
     function initBodyEditor(attrs) {
+      if (stopNoteWatch) { stopNoteWatch(); stopNoteWatch = null; }
       if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; }
       clearTimeout(bodyTimer);
+      bodyDirty = false;
       if (!window._TipTap) return;
       data.getPanelNote(attrs.personId, attrs.noteId).then(function (note) {
-        if (!note) {
-          // Note deleted — replace panel with header + any saved body snapshot.
-          setTimeout(function () {
-            if (typeof getPos !== "function") return;
-            try {
-              var pos = getPos(); if (pos === undefined || pos === null) return;
-              var headerText = attrs.personName + " — " + attrs.noteType;
-              var replacement = [{ type: "paragraph", content: [{ type: "text", text: headerText, marks: [{ type: "bold" }] }] }];
-              if (attrs.bodySnapshot) { try { var s2 = JSON.parse(attrs.bodySnapshot); if (s2 && s2.content && s2.content.length) replacement = replacement.concat(s2.content); } catch (e) {} }
-              editor.chain().insertContentAt({ from: pos, to: pos + 1 }, replacement).run();
-            } catch (e) { console.error("Error replacing orphaned panel:", e); }
-          }, 0);
-          return;
-        }
+        if (!note) { replaceOrphan(attrs); return; }
         var content = note.contentJson || "";
         var T = window._TipTap;
         var trigExt = window.createInlineTriggersExtension({
@@ -404,21 +458,75 @@
           onStatusChange: function (urg, imp) { if (!urg) return handlePanelStatusClear(); return handlePanelStatusSet(urg, imp); },
           onStatusUndo: function (activityId, urg, imp) { return handlePanelStatusUndo(activityId, urg, imp); },
         });
+        // The note's box, held on the first keystroke; a keystroke while
+        // somebody else holds it changes nothing.
+        var noteLock = T.Extension.create({
+          name: "panelNoteLock",
+          addProseMirrorPlugins: function () {
+            return [new T.Plugin({
+              key: new T.PluginKey("panelNoteLock"),
+              filterTransaction: function (tr) {
+                if (!tr.docChanged || tr.getMeta("remote") || !_live) return true;
+                return _live.holdPanel(currentAttrs.personId, currentAttrs.noteId);
+              },
+            })];
+          },
+        });
         bodyEditor = new T.Editor({
           element: bodyMount,
-          extensions: [T.StarterKit, T.Underline, T.TextStyle, T.FontFamily, T.FontSize, T.Highlight.configure({ multicolor: true }), trigExt],
+          extensions: [T.StarterKit, T.Underline, T.TextStyle, T.FontFamily, T.FontSize, T.Highlight.configure({ multicolor: true }), trigExt, noteLock],
           content: content,
-          onUpdate: function () { clearTimeout(bodyTimer); bodyTimer = setTimeout(function () { saveBody(attrs); }, 1500); },
+          onUpdate: function (o) {
+            if (o && o.transaction && o.transaction.getMeta("remote")) return;
+            bodyDirty = true;
+            clearTimeout(bodyTimer); bodyTimer = setTimeout(function () { saveBody(attrs); }, 1500);
+          },
+          onBlur: function () {
+            clearTimeout(bodyTimer);
+            Promise.resolve(bodyDirty ? saveBody(attrs) : bodySaving).then(function () {
+              if (bodyEditor && bodyEditor.isFocused) return;
+              if (_live) _live.leavePanel(attrs.personId, attrs.noteId);
+            });
+          },
         });
+        showPanelHolder();
+
+        // The note, live: words written elsewhere arrive while nobody here
+        // is typing in it.
+        var noteRef = data.db.collection("people").doc(attrs.personId).collection("shepherding_notes").doc(attrs.noteId);
+        var onNote = function (snap) {
+          if (!snap) return;
+          if (!snap.exists) { replaceOrphan(currentAttrs); return; }
+          if (snap.metadata && snap.metadata.hasPendingWrites) return;
+          if (!bodyEditor || bodyEditor.isDestroyed || bodyDirty || bodySaving || bodyEditor.isFocused) return;
+          var theirs = snap.data().contentJson || null;
+          if (!theirs || JSON.stringify(theirs) === JSON.stringify(bodyEditor.getJSON())) return;
+          var next = bodyEditor.schema.nodeFromJSON(theirs);
+          var tr = bodyEditor.state.tr.replaceWith(0, bodyEditor.state.doc.content.size, next.content);
+          tr.setMeta("remote", true); tr.setMeta("addToHistory", false);
+          bodyEditor.view.dispatch(tr);
+        };
+        stopNoteWatch = window.MosaicLiveRead
+          ? window.MosaicLiveRead.watch(noteRef, onNote, { fallbackEveryMs: window.MosaicLiveRead.PERSON_EVERY_MS, onError: function (e) { console.warn("Lost the live connection to a Person Panel note:", e); } })
+          : noteRef.onSnapshot(onNote, function () {});
       }).catch(function (err) { console.error("Error loading panel body:", err); });
     }
     function saveBody(attrs) {
-      if (!bodyEditor) return;
-      var bodyJson = bodyEditor.getJSON();
-      data.savePanelNote(attrs.personId, attrs.noteId, { contentJson: bodyJson, content: bodyEditor.getText().trim() }, _user, _currentDocId).then(function () {
-        if (typeof getPos === "function") { var pos = getPos(); if (pos !== undefined) editor.view.dispatch(editor.view.state.tr.setNodeMarkup(pos, null, Object.assign({}, currentAttrs, { bodySnapshot: JSON.stringify(bodyJson) }))); }
-      }).catch(function (err) { console.error("Error saving panel body:", err); });
+      var mine = (bodySaving || Promise.resolve()).then(function () { return saveBodyNow(attrs); });
+      bodySaving = mine;
+      return mine.then(function () { if (bodySaving === mine) bodySaving = null; });
     }
+    function saveBodyNow(attrs) {
+      if (!bodyEditor || !bodyDirty) return Promise.resolve();
+      var bodyJson = bodyEditor.getJSON();
+      bodyDirty = false;
+      return data.savePanelNote(attrs.personId, attrs.noteId, { contentJson: bodyJson, content: bodyEditor.getText().trim() }, _user, _currentDocId).then(function () {
+        if (typeof getPos === "function") { var pos = getPos(); if (pos !== undefined) editor.view.dispatch(editor.view.state.tr.setNodeMarkup(pos, null, Object.assign({}, currentAttrs, { bodySnapshot: JSON.stringify(bodyJson) }))); }
+      }).catch(function (err) { bodyDirty = true; console.error("Error saving panel body:", err); });
+    }
+    var stopPanelHolds = (window.ShepherdingPresence && window.ShepherdingPresence.subscribe)
+      ? window.ShepherdingPresence.subscribe(function () { showPanelHolder(); }) : null;
+    var panelTicker = setInterval(showPanelHolder, 5000);
     initBodyEditor(node.attrs);
 
     return {
@@ -432,7 +540,15 @@
         } else { currentAttrs = Object.assign({}, updatedNode.attrs); }
         return true;
       },
-      destroy: function () { clearTimeout(bodyTimer); if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; } destroyStatusPopup(); },
+      destroy: function () {
+        clearTimeout(bodyTimer);
+        if (bodyDirty) saveBody(currentAttrs);
+        if (stopNoteWatch) { stopNoteWatch(); stopNoteWatch = null; }
+        if (stopPanelHolds) stopPanelHolds();
+        clearInterval(panelTicker);
+        if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; }
+        destroyStatusPopup();
+      },
       stopEvent: function (event) {
         if (typeSelect.contains(event.target)) return true;
         if (statusBtn.contains(event.target)) return true;
@@ -468,7 +584,11 @@
     var loadingS = useState(true), errS = useState(false), readyS = useState(false), mountedS = useState(false);
     var titleS = useState(""), saveStatusS = useState("saved"), toastS = useState(null);
     var peopleS = useState([]);
-    var titleRef = useRef(""), saveTimerRef = useRef(null);
+    var titleRef = useRef("");
+    // Live: who is here and who holds what (MS-505).
+    var presenceS = useState([]), presenceTickS = useState(0), readOnlyS = useState(false);
+    var SP = window.ShepherdingPresence;
+    var myUid = props.user && props.user.uid;
     // Person picker
     var pickerS = useState(null); // { mode, pos, curPersonId, curNoteId, step, search, selected, noteMode, existing, selectedNoteId }
     // Panel delete dialog
@@ -484,13 +604,34 @@
       _user = props.user; _nav = props.nav;
       if (!docId) { errS[1](true); loadingS[1](false); return; }
       M.ensureTipTap().then(function () { if (alive) readyS[1](true); }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      Promise.all([data.getElderDocument(docId), data.getDocMentionData()]).then(function (r) {
+      _sayHeld = function (holder) { showToast(window.PresenceCore ? window.PresenceCore.holderTitle(holder) : "Someone is editing this", "error"); };
+      _live = window.ElderDocumentLive.create({
+        db: data.db,
+        fs: firebase.firestore,
+        docId: docId,
+        byName: function () { return (_user && _user.name) || ""; },
+        onStatus: function (st) {
+          if (st === "error") { saveStatusS[1]("unsaved"); showToast("Error saving document", "error"); }
+          else saveStatusS[1](st);
+        },
+        onTitle: function (t) { titleS[1](t); titleRef.current = t; _currentDocTitle = t; },
+        onHolds: function () { presenceTickS[1](function (n) { return n + 1; }); },
+        onRefused: function (holder) { _sayHeld(holder); },
+        onDeleted: function () { showToast("This document was deleted", "error"); if (props.back) setTimeout(props.back, 1500); },
+      });
+      _live.setTitleReader(function () { return titleRef.current; });
+      // Opened through the live layer: a legacy document becomes Blocks once.
+      Promise.all([_live.open(), data.getDocMentionData()]).then(function (r) {
         if (!alive) return;
-        var doc = r[0];
-        if (!doc) { errS[1](true); loadingS[1](false); return; }
+        var opened = r[0];
+        if (!opened) { errS[1](true); loadingS[1](false); return; }
+        var doc = opened.record;
         _currentDocId = docId; _currentDocTitle = doc.title || "";
         titleS[1](doc.title || ""); titleRef.current = doc.title || "";
         _docLoaded.doc = doc;
+        _docLoaded.body = opened.body;
+        readOnlyS[1](opened.readOnly);
+        if (opened.readOnly) showToast("Open to read only: this document could not be updated for live editing", "error");
         var md = r[1];
         _mentionPeople = md.people; _mentionNotes = md.notes; _mentionDocs = md.docs; _mentionFolders = md.folders;
         _peopleList = md.peopleList; _docTypeById = md.docTypeById; _allTagsList = md.tags;
@@ -499,10 +640,52 @@
       }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () {
         alive = false;
+        var live = _live;
+        if (live) { live.save(); live.stop(); }
+        _live = null;
+        _sayHeld = function () {};
         if (_docEditor) { try { _docEditor.destroy(); } catch (e) {} _docEditor = null; }
         _currentDocId = null; _currentDocTitle = "";
       };
     }, [docId]);
+
+    // ── Presence ── the same store, surface and box names as the web page, so
+    // a paragraph held on a laptop is held here. It cannot throw, and while it
+    // is not running every box opens.
+    useEffect(function () {
+      if (!docId || !props.user || !SP) return;
+      var unsubscribe = function () {};
+      var ticker = null;
+      try {
+        unsubscribe = SP.subscribe(presenceS[1]);
+        SP.start({
+          db: data.db,
+          uid: props.user.uid,
+          identity: { id: props.user.personId || null, name: props.user.name || "", photoUrl: props.user.photoUrl || null, photoCrop: props.user.photoCrop || null },
+          surface: "shepherding-document",
+          pageKey: docId,
+          stamp: function () { return firebase.firestore.FieldValue.serverTimestamp(); },
+        });
+        if (_live) _live.reclaim();
+        ticker = setInterval(function () { presenceTickS[1](function (n) { return n + 1; }); }, window.PresenceCore.HEARTBEAT_MS);
+      } catch (e) {
+        console.warn("Presence could not start on this document; carrying on without it:", e);
+      }
+      return function () { unsubscribe(); if (ticker) clearInterval(ticker); SP.leave(); SP.stop(); };
+    }, [docId, myUid]);
+
+    // Faces beside held boxes, redrawn after every render (a tick, a hold, a
+    // keystroke all render).
+    useEffect(function () {
+      if (_live && _docEditor) _live.drawFaces(document.getElementById("doc-held-layer"), function (h) { return faceFor(h); });
+    });
+
+    function titleHolder() { return _live ? _live.titleHolder() : null; }
+    function othersHere() {
+      if (!myUid || !window.PresenceCore) return [];
+      return window.PresenceCore.peopleHere(presenceS[0], myUid, "shepherding-document", docId, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS });
+    }
+
 
     // ── NodeView event bridge (open picker / delete panel) ──
     useEffect(function () {
@@ -516,15 +699,8 @@
       return function () { document.removeEventListener("open-person-picker", onOpen); document.removeEventListener("panel-delete-request", onDel); };
     }, []);
 
-    // ── Cross-tab sync: react when a profile tab deletes a linked note ──
-    useEffect(function () {
-      if (typeof BroadcastChannel === "undefined") return;
-      var bc = new BroadcastChannel("mosaic-shepherding");
-      bc.onmessage = function (e) {
-        if (e.data && e.data.type === "note-deleted" && e.data.sourceDocumentId === docId) replaceOrphanedPanel(e.data.noteId, e.data.personName, e.data.noteType, e.data.bodySnapshot);
-      };
-      return function () { try { bc.close(); } catch (e) {} };
-    }, [docId]);
+    // A note deleted on a profile arrives as Blocks through the live watch;
+    // there is no message between tabs any more (MS-506).
 
     // ── Mount the TipTap editor once bundle + doc are ready ──
     useEffect(function () {
@@ -535,6 +711,12 @@
       if (_docEditor) { try { _docEditor.destroy(); } catch (e) {} _docEditor = null; }
       var PersonPanelNode = createPersonPanelNode();
       var InlinePicker = createInlinePickerPlugin();
+      var live = _live;
+      // One person per box (MS-505).
+      var BoxLock = T.Extension.create({
+        name: "elderDocumentLocks",
+        addProseMirrorPlugins: function () { return [live.lockPlugin({ Plugin: T.Plugin, PluginKey: T.PluginKey })]; },
+      });
       _docEditor = new T.Editor({
         element: el,
         extensions: [
@@ -543,8 +725,13 @@
           T.Table.configure({ resizable: false }), T.TableRow, T.TableHeader, T.TableCell,
           PersonPanelNode, InlinePicker,
           T.Mention.configure({ HTMLAttributes: { class: "mention-chip" }, suggestion: createDocMentionSuggestion() }),
-        ],
-        content: (_docLoaded.doc && _docLoaded.doc.contentJson) || "",
+          // Lasting block ids: saved, updated live and held block by block (MS-500).
+          T.BlockId,
+          BoxLock,
+        ].filter(Boolean),
+        // Drawn from the document's Blocks (MS-501).
+        content: _docLoaded.body || "",
+        editable: !readOnlyS[0],
         editorProps: {
           handleClick: function (view, pos, event) {
             var target = event.target.closest && event.target.closest(".mention-chip");
@@ -563,22 +750,17 @@
             return false;
           },
         },
-        onTransaction: function () { scheduleSave(); },
+        onTransaction: function () { if (_live) _live.drawFaces(document.getElementById("doc-held-layer"), function (h) { return faceFor(h); }); },
+        onUpdate: function (o) {
+          // Somebody else's blocks arriving, or ids given out, are not edits.
+          var tr = o && o.transaction;
+          if (tr && (tr.getMeta("remote") || tr.getMeta("blockIds"))) return;
+          live.edited();
+        },
       });
+      live.attach(_docEditor);
       mountedS[1](true);
     });
-
-    // ── Auto-save (title + timer in refs so the editor's onTransaction closure
-    // — captured once at mount — always saves the latest title on a stable timer) ──
-    function scheduleSave() { saveStatusS[1]("unsaved"); clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(save, 1500); }
-    function save() {
-      if (!_docEditor || !docId) return;
-      saveStatusS[1]("saving");
-      _currentDocTitle = titleRef.current;
-      data.saveElderDocument(docId, { title: titleRef.current, contentJson: _docEditor.getJSON() }, _user)
-        .then(function () { saveStatusS[1]("saved"); })
-        .catch(function () { saveStatusS[1]("unsaved"); showToast("Error saving document", "error"); });
-    }
 
     // ── Toolbar commands (target the main doc editor) ──
     function cmd(name) { if (_docEditor) _docEditor.chain().focus()[name]().run(); }
@@ -635,19 +817,6 @@
       op.catch(function (e) { console.error(e); showToast(deleteNote ? "Error deleting note" : "Error unlinking note", "error"); });
     }
 
-    function replaceOrphanedPanel(noteId, personName, noteType, bodySnapshot) {
-      if (!_docEditor) return;
-      var state = _docEditor.view.state, targetPos = null, targetAttrs = null;
-      state.doc.descendants(function (node, pos) { if (node.type.name === "personPanel" && node.attrs.noteId === noteId) { targetPos = pos; targetAttrs = node.attrs; return false; } });
-      if (targetPos === null) return;
-      var name = personName || targetAttrs.personName || "", type = noteType || targetAttrs.noteType || "";
-      var headerText = [name, type].filter(Boolean).join(" — ");
-      var replacement = [{ type: "paragraph", content: [{ type: "text", text: headerText, marks: [{ type: "bold" }] }] }];
-      var snapStr = bodySnapshot || targetAttrs.bodySnapshot;
-      if (snapStr) { try { var s = JSON.parse(snapStr); if (s && s.content && s.content.length) replacement = replacement.concat(s.content); } catch (e) {} }
-      _docEditor.chain().insertContentAt({ from: targetPos, to: targetPos + 1 }, replacement).run();
-    }
-
     var userKnown = props.user !== undefined;
     var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var saveStatus = saveStatusS[0];
@@ -675,8 +844,17 @@
 
         <!-- Title band: part of the header, visually separated from the body. -->
         <div style=${{ flexShrink: 0, padding: "12px 16px 12px", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)" }}>
-          <input value=${titleS[0]} onInput=${function (e) { titleS[1](e.target.value); titleRef.current = e.target.value; scheduleSave(); }} placeholder="Untitled Document"
-            style=${{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", background: "transparent", fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--on-surface)", padding: 0 }} />
+          <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input value=${titleS[0]} readOnly=${readOnlyS[0] || !!titleHolder()}
+              onFocus=${function (e) { if (_live && !_live.enterTitle()) e.target.blur(); }}
+              onBlur=${function () { if (_live) _live.leaveTitle(); }}
+              onInput=${function (e) { titleS[1](e.target.value); titleRef.current = e.target.value; _currentDocTitle = e.target.value; if (_live) _live.titleInput(e.target.value); }} placeholder="Untitled Document"
+              style=${{ flex: 1, minWidth: 0, boxSizing: "border-box", border: "none", outline: "none", background: "transparent", fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--on-surface)", padding: 0 }} />
+            ${titleHolder() ? html`<span class="doc-held doc-held--inline" title=${window.PresenceCore.holderTitle(titleHolder())}>${Ic("lock", 14)} <span class="doc-held__name">${window.PresenceCore.holderLabel(titleHolder())}</span></span>` : null}
+          </div>
+          ${othersHere().length ? html`<div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>
+            Also here ${othersHere().map(function (p) { return html`<span key=${p.uid} title=${p.name} style=${{ textTransform: "none", letterSpacing: 0, fontSize: 12, fontWeight: 500 }}>${p.name}</span>`; })}
+          </div>` : null}
         </div>
 
         <div style=${{ flexShrink: 0, display: "flex", alignItems: "center", gap: 3, padding: "8px 10px", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container)", overflowX: "auto" }}>
@@ -704,7 +882,8 @@
         </div>
 
         <${Body} style=${{ padding: 0 }}>
-          <div class="doc-pm" style=${{ padding: "16px 18px calc(48px + env(safe-area-inset-bottom, 0px))" }}>
+          <div class="doc-pm" style=${{ position: "relative", padding: "16px 18px calc(48px + env(safe-area-inset-bottom, 0px))" }}>
+            <div id="doc-held-layer" class="doc-held-layer"></div>
             <div id="tiptap-doc-editor" style=${{ minHeight: 240 }}></div>
           </div>
         </${Body}>

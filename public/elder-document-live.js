@@ -429,20 +429,32 @@ var ElderDocumentLive = (function () {
             return out;
         }
 
-        // Faces beside held boxes, drawn into `layer` (absolutely positioned
-        // inside the same scrolling container as the editor).
+        // Who holds what, drawn into `layer`: a zero-size, absolutely
+        // positioned element at the top left of the editor's content, inside
+        // the same scrolling container, so marks scroll with the text. Each
+        // held box gets a bar down its left edge and the holder's face at its
+        // right. `faceFor(holder)` makes the face element.
         function drawFaces(layer, faceFor) {
             if (!layer || !editor || editor.isDestroyed) return;
             layer.innerHTML = '';
             var base = layer.getBoundingClientRect();
+            var edge = editor.view.dom.getBoundingClientRect();
             heldBlocks().forEach(function (h) {
                 var dom = editor.view.nodeDOM(h.pos);
                 if (!dom || !dom.getBoundingClientRect) return;
                 var r = dom.getBoundingClientRect();
+                var bar = root.document.createElement('div');
+                bar.className = 'doc-held-bar';
+                bar.style.cssText = 'position:absolute;width:3px;border-radius:2px;pointer-events:none;';
+                bar.style.top = (r.top - base.top) + 'px';
+                bar.style.left = Math.max(0, r.left - base.left - 8) + 'px';
+                bar.style.height = r.height + 'px';
+                layer.appendChild(bar);
                 var badge = faceFor(h.holder);
                 badge.style.position = 'absolute';
                 badge.style.top = (r.top - base.top) + 'px';
-                badge.style.left = Math.max(0, (r.right - base.left) + 6) + 'px';
+                badge.style.right = (base.left - edge.right + 4) + 'px';
+                badge.style.left = 'auto';
                 layer.appendChild(badge);
             });
         }
@@ -454,6 +466,40 @@ var ElderDocumentLive = (function () {
             return holderOf(p.box.note(personId, noteId));
         }
 
+        // Typing in a Person Panel's note body: hold the note's box (the same
+        // box the profile's note editor claims). True means carry on. Goes
+        // through here, not straight to presence, so this layer always knows
+        // which box the page holds — a store holds one box at a time.
+        function holdPanel(personId, noteId) {
+            var p = presence();
+            if (!p) return true;
+            var box = panelBox({ attrs: { personId: personId, noteId: noteId } });
+            if (!box) return true;
+            if (sameBox(held, box)) {
+                if (p.touch()) return true;
+                held = null;
+                if (o.onRefused) o.onRefused(holderOf(box), 'Person Panel');
+                return false;
+            }
+            if (!p.claimBox(box)) {
+                if (o.onRefused) o.onRefused(holderOf(box), 'Person Panel');
+                return false;
+            }
+            held = box;
+            inTitle = false;
+            return true;
+        }
+
+        // Out of a Person Panel's note body, once its own save is done.
+        function leavePanel(personId, noteId) {
+            var p = presence();
+            if (!p) return;
+            var box = panelBox({ attrs: { personId: personId, noteId: noteId } });
+            if (!box || !sameBox(held, box)) return;
+            held = null;
+            if (!inTitle) p.release();
+        }
+
         // An orphaned Person Panel, replaced by its text the same way on every
         // page, as block writes the live watch then brings to everybody.
         function replaceOrphanPanel(blockId, noteBody) {
@@ -463,6 +509,18 @@ var ElderDocumentLive = (function () {
             var pairs = core().blockUpdatePairs(o.fs, change);
             pairs.push('updatedAt', o.fs.FieldValue.serverTimestamp(), 'updatedByName', (o.byName && o.byName()) || '');
             return ref.update.apply(ref, pairs).catch(function (e) { console.error('Could not replace a Person Panel:', e); });
+        }
+
+        // Presence has just started: record the box this page already holds.
+        function reclaim() {
+            var p = presence();
+            if (!p) return;
+            if (held && !p.claimBox(held)) {
+                if (o.onRefused) o.onRefused(holderOf(held), 'paragraph');
+                held = null;
+            } else if (!held && inTitle && !p.claimBox(titleBox())) {
+                if (o.onRefused) o.onRefused(titleHolder(), 'title');
+            }
         }
 
         function stop() {
@@ -484,6 +542,9 @@ var ElderDocumentLive = (function () {
             heldBlocks: heldBlocks,
             drawFaces: drawFaces,
             panelHolder: panelHolder,
+            holdPanel: holdPanel,
+            reclaim: reclaim,
+            leavePanel: leavePanel,
             replaceOrphanPanel: replaceOrphanPanel,
             adopt: adopt,
             stop: stop,
@@ -491,7 +552,51 @@ var ElderDocumentLive = (function () {
         };
     }
 
-    return { create: create, boxAt: boxAt, boxesTouched: boxesTouched, AUTOSAVE_MS: AUTOSAVE_MS };
+    // ── A note deleted from a profile ─────────────────────────────────────────
+
+    // The Person Panel for `noteId` in document `docId`, replaced by a bold
+    // header and the note's words (`noteBody`, a Note Body, or null to use the
+    // panel's own last copy). Written as Blocks, so an open document takes the
+    // change in live — no message between tabs, and it reaches other devices.
+    // A legacy document is converted in the same transaction; one that cannot
+    // be converted without changing it is left alone.
+    function detachPanel(db, fs, docId, noteId, noteBody) {
+        var ref = db.collection('elder_documents').doc(docId);
+        return db.runTransaction(function (tx) {
+            return tx.get(ref).then(function (snap) {
+                if (!snap.exists) return false;
+                var data = snap.data();
+                var blocks = null;
+                var converting = false;
+                if (core().hasBlocks(data)) {
+                    blocks = data.blocks;
+                } else {
+                    var converted = core().convertLegacy(data);
+                    if (!converted.ok) return false;
+                    blocks = converted.blocks;
+                    converting = true;
+                }
+                var panelId = Object.keys(blocks).filter(function (id) {
+                    var b = blocks[id];
+                    return b.type === 'personPanel' && b.attrs && b.attrs.noteId === noteId;
+                })[0];
+                if (!panelId) return false;
+                var change = core().orphanPanelReplacement(blocks, panelId, noteBody || null);
+                if (converting) {
+                    var next = Object.assign({}, blocks, change.write);
+                    change.remove.forEach(function (id) { delete next[id]; });
+                    tx.update(ref, { blocks: next, contentJson: fs.FieldValue.delete(), updatedAt: fs.FieldValue.serverTimestamp() });
+                } else {
+                    var pairs = core().blockUpdatePairs(fs, change);
+                    pairs.push('updatedAt', fs.FieldValue.serverTimestamp());
+                    tx.update.apply(tx, [ref].concat(pairs));
+                }
+                return true;
+            });
+        });
+    }
+
+    return { create: create, boxAt: boxAt, boxesTouched: boxesTouched, detachPanel: detachPanel, AUTOSAVE_MS: AUTOSAVE_MS };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

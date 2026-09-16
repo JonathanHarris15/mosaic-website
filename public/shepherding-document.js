@@ -6,6 +6,43 @@ let _currentUserId   = '';
 
 let _docEditor = null;
 
+// The open document, live: block-by-block saves, other elders' changes, and
+// one person per box (elder-document-live.js, shared with the phone).
+let _live = null;
+let _openedBody = null;
+
+// A face for whoever holds a box: their photo or initials, their first name
+// and a lock.
+function _faceFor(holder, inline) {
+    const badge = document.createElement('span');
+    badge.className = 'doc-held' + (inline ? ' doc-held--inline' : '');
+    badge.title = PresenceCore.holderTitle(holder);
+    const avatar = document.createElement('span');
+    avatar.className = 'm-avatar m-avatar--sm';
+    if (holder.photoUrl) {
+        const img = document.createElement('img');
+        img.src = holder.photoUrl;
+        img.alt = '';
+        img.setAttribute('style', PersonPhotoCore.frameStyle(holder.photoCrop));
+        avatar.appendChild(img);
+    } else {
+        avatar.textContent = PersonPhotoCore.initialsOf(holder.name);
+    }
+    const name = document.createElement('span');
+    name.className = 'doc-held__name';
+    name.textContent = PresenceCore.holderLabel(holder);
+    const lock = document.createElement('span');
+    lock.className = 'material-symbols-outlined doc-held__lock';
+    lock.textContent = 'lock';
+    badge.append(avatar, name, lock);
+    return badge;
+}
+
+// "Ann is editing this" — told to the page, from anywhere a change was refused.
+function _notifyHeld(holder, what) {
+    document.dispatchEvent(new CustomEvent('doc-held', { detail: { holder, what } }));
+}
+
 // ⚠ KEPT OUT OF ALPINE STATE ON PURPOSE. Alpine wraps state in a proxy, and a
 // proxied File is no longer a File to FileReader — the brand check fails and
 // the read throws. Only what the dialog needs to SAY goes into state.
@@ -418,6 +455,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     nameBtn.addEventListener('mousedown', e => {
         e.preventDefault();
         e.stopPropagation();
+        if (panelIsHeld()) return;
         document.dispatchEvent(new CustomEvent('open-person-picker', {
             detail: { mode: 'reattach', pos: getPos(), currentPersonId: currentAttrs.personId, currentNoteId: currentAttrs.noteId }
         }));
@@ -451,6 +489,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             }
         }
 
+        if (panelIsHeld()) { typeSelect.value = currentAttrs.noteType || 'Elder Meeting'; return; }
         if (typeof getPos === 'function') {
             editor.view.dispatch(
                 editor.view.state.tr.setNodeMarkup(getPos(), null, { ...currentAttrs, noteType: newType })
@@ -644,6 +683,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     deleteBtn.addEventListener('mousedown', e => {
         e.preventDefault();
         e.stopPropagation();
+        if (panelIsHeld()) return;
         document.dispatchEvent(new CustomEvent('panel-delete-request', {
             detail: { pos: getPos(), personId: currentAttrs.personId, noteId: currentAttrs.noteId, personName: currentAttrs.personName }
         }));
@@ -665,39 +705,55 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     // ── Body editor lifecycle ──
     let bodyEditor = null;
     let bodyTimer  = null;
+    let bodyDirty  = false;     // typed here and not yet saved
+    let bodySaving = null;
+    let stopNoteWatch = null;
+    let panelHeldBy = null;
+
+    // Somebody else has this note open — here, in another document, or on the
+    // profile: the body is read-only and says who (MS-506).
+    const heldBadge = document.createElement('span');
+    heldBadge.className = 'doc-held person-panel-held';
+    heldBadge.hidden = true;
+    header.appendChild(heldBadge);
+
+    function showPanelHolder() {
+        const holder = _live ? _live.panelHolder(currentAttrs.personId, currentAttrs.noteId) : null;
+        const same = (holder && holder.uid) === (panelHeldBy && panelHeldBy.uid);
+        panelHeldBy = holder;
+        if (!same) {
+            heldBadge.hidden = !holder;
+            heldBadge.innerHTML = '';
+            if (holder) heldBadge.appendChild(_faceFor(holder, true));
+        }
+        if (bodyEditor && !bodyEditor.isDestroyed) bodyEditor.setEditable(!holder && !(_live && _live.readOnly));
+    }
+
+    function panelIsHeld() {
+        const holder = _live ? _live.panelHolder(currentAttrs.personId, currentAttrs.noteId) : null;
+        if (holder) _notifyHeld(holder, 'this note');
+        return !!holder;
+    }
+
+    // Replace a panel whose note has gone, the same way on every page, as
+    // Blocks the live watch brings back to everybody.
+    function replaceOrphan(attrs) {
+        if (_live && attrs.blockId) _live.replaceOrphanPanel(attrs.blockId, null);
+    }
 
     async function initBodyEditor(attrs) {
+        if (stopNoteWatch) { stopNoteWatch(); stopNoteWatch = null; }
         if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; }
         clearTimeout(bodyTimer);
+        bodyDirty = false;
         if (!window._TipTap) return;
         try {
-            const snap = await db.collection('people').doc(attrs.personId)
-                .collection('shepherding_notes').doc(attrs.noteId).get();
+            const noteRef = db.collection('people').doc(attrs.personId)
+                .collection('shepherding_notes').doc(attrs.noteId);
+            const snap = await noteRef.get();
 
             if (!snap.exists) {
-                // Note was deleted — replace this panel with header + any saved body content
-                setTimeout(() => {
-                    if (typeof getPos !== 'function') return;
-                    try {
-                        const pos = getPos();
-                        if (pos === undefined || pos === null) return;
-                        const headerText = `${attrs.personName} — ${attrs.noteType}`;
-                        const replacement = [
-                            { type: 'paragraph', content: [{ type: 'text', text: headerText, marks: [{ type: 'bold' }] }] },
-                        ];
-                        if (attrs.bodySnapshot) {
-                            try {
-                                const snap2 = JSON.parse(attrs.bodySnapshot);
-                                if (snap2 && snap2.content && snap2.content.length > 0) {
-                                    replacement.push(...snap2.content);
-                                }
-                            } catch (_) {}
-                        }
-                        editor.chain().insertContentAt({ from: pos, to: pos + 1 }, replacement).run();
-                    } catch (e) {
-                        console.error('Error replacing orphaned panel:', e);
-                    }
-                }, 0);
+                replaceOrphan(attrs);
                 return;
             }
 
@@ -741,6 +797,22 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 },
                 onStatusUndo: (activityId, urg, imp) => handlePanelStatusUndo(activityId, urg, imp),
             });
+            const { Extension, Plugin, PluginKey } = window._TipTap;
+            // The note's box, held on the first keystroke; a keystroke while
+            // somebody else holds it changes nothing (MS-506).
+            const noteLock = Extension.create({
+                name: 'panelNoteLock',
+                addProseMirrorPlugins() {
+                    return [new Plugin({
+                        key: new PluginKey('panelNoteLock'),
+                        filterTransaction(tr) {
+                            if (!tr.docChanged || tr.getMeta('remote')) return true;
+                            if (!_live) return true;
+                            return _live.holdPanel(currentAttrs.personId, currentAttrs.noteId);
+                        },
+                    })];
+                },
+            });
             bodyEditor = new Editor({
                 element: bodyMount,
                 extensions: [
@@ -750,21 +822,63 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                     Link.configure({ openOnClick: false, autolink: true }),
                     TextAlign.configure({ types: ['heading', 'paragraph'] }),
                     trigExt,
+                    noteLock,
                 ],
                 content,
-                onUpdate() {
+                onUpdate({ transaction }) {
+                    if (transaction && transaction.getMeta('remote')) return;
+                    bodyDirty = true;
                     clearTimeout(bodyTimer);
                     bodyTimer = setTimeout(() => saveBody(attrs), 1500);
                 },
+                onBlur() {
+                    // Out of the note: save, then let its box go.
+                    clearTimeout(bodyTimer);
+                    Promise.resolve(bodyDirty ? saveBody(attrs) : bodySaving).then(() => {
+                        if (bodyEditor && bodyEditor.isFocused) return;
+                        if (_live) _live.leavePanel(attrs.personId, attrs.noteId);
+                    });
+                },
             });
+            showPanelHolder();
+
+            // The note, live: words written on the profile or in another
+            // document arrive here while nobody on this page is typing in it.
+            const onNote = (noteSnap) => {
+                if (!noteSnap) return;
+                if (!noteSnap.exists) { replaceOrphan(currentAttrs); return; }
+                if (noteSnap.metadata && noteSnap.metadata.hasPendingWrites) return;
+                if (!bodyEditor || bodyEditor.isDestroyed || bodyDirty || bodySaving || bodyEditor.isFocused) return;
+                const theirs = noteSnap.data().contentJson || null;
+                if (!theirs) return;
+                if (JSON.stringify(theirs) === JSON.stringify(bodyEditor.getJSON())) return;
+                const next = bodyEditor.schema.nodeFromJSON(theirs);
+                const tr = bodyEditor.state.tr.replaceWith(0, bodyEditor.state.doc.content.size, next.content);
+                tr.setMeta('remote', true);
+                tr.setMeta('addToHistory', false);
+                bodyEditor.view.dispatch(tr);
+            };
+            stopNoteWatch = window.MosaicLiveRead
+                ? MosaicLiveRead.watch(noteRef, onNote, {
+                    fallbackEveryMs: MosaicLiveRead.PERSON_EVERY_MS,
+                    onError: e => console.warn('Lost the live connection to a Person Panel note:', e),
+                })
+                : noteRef.onSnapshot(onNote, () => {});
         } catch (err) {
             console.error('Error loading panel body:', err);
         }
     }
 
-    async function saveBody(attrs) {
-        if (!bodyEditor) return;
+    function saveBody(attrs) {
+        const mine = (bodySaving || Promise.resolve()).then(() => saveBodyNow(attrs));
+        bodySaving = mine;
+        return mine.then(() => { if (bodySaving === mine) bodySaving = null; });
+    }
+
+    async function saveBodyNow(attrs) {
+        if (!bodyEditor || !bodyDirty) return;
         const bodyJson = bodyEditor.getJSON();
+        bodyDirty = false;
         try {
             await db.collection('people').doc(attrs.personId)
                 .collection('shepherding_notes').doc(attrs.noteId)
@@ -788,9 +902,15 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 }
             }
         } catch (err) {
+            bodyDirty = true;
             console.error('Error saving panel body:', err);
         }
     }
+
+    // Who holds the note changes without anything happening here.
+    const stopPanelHolds = (window.ShepherdingPresence && ShepherdingPresence.subscribe)
+        ? ShepherdingPresence.subscribe(() => showPanelHolder()) : null;
+    const panelTicker = setInterval(showPanelHolder, 5000);
 
     initBodyEditor(node.attrs);
 
@@ -819,6 +939,10 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
 
         destroy() {
             clearTimeout(bodyTimer);
+            if (bodyDirty) saveBody(currentAttrs);
+            if (stopNoteWatch) { stopNoteWatch(); stopNoteWatch = null; }
+            if (stopPanelHolds) stopPanelHolds();
+            clearInterval(panelTicker);
             if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; }
             destroyStatusPopup();
         },
@@ -880,8 +1004,17 @@ document.addEventListener('alpine:init', () => {
         title: '',
 
         saveStatus: 'saved',
-        _saveTimer: null,
         editorUpdated: 0,
+
+        // Live (MS-501/505/506): who holds the title, and what was just
+        // refused because somebody else holds it.
+        presenceEntries: [],
+        presenceTick: 0,
+        heldNotice: '',
+        _heldNoticeTimer: null,
+        // A legacy document that could not be turned into Blocks without
+        // changing it opens to read, never to be written over.
+        readOnly: false,
 
         // Set while a Word file is being built, so the button can say so. The
         // library is 1.1MB and arrives on the first click, so the first export
@@ -943,7 +1076,6 @@ document.addEventListener('alpine:init', () => {
             this._onKeyDown = e => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                     e.preventDefault();
-                    clearTimeout(this._saveTimer);
                     this.save();
                 }
             };
@@ -952,15 +1084,17 @@ document.addEventListener('alpine:init', () => {
             // Listen for NodeView events (dispatched on document, not window)
             document.addEventListener('open-person-picker', e => this._handleOpenPicker(e.detail));
             document.addEventListener('panel-delete-request', e => this._handleDeleteRequest(e.detail));
+            document.addEventListener('doc-held', e => this.showHeld(e.detail.holder));
 
-            // Cross-tab: react when a profile tab deletes a note linked to this document
-            this._bc = new BroadcastChannel('mosaic-shepherding');
-            this._bc.onmessage = (e) => {
-                if (e.data?.type === 'note-deleted' && e.data.sourceDocumentId === this.docId) {
-                    this._replaceOrphanedPanel(e.data.noteId, e.data.personName, e.data.noteType, e.data.bodySnapshot);
-                }
-            };
-            window.addEventListener('beforeunload', () => this._bc?.close());
+            // A note deleted on a profile reaches this page as Blocks through
+            // the live watch — on this device or any other — so there is no
+            // message between tabs any more (MS-506).
+            window.addEventListener('pagehide', () => {
+                if (!_live) return;
+                _live.save();
+                _live.stop();
+                try { ShepherdingPresence.leave(); } catch (e) {}
+            });
 
             auth.onAuthStateChanged(async user => {
                 if (!user) { window.location.href = 'login.html'; return; }
@@ -983,6 +1117,8 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 await this.loadDoc();
+                if (!this.doc) return;
+                this.startPresence(user);
                 this.loading = false;
                 this.$nextTick(() => this.initEditor());
             });
@@ -990,16 +1126,108 @@ document.addEventListener('alpine:init', () => {
 
         async loadDoc() {
             try {
-                const snap = await db.collection('elder_documents').doc(this.docId).get();
-                if (!snap.exists) { window.location.href = 'shepherding-documents.html'; return; }
-                this.doc  = { id: snap.id, ...snap.data() };
+                _live = ElderDocumentLive.create({
+                    db,
+                    fs: firebase.firestore,
+                    docId: this.docId,
+                    byName: () => this.currentUserName,
+                    onStatus: s => {
+                        if (s === 'error') {
+                            this.saveStatus = 'unsaved';
+                            this.showToast('Error saving document', 'error');
+                        } else {
+                            this.saveStatus = s;
+                        }
+                    },
+                    onTitle: t => { this.title = t; _currentDocTitle = t; },
+                    onHolds: () => this.redrawHolds(),
+                    onRefused: holder => this.showHeld(holder),
+                    onDeleted: () => {
+                        this.showToast('This document was deleted', 'error');
+                        setTimeout(() => { window.location.href = this.backHref; }, 1500);
+                    },
+                });
+                _live.setTitleReader(() => this.title);
+                const opened = await _live.open();
+                if (!opened) { window.location.href = 'shepherding-documents.html'; return; }
+                this.doc  = { id: this.docId, ...opened.record };
+                _openedBody = opened.body;
+                this.readOnly = opened.readOnly;
                 this.title = this.doc.title || '';
                 _currentDocId    = this.docId;
                 _currentDocTitle = this.title;
+                if (this.readOnly) {
+                    this.showToast('This document is open to read only — it could not be updated for live editing', 'error');
+                }
             } catch (e) {
                 console.error('Error loading document:', e);
                 this.showToast('Error loading document', 'error');
             }
+        },
+
+        // ── Live: who is here, and who holds what ─────────────────────────────
+
+        startPresence(user) {
+            if (typeof ShepherdingPresence === 'undefined') return;
+            try {
+                ShepherdingPresence.subscribe(entries => { this.presenceEntries = entries; });
+                MosaicIdentity.me({ db, getUserData, uid: user.uid }).then(identity => {
+                    ShepherdingPresence.start({
+                        db,
+                        uid: user.uid,
+                        identity,
+                        // The same surface on web and phone, so both count as
+                        // being on this document.
+                        surface: 'shepherding-document',
+                        pageKey: this.docId,
+                        stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    // Presence waits on who you are; typing does not. A box
+                    // entered before it started was let in unrecorded.
+                    if (_live) _live.reclaim();
+                }).catch(e => console.warn('Presence could not work out who you are:', e));
+                // A quiet hold lets go after a minute; redraw so it shows.
+                setInterval(() => { this.presenceTick++; this.redrawHolds(); }, PresenceCore.HEARTBEAT_MS);
+                window.addEventListener('resize', () => this.redrawHolds());
+                window.addEventListener('beforeunload', () => ShepherdingPresence.leave());
+            } catch (e) {
+                console.warn('Presence could not start on this document; carrying on without it:', e);
+            }
+        },
+
+        redrawHolds() {
+            this.presenceTick++;
+            if (!_live || !_docEditor) return;
+            if (this._holdsFrame) return;
+            this._holdsFrame = requestAnimationFrame(() => {
+                this._holdsFrame = null;
+                _live.drawFaces(document.getElementById('doc-held-layer'), holder => _faceFor(holder));
+            });
+        },
+
+        get titleHolder() {
+            this.presenceTick;
+            this.presenceEntries;
+            return _live ? _live.titleHolder() : null;
+        },
+
+        // The other elders on this document, web or phone.
+        get othersHere() {
+            this.presenceTick;
+            if (!this.currentUser || typeof PresenceCore === 'undefined') return [];
+            return PresenceCore.peopleHere(
+                this.presenceEntries, this.currentUser.uid, 'shepherding-document', this.docId,
+                Date.now(), { idleMs: PresenceCore.SHEPHERDING_IDLE_MS });
+        },
+
+        holderLabel(holder) { return PresenceCore.holderLabel(holder); },
+        holderTitle(holder) { return PresenceCore.holderTitle(holder); },
+
+        showHeld(holder) {
+            this.heldNotice = holder ? PresenceCore.holderTitle(holder) : 'Someone is editing this';
+            clearTimeout(this._heldNoticeTimer);
+            this._heldNoticeTimer = setTimeout(() => { this.heldNotice = ''; }, 3000);
+            this.redrawHolds();
         },
 
         // ── Arriving from a Word file ─────────────────────────────────────────
@@ -1102,10 +1330,16 @@ document.addEventListener('alpine:init', () => {
             if (!el) return;
             if (_docEditor) { _docEditor.destroy(); _docEditor = null; }
 
-            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell, Image, Link, TextAlign } = window._TipTap;
+            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell, Image, Link, TextAlign, BlockId, Extension, Plugin, PluginKey } = window._TipTap;
             const PersonPanelNode = createPersonPanelNode();
             const InlinePickerExtension = createInlinePickerPlugin();
             const self = this;
+            // One person per box (MS-505): a change touching a paragraph, list
+            // item, cell or Person Panel somebody else holds is dropped.
+            const BoxLock = Extension.create({
+                name: 'elderDocumentLocks',
+                addProseMirrorPlugins() { return [_live.lockPlugin({ Plugin, PluginKey })]; },
+            });
 
             _docEditor = new Editor({
                 element: el,
@@ -1132,8 +1366,14 @@ document.addEventListener('alpine:init', () => {
                         HTMLAttributes: { class: 'mention-chip' },
                         suggestion: createDocMentionSuggestion(),
                     }),
-                ],
-                content: this.doc?.contentJson || '',
+                    // Every block carries a lasting id: it is saved, updated
+                    // live and held block by block (MS-500).
+                    BlockId,
+                    BoxLock,
+                ].filter(Boolean),
+                // Drawn from the document's Blocks (MS-501).
+                content: _openedBody || '',
+                editable: !this.readOnly,
                 editorProps: {
                     handleClick(view, pos, event) {
                         const target = event.target.closest('.mention-chip');
@@ -1162,8 +1402,16 @@ document.addEventListener('alpine:init', () => {
                         return false;
                     },
                 },
-                onTransaction() { self.editorUpdated++; self.scheduleSave(); },
+                onTransaction() { self.editorUpdated++; self.redrawHolds(); },
+                onUpdate({ transaction }) {
+                    // Somebody else's blocks arriving, or ids being given out,
+                    // are not edits of ours.
+                    if (transaction && (transaction.getMeta('remote') || transaction.getMeta('blockIds'))) return;
+                    _live.edited();
+                },
             });
+            _live.attach(_docEditor);
+            this.redrawHolds();
         },
 
         focusEditor() { _docEditor?.commands.focus(); },
@@ -1434,38 +1682,6 @@ document.addEventListener('alpine:init', () => {
             this.showPanelDeleteDialog = true;
         },
 
-        _replaceOrphanedPanel(noteId, personName, noteType, bodySnapshot) {
-            if (!_docEditor) return;
-            const { state } = _docEditor.view;
-            let targetPos = null;
-            let targetAttrs = null;
-            state.doc.descendants((node, pos) => {
-                if (node.type.name === 'personPanel' && node.attrs.noteId === noteId) {
-                    targetPos = pos;
-                    targetAttrs = node.attrs;
-                    return false;
-                }
-            });
-            if (targetPos === null) return;
-
-            const name = personName || targetAttrs.personName || '';
-            const type = noteType  || targetAttrs.noteType  || '';
-            const headerText = [name, type].filter(Boolean).join(' — ');
-            const replacement = [
-                { type: 'paragraph', content: [{ type: 'text', text: headerText, marks: [{ type: 'bold' }] }] },
-            ];
-            const snapshotStr = bodySnapshot || targetAttrs.bodySnapshot;
-            if (snapshotStr) {
-                try {
-                    const snap = JSON.parse(snapshotStr);
-                    if (snap?.content?.length > 0) replacement.push(...snap.content);
-                } catch (_) {}
-            }
-            _docEditor.chain()
-                .insertContentAt({ from: targetPos, to: targetPos + 1 }, replacement)
-                .run();
-        },
-
         async executePanelDelete(deleteNote) {
             this.showPanelDeleteDialog = false;
             const pos      = this._deletePos;
@@ -1503,33 +1719,28 @@ document.addEventListener('alpine:init', () => {
 
         // ── Auto-save ─────────────────────────────────────────────────────────
 
+        // The title is a box too: one person renames at a time (MS-505).
         onTitleInput() {
-            this.saveStatus = 'unsaved';
-            this.scheduleSave();
+            _currentDocTitle = this.title;
+            if (_live) _live.titleInput(this.title);
+        },
+
+        enterTitle(event) {
+            if (_live && !_live.enterTitle() && event && event.target) event.target.blur();
+        },
+
+        leaveTitle() {
+            if (_live) _live.leaveTitle();
         },
 
         scheduleSave() {
-            this.saveStatus = 'unsaved';
-            clearTimeout(this._saveTimer);
-            this._saveTimer = setTimeout(() => this.save(), 1500);
+            if (_live) _live.edited();
         },
 
-        async save() {
-            if (!_docEditor || !this.docId) return;
-            this.saveStatus = 'saving';
-            try {
-                await db.collection('elder_documents').doc(this.docId).update({
-                    title:          this.title.trim() || 'Untitled Document',
-                    contentJson:    _docEditor.getJSON(),
-                    updatedAt:      firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedByName:  this.currentUserName,
-                });
-                this.saveStatus = 'saved';
-            } catch (e) {
-                console.error('Error saving:', e);
-                this.saveStatus = 'unsaved';
-                this.showToast('Error saving document', 'error');
-            }
+        // Only what changed: each changed block, and the title if it changed,
+        // at its own field (elder-document-live.js).
+        save() {
+            return _live ? _live.save() : Promise.resolve();
         },
 
         formatDate(ts) {

@@ -1051,14 +1051,6 @@
     return db.collection("elder_documents").doc(id).get()
       .then(function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; });
   }
-  function saveElderDocument(id, payload, user) {
-    return db.collection("elder_documents").doc(id).update({
-      title: (payload.title || "").trim() || "Untitled Document",
-      contentJson: payload.contentJson,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedByName: (user && user.name) || "",
-    });
-  }
   // Mention data for the doc editor's @ picker: people, elder docs, standalone
   // notes, folders (from the structure tree), tags. Mirrors loadDocMentionData
   // in shepherding-document.js — labels/ids kept byte-identical.
@@ -1363,7 +1355,6 @@
     renameElderDocument: renameElderDocument,
     deleteElderDocuments: deleteElderDocuments,
     getElderDocument: getElderDocument,
-    saveElderDocument: saveElderDocument,
     getDocMentionData: getDocMentionData,
     addPanelNote: addPanelNote,
     getPanelNote: getPanelNote,

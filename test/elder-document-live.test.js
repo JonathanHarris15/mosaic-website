@@ -309,3 +309,46 @@ test('both document editors sit on the shared live layer', () => {
     const mobile = read('mobile.html');
     assert.ok(mobile.includes('src="elder-document-live.js"'));
 });
+
+// ── A note deleted from a profile ────────────────────────────────────────────
+
+function txDb(record, calls) {
+    const ref = { id: DOC };
+    return {
+        collection: () => ({ doc: () => ref }),
+        runTransaction: (fn) => fn({
+            get: () => Promise.resolve({ exists: !!record, data: () => JSON.parse(JSON.stringify(record)) }),
+            update: (...args) => { calls.push(args.slice(1)); },
+        }),
+    };
+}
+
+test('deleting a note turns its panel into its words, written as block changes only', async () => {
+    globalThis.ShepherdingPresence = undefined;
+    const record = { title: 'Minutes', blocks: Body.blocksOfBody(body()) };
+    const calls = [];
+    const note = { type: 'doc', content: [{ type: 'paragraph', content: [text('Doing well.')] }] };
+    const done = await ElderDocumentLive.detachPanel(txDb(record, calls), FS, DOC, 'n9', note);
+    assert.strictEqual(done, true);
+    assert.strictEqual(calls.length, 1);
+    const args = calls[0];
+    const paths = args.filter(a => a instanceof FieldPath).map(fp => fp.segments.join('.'));
+    assert.ok(paths.includes('blocks.pp'), 'the panel was not removed');
+    assert.ok(!args.includes('blocks') && !args.includes('contentJson'), 'the whole body was written');
+    // What it leaves reads as the header and the words, where the panel was.
+    const after = JSON.parse(JSON.stringify(record.blocks));
+    for (let i = 0; i < args.length; i += 2) {
+        if (!(args[i] instanceof FieldPath)) continue;
+        const id = args[i].segments[1];
+        if (args[i + 1] === 'DELETE') delete after[id]; else after[id] = args[i + 1];
+    }
+    const words = Body.plainText(Body.bodyOfBlocks(after));
+    assert.match(words, /Sue — Elder Meeting[\s\S]*Doing well\.[\s\S]*Closed\./);
+});
+
+test('a document with no panel for the note is left alone', async () => {
+    const calls = [];
+    const done = await ElderDocumentLive.detachPanel(txDb({ blocks: Body.blocksOfBody(body()) }, calls), FS, DOC, 'other', null);
+    assert.strictEqual(done, false);
+    assert.strictEqual(calls.length, 0);
+});

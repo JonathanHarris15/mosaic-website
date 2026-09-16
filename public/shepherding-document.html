@@ -44,6 +44,18 @@
         .person-panel-body { background:var(--primary-fixed); min-height:80px; }
         .person-panel-body .ProseMirror { min-height:80px; padding:12px; box-sizing:border-box; }
         .ProseMirror-selectednode[data-action-chip] { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 3px; }
+        /* Who holds what (MS-505/506). The layer sits at the top left of the
+           scrolling editor, so the marks scroll with the words. */
+        #tiptap-doc-editor { position: relative; }
+        .doc-held-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 5; pointer-events: none; }
+        .doc-held-bar { background: var(--secondary); opacity: .6; }
+        .doc-held { display: inline-flex; align-items: center; gap: 6px; color: var(--on-surface-variant); background: var(--surface-container-lowest); border-radius: 999px; padding: 2px 8px 2px 2px; white-space: nowrap; }
+        .doc-held--inline { background: transparent; padding: 0; }
+        .doc-held__name { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+        .doc-held__lock { font-size: 14px; }
+        .doc-title-row { display: flex; align-items: center; gap: 8px; }
+        .doc-here { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+        .doc-here__label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--on-surface-variant); }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -52,6 +64,9 @@
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
+    <!-- Live (MS-501/505/506): the document follows the database while open,
+         and one person edits each paragraph at a time. -->
+    <script src="live-read.js"></script>
     <script src="auth.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -129,13 +144,34 @@
     <!-- Main -->
     <main x-show="!loading" class="flex-grow overflow-hidden w-full px-4 md:px-margin pb-lg flex flex-col gap-sm pt-md">
 
-        <!-- Title -->
-        <input type="text"
-               x-model="title"
-               @input="onTitleInput()"
-               placeholder="Document title…"
-               :class="ShepherdingBlur.contentClass(doc?.authorUid)"
-               class="w-full font-headline-lg text-headline-lg text-primary bg-transparent border-0 border-b-2 border-transparent focus:border-outline-variant focus:outline-none pb-xs transition-colors placeholder-outline" />
+        <!-- Somebody else has the paragraph, panel or title that was just tried. -->
+        <div class="m-notice" x-show="heldNotice" x-cloak>
+            <span class="material-symbols-outlined m-notice__icon">lock</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="heldNotice"></span></div>
+        </div>
+
+        <!-- Title. A box: one person renames the document at a time (MS-505). -->
+        <div class="doc-title-row">
+            <input type="text"
+                   x-model="title"
+                   @input="onTitleInput()"
+                   @focus="enterTitle($event)"
+                   @blur="leaveTitle()"
+                   :readonly="readOnly || !!titleHolder"
+                   placeholder="Document title…"
+                   :class="ShepherdingBlur.contentClass(doc?.authorUid)"
+                   class="w-full font-headline-lg text-headline-lg text-primary bg-transparent border-0 border-b-2 border-transparent focus:border-outline-variant focus:outline-none pb-xs transition-colors placeholder-outline" />
+            <template x-for="holder in [titleHolder].filter(Boolean)" :key="holder.uid">
+                <span class="doc-held" :title="holderTitle(holder)">
+                    <span class="m-avatar m-avatar--sm">
+                        <template x-if="holder.photoUrl"><img :src="holder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(holder.photoCrop)"></template>
+                        <template x-if="!holder.photoUrl"><span x-text="PersonPhotoCore.initialsOf(holder.name)"></span></template>
+                    </span>
+                    <span class="doc-held__name" x-text="holderLabel(holder)"></span>
+                    <span class="material-symbols-outlined doc-held__lock">lock</span>
+                </span>
+            </template>
+        </div>
 
         <!-- Metadata -->
         <div class="flex flex-wrap items-center gap-sm pb-xs border-b border-outline-variant">
@@ -146,6 +182,18 @@
             </template>
             <span class="font-label-md text-label-md text-on-surface-variant"
                   x-text="formatDate(doc?.createdAt)"></span>
+            <!-- Who else has this document open, web or phone. -->
+            <template x-if="othersHere.length">
+                <span class="doc-here">
+                    <span class="doc-here__label">Also here</span>
+                    <template x-for="p in othersHere" :key="p.uid">
+                        <span class="m-avatar m-avatar--sm" :title="p.name">
+                            <template x-if="p.photoUrl"><img :src="p.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(p.photoCrop)"></template>
+                            <template x-if="!p.photoUrl"><span x-text="PersonPhotoCore.initialsOf(p.name)"></span></template>
+                        </span>
+                    </template>
+                </span>
+            </template>
         </div>
 
         <!-- Editor card -->
@@ -163,6 +211,7 @@
                  class="font-body-md text-on-surface bg-surface-container-lowest flex-grow overflow-y-auto cursor-text rounded-b-xl"
                  :class="ShepherdingBlur.contentClass(doc?.authorUid)"
                  @click="if (!$event.target.closest('.person-panel')) focusEditor()">
+                <div id="doc-held-layer" class="doc-held-layer"></div>
             </div>
         </div>
     </main>
@@ -297,6 +346,11 @@
     <!-- Every block carries a lasting id (MS-500). -->
     <script src="document-body-core.js"></script>
     <script src="block-id-extension.js"></script>
+    <script src="person-photo-core.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="presence-core.js"></script>
+    <script src="shepherding-presence.js"></script>
+    <script src="elder-document-live.js"></script>
     <script src="tiptap-editor-loader.js"></script>
     <script src="shepherding-document.js"></script>
     <script src="shepherding-key-legend.js"></script>
