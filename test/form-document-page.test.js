@@ -32,17 +32,33 @@ function loadPage(doc) {
     sandbox.FormsCore = require('../public/forms-core.js');
     // The page loads this too, and the component spreads its state in.
     sandbox.NewPersonCard = require('../public/new-person-card.js');
+    sandbox.FormDocumentCore = require('../public/form-document-core.js');
+    sandbox.ShepherdingDocsCore = require('../public/shepherding-documents-core.js');
 
+    // An update is either one object, or field/value pairs where a field may be
+    // a FieldPath (MS-486). Either way it is recorded as one flat patch, keyed
+    // by the dotted path, so a test reads what landed where.
     const writes = [];
+    function asPatch(args) {
+        if (args.length === 1) return args[0];
+        const patch = {};
+        for (let i = 0; i < args.length; i += 2) {
+            const field = args[i];
+            patch[field && field.segments ? field.segments.join('.') : field] = args[i + 1];
+        }
+        return patch;
+    }
     sandbox.db = {
         collection: () => ({
             doc: () => ({
                 get: () => Promise.resolve({ exists: !!doc, data: () => doc }),
-                update: (patch) => { writes.push(patch); return Promise.resolve(); },
+                update: (...args) => { writes.push(asPatch(args)); return Promise.resolve(); },
+                onSnapshot: () => () => {},
             }),
         }),
     };
-    sandbox.firebase = { firestore: { FieldValue: { serverTimestamp: () => 'STAMP' } } };
+    class FieldPath { constructor(...segments) { this.segments = segments; } }
+    sandbox.firebase = { firestore: { FieldPath, FieldValue: { serverTimestamp: () => 'STAMP', delete: () => 'DELETE' } } };
     sandbox.auth = { onAuthStateChanged: (cb) => { sandbox._authCb = cb; } };
     sandbox.getUserData = () => Promise.resolve({ name: 'Keegan' });
 
@@ -142,10 +158,38 @@ test('saving writes the answers and never the questions', async () => {
     await page.save();
 
     assert.strictEqual(writes.length, 1);
-    assert.deepEqual(writes[0].answers.why, 'A friend');
-    assert.ok(!('questions' in writes[0]), 'saving rewrote the questions');
+    assert.deepEqual(writes[0]['answers.why'], 'A friend');
+    assert.ok(!Object.keys(writes[0]).some(k => k.startsWith('questions')), 'saving rewrote the questions');
     assert.ok(!('templateId' in writes[0]), 'saving rewrote where it came from');
     assert.strictEqual(page.saveStatus, 'saved');
+});
+
+test('a save writes only the answer that changed, never the whole map (MS-486)', async () => {
+    // The whole map put back every answer somebody else had saved since.
+    const { page, writes } = await opened(aDocument());
+    page.answers.why = 'Moved here';
+    await page.save();
+    assert.deepEqual(Object.keys(writes[0]).filter(k => k.startsWith('answers')), ['answers.why']);
+    assert.ok(!('answers' in writes[0]), 'the whole answers map was written');
+    assert.ok(!('title' in writes[0]), 'an untouched title was written');
+});
+
+test('opening a form and touching nothing writes nothing', async () => {
+    // Its select-all question gets an empty list on open — which is no answer.
+    const { page, writes } = await opened(aDocument());
+    await page.save();
+    assert.strictEqual(writes.length, 0);
+    assert.strictEqual(page.saveStatus, 'saved');
+});
+
+test('an answer somebody else saved arrives, and is not written back', async () => {
+    const { page, writes } = await opened(aDocument());
+    const theirs = aDocument();
+    theirs.answers.why = 'A friend';
+    page.adoptRemote(theirs);
+    assert.strictEqual(page.answers.why, 'A friend');
+    await page.save();
+    assert.strictEqual(writes.length, 0);
 });
 
 test('it saves itself on a debounce rather than on a button', async () => {
@@ -213,4 +257,53 @@ test('the library opens a form document on this page', () => {
     assert.match(library, /docType === 'form'/, 'the library does not recognise a form document');
     assert.match(library, /shepherding-form-document\.html\?id=/,
         'the library does not open a form document anywhere');
+});
+
+// ── Live, and one person per question (MS-486 / MS-487) ─────────────────────
+
+function loadsBefore(first, second) {
+    const a = MARKUP.indexOf('src="' + first + '"');
+    const b = MARKUP.indexOf('src="' + second + '"');
+    return a !== -1 && b !== -1 && a < b;
+}
+
+test('the page loads the shared rules and the presence store before itself', () => {
+    ['live-read.js', 'mosaic-identity.js', 'presence-core.js', 'shepherding-presence.js', 'form-document-core.js']
+        .forEach(script => assert.ok(loadsBefore(script, 'shepherding-form-document.js'), script));
+});
+
+test('a held question is drawn around the shared markup, never inside it', () => {
+    // The public fill-in page mounts the same markup; the hold must not reach it.
+    assert.match(MARKUP, /data-form-question :inert="!!questionHolder\(q\)"/);
+    assert.match(MARKUP, /@pointerdown="onQuestionPointer\(q\)"/);
+    assert.match(MARKUP, /@focusout="leaveQuestion\(q, \$event\)"/);
+    assert.ok(!read('form-question-markup.js').includes('questionHolder'),
+        'the shared markup knows about holds');
+    assert.ok(!read('form-answer.html').includes('shepherding-presence.js'),
+        'the public fill-in page loads presence');
+});
+
+test('the title is a box, and the faces show who else is here', () => {
+    assert.match(MARKUP, /@focus="enterTitle\(\$event\)"/);
+    assert.match(MARKUP, /:readonly="!!titleHolder"/);
+    assert.match(MARKUP, /othersHere/);
+    assert.match(PAGE_SRC, /surface: 'shepherding-form-document'/);
+});
+
+test('a hold is let go only after that question\'s save', () => {
+    const at = PAGE_SRC.indexOf('async leaveQuestion(');
+    const body = PAGE_SRC.slice(at, PAGE_SRC.indexOf('enterTitle(', at));
+    assert.ok(body.indexOf('await this.save()') !== -1 && body.indexOf('await this.save()') < body.indexOf('release()'));
+});
+
+test('a question somebody took puts the stored answer back instead of saving', async () => {
+    const { page, sandbox, writes } = await opened(aDocument());
+    sandbox.ShepherdingPresence = { touch: () => false, claimBox: () => true, release: () => {}, holderIn: () => ({ name: 'Ann Lee' }) };
+    const q = page.questions.find(x => x.id === 'why');
+    page.answers.why = 'Moved here';
+    page.touch(q);
+    assert.strictEqual(page.answers.why, null);
+    assert.match(page.heldNotice, /Ann Lee/);
+    await page.save();
+    assert.strictEqual(writes.length, 0);
 });

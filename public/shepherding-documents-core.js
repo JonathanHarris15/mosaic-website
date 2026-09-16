@@ -244,7 +244,12 @@
             // tell what kind of document it is holding without asking anybody.
             if (shepherdingDoc) record.shepherdingDoc = true;
         } else {
-            record.contentJson = null;
+            // ⚠ BLOCKS, NOT A BODY VALUE (MS-501). A note's body is stored as
+            // Blocks, one record per block, so two elders in two paragraphs
+            // save different fields. A new document is one empty paragraph.
+            // (The Blocks rules are DocumentBodyCore's; this module does not
+            // load it, so the one block is written out here.)
+            record.blocks = { [emptyBlockId()]: { type: 'paragraph', parent: null, order: 'i' } };
         }
 
         return record;
@@ -252,6 +257,15 @@
 
     // Put a document at the top of a structure, unless it is already somewhere
     // in it. Returns whether anything changed, so a caller can skip the write.
+    // A Block id: a letter, then letters and digits (DocumentBodyCore.newBlockId).
+    function emptyBlockId() {
+        const letters = 'abcdefghijklmnopqrstuvwxyz';
+        const chars = letters + '0123456789';
+        let id = letters[Math.floor(Math.random() * letters.length)];
+        for (let i = 0; i < 9; i++) id += chars[Math.floor(Math.random() * chars.length)];
+        return id;
+    }
+
     function fileInRoot(root, docId) {
         if (!root || containsDoc(root, docId)) return false;
         if (!root.children) root.children = [];
@@ -277,8 +291,117 @@
         return true;
     }
 
+    // ── One change to a tree (MS-493) ─────────────────────────────────────────
+    //
+    // ⚠ A TREE IS ONE RECORD, SO NOBODY WRITES BACK A WHOLE TREE THEY LOADED.
+    // Two elders filing at the same moment each saved the tree from before the
+    // other's change, and a folder, a move or a filed document vanished. Every
+    // writer now sends ONE of these changes, applied on the server to the
+    // latest tree inside a transaction. The page applies the same change to
+    // its own copy first, so a click still shows at once.
+
+    const LIBRARY_TREE = 'root';
+
+    function personTreeId(personId) {
+        return 'person_' + personId;
+    }
+
+    // The Library's tree, or one person's. A person id is a Firestore document
+    // id, so it holds no '/' — and a tree id with one would not be a tree.
+    function isTreeId(treeId) {
+        return treeId === LIBRARY_TREE || /^person_[A-Za-z0-9_-]+$/.test(String(treeId || ''));
+    }
+
+    function folderOrRoot(root, folderId) {
+        return (!folderId || folderId === ROOT) ? root : getFolderById(root, folderId);
+    }
+
+    // Apply one change to `root`, in place. Returns { changed, refused } —
+    // `refused` is a sentence for a person when the change could not apply
+    // because what it names has gone.
+    function applyTreeChange(root, change) {
+        const c = change || {};
+        if (!root.children) root.children = [];
+        const gone = { changed: false, refused: 'That folder no longer exists.' };
+        switch (c.op) {
+        case 'createFolder': {
+            if (findItemById(root, c.folderId)) return { changed: false };
+            const parent = folderOrRoot(root, c.parentId);
+            if (!parent) return gone;
+            if (!parent.children) parent.children = [];
+            parent.children.unshift({ type: 'folder', id: c.folderId, name: String(c.name || 'New Folder'), children: [] });
+            return { changed: true };
+        }
+        case 'renameFolder': {
+            const folder = getFolderById(root, c.folderId);
+            if (!folder) return gone;
+            const name = String(c.name || '').trim() || 'New Folder';
+            if (folder.name === name) return { changed: false };
+            folder.name = name;
+            return { changed: true };
+        }
+        case 'move': {
+            const item = c.item || {};
+            if (!findItemById(root, item.id)) return { changed: false, refused: 'That is no longer here.' };
+            const target = folderOrRoot(root, c.targetFolderId);
+            if (!target) return gone;
+            if (item.type === 'folder' && (c.targetFolderId === item.id || isDescendant(root, c.targetFolderId, item.id))) {
+                return { changed: false, refused: 'A folder cannot go inside itself.' };
+            }
+            return { changed: moveNode(root, item, c.targetFolderId || ROOT) };
+        }
+        case 'remove':
+            return { changed: removeFromTree(root, c.itemId) };
+        case 'file': {
+            if (containsDoc(root, c.docId)) return { changed: false };
+            const folder = folderOrRoot(root, c.folderId);
+            if (!folder) return gone;
+            if (!folder.children) folder.children = [];
+            folder.children.push({ type: 'document', id: c.docId });
+            return { changed: true };
+        }
+        case 'prune': {
+            let changed = false;
+            (c.docIds || []).forEach(id => { if (removeFromTree(root, id)) changed = true; });
+            return { changed };
+        }
+        default:
+            throw new Error('No tree change is known as ' + c.op);
+        }
+    }
+
+    // What removing documents from a tree does to their records (MS-98), the
+    // same on the website and the phone (MS-493). A document is in two trees
+    // when a profile owns it and it was opted into the Library, and taking it
+    // out of ONE must not destroy it for the other:
+    //   • a profile tab owns its documents — destroy them, and prune them from
+    //     the Library in case they were opted in;
+    //   • the Library destroys only its own documents (no owner); a
+    //     profile-owned one is opted back out and stays on the profile.
+    // `docsById` maps id → record. Returns { destroy, optOut, pruneFromLibrary }.
+    function removalPlan(ids, docsById, isProfileScope) {
+        const plan = { destroy: [], optOut: [], pruneFromLibrary: [] };
+        (ids || []).forEach(id => {
+            const owner = docsById && docsById[id] && docsById[id].ownerPersonId;
+            if (isProfileScope) {
+                plan.destroy.push(id);
+                plan.pruneFromLibrary.push(id);
+            } else if (!owner) {
+                plan.destroy.push(id);
+            } else {
+                plan.optOut.push(id);
+            }
+        });
+        return plan;
+    }
+
     const ShepherdingDocsCore = {
+        removalPlan,
         ROOT,
+        LIBRARY_TREE,
+        personTreeId,
+        isTreeId,
+        applyTreeChange,
         MISSING_AUTHOR,
         buildElderDocument,
         fileInRoot,

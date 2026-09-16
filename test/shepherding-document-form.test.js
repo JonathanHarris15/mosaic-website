@@ -176,11 +176,17 @@ test('started from a profile, it is filed in the Library as well', () => {
 });
 
 test('answering the first question files it on that person, and changing it moves it', () => {
+    // Off the old profile before onto the new one, and only when the stored
+    // subject and filing disagree, is pinned where the rule lives, in
+    // form-document-core.test.js (MS-483).
     const js = read('public', 'shepherding-form-document.js');
-    assert.match(js, /async refileForSubject\(\)/, 'nothing files it on a profile');
-    assert.match(js, /if \(was\) await this\.unfileFrom/, 'changing the answer leaves it on two profiles');
-    assert.ok(js.indexOf('unfileFrom(') < js.indexOf('fileOn(\'person_\' + now)'),
-        'it is added to the new profile before being taken off the old one');
+    assert.match(js, /FormDocumentCore\.settleFiling\(db, DocumentTree\.change, this\.docId\)/,
+        'it files through its own tree writes instead of the shared rule and the server');
+    assert.match(js, /SUBJECT_QUESTION_ID\)\) this\.settleFiling\(\)/,
+        'saving who it is about does not file it');
+    assert.match(js, /if \(FormDocumentCore\.filingPlan\(data\)\) this\.settleFiling\(\)/,
+        'a missed move is never repaired');
+    assert.ok(!/collection\('elder_document_structure'\)/.test(js), 'the page writes a tree record itself');
     assert.match(js, /this\.doc && this\.doc\.shepherdingDoc/,
         'it reads the template rather than the stamp on the record');
 });

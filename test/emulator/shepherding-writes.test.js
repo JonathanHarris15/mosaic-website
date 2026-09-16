@@ -49,6 +49,7 @@ suite('what the MCP writes on a Person', () => {
         require('../../functions/mcp-firestore.js').bind({
             FieldValue: admin.firestore.FieldValue,
             Timestamp: admin.firestore.Timestamp,
+            FieldPath: admin.firestore.FieldPath,
         });
     });
 
@@ -384,7 +385,7 @@ suite('what the MCP writes on a Person', () => {
         // The panel is in the document's body, as the atom node the editor
         // draws, carrying the person's name and the note it is linked to.
         const doc = (await db.collection('elder_documents').doc(documentId).get()).data();
-        const nodes = doc.contentJson.content;
+        const nodes = require('../../functions/shared/document-body-core.js').bodyOfRecord(doc).content;
         const found = nodes.find((n) => n.type === 'personPanel');
         assert.ok(found, 'the document must carry the panel');
         assert.strictEqual(found.attrs.personId, SUBJECT);

@@ -18,10 +18,18 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script src="forms-core.js"></script>
     <script src="shepherding-documents-core.js"></script>
+    <!-- Live updates and one person per question (MS-486 / MS-487). -->
+    <script src="live-read.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="presence-core.js"></script>
+    <script src="shepherding-presence.js"></script>
+    <script src="form-document-core.js"></script>
+    <script src="document-tree-client.js"></script>
     <script src="shepherding-form-document.js"></script>
 
     <!-- The question controls, shared with the page a stranger answers a public
@@ -76,29 +84,77 @@
             <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
         </div>
 
+        <!-- Somebody else has the question or the title that was just tried. -->
+        <div class="m-notice" x-show="heldNotice" x-cloak>
+            <span class="material-symbols-outlined m-notice__icon">lock</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="heldNotice"></span></div>
+        </div>
+
         <template x-if="!loading && doc">
             <div class="fd-stack">
 
                 <!-- Its own name, editable, like every other document. Renaming
                      it never touches the template it came from. -->
-                <input type="text" class="fd-title" x-model="title" @input="onTitleInput()"
-                       placeholder="Name this document…" maxlength="200" />
+                <!-- The title is a box: one person renames it at a time (MS-487). -->
+                <div class="fd-title-row">
+                    <input type="text" class="fd-title" x-model="title" @input="onTitleInput()"
+                           @focus="enterTitle($event)" @blur="leaveTitle()" :readonly="!!titleHolder"
+                           placeholder="Name this document…" maxlength="200" />
+                    <template x-for="holder in [titleHolder].filter(Boolean)" :key="holder.uid">
+                        <span class="fd-held" :title="holderTitle(holder)">
+                            <span class="m-avatar m-avatar--sm">
+                                <template x-if="holder.photoUrl"><img :src="holder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(holder.photoCrop)"></template>
+                                <template x-if="!holder.photoUrl"><span x-text="PersonPhotoCore.initialsOf(holder.name)"></span></template>
+                            </span>
+                            <span class="fd-held__name" x-text="holderLabel(holder)"></span>
+                            <span class="material-symbols-outlined fd-held__lock">lock</span>
+                        </span>
+                    </template>
+                </div>
 
                 <div class="fd-meta">
                     <span x-text="'Started by ' + (doc.authorName || 'somebody')"></span>
                     <span>·</span>
                     <span x-text="progressLine"></span>
+                    <!-- Who else has this document open, web or phone (MS-487). -->
+                    <template x-if="othersHere.length">
+                        <span class="fd-here">
+                            <span class="fd-here__label">Also here</span>
+                            <template x-for="p in othersHere" :key="p.uid">
+                                <span class="m-avatar m-avatar--sm" :title="p.name">
+                                    <template x-if="p.photoUrl"><img :src="p.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(p.photoCrop)"></template>
+                                    <template x-if="!p.photoUrl"><span x-text="PersonPhotoCore.initialsOf(p.name)"></span></template>
+                                </span>
+                            </template>
+                        </span>
+                    </template>
                 </div>
 
                 <div class="fa-questions">
                     <template x-for="(q, i) in questions" :key="q.id">
-                        <div class="fa-q" :class="q.type === 'section' ? 'fa-q--head' : ''">
+                        <!-- Each question that asks something is a box (MS-487):
+                             stepping into it claims it, and one somebody else
+                             holds shows their face and cannot be changed. The
+                             hold is drawn HERE, around the shared markup, so the
+                             public fill-in page is untouched. -->
+                        <div class="fa-q" :data-question-id="q.id" :class="[q.type === 'section' ? 'fa-q--head' : '', questionHolder(q) ? 'fd-q--held' : '']"
+                             @pointerdown="onQuestionPointer(q)" @focusin="enterQuestion(q)" @focusout="leaveQuestion(q, $event)">
                             <!-- A heading is not question 4 of 9. It carries no
                                  number and nothing to type into. -->
                             <span class="fa-q__num" x-show="asks(q)" x-text="numberFor(i)"></span>
                             <div class="fa-q__body">
                                 <div>
                                     <div class="fa-q__text" :class="q.type === 'section' ? 'fa-head__text' : ''" x-text="q.text"></div>
+                                    <template x-for="holder in [questionHolder(q)].filter(Boolean)" :key="holder.uid">
+                                        <span class="fd-held" :title="holderTitle(holder)">
+                                            <span class="m-avatar m-avatar--sm">
+                                                <template x-if="holder.photoUrl"><img :src="holder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(holder.photoCrop)"></template>
+                                                <template x-if="!holder.photoUrl"><span x-text="PersonPhotoCore.initialsOf(holder.name)"></span></template>
+                                            </span>
+                                            <span class="fd-held__name" x-text="holderLabel(holder)"></span>
+                                            <span class="material-symbols-outlined fd-held__lock">lock</span>
+                                        </span>
+                                    </template>
                                 </div>
 
                                 <!-- The same controls the fill-in page draws. A
@@ -106,7 +162,7 @@
                                      choice shows every option with the chosen
                                      one marked — so this reads as a record of
                                      what was asked as well as what was said. -->
-                                <div data-form-question @input="touch()" @change="touch()"></div>
+                                <div data-form-question :inert="!!questionHolder(q)" @input="touch(q)" @change="touch(q)"></div>
                             </div>
                         </div>
                     </template>
@@ -128,13 +184,21 @@
          DOMContentLoaded, which this used, fires after the deferred Alpine has
          already run — so every question drew a label and nothing to answer it
          with. -->
-    <div data-new-person-card></div>
+    <!-- Typing a new person in keeps the picker's question held (MS-487). -->
+    <div @input.capture="keepHold()"><div data-new-person-card></div></div>
     <script>FormQuestionMarkup.mount(); NewPersonCard.mount();</script>
 
     <style>
         .fd-stack { display: flex; flex-direction: column; gap: var(--space-sm); max-width: 760px; margin: 0 auto; width: 100%; }
         .fd-title { width: 100%; font-family: var(--font-display); font-size: 28px; color: var(--primary); background: transparent; border: 0; border-bottom: 2px solid transparent; padding-bottom: 4px; }
         .fd-title:focus { outline: none; border-bottom-color: var(--outline-variant); }
+        .fd-title-row { display: flex; align-items: center; gap: 8px; }
+        .fd-held { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--on-surface-variant); margin-top: 4px; }
+        .fd-held__name { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+        .fd-held__lock { font-size: 14px; }
+        .fd-q--held { opacity: .7; cursor: not-allowed; }
+        .fd-here { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+        .fd-here__label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
         .fd-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; color: var(--on-surface-variant); padding-bottom: 8px; border-bottom: 1px solid var(--outline-variant); }
 
         /* The question rows, and the scale, match the fill-in page exactly —

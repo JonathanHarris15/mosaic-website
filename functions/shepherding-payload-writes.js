@@ -41,6 +41,7 @@ const FormsCore = require("./shared/forms-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const NoteMarkdownCore = require("./shared/note-markdown-core.js");
 const CareListCore = require("./shared/care-list-core.js");
+const FormDocumentCore = require("./shared/form-document-core.js");
 const Actor = require("./mcp-actor.js");
 const {refuse, loadPerson} = require("./shepherding-writes.js");
 const {loadDocument, withTree} = require("./shepherding-doc-writes.js");
@@ -209,7 +210,7 @@ async function getFormDocument(db, {documentId}) {
  * @return {Promise<object>} what was answered and what was not
  */
 async function answerFormDocument(db, {documentId, answers, actor}) {
-  const {ref, data} = await loadDocument(db, documentId);
+  const {data} = await loadDocument(db, documentId);
   if ((data.docType || "note") !== "form") {
     throw refuse("That is not a Form Document.");
   }
@@ -220,7 +221,6 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
     if (q && q.id) byId[q.id] = q;
   });
 
-  const merged = Object.assign({}, data.answers || {});
   const skipped = [];
   const proposed = {};
 
@@ -251,16 +251,37 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
     skipped.push({questionId: problem.id, why: problem.why});
   });
 
-  Object.assign(merged, proposed);
   const answered = Object.keys(proposed);
 
-  await ref.update(Object.assign({
-    answers: merged,
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
+  // ⚠ EACH ANSWER TO ITS OWN FIELD (MS-484). Reading the whole map, merging
+  // and writing it back put back every answer an elder saved in between.
+  await FormDocumentCore.saveEdits(db, F.namespace(), documentId, {
+    answers: answered.map((questionId) => ({
+      questionId, value: proposed[questionId],
+    })),
+    byName: actor.name,
+    extra: Actor.provenance(),
+  });
 
-  return {ok: true, documentId, answered, skipped};
+  // A personal shepherding document is filed on whoever its first question
+  // names. The assistant changing that answer moves it exactly as the page
+  // does: the STORED record is asked whether its subject and filing agree,
+  // and each tree is changed inside its own transaction.
+  const result = {ok: true, documentId, answered, skipped};
+  if (answered.includes(FormDocumentCore.SUBJECT_QUESTION_ID)) {
+    const changeTree = (treeId, change) => withTree(db,
+        (tree) => DocsCore.applyTreeChange(tree, change), treeId);
+    try {
+      await FormDocumentCore.settleFiling(db, changeTree, documentId);
+    } catch (e) {
+      // The answers are saved either way; this is only where it is SHOWN.
+      // The next save or opening of the document tries again.
+      result.filing = "The answers are saved, but moving this document " +
+        "to the new person's profile did not finish. It will be retried " +
+        "the next time the document is saved or opened.";
+    }
+  }
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

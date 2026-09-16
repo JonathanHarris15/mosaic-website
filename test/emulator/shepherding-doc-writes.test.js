@@ -39,6 +39,7 @@ suite('the Document Library tools', () => {
         require('../../functions/mcp-firestore.js').bind({
             FieldValue: admin.firestore.FieldValue,
             Timestamp: admin.firestore.Timestamp,
+            FieldPath: admin.firestore.FieldPath,
         });
     });
 
@@ -359,5 +360,178 @@ suite('the Document Library tools', () => {
         const listed = await Docs.listDocuments(db, {});
         assert.deepStrictEqual(
             listed.documents.map((d) => d.documentId), [made.documentId]);
+    });
+
+    // ── MS-502: the document tools read and write Blocks ─────────────────
+
+    const Body = require('../../functions/shared/document-body-core.js');
+    const Markdown = require('../../functions/shared/note-markdown-core.js');
+
+    /** A document as an old page wrote it: one body value, no Blocks. */
+    async function legacyDocument(id, markdown) {
+        await db.collection('elder_documents').doc(id).set({
+            title: 'Old minutes', docType: 'note', authorUid: UID, authorName: 'Jonathan Harris',
+            contentJson: Markdown.fromMarkdown(markdown),
+        });
+        await db.collection('elder_document_structure').doc('root').set({children: [{type: 'document', id}]});
+        return id;
+    }
+
+    async function stored(id) {
+        return (await db.collection('elder_documents').doc(id).get()).data();
+    }
+
+    test('a new document is stored as Blocks', async () => {
+        const {documentId} = await Docs.createDocument(db, {title: 'Minutes', markdown: 'One.\n\nTwo.', actor});
+        const data = await stored(documentId);
+        assert.ok(Body.hasBlocks(data));
+        assert.strictEqual('contentJson' in data, false);
+        assert.strictEqual(Object.keys(data.blocks).length, 2);
+    });
+
+    test('get and list read a legacy document exactly as before', async () => {
+        await legacyDocument('old1', '## Present\n\nJonathan and Sam.');
+        const back = await Docs.getDocument(db, {documentId: 'old1'});
+        assert.strictEqual(back.body, '## Present\n\nJonathan and Sam.');
+        const listed = await Docs.listDocuments(db, {});
+        assert.strictEqual(listed.documents[0].preview, 'Present Jonathan and Sam.');
+    });
+
+    test('a converted document reads back the same markdown and preview', async () => {
+        const {documentId} = await Docs.createDocument(db, {title: 'Minutes', markdown: '## Present\n\nJonathan and Sam.', actor});
+        const back = await Docs.getDocument(db, {documentId});
+        assert.strictEqual(back.body, '## Present\n\nJonathan and Sam.');
+        assert.strictEqual(back.preview, 'Present Jonathan and Sam.');
+    });
+
+    test('appending writes new blocks only: a block somebody changed meanwhile is untouched', async () => {
+        const {documentId} = await Docs.createDocument(db, {title: 'Minutes', markdown: 'First.\n\nSecond.', actor});
+        const data = await stored(documentId);
+        const firstId = Object.keys(data.blocks).find(id => (data.blocks[id].content || [])[0].text === 'First.');
+        // A page saves its paragraph after the assistant read the document.
+        const admin = require('firebase-admin');
+        await db.collection('elder_documents').doc(documentId).update(
+            new admin.firestore.FieldPath('blocks', firstId, 'content'), [{type: 'text', text: 'First, rewritten by an elder.'}]);
+
+        await Docs.appendToDocument(db, {documentId, markdown: 'Third.', actor});
+
+        const back = await Docs.getDocument(db, {documentId});
+        assert.strictEqual(back.body, 'First, rewritten by an elder.\n\nSecond.\n\nThird.');
+    });
+
+    test('appending to a legacy document converts it once, keeping every word', async () => {
+        await legacyDocument('old2', 'Present: Jonathan.');
+        await Docs.appendToDocument(db, {documentId: 'old2', markdown: 'Agreed.', actor});
+        const data = await stored('old2');
+        assert.ok(Body.hasBlocks(data));
+        assert.strictEqual('contentJson' in data, false);
+        assert.strictEqual((await Docs.getDocument(db, {documentId: 'old2'})).body, 'Present: Jonathan.\n\nAgreed.');
+    });
+
+    test('two tools converting one legacy document at the same moment convert it once', async () => {
+        await legacyDocument('old3', 'Present.');
+        await Promise.all([
+            Docs.appendToDocument(db, {documentId: 'old3', markdown: 'A.', actor}),
+            Docs.appendToDocument(db, {documentId: 'old3', markdown: 'B.', actor}),
+        ]);
+        const body = (await Docs.getDocument(db, {documentId: 'old3'})).body;
+        assert.match(body, /^Present\./);
+        assert.ok(body.includes('A.') && body.includes('B.'), body);
+        assert.strictEqual((body.match(/Present\./g) || []).length, 1, 'converted twice: ' + body);
+    });
+
+    test('replacing the body writes a whole new Blocks map, on a legacy document too', async () => {
+        await legacyDocument('old4', 'Old words.');
+        await Docs.updateDocument(db, {documentId: 'old4', markdown: 'New words.', actor});
+        const data = await stored('old4');
+        assert.ok(Body.hasBlocks(data));
+        assert.strictEqual('contentJson' in data, false);
+        assert.strictEqual((await Docs.getDocument(db, {documentId: 'old4'})).body, 'New words.');
+    });
+
+    test('a Person Panel is added as one new block, after its note is written', async () => {
+        const {documentId} = await Docs.createDocument(db, {title: 'Minutes', markdown: 'Present.', actor});
+        const before = Object.keys((await stored(documentId)).blocks);
+        const panel = await Docs.addPersonPanel(db, {documentId, personId: SUBJECT, noteType: 'Elder Meeting', markdown: 'Doing well.', actor});
+        const after = (await stored(documentId)).blocks;
+        const added = Object.keys(after).filter(id => !before.includes(id));
+        assert.strictEqual(added.length, 1);
+        assert.strictEqual(after[added[0]].type, 'personPanel');
+        assert.strictEqual(after[added[0]].attrs.noteId, panel.noteId);
+        const note = await db.collection('people').doc(SUBJECT).collection('shepherding_notes').doc(panel.noteId).get();
+        assert.ok(note.exists);
+    });
+
+    test('a Person Panel added to a legacy document converts it first', async () => {
+        await legacyDocument('old5', 'Present.');
+        await Docs.addPersonPanel(db, {documentId: 'old5', personId: SUBJECT, noteType: 'Elder Meeting', markdown: 'x', actor});
+        const body = Body.bodyOfRecord(await stored('old5'));
+        assert.deepStrictEqual(body.content.map(n => n.type), ['paragraph', 'personPanel']);
+    });
+
+    // ── MS-493: one change to any tree, from a page ──────────────────────
+
+    async function treeOf(treeId) {
+        const snap = await db.collection('elder_document_structure').doc(treeId).get();
+        return snap.exists ? snap.data() : null;
+    }
+
+    test('two different changes racing on the Library tree both survive', async () => {
+        await db.collection('elder_document_structure').doc('root').set({children: [
+            {type: 'folder', id: 'F', name: 'Visits', children: []},
+            {type: 'document', id: 'd1'},
+        ]});
+        await Promise.all([
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'N', name: 'New'}}),
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'move', item: {type: 'document', id: 'd1'}, targetFolderId: 'F'}}),
+            Docs.changeTree(db, {treeId: 'root', change: {op: 'file', docId: 'd2', folderId: DocsCore.ROOT}}),
+        ]);
+        const t = await treeOf('root');
+        assert.ok(DocsCore.getFolderById(t, 'N'), 'the new folder was lost');
+        assert.deepStrictEqual(DocsCore.getAllDocIds(DocsCore.getFolderById(t, 'F')), ['d1'], 'the move was lost');
+        assert.ok(DocsCore.containsDoc(t, 'd2'), 'the filed document was lost');
+    });
+
+    test('the same holds on the tree of one person, which starts from nothing', async () => {
+        const treeId = DocsCore.personTreeId(SUBJECT);
+        await Promise.all([
+            Docs.changeTree(db, {treeId, change: {op: 'file', docId: 'd1'}}),
+            Docs.changeTree(db, {treeId, change: {op: 'file', docId: 'd2'}}),
+            Docs.changeTree(db, {treeId, change: {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'F', name: 'Interviews'}}),
+        ]);
+        const t = await treeOf(treeId);
+        assert.deepStrictEqual(DocsCore.treeDocIds(t).sort(), ['d1', 'd2']);
+        assert.ok(DocsCore.getFolderById(t, 'F'));
+        assert.strictEqual(await treeOf('root'), null, 'a change to one person reached the Library');
+    });
+
+    test('each change does what the shared rule says', async () => {
+        const changes = [
+            {op: 'createFolder', parentId: DocsCore.ROOT, folderId: 'F', name: 'Visits'},
+            {op: 'file', docId: 'd1', folderId: 'F'},
+            {op: 'file', docId: 'd2'},
+            {op: 'renameFolder', folderId: 'F', name: 'Home visits'},
+            {op: 'move', item: {type: 'document', id: 'd2'}, targetFolderId: 'F'},
+            {op: 'prune', docIds: ['d1']},
+            {op: 'remove', itemId: 'd2'},
+        ];
+        const expected = {children: []};
+        for (const change of changes) {
+            await Docs.changeTree(db, {treeId: 'root', change});
+            DocsCore.applyTreeChange(expected, change);
+            assert.deepStrictEqual(await treeOf('root'), expected, change.op + ' did something else on the server');
+        }
+    });
+
+    test('a change whose folder is gone is refused, and a tree that is not one is refused', async () => {
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'root', change: {op: 'file', docId: 'd1', folderId: 'ghost'},
+        }), /no longer exists/);
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'people', change: {op: 'file', docId: 'd1'},
+        }), /not a document tree/);
+        await assert.rejects(() => Docs.changeTree(db, {
+            treeId: 'root', change: {op: 'shuffle'},
+        }), /shuffle/);
     });
 });

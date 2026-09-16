@@ -39,31 +39,14 @@
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
-  function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
-  // ── Pure tree helpers (operate on a structure clone) ─────────
+  // ── Pure tree helpers (read-only; changes go through M.documentTree) ─────────
   function getFolderById(root, id) {
     for (var i = 0; i < (root.children || []).length; i++) {
       var c = root.children[i];
       if (c.type === "folder") { if (c.id === id) return c; var f = getFolderById(c, id); if (f) return f; }
     }
     return null;
-  }
-  function findParent(root, id) {
-    for (var i = 0; i < (root.children || []).length; i++) {
-      var c = root.children[i];
-      if (c.id === id) return root;
-      if (c.type === "folder") { var f = findParent(c, id); if (f) return f; }
-    }
-    return null;
-  }
-  function removeFromTree(root, id) {
-    var idx = (root.children || []).findIndex(function (c) { return c.id === id; });
-    if (idx !== -1) { root.children.splice(idx, 1); return true; }
-    for (var i = 0; i < (root.children || []).length; i++) {
-      if (root.children[i].type === "folder" && removeFromTree(root.children[i], id)) return true;
-    }
-    return false;
   }
   function getAllDocIds(node) {
     var ids = [];
@@ -167,8 +150,7 @@
 
   // ── Document Library ─────────────────────────────────────────
   function DocumentsScreen(props) {
-    var loadingS = useState(true), errS = useState(false);
-    var structureS = useState({ children: [] }), docsS = useState({});
+    var DC = window.ShepherdingDocsCore;
     var viewsS = useState([]), tagsS = useState([]);
     var pathS = useState([]);
     var renameIdS = useState(null), renameValS = useState("");
@@ -178,23 +160,23 @@
     var deleteS = useState(null); // delete confirm: the item
     var toastS = useState(null);
 
-    var structure = structureS[0], docs = docsS[0], views = viewsS[0], tags = tagsS[0], path = pathS[0];
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
+    // Live, and changed one change at a time through the server (MS-493 /
+    // MS-496) — see mobile/document-tree.js.
+    var tree = M.documentTree.useDocumentTree({ treeId: "root", pathS: pathS, renameIdS: renameIdS, showToast: showToast });
+    var elderDocs = M.documentTree.useElderDocuments();
     useEffect(function () {
-      var alive = true;
-      Promise.all([data.getDocumentStructure(), data.getElderDocuments(), data.getShepherdingViews(), data.getShepherdingTags()])
-        .then(function (r) {
-          if (!alive) return;
-          structureS[1](r[0]);
-          var map = {}; r[1].forEach(function (d) { map[d.id] = d; }); docsS[1](map);
-          viewsS[1](r[2]); tagsS[1](r[3]); loadingS[1](false);
-        })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      var stops = [
+        data.watchShepherdingViews(function (v) { viewsS[1](v); }),
+        data.watchShepherdingTags(function (t) { tagsS[1](t); }),
+      ];
+      return function () { stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
     }, []);
 
-    function persist(next) { structureS[1](next); data.saveDocumentStructure(next).catch(function () { showToast("Error saving changes", "error"); }); }
+    var structure = tree.structure, docs = elderDocs.docs, views = viewsS[0], tags = tagsS[0], path = pathS[0];
+    var loading = !(tree.loaded && elderDocs.loaded);
+    var currentFolderId = path.length ? path[path.length - 1] : DC.ROOT;
 
     var currentFolder = path.length === 0 ? structure : (getFolderById(structure, path[path.length - 1]) || structure);
     var children = (currentFolder.children || []);
@@ -240,17 +222,15 @@
       }
       createS[1](null);
       data.createElderDocument(opts, props.user).then(function (id) {
-        var d = { id: id, title: opts.title || (c.type === "care-list" ? "New Care List" : "New Document"), docType: c.type, authorName: (props.user && props.user.name) || "" };
-        docsS[1](Object.assign({}, docs, (function () { var o = {}; o[id] = d; return o; })()));
-        var next = clone(structure);
-        var folder = path.length === 0 ? next : (getFolderById(next, path[path.length - 1]) || next);
-        if (!folder.children) folder.children = [];
-        folder.children.push({ type: "document", id: id });
-        structureS[1](next);
+        elderDocs.patch(id, { id: id, title: opts.title || (c.type === "care-list" ? "New Care List" : "New Document"), docType: c.type, authorName: (props.user && props.user.name) || "" });
         // Route by the type we just created — the docs map closure here is stale
         // (doesn't yet contain the new doc), so don't rely on openDoc's lookup.
-        data.saveDocumentStructure(next).then(function () { props.nav(c.type === "care-list" ? "careList" : "documentEditor", { id: id }); })
-          .catch(function () { showToast("Error creating document", "error"); });
+        // Never filed nowhere: if the folder went meanwhile, it lands at the top.
+        tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) {
+          return ok || (currentFolderId !== DC.ROOT && tree.change({ op: "file", docId: id, folderId: DC.ROOT }));
+        }).then(function (ok) {
+          if (ok) props.nav(c.type === "care-list" ? "careList" : "documentEditor", { id: id });
+        });
       // Say WHICH failure. A refusal for a missing author is a different
       // thing from a permission problem, and an elder can act on one of
       // them (MS-304).
@@ -261,11 +241,7 @@
     }
     function createFolder() {
       var fid = genId();
-      var next = clone(structure);
-      var folder = path.length === 0 ? next : (getFolderById(next, path[path.length - 1]) || next);
-      if (!folder.children) folder.children = [];
-      folder.children.unshift({ type: "folder", id: fid, name: "New Folder", children: [] });
-      persist(next);
+      tree.change({ op: "createFolder", parentId: currentFolderId, folderId: fid, name: "New Folder" });
       renameIdS[1](fid); renameValS[1]("New Folder");
     }
 
@@ -279,9 +255,9 @@
       var name = renameValS[0].trim() || (item.type === "folder" ? "New Folder" : "New Document");
       renameIdS[1](null);
       if (item.type === "folder") {
-        var next = clone(structure); var f = getFolderById(next, item.id); if (f) f.name = name; persist(next);
+        tree.change({ op: "renameFolder", folderId: item.id, name: name });
       } else {
-        docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { title: name }); return o; })()));
+        elderDocs.patch(item.id, { title: name });
         data.renameElderDocument(item.id, name, props.user).catch(function () { showToast("Error renaming", "error"); });
       }
     }
@@ -292,33 +268,22 @@
       if (item.type === "folder" && targetId !== "__root__" && (targetId === item.id || isDescendant(structure, targetId, item.id))) {
         showToast("Cannot move a folder into itself", "error"); return;
       }
-      var next = clone(structure);
-      var snapshot = item.type === "folder" ? (getFolderById(next, item.id) || { type: "folder", id: item.id, name: item.name, children: [] }) : { type: "document", id: item.id };
-      removeFromTree(next, item.id);
-      var target = targetId === "__root__" ? next : getFolderById(next, targetId);
-      if (!target) { showToast("Error moving item", "error"); return; }
-      if (!target.children) target.children = [];
-      target.children.push(snapshot);
-      persist(next);
-      showToast("Moved");
+      tree.change({ op: "move", item: { type: item.type, id: item.id }, targetFolderId: targetId }).then(function (ok) {
+        if (ok) showToast("Moved");
+      });
     }
 
     // ── Delete ──
+    // The same rule as the website (MS-493): a document a profile owns is only
+    // taken out of the Library, never destroyed from here.
     function doDelete(item) {
       deleteS[1](null); menuS[1](null);
-      var next = clone(structure);
-      if (item.type === "document") {
-        data.deleteElderDocuments([item.id]);
-        var m = Object.assign({}, docs); delete m[item.id]; docsS[1](m);
-      } else {
-        var folder = getFolderById(structure, item.id);
-        var ids = folder ? getAllDocIds(folder) : [];
-        if (ids.length) data.deleteElderDocuments(ids);
-        var m2 = Object.assign({}, docs); ids.forEach(function (id) { delete m2[id]; }); docsS[1](m2);
-      }
-      removeFromTree(next, item.id);
-      persist(next);
-      showToast("Deleted");
+      var ids = item.type === "document" ? [item.id] : (function () { var f = getFolderById(structure, item.id); return f ? getAllDocIds(f) : []; })();
+      var plan = DC.removalPlan(ids, docs, false);
+      if (plan.destroy.length) data.deleteElderDocuments(plan.destroy);
+      if (plan.optOut.length) data.optElderDocsOutOfLibrary(plan.optOut);
+      plan.destroy.forEach(function (id) { elderDocs.patch(id, null); });
+      tree.change({ op: "remove", itemId: item.id }).then(function (ok) { if (ok) showToast("Deleted"); });
     }
 
     var userKnown = props.user !== undefined;
@@ -339,9 +304,8 @@
       <${Screen}>
         <${TopBar} title="Document Library" onBack=${props.back} serif=${false} />
         <${Body} style=${{ paddingBottom: "calc(96px + env(safe-area-inset-bottom, 0px))" }}>
-          ${!userKnown || loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
+          ${!userKnown || loading ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
-          : errS[0] ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15 }}>Couldn't load the document library.</p></div>`
           : html`<${Fragment}>
             <div style=${{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, padding: "12px 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>
               ${Ic("folder-open", 15)}
@@ -396,7 +360,7 @@
           </${Fragment}>`}
         </${Body}>
 
-        ${isElder && !loadingS[0] ? html`<${FAB} icon="plus" label="New document" onClick=${openCreate} />` : null}
+        ${isElder && !loading ? html`<${FAB} icon="plus" label="New document" onClick=${openCreate} />` : null}
 
         ${menuItem ? html`<${Sheet} title=${menuItem.type === "folder" ? menuItem.name : ((docs[menuItem.id] && docs[menuItem.id].title) || "Document")} subtitle=${menuItem.type === "folder" ? "Folder" : "Document"} onClose=${function () { menuS[1](null); }}>
           ${[

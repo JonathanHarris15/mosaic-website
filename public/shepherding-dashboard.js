@@ -9,6 +9,15 @@ const dashZoneKey = ShepherdingCore.statusZoneKey;
 const DASH_TASK_LOOK_BACK_DAYS = 365;
 const DASH_TASK_LOOK_AHEAD_DAYS = 180;
 
+// The live reads this page holds open (MS-494), stopped when it goes. Outside
+// Alpine: nothing here is drawn.
+const _dashWatches = [];
+const _dashRows = { tasks: null, occurrences: null, activity: null, holdsWatched: false };
+function stopDashWatches() {
+    _dashWatches.splice(0).forEach(stop => { try { stop(); } catch (e) {} });
+    _dashRows.holdsWatched = false;
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingDashboard', () => ({
         currentUser: null,
@@ -66,44 +75,93 @@ document.addEventListener('alpine:init', () => {
                 });
                 this.currentPersonId = (userData && userData.personId) || null;
 
-                await Promise.all([
-                    this.loadPanelTasks(),
-                    this.loadViews(),
-                    this.loadPeople(),
-                    this.loadTags(),
-                ]);
-                // Tag Hold history is only needed to satisfy a Hold-Duration
-                // filter — fetch it lazily, not on every dashboard load (ADR-0011).
-                if (this.views.some(v => this.viewHasHoldFilter(v))) {
-                    await this.loadTagHolds();
-                }
+                await this.watchDashboard();
                 this.loading = false;
             });
+            window.addEventListener('pagehide', stopDashWatches);
+            // Brought back from the back/forward cache with its watches stopped.
+            window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
+        },
+
+        // ── Live (MS-494) ────────────────────────────────────────────────────
+        //
+        // Tasks, Filtered Views, People and tags are followed while the page is
+        // open, so a status, tag, view or Task another elder changes shows here
+        // without reloading. Through live-read.js: a listener on the web, and on
+        // the phone a listener that falls back to re-reading. Resolves once the
+        // People and the Filtered Views have first arrived, which is the load.
+        //
+        // ⚠ NOTHING RE-READS AFTER A SAVE ANY MORE. The page still shows its
+        // own change at once; the next delivery brings the server's copy.
+        watchDashboard() {
+            const Live = MosaicLiveRead;
+            const failed = what => e => console.warn('Could not keep ' + what + ' current:', e);
+            const every = Live.ROSTER_EVERY_MS;
+            let people = false, views = false;
+            return new Promise(resolve => {
+                const ready = () => { if (people && views) resolve(); };
+                _dashWatches.push(Live.watch(db.collection('people'), snap => {
+                    this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.deriveTagHolds();
+                    people = true; ready();
+                }, { fallbackEveryMs: every, onError: e => { failed('people')(e); people = true; ready(); } }));
+                _dashWatches.push(Live.watch(db.collection('shepherding_views').orderBy('createdAt', 'asc'), snap => {
+                    this.adoptViews(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    views = true; ready();
+                }, { fallbackEveryMs: every, onError: e => { failed('the Filtered Views')(e); views = true; ready(); } }));
+                _dashWatches.push(Live.watch(db.collection('people_tags').orderBy('name', 'asc'), snap => {
+                    this.shepherdingTags = snap.docs.map(doc => ({
+                        id: doc.id,
+                        name: doc.data().name || doc.id,
+                        hiddenFromOthers: doc.data().hiddenFromOthers || false,
+                        hidePeople: doc.data().hidePeople || false,
+                    }));
+                }, { fallbackEveryMs: every, onError: failed('the tags') }));
+                _dashWatches.push(Live.watch(db.collection('shepherding_tasks'), snap => {
+                    _dashRows.tasks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.resolvePanelTasks();
+                }, { fallbackEveryMs: every, onError: failed('the Tasks') }));
+                _dashWatches.push(Live.watch(db.collection('shepherding_task_occurrences'), snap => {
+                    _dashRows.occurrences = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.resolvePanelTasks();
+                }, { fallbackEveryMs: every, onError: failed('the Task dates') }));
+            });
+        },
+
+        // A new list of Filtered Views. The one being edited stays open unless
+        // it was deleted; the one selected moves only if it went.
+        adoptViews(views) {
+            this.views = views;
+            if (this.editingViewId && !views.some(v => v.id === this.editingViewId)) {
+                this.editingViewId = null;
+                this.showViewModal = false;
+                this.newView = this.blankView();
+                this.showToast('The view you were editing was just deleted by somebody else.', 'error');
+            }
+            if (this.selectedViewId && !views.some(v => v.id === this.selectedViewId)) {
+                this.selectedViewId = views.length ? views[0].id : null;
+            }
+            // Tag Hold history is only needed to satisfy a Hold-Duration filter —
+            // followed only once a view uses one, not on every dashboard (ADR-0011).
+            if (!_dashRows.holdsWatched && views.some(v => this.viewHasHoldFilter(v))) this.watchTagHolds();
         },
 
         // ⚠ THE PANEL DECIDES NOTHING. Which Tasks belong here is
         // TasksCore.panelFor, the same answer the phone's Shepherd screen gets,
         // so the two cannot disagree about what "yours" means.
-        async loadPanelTasks() {
-            try {
-                const [taskSnap, occSnap] = await Promise.all([
-                    db.collection('shepherding_tasks').get(),
-                    db.collection('shepherding_task_occurrences').get(),
-                ]);
-                const rows = taskSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const now = Date.now();
-                const all = TasksCore.resolve({
-                    tasks: rows.filter(t => !t.recurrence),
-                    series: rows.filter(t => t.recurrence),
-                    occurrences: occSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                    now,
-                    from: TasksCore.dayOf(now - DASH_TASK_LOOK_BACK_DAYS * 86400000),
-                    to: TasksCore.dayOf(now + DASH_TASK_LOOK_AHEAD_DAYS * 86400000),
-                });
-                this.panelTasks = TasksCore.panelFor(all, this.currentPersonId, now);
-            } catch (e) {
-                console.error('Error loading tasks:', e);
-            }
+        resolvePanelTasks() {
+            if (!_dashRows.tasks || !_dashRows.occurrences) return;
+            const rows = _dashRows.tasks;
+            const now = Date.now();
+            const all = TasksCore.resolve({
+                tasks: rows.filter(t => !t.recurrence),
+                series: rows.filter(t => t.recurrence),
+                occurrences: _dashRows.occurrences,
+                now,
+                from: TasksCore.dayOf(now - DASH_TASK_LOOK_BACK_DAYS * 86400000),
+                to: TasksCore.dayOf(now + DASH_TASK_LOOK_AHEAD_DAYS * 86400000),
+            });
+            this.panelTasks = TasksCore.panelFor(all, this.currentPersonId, now);
         },
 
         taskDueLabel(task) {
@@ -122,45 +180,12 @@ document.addEventListener('alpine:init', () => {
                     taskId: task.seriesId || task.id,
                     date: task.seriesId ? task.dueDate : undefined,
                 });
-                await this.loadPanelTasks();
+                // Off the panel at once; the next delivery brings the truth.
+                this.panelTasks = this.panelTasks.filter(t => t !== task);
                 this.showToast('Done');
             } catch (e) {
                 console.error('Error completing task:', e);
                 this.showToast((e && e.message) || 'Error completing task', 'error');
-            }
-        },
-
-        async loadViews() {
-            try {
-                const snap = await db.collection('shepherding_views')
-                    .orderBy('createdAt', 'asc')
-                    .get();
-                this.views = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                console.error('Error loading views:', e);
-            }
-        },
-
-        async loadPeople() {
-            try {
-                const snap = await db.collection('people').get();
-                this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                console.error('Error loading people:', e);
-            }
-        },
-
-        async loadTags() {
-            try {
-                const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-                this.shepherdingTags = snap.docs.map(doc => ({
-                    id: doc.id,
-                    name: doc.data().name || doc.id,
-                    hiddenFromOthers: doc.data().hiddenFromOthers || false,
-                    hidePeople: doc.data().hidePeople || false,
-                }));
-            } catch (e) {
-                console.error('Error loading tags:', e);
             }
         },
 
@@ -179,10 +204,15 @@ document.addEventListener('alpine:init', () => {
                     createdByName: this.currentUserName,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
+                // On screen at once; the next delivery brings the server's copy.
+                if (!this.views.some(v => v.id === docRef.id)) {
+                    this.views = this.views.concat([{ id: docRef.id, title: this.newView.title.trim(),
+                        filterTags: [...this.newView.filterTags], filterMode: this.newView.filterMode,
+                        statusZoneFilters: [...this.newView.statusZoneFilters],
+                        tagHoldFilters: this.cleanHoldFilters(), tagHoldCmp: this.cleanHoldCmp() }]);
+                }
                 this.newView = this.blankView();
                 this.showViewModal = false;
-                await this.loadViews();
-                if (this.views.some(v => this.viewHasHoldFilter(v))) await this.loadTagHolds();
                 this.selectedViewId = docRef.id;
                 this.showToast('Filtered view created');
             } catch (e) {
@@ -283,8 +313,6 @@ document.addEventListener('alpine:init', () => {
                 this.showViewModal = false;
                 const updatedId = this.editingViewId;
                 this.editingViewId = null;
-                await this.loadViews();
-                if (this.views.some(v => this.viewHasHoldFilter(v))) await this.loadTagHolds();
                 this.selectedViewId = updatedId;
                 this.showToast('View updated');
             } catch (e) {
@@ -309,28 +337,35 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Load Tag Hold history for the Hold-Duration filter: one collection-group
-        // pass over tag_change entries, grouped by person, derived via the core.
-        async loadTagHolds() {
-            try {
-                const snap = await db.collectionGroup('shepherding_activity')
-                    .where('kind', '==', 'tag_change')
-                    .get();
-                const byPerson = {};
-                snap.docs.forEach(doc => {
-                    const personId = doc.ref.parent.parent && doc.ref.parent.parent.id;
-                    if (!personId) return;
-                    (byPerson[personId] || (byPerson[personId] = [])).push(doc.data());
-                });
-                const now = Date.now();
-                const holds = {};
-                this.people.forEach(p => {
-                    holds[p.id] = ShepherdingCore.deriveTagHolds(byPerson[p.id] || [], p.tags || [], now);
-                });
-                this.tagHolds = holds;
-            } catch (e) {
-                console.error('Error loading tag holds:', e);
-            }
+        // Tag Hold history for the Hold-Duration filter: the tag_change entries,
+        // followed live once a view needs them, grouped by person and derived
+        // through the core whenever they or the People change.
+        watchTagHolds() {
+            _dashRows.holdsWatched = true;
+            _dashWatches.push(MosaicLiveRead.watch(
+                db.collectionGroup('shepherding_activity').where('kind', '==', 'tag_change'),
+                snap => {
+                    const byPerson = {};
+                    snap.docs.forEach(doc => {
+                        const personId = doc.ref.parent.parent && doc.ref.parent.parent.id;
+                        if (!personId) return;
+                        (byPerson[personId] || (byPerson[personId] = [])).push(doc.data());
+                    });
+                    _dashRows.activity = byPerson;
+                    this.deriveTagHolds();
+                },
+                { fallbackEveryMs: MosaicLiveRead.ROSTER_EVERY_MS,
+                    onError: e => console.warn('Could not keep tag holds current:', e) }));
+        },
+
+        deriveTagHolds() {
+            if (!_dashRows.activity) return;
+            const now = Date.now();
+            const holds = {};
+            this.people.forEach(p => {
+                holds[p.id] = ShepherdingCore.deriveTagHolds(_dashRows.activity[p.id] || [], p.tags || [], now);
+            });
+            this.tagHolds = holds;
         },
 
         getPeopleForView(view) {

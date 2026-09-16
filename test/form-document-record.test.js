@@ -77,7 +77,12 @@ test('an ordinary document is completely unaffected', () => {
         title: 'Notes', docType: 'note', author, timestamp: STAMP,
     });
     assert.strictEqual(note.docType, 'note');
-    assert.strictEqual(note.contentJson, null);
+    // A note starts as Blocks: one empty paragraph (MS-501).
+    const blocks = Object.values(note.blocks);
+    assert.strictEqual(blocks.length, 1);
+    assert.deepStrictEqual(blocks[0], { type: 'paragraph', parent: null, order: 'i' });
+    assert.match(Object.keys(note.blocks)[0], /^[a-z][a-z0-9]{9}$/);
+    assert.strictEqual('contentJson' in note, false);
     assert.ok(!('questions' in note), 'a blank document grew form fields');
     assert.ok(!('answers' in note));
 });
@@ -148,6 +153,10 @@ test('a Form Document needs no rule of its own, and none was written', () => {
     const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');
     assert.ok(!rules.includes('form_documents'),
         'a separate collection appeared — the ADR says a Form Document is an Elder Document');
-    assert.match(rules, /match \/elder_documents\/\{docId\} \{\s*\n\s*allow read, write: if isElder\(\);/,
+    // Elder-only, and the one extra condition on an update only concerns a
+    // document stored as Blocks, which a Form Document never is (MS-501).
+    assert.match(rules, /match \/elder_documents\/\{docId\} \{\s*\n\s*allow read, create, delete: if isElder\(\);/,
         'the rule a Form Document relies on has changed');
+    assert.match(rules, /allow update: if isElder\(\)\s*\n\s*&& !\('blocks' in resource\.data/,
+        'an Elder Document update is no longer elder-only with only the Blocks condition');
 });

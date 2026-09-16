@@ -507,8 +507,8 @@
   function watchCareLists(onDocs) {
     return watch(db.collection("elder_documents").where("docType", "==", "care-list"), liveRows, onDocs, rosterEvery());
   }
-  function watchShepherdingTags(onTags) {
-    return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery());
+  function watchShepherdingTags(onTags, onError) {
+    return watch(db.collection("people_tags").orderBy("name", "asc"), tagsFromSnap, onTags, rosterEvery(), onError);
   }
   function watchPeople(onPeople) {
     return watch(db.collection("people"), peopleFromSnap, onPeople, rosterEvery());
@@ -526,28 +526,71 @@
     return watch(db.collection("relationship_groups"), groupsFromSnap, onGroups, rosterEvery());
   }
 
-  // The Tasks this person is FOR (ADR-0061), kept current. Two collections feed
-  // one answer, so it is resolved again whenever either arrives.
-  function watchPersonTasks(personId, onTasks) {
+  // Every Task, resolved, kept current. Two collections feed one answer, so it
+  // is resolved again whenever either arrives. `every` is how often the phone's
+  // fallback re-reads.
+  function watchAllTasks(onAll, every) {
     var rows = null, occurrences = null;
     function resolveNow() {
       if (!rows || !occurrences) return;
       var now = Date.now();
-      var all = window.TasksCore.resolve({
+      onAll(window.TasksCore.resolve({
         tasks: rows.filter(function (t) { return !t.recurrence; }),
         series: rows.filter(function (t) { return t.recurrence; }),
         occurrences: occurrences,
         now: now,
         from: window.TasksCore.dayOf(now - TASK_LOOK_BACK_DAYS * 86400000),
         to: window.TasksCore.dayOf(now + TASK_LOOK_AHEAD_DAYS * 86400000),
-      });
-      onTasks(window.TasksCore.forPerson(all, personId));
+      }), now);
     }
     var stops = [
-      watch(db.collection("shepherding_tasks"), mapDocs, function (r) { rows = r; resolveNow(); }, personEvery()),
-      watch(db.collection("shepherding_task_occurrences"), mapDocs, function (o) { occurrences = o; resolveNow(); }, personEvery()),
+      watch(db.collection("shepherding_tasks"), mapDocs, function (r) { rows = r; resolveNow(); }, every),
+      watch(db.collection("shepherding_task_occurrences"), mapDocs, function (o) { occurrences = o; resolveNow(); }, every),
     ];
     return function () { stops.forEach(function (stop) { stop(); }); };
+  }
+  // The Tasks this person is FOR (ADR-0061), kept current.
+  function watchPersonTasks(personId, onTasks) {
+    return watchAllTasks(function (all) { onTasks(window.TasksCore.forPerson(all, personId)); }, personEvery());
+  }
+  // The Shepherd home's Your Tasks panel, kept current (MS-494) — the same
+  // TasksCore.panelFor answer the web dashboard gets.
+  function watchShepherdingPanelTasks(user, onTasks) {
+    return watchAllTasks(function (all, now) {
+      onTasks(window.TasksCore.panelFor(all, (user && user.personId) || null, now));
+    }, rosterEvery());
+  }
+  // Tag Change entries grouped by person, kept current — only watched while a
+  // Filtered View filters on how long a tag has been held (ADR-0011).
+  function watchShepherdingTagActivity(onByPerson) {
+    return watch(db.collectionGroup("shepherding_activity").where("kind", "==", "tag_change"), function (snap) {
+      var byPerson = {};
+      snap.docs.forEach(function (doc) {
+        var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
+        if (!pid) return;
+        (byPerson[pid] || (byPerson[pid] = [])).push(doc.data());
+      });
+      return byPerson;
+    }, onByPerson, rosterEvery());
+  }
+  function tagHoldsFrom(byPerson, people) {
+    var now = Date.now(), holds = {};
+    (people || []).forEach(function (p) {
+      holds[p.id] = window.ShepherdingCore.deriveTagHolds((byPerson || {})[p.id] || [], p.tags || [], now);
+    });
+    return holds;
+  }
+  // Each person's latest note date, kept current (MS-495): a note another
+  // elder writes moves it.
+  function watchShepherdingLastNoteDates(onDates) {
+    return watch(db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc"), function (snap) {
+      var latest = {};
+      snap.docs.forEach(function (doc) {
+        var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
+        if (pid && !latest[pid]) latest[pid] = doc.data({ serverTimestamps: "estimate" }).createdAt;
+      });
+      return latest;
+    }, onDates, rosterEvery());
   }
   function addShepherdingNote(personId, note, user) {
     return db.collection("people").doc(personId).collection("shepherding_notes").add({
@@ -877,8 +920,8 @@
       function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; }, onView, rosterEvery());
   }
   // Whole records — the Care List filters on tags, status and membership.
-  function watchShepherdingPeople(onPeople) {
-    return watch(db.collection("people"), mapDocs, onPeople, rosterEvery());
+  function watchShepherdingPeople(onPeople, onError) {
+    return watch(db.collection("people"), mapDocs, onPeople, rosterEvery(), onError);
   }
 
   // ── Document Library (elder_documents + elder_document_structure) ────────────
@@ -898,10 +941,24 @@
         return data && data.children ? data : { children: [] };
       }).catch(function () { return { children: [] }; });
   }
-  function saveDocumentStructure(structure, docId) {
-    // Plain clone so Firestore never sees Preact/proxy wrappers.
-    var plain = JSON.parse(JSON.stringify(structure || { children: [] }));
-    return db.collection("elder_document_structure").doc(docId || "root").set(plain).then(function () { return plain; });
+  // ⚠ NO SCREEN WRITES A TREE RECORD (MS-493). A tree is changed one change at
+  // a time, on the server, through the shepherdingTree callable
+  // (document-tree-client.js) — the same path the website and the assistant use.
+  function changeDocumentTree(treeId, change) {
+    return window.DocumentTree.change(treeId || "root", change);
+  }
+  // A tree, live (MS-496). `onTree` gets { children } every time it changes.
+  function watchDocumentStructure(treeId, onTree, onError) {
+    return watch(db.collection("elder_document_structure").doc(treeId || "root"), function (d) {
+      var data = d.exists ? d.data() : null;
+      return data && data.children ? data : { children: [] };
+    }, onTree, personEvery(), onError);
+  }
+  function watchElderDocuments(onDocs, onError) {
+    return watch(db.collection("elder_documents").orderBy("createdAt", "desc"), mapDocs, onDocs, rosterEvery(), onError);
+  }
+  function watchShepherdingViews(onViews, onError) {
+    return watch(db.collection("shepherding_views").orderBy("createdAt", "asc"), mapDocs, onViews, rosterEvery(), onError);
   }
   // ⚠ THE RECORD IS NOT ASSEMBLED HERE. It used to be, and it carried both of
   // the identity faults MS-283 fixed on the web: a document signed with the
@@ -959,31 +1016,24 @@
   // record from the root tree (no copy) and flag it. targetFolderId '__root__'
   // drops it at the Library top level.
   function addElderDocToLibrary(docId, targetFolderId) {
-    var Core = window.ShepherdingDocsCore;
-    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
-      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
-      if (Core.containsDoc(rootStruct, docId)) return false;
-      var target = (!targetFolderId || targetFolderId === "__root__") ? rootStruct : Core.getFolderById(rootStruct, targetFolderId);
-      if (!target) return false;
-      if (!target.children) target.children = [];
-      target.children.push({ type: "document", id: docId });
-      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)))
-        .then(function () { return db.collection("elder_documents").doc(docId).update({ inLibrary: true }); })
-        .then(function () { return true; });
-    });
+    return changeDocumentTree("root", { op: "file", docId: docId, folderId: targetFolderId || "__root__" })
+      .then(function (out) {
+        if (!out.changed) return false;
+        return db.collection("elder_documents").doc(docId).update({ inLibrary: true }).then(function () { return true; });
+      });
   }
   // MS-98: remove document ids from the Library root tree (used when a profile
   // deletes docs that had been opted in), so no dangling reference remains.
   function pruneElderDocsFromLibrary(ids) {
-    var Core = window.ShepherdingDocsCore;
     if (!ids || !ids.length) return Promise.resolve();
-    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
-      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
-      var changed = false;
-      ids.forEach(function (id) { if (Core.removeFromTree(rootStruct, id)) changed = true; });
-      if (!changed) return;
-      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)));
-    });
+    return changeDocumentTree("root", { op: "prune", docIds: ids });
+  }
+  // A profile-owned document taken out of the Library stays on the profile
+  // (MS-493): only its flag changes. ShepherdingDocsCore.removalPlan decides.
+  function optElderDocsOutOfLibrary(ids) {
+    return Promise.all((ids || []).map(function (id) {
+      return db.collection("elder_documents").doc(id).update({ inLibrary: false });
+    }));
   }
   function renameElderDocument(id, title, user) {
     return db.collection("elder_documents").doc(id).update({
@@ -1000,14 +1050,6 @@
   function getElderDocument(id) {
     return db.collection("elder_documents").doc(id).get()
       .then(function (d) { return d.exists ? Object.assign({ id: d.id }, d.data()) : null; });
-  }
-  function saveElderDocument(id, payload, user) {
-    return db.collection("elder_documents").doc(id).update({
-      title: (payload.title || "").trim() || "Untitled Document",
-      contentJson: payload.contentJson,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedByName: (user && user.name) || "",
-    });
   }
   // Mention data for the doc editor's @ picker: people, elder docs, standalone
   // notes, folders (from the structure tree), tags. Mirrors loadDocMentionData
@@ -1237,6 +1279,10 @@
     getShepherdingPanelTasks: getShepherdingPanelTasks,
     getPersonTasks: getPersonTasks,
     watchPersonTasks: watchPersonTasks,
+    watchShepherdingPanelTasks: watchShepherdingPanelTasks,
+    watchShepherdingTagActivity: watchShepherdingTagActivity,
+    tagHoldsFrom: tagHoldsFrom,
+    watchShepherdingLastNoteDates: watchShepherdingLastNoteDates,
     watchPerson: watchPerson,
     watchShepherdingNotes: watchShepherdingNotes,
     watchShepherdingActivity: watchShepherdingActivity,
@@ -1297,7 +1343,11 @@
     watchShepherdingPeople: watchShepherdingPeople,
     getElderDocuments: getElderDocuments,
     getDocumentStructure: getDocumentStructure,
-    saveDocumentStructure: saveDocumentStructure,
+    changeDocumentTree: changeDocumentTree,
+    watchDocumentStructure: watchDocumentStructure,
+    watchElderDocuments: watchElderDocuments,
+    watchShepherdingViews: watchShepherdingViews,
+    optElderDocsOutOfLibrary: optElderDocsOutOfLibrary,
     createElderDocument: createElderDocument,
     documentCreateFailure: documentCreateFailure,
     addElderDocToLibrary: addElderDocToLibrary,
@@ -1305,7 +1355,6 @@
     renameElderDocument: renameElderDocument,
     deleteElderDocuments: deleteElderDocuments,
     getElderDocument: getElderDocument,
-    saveElderDocument: saveElderDocument,
     getDocMentionData: getDocMentionData,
     addPanelNote: addPanelNote,
     getPanelNote: getPanelNote,

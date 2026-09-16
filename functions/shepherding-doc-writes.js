@@ -58,19 +58,109 @@ async function loadTree(db) {
  * @param {object} db the Firestore handle
  * @param {function(object): *} change given the tree, mutates it; whatever it
  *   returns is handed back to the caller. Throw to abort the whole thing.
+ * @param {string} [treeId] which tree: the Library's (the default) or one
+ *   person's, `person_<id>` (MS-493)
  * @return {Promise<*>} what `change` returned
  */
-async function withTree(db, change) {
-  const ref = db.collection(STRUCTURE).doc(STRUCTURE_DOC);
+async function withTree(db, change, treeId) {
+  const ref = db.collection(STRUCTURE).doc(treeId || STRUCTURE_DOC);
   let result = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
     const tree = (data && data.children) ? data : {children: []};
     result = change(tree);
+    // A tree change that changed nothing (refused, or already so) writes
+    // nothing (MS-493).
+    if (result && typeof result === "object" && result.changed === false) {
+      return;
+    }
     tx.set(ref, {children: tree.children});
   });
   return result;
+}
+
+/**
+ * One change to a folder tree, from a page or the phone (MS-493).
+ *
+ * ⚠ THE PAGES USED TO WRITE BACK THE WHOLE TREE THEY LOADED. Two elders
+ * filing at the same moment each saved the tree from before the other's
+ * change, and a folder, a move or a filed document silently vanished. This applies ONE
+ * change — the same pure function the page applied to its own copy — to the
+ * latest tree, inside the transaction the assistant's tree tools already use.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} args treeId (`root` or `person_<id>`), change
+ * @return {Promise<object>} { ok, changed }
+ */
+async function changeTree(db, {treeId, change}) {
+  if (!DocsCore.isTreeId(treeId)) {
+    throw refuse("That is not a document tree.");
+  }
+  let out;
+  try {
+    out = await withTree(db, (tree) => DocsCore.applyTreeChange(tree, change),
+        treeId);
+  } catch (e) {
+    if (e && /No tree change is known/.test(e.message || "")) {
+      throw refuse(e.message);
+    }
+    throw e;
+  }
+  if (out.refused) throw refuse(out.refused);
+  return {ok: true, changed: !!out.changed};
+}
+
+/**
+ * The Blocks of a note document, converting a legacy one first (MS-502).
+ *
+ * ⚠ CONVERTED ONCE, IN A TRANSACTION. A legacy document (contentJson, no
+ * blocks) is turned into Blocks only if it still has none when the transaction
+ * reads it — a page or another tool that converted it first wins, and its
+ * Blocks are used.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} ref the document
+ * @param {object} data the document as last read
+ * @return {Promise<object>} the Blocks
+ */
+async function blocksOf(db, ref, data) {
+  if (DocumentBodyCore.hasBlocks(data)) return data.blocks;
+  const ns = F.namespace();
+  let blocks = null;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const now = snap.exists ? snap.data() : {};
+    if (DocumentBodyCore.hasBlocks(now)) {
+      blocks = now.blocks;
+      return;
+    }
+    const converted = DocumentBodyCore.convertLegacy(now);
+    if (!converted.ok) {
+      throw refuse(
+          "This document could not be converted to blocks without changing " +
+          "it, so it was left as it is. Open it in the app first.");
+    }
+    blocks = converted.blocks;
+    tx.update(ref, {blocks, contentJson: ns.FieldValue.delete()});
+  });
+  return blocks;
+}
+
+/**
+ * One update writing a change to Blocks, stamped with who made it.
+ * @param {object} ref the document
+ * @param {object} change {write, remove}
+ * @param {object} actor who
+ * @return {Promise<void>}
+ */
+function writeBlocks(ref, change, actor) {
+  const ns = F.namespace();
+  const pairs = DocumentBodyCore.blockUpdatePairs(ns, change)
+      .concat(["updatedAt", F.now(), "updatedByName", actor.name]);
+  const provenance = Actor.provenance();
+  Object.keys(provenance).forEach((k) => pairs.push(k, provenance[k]));
+  return ref.update(pairs[0], pairs[1], ...pairs.slice(2));
 }
 
 /** An Elder Document, or a refusal. */
@@ -95,7 +185,8 @@ function documentRow(id, data) {
     author: data.authorName || "",
     ownerPersonId: data.ownerPersonId || null,
     writtenVia: data.writtenVia || "page",
-    preview: DocumentBodyCore.bodyPreview(data.contentJson, 120),
+    // Through the Blocks core, whichever way the body is stored (MS-502).
+    preview: DocumentBodyCore.bodyPreview(DocumentBodyCore.bodyOfRecord(data), 120),
   };
 }
 
@@ -146,7 +237,7 @@ async function listDocuments(db, {folderId, recursive}) {
 async function getDocument(db, {documentId}) {
   const {data} = await loadDocument(db, documentId);
   return Object.assign(documentRow(documentId, data), {
-    body: NoteMarkdownCore.toMarkdown(data.contentJson),
+    body: NoteMarkdownCore.toMarkdown(DocumentBodyCore.bodyOfRecord(data)),
     // A Care List and a Form Document carry a payload instead of prose, and
     // reading their body as markdown would say nothing. Their own tools open
     // them properly.
@@ -173,8 +264,9 @@ async function createDocument(db, {title, markdown, folderId, ownerPersonId, act
     ownerPersonId: ownerPersonId || null,
   });
 
-  record.contentJson = markdown ?
-    NoteMarkdownCore.fromMarkdown(markdown) : NoteMarkdownCore.emptyBody();
+  // Stored as Blocks (MS-502).
+  record.blocks = DocumentBodyCore.blocksOfBody(markdown ?
+    NoteMarkdownCore.fromMarkdown(markdown) : NoteMarkdownCore.emptyBody());
 
   const ref = db.collection(DOCUMENTS).doc();
   await ref.set(Object.assign({}, record, Actor.provenance()));
@@ -217,7 +309,11 @@ async function updateDocument(db, {documentId, title, markdown, actor}) {
   const update = {updatedAt: F.now(), updatedByName: actor.name};
   if (title !== undefined && title !== null) update.title = String(title).trim();
   if (markdown !== undefined && markdown !== null) {
-    update.contentJson = NoteMarkdownCore.fromMarkdown(String(markdown));
+    // A whole new body is a whole new Blocks map (MS-502); any legacy body
+    // goes with it.
+    update.blocks = DocumentBodyCore.blocksOfBody(
+        NoteMarkdownCore.fromMarkdown(String(markdown)));
+    update.contentJson = F.namespace().FieldValue.delete();
   }
 
   await ref.update(Object.assign(update, Actor.provenance()));
@@ -237,11 +333,12 @@ async function appendToDocument(db, {documentId, markdown, actor}) {
   const body = String(markdown || "").trim();
   if (!body) throw refuse("There is nothing to add.");
 
-  await ref.update(Object.assign({
-    contentJson: NoteMarkdownCore.appendMarkdown(data.contentJson, body),
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
+  // ⚠ NEW BLOCKS ONLY (MS-502). Rewriting the body put back whatever a page
+  // had open and unsaved; adding blocks after the last one touches nothing
+  // anybody else is writing in.
+  const blocks = await blocksOf(db, ref, data);
+  await writeBlocks(ref, DocumentBodyCore.appendBlocks(
+      blocks, NoteMarkdownCore.fromMarkdown(body)), actor);
 
   return {ok: true, documentId};
 }
@@ -492,22 +589,12 @@ async function addPersonPanel(db, {documentId, personId, noteType, markdown, act
     },
   };
 
-  const body = data.contentJson && data.contentJson.content ?
-    data.contentJson : NoteMarkdownCore.emptyBody();
-
-  await ref.update(Object.assign({
-    contentJson: {
-      type: "doc",
-      // A panel appended to the empty paragraph a new document starts with
-      // would leave a blank line above every panel.
-      content: body.content
-          .filter((node, i) => !(i === 0 && node.type === "paragraph" &&
-            !(node.content && node.content.length) && body.content.length === 1))
-          .concat([panel]),
-    },
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
+  // One new panel Block after the last one (MS-502). A panel appended to the
+  // empty paragraph a new document starts with takes that paragraph's place,
+  // rather than leaving a blank line above it.
+  const blocks = await blocksOf(db, ref, data);
+  await writeBlocks(ref, DocumentBodyCore.appendBlocks(
+      blocks, {type: "doc", content: [panel]}), actor);
 
   return {
     ok: true,
@@ -538,5 +625,7 @@ module.exports = {
   loadDocument,
   loadTree,
   withTree,
+  changeTree,
+  blocksOf,
   documentRow,
 };

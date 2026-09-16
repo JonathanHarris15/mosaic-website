@@ -9,6 +9,16 @@ const Docs = (typeof ShepherdingDocsCore !== 'undefined') ? ShepherdingDocsCore 
 // Firestore's code for a write the security rules turned down.
 const PERMISSION_DENIED = 'permission-denied';
 
+// The live reads this page holds open, stopped when it goes (MS-496). Kept
+// outside Alpine: a proxy around a stop function is no use to anybody.
+const _libraryWatches = [];
+// The last tree that arrived, as the server has it — what the screen is drawn
+// from again when one of this page's own changes settles or is refused.
+let _lastLibraryTree = null;
+function stopLibraryWatches() {
+    _libraryWatches.splice(0).forEach(stop => { try { stop(); } catch (e) {} });
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('documentLibrary', (config = {}) => ({
         // ── Scope (MS-98) ─────────────────────────────────────────────────────
@@ -52,6 +62,13 @@ document.addEventListener('alpine:init', () => {
 
         structure: { children: [] },
         allDocs: {},
+        // Tree changes this page has made and the server has not confirmed yet.
+        // A tree that arrives in the meantime has them applied on top, so an
+        // elder's own click never flickers out and back (MS-493).
+        pendingTree: [],
+        // Of those, the ones the server has confirmed, dropped when the next
+        // tree arrives.
+        confirmedTree: [],
 
         currentPath: [],
 
@@ -116,6 +133,7 @@ document.addEventListener('alpine:init', () => {
                 // Profile). The host owns identity and we read it live; no auth
                 // gate and, deliberately, no copy taken here.
                 await this.loadData();
+                this.watchLibrary();
                 this.loading = false;
                 return;
             }
@@ -142,6 +160,7 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 await this.loadData();
+                this.watchLibrary();
 
                 const params = new URLSearchParams(window.location.search);
                 const folderId = params.get('folder');
@@ -198,6 +217,132 @@ document.addEventListener('alpine:init', () => {
                 console.error('Error loading data:', e);
                 this.showToast('Error loading documents', 'error');
             }
+        },
+
+        // ── Live (MS-496) ─────────────────────────────────────────────────────
+        //
+        // After the first load, the tree, the documents and (on the Library) the
+        // Filtered Views and tags are followed while the page is open, so a
+        // folder or document another elder makes, renames, moves or deletes
+        // shows here without reloading.
+        //
+        // ⚠ A DELIVERY NEVER DISTURBS SOMEBODY MID-ACTION. What the elder is
+        // doing — the folder they are in, a rename box, a drag, the move
+        // dialog — is held apart from the delivered data and survives it. Only
+        // when the thing itself has gone does the action close, with a line
+        // saying why; a folder that went takes the elder to its nearest parent
+        // that is still there.
+        watchLibrary() {
+            if (typeof MosaicLiveRead === 'undefined') return;
+            const Live = MosaicLiveRead;
+            const failed = what => e => console.warn('Could not keep ' + what + ' current:', e);
+            _libraryWatches.push(Live.watch(
+                db.collection('elder_document_structure').doc(this.structureDocId),
+                snap => this.adoptTree(snap.exists ? snap.data() : null),
+                { fallbackEveryMs: Live.PERSON_EVERY_MS, onError: failed('the folders') }));
+            _libraryWatches.push(Live.watch(
+                db.collection('elder_documents').orderBy('createdAt', 'desc'),
+                snap => {
+                    const docs = {};
+                    snap.docs.forEach(doc => { docs[doc.id] = { id: doc.id, ...doc.data() }; });
+                    this.allDocs = docs;
+                },
+                { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('the documents') }));
+            if (!this.isProfileScope) {
+                _libraryWatches.push(Live.watch(
+                    db.collection('shepherding_views').orderBy('title', 'asc'),
+                    snap => { this.views = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); },
+                    { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('the Filtered Views') }));
+                _libraryWatches.push(Live.watch(
+                    db.collection('people_tags').orderBy('name', 'asc'),
+                    snap => { this.shepherdingTags = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id })); },
+                    { fallbackEveryMs: Live.ROSTER_EVERY_MS, onError: failed('the tags') }));
+            }
+            window.addEventListener('pagehide', stopLibraryWatches);
+            // Brought back from the browser's back/forward cache with its
+            // watches stopped: start again rather than sit there stale.
+            window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
+        },
+
+        adoptTree(data) {
+            _lastLibraryTree = (data && Array.isArray(data.children))
+                ? JSON.parse(JSON.stringify({ children: data.children })) : { children: [] };
+            // A change the server confirmed before this tree arrived is in it
+            // (or already overwritten by somebody later): stop laying it on top.
+            const confirmed = this.confirmedTree;
+            if (confirmed.length) {
+                this.pendingTree = this.pendingTree.filter(c => !confirmed.includes(c));
+                this.confirmedTree = [];
+            }
+            this.redrawTree();
+        },
+
+        // The last tree that arrived, with this page's own changes still on
+        // their way laid over it.
+        redrawTree() {
+            const tree = JSON.parse(JSON.stringify(_lastLibraryTree || this.structure));
+            this.pendingTree.forEach(change => { try { Docs.applyTreeChange(tree, change); } catch (e) {} });
+            this.structure = tree;
+            this.keepPlaceIn(tree);
+        },
+
+        keepPlaceIn(tree) {
+            // The folder the elder is in, as far down as it still exists.
+            let depth = 0;
+            while (depth < this.currentPath.length && Docs.getFolderById(tree, this.currentPath[depth])) depth += 1;
+            if (depth < this.currentPath.length) {
+                this.currentPath = this.currentPath.slice(0, depth);
+                this.renamingItemId = null;
+                this.showToast('That folder was deleted, so you are in the nearest one still here.', 'error');
+            }
+            const gone = id => id && !Docs.findItemById(tree, id);
+            if (this.renamingItemId && gone(this.renamingItemId)) {
+                this.renamingItemId = null;
+                this.showToast('What you were renaming was just removed by somebody else.', 'error');
+            }
+            if (this.draggedItem && gone(this.draggedItem.id)) {
+                this.draggedItem = null;
+                this.dragOverFolderId = null;
+            }
+            if (this.movingItem && gone(this.movingItem.id)) {
+                this.movingItem = null;
+                this.showMoveModal = false;
+                this.showToast('What you were moving was just removed by somebody else.', 'error');
+            }
+        },
+
+        // ── One change to the tree (MS-493) ───────────────────────────────────
+        //
+        // Applied here at once, so the click shows, and sent to the server as
+        // ONE change for it to apply to the latest tree. Never the whole tree:
+        // two elders filing at the same moment each wrote back the tree from
+        // before the other's change, and one of them silently vanished.
+        async changeTree(change) {
+            const local = Docs.applyTreeChange(this.structure, change);
+            if (local.refused) {
+                this.showToast(local.refused, 'error');
+                return false;
+            }
+            this.pendingTree.push(change);
+            try {
+                await DocumentTree.change(this.structureDocId, change);
+                // Kept on screen until the next tree arrives, which carries it
+                // (a change laid over a tree that already has it changes nothing).
+                this.confirmedTree.push(change);
+                return true;
+            } catch (e) {
+                console.error('Error changing the folders:', e);
+                this.showToast((e && e.message) || 'That did not save', 'error');
+                // Refused: nothing changed on the server, so no tree will
+                // arrive to take it off the screen. Draw again without it.
+                this.pendingTree = this.pendingTree.filter(c => c !== change);
+                if (_lastLibraryTree) this.redrawTree();
+                return false;
+            }
+        },
+
+        get currentFolderId() {
+            return this.currentPath.length ? this.currentPath[this.currentPath.length - 1] : Docs.ROOT;
         },
 
         // ── Custom Filter Helpers ─────────────────────────────────────────────
@@ -292,12 +437,6 @@ document.addEventListener('alpine:init', () => {
         // global Library — i.e. it has been opted in. Profile scope only.
         isInLibrary(docId) {
             return !!this.allDocs[docId] && (this.allDocs[docId].inLibrary === true);
-        },
-
-        async saveStructure() {
-            const plain = JSON.parse(JSON.stringify(this.structure));
-            await db.collection('elder_document_structure').doc(this.structureDocId).set(plain);
-            this.structure = plain;
         },
 
         // ── Create ────────────────────────────────────────────────────────────
@@ -406,10 +545,12 @@ document.addEventListener('alpine:init', () => {
                     inLibrary: shepherding ? true : false,
                 };
 
-                const currentFolder = this.currentFolder;
-                if (!currentFolder.children) currentFolder.children = [];
-                currentFolder.children.push({ type: 'document', id: docRef.id });
-                await this.saveStructure();
+                // A document is never left filed nowhere: if the folder went
+                // while it was being made, it lands at the top instead.
+                const filed = await this.changeTree({ op: 'file', docId: docRef.id, folderId: this.currentFolderId })
+                    || (this.currentFolderId !== Docs.ROOT
+                        && await this.changeTree({ op: 'file', docId: docRef.id, folderId: Docs.ROOT }));
+                if (!filed) return;
 
                 // The other half of "both places". Only when it was started on
                 // a profile: from the Library there is nobody to file it under
@@ -452,10 +593,7 @@ document.addEventListener('alpine:init', () => {
 
         async createFolder() {
             const folderId = Docs.newId();
-            const currentFolder = this.currentFolder;
-            if (!currentFolder.children) currentFolder.children = [];
-            currentFolder.children.unshift({ type: 'folder', id: folderId, name: 'New Folder', children: [] });
-            await this.saveStructure();
+            const made = this.changeTree({ op: 'createFolder', parentId: this.currentFolderId, folderId, name: 'New Folder' });
 
             this.renamingItemId = folderId;
             this.renameValue = 'New Folder';
@@ -463,6 +601,7 @@ document.addEventListener('alpine:init', () => {
                 const el = document.getElementById(`rename-${folderId}`);
                 if (el) { el.focus(); el.select(); }
             });
+            await made;
         },
 
         // ── Rename ────────────────────────────────────────────────────────────
@@ -482,9 +621,7 @@ document.addEventListener('alpine:init', () => {
             this.renamingItemId = null;
             try {
                 if (item.type === 'folder') {
-                    const folder = Docs.getFolderById(this.structure, item.id);
-                    if (folder) folder.name = newName;
-                    await this.saveStructure();
+                    await this.changeTree({ op: 'renameFolder', folderId: item.id, name: newName });
                 } else {
                     if (this.allDocs[item.id]) this.allDocs[item.id].title = newName;
                     await db.collection('elder_documents').doc(item.id).update({
@@ -529,31 +666,13 @@ document.addEventListener('alpine:init', () => {
                     if (folder) docIds = Docs.getAllDocIds(folder);
                 }
 
-                // MS-98 delete reconciliation — a document referenced by two trees
-                // must not be destroyed when removed from just one:
-                //  • Profile scope OWNS its documents → delete the record, and also
-                //    prune it from the Library root tree if it was opted in.
-                //  • Library scope only hard-deletes genuine Library documents
-                //    (no ownerPersonId); a profile-owned doc that was opted in is
-                //    kept — removing it here just opts it back out.
-                const toHardDelete = [];
-                const toPruneFromLibrary = [];
-                const toOptOut = [];
-                for (const id of docIds) {
-                    const owner = this.allDocs[id]?.ownerPersonId || null;
-                    if (this.isProfileScope) {
-                        toHardDelete.push(id);
-                        // Always attempt a Library prune (idempotent no-op if it
-                        // was never opted in) — don't trust the denormalized flag.
-                        toPruneFromLibrary.push(id);
-                    } else if (!owner) {
-                        toHardDelete.push(id); // genuine Library document
-                    } else {
-                        // Library scope + profile-owned doc → keep the record; this
-                        // is an opt-out. Remove the node below and clear the flag.
-                        toOptOut.push(id);
-                    }
-                }
+                // MS-98 delete reconciliation, the same rule the phone uses: a
+                // document held by two trees is not destroyed when it leaves one
+                // (ShepherdingDocsCore.removalPlan).
+                const plan = Docs.removalPlan(docIds, this.allDocs, this.isProfileScope);
+                const toHardDelete = plan.destroy;
+                const toPruneFromLibrary = plan.pruneFromLibrary;
+                const toOptOut = plan.optOut;
 
                 await Promise.all(toHardDelete.map(id => db.collection('elder_documents').doc(id).delete()));
                 toHardDelete.forEach(id => delete this.allDocs[id]);
@@ -561,12 +680,11 @@ document.addEventListener('alpine:init', () => {
                     db.collection('elder_documents').doc(id).update({ inLibrary: false })));
                 toOptOut.forEach(id => { if (this.allDocs[id]) this.allDocs[id].inLibrary = false; });
 
-                Docs.removeFromTree(this.structure, item.id);
-                await this.saveStructure();
+                const removed = await this.changeTree({ op: 'remove', itemId: item.id });
 
                 if (toPruneFromLibrary.length) await this.pruneFromLibraryRoot(toPruneFromLibrary);
 
-                this.showToast('Deleted successfully');
+                if (removed) this.showToast('Deleted successfully');
             } catch (e) {
                 console.error('Error deleting:', e);
                 this.showToast('Error deleting', 'error');
@@ -577,16 +695,7 @@ document.addEventListener('alpine:init', () => {
         // profile deletes docs that had been opted in). Profile scope only.
         async pruneFromLibraryRoot(docIds) {
             try {
-                const snap = await db.collection('elder_document_structure').doc('root').get();
-                const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
-                let changed = false;
-                for (const id of docIds) {
-                    if (Docs.removeFromTree(rootStruct, id)) changed = true;
-                }
-                if (changed) {
-                    await db.collection('elder_document_structure').doc('root')
-                        .set(JSON.parse(JSON.stringify(rootStruct)));
-                }
+                await DocumentTree.change(Docs.LIBRARY_TREE, { op: 'prune', docIds });
             } catch (e) {
                 console.error('Error pruning from Library root:', e);
             }
@@ -610,17 +719,8 @@ document.addEventListener('alpine:init', () => {
             const targetId = this.libraryTargetId;
             this.libraryItem = null;
             try {
-                const snap = await db.collection('elder_document_structure').doc('root').get();
-                const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
-                if (Docs.containsDoc(rootStruct, docId)) { this.showToast('Already in the Library'); return; }
-
-                const target = targetId === '__root__' ? rootStruct : Docs.getFolderById(rootStruct, targetId);
-                if (!target) { this.showToast('Target folder no longer exists', 'error'); return; }
-                if (!target.children) target.children = [];
-                target.children.push({ type: 'document', id: docId });
-
-                await db.collection('elder_document_structure').doc('root')
-                    .set(JSON.parse(JSON.stringify(rootStruct)));
+                const out = await DocumentTree.change(Docs.LIBRARY_TREE, { op: 'file', docId, folderId: targetId });
+                if (!out.changed) { this.showToast('Already in the Library'); return; }
                 await db.collection('elder_documents').doc(docId).update({ inLibrary: true });
                 if (this.allDocs[docId]) this.allDocs[docId].inLibrary = true;
                 this.showToast('Added to the Library');
@@ -635,11 +735,7 @@ document.addEventListener('alpine:init', () => {
         // shepherding document is in both places by construction and has
         // nothing to opt into.
         async alsoFileInLibrary(docId) {
-            const snap = await db.collection('elder_document_structure').doc('root').get();
-            const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
-            if (!Docs.fileInRoot(rootStruct, docId)) return;
-            await db.collection('elder_document_structure').doc('root')
-                .set(JSON.parse(JSON.stringify(rootStruct)));
+            await DocumentTree.change(Docs.LIBRARY_TREE, { op: 'file', docId, folderId: Docs.ROOT });
         },
 
         // The Library folder choices for the opt-in dialog.
@@ -740,15 +836,7 @@ document.addEventListener('alpine:init', () => {
         // ── Move ──────────────────────────────────────────────────────────────
 
         async moveItem(item, targetFolderId) {
-            const ok = Docs.moveNode(this.structure, item, targetFolderId);
-            if (!ok) { await this.loadData(); return; }
-            try {
-                await this.saveStructure();
-            } catch (e) {
-                console.error('Error moving:', e);
-                this.showToast('Error moving item', 'error');
-                await this.loadData();
-            }
+            await this.changeTree({ op: 'move', item: { type: item.type, id: item.id }, targetFolderId });
         },
 
         openMoveDialog(item) {

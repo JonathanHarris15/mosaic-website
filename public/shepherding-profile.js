@@ -980,20 +980,9 @@ document.addEventListener('alpine:init', () => {
             if (!confirm('Delete this note? This cannot be undone.')) return;
             try {
                 if (note.sourceDocumentId) {
+                    // Written as Blocks: an open document takes the change in
+                    // live, on any device (MS-506).
                     await this._detachPanelFromDocument(note.sourceDocumentId, note.id, note.contentJson, note.content);
-                    // Notify any open document tab so it can replace the panel live
-                    try {
-                        const bc = new BroadcastChannel('mosaic-shepherding');
-                        bc.postMessage({
-                            type: 'note-deleted',
-                            noteId: note.id,
-                            sourceDocumentId: note.sourceDocumentId,
-                            personName: this.person?.name || '',
-                            noteType: note.type || '',
-                            bodySnapshot: note.contentJson ? JSON.stringify(note.contentJson) : null,
-                        });
-                        bc.close();
-                    } catch (_) {}
                 }
                 await db.collection('people').doc(this.personId)
                     .collection('shepherding_notes').doc(id).delete();
@@ -1005,42 +994,17 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // The document's Person Panel for this note becomes a bold header and
+        // the note's words, the same way every page does it
+        // (ElderDocumentLive.detachPanel).
         async _detachPanelFromDocument(docId, noteId, noteContentJson, noteText) {
+            const body = (noteContentJson && noteContentJson.content && noteContentJson.content.length)
+                ? noteContentJson
+                : noteText
+                    ? { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: noteText }] }] }
+                    : null;
             try {
-                const docSnap = await db.collection('elder_documents').doc(docId).get();
-                if (!docSnap.exists) return;
-                const docData = docSnap.data();
-                const contentJson = docData.contentJson;
-                if (!contentJson || !contentJson.content) return;
-
-                let changed = false;
-                const newContent = [];
-                for (const node of contentJson.content) {
-                    if (node.type === 'personPanel' && node.attrs && node.attrs.noteId === noteId) {
-                        const personName = node.attrs.personName || '';
-                        const noteType = node.attrs.noteType || '';
-                        const headerText = [personName, noteType].filter(Boolean).join(' — ');
-                        const headerPara = {
-                            type: 'paragraph',
-                            content: [{ type: 'text', text: headerText, marks: [{ type: 'bold' }] }],
-                        };
-                        const bodyNodes = (noteContentJson && noteContentJson.content && noteContentJson.content.length > 0)
-                            ? noteContentJson.content
-                            : noteText
-                                ? [{ type: 'paragraph', content: [{ type: 'text', text: noteText }] }]
-                                : [];
-                        newContent.push(headerPara, ...bodyNodes);
-                        changed = true;
-                    } else {
-                        newContent.push(node);
-                    }
-                }
-
-                if (!changed) return;
-                await db.collection('elder_documents').doc(docId).update({
-                    contentJson: { ...contentJson, content: newContent },
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+                await ElderDocumentLive.detachPanel(db, firebase.firestore, docId, noteId, body);
             } catch (e) {
                 console.error('Error detaching panel from document:', e);
             }

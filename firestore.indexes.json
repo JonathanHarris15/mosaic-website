@@ -127,6 +127,11 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "elder_documents",
+      "fieldPath": "blocks",
+      "indexes": []
+    },
+    {
       "collectionGroup": "shepherding_activity",
       "fieldPath": "createdAt",
       "indexes": [

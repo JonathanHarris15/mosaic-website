@@ -160,30 +160,45 @@
     var toast = toastS[0];
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
-    // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
+    // Live (MS-494): Tasks, Filtered Views, People and tags are followed while
+    // the screen is open, and stop when it goes. Nothing re-reads after a save.
+    var activityS = useState(null);
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPanelTasks(user), data.getShepherdingViews(), data.getShepherdingPeople(), data.getShepherdingTags()])
-        .then(function (res) {
-          if (!alive) return;
-          tasksS[1](res[0]); viewsS[1](res[1]); peopleS[1](res[2]); tagsS[1](res[3]);
-          if (res[1].some(viewHasHoldFilter)) {
-            data.getShepherdingTagHolds(res[2]).then(function (h) { if (alive) holdsS[1](h); });
-          }
-          loadingS[1](false);
-        })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
-    }, []);
+      function keep(set) { return function (v) { if (alive) set(v); }; }
+      // The load is the People arriving — or failing, which must not leave a
+      // spinner up (the rest simply stay as they are).
+      function done() { if (alive) loadingS[1](false); }
+      var stops = [
+        data.watchShepherdingPanelTasks(user, keep(tasksS[1])),
+        data.watchShepherdingViews(keep(viewsS[1])),
+        data.watchShepherdingPeople(function (v) { if (alive) { peopleS[1](v); done(); } }, done),
+        data.watchShepherdingTags(keep(tagsS[1])),
+      ];
+      return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
+    }, [user && user.personId]);
 
-    function reloadViews(selectId) {
-      return data.getShepherdingViews().then(function (list) {
-        viewsS[1](list);
-        if (list.some(viewHasHoldFilter)) data.getShepherdingTagHolds(people).then(holdsS[1]);
-        if (selectId !== undefined) selectedS[1](selectId);
-      });
-    }
-    function reloadTasks() { return data.getShepherdingPanelTasks(user).then(tasksS[1]); }
+    // Tag-Hold history only while a view needs it (ADR-0011), and derived again
+    // whenever it or the People change.
+    var needsHolds = views.some(viewHasHoldFilter);
+    useEffect(function () {
+      if (!needsHolds) return;
+      return data.watchShepherdingTagActivity(activityS[1]);
+    }, [needsHolds]);
+    useEffect(function () {
+      if (activityS[0]) holdsS[1](data.tagHoldsFrom(activityS[0], people));
+    }, [activityS[0], people]);
+
+    // The view being edited stays open while others change; if it is deleted
+    // by somebody else it closes, saying so.
+    useEffect(function () {
+      var open = viewModalS[0];
+      if (open && open.editingId && !views.some(function (v) { return v.id === open.editingId; })) {
+        viewModalS[1](null);
+        showToast("The view you were editing was just deleted by somebody else.", "error");
+      }
+      if (selectedS[0] && !views.some(function (v) { return v.id === selectedS[0]; })) selectedS[1](null);
+    }, [views]);
 
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
@@ -199,13 +214,13 @@
         data.updateShepherdingView(vm.editingId, {
           title: vm.title.trim(), filterTags: vm.filterTags, filterMode: vm.filterMode, statusZoneFilters: vm.statusZones,
           tagHoldFilters: kept.tagHoldFilters, tagHoldCmp: kept.tagHoldCmp,
-        }).then(function () { viewModalS[1](null); reloadViews(vm.editingId); showToast("View updated"); })
+        }).then(function () { viewModalS[1](null); selectedS[1](vm.editingId); showToast("View updated"); })
           .catch(function () { showToast("Error updating view", "error"); });
       } else {
         data.addShepherdingView({
           title: vm.title.trim(), filterTags: vm.filterTags, filterMode: vm.filterMode, statusZoneFilters: vm.statusZones,
           tagHoldFilters: {}, tagHoldCmp: {},
-        }, user).then(function (newId) { viewModalS[1](null); reloadViews(newId); showToast("Filtered view created"); })
+        }, user).then(function (newId) { viewModalS[1](null); selectedS[1](newId); showToast("Filtered view created"); })
           .catch(function () { showToast("Error creating view", "error"); });
       }
     }
@@ -223,7 +238,9 @@
     // the rules about what a tick does exist once rather than three times.
     function completeTask(t) {
       data.completeShepherdingTask(t).then(function () {
-        reloadTasks(); showToast("Done");
+        // Off the panel at once; the next delivery brings the truth.
+        tasksS[1](function (list) { return list.filter(function (x) { return x.id !== t.id || x.dueDate !== t.dueDate; }); });
+        showToast("Done");
       }).catch(function (e) { showToast((e && e.message) || "Error completing task", "error"); });
     }
 
@@ -426,12 +443,20 @@
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
+    // Live (MS-495): People, their latest note dates, tags and saved filters
+    // are followed while the screen is open. Search, filters and sort are this
+    // screen's own state and survive every delivery.
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPeople(), data.getShepherdingLastNoteDates(), data.getShepherdingTags(), data.getShepherdingViews()])
-        .then(function (r) { if (!alive) return; peopleS[1](r[0]); notesDatesS[1](r[1]); tagsS[1](r[2]); viewsS[1](r[3]); loadingS[1](false); })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      function keep(set) { return function (v) { if (alive) set(v); }; }
+      function done() { if (alive) loadingS[1](false); }
+      var stops = [
+        data.watchShepherdingPeople(function (v) { if (alive) { peopleS[1](v); done(); } }, done),
+        data.watchShepherdingLastNoteDates(keep(notesDatesS[1])),
+        data.watchShepherdingTags(keep(tagsS[1])),
+        data.watchShepherdingViews(keep(viewsS[1])),
+      ];
+      return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
     }, []);
 
     var filtered = people.filter(function (p) {
@@ -473,7 +498,7 @@
     function saveView() {
       var t = saveNameS[0].trim(); if (!t) return;
       data.addShepherdingView({ title: t, filterTags: tagFilters.slice(), filterMode: tagMode, statusZoneFilters: statusZones.slice(), sortBy: sortByS[0], tagHoldFilters: {}, tagHoldCmp: {} }, user)
-        .then(function () { saveNameS[1](""); showSaveS[1](false); data.getShepherdingViews().then(viewsS[1]); showToast("View saved"); })
+        .then(function () { saveNameS[1](""); showSaveS[1](false); showToast("View saved"); })
         .catch(function () { showToast("Error saving view", "error"); });
     }
     function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
@@ -760,24 +785,17 @@
     var DC = window.ShepherdingDocsCore;
     var pid = props.pid, user = props.user, nav = props.nav, showToast = props.showToast;
     var structDocId = "person_" + pid;
-    var loadingS = useState(true);
-    var structureS = useState({ children: [] }), docsS = useState({});
     var pathS = useState([]), renameIdS = useState(null), renameValS = useState("");
     var moveS = useState(null), deleteS = useState(null);
-    var structure = structureS[0], docs = docsS[0], path = pathS[0];
-    function clone(x) { return JSON.parse(JSON.stringify(x)); }
-    function persist(next) { structureS[1](next); data.saveDocumentStructure(next, structDocId).catch(function () { showToast("Error saving", "error"); }); }
-
-    useEffect(function () {
-      var alive = true;
-      Promise.all([data.getDocumentStructure(structDocId), data.getElderDocuments()]).then(function (r) {
-        if (!alive) return;
-        structureS[1](r[0]);
-        var map = {}; r[1].forEach(function (d) { map[d.id] = d; }); docsS[1](map);
-        loadingS[1](false);
-      }).catch(function () { if (alive) loadingS[1](false); });
-      return function () { alive = false; };
-    }, [pid]);
+    // Another person's tab starts at the top, not in the last person's folder.
+    useEffect(function () { pathS[1]([]); renameIdS[1](null); }, [pid]);
+    // Live, and changed one change at a time through the server (MS-493 /
+    // MS-496) — see mobile/document-tree.js.
+    var tree = M.documentTree.useDocumentTree({ treeId: structDocId, pathS: pathS, renameIdS: renameIdS, showToast: showToast });
+    var elderDocs = M.documentTree.useElderDocuments();
+    var structure = tree.structure, docs = elderDocs.docs, path = pathS[0];
+    var loading = !(tree.loaded && elderDocs.loaded);
+    var currentFolderId = path.length ? path[path.length - 1] : DC.ROOT;
 
     var currentFolder = path.length === 0 ? structure : (DC.getFolderById(structure, path[path.length - 1]) || structure);
     var children = currentFolder.children || [];
@@ -791,48 +809,43 @@
     function openDoc(id) { nav("documentEditor", { id: id }); }
     function createDoc() {
       data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
-        var next = clone(structure);
-        var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
-        if (!folder.children) folder.children = [];
-        folder.children.push({ type: "document", id: id });
-        data.saveDocumentStructure(next, structDocId).then(function () { nav("documentEditor", { id: id }); }).catch(function () { showToast("Error creating", "error"); });
+        tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) {
+          return ok || (currentFolderId !== DC.ROOT && tree.change({ op: "file", docId: id, folderId: DC.ROOT }));
+        }).then(function (ok) { if (ok) nav("documentEditor", { id: id }); });
       }).catch(function (e) {
         console.error("Error creating document:", e);
         showToast(data.documentCreateFailure(e), "error");
       });
     }
     function createFolder() {
-      var fid = DC.newId(); var next = clone(structure);
-      var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
-      if (!folder.children) folder.children = [];
-      folder.children.unshift({ type: "folder", id: fid, name: "New Folder", children: [] });
-      persist(next); renameIdS[1](fid); renameValS[1]("New Folder");
+      var fid = DC.newId();
+      tree.change({ op: "createFolder", parentId: currentFolderId, folderId: fid, name: "New Folder" });
+      renameIdS[1](fid); renameValS[1]("New Folder");
     }
     function startRename(item) { renameValS[1](item.type === "folder" ? item.name : ((docs[item.id] && docs[item.id].title) || "Untitled Document")); renameIdS[1](item.id); }
     function finishRename(item) {
       if (renameIdS[0] !== item.id) return;
       var name = renameValS[0].trim() || (item.type === "folder" ? "New Folder" : "New Document");
       renameIdS[1](null);
-      if (item.type === "folder") { var next = clone(structure); var f = DC.getFolderById(next, item.id); if (f) f.name = name; persist(next); }
-      else { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { title: name }); return o; })())); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
+      if (item.type === "folder") { tree.change({ op: "renameFolder", folderId: item.id, name: name }); }
+      else { elderDocs.patch(item.id, { title: name }); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
     }
     function doMove(item, targetId) {
       moveS[1](null);
-      var next = clone(structure);
-      if (item.type === "folder" && targetId !== "__root__" && (targetId === item.id || DC.isDescendant(next, targetId, item.id))) { showToast("Can't move a folder into itself", "error"); return; }
-      DC.moveNode(next, item, targetId); persist(next); showToast("Moved");
+      tree.change({ op: "move", item: { type: item.type, id: item.id }, targetFolderId: targetId }).then(function (ok) { if (ok) showToast("Moved"); });
     }
     function doDelete(item) {
       deleteS[1](null);
-      var next = clone(structure);
       var ids = item.type === "document" ? [item.id] : (function () { var f = DC.getFolderById(structure, item.id); return f ? DC.getAllDocIds(f) : []; })();
-      if (ids.length) { data.deleteElderDocuments(ids); data.pruneElderDocsFromLibrary(ids); }
-      var m = Object.assign({}, docs); ids.forEach(function (id) { delete m[id]; }); docsS[1](m);
-      DC.removeFromTree(next, item.id); persist(next); showToast("Deleted");
+      var plan = DC.removalPlan(ids, docs, true);
+      if (plan.destroy.length) data.deleteElderDocuments(plan.destroy);
+      if (plan.pruneFromLibrary.length) data.pruneElderDocsFromLibrary(plan.pruneFromLibrary);
+      plan.destroy.forEach(function (id) { elderDocs.patch(id, null); });
+      tree.change({ op: "remove", itemId: item.id }).then(function (ok) { if (ok) showToast("Deleted"); });
     }
     function addToLibrary(item) {
       data.addElderDocToLibrary(item.id, "__root__").then(function (ok) {
-        if (ok) { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { inLibrary: true }); return o; })())); showToast("Added to the Library"); }
+        if (ok) { elderDocs.patch(item.id, { inLibrary: true }); showToast("Added to the Library"); }
         else showToast("Already in the Library");
       }).catch(function () { showToast("Error", "error"); });
     }
@@ -863,7 +876,7 @@
           <button onClick=${createDoc} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New</button>
         </div>
       </div>
-      ${loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
+      ${loading ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
         : (folders.length === 0 && docItems.length === 0) ? html`<p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)", textAlign: "center", padding: "24px 8px" }}>No documents yet. Use “New” to add one.</p>`
         : html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
           ${folders.map(function (f) { var renaming = renameIdS[0] === f.id; return html`<div key=${f.id} style=${rowCard}>

@@ -103,6 +103,9 @@ const MODULES = [
     // writing a cell has to follow exactly the page's rules, or its write lands
     // somewhere the page does not read — or wipes what the page wrote.
     'care-list-core.js',
+    // MS-483 / MS-484. The same for a Form Document: one field per answer, and
+    // re-filing only when the subject changed, whoever changed it.
+    'form-document-core.js',
 ];
 
 const BANNER = [

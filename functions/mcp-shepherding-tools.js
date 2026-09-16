@@ -20,6 +20,12 @@
  * tool that answers "unknown tool" — which reads as a broken server. Every tool
  * is listed and each refuses with a sentence saying it is elder-only and why.
  *
+ * ⚠ EVERY WRITE TOOL SAYS WHICH BOXES IT WRITES (MS-433). `boxes` on its spec
+ * is either NO_BOX or a function from the call to the boxes it would write
+ * into; `elderTool` refuses to register a write tool without one, and checks
+ * presence before the tool runs. A box somebody else is typing in refuses the
+ * call and names them (held-box-guard.js, ADR-0063).
+ *
  * ⚠ NO WRITE TOOL TAKES A NAME. `shep_find_person` is the one door from a name
  * to an id; everything else takes the id. An assistant that guesses which Sarah
  * a transcript meant writes pastoral history onto a stranger, and nothing about
@@ -44,6 +50,15 @@ const Docs = require("./shepherding-doc-writes.js");
 const Payload = require("./shepherding-payload-writes.js");
 const Cal = require("./calendar-writes.js");
 const Tasks = require("./task-writes.js");
+const Guard = require("./held-box-guard.js");
+const CareListCore = require("./shared/care-list-core.js");
+const {NO_BOX} = Guard;
+
+// Said on every tool that can be refused because a person is working in what
+// it would change.
+const WAITS =
+  " If a person is editing it right now the call is refused and says who — " +
+  "tell the elder, and do not retry in a loop.";
 
 // Said once, appended to every tool that can reach a Person's record. An
 // assistant summarising a meeting into a message an elder then pastes somewhere
@@ -62,14 +77,22 @@ const personId = z.string().min(1).describe(
  * @param {object} server the McpServer
  * @param {object} deps {db, auth}
  * @param {string} name the tool name
- * @param {object} spec title, description, inputSchema, annotations
+ * @param {object} spec title, description, inputSchema, annotations, and for a
+ *   write tool `boxes`: NO_BOX, or a function (args, db) → {boxes, scopes}
  * @param {function(object, ?object): Promise<*>} run given the arguments and
  *   the resolved Author (null for a read-only tool), returns what to hand back
  */
 function elderTool(server, deps, name, spec, run) {
   const readOnly = !!(spec.annotations && spec.annotations.readOnlyHint);
+  const declared = spec.boxes;
+  if (!readOnly && !declared) {
+    throw new Error(`${name} writes, and does not say which boxes it writes ` +
+      "(boxes: NO_BOX, or a function naming them). See held-box-guard.js.");
+  }
+  const registered = Object.assign({}, spec);
+  delete registered.boxes;
 
-  server.registerTool(name, spec, async (args) => {
+  server.registerTool(name, registered, async (args) => {
     const level = deps.auth && deps.auth.permissionLevel;
     if (!Actor.isElder(level)) return refuse(Actor.refusalFor(level));
 
@@ -78,11 +101,93 @@ function elderTool(server, deps, name, spec, run) {
       // writing a record nobody can be traced to (CONTEXT.md, Author).
       const actor = readOnly ?
         null : await Actor.requireActor(deps.db, deps.auth.uid);
+      // Somebody typing in what this would change is waited for (MS-433).
+      if (!readOnly && declared !== NO_BOX) {
+        let where = null;
+        try {
+          where = await declared(args || {}, deps.db);
+        } catch (e) {
+          // Working out the boxes failed (a read of the target). Nobody is
+          // demonstrably in the way, so the tool runs and says for itself
+          // whether its target exists (ADR-0035 §3).
+          console.warn(`${name}: could not work out which boxes it writes:`, e);
+        }
+        const held = where ?
+          await Guard.holders(deps.db, Object.assign({uid: deps.auth.uid}, where)) : [];
+        if (held.length) return refuse(Guard.refusalFor(held));
+      }
       return jsonResult(await run(args || {}, actor));
     } catch (e) {
       return refuse(e && e.message ? e.message : "That did not work.");
     }
   });
+}
+
+/**
+ * The Care List cell a write lands in. Leaving the column out means the first
+ * column, which only the document knows.
+ * @param {object} db the Firestore handle
+ * @param {object} a the call
+ * @return {Promise<object>} {boxes}
+ */
+async function careListCell(db, a) {
+  let columnId = a.columnId;
+  if (!columnId) {
+    const snap = await db.collection("elder_documents").doc(a.documentId).get();
+    // The columns the page reads — an old list with none stored still has
+    // its default column, and that is the cell the page holds.
+    const columns = snap.exists ? CareListCore.columnsOf(snap.data()) : [];
+    columnId = columns[0] && columns[0].id;
+  }
+  return {boxes: columnId ? [Guard.careListCellBox(a.documentId, a.personId, columnId)] : []};
+}
+
+/**
+ * What changing an Elder Document touches: its title box for a new title, and
+ * every box in it for a new body — a body replace rewrites every block.
+ * @param {object} db the Firestore handle
+ * @param {object} a the call
+ * @return {Promise<object>} {boxes, scopes}
+ */
+async function documentUpdate(db, a) {
+  if (a.markdown !== undefined && a.markdown !== null) {
+    return Guard.documentBoxes(db, a.documentId, "that document");
+  }
+  return {boxes: a.title !== undefined ? [Guard.titleBox(a.documentId)] : []};
+}
+
+/**
+ * Answer a Form Document, leaving out any question somebody is in. A held
+ * question goes into `skipped` naming them, the rest land; if every answer
+ * given is held, nothing is written and the call is refused.
+ * @param {object} db the Firestore handle
+ * @param {object} auth the caller
+ * @param {object} a the call
+ * @param {object} actor the Author
+ * @return {Promise<object>} what was answered and skipped
+ */
+async function answerAroundHeld(db, auth, a, actor) {
+  const ids = Object.keys(a.answers || {});
+  const held = await Guard.holders(db, {
+    uid: auth.uid,
+    boxes: ids.map((id) => Guard.questionBox(a.documentId, id)),
+  });
+  if (!held.length) return Payload.answerFormDocument(db, Object.assign({}, a, {actor}));
+  const answers = Object.assign({}, a.answers);
+  held.forEach((h) => { delete answers[String(h.boxKey).slice("question:".length)]; });
+  // Nothing left that the document actually asks: every real answer given is
+  // held, so the call is refused rather than reported as a write of nothing.
+  const snap = await db.collection("elder_documents").doc(a.documentId).get();
+  const asked = new Set(((snap.exists && snap.data().questions) || []).map((q) => q.id));
+  if (!Object.keys(answers).some((id) => asked.has(id))) {
+    throw Writes.refuse(Guard.refusalFor(held));
+  }
+  const result = await Payload.answerFormDocument(db, Object.assign({}, a, {answers, actor}));
+  result.skipped = (result.skipped || []).concat(held.map((h) => ({
+    questionId: String(h.boxKey).slice("question:".length),
+    why: `${h.name} is editing this question — try again shortly`,
+  })));
+  return result;
 }
 
 /**
@@ -209,6 +314,7 @@ function register(server, deps) {
   // ── B. Writing on a Person ───────────────────────────────────────────────
 
   tool("shep_write_note", {
+    boxes: NO_BOX,
     title: "Write a note on a person",
     description:
       "Add a new Shepherding Note to somebody's Pastoral Record. The body is " +
@@ -229,12 +335,13 @@ function register(server, deps) {
   }, (a, actor) => Writes.writeNote(db, Object.assign({}, a, {actor})));
 
   tool("shep_append_to_note", {
+    boxes: (a) => ({boxes: [Guard.noteBox(a.personId, a.noteId)]}),
     title: "Add to a note",
     description:
       "Add to the end of a Shepherding Note that already exists, rather than " +
       "making a second note about the same conversation. This is usually the " +
       "right tool when an elder tells you more about something already " +
-      "recorded today.",
+      "recorded today." + WAITS,
     inputSchema: {
       personId,
       noteId: z.string().min(1).describe("The note to grow, from shep_list_notes"),
@@ -243,12 +350,13 @@ function register(server, deps) {
   }, (a, actor) => Writes.appendToNote(db, Object.assign({}, a, {actor})));
 
   tool("shep_edit_note", {
+    boxes: (a) => ({boxes: [Guard.noteBox(a.personId, a.noteId)]}),
     title: "Change a note",
     description:
       "Change a Shepherding Note's type, subject or body. ⚠ The body is " +
       "REPLACED, not merged — read the note first with shep_get_note, or use " +
       "shep_append_to_note if you only mean to add. Anything left out is left " +
-      "as it was.",
+      "as it was." + WAITS,
     inputSchema: {
       personId,
       noteId: z.string().min(1).describe("The note to change"),
@@ -259,13 +367,14 @@ function register(server, deps) {
   }, (a, actor) => Writes.editNote(db, Object.assign({}, a, {actor})));
 
   tool("shep_delete_note", {
+    boxes: (a) => ({boxes: [Guard.noteBox(a.personId, a.noteId)]}),
     title: "Delete a note",
     description:
       "Remove a Shepherding Note for good. There is no undo and the page's " +
       "confirmation dialog is not available to you, so say what you are about " +
       "to delete and get a clear yes first. What was deleted comes back in " +
       "the result. A note belonging to a Person Panel in an Elder Document is " +
-      "refused — remove the panel from the document instead.",
+      "refused — remove the panel from the document instead." + WAITS,
     inputSchema: {
       personId,
       noteId: z.string().min(1).describe("The note to delete"),
@@ -273,6 +382,7 @@ function register(server, deps) {
   }, (a) => Writes.deleteNote(db, a));
 
   tool("shep_set_status", {
+    boxes: NO_BOX,
     title: "Set a person's status",
     description:
       "Set somebody's Shepherding Status — how urgent and how important the " +
@@ -288,6 +398,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.setStatus(db, Object.assign({}, a, {actor})));
 
   tool("shep_clear_status", {
+    boxes: NO_BOX,
     title: "Clear a person's status",
     description:
       "Take somebody's Shepherding Status off, and record the Status Change " +
@@ -300,6 +411,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.clearStatus(db, Object.assign({}, a, {actor})));
 
   tool("shep_add_tags", {
+    boxes: NO_BOX,
     title: "Apply tags to a person",
     description:
       "Put one or more Shepherding Tags on somebody, logging a Tag Change for " +
@@ -315,6 +427,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.addTags(db, Object.assign({}, a, {actor})));
 
   tool("shep_remove_tags", {
+    boxes: NO_BOX,
     title: "Take tags off a person",
     description:
       "Take one or more Shepherding Tags off somebody, logging a Tag Change " +
@@ -328,6 +441,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.removeTags(db, Object.assign({}, a, {actor})));
 
   tool("shep_set_membership_stage", {
+    boxes: NO_BOX,
     title: "Move somebody along the Membership Track",
     description:
       "Set somebody's Membership Stage, or mark them inactive. The Membership " +
@@ -346,6 +460,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.setMembershipStage(db, Object.assign({}, a, {actor})));
 
   tool("shep_set_elder_assignment", {
+    boxes: NO_BOX,
     title: "Assign somebody to an elder",
     description:
       "Say which elder shepherds this Person, or clear the assignment by " +
@@ -361,6 +476,7 @@ function register(server, deps) {
   }, (a, actor) => Writes.setElderAssignment(db, Object.assign({}, a, {actor})));
 
   tool("shep_explain_change", {
+    boxes: NO_BOX,
     title: "Explain a change already recorded",
     description:
       "Put an Explanation on a Status, Tag, Membership or Assignment Change " +
@@ -390,6 +506,7 @@ function register(server, deps) {
   }, () => Tags.listTags(db));
 
   tool("shep_create_tag", {
+    boxes: NO_BOX,
     title: "Make a new tag",
     description:
       "Create a Shepherding Tag. Check shep_list_tags first — a second tag " +
@@ -405,6 +522,7 @@ function register(server, deps) {
   }, (a) => Tags.createTag(db, a));
 
   tool("shep_rename_tag", {
+    boxes: NO_BOX,
     title: "Rename a tag",
     description:
       "Change a tag's display name. Nothing else moves: a tag's identity is " +
@@ -430,6 +548,7 @@ function register(server, deps) {
   }, (a) => Tags.previewMerge(db, a));
 
   tool("shep_merge_tags", {
+    boxes: NO_BOX,
     title: "Merge tags",
     description:
       "Fold one or more Shepherding Tags into another. Everybody carrying the " +
@@ -445,6 +564,7 @@ function register(server, deps) {
   }, (a) => Tags.mergeTags(db, a));
 
   tool("shep_delete_tag", {
+    boxes: NO_BOX,
     title: "Delete a tag",
     description:
       "Delete a Shepherding Tag and take it off everybody carrying it. The " +
@@ -480,6 +600,7 @@ function register(server, deps) {
   }, (a) => Docs.getDocument(db, a));
 
   tool("shep_create_document", {
+    boxes: NO_BOX,
     title: "Make an Elder Document",
     description:
       "Create an Elder Document — Meeting Minutes, a summary, anything an " +
@@ -496,12 +617,13 @@ function register(server, deps) {
   }, (a, actor) => Docs.createDocument(db, Object.assign({}, a, {actor})));
 
   tool("shep_update_document", {
+    boxes: (a, db) => documentUpdate(db, a),
     title: "Change an Elder Document",
     description:
       "Replace an Elder Document's title, body or both. ⚠ The body is " +
       "REPLACED — read it first with shep_get_document, or use " +
       "shep_append_to_document to add to the end without touching what is " +
-      "there.",
+      "there." + WAITS,
     inputSchema: {
       documentId: z.string().min(1),
       title: z.string().optional(),
@@ -510,6 +632,7 @@ function register(server, deps) {
   }, (a, actor) => Docs.updateDocument(db, Object.assign({}, a, {actor})));
 
   tool("shep_append_to_document", {
+    boxes: NO_BOX,
     title: "Add to an Elder Document",
     description:
       "Add to the end of an Elder Document, leaving everything already in it " +
@@ -521,10 +644,11 @@ function register(server, deps) {
   }, (a, actor) => Docs.appendToDocument(db, Object.assign({}, a, {actor})));
 
   tool("shep_rename_document", {
+    boxes: (a) => ({boxes: [Guard.titleBox(a.documentId)]}),
     title: "Rename an Elder Document",
     description:
       "Change what an Elder Document is called. Nothing else about it moves — " +
-      "it stays in the same Folder with the same body and the same author.",
+      "it stays in the same Folder with the same body and the same author." + WAITS,
     inputSchema: {
       documentId: z.string().min(1),
       title: z.string().min(1).describe("The new title"),
@@ -532,6 +656,7 @@ function register(server, deps) {
   }, (a, actor) => Docs.renameDocument(db, Object.assign({}, a, {actor})));
 
   tool("shep_move_document", {
+    boxes: NO_BOX,
     title: "File a document elsewhere",
     description:
       "Move an Elder Document into a different Folder. Only where it sits " +
@@ -544,15 +669,17 @@ function register(server, deps) {
   }, (a) => Docs.moveDocument(db, a));
 
   tool("shep_delete_document", {
+    boxes: (a, db) => Guard.documentBoxes(db, a.documentId, "that document"),
     title: "Delete an Elder Document",
     description:
       "Delete an Elder Document for good. Shepherding Notes made from Person " +
       "Panels inside it stay on their People — those are the pastoral record, " +
-      "this was only the meeting. No undo; confirm first.",
+      "this was only the meeting. No undo; confirm first." + WAITS,
     inputSchema: {documentId: z.string().min(1)},
   }, (a) => Docs.deleteDocument(db, a));
 
   tool("shep_create_folder", {
+    boxes: NO_BOX,
     title: "Make a Folder",
     description:
       "Create a Folder in the Document Library, optionally inside another " +
@@ -564,6 +691,7 @@ function register(server, deps) {
   }, (a) => Docs.createFolder(db, a));
 
   tool("shep_rename_folder", {
+    boxes: NO_BOX,
     title: "Rename a Folder",
     description:
       "Change a Folder's name. Everything inside it stays where it is.",
@@ -574,6 +702,7 @@ function register(server, deps) {
   }, (a) => Docs.renameFolder(db, a));
 
   tool("shep_move_folder", {
+    boxes: NO_BOX,
     title: "Move a Folder",
     description:
       "Move a Folder, and everything inside it, into another Folder. Moving a " +
@@ -586,12 +715,13 @@ function register(server, deps) {
   }, (a) => Docs.moveFolder(db, a));
 
   tool("shep_delete_folder", {
+    boxes: async (a, db) => Guard.folderBoxes(db, await Docs.loadTree(db), a.folderId),
     title: "Delete a Folder and everything in it",
     description:
       "Delete a Folder AND EVERY ELDER DOCUMENT INSIDE IT, at any depth. " +
       "⚠ Call it once without confirmDocumentCount: it refuses and tells you " +
       "how many documents are in there. Say that number to the elder, get a " +
-      "yes, then call again passing it. No undo.",
+      "yes, then call again passing it. No undo." + WAITS,
     inputSchema: {
       folderId: z.string().min(1),
       confirmDocumentCount: z.number().int().nonnegative().optional().describe(
@@ -600,6 +730,7 @@ function register(server, deps) {
   }, (a) => Docs.deleteFolder(db, a));
 
   tool("shep_add_person_panel", {
+    boxes: NO_BOX,
     title: "Put a person into a document",
     description:
       "Add a Person Panel to an Elder Document, creating the Shepherding Note " +
@@ -632,6 +763,7 @@ function register(server, deps) {
   }, () => Payload.listFormTemplates(db));
 
   tool("shep_create_form_document", {
+    boxes: NO_BOX,
     title: "Start a form document about somebody",
     description:
       "Start a Form Document from a template, about a Person. It takes a COPY " +
@@ -656,22 +788,24 @@ function register(server, deps) {
   }, (a) => Payload.getFormDocument(db, a));
 
   tool("shep_answer_form_document", {
+    boxes: NO_BOX, // held questions are checked per answer, below
     title: "Fill in a form document",
     description:
       "Answer, or change, a Form Document's questions. Pass answers keyed by " +
       "question id. Anything refused comes back in `skipped` with the reason " +
       "— a date that is not a date, a choice never offered, or an upload, " +
       "which needs a file you do not have. Only the answers move; the " +
-      "questions are the record's own copy.",
+      "questions are the record's own copy." + WAITS,
     inputSchema: {
       documentId: z.string().min(1),
       answers: z.record(z.any()).describe("Answers keyed by question id"),
     },
-  }, (a, actor) => Payload.answerFormDocument(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => answerAroundHeld(db, deps.auth, a, actor));
 
   // ── F. Care Lists ────────────────────────────────────────────────────────
 
   tool("shep_create_care_list", {
+    boxes: NO_BOX,
     title: "Make a Care List",
     description:
       "Create a Care List — a filtered list of People with elder-written " +
@@ -704,6 +838,7 @@ function register(server, deps) {
 
   tool("shep_add_care_list_column",
       {
+        boxes: NO_BOX,
         title: "Add a column to a Care List",
         description:
       "Add a column to a Care List. Existing cells stay where they are; the " +
@@ -715,12 +850,13 @@ function register(server, deps) {
       }, (a, actor) => Payload.addCareListColumn(db, Object.assign({}, a, {actor})));
 
   tool("shep_write_care_list_cell", {
+    boxes: (a, db) => careListCell(db, a),
     title: "Write in a Care List cell",
     description:
       "Write one Person's cell in a Care List, as markdown. ⚠ Only this one " +
       "cell is written. It shows on their Shepherding Profile as a read-only " +
       "entry that links back to this list, and changes there when the cell " +
-      "changes. Use shep_write_note for a note that belongs to the person.",
+      "changes. Use shep_write_note for a note that belongs to the person." + WAITS,
     inputSchema: {
       documentId: z.string().min(1),
       personId,
@@ -741,6 +877,7 @@ function register(server, deps) {
   }, () => Payload.listViews(db));
 
   tool("shep_create_view", {
+    boxes: NO_BOX,
     title: "Make a Filtered View",
     description:
       "Create a Filtered View. ⚠ THIS IS SHARED. It appears on EVERY elder's " +
@@ -759,6 +896,7 @@ function register(server, deps) {
   }, (a, actor) => Payload.createView(db, Object.assign({}, a, {actor})));
 
   tool("shep_update_view", {
+    boxes: NO_BOX,
     title: "Change a Filtered View",
     description:
       "Change a Filtered View's title or filter. Shared, so this changes what " +
@@ -775,6 +913,7 @@ function register(server, deps) {
   }, (a, actor) => Payload.updateView(db, Object.assign({}, a, {actor})));
 
   tool("shep_delete_view", {
+    boxes: NO_BOX,
     title: "Delete a Filtered View",
     description:
       "Remove a Filtered View from every elder's Shepherd Landing Page. Any " +
@@ -815,6 +954,7 @@ function register(server, deps) {
   }, (a) => Tasks.listTasks(db, a));
 
   tool("shep_create_task", {
+    boxes: NO_BOX,
     title: "Write a task down for the elders",
     description:
       "Add a Task. Good for the loose ends at the end of a meeting — write " +
@@ -852,12 +992,13 @@ function register(server, deps) {
   }, (a, actor) => Tasks.createTask(db, Object.assign({}, a, {actor})));
 
   tool("shep_complete_task", {
+    boxes: (a) => ({boxes: [Guard.taskBox(a.taskId)]}),
     title: "Tick a task off",
     description:
       "Mark a Task done. It is kept, never deleted — the completed list is " +
       "how anybody can say what the elders actually did.\n\n" +
       "For a repeating Task give the date of the one you mean: that month is " +
-      "finished and the standing commitment carries on.",
+      "finished and the standing commitment carries on." + WAITS,
     inputSchema: {
       taskId: z.string().min(1),
       date: z.string().optional().describe("Which date, for a repeating Task"),
@@ -865,13 +1006,14 @@ function register(server, deps) {
   }, (a, actor) => Tasks.completeTask(db, Object.assign({}, a, {actor})));
 
   tool("shep_skip_task", {
+    boxes: (a) => ({boxes: [Guard.taskBox(a.taskId)]}),
     title: "Stand one date of a repeat down",
     description:
       "Skip one date of a repeating Task without claiming it was done — " +
       "December, because it is Christmas. Deliberately not the same as " +
       "ticking it: once things get marked done that were not, the completed " +
       "list stops meaning anything. A one-off cannot be skipped; it is either " +
-      "done or deleted.",
+      "done or deleted." + WAITS,
     inputSchema: {
       taskId: z.string().min(1),
       date: z.string().min(1).describe("Which date, YYYY-MM-DD"),
@@ -879,13 +1021,14 @@ function register(server, deps) {
   }, (a, actor) => Tasks.skipOccurrence(db, Object.assign({}, a, {actor})));
 
   tool("shep_delete_task", {
+    boxes: (a) => ({boxes: [Guard.taskBox(a.taskId)]}),
     title: "Delete a task",
     description:
       "Remove a Task written by mistake. A repeat that has finished work " +
       "behind it is STOPPED rather than erased: no more dates, and every " +
       "record of the times it was kept survives, because stopping a " +
       "commitment and denying you kept it are different things. The result " +
-      "says which happened.",
+      "says which happened." + WAITS,
     inputSchema: {taskId: z.string().min(1)},
   }, (a) => Tasks.deleteTask(db, a));
 
@@ -927,6 +1070,7 @@ function register(server, deps) {
   }, () => Cal.listSeries(db));
 
   tool("cal_create_event", {
+    boxes: NO_BOX,
     title: "Put a new event on the calendar",
     description:
       "Create an Event. Without a recurrence it is a single dated event; with " +
@@ -953,6 +1097,7 @@ function register(server, deps) {
   }, (a) => Cal.createEvent(db, a));
 
   tool("cal_update_event", {
+    boxes: NO_BOX,
     title: "Change ONE date",
     description:
       "Change one date of an Event — its name, time, place or description — " +
@@ -971,6 +1116,7 @@ function register(server, deps) {
   }, (a) => Cal.updateEvent(db, a));
 
   tool("cal_update_series", {
+    boxes: NO_BOX,
     title: "Change the EVENT, across every date",
     description:
       "Change a repeating Event itself: its name, place, description, start " +
@@ -988,6 +1134,7 @@ function register(server, deps) {
   }, (a) => Cal.updateSeries(db, a));
 
   tool("cal_move_event", {
+    boxes: NO_BOX,
     title: "Move one date to another date",
     description:
       "Move a single date of a repeating Event to a different date, carrying " +
@@ -1001,6 +1148,7 @@ function register(server, deps) {
   }, (a) => Cal.moveEvent(db, a));
 
   tool("cal_cancel_event", {
+    boxes: NO_BOX,
     title: "Skip one date",
     description:
       "Mark one date of a repeating Event as not happening, or put a skipped " +
@@ -1014,6 +1162,7 @@ function register(server, deps) {
   }, (a) => Cal.cancelEvent(db, a));
 
   tool("cal_delete_event", {
+    boxes: NO_BOX,
     title: "Delete one date",
     description:
       "Delete a single Event occurrence and its roster. Only that date — " +
@@ -1024,6 +1173,7 @@ function register(server, deps) {
   }, (a) => Cal.deleteEvent(db, a));
 
   tool("cal_create_event_document", {
+    boxes: NO_BOX,
     title: "Attach a document to an event",
     description:
       "Add a document to one Event occurrence — an agenda, notes, a running " +

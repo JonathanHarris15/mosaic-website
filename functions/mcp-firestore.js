@@ -114,8 +114,9 @@ function namespace() {
   const fieldValue = bound();
   if (!FieldPath) {
     throw new Error(
-        "No Firestore FieldPath was bound, so a Care List cell cannot be " +
-        "written at its own field. See mcp-firestore.js.");
+        "No Firestore FieldPath was bound, so a Care List cell, a Form " +
+        "Document answer or a document block cannot be written at its own " +
+        "field. See mcp-firestore.js.");
   }
   return {FieldValue: fieldValue, FieldPath};
 }
