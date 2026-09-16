@@ -898,10 +898,24 @@
         return data && data.children ? data : { children: [] };
       }).catch(function () { return { children: [] }; });
   }
-  function saveDocumentStructure(structure, docId) {
-    // Plain clone so Firestore never sees Preact/proxy wrappers.
-    var plain = JSON.parse(JSON.stringify(structure || { children: [] }));
-    return db.collection("elder_document_structure").doc(docId || "root").set(plain).then(function () { return plain; });
+  // ⚠ NO SCREEN WRITES A TREE RECORD (MS-493). A tree is changed one change at
+  // a time, on the server, through the shepherdingTree callable
+  // (document-tree-client.js) — the same path the website and the assistant use.
+  function changeDocumentTree(treeId, change) {
+    return window.DocumentTree.change(treeId || "root", change);
+  }
+  // A tree, live (MS-496). `onTree` gets { children } every time it changes.
+  function watchDocumentStructure(treeId, onTree, onError) {
+    return watch(db.collection("elder_document_structure").doc(treeId || "root"), function (d) {
+      var data = d.exists ? d.data() : null;
+      return data && data.children ? data : { children: [] };
+    }, onTree, personEvery(), onError);
+  }
+  function watchElderDocuments(onDocs, onError) {
+    return watch(db.collection("elder_documents").orderBy("createdAt", "desc"), mapDocs, onDocs, rosterEvery(), onError);
+  }
+  function watchShepherdingViews(onViews, onError) {
+    return watch(db.collection("shepherding_views").orderBy("createdAt", "asc"), mapDocs, onViews, rosterEvery(), onError);
   }
   // ⚠ THE RECORD IS NOT ASSEMBLED HERE. It used to be, and it carried both of
   // the identity faults MS-283 fixed on the web: a document signed with the
@@ -959,31 +973,24 @@
   // record from the root tree (no copy) and flag it. targetFolderId '__root__'
   // drops it at the Library top level.
   function addElderDocToLibrary(docId, targetFolderId) {
-    var Core = window.ShepherdingDocsCore;
-    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
-      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
-      if (Core.containsDoc(rootStruct, docId)) return false;
-      var target = (!targetFolderId || targetFolderId === "__root__") ? rootStruct : Core.getFolderById(rootStruct, targetFolderId);
-      if (!target) return false;
-      if (!target.children) target.children = [];
-      target.children.push({ type: "document", id: docId });
-      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)))
-        .then(function () { return db.collection("elder_documents").doc(docId).update({ inLibrary: true }); })
-        .then(function () { return true; });
-    });
+    return changeDocumentTree("root", { op: "file", docId: docId, folderId: targetFolderId || "__root__" })
+      .then(function (out) {
+        if (!out.changed) return false;
+        return db.collection("elder_documents").doc(docId).update({ inLibrary: true }).then(function () { return true; });
+      });
   }
   // MS-98: remove document ids from the Library root tree (used when a profile
   // deletes docs that had been opted in), so no dangling reference remains.
   function pruneElderDocsFromLibrary(ids) {
-    var Core = window.ShepherdingDocsCore;
     if (!ids || !ids.length) return Promise.resolve();
-    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
-      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
-      var changed = false;
-      ids.forEach(function (id) { if (Core.removeFromTree(rootStruct, id)) changed = true; });
-      if (!changed) return;
-      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)));
-    });
+    return changeDocumentTree("root", { op: "prune", docIds: ids });
+  }
+  // A profile-owned document taken out of the Library stays on the profile
+  // (MS-493): only its flag changes. ShepherdingDocsCore.removalPlan decides.
+  function optElderDocsOutOfLibrary(ids) {
+    return Promise.all((ids || []).map(function (id) {
+      return db.collection("elder_documents").doc(id).update({ inLibrary: false });
+    }));
   }
   function renameElderDocument(id, title, user) {
     return db.collection("elder_documents").doc(id).update({
@@ -1297,7 +1304,11 @@
     watchShepherdingPeople: watchShepherdingPeople,
     getElderDocuments: getElderDocuments,
     getDocumentStructure: getDocumentStructure,
-    saveDocumentStructure: saveDocumentStructure,
+    changeDocumentTree: changeDocumentTree,
+    watchDocumentStructure: watchDocumentStructure,
+    watchElderDocuments: watchElderDocuments,
+    watchShepherdingViews: watchShepherdingViews,
+    optElderDocsOutOfLibrary: optElderDocsOutOfLibrary,
     createElderDocument: createElderDocument,
     documentCreateFailure: documentCreateFailure,
     addElderDocToLibrary: addElderDocToLibrary,

@@ -228,3 +228,13 @@ test('pruning takes several documents out wherever they sit', () => {
 test('a change nobody knows is refused rather than guessed at', () => {
     assert.throws(() => Core.applyTreeChange(sampleTree(), { op: 'shuffle' }), /shuffle/);
 });
+
+test('removing from a profile destroys its documents and prunes them from the Library', () => {
+    const plan = Core.removalPlan(['d1'], { d1: { ownerPersonId: 'p1' } }, true);
+    assert.deepStrictEqual(plan, { destroy: ['d1'], optOut: [], pruneFromLibrary: ['d1'] });
+});
+
+test('removing from the Library destroys its own documents, and only opts a profile document out', () => {
+    const plan = Core.removalPlan(['lib', 'owned'], { lib: {}, owned: { ownerPersonId: 'p1' } }, false);
+    assert.deepStrictEqual(plan, { destroy: ['lib'], optOut: ['owned'], pruneFromLibrary: [] });
+});

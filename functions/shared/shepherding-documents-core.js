@@ -364,7 +364,33 @@
         }
     }
 
+    // What removing documents from a tree does to their records (MS-98), the
+    // same on the website and the phone (MS-493). A document is in two trees
+    // when a profile owns it and it was opted into the Library, and taking it
+    // out of ONE must not destroy it for the other:
+    //   • a profile tab owns its documents — destroy them, and prune them from
+    //     the Library in case they were opted in;
+    //   • the Library destroys only its own documents (no owner); a
+    //     profile-owned one is opted back out and stays on the profile.
+    // `docsById` maps id → record. Returns { destroy, optOut, pruneFromLibrary }.
+    function removalPlan(ids, docsById, isProfileScope) {
+        const plan = { destroy: [], optOut: [], pruneFromLibrary: [] };
+        (ids || []).forEach(id => {
+            const owner = docsById && docsById[id] && docsById[id].ownerPersonId;
+            if (isProfileScope) {
+                plan.destroy.push(id);
+                plan.pruneFromLibrary.push(id);
+            } else if (!owner) {
+                plan.destroy.push(id);
+            } else {
+                plan.optOut.push(id);
+            }
+        });
+        return plan;
+    }
+
     const ShepherdingDocsCore = {
+        removalPlan,
         ROOT,
         LIBRARY_TREE,
         personTreeId,

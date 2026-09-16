@@ -760,24 +760,15 @@
     var DC = window.ShepherdingDocsCore;
     var pid = props.pid, user = props.user, nav = props.nav, showToast = props.showToast;
     var structDocId = "person_" + pid;
-    var loadingS = useState(true);
-    var structureS = useState({ children: [] }), docsS = useState({});
     var pathS = useState([]), renameIdS = useState(null), renameValS = useState("");
     var moveS = useState(null), deleteS = useState(null);
-    var structure = structureS[0], docs = docsS[0], path = pathS[0];
-    function clone(x) { return JSON.parse(JSON.stringify(x)); }
-    function persist(next) { structureS[1](next); data.saveDocumentStructure(next, structDocId).catch(function () { showToast("Error saving", "error"); }); }
-
-    useEffect(function () {
-      var alive = true;
-      Promise.all([data.getDocumentStructure(structDocId), data.getElderDocuments()]).then(function (r) {
-        if (!alive) return;
-        structureS[1](r[0]);
-        var map = {}; r[1].forEach(function (d) { map[d.id] = d; }); docsS[1](map);
-        loadingS[1](false);
-      }).catch(function () { if (alive) loadingS[1](false); });
-      return function () { alive = false; };
-    }, [pid]);
+    // Live, and changed one change at a time through the server (MS-493 /
+    // MS-496) — see mobile/document-tree.js.
+    var tree = M.documentTree.useDocumentTree({ treeId: structDocId, pathS: pathS, renameIdS: renameIdS, showToast: showToast });
+    var elderDocs = M.documentTree.useElderDocuments();
+    var structure = tree.structure, docs = elderDocs.docs, path = pathS[0];
+    var loading = !(tree.loaded && elderDocs.loaded);
+    var currentFolderId = path.length ? path[path.length - 1] : DC.ROOT;
 
     var currentFolder = path.length === 0 ? structure : (DC.getFolderById(structure, path[path.length - 1]) || structure);
     var children = currentFolder.children || [];
@@ -791,48 +782,41 @@
     function openDoc(id) { nav("documentEditor", { id: id }); }
     function createDoc() {
       data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
-        var next = clone(structure);
-        var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
-        if (!folder.children) folder.children = [];
-        folder.children.push({ type: "document", id: id });
-        data.saveDocumentStructure(next, structDocId).then(function () { nav("documentEditor", { id: id }); }).catch(function () { showToast("Error creating", "error"); });
+        tree.change({ op: "file", docId: id, folderId: currentFolderId }).then(function (ok) { if (ok) nav("documentEditor", { id: id }); });
       }).catch(function (e) {
         console.error("Error creating document:", e);
         showToast(data.documentCreateFailure(e), "error");
       });
     }
     function createFolder() {
-      var fid = DC.newId(); var next = clone(structure);
-      var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
-      if (!folder.children) folder.children = [];
-      folder.children.unshift({ type: "folder", id: fid, name: "New Folder", children: [] });
-      persist(next); renameIdS[1](fid); renameValS[1]("New Folder");
+      var fid = DC.newId();
+      tree.change({ op: "createFolder", parentId: currentFolderId, folderId: fid, name: "New Folder" });
+      renameIdS[1](fid); renameValS[1]("New Folder");
     }
     function startRename(item) { renameValS[1](item.type === "folder" ? item.name : ((docs[item.id] && docs[item.id].title) || "Untitled Document")); renameIdS[1](item.id); }
     function finishRename(item) {
       if (renameIdS[0] !== item.id) return;
       var name = renameValS[0].trim() || (item.type === "folder" ? "New Folder" : "New Document");
       renameIdS[1](null);
-      if (item.type === "folder") { var next = clone(structure); var f = DC.getFolderById(next, item.id); if (f) f.name = name; persist(next); }
-      else { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { title: name }); return o; })())); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
+      if (item.type === "folder") { tree.change({ op: "renameFolder", folderId: item.id, name: name }); }
+      else { elderDocs.patch(item.id, { title: name }); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
     }
     function doMove(item, targetId) {
       moveS[1](null);
-      var next = clone(structure);
-      if (item.type === "folder" && targetId !== "__root__" && (targetId === item.id || DC.isDescendant(next, targetId, item.id))) { showToast("Can't move a folder into itself", "error"); return; }
-      DC.moveNode(next, item, targetId); persist(next); showToast("Moved");
+      tree.change({ op: "move", item: { type: item.type, id: item.id }, targetFolderId: targetId }).then(function (ok) { if (ok) showToast("Moved"); });
     }
     function doDelete(item) {
       deleteS[1](null);
-      var next = clone(structure);
       var ids = item.type === "document" ? [item.id] : (function () { var f = DC.getFolderById(structure, item.id); return f ? DC.getAllDocIds(f) : []; })();
-      if (ids.length) { data.deleteElderDocuments(ids); data.pruneElderDocsFromLibrary(ids); }
-      var m = Object.assign({}, docs); ids.forEach(function (id) { delete m[id]; }); docsS[1](m);
-      DC.removeFromTree(next, item.id); persist(next); showToast("Deleted");
+      var plan = DC.removalPlan(ids, docs, true);
+      if (plan.destroy.length) data.deleteElderDocuments(plan.destroy);
+      if (plan.pruneFromLibrary.length) data.pruneElderDocsFromLibrary(plan.pruneFromLibrary);
+      plan.destroy.forEach(function (id) { elderDocs.patch(id, null); });
+      tree.change({ op: "remove", itemId: item.id }).then(function (ok) { if (ok) showToast("Deleted"); });
     }
     function addToLibrary(item) {
       data.addElderDocToLibrary(item.id, "__root__").then(function (ok) {
-        if (ok) { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { inLibrary: true }); return o; })())); showToast("Added to the Library"); }
+        if (ok) { elderDocs.patch(item.id, { inLibrary: true }); showToast("Added to the Library"); }
         else showToast("Already in the Library");
       }).catch(function () { showToast("Error", "error"); });
     }
@@ -863,7 +847,7 @@
           <button onClick=${createDoc} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New</button>
         </div>
       </div>
-      ${loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
+      ${loading ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
         : (folders.length === 0 && docItems.length === 0) ? html`<p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)", textAlign: "center", padding: "24px 8px" }}>No documents yet. Use “New” to add one.</p>`
         : html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
           ${folders.map(function (f) { var renaming = renameIdS[0] === f.id; return html`<div key=${f.id} style=${rowCard}>
