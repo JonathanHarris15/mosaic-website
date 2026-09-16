@@ -6,6 +6,7 @@ const Payload = require('../../functions/shepherding-payload-writes.js');
 const Writes = require('../../functions/shepherding-writes.js');
 const FormsCore = require('../../functions/shared/forms-core.js');
 const Actor = require('../../functions/mcp-actor.js');
+const NoteMarkdown = require('../../functions/shared/note-markdown-core.js');
 
 // Form Documents, Care Lists and Filtered Views, against a
 // real Firestore (MS-278).
@@ -41,6 +42,7 @@ suite('the payload-carrying shepherding tools', () => {
         require('../../functions/mcp-firestore.js').bind({
             FieldValue: admin.firestore.FieldValue,
             Timestamp: admin.firestore.Timestamp,
+            FieldPath: admin.firestore.FieldPath,
         });
     });
 
@@ -286,7 +288,7 @@ suite('the payload-carrying shepherding tools', () => {
 
         const list = await Payload.getCareList(db, {documentId: made.documentId});
         assert.strictEqual(list.rows[0].cells.col_default, 'Visited **Tuesday**.');
-        assert.match(list.note, /does not reach/);
+        assert.match(list.note, /shows, read-only, on that person's Shepherding Profile/);
     });
 
     test('a column that is not on the list is refused, listing the ones that are', async () => {
@@ -294,6 +296,74 @@ suite('the payload-carrying shepherding tools', () => {
         await assert.rejects(() => Payload.writeCareListCell(db, {
             documentId: made.documentId, personId: A, columnId: 'col_99', markdown: 'x', actor,
         }), /col_default/);
+    });
+
+    // ── MS-437: the assistant writes one cell, and never undoes a column ──
+
+    function body(text) {
+        return {type: 'doc', content: [{type: 'paragraph', content: [{type: 'text', text}]}]};
+    }
+
+    test('a cell another writer changed after the assistant read is still there after it writes a different cell', async () => {
+        const made = await Payload.createCareList(db, {title: 'Visits', actor});
+        const ref = db.collection('elder_documents').doc(made.documentId);
+        await Payload.writeCareListCell(db, {
+            documentId: made.documentId, personId: A, markdown: 'First.', actor,
+        });
+        // An elder's page saves B's cell — the whole map the assistant read is
+        // now out of date.
+        await ref.update(new (require('firebase-admin').firestore.FieldPath)(
+            'careListData', B, 'col_default'), body('From the page'));
+
+        await Payload.writeCareListCell(db, {
+            documentId: made.documentId, personId: A, markdown: 'Second.', actor,
+        });
+
+        const stored = (await ref.get()).data().careListData;
+        assert.deepStrictEqual(stored[B].col_default, body('From the page'));
+        assert.strictEqual(NoteMarkdown.toMarkdown(stored[A].col_default), 'Second.');
+    });
+
+    test('writing into an old-shaped Care List keeps every cell and leaves the column shape', async () => {
+        const ref = db.collection('elder_documents').doc('old-list');
+        await ref.set({
+            title: 'Old', docType: 'care-list', authorUid: UID, authorName: 'Jonathan Harris',
+            careListData: {[B]: body('Written years ago')},
+        });
+
+        await Payload.writeCareListCell(db, {
+            documentId: 'old-list', personId: A, markdown: 'New.', actor,
+        });
+
+        const data = (await ref.get()).data();
+        assert.deepStrictEqual(data.careListColumns, [{id: 'col_default', name: 'Notes'}]);
+        assert.deepStrictEqual(data.careListData[B], {col_default: body('Written years ago')});
+        assert.strictEqual(NoteMarkdown.toMarkdown(data.careListData[A].col_default), 'New.');
+    });
+
+    test('a column the assistant adds never shows cells a removed column left behind', async () => {
+        const made = await Payload.createCareList(db, {title: 'Visits', columns: ['Needs'], actor});
+        const ref = db.collection('elder_documents').doc(made.documentId);
+        // Leftovers under col_2, from a column removed before removals cleaned up.
+        await ref.update({careListData: {[A]: {col_1: body('a'), col_2: body('stray')}}});
+
+        const added = await Payload.addCareListColumn(db, {
+            documentId: made.documentId, name: 'Prayer', actor,
+        });
+        assert.notStrictEqual(added.column.id, 'col_2');
+        const list = await Payload.getCareList(db, {documentId: made.documentId});
+        assert.ok(list.columns.some((c) => c.name === 'Prayer'));
+    });
+
+    test('a column change an elder made just before the assistant adds a column survives', async () => {
+        const made = await Payload.createCareList(db, {title: 'Visits', columns: ['Needs', 'Visit'], actor});
+        const ref = db.collection('elder_documents').doc(made.documentId);
+        await ref.update({careListColumns: [{id: 'col_1', name: 'Needs'}, {id: 'col_2', name: 'Renamed by Ann'}]});
+
+        await Payload.addCareListColumn(db, {documentId: made.documentId, name: 'Prayer', actor});
+
+        const names = (await ref.get()).data().careListColumns.map((c) => c.name);
+        assert.deepStrictEqual(names, ['Needs', 'Renamed by Ann', 'Prayer']);
     });
 
     test('a care list can read a saved Filtered View instead of its own filter', async () => {

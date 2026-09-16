@@ -1643,6 +1643,8 @@ exports.mcp = onRequest(
             // above, and mcp-firestore.js says what goes wrong without it.
             FieldValue: admin.firestore.FieldValue,
             Timestamp: admin.firestore.Timestamp,
+            // MS-437. A Care List cell is written at its own segmented path.
+            FieldPath: admin.firestore.FieldPath,
           },
         });
       }

@@ -675,10 +675,10 @@ function register(server, deps) {
     title: "Make a Care List",
     description:
       "Create a Care List — a filtered list of People with elder-written " +
-      "columns beside each. ⚠ What gets written in its cells is PRIVATE TO " +
-      "THIS DOCUMENT and never reaches anybody's Shepherding Profile. If what " +
-      "you have to record is about a person, shep_write_note is almost always " +
-      "the right tool instead.",
+      "columns beside each. ⚠ A filled cell SHOWS on that person's " +
+      "Shepherding Profile as a read-only entry linking back to the list, " +
+      "but it lives in the list and is edited only there. For a note about " +
+      "a person, shep_write_note is almost always the right tool.",
     inputSchema: {
       title: z.string().optional().describe("What the list is called"),
       viewId: z.string().optional().describe("An existing Filtered View to read"),
@@ -717,10 +717,10 @@ function register(server, deps) {
   tool("shep_write_care_list_cell", {
     title: "Write in a Care List cell",
     description:
-      "Write one Person's cell in a Care List, as markdown. ⚠ This does not " +
-      "reach their Shepherding Profile — an elder looking at that Person will " +
-      "not find it. Use shep_write_note for anything that should be findable " +
-      "from their side.",
+      "Write one Person's cell in a Care List, as markdown. ⚠ Only this one " +
+      "cell is written. It shows on their Shepherding Profile as a read-only " +
+      "entry that links back to this list, and changes there when the cell " +
+      "changes. Use shep_write_note for a note that belongs to the person.",
     inputSchema: {
       documentId: z.string().min(1),
       personId,

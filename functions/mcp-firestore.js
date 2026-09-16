@@ -30,12 +30,13 @@
 
 let FieldValue = null;
 let Timestamp = null;
+let FieldPath = null;
 
 /**
  * Point this module at the caller's firebase-admin.
  *
- * @param {object} fieldValues {FieldValue, Timestamp} from the admin namespace
- *   that made the Firestore handle these writes will be given
+ * @param {object} fieldValues {FieldValue, Timestamp, FieldPath} from the admin
+ *   namespace that made the Firestore handle these writes will be given
  */
 function bind(fieldValues) {
   const f = fieldValues || {};
@@ -54,6 +55,7 @@ function bind(fieldValues) {
 
   FieldValue = f.FieldValue;
   Timestamp = f.Timestamp || null;
+  FieldPath = f.FieldPath || null;
   global.firebase = {firestore: {FieldValue: FieldValue}};
 }
 
@@ -102,4 +104,20 @@ function timestampFrom(date) {
   return Timestamp.fromDate(date);
 }
 
-module.exports = {bind, now, arrayUnion, arrayRemove, timestampFrom};
+/**
+ * The sentinels and the field-path class together, in the shape the shared
+ * writes take (care-list-core.js): one Care List cell is written at its own
+ * segmented path, never at a dotted string built by hand (MS-437).
+ * @return {object} {FieldValue, FieldPath}
+ */
+function namespace() {
+  const fieldValue = bound();
+  if (!FieldPath) {
+    throw new Error(
+        "No Firestore FieldPath was bound, so a Care List cell cannot be " +
+        "written at its own field. See mcp-firestore.js.");
+  }
+  return {FieldValue: fieldValue, FieldPath};
+}
+
+module.exports = {bind, now, arrayUnion, arrayRemove, timestampFrom, namespace};

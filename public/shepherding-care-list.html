@@ -85,12 +85,31 @@
     <!-- Main -->
     <main x-show="!loading" class="flex-grow overflow-hidden max-w-6xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-sm pt-md">
 
-        <!-- Title -->
-        <input type="text"
-               x-model="title"
-               @input="onTitleInput()"
-               placeholder="Care List title…"
-               class="w-full font-headline-lg text-headline-lg text-primary bg-transparent border-0 border-b-2 border-transparent focus:border-outline-variant focus:outline-none pb-xs transition-colors placeholder-outline" />
+        <!-- Title — a box: one person renames at a time (MS-443). -->
+        <div class="flex items-center gap-sm">
+            <input type="text"
+                   x-model="title"
+                   @focus="enterTitle($event)"
+                   @blur="leaveTitle()"
+                   @input="onTitleInput()"
+                   :readonly="!!titleHolder"
+                   placeholder="Care List title…"
+                   class="w-full font-headline-lg text-headline-lg text-primary bg-transparent border-0 border-b-2 border-transparent focus:border-outline-variant focus:outline-none pb-xs transition-colors placeholder-outline" />
+            <template x-if="titleHolder">
+                <span class="held-badge flex items-center gap-1.5 flex-shrink-0" :title="holderTitle(titleHolder)">
+                    <span class="m-avatar m-avatar--sm">
+                                        <template x-if="titleHolder.photoUrl">
+                                            <img :src="titleHolder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(titleHolder.photoCrop)">
+                                        </template>
+                                        <template x-if="!titleHolder.photoUrl">
+                                            <span x-text="PersonPhotoCore.initialsOf(titleHolder.name)"></span>
+                                        </template>
+                                    </span>
+                    <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(titleHolder)"></span>
+                    <span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+                </span>
+            </template>
+        </div>
 
         <!-- Metadata & Filter Info -->
         <div class="flex flex-wrap items-center justify-between pb-xs border-b border-outline-variant">
@@ -98,6 +117,20 @@
                 <span class="font-label-md text-label-md text-on-surface-variant" x-text="'Created by ' + (doc?.authorName || '…')"></span>
                 <span class="font-label-md text-label-md text-outline">·</span>
                 <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(doc?.createdAt)"></span>
+            </div>
+            <!-- Who else is on this Care List right now, web or phone (MS-443). -->
+            <div x-show="othersHere.length" x-cloak class="flex items-center gap-2">
+                <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">Also here</span>
+                <template x-for="p in othersHere" :key="p.uid">
+                    <span class="m-avatar m-avatar--sm" :title="p.name">
+                        <template x-if="p.photoUrl">
+                            <img :src="p.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(p.photoCrop)">
+                        </template>
+                        <template x-if="!p.photoUrl">
+                            <span x-text="PersonPhotoCore.initialsOf(p.name)"></span>
+                        </template>
+                    </span>
+                </template>
             </div>
             <div class="flex items-center gap-sm">
                 <span class="material-symbols-outlined text-sm text-secondary">filter_list</span>
@@ -245,11 +278,28 @@
                         <!-- Per-column cells -->
                         <template x-for="col in careListColumns" :key="col.id">
                             <div class="w-80 flex-shrink-0 border-r border-outline-variant relative min-h-[100px]"
-                                 :class="activePersonId === person.id && activeColId === col.id ? 'ring-2 ring-inset ring-primary/40' : ''">
+                                 :class="activePersonId === person.id && activeColId === col.id ? 'ring-2 ring-inset ring-primary/40' : ''"
+                                 @mousedown.capture="onCellPointer($event, person.id, col.id)">
                                 <div :id="'editor-' + person.id + '-' + col.id"
-                                     class="h-full cursor-text min-h-[100px]"
-                                     :class="ShepherdingBlur.pastoralClass()"
-                                     @focusin="activePersonId = person.id; activeColId = col.id"></div>
+                                     class="h-full min-h-[100px]"
+                                     :class="[ShepherdingBlur.pastoralClass(), cellHolder(person.id, col.id) ? 'cursor-not-allowed opacity-70' : 'cursor-text']"></div>
+                                <!-- Somebody else is in this cell: their face and first name (MS-443). -->
+                                <!-- x-for over [holder] asks once per redraw, not six times. -->
+                                <template x-for="holder in [cellHolder(person.id, col.id)].filter(Boolean)" :key="holder.uid">
+                                    <span class="held-badge absolute top-1 right-1 flex items-center gap-1.5 bg-surface-container-lowest rounded-full pr-2"
+                                          :title="holderTitle(holder)">
+                                        <span class="m-avatar m-avatar--sm">
+                                            <template x-if="holder.photoUrl">
+                                                <img :src="holder.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(holder.photoCrop)">
+                                            </template>
+                                            <template x-if="!holder.photoUrl">
+                                                <span x-text="PersonPhotoCore.initialsOf(holder.name)"></span>
+                                            </template>
+                                        </span>
+                                        <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant" x-text="holderLabel(holder)"></span>
+                                        <span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+                                    </span>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -270,6 +320,13 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <!-- Live updates and one person per box (MS-439 / MS-443). -->
+    <script src="live-read.js"></script>
+    <script src="person-photo-core.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="presence-core.js"></script>
+    <script src="shepherding-presence.js"></script>
+    <script src="care-list-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="shepherding-inline-triggers.js"></script>
     <!-- Loads the vendored TipTap bundle. Must come before the page

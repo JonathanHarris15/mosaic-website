@@ -14,12 +14,11 @@
  *                    already written (ADR-0055).
  *
  *   CARE LISTS       a filtered list of People with elder-written cells beside
- *                    each. ⚠ Cell content is PRIVATE TO THE DOCUMENT and does
- *                    not reach anybody's Shepherding Profile. That was raised
- *                    as the weakest reason to give an assistant a tool and
- *                    accepted anyway (2026-09-04), so the tool descriptions
- *                    point at shep_write_note for anything that should be
- *                    findable from the Person's side.
+ *                    each. ⚠ Cell content LIVES IN THE DOCUMENT: a filled cell
+ *                    is SHOWN on that person's Shepherding Profile, read-only,
+ *                    but never copied there (MS-429). The tool descriptions
+ *                    still point at shep_write_note for a note that belongs
+ *                    to the person.
  *
  *   FILTERED VIEWS   ⚠ SHARED, NOT PERSONAL. A view appears as a table widget
  *                    on EVERY elder's Shepherd Landing Page. An assistant
@@ -41,6 +40,7 @@ const F = require("./mcp-firestore.js");
 const FormsCore = require("./shared/forms-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const NoteMarkdownCore = require("./shared/note-markdown-core.js");
+const CareListCore = require("./shared/care-list-core.js");
 const Actor = require("./mcp-actor.js");
 const {refuse, loadPerson} = require("./shepherding-writes.js");
 const {loadDocument, withTree} = require("./shepherding-doc-writes.js");
@@ -50,8 +50,6 @@ const DOCUMENTS = "elder_documents";
 const FORMS = "forms";
 const VIEWS = "shepherding_views";
 
-// The one column a Care List has before an elder adds any of their own.
-const DEFAULT_COLUMN = {id: "col_default", name: "Notes"};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Form Documents
@@ -309,7 +307,7 @@ async function createCareList(db, {title, filter, viewId, columns, folderId, act
 
   record.careListColumns = (columns || []).length ?
     columns.map((name, i) => ({id: "col_" + (i + 1), name: String(name)})) :
-    [Object.assign({}, DEFAULT_COLUMN)];
+    [Object.assign({}, CareListCore.DEFAULT_COLUMN)];
   record.careListData = {};
 
   const ref = db.collection(DOCUMENTS).doc();
@@ -340,12 +338,6 @@ async function loadCareList(db, documentId) {
   return {ref, data};
 }
 
-/** The Care List's columns, in the shape the editor stores them. */
-function columnsOf(data) {
-  return (data.careListColumns && data.careListColumns.length) ?
-    data.careListColumns : [Object.assign({}, DEFAULT_COLUMN)];
-}
-
 /**
  * A Care List: who is on it, and what each cell says.
  * @param {object} db the Firestore handle
@@ -361,7 +353,7 @@ async function getCareList(db, {documentId}) {
     filter = view.exists ? view.data() : null;
   }
 
-  const columns = columnsOf(data);
+  const columns = CareListCore.columnsOf(data);
   const listed = filter ? await Read.listPeople(db, {
     tagIds: filter.filterTags || [],
     tagMode: filter.filterMode || "any",
@@ -369,7 +361,7 @@ async function getCareList(db, {documentId}) {
     limit: 500,
   }) : {people: []};
 
-  const cells = data.careListData || {};
+  const cells = CareListCore.cellsOf(data);
   return {
     documentId,
     title: data.title || "",
@@ -383,9 +375,9 @@ async function getCareList(db, {documentId}) {
         return out;
       }, {}),
     })),
-    note: "Cell content lives in this document only — it does not reach " +
-      "anybody's Shepherding Profile. Use shep_write_note for anything that " +
-      "should be findable from the Person's side.",
+    note: "Cell content lives in this document. A filled cell shows, " +
+      "read-only, on that person's Shepherding Profile and links back here. " +
+      "Use shep_write_note for a note that belongs to the person.",
   };
 }
 
@@ -396,25 +388,18 @@ async function getCareList(db, {documentId}) {
  * @return {Promise<object>} { ok, columns }
  */
 async function addCareListColumn(db, {documentId, name, actor}) {
-  const {ref, data} = await loadCareList(db, documentId);
+  await loadCareList(db, documentId);
   const label = String(name || "").trim();
   if (!label) throw refuse("A column needs a name.");
 
-  const columns = columnsOf(data);
-  // Ids are positional and must not collide with one already in use, including
-  // one whose column was removed — a reused id would inherit its old cells.
-  const used = new Set(columns.map((c) => c.id));
-  let n = columns.length + 1;
-  while (used.has("col_" + n)) n += 1;
+  // ⚠ AGAINST THE LATEST LIST, IN A TRANSACTION (MS-437). Writing back the
+  // list this read loaded undid a column an elder added or renamed a moment
+  // before. The id also skips any id a removed column left cells under — a
+  // reused id would inherit them.
+  const out = await CareListCore.changeColumn(db, F.namespace(), documentId,
+      {kind: "add", name: label}, actor.name, Actor.provenance());
 
-  const added = {id: "col_" + n, name: label};
-  await ref.update(Object.assign({
-    careListColumns: columns.concat([added]),
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
-
-  return {ok: true, documentId, column: added, columns: columns.concat([added])};
+  return {ok: true, documentId, column: out.column, columns: out.columns};
 }
 
 /**
@@ -424,10 +409,10 @@ async function addCareListColumn(db, {documentId, name, actor}) {
  * @return {Promise<object>} { ok }
  */
 async function writeCareListCell(db, {documentId, personId, columnId, markdown, actor}) {
-  const {ref, data} = await loadCareList(db, documentId);
+  const {data} = await loadCareList(db, documentId);
   await loadPerson(db, personId);
 
-  const columns = columnsOf(data);
+  const columns = CareListCore.columnsOf(data);
   const column = columnId ?
     columns.find((c) => c.id === columnId) : columns[0];
   if (!column) {
@@ -436,16 +421,20 @@ async function writeCareListCell(db, {documentId, personId, columnId, markdown, 
         columns.map((c) => `${c.id} (${c.name})`).join(", ") + ".");
   }
 
-  const cells = Object.assign({}, data.careListData || {});
-  cells[personId] = Object.assign({}, cells[personId] || {}, {
-    [column.id]: NoteMarkdownCore.fromMarkdown(String(markdown || "")),
+  // ⚠ THIS ONE CELL'S FIELD, NOTHING ELSE (MS-437). Rewriting the whole cell
+  // map put back every cell an elder had written since this read. An
+  // old-shaped list is normalised first, or the cell would land inside
+  // somebody's note.
+  await CareListCore.saveEdits(db, F.namespace(), documentId, {
+    cells: [{
+      personId,
+      columnId: column.id,
+      value: NoteMarkdownCore.fromMarkdown(String(markdown || "")),
+    }],
+    byName: actor.name,
+    oldShape: CareListCore.isOldShape(data),
+    extra: Actor.provenance(),
   });
-
-  await ref.update(Object.assign({
-    careListData: cells,
-    updatedAt: F.now(),
-    updatedByName: actor.name,
-  }, Actor.provenance()));
 
   return {ok: true, documentId, personId, columnId: column.id};
 }

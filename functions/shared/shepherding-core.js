@@ -214,19 +214,26 @@
     function careListNotesFor(personId, careListDocs) {
         const out = [];
         (careListDocs || []).forEach(doc => {
-            const cells = doc && doc.careListData && doc.careListData[personId];
-            if (!cells) return;
-            const columns = doc.careListColumns || [];
+            const stored = doc && doc.careListData && doc.careListData[personId];
+            if (!stored) return;
+            // A list from before columns kept one bare body per person: it
+            // reads as the one Notes column (care-list-core.js says the same).
+            const oldShaped = stored.type === 'doc';
+            const cells = oldShaped ? { col_default: stored } : stored;
+            const columns = (doc.careListColumns && doc.careListColumns.length)
+                ? doc.careListColumns : [{ id: 'col_default', name: 'Notes' }];
             Object.keys(cells).forEach(colId => {
+                // A cell under a column that was removed is gone with it (MS-430).
+                const col = columns.find(c => c.id === colId);
+                if (!col) return;
                 const contentJson = cells[colId];
                 if (!contentJson || !contentJson.content || !contentJson.content.length) return;
                 const hasText = contentJson.content.some(n => (n.content && n.content.length > 0) || n.type === 'table');
                 if (!hasText) return;
-                const col = columns.find(c => c.id === colId);
                 out.push({
                     id: `carelist-${doc.id}-${colId}`,
                     type: 'Care List',
-                    subject: col ? col.name : 'Notes',
+                    subject: col.name,
                     contentJson,
                     createdAt: doc.updatedAt || doc.createdAt,
                     authorName: doc.updatedByName || 'Elder',

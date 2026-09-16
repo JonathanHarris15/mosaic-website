@@ -107,6 +107,8 @@
   function CareListEditorScreen(props) {
     var user = props.user || {};
     var docId = (props.params && props.params.id) || null;
+    var CL = window.CareListCore;
+    var SP = window.ShepherdingPresence;
 
     var loadingS = useState(true), errS = useState(false), readyS = useState(false);
     var titleS = useState("");
@@ -117,25 +119,42 @@
     var saveStatusS = useState("saved");
     var toastS = useState(null);
     var activeCellS = useState(null); // { personId, colId } — for toolbar enable + highlight
+    var rowsTickS = useState(0);      // redraw the rows once a kept row may go
+    // Presence (MS-445): everybody's claims, and a tick so a quiet hold, or one
+    // whose page died, stops showing as held without anybody writing anything.
+    var presenceS = useState([]), presenceTickS = useState(0);
 
     // Imperative state (read by TipTap callbacks — kept in refs to dodge stale closures).
     var editorsRef = useRef({});      // personId -> { colId -> Editor }
     var cellElsRef = useRef({});      // "pid|cid" -> DOM el
     var refCbRef = useRef({});        // "pid|cid" -> stable ref callback
-    var dataStoreRef = useRef({});    // personId -> { colId -> TipTap JSON }
+    var sessionRef = useRef(null);    // CareListCore session: the stored copy + what is unsaved
+    var focusRef = useRef(null);      // { personId, columnId } while the cursor is in a cell
+    var inTitleRef = useRef(false);
+    var titleRef = useRef("");
     var peopleRef = useRef([]);       // current people (for trigger callbacks)
     var tagsRef = useRef([]);
+    var presenceRef = useRef([]);
     var userRef = useRef(user);
     var saveTimerRef = useRef(null);
+    var savingRef = useRef(null);     // the save on its way, if one is
+    var viewIdRef = useRef(null);     // the Filtered View this list reads, if any
     var activeEditorRef = useRef(null);
 
     peopleRef.current = peopleS[0]; tagsRef.current = tagsS[0]; userRef.current = user;
+    presenceRef.current = presenceS[0]; titleRef.current = titleS[0];
+    var myUid = props.user && props.user.uid;
 
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
-    // ── Load: TipTap bundle + doc + people + tags + view ──
+    // ── Load, then follow: the list, who is on it, and its Filtered View ──
+    // Somebody else's cell goes into its editor without counting as an edit,
+    // so it is never saved back; a cell typed into and not yet saved is left
+    // alone (CareListCore). A cell in a column not on screen goes into the
+    // stored copy, and is what its editor opens with later.
     useEffect(function () {
       var alive = true;
+      var watches = [];
       injectStyles();
       if (!docId) { errS[1](true); loadingS[1](false); return; }
       ensureTipTap().then(function () { if (alive) readyS[1](true); }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
@@ -144,23 +163,28 @@
           if (!alive) return;
           var doc = r[0];
           if (!doc) { errS[1](true); loadingS[1](false); return; }
-          titleS[1](doc.title || "");
-          // Columns (+ legacy migration: careListData[pid] as a bare TipTap doc).
-          var cols = (doc.careListColumns && doc.careListColumns.length) ? doc.careListColumns : [{ id: "col_default", name: "Notes" }];
-          var store = {};
-          if (doc.careListData) {
-            Object.keys(doc.careListData).forEach(function (pid) {
-              var val = doc.careListData[pid];
-              store[pid] = (val && typeof val === "object" && val.type === "doc") ? { col_default: val } : (val || {});
-            });
-          }
-          dataStoreRef.current = store;
+          // An old-shaped list reads as one Notes column here, and is only
+          // WRITTEN in the column shape by the first save — opening writes nothing.
+          var session = CL.createSession(doc);
+          sessionRef.current = session;
+          titleS[1](session.title());
+          var cols = session.columns();
           columnsS[1](cols);
           activeColS[1](cols[0] ? cols[0].id : null);
           peopleS[1](r[1]); tagsS[1](r[2]);
+
+          watches.push(data.watchCareList(docId, function (remote) { if (alive) adoptRemote(remote); }));
+          watches.push(data.watchShepherdingPeople(function (people) { if (alive) peopleS[1](people); }));
+
           var viewId = doc.filterId || null;
+          viewIdRef.current = viewId;
           if (viewId) {
-            data.getShepherdingView(viewId).then(function (v) { if (!alive) return; viewS[1](v); filterTitleS[1]((v && v.title) || "Untitled Filter"); loadingS[1](false); });
+            var first = true;
+            watches.push(data.watchShepherdingView(viewId, function (v) {
+              if (!alive) return;
+              viewS[1](v); filterTitleS[1]((v && v.title) || "Untitled Filter");
+              if (first) { first = false; loadingS[1](false); }
+            }));
           } else {
             viewS[1](doc.filterConfig || null); filterTitleS[1](doc.filterConfig ? "Custom Filter" : "All members"); loadingS[1](false);
           }
@@ -168,41 +192,209 @@
         .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () {
         alive = false;
-        // Tear down all editors on unmount.
+        watches.forEach(function (stop) { try { stop(); } catch (e) {} });
+        // Anything typed and not yet saved goes before the editors do.
+        doSave();
         var es = editorsRef.current;
         Object.keys(es).forEach(function (pid) { Object.keys(es[pid]).forEach(function (cid) { try { es[pid][cid].destroy(); } catch (e) {} }); });
         editorsRef.current = {};
       };
     }, [docId]);
 
-    var filtered = filterPeople(peopleS[0], viewS[0]);
-    var activeCol = columnsS[0].filter(function (c) { return c.id === activeColS[0]; })[0] || columnsS[0][0];
+    function adoptRemote(remote) {
+      var session = sessionRef.current;
+      if (!session) return;
+      if (!remote) { showToast("This care list was deleted", "error"); return; }
+      // A list with its own filter, rather than a Filtered View, carries it.
+      if (!viewIdRef.current && remote.filterConfig) {
+        viewS[1](function (cur) { return CL.sameContent(cur, remote.filterConfig) ? cur : remote.filterConfig; });
+      }
+      var out = session.adopt(remote, { inCell: focusRef.current, inTitle: inTitleRef.current });
+      if (out.title !== null) titleS[1](out.title);
+      out.cells.forEach(function (c) { putCell(c.personId, c.columnId, c.value); });
+      if (out.columns) showColumns(out.columns);
+    }
 
-    // ── Save (debounced) ──
+    function showColumns(cols) {
+      columnsS[1](cols);
+      activeColS[1](function (cur) {
+        return cols.some(function (c) { return c.id === cur; }) ? cur : (cols[0] ? cols[0].id : null);
+      });
+    }
+
+    // Somebody else's value into a mounted editor, without it counting as an
+    // edit: setContent's second argument keeps onUpdate quiet.
+    function putCell(pid, cid, value) {
+      var ed = editorsRef.current[pid] && editorsRef.current[pid][cid];
+      if (ed) { try { ed.commands.setContent(value || "", false); } catch (e) {} }
+    }
+
+    // ── Presence (MS-445) ── the same store and box names as the web, so a
+    // cell held on a laptop is held here. Presence may remove a lock, never an
+    // editor: it cannot throw, and while it is not running every cell opens.
+    useEffect(function () {
+      if (!docId || !props.user || !SP) return;
+      var unsubscribe = function () {};
+      var ticker = null;
+      try {
+        unsubscribe = SP.subscribe(presenceS[1]);
+        SP.start({
+          db: data.db,
+          uid: props.user.uid,
+          identity: { id: props.user.personId || null, name: props.user.name || "", photoUrl: props.user.photoUrl || null, photoCrop: props.user.photoCrop || null },
+          // The web Care List page says the same, so both count as one list.
+          surface: "shepherding-care-list",
+          pageKey: docId,
+          stamp: function () { return firebase.firestore.FieldValue.serverTimestamp(); },
+        });
+        ticker = setInterval(function () { presenceTickS[1](function (n) { return n + 1; }); }, window.PresenceCore.HEARTBEAT_MS);
+      } catch (e) {
+        console.warn("Presence could not start on this care list; carrying on without it:", e);
+      }
+      // leave(), not release(): gone means gone, not freshly here.
+      return function () { unsubscribe(); if (ticker) clearInterval(ticker); SP.leave(); SP.stop(); };
+    }, [docId, myUid]);
+
+    function holderOf(box) {
+      return SP ? SP.holderIn(presenceRef.current, myUid, box, Date.now()) : null;
+    }
+    function cellHolder(pid, cid) { return holderOf(CL.box.cell(docId, pid, cid)); }
+    function titleHolder() { return holderOf(CL.box.title(docId)); }
+    function othersHere() {
+      if (!myUid || !window.PresenceCore) return [];
+      return window.PresenceCore.peopleHere(presenceS[0], myUid, "shepherding-care-list", docId, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS });
+    }
+    function claim(box) { return !SP || SP.claimBox(box); }
+    function sayHeld(holder, what) { showToast((holder ? holder.name : "Somebody") + " is editing this " + what, "error"); }
+
+    // A cell somebody else holds cannot be typed into. setEditable's second
+    // argument keeps it from firing an update, which would read as an edit.
+    useEffect(function () {
+      var es = editorsRef.current;
+      Object.keys(es).forEach(function (pid) {
+        Object.keys(es[pid]).forEach(function (cid) {
+          var open = !cellHolder(pid, cid);
+          if (es[pid][cid].isEditable !== open) { try { es[pid][cid].setEditable(open, false); } catch (e) {} }
+        });
+      });
+    });
+
+    // ── Save (debounced) — only what was typed into, each to its own field ──
     function scheduleSave() {
       saveStatusS[1]("unsaved");
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(doSave, 1500);
     }
     function doSave() {
+      var session = sessionRef.current;
+      clearTimeout(saveTimerRef.current);
+      if (!session) return Promise.resolve();
+      var edits = session.takeSave(function (pid, cid) {
+        var ed = editorsRef.current[pid] && editorsRef.current[pid][cid];
+        try { return ed ? ed.getJSON() : session.cell(pid, cid); } catch (e) { return session.cell(pid, cid); }
+      }, function () { return (titleRef.current || "").trim() || "Untitled Care List"; });
+      if (!edits.cells.length && edits.title === null) {
+        if (!session.hasUnsaved()) saveStatusS[1]("saved");
+        return Promise.resolve();
+      }
       saveStatusS[1]("saving");
-      // Refresh the store from any live editors before serializing.
-      var es = editorsRef.current;
-      Object.keys(es).forEach(function (pid) {
-        Object.keys(es[pid]).forEach(function (cid) {
-          if (!dataStoreRef.current[pid]) dataStoreRef.current[pid] = {};
-          try { dataStoreRef.current[pid][cid] = es[pid][cid].getJSON(); } catch (e) {}
-        });
-      });
-      data.saveCareList(docId, { title: titleS[0], careListColumns: columnsS[0], careListData: dataStoreRef.current }, user)
-        .then(function () { saveStatusS[1]("saved"); })
-        .catch(function () { saveStatusS[1]("unsaved"); showToast("Error saving care list", "error"); });
+      var saving = data.saveCareListEdits(docId, Object.assign({}, edits, { oldShape: session.oldShape() }), userRef.current)
+        .then(function () { session.markNormalised(); saveStatusS[1](session.hasUnsaved() ? "unsaved" : "saved"); },
+          function () { session.saveFailed(edits); saveStatusS[1]("unsaved"); showToast("Error saving care list", "error"); })
+        .then(function () { if (savingRef.current === saving) savingRef.current = null; });
+      savingRef.current = saving;
+      return saving;
     }
+
+    // ── Boxes: a cell, and the title ──
+    // Every keystroke and trigger pick in a held box. False means somebody
+    // took it after you went quiet: what you just typed goes back to what is
+    // stored, and is not saved over theirs.
+    function touchCell() {
+      var f = focusRef.current;
+      if (!f || !SP || SP.touch()) return true;
+      putCell(f.personId, f.columnId, sessionRef.current.discard(f.personId, f.columnId));
+      var ed = editorsRef.current[f.personId] && editorsRef.current[f.personId][f.columnId];
+      if (ed) { try { ed.commands.blur(); } catch (e) {} }
+      showToast((cellHolder(f.personId, f.columnId) || { name: "Somebody" }).name + " is editing this cell now", "error");
+      return false;
+    }
+    function enterCell(pid, cid, ed) {
+      if (!claim(CL.box.cell(docId, pid, cid))) {
+        try { ed.commands.blur(); } catch (e) {}
+        sayHeld(cellHolder(pid, cid), "cell");
+        return;
+      }
+      focusRef.current = { personId: pid, columnId: cid };
+      activeEditorRef.current = ed;
+      activeCellS[1]({ personId: pid, colId: cid });
+      // Somebody else's save may have arrived while they held it: start from
+      // that, not from the older copy on screen.
+      var arrived = sessionRef.current && sessionRef.current.catchUpCell(pid, cid);
+      if (arrived) putCell(pid, cid, arrived.value);
+    }
+    // The hold goes only once this cell's pending save has, so letting go never
+    // strands unsaved text. Then whatever arrived meanwhile goes in, and a row
+    // that left the filter while you were in it can go.
+    function leaveCell(pid, cid) {
+      var f = focusRef.current;
+      if (!f || f.personId !== pid || f.columnId !== cid) return;
+      focusRef.current = null;
+      var session = sessionRef.current;
+      // This cell's save — the one still to start, or the one on its way.
+      var pending = session && session.isDirty(pid, cid) ? doSave() : (savingRef.current || Promise.resolve());
+      pending.then(function () {
+        var arrived = session && session.catchUpCell(pid, cid);
+        if (arrived) putCell(pid, cid, arrived.value);
+        if (!focusRef.current && !inTitleRef.current && SP) SP.release();
+        rowsTickS[1](function (n) { return n + 1; });
+      });
+    }
+    function enterTitle(e) {
+      if (!claim(CL.box.title(docId))) { e.target.blur(); sayHeld(titleHolder(), "title"); return; }
+      inTitleRef.current = true;
+      var arrived = sessionRef.current && sessionRef.current.catchUpTitle();
+      if (arrived !== null && arrived !== undefined) titleS[1](arrived);
+    }
+    function onTitleInput(e) {
+      var session = sessionRef.current;
+      if (!session) return;
+      // Put straight onto the input: the state already holds this title, so
+      // setting it again would not redraw, and the refused typing would stay.
+      if (SP && !SP.touch()) { e.target.value = session.title(); sayHeld(titleHolder(), "title"); return; }
+      titleRef.current = e.target.value;
+      titleS[1](e.target.value);
+      session.titleEdited();
+      scheduleSave();
+    }
+    function leaveTitle() {
+      if (!inTitleRef.current) return;
+      inTitleRef.current = false;
+      var session = sessionRef.current;
+      var pending = session && session.hasUnsaved() ? doSave() : (savingRef.current || Promise.resolve());
+      pending.then(function () {
+        var arrived = session && session.catchUpTitle();
+        if (arrived !== null && arrived !== undefined) titleS[1](arrived);
+        if (!focusRef.current && !inTitleRef.current && SP) SP.release();
+      });
+    }
+
+    // A row that leaves the filter while you are typing in it stays until you
+    // leave the cell — it is never pulled out from under you (MS-448).
+    var filtered = filterPeople(peopleS[0], viewS[0]);
+    var kept = focusRef.current;
+    if (kept && !filtered.some(function (p) { return p.id === kept.personId; })) {
+      var keptPerson = peopleS[0].filter(function (p) { return p.id === kept.personId; })[0];
+      if (keptPerson) filtered = filtered.concat([keptPerson]).sort(function (a, b) { return String(a.name || "").localeCompare(String(b.name || "")); });
+    }
+    var activeCol = columnsS[0].filter(function (c) { return c.id === activeColS[0]; })[0] || columnsS[0][0];
 
     // ── Trigger callbacks (wired to real dual-writes, source: 'document') ──
     function computeHidden(newTags) { var h = hiddenIds(tagsRef.current); return newTags.some(function (id) { return !!h[id]; }); }
     function patchPerson(pid, patch) { peopleS[1](peopleRef.current.map(function (p) { return p.id === pid ? Object.assign({}, p, patch) : p; })); }
+    // A pick in a cell somebody took from you is not recorded.
     function onTagAdd(pid, tagId, tagName) {
+      if (!touchCell()) return;
       var cur = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).tags || [];
       if (cur.indexOf(tagId) !== -1) return;
       var newTags = cur.concat([tagId]);
@@ -211,6 +403,7 @@
         .catch(function () { showToast("Error adding tag", "error"); });
     }
     function onTagRemove(pid, tagId, tagName) {
+      if (!touchCell()) return;
       var cur = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).tags || [];
       var newTags = cur.filter(function (t) { return t !== tagId; });
       data.toggleShepherdingTag(pid, tagId, tagName, false, computeHidden(newTags), userRef.current, "document", docId)
@@ -218,6 +411,7 @@
         .catch(function () { showToast("Error removing tag", "error"); });
     }
     function onStatusChange(pid, urg, imp) {
+      if (!touchCell()) return Promise.resolve(null);
       var prev = (peopleRef.current.filter(function (p) { return p.id === pid; })[0] || {}).shepherdingStatus || null;
       var next = (urg && imp) ? { urgency: urg, importance: imp } : null;
       return data.setShepherdingStatus(pid, next, prev, userRef.current, "document", docId)
@@ -239,10 +433,10 @@
     function mountEditor(pid, cid) {
       var key = pid + "|" + cid;
       var el = cellElsRef.current[key];
-      if (!el || !window._TipTap) return;
+      if (!el || !window._TipTap || !sessionRef.current) return;
       if (editorsRef.current[pid] && editorsRef.current[pid][cid]) return;
       var T = window._TipTap;
-      var content = (dataStoreRef.current[pid] && dataStoreRef.current[pid][cid]) || "";
+      var content = sessionRef.current.cell(pid, cid) || "";
       var triggerExt = window.createInlineTriggersExtension({
         personId: pid,
         getAllTags: function () { return tagsRef.current; },
@@ -264,22 +458,35 @@
           triggerExt,
         ],
         content: content,
+        editable: !cellHolder(pid, cid),
         onUpdate: function () {
-          if (!dataStoreRef.current[pid]) dataStoreRef.current[pid] = {};
-          try { dataStoreRef.current[pid][cid] = ed.getJSON(); } catch (e) {}
+          var session = sessionRef.current;
+          if (!session) return;
+          session.edited(pid, cid);
+          if (!touchCell()) return;
           scheduleSave();
         },
-        onFocus: function () { activeEditorRef.current = ed; activeCellS[1]({ personId: pid, colId: cid }); },
+        onFocus: function () { enterCell(pid, cid, ed); },
+        onBlur: function () { leaveCell(pid, cid); },
       });
       if (!editorsRef.current[pid]) editorsRef.current[pid] = {};
       editorsRef.current[pid][cid] = ed;
     }
     function destroyEditor(pid, cid) {
-      if (editorsRef.current[pid] && editorsRef.current[pid][cid]) {
-        try { editorsRef.current[pid][cid].getJSON && (dataStoreRef.current[pid] = dataStoreRef.current[pid] || {}, dataStoreRef.current[pid][cid] = editorsRef.current[pid][cid].getJSON()); } catch (e) {}
-        try { editorsRef.current[pid][cid].destroy(); } catch (e) {}
-        delete editorsRef.current[pid][cid];
+      var ed = editorsRef.current[pid] && editorsRef.current[pid][cid];
+      if (!ed) return;
+      // Unsaved typing is read out of the editor (takeSave is synchronous)
+      // before it goes — switching column must not lose it.
+      if (sessionRef.current && sessionRef.current.isDirty(pid, cid)) doSave();
+      // Its column removed under the cursor: TipTap reports no blur on
+      // destroy, so let go of the cell here.
+      var f = focusRef.current;
+      if (f && f.personId === pid && f.columnId === cid) {
+        focusRef.current = null;
+        if (!inTitleRef.current && SP) SP.release();
       }
+      try { ed.destroy(); } catch (e) {}
+      delete editorsRef.current[pid][cid];
     }
     function cellRef(pid, cid) {
       var key = pid + "|" + cid;
@@ -299,31 +506,68 @@
     });
 
     // ── Toolbar ──
-    function withActive(fn) { var ed = activeEditorRef.current; if (!ed) return; ed.chain().focus(); fn(ed); }
+    function withActive(fn) { var ed = activeEditorRef.current; if (!ed || !ed.isEditable) return; ed.chain().focus(); fn(ed); }
     function exec(cmd) { withActive(function (ed) { ed.chain().focus()[cmd]().run(); }); }
     function setFont(v) { withActive(function (ed) { v ? ed.chain().focus().setFontFamily(v).run() : ed.chain().focus().unsetFontFamily().run(); }); }
     function setSize(v) { withActive(function (ed) { v ? ed.chain().focus().setFontSize(v).run() : ed.chain().focus().unsetFontSize().run(); }); }
 
-    // ── Column management ──
+    // ── Column management ── each ONE change against the latest stored list,
+    // in a transaction, so two elders' column changes both stand (ADR-0039).
+    function changeColumn(change) {
+      return data.changeCareListColumn(docId, change, userRef.current)
+        .then(function (out) {
+          if (sessionRef.current) sessionRef.current.columnsChanged(out.columns);
+          showColumns(out.columns);
+          return out;
+        })
+        .catch(function (e) {
+          // A rename shown before it was written goes back.
+          if (sessionRef.current) columnsS[1](sessionRef.current.columns());
+          showToast(e && /last column/.test(e.message || "") ? "Cannot delete the last column" : "Error changing column", "error");
+          return null;
+        });
+    }
     function addColumn() {
-      var id = "col_" + Date.now();
-      var cols = columnsS[0].concat([{ id: id, name: "Column " + (columnsS[0].length + 1) }]);
-      columnsS[1](cols); activeColS[1](id); colPickerS[1](false);
-      editingColS[1](id); editingColNameS[1]("Column " + columnsS[0].length);
-      scheduleSave();
+      colPickerS[1](false);
+      changeColumn({ kind: "add", name: "Column " + (columnsS[0].length + 1) }).then(function (out) {
+        if (!out || !out.column) return;
+        activeColS[1](out.column.id);
+        editingColS[1](out.column.id); editingColNameS[1](out.column.name);
+      });
     }
     function saveColName(id) {
-      columnsS[1](columnsS[0].map(function (c) { return c.id === id ? Object.assign({}, c, { name: editingColNameS[0].trim() || "Untitled" }) : c; }));
-      editingColS[1](null); scheduleSave();
+      if (editingColS[0] !== id) return;
+      var name = editingColNameS[0].trim() || "Untitled";
+      columnsS[1](columnsS[0].map(function (c) { return c.id === id ? Object.assign({}, c, { name: name }) : c; }));
+      editingColS[1](null);
+      changeColumn({ kind: "rename", columnId: id, name: name });
     }
     function deleteColumn(id) {
       if (columnsS[0].length <= 1) { showToast("Cannot delete the last column", "error"); return; }
+      // Removing a column deletes every cell in it — not while somebody is
+      // writing in one.
+      if (refuseWhileWritten(id)) return;
       if (!window.confirm("Delete this column? Its content will be permanently lost.")) return;
-      filtered.forEach(function (p) { destroyEditor(p.id, id); if (dataStoreRef.current[p.id]) delete dataStoreRef.current[p.id][id]; });
-      var rest = columnsS[0].filter(function (c) { return c.id !== id; });
-      columnsS[1](rest);
-      if (activeColS[0] === id) activeColS[1](rest[0].id);
-      scheduleSave();
+      // Asked again: somebody may have stepped into a cell while the question was open.
+      if (refuseWhileWritten(id)) return;
+      changeColumn({ kind: "remove", columnId: id });
+    }
+    function refuseWhileWritten(id) {
+      var claims = (myUid && window.PresenceCore) ? window.PresenceCore.claimsByBox(presenceRef.current, myUid, Date.now(), { idleMs: window.PresenceCore.SHEPHERDING_IDLE_MS }) : {};
+      var holder = CL.columnHolder(claims, docId, id);
+      if (!holder) return false;
+      showToast(holder.name + " is writing in this column — it can't be deleted now", "error");
+      return true;
+    }
+
+    // A face, a first name and a lock: "you can't open this" answered before
+    // it is asked.
+    function heldBadge(holder) {
+      return html`<span title=${window.PresenceCore.holderTitle(holder)} style=${{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, color: "var(--on-surface-variant)" }}>
+        <${ui.Avatar} name=${holder.name} photoUrl=${holder.photoUrl} photoCrop=${holder.photoCrop} size=${22} />
+        <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>${window.PresenceCore.holderLabel(holder)}</span>
+        ${Ic("lock", 13)}
+      </span>`;
     }
 
     var userKnown = props.user !== undefined;
@@ -354,12 +598,19 @@
           </span>`} />
 
         <div style=${{ flexShrink: 0, padding: "12px 16px 10px", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)" }}>
-          <input value=${titleS[0]} onInput=${function (e) { titleS[1](e.target.value); scheduleSave(); }} placeholder="Care List title…"
-            style=${{ width: "100%", boxSizing: "border-box", border: "none", background: "transparent", outline: "none", padding: "2px 0 6px", fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em" }} />
+          <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input value=${titleS[0]} onFocus=${enterTitle} onBlur=${leaveTitle} onInput=${onTitleInput} readOnly=${!!titleHolder()} placeholder="Care List title…"
+              style=${{ flex: 1, minWidth: 0, boxSizing: "border-box", border: "none", background: "transparent", outline: "none", padding: "2px 0 6px", fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em" }} />
+            ${titleHolder() ? heldBadge(titleHolder()) : null}
+          </div>
           <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
             <span style=${{ display: "inline-flex", color: "var(--secondary)" }}>${Ic("list-filter", 13)}</span>
             <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, color: "var(--secondary)" }}>Filter: ${filterTitleS[0]}</span>
           </div>
+          ${othersHere().length ? html`<div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>Also here</span>
+            ${othersHere().map(function (p) { return html`<span key=${p.uid} title=${p.name}><${ui.Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${26} /></span>`; })}
+          </div>` : null}
         </div>
 
         <div style=${{ flexShrink: 0, display: "flex", alignItems: "center", gap: 3, padding: "8px 10px", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container)", overflowX: "auto", opacity: hasActive ? 1 : 0.55, pointerEvents: hasActive ? "auto" : "none" }}>
@@ -398,6 +649,7 @@
           ${filtered.length === 0 ? html`<div style=${{ padding: "40px 20px", textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No people match this filter.</div>`
             : !activeCol ? null : filtered.map(function (p, idx) {
               var isActive = activeCellS[0] && activeCellS[0].personId === p.id && activeCellS[0].colId === activeCol.id;
+              var holder = cellHolder(p.id, activeCol.id);
               return html`<div key=${p.id} style=${{ display: "flex", borderBottom: "1px solid var(--outline-variant)", background: idx % 2 ? "var(--surface-container-low)" : "var(--surface-container-lowest)" }}>
                 <div style=${{ width: CL_NAME_W, flexShrink: 0, padding: "12px 12px", borderRight: "1px solid var(--outline-variant)", display: "flex", flexDirection: "column", gap: 6 }}>
                   <button onClick=${function () { props.nav("shepherdProfile", { id: p.id, from: "carelist" }); }} style=${{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 700, color: "var(--primary)", textDecoration: "underline", textDecorationColor: "rgba(24,47,87,0.25)" }}>${p.name || "(no name)"}</button>
@@ -406,8 +658,9 @@
                   </div>
                   ${p.shepherdingStatus ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 500, color: "var(--secondary)" }}>${shortStatus(p.shepherdingStatus)}</span>` : null}
                 </div>
-                <div style=${{ flex: 1, minWidth: 0, background: isActive ? "rgba(24,47,87,0.03)" : "transparent" }}>
+                <div onClick=${function () { if (holder) sayHeld(holder, "cell"); }} style=${{ flex: 1, minWidth: 0, position: "relative", background: isActive ? "rgba(24,47,87,0.03)" : "transparent", opacity: holder ? 0.7 : 1 }}>
                   <div key=${activeCol.id} ref=${cellRef(p.id, activeCol.id)} class="cl-cell"></div>
+                  ${holder ? html`<div style=${{ position: "absolute", top: 6, right: 8, background: "var(--surface-container-lowest)", borderRadius: "var(--radius-full)", padding: "2px 8px 2px 2px" }}>${heldBadge(holder)}</div>` : null}
                 </div>
               </div>`;
             })}
