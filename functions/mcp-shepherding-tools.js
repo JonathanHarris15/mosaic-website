@@ -51,6 +51,7 @@ const Payload = require("./shepherding-payload-writes.js");
 const Cal = require("./calendar-writes.js");
 const Tasks = require("./task-writes.js");
 const Guard = require("./held-box-guard.js");
+const CareListCore = require("./shared/care-list-core.js");
 const {NO_BOX} = Guard;
 
 // Said on every tool that can be refused because a person is working in what
@@ -102,8 +103,17 @@ function elderTool(server, deps, name, spec, run) {
         null : await Actor.requireActor(deps.db, deps.auth.uid);
       // Somebody typing in what this would change is waited for (MS-433).
       if (!readOnly && declared !== NO_BOX) {
-        const where = await declared(args || {}, deps.db);
-        const held = await Guard.holders(deps.db, Object.assign({uid: deps.auth.uid}, where));
+        let where = null;
+        try {
+          where = await declared(args || {}, deps.db);
+        } catch (e) {
+          // Working out the boxes failed (a read of the target). Nobody is
+          // demonstrably in the way, so the tool runs and says for itself
+          // whether its target exists (ADR-0035 §3).
+          console.warn(`${name}: could not work out which boxes it writes:`, e);
+        }
+        const held = where ?
+          await Guard.holders(deps.db, Object.assign({uid: deps.auth.uid}, where)) : [];
         if (held.length) return refuse(Guard.refusalFor(held));
       }
       return jsonResult(await run(args || {}, actor));
@@ -124,7 +134,9 @@ async function careListCell(db, a) {
   let columnId = a.columnId;
   if (!columnId) {
     const snap = await db.collection("elder_documents").doc(a.documentId).get();
-    const columns = (snap.exists && snap.data().careListColumns) || [];
+    // The columns the page reads — an old list with none stored still has
+    // its default column, and that is the cell the page holds.
+    const columns = snap.exists ? CareListCore.columnsOf(snap.data()) : [];
     columnId = columns[0] && columns[0].id;
   }
   return {boxes: columnId ? [Guard.careListCellBox(a.documentId, a.personId, columnId)] : []};
@@ -161,12 +173,15 @@ async function answerAroundHeld(db, auth, a, actor) {
     boxes: ids.map((id) => Guard.questionBox(a.documentId, id)),
   });
   if (!held.length) return Payload.answerFormDocument(db, Object.assign({}, a, {actor}));
-  if (ids.length && held.length >= ids.length &&
-      ids.every((id) => held.some((h) => h.boxKey === "question:" + id))) {
-    throw Writes.refuse(Guard.refusalFor(held));
-  }
   const answers = Object.assign({}, a.answers);
   held.forEach((h) => { delete answers[String(h.boxKey).slice("question:".length)]; });
+  // Nothing left that the document actually asks: every real answer given is
+  // held, so the call is refused rather than reported as a write of nothing.
+  const snap = await db.collection("elder_documents").doc(a.documentId).get();
+  const asked = new Set(((snap.exists && snap.data().questions) || []).map((q) => q.id));
+  if (!Object.keys(answers).some((id) => asked.has(id))) {
+    throw Writes.refuse(Guard.refusalFor(held));
+  }
   const result = await Payload.answerFormDocument(db, Object.assign({}, a, {answers, actor}));
   result.skipped = (result.skipped || []).concat(held.map((h) => ({
     questionId: String(h.boxKey).slice("question:".length),

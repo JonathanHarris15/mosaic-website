@@ -150,6 +150,17 @@ suite('the assistant at a held box', () => {
         assert.ok(later.ok, 'still refused once the hold was gone');
     });
 
+    test('an old Care List with no stored columns still protects its default cell', async () => {
+        await Writes.addTags(db, {personId: A, tagIds: ['red-flag'], actor});
+        const list = await Payload.createCareList(db, {title: 'Visits', filter: {tagIds: ['red-flag']}, actor});
+        const ref = db.collection('elder_documents').doc(list.documentId);
+        await ref.update({careListColumns: require('firebase-admin').firestore.FieldValue.delete()});
+        const col = require('../../functions/shared/care-list-core.js').columnsOf((await ref.get()).data())[0].id;
+        await hold(SAM, Guard.careListCellBox(list.documentId, A, col));
+        const out = await tools.call('shep_write_care_list_cell', {documentId: list.documentId, personId: A, markdown: 'Mine'});
+        assert.match(out.refused || '', /Sam Jones/);
+    });
+
     // ── Form Documents ───────────────────────────────────────────────────
 
     test('a held question is skipped naming the holder, and the others land', async () => {
@@ -171,6 +182,8 @@ suite('the assistant at a held box', () => {
 
         const all = await tools.call('shep_answer_form_document', {documentId: made.documentId, answers: {q_story: 'Mine'}});
         assert.match(all.refused, /Sam Jones/);
+        const withTypo = await tools.call('shep_answer_form_document', {documentId: made.documentId, answers: {q_story: 'Mine', q_typo: 'x'}});
+        assert.match(withTypo.refused, /Sam Jones/, 'every real answer held, plus a typo, still wrote nothing and said ok');
         const stored = (await db.collection('elder_documents').doc(made.documentId).get()).data();
         assert.ok(!stored.answers || !stored.answers.q_story);
     });
