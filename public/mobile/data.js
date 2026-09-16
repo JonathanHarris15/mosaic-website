@@ -526,28 +526,71 @@
     return watch(db.collection("relationship_groups"), groupsFromSnap, onGroups, rosterEvery());
   }
 
-  // The Tasks this person is FOR (ADR-0061), kept current. Two collections feed
-  // one answer, so it is resolved again whenever either arrives.
-  function watchPersonTasks(personId, onTasks) {
+  // Every Task, resolved, kept current. Two collections feed one answer, so it
+  // is resolved again whenever either arrives. `every` is how often the phone's
+  // fallback re-reads.
+  function watchAllTasks(onAll, every) {
     var rows = null, occurrences = null;
     function resolveNow() {
       if (!rows || !occurrences) return;
       var now = Date.now();
-      var all = window.TasksCore.resolve({
+      onAll(window.TasksCore.resolve({
         tasks: rows.filter(function (t) { return !t.recurrence; }),
         series: rows.filter(function (t) { return t.recurrence; }),
         occurrences: occurrences,
         now: now,
         from: window.TasksCore.dayOf(now - TASK_LOOK_BACK_DAYS * 86400000),
         to: window.TasksCore.dayOf(now + TASK_LOOK_AHEAD_DAYS * 86400000),
-      });
-      onTasks(window.TasksCore.forPerson(all, personId));
+      }), now);
     }
     var stops = [
-      watch(db.collection("shepherding_tasks"), mapDocs, function (r) { rows = r; resolveNow(); }, personEvery()),
-      watch(db.collection("shepherding_task_occurrences"), mapDocs, function (o) { occurrences = o; resolveNow(); }, personEvery()),
+      watch(db.collection("shepherding_tasks"), mapDocs, function (r) { rows = r; resolveNow(); }, every),
+      watch(db.collection("shepherding_task_occurrences"), mapDocs, function (o) { occurrences = o; resolveNow(); }, every),
     ];
     return function () { stops.forEach(function (stop) { stop(); }); };
+  }
+  // The Tasks this person is FOR (ADR-0061), kept current.
+  function watchPersonTasks(personId, onTasks) {
+    return watchAllTasks(function (all) { onTasks(window.TasksCore.forPerson(all, personId)); }, personEvery());
+  }
+  // The Shepherd home's Your Tasks panel, kept current (MS-494) — the same
+  // TasksCore.panelFor answer the web dashboard gets.
+  function watchShepherdingPanelTasks(user, onTasks) {
+    return watchAllTasks(function (all, now) {
+      onTasks(window.TasksCore.panelFor(all, (user && user.personId) || null, now));
+    }, rosterEvery());
+  }
+  // Tag Change entries grouped by person, kept current — only watched while a
+  // Filtered View filters on how long a tag has been held (ADR-0011).
+  function watchShepherdingTagActivity(onByPerson) {
+    return watch(db.collectionGroup("shepherding_activity").where("kind", "==", "tag_change"), function (snap) {
+      var byPerson = {};
+      snap.docs.forEach(function (doc) {
+        var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
+        if (!pid) return;
+        (byPerson[pid] || (byPerson[pid] = [])).push(doc.data());
+      });
+      return byPerson;
+    }, onByPerson, rosterEvery());
+  }
+  function tagHoldsFrom(byPerson, people) {
+    var now = Date.now(), holds = {};
+    (people || []).forEach(function (p) {
+      holds[p.id] = window.ShepherdingCore.deriveTagHolds((byPerson || {})[p.id] || [], p.tags || [], now);
+    });
+    return holds;
+  }
+  // Each person's latest note date, kept current (MS-495): a note another
+  // elder writes moves it.
+  function watchShepherdingLastNoteDates(onDates) {
+    return watch(db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc"), function (snap) {
+      var latest = {};
+      snap.docs.forEach(function (doc) {
+        var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
+        if (pid && !latest[pid]) latest[pid] = doc.data({ serverTimestamps: "estimate" }).createdAt;
+      });
+      return latest;
+    }, onDates, rosterEvery());
   }
   function addShepherdingNote(personId, note, user) {
     return db.collection("people").doc(personId).collection("shepherding_notes").add({
@@ -1244,6 +1287,10 @@
     getShepherdingPanelTasks: getShepherdingPanelTasks,
     getPersonTasks: getPersonTasks,
     watchPersonTasks: watchPersonTasks,
+    watchShepherdingPanelTasks: watchShepherdingPanelTasks,
+    watchShepherdingTagActivity: watchShepherdingTagActivity,
+    tagHoldsFrom: tagHoldsFrom,
+    watchShepherdingLastNoteDates: watchShepherdingLastNoteDates,
     watchPerson: watchPerson,
     watchShepherdingNotes: watchShepherdingNotes,
     watchShepherdingActivity: watchShepherdingActivity,

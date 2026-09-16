@@ -48,7 +48,9 @@
     // ⚠ OFF, because switching it on breaks the app inside the WebView.
     //
     // The cache is kept in sync by a Firestore listen stream. When this was
-    // written no page used onSnapshot, so no page had opened one — and inside
+    // written no page used onSnapshot, so no page had opened one. (Many do now,
+    // through live-read.js, which falls back to re-reading when a stream stays
+    // silent in the app — MS-482 / MS-494.) And inside
     // the Capacitor WebView that stream is refused:
     //
     //   Fetch API cannot load https://firestore.googleapis.com/…/Listen/channel

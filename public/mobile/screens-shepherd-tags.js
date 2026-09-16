@@ -59,13 +59,27 @@
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagById(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i]; } return null; }
 
+    // Live (MS-497): tags, and People for the counts, are followed while the
+    // screen is open, and stop when it goes.
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPeople(), data.getShepherdingTags()])
-        .then(function (r) { if (!alive) return; peopleS[1](r[0]); tagsS[1](r[1]); loadingS[1](false); })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      var stops = [
+        data.watchShepherdingPeople(keep(peopleS[1])),
+        data.watchShepherdingTags(keep(tagsS[1])),
+      ];
+      return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
     }, []);
+
+    // An open rename keeps what was typed while other tags change; if its tag
+    // is merged or deleted by somebody else, it closes and says so.
+    useEffect(function () {
+      var ed = editingS[0];
+      if (ed && !tags.some(function (t) { return t.id === ed.id; })) {
+        editingS[1](null);
+        showToast("The tag you were renaming was just merged or deleted by somebody else.", "error");
+      }
+    }, [tags]);
 
     function countFor(tagId) { return people.reduce(function (n, p) { return n + ((p.tags || []).indexOf(tagId) !== -1 ? 1 : 0); }, 0); }
     var tagIds = tags.map(function (t) { return t.id; });

@@ -6,6 +6,13 @@ const URGENCY_LABEL = ShepherdingCore.URGENCY_LABEL_SHORT;
 const IMPORTANCE_LABEL = ShepherdingCore.IMPORTANCE_LABEL_SHORT;
 const statusZoneKey = ShepherdingCore.statusZoneKey;
 
+// The live reads this page holds open (MS-495), stopped when it goes.
+const _peopleWatches = [];
+let _peopleTagActivity = null;
+function stopPeopleWatches() {
+    _peopleWatches.splice(0).forEach(stop => { try { stop(); } catch (e) {} });
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingPeople', () => ({
         currentUser: null,
@@ -80,7 +87,7 @@ document.addEventListener('alpine:init', () => {
             // history the first time any threshold is raised above zero.
             this.$watch('tagHoldFilters', val => {
                 sessionStorage.setItem('shepherding_tagHoldFilters', JSON.stringify(val));
-                if (this.anyHoldActive() && !this.holdsLoaded) this.loadTagHolds();
+                if (this.anyHoldActive() && !this.holdsLoaded) this.watchTagHolds();
             });
             this.$watch('tagHoldCmp', val => sessionStorage.setItem('shepherding_tagHoldCmp', JSON.stringify(val)));
             this.$watch('showInactive', val => sessionStorage.setItem('shepherding_showInactive', String(val)));
@@ -105,55 +112,56 @@ document.addEventListener('alpine:init', () => {
                     personId: userData && userData.personId,
                 });
 
-                await Promise.all([
-                    this.loadPeople(),
-                    this.loadTags(),
-                    this.loadFilterViews(),
-                ]);
+                await this.watchPeopleList();
                 // A restored Hold-Duration filter needs its history up front.
-                if (this.anyHoldActive()) await this.loadTagHolds();
+                if (this.anyHoldActive()) this.watchTagHolds();
                 this.loading = false;
             });
+            window.addEventListener('pagehide', stopPeopleWatches);
         },
 
-        async loadPeople() {
-            try {
-                const peopleSnap = await db.collection('people').orderBy('name', 'asc').get();
-                this.people = peopleSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                console.error('Error loading people:', e);
-                this.showToast('Error loading people', 'error');
-            }
-
-            try {
-                const notesSnap = await db.collectionGroup('shepherding_notes')
-                    .orderBy('createdAt', 'desc')
-                    .get();
-                const latestByPerson = {};
-                notesSnap.docs.forEach(doc => {
-                    const personId = doc.ref.parent.parent.id;
-                    if (!latestByPerson[personId]) {
-                        latestByPerson[personId] = doc.data().createdAt;
-                    }
-                });
-                this.lastNoteDates = latestByPerson;
-            } catch (e) {
-                console.error('Error loading last note dates (collection group query may need a Firestore index):', e);
-            }
-        },
-
-        async loadTags() {
-            try {
-                const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-                this.shepherdingTags = snap.docs.map(doc => ({
-                    id: doc.id,
-                    name: doc.data().name || doc.id,
-                    hiddenFromOthers: doc.data().hiddenFromOthers || false,
-                    hidePeople: doc.data().hidePeople || false,
-                }));
-            } catch (e) {
-                console.error('Error loading tags:', e);
-            }
+        // ── Live (MS-495) ────────────────────────────────────────────────────
+        //
+        // People, their latest note dates, tags and the saved filters are
+        // followed while the page is open, so a status, tag or assignment
+        // another elder changes — or a note they write — shows here without
+        // reloading. Search, filters and sort are this page's own state and
+        // survive every delivery. Resolves once the People have first arrived.
+        watchPeopleList() {
+            const Live = MosaicLiveRead;
+            const every = Live.ROSTER_EVERY_MS;
+            return new Promise(resolve => {
+                _peopleWatches.push(Live.watch(db.collection('people').orderBy('name', 'asc'), snap => {
+                    this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.deriveTagHolds();
+                    resolve();
+                }, { fallbackEveryMs: every, onError: e => {
+                    console.error('Error loading people:', e);
+                    this.showToast('Error loading people', 'error');
+                    resolve();
+                } }));
+                _peopleWatches.push(Live.watch(db.collectionGroup('shepherding_notes').orderBy('createdAt', 'desc'), snap => {
+                    const latestByPerson = {};
+                    snap.docs.forEach(doc => {
+                        const personId = doc.ref.parent.parent.id;
+                        if (!latestByPerson[personId]) {
+                            latestByPerson[personId] = doc.data({ serverTimestamps: 'estimate' }).createdAt;
+                        }
+                    });
+                    this.lastNoteDates = latestByPerson;
+                }, { fallbackEveryMs: every, onError: e => console.error('Error loading last note dates (collection group query may need a Firestore index):', e) }));
+                _peopleWatches.push(Live.watch(db.collection('people_tags').orderBy('name', 'asc'), snap => {
+                    this.shepherdingTags = snap.docs.map(doc => ({
+                        id: doc.id,
+                        name: doc.data().name || doc.id,
+                        hiddenFromOthers: doc.data().hiddenFromOthers || false,
+                        hidePeople: doc.data().hidePeople || false,
+                    }));
+                }, { fallbackEveryMs: every, onError: e => console.error('Error loading tags:', e) }));
+                _peopleWatches.push(Live.watch(db.collection('shepherding_views').orderBy('title', 'asc'), snap => {
+                    this.filterViews = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }, { fallbackEveryMs: every, onError: e => console.error('Error loading filter views:', e) }));
+            });
         },
 
         get filteredPeople() {
@@ -236,30 +244,35 @@ document.addEventListener('alpine:init', () => {
 
         // ── Hold-Duration filter (ADR-0011) ───────────────────────────────────
 
-        // One collection-group pass over Tag Changes, grouped by person, derived
-        // into current holds via the core. Loaded lazily the first time the filter
-        // is switched on.
-        async loadTagHolds() {
-            try {
-                const snap = await db.collectionGroup('shepherding_activity')
-                    .where('kind', '==', 'tag_change')
-                    .get();
-                const byPerson = {};
-                snap.docs.forEach(doc => {
-                    const personId = doc.ref.parent.parent && doc.ref.parent.parent.id;
-                    if (!personId) return;
-                    (byPerson[personId] || (byPerson[personId] = [])).push(doc.data());
-                });
-                const now = Date.now();
-                const holds = {};
-                this.people.forEach(p => {
-                    holds[p.id] = ShepherdingCore.deriveTagHolds(byPerson[p.id] || [], p.tags || [], now);
-                });
-                this.tagHolds = holds;
-                this.holdsLoaded = true;
-            } catch (e) {
-                console.error('Error loading tag holds:', e);
-            }
+        // Tag Changes, grouped by person and derived into current holds via the
+        // core, followed live from the first time the filter is switched on.
+        watchTagHolds() {
+            if (this.holdsLoaded) return;
+            this.holdsLoaded = true;
+            _peopleWatches.push(MosaicLiveRead.watch(
+                db.collectionGroup('shepherding_activity').where('kind', '==', 'tag_change'),
+                snap => {
+                    const byPerson = {};
+                    snap.docs.forEach(doc => {
+                        const personId = doc.ref.parent.parent && doc.ref.parent.parent.id;
+                        if (!personId) return;
+                        (byPerson[personId] || (byPerson[personId] = [])).push(doc.data());
+                    });
+                    _peopleTagActivity = byPerson;
+                    this.deriveTagHolds();
+                },
+                { fallbackEveryMs: MosaicLiveRead.ROSTER_EVERY_MS,
+                    onError: e => console.error('Error loading tag holds:', e) }));
+        },
+
+        deriveTagHolds() {
+            if (!_peopleTagActivity) return;
+            const now = Date.now();
+            const holds = {};
+            this.people.forEach(p => {
+                holds[p.id] = ShepherdingCore.deriveTagHolds(_peopleTagActivity[p.id] || [], p.tags || [], now);
+            });
+            this.tagHolds = holds;
         },
 
         // ── Per-tag Hold-Duration slider ──────────────────────────────────────
@@ -322,15 +335,6 @@ document.addEventListener('alpine:init', () => {
         importanceLabel(i) { return IMPORTANCE_LABEL[i] || i; },
 
         // ── Filter views ──────────────────────────────────────────────────────
-
-        async loadFilterViews() {
-            try {
-                const snap = await db.collection('shepherding_views').orderBy('title', 'asc').get();
-                this.filterViews = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                console.error('Error loading filter views:', e);
-            }
-        },
 
         loadFilterView(view) {
             this.tagFilters = view.filterTags || [];
@@ -403,7 +407,6 @@ document.addEventListener('alpine:init', () => {
                 
                 const newId = docRef.id;
                 this.newPerson = { name: '', email: '', phone: '', address: '', birthday: '', sex: '' };
-                await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');
                 

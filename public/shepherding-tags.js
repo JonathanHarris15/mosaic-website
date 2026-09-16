@@ -64,29 +64,51 @@ document.addEventListener('alpine:init', () => {
                 // the other, and must not leave the page stuck on its spinner —
                 // each load owns its own errors, and `loading` clears regardless.
                 try {
-                    await Promise.all([this.loadTags(), this.loadRelationshipsTab()]);
+                    await Promise.all([this.watchTags(), this.loadRelationshipsTab()]);
                 } finally {
                     this.loading = false;
                 }
             });
         },
 
-        async loadTags() {
-            try {
-                const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-                this.shepherdingTags = snap.docs.map(doc => ({
-                    id: doc.id,
-                    name: doc.data().name || doc.id,
-                    hiddenFromOthers: doc.data().hiddenFromOthers || false,
-                    hidePeople: doc.data().hidePeople || false,
-                    // Projected Tags are code-defined and immutable (ADR-0012,
-                    // ADR-0013): Membership Tags AND the Elder Tag. The UI locks
-                    // rename/delete/merge/hide on them; they still appear in the
-                    // list so elders can see the vocabulary.
-                    locked: ShepherdingCore.isProjectedTagId(doc.id),
-                }));
-            } catch (e) {
-                console.error('Error loading tags:', e);
+        // ── Live (MS-497) ─────────────────────────────────────────────────────
+        // The tags are followed while the page is open, so a tag another elder
+        // creates, renames, merges or deletes shows here. An open rename or
+        // merge keeps what was typed; if its tag goes, it closes and says so.
+        // Resolves on the first delivery, which is the load.
+        watchTags() {
+            return new Promise(resolve => {
+                const stop = MosaicLiveRead.watch(db.collection('people_tags').orderBy('name', 'asc'), snap => {
+                    this.adoptTags(snap);
+                    resolve();
+                }, { fallbackEveryMs: MosaicLiveRead.ROSTER_EVERY_MS, onError: e => {
+                    console.error('Error loading tags:', e);
+                    resolve();
+                } });
+                window.addEventListener('pagehide', () => { try { stop(); } catch (e) {} });
+            });
+        },
+
+        adoptTags(snap) {
+            this.shepherdingTags = snap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                hiddenFromOthers: doc.data().hiddenFromOthers || false,
+                hidePeople: doc.data().hidePeople || false,
+                // Projected Tags are code-defined and immutable (ADR-0012,
+                // ADR-0013): Membership Tags AND the Elder Tag. The UI locks
+                // rename/delete/merge/hide on them; they still appear in the
+                // list so elders can see the vocabulary.
+                locked: ShepherdingCore.isProjectedTagId(doc.id),
+            }));
+            const gone = id => id && !this.shepherdingTags.some(t => t.id === id);
+            if (gone(this.editingTagId)) {
+                this.cancelRenameTag();
+                this.showToast('The tag you were renaming was just merged or deleted by somebody else.', 'error');
+            }
+            if (gone(this.mergingTagId)) {
+                this.cancelMergeTag();
+                this.showToast('The tag you were merging was just merged or deleted by somebody else.', 'error');
             }
         },
 
@@ -187,6 +209,9 @@ document.addEventListener('alpine:init', () => {
             const survivor = this.shepherdingTags.find(t => t.id === survivorId);
             if (!source || !survivor) { this.cancelMergeTag(); return; }
             if (!confirm(`Merge "${source.name}" into "${survivor.name}"? Everyone tagged "${source.name}" will be tagged "${survivor.name}" instead, and "${source.name}" will be deleted.`)) return;
+            // Our own merge deletes the tag; the live list must not report that
+            // as somebody else's doing (MS-497).
+            this.cancelMergeTag();
             try {
                 const carriers = await db.collection('people')
                     .where('tags', 'array-contains', sourceId)

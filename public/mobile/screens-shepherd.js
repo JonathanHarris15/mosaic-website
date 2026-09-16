@@ -160,30 +160,42 @@
     var toast = toastS[0];
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
-    // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
+    // Live (MS-494): Tasks, Filtered Views, People and tags are followed while
+    // the screen is open, and stop when it goes. Nothing re-reads after a save.
+    var activityS = useState(null);
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPanelTasks(user), data.getShepherdingViews(), data.getShepherdingPeople(), data.getShepherdingTags()])
-        .then(function (res) {
-          if (!alive) return;
-          tasksS[1](res[0]); viewsS[1](res[1]); peopleS[1](res[2]); tagsS[1](res[3]);
-          if (res[1].some(viewHasHoldFilter)) {
-            data.getShepherdingTagHolds(res[2]).then(function (h) { if (alive) holdsS[1](h); });
-          }
-          loadingS[1](false);
-        })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
-    }, []);
+      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      var stops = [
+        data.watchShepherdingPanelTasks(user, keep(tasksS[1])),
+        data.watchShepherdingViews(keep(viewsS[1])),
+        data.watchShepherdingPeople(keep(peopleS[1])),
+        data.watchShepherdingTags(keep(tagsS[1])),
+      ];
+      return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
+    }, [user && user.personId]);
 
-    function reloadViews(selectId) {
-      return data.getShepherdingViews().then(function (list) {
-        viewsS[1](list);
-        if (list.some(viewHasHoldFilter)) data.getShepherdingTagHolds(people).then(holdsS[1]);
-        if (selectId !== undefined) selectedS[1](selectId);
-      });
-    }
-    function reloadTasks() { return data.getShepherdingPanelTasks(user).then(tasksS[1]); }
+    // Tag-Hold history only while a view needs it (ADR-0011), and derived again
+    // whenever it or the People change.
+    var needsHolds = views.some(viewHasHoldFilter);
+    useEffect(function () {
+      if (!needsHolds) return;
+      return data.watchShepherdingTagActivity(activityS[1]);
+    }, [needsHolds]);
+    useEffect(function () {
+      if (activityS[0]) holdsS[1](data.tagHoldsFrom(activityS[0], people));
+    }, [activityS[0], people]);
+
+    // The view being edited stays open while others change; if it is deleted
+    // by somebody else it closes, saying so.
+    useEffect(function () {
+      var open = viewModalS[0];
+      if (open && open.editingId && !views.some(function (v) { return v.id === open.editingId; })) {
+        viewModalS[1](null);
+        showToast("The view you were editing was just deleted by somebody else.", "error");
+      }
+      if (selectedS[0] && !views.some(function (v) { return v.id === selectedS[0]; })) selectedS[1](null);
+    }, [views]);
 
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
@@ -199,13 +211,13 @@
         data.updateShepherdingView(vm.editingId, {
           title: vm.title.trim(), filterTags: vm.filterTags, filterMode: vm.filterMode, statusZoneFilters: vm.statusZones,
           tagHoldFilters: kept.tagHoldFilters, tagHoldCmp: kept.tagHoldCmp,
-        }).then(function () { viewModalS[1](null); reloadViews(vm.editingId); showToast("View updated"); })
+        }).then(function () { viewModalS[1](null); selectedS[1](vm.editingId); showToast("View updated"); })
           .catch(function () { showToast("Error updating view", "error"); });
       } else {
         data.addShepherdingView({
           title: vm.title.trim(), filterTags: vm.filterTags, filterMode: vm.filterMode, statusZoneFilters: vm.statusZones,
           tagHoldFilters: {}, tagHoldCmp: {},
-        }, user).then(function (newId) { viewModalS[1](null); reloadViews(newId); showToast("Filtered view created"); })
+        }, user).then(function (newId) { viewModalS[1](null); selectedS[1](newId); showToast("Filtered view created"); })
           .catch(function () { showToast("Error creating view", "error"); });
       }
     }
@@ -223,7 +235,9 @@
     // the rules about what a tick does exist once rather than three times.
     function completeTask(t) {
       data.completeShepherdingTask(t).then(function () {
-        reloadTasks(); showToast("Done");
+        // Off the panel at once; the next delivery brings the truth.
+        tasksS[1](tasksS[0].filter(function (x) { return x !== t; }));
+        showToast("Done");
       }).catch(function (e) { showToast((e && e.message) || "Error completing task", "error"); });
     }
 
@@ -426,12 +440,19 @@
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
+    // Live (MS-495): People, their latest note dates, tags and saved filters
+    // are followed while the screen is open. Search, filters and sort are this
+    // screen's own state and survive every delivery.
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPeople(), data.getShepherdingLastNoteDates(), data.getShepherdingTags(), data.getShepherdingViews()])
-        .then(function (r) { if (!alive) return; peopleS[1](r[0]); notesDatesS[1](r[1]); tagsS[1](r[2]); viewsS[1](r[3]); loadingS[1](false); })
-        .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
-      return function () { alive = false; };
+      function keep(set) { return function (v) { if (alive) { set(v); loadingS[1](false); } }; }
+      var stops = [
+        data.watchShepherdingPeople(keep(peopleS[1])),
+        data.watchShepherdingLastNoteDates(keep(notesDatesS[1])),
+        data.watchShepherdingTags(keep(tagsS[1])),
+        data.watchShepherdingViews(keep(viewsS[1])),
+      ];
+      return function () { alive = false; stops.forEach(function (stop) { try { stop(); } catch (e) {} }); };
     }, []);
 
     var filtered = people.filter(function (p) {
@@ -473,7 +494,7 @@
     function saveView() {
       var t = saveNameS[0].trim(); if (!t) return;
       data.addShepherdingView({ title: t, filterTags: tagFilters.slice(), filterMode: tagMode, statusZoneFilters: statusZones.slice(), sortBy: sortByS[0], tagHoldFilters: {}, tagHoldCmp: {} }, user)
-        .then(function () { saveNameS[1](""); showSaveS[1](false); data.getShepherdingViews().then(viewsS[1]); showToast("View saved"); })
+        .then(function () { saveNameS[1](""); showSaveS[1](false); showToast("View saved"); })
         .catch(function () { showToast("Error saving view", "error"); });
     }
     function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
