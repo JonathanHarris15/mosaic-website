@@ -719,19 +719,23 @@
                 ids.forEach(id => {
                     if (mine.has(id)) return;
                     if (stable(saved[id]) === stable(theirs[id])) return;
-                    if (theirs[id] === undefined) {
-                        remove.push(id);
-                        delete saved[id];
-                        delete onScreen[id];
-                    } else {
-                        set.push(id);
-                        saved[id] = clone(theirs[id]);
-                        onScreen[id] = clone(theirs[id]);
-                    }
+                    if (theirs[id] === undefined) remove.push(id);
+                    else set.push(id);
                 });
                 const blocks = Object.assign({}, now);
                 set.forEach(id => { blocks[id] = clone(theirs[id]); });
                 remove.forEach(id => { delete blocks[id]; });
+
+                // ⚠ NOTHING IS REMEMBERED UNTIL THE EDITOR HAS TAKEN IT. If
+                // drawing the new Blocks fails (`where.draw` throws or says
+                // no), the saved copy stays as it was — otherwise the next
+                // save would read what is still on screen as an edit and write
+                // the old words back over somebody else's.
+                if ((set.length || remove.length) && where && where.draw && where.draw(blocks) === false) {
+                    return { set: [], remove: [], blocks: now };
+                }
+                set.forEach(id => { saved[id] = clone(theirs[id]); onScreen[id] = clone(theirs[id]); });
+                remove.forEach(id => { delete saved[id]; delete onScreen[id]; });
                 return { set: set.sort(), remove: remove.sort(), blocks };
             },
 

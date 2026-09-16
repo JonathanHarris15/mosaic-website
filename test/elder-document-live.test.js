@@ -293,6 +293,78 @@ test('a title somebody else set arrives when this page is not renaming', { skip 
     assert.deepStrictEqual(titles, ['Elder meeting']);
 });
 
+// ── Found in review ──────────────────────────────────────────────────────────
+
+test('lifting a held list item out of its list is refused', { skip }, () => {
+    const ed = withLock({ ['document:' + DOC + '|block:li2']: { name: 'Ann Lee' } });
+    const SL = require(path.join(TIPTAP, 'prosemirror-schema-list'));
+    const at = inside(ed.state.doc, 'lp2');
+    const sel = T.state.TextSelection.create(ed.state.doc, at);
+    let state = ed.state.apply(ed.state.tr.setSelection(sel));
+    let lifted = null;
+    SL.liftListItem(ed.sch.nodes.listItem)(state, (tr) => { lifted = tr; });
+    assert.ok(lifted, 'the lift did not happen at all');
+    const boxes = ElderDocumentLive.boxesTouched(lifted, DOC).map(b => b.boxKey);
+    assert.ok(boxes.includes('block:li2'), 'the lift touched no box: ' + boxes.join(','));
+});
+
+test('typing in a nested item still touches only that item', { skip }, () => {
+    const s = stateFor(schema());
+    const keys = ElderDocumentLive.boxesTouched(s.tr.insertText('x', inside(s.doc, 'lp2')), DOC).map(b => b.boxKey);
+    assert.deepStrictEqual(keys, ['block:li2']);
+});
+
+test('changes above and below the paragraph being typed in leave that paragraph alone', { skip }, async () => {
+    const { live, stateRef, record } = await opened();
+    const p2 = stateRef.state.doc.nodeAt(inside(stateRef.state.doc, 'p2') - 1);
+    const theirs = JSON.parse(JSON.stringify(record.blocks));
+    theirs.h1.content = [text('Elder minutes')];
+    theirs.n1 = { type: 'paragraph', parent: null, order: Body.orderKeyBetween(theirs.p2.order, null), content: [text('After.')] };
+    live.adopt({ title: 'Minutes', blocks: theirs });
+    const after = stateRef.state.doc.nodeAt(inside(stateRef.state.doc, 'p2') - 1);
+    assert.strictEqual(after, p2, 'the paragraph between the two changes was replaced');
+    assert.match(Body.plainText(stateRef.state.doc.toJSON()), /Elder minutes[\s\S]*Closed\.[\s\S]*After\./);
+});
+
+test('a block this editor cannot draw is not remembered as saved, so it is never written back over', { skip }, async () => {
+    const { live, stateRef, record, writes } = await opened();
+    const theirs = JSON.parse(JSON.stringify(record.blocks));
+    theirs.p1.content = [text('Theirs')];
+    theirs.bad = { type: 'noSuchNode', parent: null, order: Body.orderKeyBetween(null, theirs.h1.order) };
+    const before = stateRef.state.doc.toJSON();
+    const quiet = console.error; console.error = () => {};
+    try { live.adopt({ title: 'Minutes', blocks: theirs }); } finally { console.error = quiet; }
+    assert.deepStrictEqual(stateRef.state.doc.toJSON(), before);
+    await live.save();
+    assert.strictEqual(writes.length, 0, 'the old paragraph was written back');
+});
+
+test('a Person Panel copying its note in is not refused or claimed by the lock', { skip }, () => {
+    const ed = withLock({});
+    let panelPos = null;
+    ed.state.doc.descendants((n, pos) => { if (n.type.name === 'personPanel') panelPos = pos; return panelPos === null; });
+    const node = ed.state.doc.nodeAt(panelPos);
+    const tr = ed.state.tr.setNodeMarkup(panelPos, null, Object.assign({}, node.attrs, { bodySnapshot: '{}' }));
+    tr.setMeta('panelSnapshot', true);
+    assert.strictEqual(ed.apply(tr), true);
+    assert.deepStrictEqual(ed.presence.claims, []);
+});
+
+test('a box that went quiet refuses the next keystroke instead of typing onto an old copy', { skip }, () => {
+    const presence = presenceWith({});
+    let holding = true;
+    presence.isHolding = () => holding;
+    globalThis.ShepherdingPresence = presence;
+    const live = ElderDocumentLive.create({ db: { collection: () => ({ doc: () => ({}) }) }, fs: {}, docId: DOC });
+    const sch = schema();
+    let state = stateFor(sch, [live.lockPlugin({ Plugin: T.state.Plugin, PluginKey: T.state.PluginKey })]);
+    const type = () => { const out = state.applyTransaction(state.tr.insertText('x', inside(state.doc, 'p1'))); const changed = out.state !== state; state = out.state; return changed; };
+    assert.strictEqual(type(), true, 'the first keystroke claims');
+    holding = false;
+    assert.strictEqual(type(), false, 'a keystroke into a box that went quiet went through');
+    assert.strictEqual(type(), true, 'the next keystroke claims it afresh');
+});
+
 // ── Wiring ───────────────────────────────────────────────────────────────────
 
 test('both document editors sit on the shared live layer', () => {

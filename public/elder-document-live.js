@@ -99,6 +99,9 @@ var ElderDocumentLive = (function () {
             var stepDoc = tr.docs[i] || doc;
             var ranges = [];
             step.getMap().forEach(function (oldStart, oldEnd) { ranges.push([oldStart, oldEnd]); });
+            // Wrapping or lifting keeps the content between but gives it a new
+            // parent — every block moved that way is changed too.
+            if (typeof step.gapFrom === 'number') ranges.push([step.from, step.to]);
             if (!ranges.length && typeof step.pos === 'number') ranges.push([step.pos, step.pos + 1]);
             if (!ranges.length && typeof step.from === 'number') ranges.push([step.from, step.to]);
             ranges.forEach(function (r) {
@@ -113,11 +116,87 @@ var ElderDocumentLive = (function () {
                 }
                 stepDoc.nodesBetween(from, to, function (node, pos) {
                     if (node.isTextblock || (node.isBlock && node.isAtom)) { add(boxAt(stepDoc, pos, node, docId)); return false; }
+                    // A list item or cell whose own opening or closing is in
+                    // the range is itself changed — lifting, indenting or
+                    // unwrapping it touches only those tokens, never the text
+                    // inside. One merely around the range is not.
+                    if (BOX_TYPES[node.type.name]) {
+                        var end = pos + node.nodeSize;
+                        if ((pos >= from && pos < to) || (end > from && end <= to)) add(blockBox(node, docId));
+                    }
                     return true;
                 });
             });
         });
         return Object.keys(found).map(function (k) { return found[k]; });
+    }
+
+    // ── Putting another version on screen ─────────────────────────────────────
+
+    // Change `oldFrag` (at `start` in the transaction's document) into
+    // `newFrag` with as little replaced as possible: blocks matched by id,
+    // unchanged ones untouched, a changed container patched inside rather
+    // than replaced, and everything done from the bottom up so earlier
+    // positions stay true. The paragraph somebody is typing in is never
+    // replaced because something above and below it changed, so their cursor
+    // and undo history stay where they are.
+    function patchFragment(tr, oldFrag, newFrag, start) {
+        var olds = [], news = [];
+        oldFrag.forEach(function (n) { olds.push(n); });
+        newFrag.forEach(function (n) { news.push(n); });
+        var idOf = function (n) { return n.attrs && n.attrs.blockId; };
+
+        // Longest common run of ids.
+        var L = [];
+        for (var i = 0; i <= olds.length; i++) { L.push(new Array(news.length + 1).fill(0)); }
+        for (var a = olds.length - 1; a >= 0; a--) {
+            for (var b = news.length - 1; b >= 0; b--) {
+                L[a][b] = (idOf(olds[a]) && idOf(olds[a]) === idOf(news[b]))
+                    ? L[a + 1][b + 1] + 1 : Math.max(L[a + 1][b], L[a][b + 1]);
+            }
+        }
+        var pairs = [];
+        a = 0; b = 0;
+        while (a < olds.length && b < news.length) {
+            if (idOf(olds[a]) && idOf(olds[a]) === idOf(news[b])) { pairs.push([a, b]); a++; b++; }
+            else if (L[a + 1][b] >= L[a][b + 1]) a++;
+            else b++;
+        }
+
+        var pos = [start];
+        olds.forEach(function (n, k) { pos.push(pos[k] + n.nodeSize); });
+
+        // Segments: gaps between matched pairs, and the pairs themselves.
+        var segments = [];
+        var ai = 0, bi = 0;
+        pairs.forEach(function (pr) {
+            segments.push({ gap: true, a0: ai, a1: pr[0], b0: bi, b1: pr[1] });
+            segments.push({ gap: false, a: pr[0], b: pr[1] });
+            ai = pr[0] + 1; bi = pr[1] + 1;
+        });
+        segments.push({ gap: true, a0: ai, a1: olds.length, b0: bi, b1: news.length });
+
+        for (var s = segments.length - 1; s >= 0; s--) {
+            var seg = segments[s];
+            if (seg.gap) {
+                if (seg.a0 === seg.a1 && seg.b0 === seg.b1) continue;
+                var added = news.slice(seg.b0, seg.b1);
+                if (added.length) tr.replaceWith(pos[seg.a0], pos[seg.a1], added);
+                else tr.delete(pos[seg.a0], pos[seg.a1]);
+                continue;
+            }
+            var was = olds[seg.a], now = news[seg.b];
+            if (was.eq(now)) continue;
+            var at = pos[seg.a];
+            if (was.type === now.type && was.content.eq(now.content)) {
+                tr.setNodeMarkup(at, null, now.attrs, now.marks);
+            } else if (was.type === now.type && !was.isTextblock && !was.isAtom && was.content.size && now.content.size) {
+                if (!was.sameMarkup(now)) tr.setNodeMarkup(at, null, now.attrs, now.marks);
+                patchFragment(tr, was.content, now.content, at + 1);
+            } else {
+                tr.replaceWith(at, at + was.nodeSize, now);
+            }
+        }
     }
 
     // ── One open document ─────────────────────────────────────────────────────
@@ -145,6 +224,7 @@ var ElderDocumentLive = (function () {
         var saveTimer = null;
         var stops = [];
         var readOnly = false;
+        var lastData = null;      // the latest version of the record that arrived
 
         function status(s) { if (o.onStatus) o.onStatus(s); }
         function presence() { return root.ShepherdingPresence || null; }
@@ -205,7 +285,16 @@ var ElderDocumentLive = (function () {
             if (!snap) return;
             if (!snap.exists) { if (o.onDeleted) o.onDeleted(); return; }
             if (snap.metadata && snap.metadata.hasPendingWrites) return;
-            adopt(snap.data());
+            lastData = snap.data();
+            adopt(lastData);
+        }
+
+        // Is this page still holding the box it last claimed? A quiet hold
+        // lets go after a minute (ADR-0062) without this layer being told.
+        function stillHolding() {
+            if (!held) return false;
+            var p = presence();
+            return !p || !p.isHolding || p.isHolding(held.scopeKey, held.boxKey);
         }
 
         // Somebody else's version of the document.
@@ -213,11 +302,21 @@ var ElderDocumentLive = (function () {
             if (!editor || !session || editor.isDestroyed) return;
             var incoming = core().hasBlocks(data) ? data.blocks : null;
             if (incoming) {
-                var out = session.adopt(incoming, currentBlocks(), { holding: held && held.blockId });
-                if (out.set.length || out.remove.length) {
-                    applyBlocks(out.blocks);
-                    session.adopted(currentBlocks(), out);
-                }
+                var out = session.adopt(incoming, currentBlocks(), {
+                    // Only a box still held is protected: one that went quiet
+                    // may have been written by somebody else since.
+                    holding: stillHolding() ? held.blockId : null,
+                    draw: function (blocks) {
+                        try {
+                            applyBlocks(blocks);
+                            return true;
+                        } catch (e) {
+                            console.error('Could not show another elder\u2019s change to this document:', e);
+                            return false;
+                        }
+                    },
+                });
+                if (out.set.length || out.remove.length) session.adopted(currentBlocks(), out);
             }
             var theirTitle = core().normaliseTitle(data.title);
             latestTitle = theirTitle;
@@ -227,19 +326,15 @@ var ElderDocumentLive = (function () {
             }
         }
 
-        // Put Blocks on screen as one change around what differs, marked
-        // remote: not undoable, not an edit of ours, not refused by the locks.
+        // Put Blocks on screen, marked remote: not undoable, not an edit of
+        // ours, not refused by the locks. Throws if the editor cannot hold
+        // them (nothing is dispatched then).
         function applyBlocks(blocks) {
-            var json = core().bodyOfBlocks(blocks);
-            var next = editor.schema.nodeFromJSON(json);
-            var doc = editor.state.doc;
-            var start = doc.content.findDiffStart(next.content);
-            if (start === null || start === undefined) return;
-            var end = doc.content.findDiffEnd(next.content);
-            var endA = end.a, endB = end.b;
-            var overlap = start - Math.min(endA, endB);
-            if (overlap > 0) { endA += overlap; endB += overlap; }
-            var tr = editor.state.tr.replace(start, endA, next.slice(start, endB));
+            var next = editor.schema.nodeFromJSON(core().bodyOfBlocks(blocks));
+            next.check();
+            var tr = editor.state.tr;
+            patchFragment(tr, editor.state.doc.content, next.content, 0);
+            if (!tr.docChanged) return;
             tr.setMeta('remote', true);
             tr.setMeta('addToHistory', false);
             editor.view.dispatch(tr);
@@ -326,8 +421,23 @@ var ElderDocumentLive = (function () {
                 filterTransaction: function (tr) {
                     if (!tr.docChanged || tr.getMeta('remote') || tr.getMeta('blockIds')) return true;
                     if (readOnly) return false;
+                    // A Person Panel's copy of its note, written after the note
+                    // saved: the note's own box was already checked.
+                    if (tr.getMeta('panelSnapshot')) return true;
                     var p = presence();
                     if (!p) return true;
+                    // The box this page held went quiet. Its block may have
+                    // been written by somebody else since, so the keystroke is
+                    // dropped and the latest copy put on screen; the next one
+                    // claims it afresh.
+                    if (held && !stillHolding()) {
+                        held = null;
+                        if (lastData) {
+                            var data = lastData;
+                            Promise.resolve().then(function () { adopt(data); });
+                        }
+                        return false;
+                    }
                     var boxes = boxesTouched(tr, o.docId);
                     for (var i = 0; i < boxes.length; i++) {
                         var holder = holderOf(boxes[i]);
@@ -500,15 +610,14 @@ var ElderDocumentLive = (function () {
             if (!inTitle) p.release();
         }
 
-        // An orphaned Person Panel, replaced by its text the same way on every
-        // page, as block writes the live watch then brings to everybody.
-        function replaceOrphanPanel(blockId, noteBody) {
-            if (!session || !blockId) return Promise.resolve();
-            var change = core().orphanPanelReplacement(currentBlocks(), blockId, noteBody || null);
-            if (!change.remove.length) return Promise.resolve();
-            var pairs = core().blockUpdatePairs(o.fs, change);
-            pairs.push('updatedAt', o.fs.FieldValue.serverTimestamp(), 'updatedByName', (o.byName && o.byName()) || '');
-            return ref.update.apply(ref, pairs).catch(function (e) { console.error('Could not replace a Person Panel:', e); });
+        // A Person Panel whose note has gone, replaced by its text. Through
+        // detachPanel, in a transaction: if the profile already replaced it
+        // with the note's real words, the panel is no longer there and this
+        // writes nothing.
+        function replaceOrphanPanel(noteId) {
+            if (!noteId || readOnly) return Promise.resolve();
+            return detachPanel(o.db, o.fs, o.docId, noteId, null)
+                .catch(function (e) { console.error('Could not replace a Person Panel:', e); });
         }
 
         // Presence has just started: record the box this page already holds.

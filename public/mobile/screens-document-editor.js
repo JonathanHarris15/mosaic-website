@@ -422,7 +422,7 @@
     }
     // A panel whose note has gone is replaced the same way on every page, as
     // Blocks the live watch brings back to everybody.
-    function replaceOrphan(attrs) { if (_live && attrs.blockId) _live.replaceOrphanPanel(attrs.blockId, null); }
+    function replaceOrphan(attrs) { if (_live && attrs.noteId) _live.replaceOrphanPanel(attrs.noteId); }
 
     function initBodyEditor(attrs) {
       if (stopNoteWatch) { stopNoteWatch(); stopNoteWatch = null; }
@@ -478,6 +478,8 @@
           content: content,
           onUpdate: function (o) {
             if (o && o.transaction && o.transaction.getMeta("remote")) return;
+            // A keystroke the lock refused changed nothing.
+            if (o && o.transaction && o.editor.state.doc === o.transaction.before) return;
             bodyDirty = true;
             clearTimeout(bodyTimer); bodyTimer = setTimeout(function () { saveBody(attrs); }, 1500);
           },
@@ -521,7 +523,15 @@
       var bodyJson = bodyEditor.getJSON();
       bodyDirty = false;
       return data.savePanelNote(attrs.personId, attrs.noteId, { contentJson: bodyJson, content: bodyEditor.getText().trim() }, _user, _currentDocId).then(function () {
-        if (typeof getPos === "function") { var pos = getPos(); if (pos !== undefined) editor.view.dispatch(editor.view.state.tr.setNodeMarkup(pos, null, Object.assign({}, currentAttrs, { bodySnapshot: JSON.stringify(bodyJson) }))); }
+        if (typeof getPos === "function") {
+          var pos = getPos();
+          if (pos !== undefined) {
+            // Not an edit anybody made, and not a claim: the note's own box was checked.
+            var snapTr = editor.view.state.tr.setNodeMarkup(pos, null, Object.assign({}, currentAttrs, { bodySnapshot: JSON.stringify(bodyJson) }));
+            snapTr.setMeta("panelSnapshot", true); snapTr.setMeta("addToHistory", false);
+            editor.view.dispatch(snapTr);
+          }
+        }
       }).catch(function (err) { bodyDirty = true; console.error("Error saving panel body:", err); });
     }
     var stopPanelHolds = (window.ShepherdingPresence && window.ShepherdingPresence.subscribe)
@@ -723,6 +733,12 @@
           T.StarterKit, T.Underline, T.TextStyle, T.FontFamily, T.FontSize,
           T.Highlight.configure({ multicolor: true }),
           T.Table.configure({ resizable: false }), T.TableRow, T.TableHeader, T.TableCell,
+          // The same schema as the web editor: a link or picture written there
+          // must be something this editor can hold, or it cannot take the
+          // document in live.
+          T.Image ? T.Image.configure({ inline: false, allowBase64: true }) : null,
+          T.Link ? T.Link.configure({ openOnClick: false, autolink: true }) : null,
+          T.TextAlign ? T.TextAlign.configure({ types: ["heading", "paragraph"] }) : null,
           PersonPanelNode, InlinePicker,
           T.Mention.configure({ HTMLAttributes: { class: "mention-chip" }, suggestion: createDocMentionSuggestion() }),
           // Lasting block ids: saved, updated live and held block by block (MS-500).
@@ -755,6 +771,8 @@
           // Somebody else's blocks arriving, or ids given out, are not edits.
           var tr = o && o.transaction;
           if (tr && (tr.getMeta("remote") || tr.getMeta("blockIds"))) return;
+          // A keystroke the lock refused changed nothing.
+          if (tr && o.editor.state.doc === tr.before) return;
           live.edited();
         },
       });

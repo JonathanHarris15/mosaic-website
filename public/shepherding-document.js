@@ -738,7 +738,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     // Replace a panel whose note has gone, the same way on every page, as
     // Blocks the live watch brings back to everybody.
     function replaceOrphan(attrs) {
-        if (_live && attrs.blockId) _live.replaceOrphanPanel(attrs.blockId, null);
+        if (_live && attrs.noteId) _live.replaceOrphanPanel(attrs.noteId);
     }
 
     async function initBodyEditor(attrs) {
@@ -825,8 +825,10 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                     noteLock,
                 ],
                 content,
-                onUpdate({ transaction }) {
+                onUpdate({ editor: body, transaction }) {
                     if (transaction && transaction.getMeta('remote')) return;
+                    // A keystroke the lock refused changed nothing.
+                    if (transaction && body.state.doc === transaction.before) return;
                     bodyDirty = true;
                     clearTimeout(bodyTimer);
                     bodyTimer = setTimeout(() => saveBody(attrs), 1500);
@@ -893,12 +895,15 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             if (typeof getPos === 'function') {
                 const pos = getPos();
                 if (pos !== undefined) {
-                    editor.view.dispatch(
-                        editor.view.state.tr.setNodeMarkup(pos, null, {
-                            ...currentAttrs,
-                            bodySnapshot: JSON.stringify(bodyJson),
-                        })
-                    );
+                    // Not an edit anybody made, and not a claim on anything:
+                    // the note's own box was checked when it was typed in.
+                    const tr = editor.view.state.tr.setNodeMarkup(pos, null, {
+                        ...currentAttrs,
+                        bodySnapshot: JSON.stringify(bodyJson),
+                    });
+                    tr.setMeta('panelSnapshot', true);
+                    tr.setMeta('addToHistory', false);
+                    editor.view.dispatch(tr);
                 }
             }
         } catch (err) {
@@ -1403,10 +1408,11 @@ document.addEventListener('alpine:init', () => {
                     },
                 },
                 onTransaction() { self.editorUpdated++; self.redrawHolds(); },
-                onUpdate({ transaction }) {
-                    // Somebody else's blocks arriving, or ids being given out,
-                    // are not edits of ours.
+                onUpdate({ editor: ed, transaction }) {
+                    // Somebody else's blocks arriving, ids being given out, or
+                    // a keystroke the lock refused, are not edits of ours.
                     if (transaction && (transaction.getMeta('remote') || transaction.getMeta('blockIds'))) return;
+                    if (transaction && ed.state.doc === transaction.before) return;
                     _live.edited();
                 },
             });
