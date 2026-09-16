@@ -298,7 +298,7 @@ test('a hold is let go only after that question\'s save', () => {
 
 test('a question somebody took puts the stored answer back instead of saving', async () => {
     const { page, sandbox, writes } = await opened(aDocument());
-    sandbox.ShepherdingPresence = { touch: () => false, holderIn: () => ({ name: 'Ann Lee' }) };
+    sandbox.ShepherdingPresence = { touch: () => false, claimBox: () => true, release: () => {}, holderIn: () => ({ name: 'Ann Lee' }) };
     const q = page.questions.find(x => x.id === 'why');
     page.answers.why = 'Moved here';
     page.touch(q);

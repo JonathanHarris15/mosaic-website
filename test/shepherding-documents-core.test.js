@@ -143,3 +143,88 @@ test('a document shared between two trees is only orphaned when absent from BOTH
     assert.strictEqual(Core.containsDoc(library, 'private'), false);
     assert.strictEqual(Core.containsDoc(profile, 'private'), true);
 });
+
+// ── One change to a tree (MS-493) ────────────────────────────────────────────
+//
+// Every writer — the Library page, a profile's Documents tab, the phone and the
+// assistant — applies ONE change to the LATEST tree, never a whole tree it
+// loaded earlier. These are the changes, and what each does.
+
+test('a tree is the Library or one person\'s, and nothing else', () => {
+    assert.strictEqual(Core.isTreeId('root'), true);
+    assert.strictEqual(Core.isTreeId('person_abc123'), true);
+    assert.strictEqual(Core.isTreeId(Core.personTreeId('abc123')), true);
+    assert.strictEqual(Core.isTreeId('people'), false);
+    assert.strictEqual(Core.isTreeId('person_../root'), false);
+    assert.strictEqual(Core.isTreeId(''), false);
+});
+
+test('a folder is made at the top of the folder it is made in', () => {
+    const t = sampleTree();
+    const out = Core.applyTreeChange(t, { op: 'createFolder', parentId: 'A', folderId: 'N', name: 'New Folder' });
+    assert.strictEqual(out.changed, true);
+    assert.deepStrictEqual(Core.getFolderById(t, 'A').children[0], { type: 'folder', id: 'N', name: 'New Folder', children: [] });
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'createFolder', parentId: Core.ROOT, folderId: 'N', name: 'Again' }).changed, false,
+        'the same folder is not made twice');
+});
+
+test('a folder made inside one that was deleted is refused', () => {
+    const out = Core.applyTreeChange(sampleTree(), { op: 'createFolder', parentId: 'ghost', folderId: 'N', name: 'x' });
+    assert.strictEqual(out.changed, false);
+    assert.match(out.refused, /no longer exists/);
+});
+
+test('a rename touches one folder', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'renameFolder', folderId: 'B', name: 'Visits' }).changed, true);
+    assert.strictEqual(Core.getFolderById(t, 'B').name, 'Visits');
+    assert.strictEqual(Core.getFolderById(t, 'A').name, 'Folder A');
+});
+
+test('a move whose target folder is gone refuses, and loses nothing', () => {
+    const t = sampleTree();
+    const out = Core.applyTreeChange(t, { op: 'move', item: { type: 'document', id: 'doc3' }, targetFolderId: 'ghost' });
+    assert.strictEqual(out.changed, false);
+    assert.ok(Core.containsDoc(t, 'doc3'), 'the document was dropped on the floor');
+});
+
+test('a folder cannot be moved into itself or below itself', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'move', item: { type: 'folder', id: 'A' }, targetFolderId: 'B' }).changed, false);
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'move', item: { type: 'folder', id: 'A' }, targetFolderId: 'A' }).changed, false);
+    assert.ok(Core.getFolderById(t, 'B'), 'the folder vanished');
+});
+
+test('a move carries a folder and what is in it', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'move', item: { type: 'folder', id: 'B' }, targetFolderId: Core.ROOT }).changed, true);
+    assert.strictEqual(Core.findParent(t, 'B'), t);
+    assert.deepStrictEqual(Core.getAllDocIds(Core.getFolderById(t, 'B')), ['doc2']);
+});
+
+test('removing takes an item out, and removing what is already gone changes nothing', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'remove', itemId: 'doc2' }).changed, true);
+    assert.strictEqual(Core.containsDoc(t, 'doc2'), false);
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'remove', itemId: 'doc2' }).changed, false);
+});
+
+test('filing puts a document at the end of a folder, once', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'file', docId: 'doc9', folderId: 'B' }).changed, true);
+    assert.deepStrictEqual(Core.getAllDocIds(Core.getFolderById(t, 'B')), ['doc2', 'doc9']);
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'file', docId: 'doc9', folderId: Core.ROOT }).changed, false,
+        'a document already in the tree is not filed twice');
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'file', docId: 'doc10' }).changed, true, 'no folder means the top');
+    assert.strictEqual(t.children[t.children.length - 1].id, 'doc10');
+});
+
+test('pruning takes several documents out wherever they sit', () => {
+    const t = sampleTree();
+    assert.strictEqual(Core.applyTreeChange(t, { op: 'prune', docIds: ['doc1', 'doc2', 'nope'] }).changed, true);
+    assert.deepStrictEqual(Core.treeDocIds(t).sort(), ['doc3']);
+});
+
+test('a change nobody knows is refused rather than guessed at', () => {
+    assert.throws(() => Core.applyTreeChange(sampleTree(), { op: 'shuffle' }), /shuffle/);
+});

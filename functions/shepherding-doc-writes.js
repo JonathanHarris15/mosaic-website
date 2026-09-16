@@ -58,10 +58,12 @@ async function loadTree(db) {
  * @param {object} db the Firestore handle
  * @param {function(object): *} change given the tree, mutates it; whatever it
  *   returns is handed back to the caller. Throw to abort the whole thing.
+ * @param {string} [treeId] which tree: the Library's (the default) or one
+ *   person's, `person_<id>` (MS-493)
  * @return {Promise<*>} what `change` returned
  */
-async function withTree(db, change) {
-  const ref = db.collection(STRUCTURE).doc(STRUCTURE_DOC);
+async function withTree(db, change, treeId) {
+  const ref = db.collection(STRUCTURE).doc(treeId || STRUCTURE_DOC);
   let result = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -71,6 +73,37 @@ async function withTree(db, change) {
     tx.set(ref, {children: tree.children});
   });
   return result;
+}
+
+/**
+ * One change to a folder tree, from a page or the phone (MS-493).
+ *
+ * ⚠ THE PAGES USED TO WRITE BACK THE WHOLE TREE THEY LOADED. Two elders
+ * filing at the same moment each saved the tree from before the other's
+ * change, and a folder, a move or a filed document silently vanished. This applies ONE
+ * change — the same pure function the page applied to its own copy — to the
+ * latest tree, inside the transaction the assistant's tree tools already use.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} args treeId (`root` or `person_<id>`), change
+ * @return {Promise<object>} { ok, changed }
+ */
+async function changeTree(db, {treeId, change}) {
+  if (!DocsCore.isTreeId(treeId)) {
+    throw refuse("That is not a document tree.");
+  }
+  let out;
+  try {
+    out = await withTree(db, (tree) => DocsCore.applyTreeChange(tree, change),
+        treeId);
+  } catch (e) {
+    if (e && /No tree change is known/.test(e.message || "")) {
+      throw refuse(e.message);
+    }
+    throw e;
+  }
+  if (out.refused) throw refuse(out.refused);
+  return {ok: true, changed: !!out.changed};
 }
 
 /** An Elder Document, or a refusal. */
@@ -538,5 +571,6 @@ module.exports = {
   loadDocument,
   loadTree,
   withTree,
+  changeTree,
   documentRow,
 };

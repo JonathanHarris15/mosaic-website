@@ -264,16 +264,24 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
   });
 
   // A personal shepherding document is filed on whoever its first question
-  // names. The assistant changing that answer moves it, exactly as the page
-  // does — off the old profile, then onto the new one.
-  const subject = FormDocumentCore.SUBJECT_QUESTION_ID;
-  if (data.shepherdingDoc && answered.includes(subject)) {
-    await FormDocumentCore.refile(db, DocsCore, documentId,
-        data.ownerPersonId || "",
-        FormDocumentCore.subjectOf({[subject]: proposed[subject]}));
+  // names. The assistant changing that answer moves it exactly as the page
+  // does: the STORED record is asked whether its subject and filing agree,
+  // and each tree is changed inside its own transaction.
+  const result = {ok: true, documentId, answered, skipped};
+  if (answered.includes(FormDocumentCore.SUBJECT_QUESTION_ID)) {
+    const changeTree = (treeId, change) => withTree(db,
+        (tree) => DocsCore.applyTreeChange(tree, change), treeId);
+    try {
+      await FormDocumentCore.settleFiling(db, changeTree, documentId);
+    } catch (e) {
+      // The answers are saved either way; this is only where it is SHOWN.
+      // The next save or opening of the document tries again.
+      result.filing = "The answers are saved, but moving this document " +
+        "to the new person's profile did not finish. It will be retried " +
+        "the next time the document is saved or opened.";
+    }
   }
-
-  return {ok: true, documentId, answered, skipped};
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

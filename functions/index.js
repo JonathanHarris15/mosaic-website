@@ -3084,6 +3084,50 @@ exports.publicForm = onCall(
 );
 
 /**
+ * Every change to a folder tree, from the browser and the phone (MS-493).
+ *
+ * ⚠ ONE CHANGE AT A TIME, APPLIED TO THE LATEST TREE. A tree (the Library's,
+ * or a person's Documents tab) is one record, and the pages used to write
+ * back the whole of the copy they loaded, so two elders filing at the same
+ * moment lost one of the changes. The change is applied on the server, in the
+ * transaction the assistant's tree tools already use
+ * (shepherding-doc-writes.js), with the pure function the page applied to its
+ * own copy first. A callable rather than a transaction in the browser: the
+ * phone app runs callables already (Tasks), and one path is shared by every
+ * writer.
+ *
+ * Elders only, with the same gate and the same sentence as the MCP tools.
+ */
+exports.shepherdingTree = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to change a folder.");
+      }
+
+      const db = admin.firestore();
+      const Docs = require("./shepherding-doc-writes.js");
+      const Actor = require("./mcp-actor.js");
+
+      const userSnap = await db.collection("users").doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+      if (!Actor.isElder(user.permissionLevel || user.role)) {
+        throw new HttpsError(
+            "permission-denied", Actor.refusalFor(user.permissionLevel));
+      }
+
+      const {treeId, change} = request.data || {};
+      try {
+        return await Docs.changeTree(db, {treeId, change});
+      } catch (e) {
+        throw new HttpsError(
+            e && e.code === "shepherding-refused" ? "failed-precondition" : "internal",
+            (e && e.message) || "That did not work.");
+      }
+    },
+);
+
+/**
  * Every write to a Task, from the browser (MS-79).
  *
  * ⚠ ONE DOOR, NOT SEVEN. The Tasks page and the assistant's `shep_*_task` tools

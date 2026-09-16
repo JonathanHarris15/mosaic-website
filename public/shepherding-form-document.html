@@ -18,6 +18,7 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script src="forms-core.js"></script>
@@ -28,6 +29,7 @@
     <script src="presence-core.js"></script>
     <script src="shepherding-presence.js"></script>
     <script src="form-document-core.js"></script>
+    <script src="document-tree-client.js"></script>
     <script src="shepherding-form-document.js"></script>
 
     <!-- The question controls, shared with the page a stranger answers a public
@@ -135,7 +137,7 @@
                              holds shows their face and cannot be changed. The
                              hold is drawn HERE, around the shared markup, so the
                              public fill-in page is untouched. -->
-                        <div class="fa-q" :class="[q.type === 'section' ? 'fa-q--head' : '', questionHolder(q) ? 'fd-q--held' : '']"
+                        <div class="fa-q" :data-question-id="q.id" :class="[q.type === 'section' ? 'fa-q--head' : '', questionHolder(q) ? 'fd-q--held' : '']"
                              @pointerdown="onQuestionPointer(q)" @focusin="enterQuestion(q)" @focusout="leaveQuestion(q, $event)">
                             <!-- A heading is not question 4 of 9. It carries no
                                  number and nothing to type into. -->
@@ -182,7 +184,8 @@
          DOMContentLoaded, which this used, fires after the deferred Alpine has
          already run — so every question drew a label and nothing to answer it
          with. -->
-    <div data-new-person-card></div>
+    <!-- Typing a new person in keeps the picker's question held (MS-487). -->
+    <div @input.capture="keepHold()"><div data-new-person-card></div></div>
     <script>FormQuestionMarkup.mount(); NewPersonCard.mount();</script>
 
     <style>

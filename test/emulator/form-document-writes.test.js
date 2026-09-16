@@ -3,7 +3,8 @@ const assert = require('node:assert');
 
 const H = require('./harness.js');
 const FormDoc = require('../../public/form-document-core.js');
-const DocsCore = require('../../public/shepherding-documents-core.js');
+const DocsCore = require('../../functions/shared/shepherding-documents-core.js');
+const {withTree} = require('../../functions/shepherding-doc-writes.js');
 
 // The Form Document writes the page shares with the assistant (MS-483),
 // against a real Firestore: a save at one answer's field leaves an answer
@@ -62,27 +63,75 @@ suite('the shared Form Document writes', () => {
         assert.deepStrictEqual((await ref.get()).data().answers, {ready: 'No'});
     });
 
-    test('re-filing takes it off the old profile and puts it on the new one', async () => {
+    // What a page reaches through the shepherdingTree callable: one change,
+    // applied to the latest tree in a transaction (MS-493).
+    const changeTree = (treeId, change) =>
+        withTree(db, (tree) => DocsCore.applyTreeChange(tree, change), treeId);
+
+    async function treeIds(treeId) {
+        const snap = await db.collection('elder_document_structure').doc(treeId).get();
+        return snap.exists ? snap.data().children.map((c) => c.id) : null;
+    }
+
+    async function pickSubject(personId, name) {
+        await ref.update(new fs.FieldPath('answers', 'shepherd_subject'), {personId, name});
+    }
+
+    test('settling moves it off the old profile and onto the one its answer names', async () => {
         await db.collection('elder_document_structure').doc('person_p-bob')
             .set({children: [{type: 'document', id: 'other'}, {type: 'document', id: DOC}]});
+        await pickSubject('p-sue', 'Sue');
 
-        await FormDoc.refile(db, DocsCore, DOC, 'p-bob', 'p-sue');
+        const plan = await FormDoc.settleFiling(db, changeTree, DOC);
 
-        const bobTree = (await db.collection('elder_document_structure').doc('person_p-bob').get()).data();
-        const sueTree = (await db.collection('elder_document_structure').doc('person_p-sue').get()).data();
-        assert.deepStrictEqual(bobTree.children.map((c) => c.id), ['other']);
-        assert.deepStrictEqual(sueTree.children.map((c) => c.id), [DOC]);
+        assert.deepStrictEqual(plan.after, 'p-sue');
+        assert.deepStrictEqual(await treeIds('person_p-bob'), ['other']);
+        assert.deepStrictEqual(await treeIds('person_p-sue'), [DOC]);
         const stored = (await ref.get()).data();
         assert.strictEqual(stored.ownerPersonId, 'p-sue');
         assert.strictEqual(stored.inLibrary, true);
     });
 
+    test('a document already filed under who it is about is left alone', async () => {
+        await db.collection('elder_document_structure').doc('person_p-bob')
+            .set({children: [{type: 'document', id: DOC}]});
+        assert.strictEqual(await FormDoc.settleFiling(db, changeTree, DOC), null);
+        assert.deepStrictEqual(await treeIds('person_p-bob'), [DOC]);
+        assert.strictEqual(await treeIds('person_p-sue'), null);
+    });
+
+    test('two writers settling the same change at once leave it on one profile', async () => {
+        await db.collection('elder_document_structure').doc('person_p-bob')
+            .set({children: [{type: 'document', id: DOC}]});
+        await pickSubject('p-sue', 'Sue');
+        await Promise.all([
+            FormDoc.settleFiling(db, changeTree, DOC),
+            FormDoc.settleFiling(db, changeTree, DOC),
+        ]);
+        assert.deepStrictEqual(await treeIds('person_p-bob'), []);
+        assert.deepStrictEqual(await treeIds('person_p-sue'), [DOC]);
+    });
+
+    test('a second pick while the first is settling ends filed under the second', async () => {
+        await db.collection('elder_document_structure').doc('person_p-bob')
+            .set({children: [{type: 'document', id: DOC}]});
+        await pickSubject('p-sue', 'Sue');
+        const first = FormDoc.settleFiling(db, changeTree, DOC);
+        await first;
+        await pickSubject('p-ann', 'Ann');
+        await FormDoc.settleFiling(db, changeTree, DOC);
+        assert.deepStrictEqual(await treeIds('person_p-bob'), []);
+        assert.deepStrictEqual(await treeIds('person_p-sue'), []);
+        assert.deepStrictEqual(await treeIds('person_p-ann'), [DOC]);
+        assert.strictEqual((await ref.get()).data().ownerPersonId, 'p-ann');
+    });
+
     test('clearing who it is about takes it off the profile and files it nowhere', async () => {
         await db.collection('elder_document_structure').doc('person_p-bob')
             .set({children: [{type: 'document', id: DOC}]});
-        await FormDoc.refile(db, DocsCore, DOC, 'p-bob', '');
-        const bobTree = (await db.collection('elder_document_structure').doc('person_p-bob').get()).data();
-        assert.deepStrictEqual(bobTree.children, []);
+        await ref.update(new fs.FieldPath('answers', 'shepherd_subject'), null);
+        await FormDoc.settleFiling(db, changeTree, DOC);
+        assert.deepStrictEqual(await treeIds('person_p-bob'), []);
         assert.strictEqual((await ref.get()).data().ownerPersonId, null);
     });
 });

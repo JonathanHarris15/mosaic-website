@@ -22,6 +22,9 @@
 // here would undo that in one line and let an edit reach into interviews
 // already written.
 
+// The questions answered with a click, which on Safari leaves nothing focused.
+const CLICKED = ['choice_one', 'choice_many', 'scale'];
+
 function formDocumentPage() {
     // Kept outside Alpine: none of it is drawn (MS-486 / MS-487).
     const live = {
@@ -29,6 +32,7 @@ function formDocumentPage() {
         focus: null,     // the question id under the cursor
         inTitle: false,  // the cursor is in the title
         saving: null,    // the save on its way, if one is
+        filing: null,    // the filing check on its way, if one is
         stops: [],       // what stops a live read or a ticker
     };
     const page = {
@@ -237,6 +241,9 @@ function formDocumentPage() {
                     live.session = FormDocumentCore.createSession(data);
                     this.readyForLists();
                     this.loadDirectory();
+                    // A move that was missed last time — a page closed straight
+                    // after picking somebody — is repaired on opening.
+                    if (FormDocumentCore.filingPlan(data)) this.settleFiling();
                 } catch (e) {
                     this.problem = 'That did not load. Check your connection and refresh.';
                 } finally {
@@ -318,6 +325,8 @@ function formDocumentPage() {
         // presence means somebody took the question after you went quiet: the
         // stored answer goes back on screen and nothing is saved over theirs.
         touch(q) {
+            // Answering a question that never took focus steps into it.
+            if (q && live.session && live.focus !== q.id) this.enterQuestion(q);
             if (q && live.session && typeof ShepherdingPresence !== 'undefined' && !ShepherdingPresence.touch()) {
                 this.answers[q.id] = live.session.answer(q.id);
                 this.readyForLists();
@@ -327,6 +336,16 @@ function formDocumentPage() {
             this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
+            // A click answer — a choice or a scale point — leaves nothing
+            // holding focus on Safari, so nothing would ever say the elder
+            // moved on. Once the click is in, it is saved and let go of.
+            if (q && CLICKED.includes(q.type) && !this.focusIsIn(q)) this.leaveQuestion(q);
+        },
+
+        focusIsIn(q) {
+            if (typeof document === 'undefined' || !document.activeElement || !document.activeElement.closest) return false;
+            const box = document.activeElement.closest('[data-question-id]');
+            return !!box && box.getAttribute('data-question-id') === q.id;
         },
 
         onTitleInput() {
@@ -351,10 +370,10 @@ function formDocumentPage() {
                 answers: edits.answers,
                 title: edits.title,
                 byName: this.currentUserName,
-            }).then(async () => {
-                this.saveStatus = 'saved';
-                // Only the save that changed who this is about re-files it.
-                if (edits.subject) await this.refileForSubject(edits.subject);
+            }).then(() => {
+                live.session.saveLanded(edits);
+                this.saveStatus = live.session.unsaved(this.answers).length ? 'unsaved' : 'saved';
+                if (edits.answers.some(a => a.questionId === FormDocumentCore.SUBJECT_QUESTION_ID)) this.settleFiling();
             }, (e) => {
                 console.error('Error saving form document:', e);
                 live.session.saveFailed(edits);
@@ -372,37 +391,38 @@ function formDocumentPage() {
         // Documents tab of the Shepherding Profile of whoever the first
         // question names. Answer that question and it appears there; change the
         // answer and it moves — off the old profile first, so it is never on
-        // two (FormDocumentCore.refile).
+        // two.
         //
         // ⚠ IT READS THE ANSWER, NOT THE TEMPLATE. A document keeps a copy of
         // its questions and never looks at its template again (ADR-0055), so
         // the fact that this IS a shepherding document is stamped on the record
         // and the subject is read from the answers under a fixed id.
         //
-        // ⚠ ONLY WHEN THIS PAGE'S OWN SAVE CHANGED THE SUBJECT (MS-486). A page
-        // that heard somebody else change it takes in where it is now filed
-        // and leaves the filing alone.
+        // ⚠ SETTLED FROM THE STORED RECORD, ONE CHECK AT A TIME (MS-486).
+        // FormDocumentCore.settleFiling reads the document as it is now and
+        // moves it only if who it is about and where it is filed disagree —
+        // so a second pick while the first is still moving, or another elder
+        // settling at the same moment, ends in the same place. The tree
+        // changes go through the server (MS-493), never a tree written here.
         //
         // The Library entry is never touched. It is in both places by
         // construction, so there is nothing here to opt into and nothing to
         // take away.
-        get subjectPersonId() {
-            return FormsCore.subjectPersonId({ answers: this.answers });
-        },
-
-        async refileForSubject(subject) {
-            if (!(this.doc && this.doc.shepherdingDoc)) return;
-            try {
-                await FormDocumentCore.refile(db, ShepherdingDocsCore, this.docId, subject.before, subject.after);
-                live.session.filedUnder(subject.after);
-                this.doc.ownerPersonId = subject.after || null;
-            } catch (e) {
-                // The answer is saved either way — this is where the document
-                // is SHOWN, not what it says. Saying so beats a silent miss.
-                console.error('Error filing this document on a profile:', e);
-                this.problem = 'Saved, but this did not reach their profile. ' +
-                    'Change the first answer and back again to try that part once more.';
-            }
+        settleFiling() {
+            if (!(this.doc && this.doc.shepherdingDoc)) return Promise.resolve();
+            const next = (live.filing || Promise.resolve())
+                .then(() => FormDocumentCore.settleFiling(db, DocumentTree.change, this.docId))
+                .then((plan) => { if (plan && this.doc) this.doc.ownerPersonId = plan.after || null; })
+                .catch((e) => {
+                    // The answer is saved either way — this is where the
+                    // document is SHOWN, not what it says. Saying so beats a
+                    // silent miss, and the next save or opening tries again.
+                    console.error('Error filing this document on a profile:', e);
+                    this.problem = 'Saved, but this did not reach their profile yet. ' +
+                        'It will try again the next time this document is saved or opened.';
+                });
+            live.filing = next;
+            return next;
         },
 
         // ── One person per question (MS-487) ────────────────────────────────
@@ -411,19 +431,30 @@ function formDocumentPage() {
         // Drawn by this page AROUND the shared question markup, never inside
         // it, so the public fill-in page a stranger answers is untouched.
 
-        enterQuestion(q) {
+        // Stepping into a question (focus, or answering one that takes no
+        // focus — a radio on Safari). The last question's pending save goes
+        // FIRST, and only then is this one claimed: the presence store holds
+        // one box, so claiming straight away would let go of the last one
+        // while its answer was still on its way.
+        async enterQuestion(q) {
             if (!q || !FormDocumentCore.isBox(q) || live.focus === q.id) return;
-            if (typeof ShepherdingPresence === 'undefined') return;
+            if (typeof ShepherdingPresence === 'undefined') { live.focus = q.id; return; }
+            const previous = live.focus;
+            live.focus = q.id;
+            live.inTitle = false;
+            if (previous && live.session.unsaved(this.answers).includes(previous)) await this.save();
+            if (live.focus !== q.id) return; // already moved on again
             if (!ShepherdingPresence.claimBox(FormDocumentCore.box.question(this.docId, q.id))) {
-                if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                live.focus = null;
+                if (typeof document !== 'undefined' && document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+                // Whatever was clicked before the refusal is not an answer.
+                this.answers[q.id] = live.session.answer(q.id);
+                this.readyForLists();
                 this.sayHeld(this.questionHolder(q), 'question');
                 return;
             }
-            // Moving straight from one question to the next: whatever was
-            // changed in the last one goes now.
-            if (live.focus && live.session.unsaved(this.answers).includes(live.focus)) this.save();
-            live.focus = q.id;
-            live.inTitle = false;
             const arrived = live.session.catchUpQuestion(q.id, this.answers);
             if (arrived) { this.answers[q.id] = arrived.value; this.readyForLists(); }
         },
@@ -439,7 +470,13 @@ function formDocumentPage() {
             else if (live.saving) await live.saving;
             const arrived = live.session.catchUpQuestion(q.id, this.answers);
             if (arrived) { this.answers[q.id] = arrived.value; this.readyForLists(); }
-            if (!live.focus && !live.inTitle) ShepherdingPresence.release();
+            if (!live.focus && !live.inTitle && typeof ShepherdingPresence !== 'undefined') ShepherdingPresence.release();
+        },
+
+        // Typing in the add-a-person card opened from a picker keeps that
+        // question held; it is activity for the one-minute rule like any other.
+        keepHold() {
+            if (live.focus && typeof ShepherdingPresence !== 'undefined') ShepherdingPresence.touch();
         },
 
         enterTitle(event) {
@@ -525,11 +562,12 @@ function formDocumentPage() {
         holderLabel(holder) { return PresenceCore.holderLabel(holder); },
         holderTitle(holder) { return PresenceCore.holderTitle(holder); },
 
-        // Trying a question somebody else holds says who has it.
+        // Trying a question somebody else holds says who has it. It never
+        // CLAIMS one: a finger starting a scroll over a question is not an
+        // answer. Focus, or an actual answer, does that.
         onQuestionPointer(q) {
             const holder = this.questionHolder(q);
             if (holder) this.sayHeld(holder, 'question');
-            else this.enterQuestion(q);
         },
 
         sayHeld(holder, what) {

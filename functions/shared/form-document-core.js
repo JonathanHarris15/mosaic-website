@@ -24,11 +24,15 @@
 // no answer: the page prepares one for every such question when it opens, and
 // opening a form must write nothing.
 //
-// ⚠ ONLY THE SAVE THAT CHANGED THE SUBJECT RE-FILES. A personal shepherding
-// document is filed on the profile of whoever its first question names. With
-// live updates, a page that merely heard about a new subject would otherwise
-// re-file the document on its next unrelated save — two pages fighting over
-// where it lives.
+// ⚠ FILING IS SETTLED FROM THE STORED RECORD, NOT FROM A PAGE'S MEMORY. A
+// personal shepherding document is filed on the profile of whoever its first
+// question names. Whoever has just saved asks the STORED document whether its
+// subject and where it is filed agree, and moves it if not. Every step is one
+// that can be repeated — take it off a profile, put it on one — so two writers
+// settling at once end in the same place, and a move that was missed (a page
+// closed straight after picking somebody) is repaired by the next save or the
+// next time anybody opens it. Trusting "this save changed the subject" instead
+// lost that move for good, and two quick picks left it on two profiles.
 //
 // Pure rules first; the writes at the bottom take the Firestore handle and the
 // namespace holding FieldPath / FieldValue. Mirrored into functions/shared.
@@ -36,7 +40,6 @@
     'use strict';
 
     const COLLECTION = 'elder_documents';
-    const STRUCTURE = 'elder_document_structure';
     const ANSWERS = 'answers';
     // Restated from forms-core.js, which this must not require: the page loads
     // both as plain scripts. A test holds the two together.
@@ -110,6 +113,17 @@
         return { off: was ? 'person_' + was : null, on: now ? 'person_' + now : null };
     }
 
+    // What a stored document needs, to be filed under who it is about:
+    // { before, after, off, on }, or null when it already is (or is not a
+    // personal shepherding document at all).
+    function filingPlan(doc) {
+        if (!doc || !doc.shepherdingDoc) return null;
+        const before = String(doc.ownerPersonId || '');
+        const after = subjectOf(doc.answers);
+        const plan = refiling(before, after);
+        return plan ? Object.assign({ before, after }, plan) : null;
+    }
+
     // ── One page's copy ───────────────────────────────────────────────────────
 
     // What one open Form Document page knows: the answers, title and owner it
@@ -144,14 +158,15 @@
 
             // What to write now: every answer that differs from the saved
             // copy, and the title if it does. Taking it moves both copies.
-            // `subject` is { before, after } when this save changes who the
-            // document is about, measured against where it is filed.
             takeSave(current, currentTitle) {
                 const answers = [];
                 questionIds(current, saved.answers).forEach(id => {
                     const value = current ? current[id] : undefined;
                     if (sameAnswer(value, saved.answers[id])) return;
-                    beforeSave.set(id, { saved: saved.answers[id], latest: latest.answers[id] });
+                    // The oldest value still unconfirmed is what a failure goes
+                    // back to: a second save of the same question while the
+                    // first is on its way must not overwrite it.
+                    if (!beforeSave.has(id)) beforeSave.set(id, { saved: saved.answers[id], latest: latest.answers[id] });
                     const written = isEmpty(value) ? (Array.isArray(value) ? [] : null) : copy(value);
                     answers.push({ questionId: id, value: written });
                     saved.answers[id] = written;
@@ -160,16 +175,17 @@
                 let title = null;
                 if (currentTitle !== undefined && titleValue(currentTitle) !== saved.title) {
                     title = titleValue(currentTitle);
-                    titleBeforeSave = { saved: saved.title, latest: latest.title };
+                    if (!titleBeforeSave) titleBeforeSave = { saved: saved.title, latest: latest.title };
                     saved.title = title;
                     latest.title = title;
                 }
-                let subject = null;
-                if (answers.some(a => a.questionId === SUBJECT_QUESTION_ID)) {
-                    const after = subjectOf(saved.answers);
-                    if (after !== saved.owner) subject = { before: saved.owner, after };
-                }
-                return { answers, title, subject };
+                return { answers, title };
+            },
+
+            // The save landed: nothing of it needs rolling back any more.
+            saveLanded(save) {
+                ((save && save.answers) || []).forEach(a => beforeSave.delete(a.questionId));
+                if (save && save.title !== null && save.title !== undefined) titleBeforeSave = null;
             },
 
             // The save did not land: both copies go back, so it is unsaved again.
@@ -179,15 +195,14 @@
                     if (!before) return;
                     saved.answers[a.questionId] = before.saved;
                     latest.answers[a.questionId] = before.latest;
+                    beforeSave.delete(a.questionId);
                 });
                 if (save && save.title !== null && save.title !== undefined && titleBeforeSave) {
                     saved.title = titleBeforeSave.saved;
                     latest.title = titleBeforeSave.latest;
+                    titleBeforeSave = null;
                 }
             },
-
-            // The document was re-filed (by this page, or it arrived).
-            filedUnder(personId) { saved.owner = String(personId || ''); },
 
             // Somebody else's version. Returns what the page must put on
             // screen: { answers, title, ownerPersonId }. An answer on screen
@@ -275,29 +290,23 @@
             .update(args[0], args[1], ...args.slice(2)).then(() => true);
     }
 
-    // Move the document from one person's profile to another's: each profile
-    // tree changed in its own transaction, off first, then the record's owner.
-    // `docs` is ShepherdingDocsCore (removeFromTree, fileInRoot).
-    function refile(db, docs, documentId, before, after) {
-        const plan = refiling(before, after);
-        if (!plan) return Promise.resolve(false);
-        const change = (treeId, fn) => {
-            if (!treeId) return Promise.resolve();
-            const ref = db.collection(STRUCTURE).doc(treeId);
-            return db.runTransaction(tx => tx.get(ref).then(snap => {
-                const data = snap.exists ? snap.data() : null;
-                const tree = (data && Array.isArray(data.children)) ? { children: data.children } : { children: [] };
-                if (!fn(tree)) return;
-                tx.set(ref, JSON.parse(JSON.stringify({ children: tree.children })));
-            }));
-        };
-        return change(plan.off, tree => docs.removeFromTree(tree, documentId))
-            .then(() => change(plan.on, tree => docs.fileInRoot(tree, documentId)))
-            .then(() => db.collection(COLLECTION).doc(documentId).update({
-                ownerPersonId: String(after || '') || null,
-                inLibrary: true,
-            }))
-            .then(() => true);
+    // File the stored document under who it is about, if it is not already:
+    // read it as it is NOW, take it off the old profile, put it on the new one,
+    // then record the owner. `changeTree(treeId, change)` applies one tree
+    // change (ShepherdingDocsCore.applyTreeChange) to the latest tree — the
+    // server's transaction, which a page reaches through its callable (MS-493).
+    // Resolves the plan it carried out, or null when nothing needed doing.
+    function settleFiling(db, changeTree, documentId) {
+        const ref = db.collection(COLLECTION).doc(documentId);
+        return ref.get().then(snap => {
+            const plan = filingPlan(snap.exists ? snap.data() : null);
+            if (!plan) return null;
+            return Promise.resolve()
+                .then(() => plan.off && changeTree(plan.off, { op: 'remove', itemId: documentId }))
+                .then(() => plan.on && changeTree(plan.on, { op: 'file', docId: documentId }))
+                .then(() => ref.update({ ownerPersonId: plan.after || null, inLibrary: true }))
+                .then(() => plan);
+        });
     }
 
     const FormDocumentCore = {
@@ -310,9 +319,10 @@
         subjectOf,
         titleValue,
         refiling,
+        filingPlan,
         createSession,
         saveEdits,
-        refile,
+        settleFiling,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

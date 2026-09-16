@@ -277,8 +277,91 @@
         return true;
     }
 
+    // ── One change to a tree (MS-493) ─────────────────────────────────────────
+    //
+    // ⚠ A TREE IS ONE RECORD, SO NOBODY WRITES BACK A WHOLE TREE THEY LOADED.
+    // Two elders filing at the same moment each saved the tree from before the
+    // other's change, and a folder, a move or a filed document vanished. Every
+    // writer now sends ONE of these changes, applied on the server to the
+    // latest tree inside a transaction. The page applies the same change to
+    // its own copy first, so a click still shows at once.
+
+    const LIBRARY_TREE = 'root';
+
+    function personTreeId(personId) {
+        return 'person_' + personId;
+    }
+
+    // The Library's tree, or one person's. A person id is a Firestore document
+    // id, so it holds no '/' — and a tree id with one would not be a tree.
+    function isTreeId(treeId) {
+        return treeId === LIBRARY_TREE || /^person_[A-Za-z0-9_-]+$/.test(String(treeId || ''));
+    }
+
+    function folderOrRoot(root, folderId) {
+        return (!folderId || folderId === ROOT) ? root : getFolderById(root, folderId);
+    }
+
+    // Apply one change to `root`, in place. Returns { changed, refused } —
+    // `refused` is a sentence for a person when the change could not apply
+    // because what it names has gone.
+    function applyTreeChange(root, change) {
+        const c = change || {};
+        if (!root.children) root.children = [];
+        const gone = { changed: false, refused: 'That folder no longer exists.' };
+        switch (c.op) {
+        case 'createFolder': {
+            if (findItemById(root, c.folderId)) return { changed: false };
+            const parent = folderOrRoot(root, c.parentId);
+            if (!parent) return gone;
+            if (!parent.children) parent.children = [];
+            parent.children.unshift({ type: 'folder', id: c.folderId, name: String(c.name || 'New Folder'), children: [] });
+            return { changed: true };
+        }
+        case 'renameFolder': {
+            const folder = getFolderById(root, c.folderId);
+            if (!folder) return gone;
+            const name = String(c.name || '').trim() || 'New Folder';
+            if (folder.name === name) return { changed: false };
+            folder.name = name;
+            return { changed: true };
+        }
+        case 'move': {
+            const item = c.item || {};
+            if (!findItemById(root, item.id)) return { changed: false, refused: 'That is no longer here.' };
+            const target = folderOrRoot(root, c.targetFolderId);
+            if (!target) return gone;
+            if (item.type === 'folder' && (c.targetFolderId === item.id || isDescendant(root, c.targetFolderId, item.id))) {
+                return { changed: false, refused: 'A folder cannot go inside itself.' };
+            }
+            return { changed: moveNode(root, item, c.targetFolderId || ROOT) };
+        }
+        case 'remove':
+            return { changed: removeFromTree(root, c.itemId) };
+        case 'file': {
+            if (containsDoc(root, c.docId)) return { changed: false };
+            const folder = folderOrRoot(root, c.folderId);
+            if (!folder) return gone;
+            if (!folder.children) folder.children = [];
+            folder.children.push({ type: 'document', id: c.docId });
+            return { changed: true };
+        }
+        case 'prune': {
+            let changed = false;
+            (c.docIds || []).forEach(id => { if (removeFromTree(root, id)) changed = true; });
+            return { changed };
+        }
+        default:
+            throw new Error('No tree change is known as ' + c.op);
+        }
+    }
+
     const ShepherdingDocsCore = {
         ROOT,
+        LIBRARY_TREE,
+        personTreeId,
+        isTreeId,
+        applyTreeChange,
         MISSING_AUTHOR,
         buildElderDocument,
         fileInRoot,

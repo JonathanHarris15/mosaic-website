@@ -72,7 +72,6 @@ test('opening a form, with its empty select-all lists, saves nothing', () => {
     const save = s.takeSave(onScreen(data), 'Elder Interview');
     assert.deepStrictEqual(save.answers, []);
     assert.strictEqual(save.title, null);
-    assert.strictEqual(save.subject, null);
 });
 
 test('an empty select-all list and no answer are the same answer', () => {
@@ -132,17 +131,33 @@ test('a failed save is still unsaved, and the stored copy is back', () => {
     assert.deepStrictEqual(s.takeSave(now, 'Elder Interview').answers.map(a => a.questionId), ['ready']);
 });
 
-// ── Who it is about ──────────────────────────────────────────────────────────
-
-test('a save says the subject changed only when the subject answer did', () => {
+test('two saves of one question on their way at once roll back to what was stored before both', () => {
     const data = record();
     const s = Core.createSession(data);
     const now = onScreen(data);
     now.ready = 'Yes';
-    assert.strictEqual(s.takeSave(now, 'Elder Interview').subject, null);
-    now[SUBJECT] = { personId: 'p-sue', name: 'Sue' };
-    assert.deepStrictEqual(s.takeSave(now, 'Elder Interview').subject, { before: 'p-bob', after: 'p-sue' });
+    const first = s.takeSave(now, 'Elder Interview');
+    now.ready = 'No';
+    const second = s.takeSave(now, 'Elder Interview');
+    s.saveFailed(second);
+    s.saveFailed(first);
+    assert.strictEqual(s.answer('ready'), null, 'a failure went back to the other save instead of the stored answer');
 });
+
+test('a save that landed is not rolled back by a later failure of the same question', () => {
+    const data = record();
+    const s = Core.createSession(data);
+    const now = onScreen(data);
+    now.ready = 'Yes';
+    const first = s.takeSave(now, 'Elder Interview');
+    s.saveLanded(first);
+    now.ready = 'No';
+    const second = s.takeSave(now, 'Elder Interview');
+    s.saveFailed(second);
+    assert.strictEqual(s.answer('ready'), 'Yes');
+});
+
+// ── Who it is about ──────────────────────────────────────────────────────────
 
 test('re-filing takes it off the old profile, then puts it on the new one', () => {
     assert.deepStrictEqual(Core.refiling('p-bob', 'p-sue'), { off: 'person_p-bob', on: 'person_p-sue' });
@@ -152,19 +167,28 @@ test('re-filing takes it off the old profile, then puts it on the new one', () =
     assert.strictEqual(Core.refiling('', null), null);
 });
 
-test('a save is compared with where the document is filed, not only with the last answer', () => {
-    // The page adopted a new owner from somebody else; its own later save of a
-    // different question must not re-file.
+test('a stored document needs moving only when who it is about and where it is filed disagree', () => {
+    assert.strictEqual(Core.filingPlan(record()), null, 'filed under its subject already');
+    const moved = record();
+    moved.answers[SUBJECT] = { personId: 'p-sue', name: 'Sue' };
+    assert.deepStrictEqual(Core.filingPlan(moved),
+        { before: 'p-bob', after: 'p-sue', off: 'person_p-bob', on: 'person_p-sue' });
+    const cleared = record();
+    delete cleared.answers[SUBJECT];
+    assert.deepStrictEqual(Core.filingPlan(cleared), { before: 'p-bob', after: '', off: 'person_p-bob', on: null });
+    const notPersonal = record({ shepherdingDoc: false });
+    notPersonal.answers[SUBJECT] = { personId: 'p-sue', name: 'Sue' };
+    assert.strictEqual(Core.filingPlan(notPersonal), null, 'an ordinary form document is filed nowhere');
+});
+
+test('an owner arriving from somebody else is reported, so the page can show it', () => {
     const data = record();
     const s = Core.createSession(data);
     const theirs = record({ ownerPersonId: 'p-sue' });
     theirs.answers[SUBJECT] = { personId: 'p-sue', name: 'Sue' };
-    const now = onScreen(data);
-    const out = s.adopt(theirs, now, {});
-    Object.assign(now, ...out.answers.map(a => ({ [a.questionId]: a.value })));
+    const out = s.adopt(theirs, onScreen(data), {});
     assert.strictEqual(out.ownerPersonId, 'p-sue');
-    now.ready = 'Yes';
-    assert.strictEqual(s.takeSave(now, 'Elder Interview').subject, null);
+    assert.strictEqual(s.adopt(theirs, onScreen(theirs), {}).ownerPersonId, undefined, 'and only once');
 });
 
 // ── Adopting somebody else's change ──────────────────────────────────────────
