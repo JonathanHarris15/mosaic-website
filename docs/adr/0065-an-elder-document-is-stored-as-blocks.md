@@ -19,7 +19,7 @@ ADR 0062 said each heading, paragraph, list item and table cell of an Elder Docu
 
 A save writes only the changed blocks, each at `blocks.<id>` with a segmented field path, and deletes removed ones the same way. Two writers changing different blocks write different fields.
 
-**Rebuilding the body never drops a word.** A block whose parent is missing goes to the top; a lost order sorts last; a text block holding children keeps both. `bodyOfBlocks(blocksOfBody(body))` gives back the same body, apart from ids.
+**Rebuilding the body never drops a word.** A block whose parent is missing, or that sits somewhere its type cannot, goes at the end of the document, wrapped so the document stays valid; a text block holding children keeps both. `bodyOfBlocks(blocksOfBody(body))` gives back the same body, apart from ids.
 
 **A legacy document is converted once, in a transaction.** A page or tool opening a document that still has `contentJson` and no blocks converts it inside a transaction that writes only if there are still no blocks. It is converted only if the round trip gives back exactly the same body. If it doesn't, the page opens the document read-only and the assistant refuses the write, so nothing is written over it. A migration script converts the rest in advance. It is a dry run by default and safe to run twice.
 

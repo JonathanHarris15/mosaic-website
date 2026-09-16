@@ -37,6 +37,7 @@ const nw = require("./note-writes");
 const gs = require("./guidance-store");
 const gw = require("./guidance-writes");
 const shepTools = require("./mcp-shepherding-tools.js");
+const Guard = require("./held-box-guard.js");
 const printableTools = require("./mcp-printable-tools.js");
 const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
@@ -566,7 +567,9 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "bullets, and **text** and *text* become bold and italic. Do NOT send " +
       "HTML — it is not accepted and will appear as literal characters. " +
       "Read the Sunday first with oos_get_service: a note you overwrite is " +
-      "gone, and it may be somebody's reasoning rather than a stray remark.",
+      "gone, and it may be somebody's reasoning rather than a stray remark. " +
+      "If somebody has that element open right now the call is refused and " +
+      "says who — tell the editor, and do not retry in a loop.",
     inputSchema: {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday, YYYY-MM-DD"),
@@ -581,6 +584,14 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     if (!isEditor) {
       return refuse("Editors only — this changes the live Order of Service.");
     }
+    // The note is edited inside the element's open row, which holds its slot
+    // (MS-433).
+    const noteHeld = await Guard.holders(db, {
+      uid: auth.uid,
+      area: Guard.ORDER_OF_SERVICE,
+      boxes: Guard.liturgyBoxes(date, [element]),
+    });
+    if (noteHeld.length) return refuse(Guard.refusalFor(noteHeld));
     const result = await nw.updateNote(db, {
       dateKey: date,
       element,
@@ -608,7 +619,9 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "Only send fields the editor has explicitly agreed to — this changes " +
       "the live record the church runs its service from. Fields you leave " +
       "out are untouched; send null to clear a field. Person assignments " +
-      "(Preacher, Service Leader, prayer leaders) cannot be set here.",
+      "(Preacher, Service Leader, prayer leaders) cannot be set here. If " +
+      "somebody has any of those fields open right now nothing is written " +
+      "and the call says who — tell the editor, and do not retry in a loop.",
     inputSchema: {
       dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday's date, YYYY-MM-DD"),
@@ -624,6 +637,14 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     if (!Object.keys(given).length) {
       return refuse("No fields given, so there is nothing to write.");
     }
+    // A Sunday is never half-written: any held field refuses the whole call,
+    // as a disallowed field already does (MS-433).
+    const held = await Guard.holders(db, {
+      uid: auth.uid,
+      area: Guard.ORDER_OF_SERVICE,
+      boxes: Guard.liturgyBoxes(dateKey, Object.keys(given)),
+    });
+    if (held.length) return refuse(Guard.refusalFor(held));
 
     const result = await lw.updateLiturgy(db, {
       dateKey,

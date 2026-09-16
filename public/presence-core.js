@@ -116,6 +116,17 @@ var PresenceCore = (function () {
         return claimsByBox(entries, myUid, nowMs, opts)[holdKey(scopeKey, boxKey)] || null;
     }
 
+    // Everyone else holding ANY box in a scope — a whole document, say — as
+    // entries (MS-433). Deleting a document, or replacing its whole body, pulls
+    // every one of its boxes out from under whoever is in them.
+    function holdersInScope(entries, myUid, scopeKey, nowMs, opts) {
+        var claims = claimsByBox(entries, myUid, nowMs, opts);
+        var prefix = String(scopeKey) + '|';
+        return Object.keys(claims)
+            .filter(function (key) { return key.indexOf(prefix) === 0; })
+            .map(function (key) { return claims[key]; });
+    }
+
     // Everyone looking at THIS page right now, whether or not they hold a box —
     // the row of faces that says who else is here.
     //
@@ -210,6 +221,7 @@ var PresenceCore = (function () {
         isLiveClaim: isLiveClaim,
         claimsByBox: claimsByBox,
         holderOf: holderOf,
+        holdersInScope: holdersInScope,
         peopleHere: peopleHere,
         holderLabel: holderLabel,
         holderTitle: holderTitle,
