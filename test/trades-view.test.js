@@ -289,3 +289,62 @@ test('offers crowding in do not use up the three', () => {
 
     assert.equal(View.invitesLeft(live, KIDS, TODAY), Core.MAX_INVITATIONS);
 });
+
+// ── Visibility (MS-529 / MS-532) ────────────────────────────────────────────
+//
+// The picker still LISTS people who cannot see the Event — hiding a typed name
+// would look like Mosaic did not recognise them. They are not selectable.
+
+const PUBLIC_OCC = { id: 'occ-sun', visibility: 'public', participantIds: [] };
+const MEMBER_OCC = { id: 'occ-youth', visibility: 'member', participantIds: [] };
+const MEMBER_ON_IT = {
+    id: 'occ-youth', visibility: 'member', participantIds: ['p1'],
+};
+
+const DIRECTORY = [
+    { id: 'p1', name: 'Ann' },
+    { id: 'p5', name: 'Eve', userId: 'uid-eve' },
+    { id: BOB, name: 'Bob' },
+];
+
+test('an unlinked Person stays selectable on a public Event', () => {
+    const found = View.askableFrom(DIRECTORY, {
+        rank: 'member', hidingTags: [], personId: BOB,
+        occurrence: PUBLIC_OCC,
+    });
+    const ann = found.find(p => p.id === 'p1');
+    assert.ok(ann);
+    assert.equal(ann.selectable, true);
+    assert.equal(ann.disabledReason, null);
+});
+
+test('an unlinked Person is listed, not hidden, on a members-only Event', () => {
+    const found = View.askableFrom(DIRECTORY, {
+        rank: 'member', hidingTags: [], personId: BOB,
+        occurrence: MEMBER_OCC,
+    });
+    const ann = found.find(p => p.id === 'p1');
+    assert.ok(ann, 'hiding them would make a typed name vanish');
+    assert.equal(ann.selectable, false);
+    assert.equal(ann.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
+    assert.equal(ann.disabledReason, "No account — can't invite on this event");
+});
+
+test('an unlinked participant on a members-only Event stays selectable', () => {
+    const found = View.askableFrom(DIRECTORY, {
+        rank: 'member', hidingTags: [], personId: BOB,
+        occurrence: MEMBER_ON_IT,
+    });
+    const ann = found.find(p => p.id === 'p1');
+    assert.equal(ann.selectable, true);
+});
+
+test('a Linked User who can see a members-only Event stays selectable', () => {
+    const found = View.askableFrom(DIRECTORY, {
+        rank: 'member', hidingTags: [], personId: BOB,
+        occurrence: MEMBER_OCC,
+    });
+    const eve = found.find(p => p.id === 'p5');
+    assert.equal(eve.selectable, true);
+    assert.equal(eve.disabledReason, null);
+});

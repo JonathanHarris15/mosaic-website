@@ -496,3 +496,82 @@ test('the live ones can be picked out of a person’s whole pile', () => {
 
     assert.deepEqual(Trade.liveOnes(pile, TODAY).map(t => t.id), ['a', 'd']);
 });
+
+// ── Who may be invited (MS-529 / MS-532) ────────────────────────────────────
+//
+// The picker and inviteToTrade both ask this, so they cannot drift: a Person
+// the picker offers must be one the server will accept, and the reverse.
+// Facts come in already gathered — this module does not look anyone up.
+
+const invite = (over) => Trade.inviteEligibility(Object.assign({
+    inviteeId: SARAH,
+    holderId: BOB,
+    alreadyAsked: [],
+    roleEligible: true,
+    eventIsPublic: false,
+    linkedUserCanSee: false,
+    isParticipant: false,
+}, over || {}));
+
+test('the locked no-account reason is the exact picker copy', () => {
+    assert.equal(
+        Trade.INVITE_NO_ACCOUNT_REASON,
+        "No account — can't invite on this event");
+});
+
+test('a public Event accepts a Person with no Linked User', () => {
+    // Sunday Service is always public. MS-249 will still text these people.
+    const result = invite({ eventIsPublic: true });
+
+    assert.equal(Trade.inviteVisibility({
+        eventIsPublic: true, linkedUserCanSee: false, isParticipant: false,
+    }), true);
+    assert.equal(result.ok, true);
+});
+
+test('a members-only Event refuses an unlinked Person who is not on it', () => {
+    // This is the lie the picker used to tell: they appeared selectable, then
+    // the server said "They are not able to see that one".
+    assert.equal(Trade.inviteVisibility({
+        eventIsPublic: false, linkedUserCanSee: false, isParticipant: false,
+    }), false);
+
+    const result = invite();
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, Trade.REASONS.NOT_VISIBLE);
+});
+
+test('a members-only Event accepts an unlinked Person who is already on it', () => {
+    // They are already a participant, so inviting them discloses nothing.
+    assert.equal(Trade.inviteVisibility({
+        eventIsPublic: false, linkedUserCanSee: false, isParticipant: true,
+    }), true);
+    assert.equal(invite({ isParticipant: true }).ok, true);
+});
+
+test('a members-only Event accepts a Linked User who can see it', () => {
+    assert.equal(Trade.inviteVisibility({
+        eventIsPublic: false, linkedUserCanSee: true, isParticipant: false,
+    }), true);
+    assert.equal(invite({ linkedUserCanSee: true }).ok, true);
+});
+
+test('the holder is never invited to their own place', () => {
+    const result = invite({ inviteeId: BOB, eventIsPublic: true });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, Trade.REASONS.YOURSELF);
+});
+
+test('somebody already asked about this place is not asked again', () => {
+    const result = invite({
+        eventIsPublic: true, alreadyAsked: [SARAH],
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, Trade.REASONS.ALREADY_ASKED);
+});
+
+test('somebody the Role would not offer is not invited either', () => {
+    const result = invite({ eventIsPublic: true, roleEligible: false });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, Trade.REASONS.NOT_ELIGIBLE);
+});

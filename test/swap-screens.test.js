@@ -51,11 +51,36 @@ test('"Just take it" is a button, not an empty selection', () => {
 // ── The picker ──────────────────────────────────────────────────────────────
 
 test('somebody with no account is offered, and the sender warned', () => {
-    // Excluding them would have to be unpicked when MS-189 lands and can text
+    // Excluding them would have to be unpicked when MS-249 lands and can text
     // exactly those people. Withdraw is what makes an unanswerable ask safe.
+    // On a members-only Event they are not already on, the warning becomes the
+    // locked reason instead of the chip (MS-529).
     assert.match(page, /unreachable\(person\)/);
-    assert.match(page, /cannot answer in the app/i);
     assert.match(script, /unreachable\(person\) \{ return !person \|\| !person\.userId; \}/);
+});
+
+test('a Person who cannot see this Event is listed, not hidden, and not selectable',
+    () => {
+        // Disable-with-reason, not hide. The locked copy lives on the helper
+        // and is drawn through disabledReason, so a rephrase in the markup
+        // cannot drift from the picker and the tests of the helper.
+        assert.match(page, /person\.selectable === false/);
+        assert.match(page, /x-text="person\.disabledReason"/);
+        assert.match(page, /:disabled="busy \|\| invitesLeft\(asking\) <= 0 \|\| person\.selectable === false"/);
+        assert.match(script, /if \(!person \|\| person\.selectable === false\) return;/);
+    });
+
+test('the phone uses the same Commitments picker, inside the shell', () => {
+    // One page, two skins (MS-533). A second picker would drift from the
+    // helper the web already calls. The shell header is z-index 1000, so the
+    // sheet has to sit above it or the phone cannot pick anybody.
+    assert.match(page, /src="mobile-shell\.js"/);
+    assert.match(page, /window\.MOBILE_HEADER/);
+    assert.match(page, /src="mobile-shell-header\.js"/);
+    assert.ok(page.indexOf('mobile-shell.js') < page.indexOf('mobile-shell-header.js'),
+        'the header script no-ops unless the shell class is already set');
+    assert.match(page, /html\.shell-mobile \.trade-sheet/);
+    assert.match(page, /x-text="person\.disabledReason"/);
 });
 
 test('the picker asks RolesCore who may appear rather than filtering itself',

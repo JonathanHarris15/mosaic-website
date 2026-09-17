@@ -25,6 +25,10 @@
         ? require('./roles-core.js')
         : global.RolesCore;
 
+    const Occurrences = (typeof require !== 'undefined')
+        ? require('./events-occurrence-core.js')
+        : global.EventsOccurrenceCore;
+
     // What somebody may do to this Trade from where they stand. Advisory: the
     // callable checks it all again, and the server's answer is the wall.
     function actionsFor(trade, personId) {
@@ -231,17 +235,57 @@
     // failing at the one job it has. `RolesCore.assignablePeople` already holds
     // that rule and this must not grow a second copy of it.
     //
-    // People with NO LINKED ACCOUNT are offered anyway, and that is deliberate.
-    // They cannot answer in the app today — so the sender is warned — but MS-189
-    // will text exactly those people, and a picker that excluded them would have
-    // to be unpicked. Withdraw is what makes an unanswerable invitation harmless.
+    // People who FAIL VISIBILITY still appear (MS-529). Hiding them would make a
+    // typed name vanish; the row is not selectable, with the locked reason.
+    // People with no Linked User stay selectable on a public Event, and on a
+    // members-only Event they already participate in.
+    //
+    // ⚠ A LINKED USER IS JUDGED AS A MEMBER. The picker cannot read other
+    // people's ranks (users docs are own-only). Member is the account floor,
+    // and it is who a members-only Event is for.
     function askableFrom(people, options) {
         const opts = options || {};
         const already = opts.alreadyAsked || [];
+        const occ = opts.occurrence || null;
+        const eventIsPublic = Occurrences &&
+            Occurrences.visibilityOf(occ) === 'public';
+        const participantIds = (occ && occ.participantIds) ||
+            opts.participantIds || [];
+
         return Roles.assignablePeople(people, {
             rank: opts.rank, hidingTags: opts.hidingTags,
         }).filter(p =>
-            p.id !== opts.personId && already.indexOf(p.id) === -1);
+            p.id !== opts.personId && already.indexOf(p.id) === -1)
+            .map(p => inviteeRow(p, {
+                holderId: opts.personId,
+                alreadyAsked: already,
+                eventIsPublic: eventIsPublic,
+                participantIds: participantIds,
+                occurrence: occ,
+            }));
+    }
+
+    function inviteeRow(person, opts) {
+        const hasLinkedUser = !!(person && person.userId);
+        const linkedUserCanSee = hasLinkedUser && Occurrences &&
+            Occurrences.canSee('member', opts.occurrence, person.id);
+        const verdict = Core.inviteEligibility({
+            inviteeId: person.id,
+            holderId: opts.holderId,
+            alreadyAsked: opts.alreadyAsked,
+            roleEligible: true,
+            eventIsPublic: opts.eventIsPublic === true,
+            linkedUserCanSee: linkedUserCanSee,
+            isParticipant: (opts.participantIds || []).indexOf(person.id) !== -1,
+        });
+        return Object.assign({}, person, {
+            selectable: verdict.ok,
+            disabledReason: verdict.ok ? null : (
+                verdict.reason === Core.REASONS.NOT_VISIBLE
+                    ? Core.INVITE_NO_ACCOUNT_REASON
+                    : null
+            ),
+        });
     }
 
     // Who is already in a conversation about this place — they cannot be asked

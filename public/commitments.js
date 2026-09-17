@@ -100,6 +100,9 @@
             // Which occurrences can reach the open cover list at all. The
             // quiet-or-open choice is only offered where it means something.
             coverable: {},
+            // Occurrences keyed by id, so the invite picker can ask the shared
+            // eligibility helper about visibility without a second read.
+            inviteEvents: {},
 
             // One modal at a time, named by what it is asking.
             asking: null,     // invite: who shall I ask?
@@ -178,8 +181,10 @@
                     // participant-rung Event never can, so the choice is not
                     // offered there rather than being offered and ignored.
                     this.coverable = {};
+                    this.inviteEvents = {};
                     occurrences.forEach(o => {
                         this.coverable[o.id] = Core.canBeCovered(o);
+                        this.inviteEvents[o.id] = o;
                     });
 
                     // `decorate` turns a slug into a Role name, so the names have
@@ -459,19 +464,24 @@
                     hidingTags: this.hidingTags,
                     personId: this.personId,
                     alreadyAsked: asked,
+                    occurrence: this.inviteEvents[this.asking.occurrenceId] ||
+                        null,
                 }).filter(p => !term ||
                     this.nameOf(p.id).toLowerCase().indexOf(term) !== -1)
                     .slice(0, 60);
             },
 
-            // ⚠ SOMEBODY WITH NO ACCOUNT IS OFFERED ANYWAY, and warned about.
-            // They cannot answer in the app today, but MS-189 will text exactly
-            // these people, and a picker that hid them would have to be
-            // unpicked. Withdraw is what makes an unanswerable ask harmless.
+            // ⚠ SOMEBODY WITH NO ACCOUNT IS OFFERED ANYWAY, and warned about —
+            // or, on a members-only Event they are not already on, shown with
+            // the reason they cannot be picked (MS-529). They cannot answer in
+            // the app today, but MS-189 / MS-249 will text exactly these people
+            // on a public Event, and a picker that hid them would have to be
+            // unpicked.
             unreachable(person) { return !person || !person.userId; },
 
             async ask(person) {
                 if (this.busy) return;
+                if (!person || person.selectable === false) return;
                 this.busy = 'ask';
                 try {
                     const call = firebase.functions().httpsCallable('inviteToTrade');
