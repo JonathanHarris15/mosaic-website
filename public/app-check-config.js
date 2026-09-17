@@ -59,6 +59,13 @@
         // still cannot be joined (ADR-0051, ADR-0052).
         enabled: false,
 
+        // The live HTTPS origin reCAPTCHA is registered against. The phone
+        // shell serves this same fill-in page from capacitor://localhost,
+        // which a WEBSITE key cannot attest — so when collection is on, the
+        // answering page hops onto this origin (MS-535). Not a secret; it is
+        // the public hosting URL. Trailing slashes are stripped in code.
+        liveOrigin: 'https://mosaic-hymn-database.web.app',
+
         // Replace with the reCAPTCHA site key from the Firebase console.
         // The wizard writes it here.
         siteKey: '6Leq76UtAAAAADJc3TUWYPjG89v3tfWQT6DMvasB',
@@ -75,4 +82,14 @@
         // ever comes from google.com/recaptcha/admin instead.
         provider: 'enterprise',
     };
+
+    // Debug-token policy (MS-535). Never put a UUID in this file.
+    //
+    // On localhost the answering page sets `self.FIREBASE_APPCHECK_DEBUG_TOKEN
+    // = true` *before* activate() (see app-check-client.js). The SDK prints a
+    // UUID in the console; an operator pastes that into the Firebase App Check
+    // debug-token list. A string token may be set in the browser console for
+    // a known device (break-glass) — it is a real bypass, it is not committed,
+    // and it is not how members in the phone shell get a token (they hop to
+    // liveOrigin instead).
 })(typeof window !== 'undefined' ? window : globalThis);

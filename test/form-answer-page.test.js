@@ -22,7 +22,8 @@ function loadPage(reply, locationOver) {
     };
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
-    sandbox.location = Object.assign({ pathname: '/form-answer.html', search: '', href: 'https://x/' }, locationOver || {});
+    sandbox.location = Object.assign({ pathname: '/form-answer.html', search: '', href: 'https://x/', hostname: 'x', origin: 'https://x', protocol: 'https:' }, locationOver || {});
+    sandbox.MosaicAppCheck = require('../public/app-check-client.js');
     sandbox.navigator = { share: null };
     sandbox.FormsCore = require('../public/forms-core.js');
     // The page loads this too, and the component spreads its state in — a
