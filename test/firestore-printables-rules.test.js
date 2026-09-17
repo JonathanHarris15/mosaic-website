@@ -41,18 +41,20 @@ test('a Printable is written by editors and above, and nobody below', () => {
 
 test('a member reads a Printable only when an editor marked it visible to members (MS-400)', () => {
     const block = code(printablesBlock());
-    assert.match(block, /allow read: if isEditor\(\)\s*\|\| \(isMember\(\) && \('memberVisible' in resource\.data\) && resource\.data\.memberVisible == true\);/);
+    assert.match(block, /allow read: if readsAsEditor\(\)\s*\|\| \(isMember\(\) && \('memberVisible' in resource\.data\) && resource\.data\.memberVisible == true\);/);
     assert.doesNotMatch(block, /isSignedIn\(\)/, 'signed-in is not the floor for a Printable; member is');
 });
 
 test('a Printable folder is editor-and-above, the same ladder as the Forms library', () => {
     const block = code(foldersBlock());
-    assert.match(block, /allow read, write: if isEditor\(\);/);
+    assert.match(block, /allow read: if readsAsEditor\(\);/);
+    assert.match(block, /allow write: if isEditor\(\);/);
     assert.doesNotMatch(block, /if true/);
 });
 
 test('a custom page template is editor-and-above, like the projects it seeds', () => {
     const block = code(templatesBlock());
-    assert.match(block, /allow read, write: if isEditor\(\);/);
+    assert.match(block, /allow read: if readsAsEditor\(\);/);
+    assert.match(block, /allow write: if isEditor\(\);/);
     assert.doesNotMatch(block, /if true/);
 });

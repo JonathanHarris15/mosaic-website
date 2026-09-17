@@ -194,6 +194,8 @@ test('Shepherding data is still elder-only', () => {
     // The directory closing is a floor, not a ceiling. Nothing pastoral moves.
     const notes = blockFor(/match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n    \}/);
     const requests = blockFor(/match \/prayer_requests\/\{requestId\}\s*\{([\s\S]*?)\n      \}/);
-    assert.match(notes, /allow read, write: if isElder\(\)/);
-    assert.match(requests, /allow read, write: if isElder\(\)/);
+    assert.match(notes, /allow read: if readsAsElder\(\)/);
+    assert.match(notes, /allow write: if writesTheRecord\(\)/);
+    assert.match(requests, /allow read: if readsAsElder\(\)/);
+    assert.match(requests, /allow write: if isElder\(\)/);
 });

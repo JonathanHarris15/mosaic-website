@@ -469,7 +469,8 @@ const blockFor = (collection) => {
 [Writes.TASKS, Writes.OCCURRENCES].forEach((collection) => {
     test(`${collection} is elder-only, read and write`, () => {
         const block = blockFor(collection);
-        assert.match(block, /allow read, write: if isElder\(\);/);
+        assert.match(block, /allow read: if readsAsElder\(\);/);
+        assert.match(block, /allow write: if writesTheRecord\(\);/);
     });
 
     test(`${collection} lets nobody below an elder in`, () => {

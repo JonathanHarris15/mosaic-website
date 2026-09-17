@@ -48,8 +48,8 @@ const code = block => block
 
 test('a Form Template is editor-and-above, and nothing below', () => {
     const block = code(formsBlock());
-    assert.match(block, /allow read: if isEditor\(\)/,
-        'the floor for reading a form is isEditor()');
+    assert.match(block, /allow read: if readsAsEditor\(\)/,
+        'the floor for reading a form is readsAsEditor()');
     assert.doesNotMatch(block, /if true/,
         'a form is readable by the world — this is how the directory leaked');
     assert.doesNotMatch(block, /request\.auth != null/,
@@ -65,7 +65,7 @@ test('a Form Template is editor-and-above, and nothing below', () => {
 
 test('a form shut to elders is closed to every editor who is not one', () => {
     const block = code(formsBlock());
-    assert.match(block, /allow read: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+    assert.match(block, /allow read: if readsAsEditor\(\) && \(readsAsElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
         'an ordinary editor can still read an elder-only form');
     assert.match(block, /allow delete: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
         'an ordinary editor can still delete an elder-only form');
@@ -92,7 +92,7 @@ test('a missing flag is an ordinary form, because that is what every form was', 
 
 test('a Response is read by editors and written by nobody with a browser', () => {
     const block = code(responsesBlock());
-    assert.match(block, /allow read: if isEditor\(\)/);
+    assert.match(block, /allow read: if readsAsEditor\(\)/);
     assert.match(block, /allow write: if false;/,
         'responses are written server-side, because validation cannot live in a browser we do not control');
     assert.doesNotMatch(block, /if true/);
@@ -104,7 +104,7 @@ test('the answers to an elder-only form are shut too, off a stamp on the answer 
     // same reason Event visibility is stamped onto every occurrence), so the
     // flag rides on the answer and the function writes it there.
     const block = code(responsesBlock());
-    assert.match(block, /allow read: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+    assert.match(block, /allow read: if readsAsEditor\(\) && \(readsAsElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
         'an ordinary editor can still read the answers to an elder-only form');
 });
 
@@ -135,8 +135,10 @@ const foldersBlock = () => blockFor(/match \/form_folders\/\{folderId\}\s*\{([\s
 
 test('a Form Folder is editor-and-above, like the forms it holds', () => {
     const block = code(foldersBlock());
-    assert.match(block, /allow read, write: if isEditor\(\);/,
-        'the folder collection should be plain isEditor()');
+    assert.match(block, /allow read: if readsAsEditor\(\);/,
+        'the folder collection should be readable as an editor');
+    assert.match(block, /allow write: if isEditor\(\);/,
+        'the folder collection write stays the editor ladder');
     assert.doesNotMatch(block, /if true/,
         'folder names would list the whole library to the world');
     assert.doesNotMatch(block, /request\.auth != null/,

@@ -119,7 +119,7 @@ test('the collection-group read is editors only', () => {
     // members it would hand the whole church's holidays to anyone signed in —
     // exactly what the per-person rule is there to stop.
     const block = awayGroupBlock();
-    assert.match(block, /allow read: if isEditor\(\);/);
+    assert.match(block, /allow read: if readsAsEditor\(\);/);
     assert.doesNotMatch(block, /if true/);
     assert.doesNotMatch(block, /request\.auth != null/);
 });

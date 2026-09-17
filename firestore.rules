@@ -64,6 +64,29 @@ service cloud.firestore {
       return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
     }
 
+    // Pastoral Assistant is a grant on the account, not a Permission Level
+    // (MS-426, ADR-0065). These restate AccessCore — Firestore cannot import
+    // it — and test/firestore-pastoral-assistant-rules.test.js pins them.
+    // Fail closed: a missing user doc, or a missing / non-true flag, is not
+    // a grant.
+    function isPastoralAssistant() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true;
+    }
+
+    function readsAsElder() {
+      return isElder() || isPastoralAssistant();
+    }
+
+    function readsAsEditor() {
+      return isEditor() || isPastoralAssistant();
+    }
+
+    function writesTheRecord() {
+      return isElder() || isPastoralAssistant();
+    }
+
     // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
     // ADR-0041). Parallel to isElder()/isAdmin(): an allowlist of one value.
     function isKiosk() {
@@ -96,7 +119,9 @@ service cloud.firestore {
         && noStoredPassword()
         && (('permissionLevel' in request.resource.data)
             ? request.resource.data.permissionLevel == 'viewer'
-            : request.resource.data.role == 'viewer');
+            : request.resource.data.role == 'viewer')
+        && (!('pastoralAssistant' in request.resource.data)
+            || request.resource.data.pastoralAssistant != true);
       // Allow users to update ONLY their own dashboard card arrangement.
       // Restricting the affected keys prevents self role-escalation or tampering
       // with any other field (email, personId, etc.).
@@ -131,7 +156,7 @@ service cloud.firestore {
     match /directory_requests/{requestId} {
       // The requester sees their own; editors, elders and admins see the queue.
       allow read: if request.auth != null
-        && (requestId.matches(request.auth.uid + '_.*') || isEditor());
+        && (requestId.matches(request.auth.uid + '_.*') || readsAsEditor());
 
       // You may only ask on your own behalf, only as pending, and only in your
       // own id namespace. A link request additionally requires that you are not
@@ -216,8 +241,8 @@ service cloud.firestore {
     function rankCanSee(visibility) {
       return visibility == 'public'
         || (isMember() && visibility == 'member')
-        || (isEditor() && visibility in ['member', 'participant', 'editor'])
-        || (isElder() && visibility == 'elder');
+        || (readsAsEditor() && visibility in ['member', 'participant', 'editor'])
+        || (readsAsElder() && visibility == 'elder');
     }
 
     // The one rung rank cannot answer, checked against the occurrence's own
@@ -269,7 +294,7 @@ service cloud.firestore {
       // Kiosk that writes it.
       match /attendance/{personId} {
         allow read: if isKiosk()
-          || isEditor()
+          || readsAsEditor()
           || (request.auth != null && personId == myPersonId())
           || (request.auth != null
               && get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.rosterShared == true
@@ -286,7 +311,7 @@ service cloud.firestore {
       // what you have been asked to do. Everyone else's depends on the Event's
       // roster setting, which is the editor's choice per Event.
       match /roster/{assignmentId} {
-        allow read: if isEditor()
+        allow read: if readsAsEditor()
           || (request.auth != null && resource.data.personId == myPersonId())
           || (request.auth != null
               && get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.rosterShared == true
@@ -338,7 +363,7 @@ service cloud.firestore {
     // makes it legal; unconstrained it returns other people's rows, they fail,
     // and the whole read errors.
     match /{path=**}/roster/{assignmentId} {
-      allow read: if isEditor()
+      allow read: if readsAsEditor()
         || (request.auth != null && resource.data.personId == myPersonId());
     }
 
@@ -508,7 +533,8 @@ service cloud.firestore {
       // Prayer Requests are sensitive: visible to Elders/super admins only.
       // Keyed by service date so they line up with the order of service.
       match /prayer_requests/{requestId} {
-        allow read, write: if isElder();
+        allow read: if readsAsElder();
+        allow write: if isElder();
       }
 
       // Away (MS-188): stretches of whole days this Person said they will not
@@ -528,7 +554,9 @@ service cloud.firestore {
       // radius. It carries no reason — a *why* is pastoral and belongs in a
       // Shepherding Note, behind isElder().
       match /away/{stretchId} {
-        allow read, create, update, delete: if isEditor()
+        allow read: if readsAsEditor()
+          || (request.auth != null && personId == myPersonId());
+        allow create, update, delete: if isEditor()
           || (request.auth != null && personId == myPersonId());
       }
     }
@@ -556,7 +584,7 @@ service cloud.firestore {
     // document would fail, so a member running it does not get their own rows
     // back — they get an error that reads like "nobody is ever away".
     match /{path=**}/away/{stretchId} {
-      allow read: if isEditor();
+      allow read: if readsAsEditor();
     }
 
     // The directory's tag vocabulary, including which tags hide people. Read
@@ -599,7 +627,8 @@ service cloud.firestore {
 
     // Shepherding System — elders and super_admins only
     match /shepherding_tags/{tagId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if isElder();
     }
 
     // Relationships (ADR-0012, MS-89; enriched by ADR-0014, MS-97): the
@@ -628,7 +657,7 @@ service cloud.firestore {
     // An unconstrained query does not return fewer rows — it errors outright,
     // and the error looks exactly like "this church has no relationship types".
     function canReadRelationshipRecord() {
-      return isElder() || (isEditor() && resource.data.sharedWithEditors == true);
+      return readsAsElder() || (readsAsEditor() && resource.data.sharedWithEditors == true);
     }
 
     match /relationships/{edgeId} {
@@ -649,43 +678,52 @@ service cloud.firestore {
     }
 
     match /shepherding_views/{viewId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if isElder();
     }
 
     // Superseded by shepherding_tasks (MS-79). Left readable so the migration
     // can be checked before anything is thrown away.
     match /shepherding_reminders/{reminderId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if isElder();
     }
 
     // A Task, and the standing commitment behind a repeating one — one
     // collection, because a series IS a Task that happens more than once.
-    // Elder-only, like everything else on the Shepherd Dashboard: pastoral
-    // loose ends are not congregation reading.
+    // Elder-gated, like everything else on the Shepherd Dashboard: pastoral
+    // loose ends are not congregation reading. A Pastoral Assistant writes
+    // the record (MS-426).
     match /shepherding_tasks/{taskId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if writesTheRecord();
     }
 
     // The sparse dated records of a repeat (ADR-0060) — one exists only once
     // something has been said about a date.
     match /shepherding_task_occurrences/{occurrenceId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if writesTheRecord();
     }
 
     match /elder_meetings/{meetingId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if isElder();
     }
 
     match /elder_documents/{docId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if writesTheRecord();
     }
 
     match /elder_document_structure/{docId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if writesTheRecord();
     }
 
     match /people/{personId}/shepherding_notes/{noteId} {
-      allow read, write: if isElder();
+      allow read: if readsAsElder();
+      allow write: if writesTheRecord();
     }
 
     // The Pastoral Record. Elder-only to read, and elder-only to change or
@@ -703,7 +741,7 @@ service cloud.firestore {
     // entry must also be signed with their own uid: a record that could be
     // filed under somebody else's name is not a record.
     match /people/{personId}/shepherding_activity/{activityId} {
-      allow read: if isElder();
+      allow read: if readsAsElder();
       allow update, delete: if isElder();
       allow create: if isElder()
         || (isEditor()
@@ -713,13 +751,13 @@ service cloud.firestore {
 
     // Collection group query for shepherding_notes (used by People list page)
     match /{path=**}/shepherding_notes/{noteId} {
-      allow read: if isElder();
+      allow read: if readsAsElder();
     }
 
     // Collection group query for shepherding_activity (Tag Changes), used by the
     // Shepherd Landing Page to derive Tag Hold for the Hold-Duration filter.
     match /{path=**}/shepherding_activity/{activityId} {
-      allow read: if isElder();
+      allow read: if readsAsElder();
     }
 
     // Inbound replies to SMS test texts. Written only by the smsInbound webhook
@@ -758,7 +796,7 @@ service cloud.firestore {
     // to anybody who cannot edit — and the Service Calendar is a page an
     // anonymous visitor can open.
     match /presence/{uid} {
-      allow read: if isEditor();
+      allow read: if readsAsEditor();
       allow write, delete: if isEditor() && request.auth.uid == uid;
     }
 
@@ -773,7 +811,7 @@ service cloud.firestore {
     // every editor, and narrowing /presence's read would break the Order of
     // Service's listener for the editors who write guides (MS-477).
     match /shepherding_presence/{uid} {
-      allow read: if isElder();
+      allow read: if readsAsElder();
       allow write, delete: if isElder() && request.auth.uid == uid;
     }
 
@@ -847,7 +885,7 @@ service cloud.firestore {
       return data.eldersOnly == true;
     }
     match /mcp_guidance/{fileId} {
-      allow read: if isElder() || (isEditor() && !guidanceLocked(resource.data));
+      allow read: if readsAsElder() || (readsAsEditor() && !guidanceLocked(resource.data));
       allow create: if isElder() ||
           (isEditor() && !guidanceLocked(request.resource.data));
       allow update: if isElder() ||
@@ -868,7 +906,7 @@ service cloud.firestore {
       // Restoring an old version does NOT write here either — it writes the
       // parent document, and the trigger files the restore as a new entry.
       match /versions/{versionId} {
-        allow read: if isEditor();
+        allow read: if readsAsEditor();
         allow write: if false;
       }
     }
@@ -908,7 +946,7 @@ service cloud.firestore {
     }
 
     match /forms/{formId} {
-      allow read: if isEditor() && (isElder() || !shutToElders(resource.data));
+      allow read: if readsAsEditor() && (readsAsElder() || !shutToElders(resource.data));
       allow create: if isEditor()
         && (isElder() || !shutToElders(request.resource.data));
       allow update: if isEditor()
@@ -927,7 +965,8 @@ service cloud.firestore {
     // the same time cannot overwrite each other here: they write different
     // records, not two versions of one shared tree.
     match /form_folders/{folderId} {
-      allow read, write: if isEditor();
+      allow read: if readsAsEditor();
+      allow write: if isEditor();
     }
 
     // Printables (MS-359): a project the church lays out and prints — a
@@ -943,7 +982,7 @@ service cloud.firestore {
     // hand, and a member only ever finds the link on an event they can open.
     // A missing flag reads as false; nothing below member reads at all.
     match /printables/{printableId} {
-      allow read: if isEditor()
+      allow read: if readsAsEditor()
         || (isMember() && ('memberVisible' in resource.data) && resource.data.memberVisible == true);
       allow write: if isEditor();
     }
@@ -953,13 +992,15 @@ service cloud.firestore {
     // remember its Printables (ADR-0054) — two editors filing at the same
     // moment write two different records.
     match /printable_folders/{folderId} {
-      allow read, write: if isEditor();
+      allow read: if readsAsEditor();
+      allow write: if isEditor();
     }
 
     // A custom page template (MS-393): a page somebody built, kept to start
     // the next project from. Editor and above, like the projects it seeds.
     match /printable_templates/{templateId} {
-      allow read, write: if isEditor();
+      allow read: if readsAsEditor();
+      allow write: if isEditor();
     }
 
     // One person's answers. Editors read them on the Responses tab; the
@@ -972,7 +1013,7 @@ service cloud.firestore {
     // rides on the answer and is read straight off it here. The function
     // stamps it; no client writes these at all.
     match /form_responses/{responseId} {
-      allow read: if isEditor() && (isElder() || !shutToElders(resource.data));
+      allow read: if readsAsEditor() && (readsAsElder() || !shutToElders(resource.data));
       allow write: if false;
     }
 

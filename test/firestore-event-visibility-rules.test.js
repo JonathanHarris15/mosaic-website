@@ -72,8 +72,8 @@ test('each rung is gated on the rank that owns it', () => {
     const body = fnBody('rankCanSee');
     assert.match(body, /visibility == 'public'/, 'public needs no rank at all');
     assert.match(body, /isMember\(\) && visibility == 'member'/);
-    assert.match(body, /isEditor\(\) && visibility in \[[^\]]*'editor'/);
-    assert.match(body, /isElder\(\) && visibility == 'elder'/);
+    assert.match(body, /readsAsEditor\(\) && visibility in \[[^\]]*'editor'/);
+    assert.match(body, /readsAsElder\(\) && visibility == 'elder'/);
 });
 
 test('a member cannot reach participant Events by rank alone', () => {
@@ -86,7 +86,7 @@ test('a member cannot reach participant Events by rank alone', () => {
 });
 
 test('an editor and above sees participant Events without holding a Role', () => {
-    assert.match(fnBody('rankCanSee'), /isEditor\(\) && visibility in \[[^\]]*'participant'/);
+    assert.match(fnBody('rankCanSee'), /readsAsEditor\(\) && visibility in \[[^\]]*'participant'/);
 });
 
 // ── Failing closed ────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ test('the collection-group roster rule lets you read your own row and nobody els
     // reading anybody else's, so it queries each roster for your Person id.
     const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n    \}/);
     assert.match(block, /resource\.data\.personId == myPersonId\(\)/);
-    assert.match(block, /isEditor\(\)/);
+    assert.match(block, /readsAsEditor\(\)/);
     assert.doesNotMatch(block, /allow read: if true/);
 });
 
