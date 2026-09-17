@@ -81,6 +81,31 @@ to disagree. The rung is checked inside the function for everybody.
 **App Check must be configured before a public form ships**, not after. It is
 listed as an acceptance criterion on MS-360 rather than left as ops work.
 
+## Refinement — monitor then enforce (MS-508)
+
+The first enforce flip (MS-367 era) skipped monitor. The phone shell could not
+present a valid token (`capacitor://localhost` against a WEBSITE reCAPTCHA
+key; no debug-token flag before `activate()`), and a `<head>` activation hang
+had already taught us that a missing token looks like a blank page. Enforce
+was turned off. A comment on `publicForm` still said it was on.
+
+**So: one door, three modes, platform `enforceAppCheck` left false.**
+
+- The answering page collects a token when `mode` is `monitor` or `enforce`
+  (`public/app-check-config.js`). Phone hops onto `liveOrigin`; localhost uses
+  the debug-token exchange. Still `form-answer.html` → `publicForm`.
+- `publicForm` logs missing/invalid tokens in **monitor** and refuses them in
+  **enforce**, via `functions/app-check-door.js` and
+  `PUBLIC_FORM_APP_CHECK_MODE`. Default **monitor**, so a merge cannot brick
+  prod. The enforce flip is Atlas-escalated (see
+  `docs/ops/ms-508-app-check-break-glass.md`).
+- MS-364's rate limit, when it ships, is complementary. It is not a second
+  public submit path and it is not a substitute for App Check.
+
+The stale "App Check is ENFORCED" comment is gone. If the live param and this
+ADR disagree, the param plus the break-glass doc are the operators' truth;
+update this section when enforce actually lands.
+
 ## Refinement — what a form's link actually looks like (2026-09-02)
 
 The MS-360 design came back with `mosaicchurch.app/f/monday-food`, and it was

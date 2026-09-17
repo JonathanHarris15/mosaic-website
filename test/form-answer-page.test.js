@@ -23,6 +23,13 @@ function loadPage(reply, locationOver) {
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
     sandbox.location = Object.assign({ pathname: '/form-answer.html', search: '', href: 'https://x/', hostname: 'x', origin: 'https://x', protocol: 'https:' }, locationOver || {});
+    sandbox.MOSAIC_APP_CHECK = {
+        mode: 'monitor',
+        enabled: true,
+        siteKey: 'test-site-key',
+        provider: 'enterprise',
+        liveOrigin: 'https://mosaic-hymn-database.web.app',
+    };
     sandbox.MosaicAppCheck = require('../public/app-check-client.js');
     sandbox.navigator = { share: null };
     sandbox.FormsCore = require('../public/forms-core.js');
@@ -42,9 +49,15 @@ function loadPage(reply, locationOver) {
     };
 
     const signedOut = [];
+    function appCheck() {
+        return {activate() {}};
+    }
+    appCheck.ReCaptchaEnterpriseProvider = function () {};
+    appCheck.ReCaptchaV3Provider = function () {};
     sandbox.firebase = {
         apps: [],
         initializeApp() { sandbox.firebase.apps.push({}); },
+        appCheck: appCheck,
         app() {
             return {
                 functions() {

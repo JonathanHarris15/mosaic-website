@@ -182,7 +182,7 @@
         const info = (log && log.info) || (global && global.console && global.console.info.bind(global.console)) || function () {};
 
         if (!collectsTokens(cfg)) {
-            info('App Check is off at both ends on purpose — see app-check-config.js.');
+            info('App Check is off — see app-check-config.js.');
             return {started: false, reason: 'off'};
         }
         const key = siteKey(cfg);

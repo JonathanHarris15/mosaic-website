@@ -198,19 +198,22 @@ TOTAL_STAGES=6
 banner "App Check for Mosaic's public forms"
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
-stage "What this is, and why the form is refusing everything"
+stage "What this is, and why the form was refusing everything"
 say "A public form lives at an address anybody can reach. That is the point —"
 say "it is for people outside the church. But nothing about that address says"
 say "the request came from a real person on your page, so a script could fill"
 say "a bible study sign-up with rubbish a thousand times a second."
 say ""
 say "App Check has the browser quietly collect a token proving it is running"
-say "YOUR website. The server refuses anything that arrives without one."
+say "YOUR website. After MS-508 the door MONITORS first: missing tokens are"
+say "logged, not refused. Enforce is a later, Atlas-escalated param flip."
 say "Whoever fills the form in sees nothing at all — no 'tick to prove you"
 say "are human'."
 say ""
-warn "Until this is done, public forms refuse EVERY answer, including real ones."
-note "Members-only forms are unaffected — they are already protected by sign-in."
+warn "Without a site key the page cannot collect a token. In monitor that is"
+warn "a log line; in enforce every answer is refused, including real ones."
+note "Members-only forms still need sign-in. App Check is the bot check on"
+note "the public door, not a replacement for the rung."
 say ""
 say "You will need about five minutes and a browser signed in to Firebase."
 pause "Ready?"
@@ -311,9 +314,10 @@ pause "Done, or skipping"
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
 stage "Deploy, and check it actually works"
-say "The server has enforced App Check since MS-367. It is the browser half"
-say "that was missing, and it is now in the repo — so this deploy is what"
-say "makes a public form answerable."
+say "The door is in MONITOR after MS-508. The answering page collects a token;"
+say "publicForm logs missing ones and does not refuse them. Enforce is a later"
+say "param flip (PUBLIC_FORM_APP_CHECK_MODE), Atlas-escalated — do not turn"
+say "platform enforceAppCheck on. See docs/ops/ms-508-app-check-break-glass.md."
 say ""
 if confirm "Deploy hosting and the publicForm function now?"; then
   say "Deploying. This takes a couple of minutes."
@@ -330,7 +334,9 @@ else
 fi
 say ""
 say "To check it: publish a public form, open its link on a phone with wifi"
-say "off, and answer it. If it goes through, App Check is working."
+say "off, and answer it. If it goes through, the token path is working."
+say "Then watch Cloud Logging for 'publicForm app-check' with"
+say "appCheckToken=missing-or-invalid — that is the monitor signal."
 note "Commit public/app-check-config.js — the key belongs in the repo."
 pause
 

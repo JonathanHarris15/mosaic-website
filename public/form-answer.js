@@ -56,11 +56,12 @@
     // filling the form in — no "tick to prove you are human", because a waiver
     // is already friction and a second hurdle loses people.
     //
-    // ⚠ `enabled` HAS TO AGREE WITH enforceAppCheck ON THE SERVER. Enabled here
-    // and not enforced there checks nothing; enforced there and not enabled
-    // here refuses everybody. It is currently off at both ends — the reasons
-    // are written out in app-check-config.js, and a test fails if they drift
-    // apart.
+    // ⚠ `mode` HAS TO AGREE WITH PUBLIC_FORM_APP_CHECK_MODE ON THE SERVER.
+    // Monitor here and enforce there still collects tokens (safe). Enforce
+    // there and off here refuses everybody. Platform enforceAppCheck stays
+    // false in every mode so the handler can log. The reasons and the
+    // break-glass steps are in app-check-config.js and
+    // docs/ops/ms-508-app-check-break-glass.md.
     //
     // Token paths (MS-535) live in app-check-client.js so they can be tested
     // without Firebase: live HTTPS uses the Enterprise site key; localhost
