@@ -649,7 +649,11 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var isElder = canReadElder;
     var saveStatus = saveStatusS[0];
     var saveLabel = saveStatus === "saving" ? "Saving…" : saveStatus === "unsaved" ? "Unsaved" : "Saved";
     var savedRight = html`<span style=${{ display: "flex", alignItems: "center", gap: 5, paddingRight: 8, fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: saveStatus === "saved" ? "var(--secondary)" : "var(--on-surface-variant)" }}>
