@@ -127,8 +127,8 @@ document.addEventListener('alpine:init', () => {
                 // being broken rather than the network being slow.
                 try {
                     const userData = await getUserData(user.uid);
-                    const level = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                    this.isElder = ['elder', 'super_admin'].includes(level);
+                    Object.assign(this, AccessCore.pageFlags(userData));
+                    this.isElder = this.canReadElder;
                     if (!this.isElder) {
                         if (!this.embedded) window.location.href = 'index.html';
                         this.loading = false;

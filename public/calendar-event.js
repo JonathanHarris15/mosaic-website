@@ -234,7 +234,8 @@
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            this.rank = (data && (data.permissionLevel || data.role)) || 'viewer';
+                            Object.assign(this, AccessCore.pageFlags(data));
+                            this.rank = this.currentPermissionLevel;
                         } catch (e) {
                             this.rank = 'viewer';
                         }
@@ -702,7 +703,7 @@
             },
 
             get isEditor() {
-                return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
+                return AccessCore.writesAsEditor(this.account || this.rank);
             },
 
             // Attaching or removing a file is editor-only; SEEING what is

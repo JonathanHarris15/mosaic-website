@@ -203,3 +203,14 @@ test('the existing shared cores honour the grant when handed an account', () => 
     assert.equal(Directory.canResolve(editorPa), true);
     assert.equal(Printable.mayRead(editorPa, 'editor'), true);
 });
+
+test('pageFlags is the one object a surface stores after reading the account', () => {
+    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flags.canReadElder, true);
+    assert.equal(flags.canReadEditor, true);
+    assert.equal(flags.canWriteRecord, true);
+    assert.equal(flags.canDecide, false);
+    assert.equal(flags.canWriteEditor, false);
+    assert.equal(flags.pastoralAssistant, true);
+    assert.equal(flags.currentPermissionLevel, 'member');
+});

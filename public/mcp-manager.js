@@ -69,10 +69,9 @@ function mcpManager() {
                     window.location.href = 'login.html';
                     return;
                 }
-                let level = 'viewer';
+                let userData = null;
                 try {
-                    const userData = await getUserData(user.uid);
-                    level = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                    userData = await getUserData(user.uid);
                 } catch (e) {
                     console.error('Could not read your permissions:', e);
                 }
@@ -81,9 +80,10 @@ function mcpManager() {
                 // guidance file can steer the assistant, so this screen is
                 // gated on the same rung that can already rewrite a Sunday.
                 // The rules enforce it too — a hidden page is not a lock.
-                this.permissionLevel = level;
-                this.canEdit = ['editor', 'elder', 'admin', 'super_admin'].includes(level);
-                if (!this.canEdit) {
+                Object.assign(this, AccessCore.pageFlags(userData));
+                this.permissionLevel = this.currentPermissionLevel;
+                this.canEdit = this.canWriteEditor;
+                if (!this.canReadEditor) {
                     this.refused = true;
                     this.ready = true;
                     return;
@@ -493,7 +493,7 @@ The current wording is not lost — ` +
         // Whether the person reading this page could actually use the
         // elder-only groups, or is being shown what somebody else can do.
         get isElder() {
-            return ['elder', 'super_admin'].indexOf(this.permissionLevel) !== -1;
+            return this.canReadElder;
         },
 
         // A tool name reads better as words in a list than as a symbol. Any

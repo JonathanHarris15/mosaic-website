@@ -943,8 +943,9 @@ function serviceForm() {
                         const userData = await getUserData(user.uid);
                         const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
                         this.currentPermissionLevel = permissionLevel;
-                        this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel));
-                        this.isShepherd = ['elder', 'super_admin'].includes(permissionLevel);
+                        Object.assign(this, AccessCore.pageFlags(userData));
+                        this.canEdit = this.canWriteEditor;
+                        this.isShepherd = this.canReadElder;
                         // Who this is, as a Person — stamped onto every element
                         // they decide (MS-246).
                         this.me = await MosaicIdentity.me({ db, getUserData, uid: user.uid });

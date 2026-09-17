@@ -47,7 +47,8 @@ document.addEventListener('alpine:init', () => {
                 }
                 const userData = await getUserData(user.uid);
                 this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
+                Object.assign(this, AccessCore.pageFlags(userData));
+                if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
                 }
@@ -57,6 +58,7 @@ document.addEventListener('alpine:init', () => {
                 // configure keeps the toggle available for consistency.
                 ShepherdingBlur.configure({
                     permissionLevel: this.currentPermissionLevel,
+                    pastoralAssistant: this.pastoralAssistant,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });

@@ -24,7 +24,7 @@ function printableView() {
         showWarnings: false,
 
         get template() { return this.project ? this.project.template : null; },
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get editorHref() { return 'printable-editor.html?id=' + encodeURIComponent(this.id); },
 
         async init() {

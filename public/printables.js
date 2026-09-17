@@ -49,7 +49,7 @@ function printablesPage() {
         get signInHref() { return this.inShell ? 'mobile.html#/login' : 'index.html'; },
 
         mayManagePrintables(level) {
-            return ['editor', 'admin', 'elder', 'super_admin'].includes(level);
+            return AccessCore.writesAsEditor(level);
         },
 
         // What a row says under the name: the paper it is on and how many
@@ -136,8 +136,8 @@ function printablesPage() {
                 // ever.
                 try {
                     const userData = await getUserData(user.uid);
-                    this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                    if (!this.mayManagePrintables(this.currentPermissionLevel)) {
+                    Object.assign(this, AccessCore.pageFlags(userData));
+                    if (!this.canReadEditor) {
                         window.location.href = this.homeHref;
                         return;
                     }

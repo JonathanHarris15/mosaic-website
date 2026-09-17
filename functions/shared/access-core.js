@@ -112,6 +112,22 @@
         return isPastoralAssistant(value) ? PASTORAL_ASSISTANT_LABEL : '';
     }
 
+    // What a page stores after reading users/{uid}. One object so sixty
+    // Alpine/Preact surfaces do not each invent a different flag name.
+    function pageFlags(userData) {
+        const account = accountOf(userData);
+        return {
+            account: account,
+            currentPermissionLevel: account.permissionLevel || 'viewer',
+            pastoralAssistant: account.pastoralAssistant,
+            canReadElder: readsAsElder(account),
+            canDecide: isAnElder(account),
+            canWriteRecord: writesTheRecord(account),
+            canWriteEditor: writesAsEditor(account),
+            canReadEditor: readsAsEditor(account),
+        };
+    }
+
     const AccessCore = {
         PASTORAL_ASSISTANT_LABEL,
         EDITOR_WRITE_LEVELS,
@@ -128,6 +144,7 @@
         eventRungsFor,
         liftsHidden,
         badgeLabel,
+        pageFlags,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

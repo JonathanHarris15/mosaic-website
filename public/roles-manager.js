@@ -89,7 +89,10 @@ window.RolesManager = () => ({
     // Editor and above. The card is hidden from everyone else, but a URL can
     // always be typed, so the page gates itself as well.
     mayManageRoles(permissionLevel) {
-        return ['editor', 'elder', 'admin', 'super_admin'].indexOf(permissionLevel) !== -1;
+        return AccessCore.writesAsEditor(permissionLevel);
+    },
+    mayOpenRoles(account) {
+        return AccessCore.readsAsEditor(account);
     },
 
     // ── Where "away from here" is ────────────────────────────────────────────
@@ -119,8 +122,8 @@ window.RolesManager = () => ({
                 return;
             }
             const userData = await getUserData(user.uid);
-            this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-            if (!this.mayManageRoles(this.currentPermissionLevel)) {
+            Object.assign(this, AccessCore.pageFlags(userData));
+            if (!this.canReadEditor) {
                 window.location.href = this.homeHref;
                 return;
             }

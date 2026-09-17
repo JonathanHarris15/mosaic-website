@@ -109,7 +109,7 @@ function printableEditor() {
 
         // ── Derived ──────────────────────────────────────────────────────
 
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get template() { return this.project ? this.project.template : null; },
         get pages() { return this.project ? this.project.pages : []; },
         get currentPage() {

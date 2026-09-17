@@ -57,7 +57,7 @@ export function analyticsPage() {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+                Object.assign(this, AccessCore.pageFlags(userData));
 
                 // ── Editors and above ────────────────────────────────────────
                 //
@@ -92,11 +92,14 @@ export function analyticsPage() {
         },
 
         get isAdmin() {
-            return ['elder', 'super_admin'].includes(this.currentPermissionLevel);
+            return AccessCore.readsAsElder({
+                permissionLevel: this.currentPermissionLevel,
+                pastoralAssistant: this.pastoralAssistant,
+            });
         },
 
         get isEditor() {
-            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel);
+            return this.canReadEditor;
         },
 
         async loadTagMetadata() {

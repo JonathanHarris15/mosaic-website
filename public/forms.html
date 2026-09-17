@@ -28,11 +28,11 @@
                 <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
             </div>
             <div class="m-header__actions">
-                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startFolder()" x-show="!creatingFolder && !creating">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startFolder()" x-show="canWriteEditor && !creatingFolder && !creating">
                     <span class="material-symbols-outlined">create_new_folder</span>
                     <span class="m-btn__label">New folder</span>
                 </button>
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating && !creatingFolder">
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="canWriteEditor && !creating && !creatingFolder">
                     <span class="material-symbols-outlined">post_add</span>
                     <span class="m-btn__label">New form</span>
                 </button>

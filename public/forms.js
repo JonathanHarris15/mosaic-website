@@ -55,7 +55,10 @@ function formsPage() {
         get signInHref() { return this.inShell ? 'mobile.html#/login' : 'index.html'; },
 
         mayManageForms(level) {
-            return ['editor', 'admin', 'elder', 'super_admin'].includes(level);
+            return AccessCore.writesAsEditor(level);
+        },
+        mayOpenForms(account) {
+            return AccessCore.readsAsEditor(account);
         },
 
         // ⚠ NOT A PERMISSION — A QUERY SHAPE (MS-404). A reader below elder has
@@ -212,8 +215,8 @@ function formsPage() {
                 // in place is better than one that can only be reloaded.
                 try {
                     const userData = await getUserData(user.uid);
-                    this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                    if (!this.mayManageForms(this.currentPermissionLevel)) {
+                    Object.assign(this, AccessCore.pageFlags(userData));
+                    if (!this.canReadEditor) {
                         window.location.href = this.homeHref;
                         return;
                     }
@@ -228,7 +231,7 @@ function formsPage() {
                     // empty one, because the same principle applies as when a
                     // folder is deleted: a live form whose link people are
                     // answering has to stay findable.
-                    this.forms = await FormsStore.listForms(db, this.isElder);
+                    this.forms = await FormsStore.listForms(db, this.canReadElder);
                     try {
                         this.folders = await FormsStore.listFolders(db);
                     } catch (e) {
