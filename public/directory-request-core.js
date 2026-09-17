@@ -64,8 +64,19 @@
     // an admin to confirm that a name belongs to a face.
     const RESOLVER_LEVELS = ['editor', 'elder', 'admin', 'super_admin'];
 
+    function access() {
+        if (typeof AccessCore !== 'undefined') return AccessCore;
+        if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
+
     function canResolve(permissionLevel) {
-        return RESOLVER_LEVELS.indexOf(permissionLevel) !== -1;
+        const Access = access();
+        if (Access) return Access.writesAsEditor(permissionLevel);
+        const level = permissionLevel && typeof permissionLevel === 'object'
+            ? (permissionLevel.permissionLevel || permissionLevel.role)
+            : permissionLevel;
+        return RESOLVER_LEVELS.indexOf(level) !== -1;
     }
 
     // May this User raise this kind of request? A link request needs them NOT to

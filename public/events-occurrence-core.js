@@ -93,6 +93,10 @@
     // answerable by rank for a member — that is the whole reason the Calendar
     // runs a second `array-contains` query — but everyone above participant sees
     // participant-level Events without holding a Role.
+    //
+    // ⚠ THE LIVING COPY IS AccessCore.eventRungsFor. This table is the
+    // fallback for a page that has not loaded access-core.js yet, and a pin
+    // that today's answers did not move when the grant landed (MS-515).
     const RUNGS_BY_RANK = Object.freeze({
         viewer: ['public'],
         member: ['public', 'member'],
@@ -101,6 +105,12 @@
         elder: ['public', 'member', 'participant', 'editor', 'elder'],
         super_admin: ['public', 'member', 'participant', 'editor', 'elder'],
     });
+
+    function access() {
+        if (typeof AccessCore !== 'undefined') return AccessCore;
+        if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
 
     // ── Dates ─────────────────────────────────────────────────────────────────
     //
@@ -882,6 +892,8 @@
     }
 
     function rungsFor(rank) {
+        const Access = access();
+        if (Access) return Access.eventRungsFor(rank);
         return RUNGS_BY_RANK[rank] || ['public'];
     }
 

@@ -35,6 +35,12 @@ const TO = path.join(ROOT, 'functions', 'shared');
 // others in this list, which is what makes copying them safe — a module that
 // reached for the DOM or for Firestore could not come along.
 const MODULES = [
+    // MS-426. The four access questions — reads-as-elder, reads-as-editor,
+    // writes-the-record, is-an-elder — plus Event rungs and hidden-tag
+    // lifting. Everything else that used to carry its own rank list asks
+    // here, so a Pastoral Assistant cannot be remembered in one door and
+    // forgotten in another. First because the modules below require it.
+    'access-core.js',
     'events-occurrence-core.js',
     // MS-79. Every rule about a Task — when one is overdue, which dates a
     // repeat produces, what an occurrence may override — and the writes in

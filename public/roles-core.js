@@ -402,11 +402,23 @@
     //
     // `hidingTags` are the tag ids whose `people_tags` document carries
     // `hidePeople: true`. Elders and super admins are who those tags hide people
-    // FROM everyone else for, so they still see them.
+    // FROM everyone else for, so they still see them. A Pastoral Assistant
+    // reads as an elder, so they see them too (MS-426).
     const SEES_HIDDEN = Object.freeze(['elder', 'super_admin']);
 
+    function access() {
+        if (typeof AccessCore !== 'undefined') return AccessCore;
+        if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
+
     function seesHidden(rank) {
-        return SEES_HIDDEN.indexOf(rank) !== -1;
+        const Access = access();
+        if (Access) return Access.liftsHidden(rank);
+        const level = rank && typeof rank === 'object'
+            ? (rank.permissionLevel || rank.role)
+            : rank;
+        return SEES_HIDDEN.indexOf(level) !== -1;
     }
 
     // The tags themselves can be hidden, separately from the people they carry.
@@ -423,7 +435,7 @@
     function assignablePeople(people, options) {
         const opts = options || {};
         const hiding = opts.hidingTags || [];
-        const seesHidden = SEES_HIDDEN.indexOf(opts.rank) !== -1;
+        const seesHiddenPeople = seesHidden(opts.account || opts.rank);
 
         return (people || []).filter(person => {
             if (isInactive(person)) return false;
@@ -432,7 +444,7 @@
             // is not one. A four-year-old is not offered for coffee to an elder
             // either.
             if (doesNotServe(person)) return false;
-            if (seesHidden) return true;
+            if (seesHiddenPeople) return true;
             if (person && person.shepherdingHidden) return false;
             return !((person && person.tags) || []).some(tag => hiding.indexOf(tag) !== -1);
         });

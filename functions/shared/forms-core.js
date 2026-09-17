@@ -517,8 +517,19 @@
     // document where the field is simply absent.
     const ELDER_RANKS = ['elder', 'super_admin'];
 
+    function access() {
+        if (typeof AccessCore !== 'undefined') return AccessCore;
+        if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
+
     function mayShutToElders(rank) {
-        return ELDER_RANKS.indexOf(String(rank || '')) !== -1;
+        const Access = access();
+        if (Access) return Access.isAnElder(rank);
+        const level = rank && typeof rank === 'object'
+            ? (rank.permissionLevel || rank.role || '')
+            : rank;
+        return ELDER_RANKS.indexOf(String(level || '')) !== -1;
     }
 
     function isElderOnly(form) {
