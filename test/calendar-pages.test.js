@@ -3548,7 +3548,7 @@ test('a super admin is not told they are a member', () => {
 
     // And both drawers read it from here rather than keeping their own.
     const data = fs.readFileSync(path.join(PUBLIC, 'mobile', 'data.js'), 'utf8');
-    assert.ok(/Destinations\.roleLabel\(/.test(data), 'the app keeps its own label map');
+    assert.ok(/Destinations\.accountLabel\(/.test(data), 'the app keeps its own label map');
     assert.ok(!/var ROLE_LABELS = \{/.test(data), 'the old label map is still in data.js');
 });
 

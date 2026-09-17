@@ -73,6 +73,20 @@
         return ROLE_LABELS[permissionLevel] || 'Member';
     }
 
+    // Level plus the Pastoral Assistant badge, from the access core so the
+    // web list and both phone drawers cannot invent a second name for it.
+    function accountLabel(account) {
+        const level = account && typeof account === 'object'
+            ? (account.permissionLevel || account.role)
+            : account;
+        const role = roleLabel(level);
+        const Access = (typeof window === 'undefined' && typeof require === 'function')
+            ? require('../access-core.js')
+            : (global.AccessCore);
+        const badge = Access ? Access.badgeLabel(account) : '';
+        return badge ? role + ' · ' + badge : role;
+    }
+
     // 1–2 letters for the avatar. Same rule as everywhere else in the app.
     function initials(name) {
         const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -134,7 +148,7 @@
 
     const Destinations = {
         DESTINATIONS, SHELL_PAGES, ROLE_LABELS, DRAWER_HEAD,
-        canSee, routeHref, roleLabel, initials,
+        canSee, routeHref, roleLabel, accountLabel, initials,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Destinations;

@@ -66,6 +66,7 @@
               // drawers cannot end up calling one person two different things.
               name: d.name || d.displayName || user.displayName || (user.email || "").split("@")[0] || "Friend",
               permissionLevel: d.permissionLevel || d.role || "viewer",
+              pastoralAssistant: d.pastoralAssistant === true,
             };
             // Your Directory Photo for the drawer's avatar. Only when you are a
             // Linked User, and never at the cost of the drawer itself: a refused
@@ -183,7 +184,7 @@
       } else {
         avatar.textContent = D.initials(name);
       }
-      role.textContent = user ? D.roleLabel(user.permissionLevel) : "Not signed in";
+      role.textContent = user ? D.accountLabel(user) : "Not signed in";
       if (user) {
         whoRow.href = D.routeHref("profile");
         whoRow.setAttribute("aria-label", "Open your profile");
