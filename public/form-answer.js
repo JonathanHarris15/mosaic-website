@@ -49,8 +49,6 @@
         appId: "1:1004095249066:web:0dcbf3cbbcd0be2ff4bbdd",
     };
 
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-
     // ── App Check ────────────────────────────────────────────────────────────
     //
     // The browser collects a token proving it is running this website, so that
@@ -58,54 +56,34 @@
     // filling the form in — no "tick to prove you are human", because a waiver
     // is already friction and a second hurdle loses people.
     //
-    // ⚠ `enabled` HAS TO AGREE WITH enforceAppCheck ON THE SERVER. Enabled here
-    // and not enforced there checks nothing; enforced there and not enabled
-    // here refuses everybody. It is currently off at both ends — the reasons
-    // are written out in app-check-config.js, and a test fails if they drift
-    // apart.
-    const appCheckOn = !!(window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.enabled);
-    const appCheckKey = (appCheckOn && window.MOSAIC_APP_CHECK.siteKey) || '';
-    const appCheckKind = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.provider) || 'enterprise';
-
-    // ⚠ ACTIVATION NEEDS <body> TO EXIST, and failing that is not survivable.
-    // The reCAPTCHA provider appends its container to document.body. From
-    // <head> that is null, and it throws AFTER App Check has already recorded
-    // an "attestation is starting" promise that will now never resolve — so
-    // every later call waits for a token that is never coming. A hang, not an
-    // error, and a hang is the one failure this page cannot report.
+    // ⚠ `mode` HAS TO AGREE WITH PUBLIC_FORM_APP_CHECK_MODE ON THE SERVER.
+    // Monitor here and enforce there still collects tokens (safe). Enforce
+    // there and off here refuses everybody. Platform enforceAppCheck stays
+    // false in every mode so the handler can log. The reasons and the
+    // break-glass steps are in app-check-config.js and
+    // docs/ops/ms-508-app-check-break-glass.md.
     //
-    // This script is loaded at the end of <body> so it cannot happen. The
-    // check is here so that if somebody ever moves it back, they get a loud
-    // refusal in the console instead of a spinner nobody can explain.
-    if (appCheckKey && !document.body) {
-        console.error(
-            'form-answer.js ran before <body> existed. App Check is NOT being ' +
-            'started, because starting it here hangs every call for ever. ' +
-            'Move this script back to the end of <body>.');
-    } else if (appCheckKey) {
-        try {
-            // ⚠ THE PROVIDER IS NAMED, NEVER INFERRED. activate() given a bare
-            // string quietly builds a ReCaptchaV3Provider — and ours is an
-            // Enterprise key, which the v3 flow cannot attest. The symptom is
-            // not an error mentioning reCAPTCHA; it is every submission
-            // refused and a form that will not load.
-            const P = firebase.appCheck;
-            const provider = appCheckKind === 'v3'
-                ? new P.ReCaptchaV3Provider(appCheckKey)
-                : new P.ReCaptchaEnterpriseProvider(appCheckKey);
-            firebase.appCheck().activate(provider, true);
-        } catch (e) {
-            // Never fatal. A page that will not render because attestation
-            // failed to start is worse than one that renders and is refused
-            // with a message somebody can act on.
-            console.warn('App Check did not start:', e && e.message);
-        }
-    } else if (!appCheckOn) {
-        console.info('App Check is off at both ends on purpose — see app-check-config.js.');
+    // Token paths (MS-535) live in app-check-client.js so they can be tested
+    // without Firebase: live HTTPS uses the Enterprise site key; localhost
+    // arms the debug-token exchange before activate(); the phone shell hops
+    // this same page onto liveOrigin. The hop is not a second door.
+    // Hop BEFORE initializeApp so the WebView does not start Firebase (and
+    // reCAPTCHA) on an origin that cannot attest, then abandon it.
+    const AppCheck = window.MosaicAppCheck;
+    const appCheckCfg = (AppCheck && AppCheck.configFrom(window)) || window.MOSAIC_APP_CHECK || {};
+    if (AppCheck && AppCheck.hopIfNeeded(location, appCheckCfg, window).hopped) {
+        return;
+    }
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+    if (AppCheck) {
+        AppCheck.prepareDebugToken(window, location, appCheckCfg);
+        AppCheck.activate(firebase, appCheckCfg, document, console);
     } else {
         console.warn(
-            'App Check is enabled but has no site key, so public forms will be ' +
-            'refused. Run: bash scripts/wizard-app-check.sh');
+            'app-check-client.js did not load, so App Check cannot start. ' +
+            'Public forms will be refused once the door demands a token.');
     }
 
     const fns = firebase.app().functions('us-central1');

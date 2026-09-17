@@ -19,6 +19,7 @@ const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
 const fp = require("./forms-public");
+const appCheckDoor = require("./app-check-door");
 const FormsCore = require("./shared/forms-core");
 // The Firestore half of answering and taking. It takes a `db` rather than
 // reaching for one, which is what lets test/emulator/ drive the transactions
@@ -1612,6 +1613,13 @@ const MCP_ISSUER_URL = defineString("MCP_ISSUER_URL", {
   default: "https://mosaic-hymn-mcp.web.app",
 });
 
+// App Check on the public form door (MS-508 / MS-534). off | monitor |
+// enforce. Default monitor so a functions deploy cannot brick submits;
+// flipping enforce is Atlas-escalated (docs/ops/ms-508-app-check-break-glass.md).
+const PUBLIC_FORM_APP_CHECK_MODE = defineString("PUBLIC_FORM_APP_CHECK_MODE", {
+  default: "monitor",
+});
+
 // The same public config already served in public/auth.js. It identifies the
 // project to Firebase Auth; it is not a secret and never has been.
 const MCP_WEB_CONFIG = {
@@ -2725,11 +2733,15 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
  * code alone, which turns a 128-bit id into something worth guessing at. A
  * refusal is data here, and the shapes are uniform.
  *
- * ⚠ App Check is ENFORCED. An unauthenticated write endpoint with no throttle
- * is a spam sink and the day it matters is a public day. This will refuse every
- * call until App Check is configured for the project — which is the correct
- * failure, and is why the ticket lists it as a deploy prerequisite rather than
- * ops work to do afterwards.
+ * ⚠ App Check is MONITORED by default, not platform-enforced. The stale
+ * line here used to say ENFORCED while `enforceAppCheck: false` — that lie
+ * is why MS-508 exists as much as the open door does. Mode is
+ * PUBLIC_FORM_APP_CHECK_MODE (off | monitor | enforce). Platform
+ * `enforceAppCheck` stays false so monitor can log missing tokens instead of
+ * 401-ing before the handler. Enforce is in-process (app-check-door.js) and
+ * is flipped via the param, Atlas-escalated — see
+ * docs/ops/ms-508-app-check-break-glass.md. MS-364's rate limit is
+ * complementary, not a replacement.
  *
  * Every judgement is in forms-public.js and forms-core.js, both pure and tested
  * without an emulator. This reads, asks, and writes.
@@ -2816,15 +2828,12 @@ exports.deleteFormTemplate = onCall(
 );
 
 exports.publicForm = onCall(
-    // ⚠ enforceAppCheck MUST MATCH `enabled` IN public/app-check-config.js,
-    // where the reasons are written out in full. Enforced here but not enabled
-    // there refuses everybody; enabled there but not enforced here checks
-    // nothing. test/app-check-agreement.test.js fails if they drift apart.
-    //
-    // Off for now: turning it on in one step, straight to enforce, stopped
-    // anybody answering a form for days, and App Check never gives up waiting
-    // for reCAPTCHA — so an ad blocker becomes a form nobody can fill in.
-    // Monitor first, enforce second. Turn the two back on together.
+    // ⚠ PLATFORM enforceAppCheck STAYS FALSE, ON PURPOSE. Firebase's option
+    // rejects before this handler, which makes monitor impossible and made
+    // the last enforce flip a multi-day outage. The answering page still
+    // collects tokens whenever `mode` in public/app-check-config.js is
+    // monitor or enforce (test/app-check-agreement.test.js). The door
+    // itself is app-check-door.js, keyed on PUBLIC_FORM_APP_CHECK_MODE.
     {cors: true, region: "us-central1", enforceAppCheck: false},
     async (request) => {
       const db = admin.firestore();
@@ -2832,6 +2841,23 @@ exports.publicForm = onCall(
       // arrives with the submission rather than through a second call, so a
       // file and the answer it belongs to are accepted or refused together.
       const {op, formId, answers, files} = request.data || {};
+
+      // App Check (MS-508). Runs before the form is read so a bare caller
+      // under enforce never learns whether an id exists. Monitor logs and
+      // continues. Off is silent.
+      const appCheck = appCheckDoor.verdict(
+          PUBLIC_FORM_APP_CHECK_MODE.value(), request.app);
+      if (appCheck.log) {
+        log("publicForm app-check", appCheckDoor.metricPayload(appCheck, {
+          op: typeof op === "string" ? op : null,
+          formId: typeof formId === "string" ? formId : null,
+        }));
+      }
+      if (appCheck.reject) {
+        throw new HttpsError(
+            "unauthenticated",
+            "This request did not come from Mosaic's site or app.");
+      }
 
       // Shape-check the id before it reaches a read. A form's id is 128 bits of
       // base58 and nothing else ever addresses one.

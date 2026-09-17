@@ -50,7 +50,7 @@ test('every asset the answering page loads is root-absolute', () => {
 test('the page actually loads the things it needs to work at all', () => {
     // A path can be absolute and still missing. These four are the difference
     // between a styled page and the serif wall.
-    for (const needed of ['/mosaic.css', '/fonts.css', '/form-answer.js', '/vendor/alpine-3.15.12.min.js']) {
+    for (const needed of ['/mosaic.css', '/fonts.css', '/form-answer.js', '/app-check-config.js', '/app-check-client.js', '/vendor/alpine-3.15.12.min.js']) {
         assert.ok(html.includes('"' + needed + '"'), 'form-answer.html no longer loads ' + needed);
     }
 });
@@ -103,10 +103,15 @@ test('the App Check provider is named rather than inferred', () => {
     // ReCaptchaV3Provider. Ours is an Enterprise key, which the v3 flow cannot
     // attest — and the symptom is not an error mentioning reCAPTCHA, it is
     // every submission refused and a form that will not load.
-    assert.match(js, /ReCaptchaEnterpriseProvider/,
+    const client = fs.readFileSync(path.join(PUBLIC, 'app-check-client.js'), 'utf8');
+    assert.match(client, /ReCaptchaEnterpriseProvider/,
         'nothing selects the Enterprise provider, so a bare string will pick v3');
     assert.doesNotMatch(js, /activate\(\s*appCheckKey/,
         'the raw site key is passed to activate(), which silently means v3');
+    assert.doesNotMatch(client, /activate\(\s*appCheckKey/,
+        'the raw site key is passed to activate(), which silently means v3');
+    assert.match(js, /MosaicAppCheck/,
+        'the answering page no longer goes through the helper that names the provider');
 
     const cfg = fs.readFileSync(path.join(PUBLIC, 'app-check-config.js'), 'utf8');
     assert.match(cfg, /provider:\s*'(enterprise|v3)'/,
@@ -145,7 +150,7 @@ test('the page scripts load at the end of <body>, not in <head>', () => {
     // a spinner for ever. It reads as a blank page and it took days to find.
     const bodyAt = html.indexOf('<body');
     assert.ok(bodyAt > 0, 'no <body> tag');
-    for (const src of ['/form-answer.js', '/forms-core.js', '/app-check-config.js']) {
+    for (const src of ['/form-answer.js', '/forms-core.js', '/app-check-config.js', '/app-check-client.js']) {
         const at = html.indexOf('src="' + src + '"');
         assert.ok(at > bodyAt,
             src + ' is loaded before <body> exists. App Check cannot start ' +
