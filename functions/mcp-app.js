@@ -138,7 +138,11 @@ async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}
     const extra = info.extra || {};
     await mcpServer.handleMcpRequest(req, res, {
       db,
-      auth: {uid: extra.uid, permissionLevel: extra.permissionLevel},
+      auth: {
+        uid: extra.uid,
+        permissionLevel: extra.permissionLevel,
+        pastoralAssistant: extra.pastoralAssistant === true,
+      },
       geminiKey,
       fieldValues,
       // The server announces its seal at this origin. Threaded from the one

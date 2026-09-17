@@ -466,6 +466,17 @@ const blockFor = (collection) => {
     return m[1];
 };
 
+test('the Task callable admits a Pastoral Assistant and refuses a plain member', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const block = src.match(/exports\.shepherdingTask = onCall\([\s\S]*?const ops = \{/);
+    assert.ok(block, 'shepherdingTask callable has moved');
+    assert.match(block[0], /Actor\.writesTheRecord\(user\)/);
+    assert.doesNotMatch(block[0], /Actor\.isElder\(user/);
+    const Actor = require('../functions/mcp-actor.js');
+    assert.strictEqual(Actor.writesTheRecord({permissionLevel: 'member', pastoralAssistant: true}), true);
+    assert.strictEqual(Actor.writesTheRecord({permissionLevel: 'member'}), false);
+});
+
 [Writes.TASKS, Writes.OCCURRENCES].forEach((collection) => {
     test(`${collection} is elder-only, read and write`, () => {
         const block = blockFor(collection);

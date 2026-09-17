@@ -74,6 +74,42 @@ describe('the rank an assistant must hold', () => {
         // about their rank, not a mistyped address or a broken server.
         assert.ok(message.length > 30, message);
     });
+
+    test('a Pastoral Assistant may read and write the record, and is not an elder', () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        assert.strictEqual(Actor.readsAsElder(pa), true);
+        assert.strictEqual(Actor.writesTheRecord(pa), true);
+        assert.strictEqual(Actor.isElder(pa), false);
+        assert.strictEqual(Actor.isEditor(pa), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_get_profile'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_document'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_write_note'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_task'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_status'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_add_tags'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_elder_assignment'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_explain_change'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_view'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'cal_create_event'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_unclassified_future'), false);
+    });
+
+    test('a Pastoral Assistant refused a decision hears it is about the role', () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const message = Actor.refusalFor(pa, 'shep_set_status');
+        assert.match(message, /Pastoral Assistant/);
+        assert.match(message, /elder's decision/);
+        assert.doesNotMatch(message, /raise it to elder/);
+    });
+
+    test('every shep_ and cal_ gate is one of read, record or decide', () => {
+        Object.keys(Actor.SHEP_CAL_GATES).forEach((name) => {
+            const gate = Actor.SHEP_CAL_GATES[name];
+            assert.ok(
+                [Actor.READ, Actor.RECORD, Actor.DECIDE].includes(gate),
+                name + ' has unknown gate ' + gate);
+        });
+    });
 });
 
 describe('the Author an assistant writes as', () => {
@@ -144,5 +180,16 @@ describe('the mark an assistant leaves', () => {
         assert.strictEqual(record.kind, 'status_change');
         assert.strictEqual(record.authorName, 'Jonathan Harris');
         assert.strictEqual(record.writtenVia, 'mcp');
+    });
+});
+
+describe('locked guidance', () => {
+    const gs = require('../functions/guidance-store.js');
+
+    test('a Pastoral Assistant may read locked guidance', () => {
+        assert.strictEqual(gs.readsLocked({level: 'member', pastoralAssistant: true}), true);
+        assert.strictEqual(gs.readsLocked({level: 'member'}), false);
+        assert.strictEqual(gs.readsLocked({level: 'elder'}), true);
+        assert.strictEqual(gs.readsLocked({level: 'editor'}), false);
     });
 });

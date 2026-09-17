@@ -26,16 +26,20 @@
  * BROWSER; this protects the assistant. Neither covers the other.
  */
 
+const Access = require("./shared/access-core.js");
+
 const GUIDANCE = "mcp_guidance";
 
 /**
  * Whether this caller may read elder-only guidance.
- * @param {object} [options] {level} the caller's permission level
- * @return {boolean} true for an elder or a super admin
+ * @param {object} [options] {level, pastoralAssistant}
+ * @return {boolean} true for an elder, a super admin, or a Pastoral Assistant
  */
 function readsLocked(options) {
-  const level = options && options.level;
-  return level === "elder" || level === "super_admin";
+  return Access.readsAsElder({
+    permissionLevel: options && options.level,
+    pastoralAssistant: options && options.pastoralAssistant,
+  });
 }
 
 /** The stored shape, as the MCP serves it. */

@@ -70,8 +70,10 @@ function elderTool(server, deps, name, spec, run) {
   const readOnly = !!(spec.annotations && spec.annotations.readOnlyHint);
 
   server.registerTool(name, spec, async (args) => {
-    const level = deps.auth && deps.auth.permissionLevel;
-    if (!Actor.isElder(level)) return refuse(Actor.refusalFor(level));
+    const account = deps.auth || {};
+    if (!Actor.mayUseTool(account, name)) {
+      return refuse(Actor.refusalFor(account, name));
+    }
 
     try {
       // A read needs no Author. A write refuses without one rather than

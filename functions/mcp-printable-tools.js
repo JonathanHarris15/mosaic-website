@@ -80,8 +80,8 @@ function editorTool(server, deps, name, spec, run) {
   const readOnly = !!(spec.annotations && spec.annotations.readOnlyHint);
 
   server.registerTool(name, spec, async (args) => {
-    const level = deps.auth && deps.auth.permissionLevel;
-    if (!Actor.isEditor(level)) return refuse(Actor.editorRefusalFor(level));
+    const account = deps.auth || {};
+    if (!Actor.isEditor(account)) return refuse(Actor.editorRefusalFor(account));
 
     try {
       // A read needs no Author. A write refuses without one rather than

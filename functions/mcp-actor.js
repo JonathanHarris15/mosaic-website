@@ -34,31 +34,108 @@
 // one scope. Same trick as liturgy-writes.js: set it before use.
 global.MosaicIdentity = require("./shared/mosaic-identity.js");
 
+const Access = require("./shared/access-core.js");
+
 const USERS = "users";
 
 /**
- * The ranks that may touch the Shepherding System.
+ * The ranks that may touch the Shepherding System as an elder.
  *
- * Matches `isElder()` in firestore.rules — `['elder', 'super_admin']` — and
- * must keep matching it. `admin` is deliberately absent: it is not an elder in
- * the rules either, and the Document Library's access note says so.
+ * Matches AccessCore.ELDER_LEVELS / `isElder()` in firestore.rules —
+ * `['elder', 'super_admin']`. A Pastoral Assistant is not on this list; they
+ * reach shepherding through the grant, via readsAsElder / writesTheRecord.
  */
-const ELDER_LEVELS = ["elder", "super_admin"];
+const ELDER_LEVELS = Access.ELDER_LEVELS.slice();
 
 /**
  * The ranks that may build a Printable.
  *
- * Matches `isEditor()` in firestore.rules — `['editor', 'admin', 'elder',
- * 'super_admin']` — and must keep matching it. `admin` IS here, unlike in
- * ELDER_LEVELS above, and that is not an oversight: the rules have always let
- * an admin lay out a page while keeping them out of a Person's record.
+ * Matches AccessCore.EDITOR_WRITE_LEVELS / `isEditor()` in firestore.rules.
+ * The grant adds nothing here — a member-level Pastoral Assistant cannot
+ * lay out a page.
  *
  * ⚠ THIS IS THE ONLY GATE ON A PRINTABLE WRITE. An MCP tool writes through
  * firebase-admin, which does not consult firestore.rules at all, so the rule
  * protecting `printables` never runs for these calls. If this check is not
  * applied, a viewer can lay out and publish a Printable.
  */
-const EDITOR_LEVELS = ["editor", "admin", "elder", "super_admin"];
+const EDITOR_LEVELS = Access.EDITOR_WRITE_LEVELS.slice();
+
+const READ = "read";
+const RECORD = "record";
+const DECIDE = "decide";
+
+/**
+ * Every `shep_` and `cal_` tool, classified. A tool missing from this map
+ * refuses a Pastoral Assistant (fail closed). test/mcp-actor.test.js walks
+ * the registered names against this map so a new tool cannot slip through
+ * unclassified.
+ */
+const SHEP_CAL_GATES = Object.freeze({
+  shep_find_person: READ,
+  shep_get_profile: READ,
+  shep_get_pastoral_record: READ,
+  shep_list_notes: READ,
+  shep_get_note: READ,
+  shep_list_people: READ,
+  shep_list_tags: READ,
+  shep_preview_tag_merge: READ,
+  shep_list_documents: READ,
+  shep_get_document: READ,
+  shep_list_form_templates: READ,
+  shep_get_form_document: READ,
+  shep_get_care_list: READ,
+  shep_list_views: READ,
+  shep_list_tasks: READ,
+  cal_list_events: READ,
+  cal_get_event: READ,
+  cal_list_series: READ,
+  shep_write_note: RECORD,
+  shep_append_to_note: RECORD,
+  shep_edit_note: RECORD,
+  shep_delete_note: RECORD,
+  shep_create_document: RECORD,
+  shep_update_document: RECORD,
+  shep_append_to_document: RECORD,
+  shep_rename_document: RECORD,
+  shep_move_document: RECORD,
+  shep_delete_document: RECORD,
+  shep_create_folder: RECORD,
+  shep_rename_folder: RECORD,
+  shep_move_folder: RECORD,
+  shep_delete_folder: RECORD,
+  shep_add_person_panel: RECORD,
+  shep_create_form_document: RECORD,
+  shep_answer_form_document: RECORD,
+  shep_create_care_list: RECORD,
+  shep_add_care_list_column: RECORD,
+  shep_write_care_list_cell: RECORD,
+  shep_create_task: RECORD,
+  shep_complete_task: RECORD,
+  shep_skip_task: RECORD,
+  shep_delete_task: RECORD,
+  shep_add_tags: DECIDE,
+  shep_remove_tags: DECIDE,
+  shep_create_tag: DECIDE,
+  shep_delete_tag: DECIDE,
+  shep_rename_tag: DECIDE,
+  shep_merge_tags: DECIDE,
+  shep_set_status: DECIDE,
+  shep_clear_status: DECIDE,
+  shep_set_elder_assignment: DECIDE,
+  shep_set_membership_stage: DECIDE,
+  shep_create_view: DECIDE,
+  shep_update_view: DECIDE,
+  shep_delete_view: DECIDE,
+  shep_explain_change: DECIDE,
+  cal_create_event: DECIDE,
+  cal_update_event: DECIDE,
+  cal_update_series: DECIDE,
+  cal_move_event: DECIDE,
+  cal_cancel_event: DECIDE,
+  cal_delete_event: DECIDE,
+  cal_create_event_document: DECIDE,
+});
 
 /**
  * Where a Pastoral Record entry written by an assistant says it came from.
@@ -73,35 +150,68 @@ const SOURCE = "mcp";
 const MISSING_AUTHOR = "missing-author";
 
 /**
- * May this caller touch a Person?
- * @param {?string} permissionLevel the caller's level, as mcp-auth read it
- * @return {boolean} true for an elder or a super admin, false for everyone else
+ * May this caller count as an elder — decisions, pickers, the Elder Tag.
+ * Accepts a Permission Level string or an account (`permissionLevel` +
+ * `pastoralAssistant`).
  */
-function isElder(permissionLevel) {
-  return ELDER_LEVELS.includes(permissionLevel);
+function isElder(value) {
+  return Access.isAnElder(value);
+}
+
+/** May this caller write as an editor? The grant adds nothing. */
+function isEditor(value) {
+  return Access.writesAsEditor(value);
+}
+
+function readsAsElder(value) {
+  return Access.readsAsElder(value);
+}
+
+function writesTheRecord(value) {
+  return Access.writesTheRecord(value);
+}
+
+function gateFor(name) {
+  return Object.prototype.hasOwnProperty.call(SHEP_CAL_GATES, name) ?
+    SHEP_CAL_GATES[name] : null;
 }
 
 /**
- * May this caller build a Printable?
- * @param {?string} permissionLevel the caller's level, as mcp-auth read it
- * @return {boolean} true for an editor and above, false for everyone else
+ * May this account call this `shep_` / `cal_` tool?
+ * An unclassified tool refuses a Pastoral Assistant and admits only elders.
  */
-function isEditor(permissionLevel) {
-  return EDITOR_LEVELS.includes(permissionLevel);
+function mayUseTool(account, name) {
+  const gate = gateFor(name);
+  if (gate === READ) return Access.readsAsElder(account);
+  if (gate === RECORD) return Access.writesTheRecord(account);
+  if (gate === DECIDE) return Access.isAnElder(account);
+  return Access.isAnElder(account);
+}
+
+function heldLabel(value) {
+  const level = Access.permissionLevelOf(value);
+  return level ? `"${level}"` : "no permission level";
 }
 
 /**
  * Why not, in words an assistant can pass on to the person asking.
  *
- * Not "permission denied": the elder reading this over their assistant's
- * shoulder needs to know it is about their rank, not a mistyped address or a
- * server that fell over.
+ * A Pastoral Assistant refused a decision hears that it is about the role,
+ * not a fault and not "raise it to elder".
  *
- * @param {?string} permissionLevel what they actually hold
+ * @param {string|object} value the caller's level or account
+ * @param {?string} [toolName] the tool they asked for
  * @return {string} the refusal
  */
-function refusalFor(permissionLevel) {
-  const held = permissionLevel ? `"${permissionLevel}"` : "no permission level";
+function refusalFor(value, toolName) {
+  if (Access.isPastoralAssistant(value) && !Access.isAnElder(value)) {
+    const gate = toolName ? gateFor(toolName) : DECIDE;
+    if (gate === DECIDE || gate === null) {
+      return "A Pastoral Assistant keeps the record; this is an elder's " +
+        "decision.";
+    }
+  }
+  const held = heldLabel(value);
   return "The Shepherding System is elder-only. This account holds " + held +
     ", which can build a Sunday but cannot read or write a Person's " +
     "shepherding record. Ask a super admin to raise it to elder.";
@@ -109,11 +219,11 @@ function refusalFor(permissionLevel) {
 
 /**
  * Why a Printables tool said no, in words an assistant can pass on.
- * @param {?string} permissionLevel what they actually hold
+ * @param {string|object} value the caller's level or account
  * @return {string} the refusal
  */
-function editorRefusalFor(permissionLevel) {
-  const held = permissionLevel ? `"${permissionLevel}"` : "no permission level";
+function editorRefusalFor(value) {
+  const held = heldLabel(value);
   return "Printables are editor-and-above. This account holds " + held +
     ", which can read the church's pages but cannot lay one out. Ask a super " +
     "admin to raise it to editor.";
@@ -199,10 +309,18 @@ function provenance() {
 module.exports = {
   ELDER_LEVELS,
   EDITOR_LEVELS,
+  READ,
+  RECORD,
+  DECIDE,
+  SHEP_CAL_GATES,
   SOURCE,
   MISSING_AUTHOR,
   isElder,
   isEditor,
+  readsAsElder,
+  writesTheRecord,
+  gateFor,
+  mayUseTool,
   refusalFor,
   editorRefusalFor,
   resolveActor,

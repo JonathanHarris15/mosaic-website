@@ -34,6 +34,7 @@
  */
 
 const crypto = require("crypto");
+const Access = require("./shared/access-core.js");
 
 // ⚠ THROW THESE, NEVER A BARE `Error`. The SDK's token endpoint and bearer
 // middleware both end in the same shape: an OAuthError becomes the status it
@@ -275,8 +276,8 @@ class FirebaseOAuthProvider {
       return {error: "That sign-in could not be verified. Please try again."};
     }
 
-    const level = await this.permissionLevelOf(decoded.uid);
-    if (!EDITOR_LEVELS.includes(level)) {
+    const account = await this.accountOf(decoded.uid);
+    if (!Access.readsAsEditor(account)) {
       // Deliberately specific: a member who is refused should understand it
       // is about their permissions, not a mistyped password.
       await reqRef.delete();
@@ -312,11 +313,24 @@ class FirebaseOAuthProvider {
    * @param {string} uid the Firebase uid
    * @return {Promise<?string>} their level, or null
    */
-  async permissionLevelOf(uid) {
+  /**
+   * The caller's account, read fresh — Permission Level plus the Pastoral
+   * Assistant grant (MS-426).
+   * @param {string} uid the Firebase uid
+   * @return {Promise<{permissionLevel: ?string, pastoralAssistant: boolean}>}
+   */
+  async accountOf(uid) {
     const snap = await this.db.collection("users").doc(uid).get();
-    if (!snap.exists) return null;
-    const data = snap.data();
-    return data.permissionLevel || data.role || null;
+    if (!snap.exists) return {permissionLevel: null, pastoralAssistant: false};
+    const data = snap.data() || {};
+    return {
+      permissionLevel: data.permissionLevel || data.role || null,
+      pastoralAssistant: data.pastoralAssistant === true,
+    };
+  }
+
+  async permissionLevelOf(uid) {
+    return (await this.accountOf(uid)).permissionLevel;
   }
 
   /**
@@ -419,8 +433,8 @@ class FirebaseOAuthProvider {
 
     // Still an editor? A refresh is a fresh grant of an hour's access, so it
     // is exactly the wrong moment to skip the check.
-    const level = await this.permissionLevelOf(claim.uid);
-    if (!EDITOR_LEVELS.includes(level)) {
+    const account = await this.accountOf(claim.uid);
+    if (!Access.readsAsEditor(account)) {
       throw new InvalidGrantError("This account no longer has editor access.");
     }
 
@@ -483,8 +497,8 @@ class FirebaseOAuthProvider {
     if (data.type !== "access") throw new InvalidTokenError("Invalid access token.");
     if (data.expiresAt < Date.now()) throw new InvalidTokenError("Access token expired.");
 
-    const level = await this.permissionLevelOf(data.uid);
-    if (!EDITOR_LEVELS.includes(level)) {
+    const account = await this.accountOf(data.uid);
+    if (!Access.readsAsEditor(account)) {
       // Not "forbidden": the pass itself is what has stopped being good, so
       // say so as a 401 and let the assistant offer to sign in again. Whoever
       // does will meet the plain explanation on the sign-in page rather than
@@ -500,7 +514,11 @@ class FirebaseOAuthProvider {
       resource: data.resource ? new URL(data.resource) : undefined,
       // What the MCP server needs to know about the caller. `extra` is the
       // SDK's sanctioned channel for it.
-      extra: {uid: data.uid, permissionLevel: level},
+      extra: {
+        uid: data.uid,
+        permissionLevel: account.permissionLevel,
+        pastoralAssistant: account.pastoralAssistant,
+      },
     };
   }
 
