@@ -39,12 +39,27 @@
 
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
+    function access() {
+        if (typeof AccessCore !== 'undefined') return AccessCore;
+        if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
+
     function levelRank(level) {
         const i = LEVELS.indexOf(level);
         return i < 0 ? -1 : i;
     }
 
     function mayRead(level, minLevel) {
+        const Access = access();
+        if (Access && level && typeof level === 'object') {
+            // A Pastoral Assistant reads what an elder reads. Super-admin-only
+            // sources stay super-admin-only; the grant does not raise the tier.
+            if (Access.readsAsElder(level) && levelRank(minLevel) <= levelRank('elder')) {
+                return true;
+            }
+            return levelRank(Access.permissionLevelOf(level)) >= levelRank(minLevel);
+        }
         return levelRank(level) >= levelRank(minLevel);
     }
 

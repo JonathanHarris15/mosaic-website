@@ -349,8 +349,8 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
+                Object.assign(this, AccessCore.pageFlags(userData));
+                if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
                 }
@@ -364,6 +364,7 @@ document.addEventListener('alpine:init', () => {
                 this.ownProfile = !!(userData && userData.personId && userData.personId === this.personId);
                 ShepherdingBlur.configure({
                     permissionLevel: this.currentPermissionLevel,
+                    pastoralAssistant: this.pastoralAssistant,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });
@@ -696,7 +697,7 @@ document.addEventListener('alpine:init', () => {
         // The same Track control the People list has, driven off this Person and
         // committing one Membership Change (silent tag swap) per move. Editors only.
         get canEditMembership() {
-            return ['editor', 'admin', 'elder', 'super_admin'].includes(this.currentPermissionLevel);
+            return this.canWriteEditor;
         },
         get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
         get membershipIndex() {

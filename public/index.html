@@ -87,6 +87,7 @@
     <script src="vendor/sortable-1.15.0.min.js"></script>
 
     <script src="auth.js"></script>
+    <script src="access-core.js"></script>
 
     <!-- One line, one count, landing on the Commitments page (MS-215). Built as
          its own small read model so MS-187's header rework can swallow it whole
@@ -291,6 +292,7 @@
             });
 
             let permissionLevel = 'viewer';
+            let pastoralAssistant = false;
             let savedCardOrder = null;
             if (user) {
                 let name = 'Friend';
@@ -298,6 +300,7 @@
                     const userData = await getUserData(user.uid);
                     if (userData) {
                         permissionLevel = userData.permissionLevel || userData.role || 'viewer';
+                        pastoralAssistant = userData.pastoralAssistant === true;
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         if (userData.email) {
                             name = userData.email.split('@')[0];
@@ -321,10 +324,14 @@
                 }
                 const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
                 const grid = document.getElementById('nav-cards-grid');
+                const account = (typeof AccessCore !== 'undefined')
+                    ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
+                    : { permissionLevel, pastoralAssistant: false };
 
-                // Membership Directory — members and above (members get a read-only view)
+                // Membership Directory — members and above, or a Pastoral Assistant
                 if (grid && !document.getElementById('directory-card') &&
-                    ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)
+                        || AccessCore.readsAsElder(account))) {
                     const dirCard = document.createElement('a');
                     dirCard.id = 'directory-card';
                     dirCard.dataset.cardKey = 'directory';
@@ -343,7 +350,7 @@
 
                 // Hymn Manager — editors and above (manage the hymn catalog)
                 if (grid && !document.getElementById('hymn-manager-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'hymn-manager-card';
                     card.dataset.cardKey = 'hymn-manager';
@@ -368,7 +375,7 @@
                 // successor work; the page gates itself too, because a card can
                 // be hidden and a URL cannot.
                 if (grid && !document.getElementById('service-analytics-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'service-analytics-card';
                     // ⚠ The STORED key behind every user's saved card order.
@@ -395,7 +402,7 @@
                 // gates itself and the rules gate the data — a hidden card is
                 // not a lock.
                 if (grid && !document.getElementById('mcp-manager-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'mcp-manager-card';
                     // ⚠ The STORED key behind every user's saved card order.
@@ -418,7 +425,7 @@
                 // ADR-0016: one roles list, liturgical and servant together. The
                 // page gates itself too — a card can be hidden, a URL can't.
                 if (grid && !document.getElementById('roles-manager-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'roles-manager-card';
                     card.dataset.cardKey = 'roles-manager';
@@ -441,7 +448,7 @@
                 // page's own `mayManageForms`, and the page gates itself and the
                 // rules gate the data — a hidden card is not a lock.
                 if (grid && !document.getElementById('forms-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'forms-card';
                     // ⚠ The STORED key behind every user's saved card order.
@@ -463,7 +470,7 @@
                 // themselves and the rules gate the records — a hidden card is
                 // not a lock.
                 if (grid && !document.getElementById('printables-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsEditor(account)) {
                     const card = document.createElement('a');
                     card.id = 'printables-card';
                     // ⚠ The STORED key behind every user's saved card order.
@@ -482,7 +489,7 @@
 
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
-                    ['elder', 'super_admin'].includes(permissionLevel)) {
+                    AccessCore.readsAsElder(account)) {
                     const card = document.createElement('a');
                     card.id = 'shepherding-card';
                     card.dataset.cardKey = 'shepherding';

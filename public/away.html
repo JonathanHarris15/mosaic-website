@@ -10,6 +10,7 @@
 
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="access-core.js"></script>
     <script src="mobile/destinations.js"></script>
     <script>window.MOBILE_HEADER = { title: 'Away', menu: false, back: 'calendar.html', route: 'events' };</script>
     <script src="person-photo-core.js"></script>
@@ -153,7 +154,7 @@
          in were the person's own screen, it would go back to living in an
          editor's head. Anything entered here is stamped with the editor's name,
          so the picker reads "Ann marked Sarah away". -->
-    <div x-show="!loading && personId && isEditor" class="mt-md flex items-center gap-sm flex-wrap">
+    <div x-show="!loading && personId && canReadOthersAway" class="mt-md flex items-center gap-sm flex-wrap">
         <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant">Whose days</span>
         <select @change="setSubject($event.target.value)"
                 class="text-sm rounded-lg border border-outline-variant bg-surface-container-lowest py-2 pl-3 pr-9 aw-focus">

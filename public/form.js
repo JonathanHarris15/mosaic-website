@@ -35,7 +35,7 @@ function formPage() {
         get homeHref() { return this.inShell ? 'mobile.html#/home' : 'index.html'; },
 
         mayManageForms(level) {
-            return ['editor', 'admin', 'elder', 'super_admin'].includes(level);
+            return AccessCore.writesAsEditor(level);
         },
 
         // ⚠ NOT A PERMISSION — A QUERY SHAPE (MS-404). A reader below elder has
@@ -44,7 +44,7 @@ function formPage() {
         // query unless it can see every row it could return is allowed. The
         // rules are still what decides; this only shapes what is asked for.
         get isElder() {
-            return FormsCore.mayShutToElders(this.currentPermissionLevel);
+            return this.canReadElder;
         },
 
         get today() {
@@ -180,8 +180,8 @@ function formPage() {
                 // reload, but saying what went wrong in place is better.
                 try {
                     const userData = await getUserData(user.uid);
-                    this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                    if (!this.mayManageForms(this.currentPermissionLevel)) {
+                    Object.assign(this, AccessCore.pageFlags(userData));
+                    if (!this.canReadEditor) {
                         window.location.href = this.homeHref;
                         return;
                     }

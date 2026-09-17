@@ -123,20 +123,22 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                if (!['elder', 'super_admin'].includes(permissionLevel)) {
+                Object.assign(this, AccessCore.pageFlags(userData));
+                if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
                 }
                 this.ownIdentity = {
                     user: user,
                     name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
-                    permissionLevel: permissionLevel,
+                    permissionLevel: this.currentPermissionLevel,
+                    pastoralAssistant: this.pastoralAssistant,
                 };
 
                 // Dev-only privacy screen (shepherding-blur.js).
                 ShepherdingBlur.configure({
                     permissionLevel: this.currentPermissionLevel,
+                    pastoralAssistant: this.pastoralAssistant,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });

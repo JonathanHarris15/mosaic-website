@@ -121,7 +121,7 @@
                 // Your own days, always, until you say otherwise.
                 this.subjectId = this.personId;
                 await this.load();
-                if (this.isEditor) this.loadPeople();
+                if (this.canReadOthersAway) this.loadPeople();
 
                 // The rail is held in pixels the browser measured, so a window
                 // that changes width leaves it holding an old month's worth of
@@ -140,14 +140,23 @@
                         const known = Cache && Cache.readIdentity(user.uid);
                         if (known && known.permissionLevel) {
                             this.personId = known.personId || null;
+                            this.account = {
+                                permissionLevel: known.permissionLevel,
+                                pastoralAssistant: known.pastoralAssistant === true,
+                            };
                             return resolve(known.permissionLevel);
                         }
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            const rank = (data && (data.permissionLevel || data.role)) || 'viewer';
-                            if (Cache) Cache.writeIdentity(user.uid, { personId: this.personId, permissionLevel: rank });
-                            resolve(rank);
+                            const flags = AccessCore.pageFlags(data);
+                            this.account = flags.account;
+                            if (Cache) Cache.writeIdentity(user.uid, {
+                                personId: this.personId,
+                                permissionLevel: flags.currentPermissionLevel,
+                                pastoralAssistant: flags.pastoralAssistant,
+                            });
+                            resolve(flags.currentPermissionLevel);
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');
@@ -591,7 +600,10 @@
             // ── Whose days ───────────────────────────────────────────────────
 
             get isEditor() {
-                return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
+                return AccessCore.writesAsEditor(this.account || this.rank);
+            },
+            get canReadOthersAway() {
+                return AccessCore.readsAsEditor(this.account || this.rank);
             },
 
             get isMine() { return this.subjectId === this.personId; },

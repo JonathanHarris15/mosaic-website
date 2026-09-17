@@ -116,9 +116,47 @@ function installStubs() {
             return stubs.updateLiturgy(args);
         },
     });
+
+    const ok = (label) => new Proxy({}, {
+        get: (_t, prop) => {
+            if (prop === '__esModule') return false;
+            return async (...args) => {
+                calls.push([label, prop, args[1] || args[0]]);
+                return {ok: true, via: String(prop)};
+            };
+        },
+    });
+    set('shepherding-read.js', ok('shep-read'));
+    set('shepherding-writes.js', ok('shep-write'));
+    set('shepherding-tag-writes.js', ok('shep-tags'));
+    set('shepherding-doc-writes.js', ok('shep-docs'));
+    set('shepherding-payload-writes.js', ok('shep-payload'));
+    set('calendar-writes.js', ok('cal-write'));
+    set('task-writes.js', ok('shep-tasks'));
 }
 
-const DB = {__isFakeDb: true};
+// Enough of Firestore for requireActor: a user with an email so a write
+// can name an author. Shepherding modules themselves are stubbed.
+const DB = {
+    __isFakeDb: true,
+    collection(name) {
+        return {
+            doc(id) {
+                return {
+                    get: async () => {
+                        if (name === 'users' && id === 'uid-1') {
+                            return {
+                                exists: true,
+                                data: () => ({email: 'pa@example.com'}),
+                            };
+                        }
+                        return {exists: false, data: () => undefined};
+                    },
+                };
+            },
+        };
+    },
+};
 const FIELD_VALUES = {
     serverTimestamp: () => '<<server-timestamp>>',
     deleteField: () => '<<delete>>',
@@ -143,16 +181,24 @@ const FIELD_VALUES = {
 const SITE_URL = 'https://mosaic-hymn-mcp.web.app';
 
 /** Connects a real MCP client to the server, as the given caller. */
-async function connectAs(permissionLevel) {
+async function connectAs(permissionLevel, extras) {
     const {Client} = await import(
         '@modelcontextprotocol/sdk/client/index.js');
     const {InMemoryTransport} = await import(
         '@modelcontextprotocol/sdk/inMemory.js');
 
+    const auth = typeof permissionLevel === 'object'
+        ? Object.assign({uid: 'uid-1'}, permissionLevel)
+        : {
+            uid: 'uid-1',
+            permissionLevel,
+            pastoralAssistant: !!(extras && extras.pastoralAssistant),
+        };
+
     const {buildServer} = require(path.join(FUNCTIONS, 'mcp-server.js'));
     const server = await buildServer({
         db: DB,
-        auth: {uid: 'uid-1', permissionLevel},
+        auth,
         geminiKey: () => 'fake-key',
         fieldValues: FIELD_VALUES,
         siteUrl: SITE_URL,
@@ -215,7 +261,7 @@ describe('the Order of Service MCP server', () => {
         // reason MS-262 chose `oos_` over bare names: a later group can be added
         // without renaming anything a connected client already knows, which is
         // exactly what MS-278 then did.
-        names.forEach((n) => assert.match(n, /^(oos|shep|cal)_/, n));
+        names.forEach((n) => assert.match(n, /^(oos|shep|cal|printable)_/, n));
     });
 
     // -- The shepherding and calendar groups (MS-278) ---------------------
@@ -326,6 +372,72 @@ describe('the Order of Service MCP server', () => {
         assert.strictEqual(result.isError, true);
         assert.match(textOf(result), /viewer/);
         assert.match(textOf(result), /elder/i);
+    });
+
+    test('every shep_ and cal_ tool is classified on the access core', async () => {
+        const Actor = require(path.join(FUNCTIONS, 'mcp-actor.js'));
+        const {client} = await connectAs('elder');
+        const names = (await client.listTools()).tools
+            .map((t) => t.name)
+            .filter((n) => n.startsWith('shep_') || n.startsWith('cal_'));
+        names.forEach((name) => {
+            assert.ok(Actor.gateFor(name), name + ' is unclassified and would refuse a Pastoral Assistant');
+        });
+        Object.keys(Actor.SHEP_CAL_GATES).forEach((name) => {
+            assert.ok(names.includes(name), name + ' is classified but not registered');
+        });
+    });
+
+    test('a Pastoral Assistant can read a profile, write a note, create a document and a task', async () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const {client} = await connectAs(pa);
+        for (const [name, args] of [
+            ['shep_get_profile', {personId: 'p1'}],
+            ['shep_write_note', {personId: 'p1', type: 'Elder Meeting', markdown: 'x'}],
+            ['shep_create_document', {title: 'Minutes'}],
+            ['shep_create_task', {title: 'Ring John', due: '2026-09-20'}],
+        ]) {
+            const result = await client.callTool({name, arguments: args});
+            assert.ok(!result.isError, name + ' refused: ' + textOf(result));
+        }
+    });
+
+    test('a Pastoral Assistant is refused each decision tool with the role named', async () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const {client} = await connectAs(pa);
+        const cases = [
+            ['shep_set_status', {personId: 'p1', urgency: 'urgent', importance: 'important'}],
+            ['shep_add_tags', {personId: 'p1', tagIds: ['t1']}],
+            ['shep_set_elder_assignment', {personId: 'p1', elderPersonId: 'e1'}],
+            ['shep_explain_change', {personId: 'p1', activityId: 'a1', explanation: 'x'}],
+            ['shep_create_view', {title: 'Urgent', filter: {}}],
+            ['shep_set_membership_stage', {personId: 'p1', stage: 'member'}],
+            ['cal_create_event', {name: 'Meeting', visibility: 'elder', date: '2026-09-20'}],
+        ];
+        for (const [name, args] of cases) {
+            const result = await client.callTool({name, arguments: args});
+            assert.strictEqual(result.isError, true, name);
+            assert.match(textOf(result), /Pastoral Assistant keeps the record/, name);
+            assert.doesNotMatch(textOf(result), /raise it to elder/, name);
+        }
+    });
+
+    test('a member-level Pastoral Assistant is refused Order of Service and Printable writes', async () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const {client} = await connectAs(pa);
+        for (const name of [
+            'oos_update_liturgy', 'oos_update_note', 'oos_update_guidance',
+            'oos_score_theme', 'printable_create',
+        ]) {
+            const args = name === 'oos_score_theme' ? {text: 'Anything'}
+                : name === 'printable_create' ? {title: 'Directory'}
+                : name === 'oos_update_note' ? {element: 'sermon', text: 'x'}
+                : name === 'oos_update_guidance' ? {address: 'hymn-selection', body: 'x'}
+                : {date: '2026-09-20', updates: {}};
+            const result = await client.callTool({name, arguments: args});
+            assert.strictEqual(result.isError, true, name);
+            assert.doesNotMatch(textOf(result), /unknown tool/i, name);
+        }
     });
 
     test('an elder keeps every oos_ tool, and so does an editor', async () => {

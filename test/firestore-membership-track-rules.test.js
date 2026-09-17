@@ -51,11 +51,11 @@ test('the Pastoral Record stays elder-only to READ', () => {
     // The whole point of the boundary. An editor walks the Track; the pastoral
     // history around it — notes, status changes, tag changes — is not theirs.
     const block = activityBlock();
-    assert.match(block, /allow read: if isElder\(\);/,
+    assert.match(block, /allow read: if readsAsElder\(\);/,
         'the Pastoral Record is readable by somebody below an elder');
     assert.doesNotMatch(block, /allow read[^\n]*isEditor\(\)/,
         'the read rule has picked up isEditor');
-    assert.match(activityGroupBlock(), /allow read: if isElder\(\);/,
+    assert.match(activityGroupBlock(), /allow read: if readsAsElder\(\);/,
         'the collection-group read is the same record by another door');
 });
 

@@ -322,7 +322,11 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var isElder = canReadElder;
     var c = createS[0], menuItem = menuS[0], moveItem = moveS[0], delItem = deleteS[0];
     var folderOptions = moveItem ? getFolderOptions(structure, 0, moveItem.type === "folder" ? moveItem.id : null) : [];
 

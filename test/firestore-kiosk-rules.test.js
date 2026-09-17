@@ -27,7 +27,8 @@ test('people and families name isKiosk on the read rule', () => {
 
 test('a kiosk cannot read elder-gated shepherding notes', () => {
     const notes = blockFor(/match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n    \}/);
-    assert.match(notes, /allow read, write: if isElder\(\)/);
+    assert.match(notes, /allow read: if readsAsElder\(\)/);
+    assert.match(notes, /allow write: if writesTheRecord\(\)/);
     assert.doesNotMatch(notes, /isKiosk\(\)/);
 });
 
@@ -41,7 +42,7 @@ test('attendance is kiosk-write, and non-kiosk cannot write it', () => {
 test('attendance is readable by the same floors as the roster, plus the kiosk', () => {
     const block = blockFor(/match \/attendance\/\{personId\}\s*\{([\s\S]*?)\n      \}/);
     assert.match(block, /isKiosk\(\)/);
-    assert.match(block, /isEditor\(\)/);
+    assert.match(block, /readsAsEditor\(\)/);
     assert.match(block, /rosterShared == true/);
 });
 

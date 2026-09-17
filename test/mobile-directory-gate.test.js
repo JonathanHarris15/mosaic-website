@@ -48,6 +48,20 @@ test('a member and above still get it', () => {
     }
 });
 
+test('a member-level Pastoral Assistant is offered Shepherd, Directory, Forms and Roles Manager, not Admin', () => {
+    const pa = { permissionLevel: 'member', pastoralAssistant: true };
+    const dest = (key) => {
+        const d = Destinations.DESTINATIONS.find(x => x.key === key);
+        assert.ok(d, key + ' destination is gone');
+        return d;
+    };
+    assert.equal(Destinations.canSee(dest('shepherd'), pa), true);
+    assert.equal(Destinations.canSee(dest('directory'), pa), true);
+    assert.equal(Destinations.canSee(dest('forms'), pa), true);
+    assert.equal(Destinations.canSee(dest('roles-manager'), pa), true);
+    assert.equal(Destinations.canSee(dest('admin'), pa), false);
+});
+
 test('the Home tile carries the same gate as the drawer entry', () => {
     // Two renderings of one list (see destinations.js). The tile is declared
     // separately in app.js, so the gate has to be written twice — and a gate

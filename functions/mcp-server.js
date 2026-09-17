@@ -41,6 +41,7 @@ const printableTools = require("./mcp-printable-tools.js");
 const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
+const Access = require("./shared/access-core.js");
 
 // ⚠ THE NAME AND THE TITLE ARE DIFFERENT THINGS, AND ONLY ONE IS SAFE TO
 // CHANGE. `name` is the identifier a connected client keys its own records
@@ -82,7 +83,7 @@ const SEAL_SIZE = "328x328";
  */
 const MCP_ENDPOINT_PATH = "/mcp";
 
-const EDITOR_LEVELS = ["editor", "elder", "admin", "super_admin"];
+const EDITOR_LEVELS = Access.EDITOR_WRITE_LEVELS.slice();
 
 // One import, reused on a warm instance. Holds no per-caller state.
 let sdkPromise = null;
@@ -204,14 +205,17 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
   const {McpServer, ResourceTemplate} = await loadSdk();
   const server = new McpServer(serverInfo(siteUrl));
 
-  const isEditor = EDITOR_LEVELS.includes(auth && auth.permissionLevel);
+  const isEditor = Access.writesAsEditor(auth);
 
   // ⚠ WHAT THIS CALLER MAY READ, DECIDED ONCE. Guidance can be locked to
   // elders (MS-278), and it is instructions an assistant FOLLOWS — elder-only
   // guidance can name people and say how to handle them. Four places read
   // guidance: the resource list, the resource itself, and the two tools. A
   // rank threaded into three of them is a lock with a door left open.
-  const forCaller = {level: auth && auth.permissionLevel};
+  const forCaller = {
+    level: auth && auth.permissionLevel,
+    pastoralAssistant: auth && auth.pastoralAssistant,
+  };
 
   server.registerTool("oos_get_hymn_history", {
     title: "Hymn history",

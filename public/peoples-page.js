@@ -83,10 +83,11 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+                Object.assign(this, AccessCore.pageFlags(userData));
                 this.currentUserUid = user.uid;
                 this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
-                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel)) {
+                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel)
+                    && !this.canReadElder) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
                     return;
@@ -112,13 +113,16 @@ document.addEventListener('alpine:init', () => {
         },
 
         get isAdmin() {
-            return ['elder', 'super_admin'].includes(this.effectivePermissionLevel);
+            return AccessCore.readsAsElder({
+                permissionLevel: this.effectivePermissionLevel,
+                pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
+            });
         },
 
         // Members get a read-only view of the directory; editors and above can modify
-        // records and see the Tags Manager.
+        // records and see the Tags Manager. The grant adds nothing here.
         get canEdit() {
-            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.effectivePermissionLevel);
+            return AccessCore.writesAsEditor(this.effectivePermissionLevel);
         },
 
         // Super-admin only: flip the page between the real super-admin view and a

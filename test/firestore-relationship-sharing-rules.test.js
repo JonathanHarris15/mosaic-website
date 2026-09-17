@@ -43,8 +43,8 @@ test('the predicate lets elders through and editors only for shared records', ()
     assert.ok(fn, 'canReadRelationshipRecord() is missing');
     const body = fn[1];
 
-    assert.match(body, /isElder\(\)/, 'elders keep full access');
-    assert.match(body, /isEditor\(\)/, 'editors are the floor');
+    assert.match(body, /readsAsElder\(\)/, 'elders (and a Pastoral Assistant) keep full access');
+    assert.match(body, /readsAsEditor\(\)/, 'editors are the floor');
     assert.match(body, /sharedWithEditors == true/, 'editors need an explicit true');
 });
 
@@ -92,7 +92,8 @@ test('the other elder-only collections did not get swept along', () => {
     ['shepherding_tags', 'shepherding_views', 'shepherding_reminders'].forEach(collection => {
         const m = rules.match(new RegExp('match /' + collection + '/\\{[^}]+\\}\\s*\\{([\\s\\S]*?)\\n    \\}'));
         if (!m) return; // not every one exists
-        assert.match(m[1], /allow read, write: if isElder\(\)/, collection);
+        assert.match(m[1], /allow read: if readsAsElder\(\)/, collection);
+        assert.match(m[1], /allow write: if isElder\(\)/, collection);
     });
 });
 

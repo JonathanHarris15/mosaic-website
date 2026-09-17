@@ -132,7 +132,7 @@
             <section class="flex-1 min-w-0 flex flex-col gap-md">
                 <div class="flex items-center justify-between">
                     <h2 class="font-headline-md text-headline-md text-primary">Filtered Views</h2>
-                    <button @click="editingViewId = null; newView = blankView(); showViewModal = true"
+                    <button x-show="canDecide" @click="editingViewId = null; newView = blankView(); showViewModal = true"
                         class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
                         <span class="material-symbols-outlined text-[18px]">add</span>
                         New View
@@ -415,6 +415,7 @@
         <span x-text="toast.message"></span>
     </div>
 
+    <script src="access-core.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="shepherding-dashboard.js"></script>

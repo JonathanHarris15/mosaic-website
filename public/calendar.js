@@ -256,15 +256,24 @@
                         const known = Cache && Cache.readIdentity(user.uid);
                         if (known && known.permissionLevel) {
                             this.personId = known.personId || null;
+                            this.account = {
+                                permissionLevel: known.permissionLevel,
+                                pastoralAssistant: known.pastoralAssistant === true,
+                            };
                             return resolve(known.permissionLevel);
                         }
 
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            const rank = (data && (data.permissionLevel || data.role)) || 'viewer';
-                            if (Cache) Cache.writeIdentity(user.uid, { personId: this.personId, permissionLevel: rank });
-                            resolve(rank);
+                            const flags = AccessCore.pageFlags(data);
+                            this.account = flags.account;
+                            if (Cache) Cache.writeIdentity(user.uid, {
+                                personId: this.personId,
+                                permissionLevel: flags.currentPermissionLevel,
+                                pastoralAssistant: flags.pastoralAssistant,
+                            });
+                            resolve(flags.currentPermissionLevel);
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');
@@ -309,7 +318,7 @@
                     const range = this.railRange;
                     this.loadedRange = range;
                     const rows = await Store.loadCalendar(db, {
-                        rank: this.rank,
+                        rank: this.account || this.rank,
                         personId: this.personId,
                         from: range.from,
                         to: range.to,
@@ -1206,7 +1215,7 @@
             },
 
             get isEditor() {
-                return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
+                return AccessCore.writesAsEditor(this.account || this.rank);
             },
 
             get canCreate() { return this.isEditor; },

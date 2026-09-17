@@ -43,13 +43,16 @@
 
     const state = {
         permissionLevel: null,
+        pastoralAssistant: false,
         uid: null,
         personId: null,   // the Person record id that IS the current user, if any
         ready: false,
     };
 
     function active() {
-        return state.permissionLevel === 'super_admin';
+        // A Pastoral Assistant is meant to read pastoral data. The blur exists
+        // to keep a developer account from casually reading it (MS-426).
+        return state.permissionLevel === 'super_admin' && !state.pastoralAssistant;
     }
 
     // ── Class helpers (safe before configure; inert when not active) ───────────
@@ -193,8 +196,9 @@
     //   uid      — auth uid (to exempt content the user authored)
     //   personId — the Person record id that is the current user, if known (to
     //              exempt their own profile). Optional.
-    function configure({ permissionLevel, uid, personId }) {
+    function configure({ permissionLevel, pastoralAssistant, uid, personId }) {
         state.permissionLevel = permissionLevel || null;
+        state.pastoralAssistant = pastoralAssistant === true;
         state.uid = uid || null;
         state.personId = personId || null;
         state.ready = true;

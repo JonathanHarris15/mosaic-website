@@ -92,6 +92,14 @@ test('a closed form gives its title and date, and never its questions', () => {
 
 // ── The rung ─────────────────────────────────────────────────────────────────
 
+test('a Pastoral Assistant does not satisfy the elder answering rung', () => {
+    // The grant stacks; it is not a rung. An elder-only form or ballot stays
+    // a vote of elders (MS-426).
+    assert.strictEqual(fp.rankSatisfies('elder', 'member'), false);
+    assert.strictEqual(fp.rankSatisfies('elder', 'editor'), false);
+    assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.elder.slice().sort(), ['elder', 'super_admin']);
+});
+
 test('the ladder here matches the one in firestore.rules', () => {
     // forms-public.js restates isMember()/isEditor()/isElder() because the rules
     // language cannot export anything. Restated is fine; drifted is not.

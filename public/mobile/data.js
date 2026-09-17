@@ -50,6 +50,7 @@
         if (Cache) Cache.writeIdentity(user.uid, {
           personId: data.personId || null,
           permissionLevel: data.permissionLevel || data.role || "viewer",
+          pastoralAssistant: data.pastoralAssistant === true,
         });
         return data;
       })
@@ -68,13 +69,18 @@
         var person = both.person || {};
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
         var permissionLevel = data.permissionLevel || data.role || "viewer";
+        var pastoralAssistant = data.pastoralAssistant === true;
         return {
           uid: user.uid,
           email: user.email || "",
           name: name,
           first: String(name).trim().split(/\s+/)[0],
           permissionLevel: permissionLevel,
-          roleLabel: Destinations.roleLabel(permissionLevel),
+          pastoralAssistant: pastoralAssistant,
+          roleLabel: Destinations.accountLabel({
+            permissionLevel: permissionLevel,
+            pastoralAssistant: pastoralAssistant,
+          }),
           personId: data.personId || null,
           photoUrl: person.photoUrl || null,
           photoCrop: person.photoCrop || null,

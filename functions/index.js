@@ -3150,9 +3150,9 @@ exports.shepherdingTask = onCall(
 
       const userSnap = await db.collection("users").doc(request.auth.uid).get();
       const user = userSnap.exists ? userSnap.data() : {};
-      if (!Actor.isElder(user.permissionLevel || user.role)) {
+      if (!Actor.writesTheRecord(user)) {
         throw new HttpsError(
-            "permission-denied", Actor.refusalFor(user.permissionLevel));
+            "permission-denied", Actor.refusalFor(user));
       }
 
       const {op} = request.data || {};

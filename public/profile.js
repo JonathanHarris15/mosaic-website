@@ -72,6 +72,8 @@ async function initProfile() {
         try {
             const userData = await getUserData(user.uid);
             const permissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+            const pastoralAssistant = !!(userData && userData.pastoralAssistant === true);
+            const account = { permissionLevel, pastoralAssistant };
 
             // Update permission level displays
             const roleLabels = {
@@ -84,8 +86,13 @@ async function initProfile() {
                 'kiosk': 'Kiosk'
             };
             const permissionLevelText = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
-            document.getElementById('user-role-badge').textContent = `${permissionLevelText} Access`;
-            document.getElementById('user-role-display').textContent = permissionLevelText;
+            const paBadge = (typeof AccessCore !== 'undefined') ? AccessCore.badgeLabel(account) : '';
+            document.getElementById('user-role-badge').textContent = paBadge
+                ? `${permissionLevelText} · ${paBadge}`
+                : `${permissionLevelText} Access`;
+            document.getElementById('user-role-display').textContent = paBadge
+                ? `${permissionLevelText} · ${paBadge}`
+                : permissionLevelText;
 
             // Show Admin Panel if admin or super_admin
             if (['admin', 'super_admin'].includes(permissionLevel)) {
@@ -1104,6 +1111,7 @@ async function loadUsersList() {
         snapshot.forEach(doc => {
             const data = doc.data();
             const permissionLevel = data.permissionLevel || data.role || 'viewer';
+            const pastoralAssistant = data.pastoralAssistant === true;
             const roleLabels = {
                 'admin': 'Admin',
                 'super_admin': 'Super Admin',
@@ -1114,6 +1122,9 @@ async function loadUsersList() {
                 'kiosk': 'Kiosk'
             };
             const roleLabel = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
+            const paBadge = (typeof AccessCore !== 'undefined')
+                ? AccessCore.badgeLabel({ permissionLevel, pastoralAssistant })
+                : '';
             const isSelf = doc.id === currentUserUid;
 
             // Linked directory person (if any)
@@ -1137,9 +1148,16 @@ async function loadUsersList() {
                         <div class="flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full ${statusColor}"></span>
                             <span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">${roleLabel}</span>
+                            ${paBadge ? `<span class="text-[10px] font-label-md text-primary uppercase tracking-widest">${paBadge}</span>` : ''}
                         </div>
                     </div>
                     <div class="flex gap-3 items-center">
+                        <label class="flex items-center gap-2 cursor-pointer" title="Pastoral Assistant — writes the record, is not an elder">
+                            <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">${paBadge || 'Pastoral Assistant'}</span>
+                            <input type="checkbox" ${pastoralAssistant ? 'checked' : ''}
+                                   onchange="updateUserPastoralAssistant('${doc.id}', this.checked)"
+                                   class="rounded border-outline-variant text-primary focus:ring-primary" />
+                        </label>
                         <div class="relative">
                             <select onchange="updateUserRole('${doc.id}', this.value)" 
                                     class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
@@ -1197,6 +1215,15 @@ async function updateUserRole(uid, newRole) {
         console.log(`Role for ${uid} updated to ${newRole}`);
     } catch (error) {
         alert('Error updating permission level: ' + error.message);
+    }
+}
+
+async function updateUserPastoralAssistant(uid, on) {
+    try {
+        await db.collection('users').doc(uid).update({ pastoralAssistant: on === true });
+        await loadUsersList();
+    } catch (error) {
+        alert('Error updating Pastoral Assistant: ' + error.message);
     }
 }
 
@@ -1359,6 +1386,7 @@ async function updateUserPasswordAdmin(uid) {
 
 // Global scope for handlers
 window.updateUserRole = updateUserRole;
+window.updateUserPastoralAssistant = updateUserPastoralAssistant;
 window.openLinkModal = openLinkModal;
 window.closeLinkModal = closeLinkModal;
 window.renderLinkPeopleList = renderLinkPeopleList;

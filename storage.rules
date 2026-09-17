@@ -68,11 +68,14 @@ service firebase.storage {
     // is decided against the occurrence's own list of Person ids.
     function rankOrParticipantSees(occ, u) {
       return (stampedVisibility(occ) == 'member'
-              && levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin'])
+              && (levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin']
+                  || u.pastoralAssistant == true))
         || (stampedVisibility(occ) in ['member', 'participant', 'editor']
-              && levelOf(u) in ['editor', 'admin', 'elder', 'super_admin'])
+              && (levelOf(u) in ['editor', 'admin', 'elder', 'super_admin']
+                  || u.pastoralAssistant == true))
         || (stampedVisibility(occ) == 'elder'
-              && levelOf(u) in ['elder', 'super_admin'])
+              && (levelOf(u) in ['elder', 'super_admin']
+                  || u.pastoralAssistant == true))
         || (stampedVisibility(occ) == 'participant'
               && ('personId' in u) && ('participantIds' in occ)
               && u.personId in occ.participantIds);
@@ -102,6 +105,20 @@ service firebase.storage {
     // the tier list. Shepherding data is closed to admins on purpose.
     function isElderAccount() {
       return isSignedIn() && levelOf(myUserDoc()) in ['elder', 'super_admin'];
+    }
+
+    // Pastoral Assistant grant, restated from AccessCore (MS-426, ADR-0065).
+    // Fail closed: a missing flag is not a grant.
+    function isPastoralAssistantAccount() {
+      return isSignedIn() && myUserDoc().pastoralAssistant == true;
+    }
+
+    function readsAsElderAccount() {
+      return isElderAccount() || isPastoralAssistantAccount();
+    }
+
+    function readsAsEditorAccount() {
+      return isEditorAccount() || isPastoralAssistantAccount();
     }
 
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
@@ -175,7 +192,7 @@ service firebase.storage {
     // already accepts, and test/storage-form-upload-rules.test.js fails when
     // the two drift.
     match /form_uploads/{formId}/{responseId}/{fileName} {
-      allow read: if isEditorAccount();
+      allow read: if readsAsEditorAccount();
       allow write: if false;
       allow delete: if false;
     }
@@ -193,7 +210,7 @@ service firebase.storage {
     // the prefix is chosen in ONE place — fp.uploadPath — and the record keeps
     // the path it actually wrote.
     match /form_uploads_elder/{formId}/{responseId}/{fileName} {
-      allow read: if isElderAccount();
+      allow read: if readsAsElderAccount();
       allow write: if false;
       allow delete: if false;
     }

@@ -150,7 +150,11 @@
     }
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var isElder = canReadElder;
     var newTag = newTagS[0];
     var mergeSource = mergeSourceS[0] ? tagById(mergeSourceS[0]) : null;
     var confirmDelete = confirmDeleteS[0] ? tagById(confirmDeleteS[0]) : null;
@@ -188,11 +192,11 @@
 
           <p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Create, rename & merge the tags used to group members across the shepherding tools.</p>
 
-          <div style=${Object.assign({}, OVER, { marginBottom: 8 })}>Create a Tag</div>
+          ${canDecide ? html`<div style=${Object.assign({}, OVER, { marginBottom: 8 })}>Create a Tag</div>
           <div style=${{ display: "flex", gap: 8, marginBottom: 24 }}>
             <input value=${newTag} onInput=${function (e) { newTagS[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === "Enter") createTag(); }} placeholder="New tag name…" style=${Object.assign({}, inputStyle, { flex: 1 })} />
             <button onClick=${createTag} disabled=${!newTag.trim()} style=${Object.assign({}, pill(), { display: "inline-flex", alignItems: "center", gap: 6, opacity: newTag.trim() ? 1 : 0.5, cursor: newTag.trim() ? "pointer" : "default", whiteSpace: "nowrap" })}>${Ic("plus", 16)} Create</button>
-          </div>
+          </div>` : html`<p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Tag vocabulary is an elder's decision. You can read every tag.</p>`}
 
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <span style=${OVER}>All Tags · ${tags.length}</span>

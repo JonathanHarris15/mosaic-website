@@ -45,8 +45,8 @@ test('no client may write a form upload — not even a signed-in one', () => {
 
 test('a form upload is readable by editors and above, and by nobody else', () => {
     const block = uploadBlock();
-    assert.match(block, /allow read: if isEditorAccount\(\);/,
-        'read should restate the isEditor() ladder, as event_attachments does');
+    assert.match(block, /allow read: if readsAsEditorAccount\(\);/,
+        'read should restate the editor ladder plus a Pastoral Assistant');
     assert.doesNotMatch(block, /if true/,
         'a waiver photo readable by the world is the thing this path exists to prevent');
     assert.doesNotMatch(block, /allow read: if request\.auth != null/,
@@ -62,7 +62,7 @@ test('the read rule matches the Firestore rule it restates', () => {
     // Two engines, one sentence: whoever may read a Response may read what came
     // with it. `isEditorAccount()` here is `isEditor()` there, and this fails if
     // somebody tightens one and forgets the other.
-    assert.match(firestoreRules, /match \/form_responses\/\{responseId\} \{\s*\n\s*allow read: if isEditor\(\)/,
+    assert.match(firestoreRules, /match \/form_responses\/\{responseId\} \{\s*\n\s*allow read: if readsAsEditor\(\)/,
         'the Firestore rule on form_responses has changed shape');
     assert.match(rules, /function isEditorAccount\(\)[\s\S]*?'editor', 'admin', 'elder', 'super_admin'/,
         'isEditorAccount no longer lists the same ranks as isEditor');
@@ -137,7 +137,7 @@ test('an elder-only upload lives on its own path, behind an elder-only rule', ()
     const elderBlock = /match \/form_uploads_elder\/[\s\S]{0,200}?allow read: if ([A-Za-z]+)\(\);/;
     const found = rules.match(elderBlock);
     assert.ok(found, 'there is no rule for form_uploads_elder at all');
-    assert.equal(found[1], 'isElderAccount', 'an elder-only upload is readable by ' + found[1]);
+    assert.equal(found[1], 'readsAsElderAccount', 'an elder-only upload is readable by ' + found[1]);
     assert.match(rules.slice(found.index), /allow write: if false;/);
 });
 

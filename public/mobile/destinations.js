@@ -73,6 +73,20 @@
         return ROLE_LABELS[permissionLevel] || 'Member';
     }
 
+    // Level plus the Pastoral Assistant badge, from the access core so the
+    // web list and both phone drawers cannot invent a second name for it.
+    function accountLabel(account) {
+        const level = account && typeof account === 'object'
+            ? (account.permissionLevel || account.role)
+            : account;
+        const role = roleLabel(level);
+        const Access = (typeof window === 'undefined' && typeof require === 'function')
+            ? require('../access-core.js')
+            : (global.AccessCore);
+        const badge = Access ? Access.badgeLabel(account) : '';
+        return badge ? role + ' · ' + badge : role;
+    }
+
     // 1–2 letters for the avatar. Same rule as everywhere else in the app.
     function initials(name) {
         const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -110,9 +124,31 @@
     // FAILS CLOSED on an unknown user: a gated entry is hidden while we do not
     // yet know who is looking, because offering the Shepherd Dashboard to
     // somebody who will be refused on arrival is worse than not offering it.
+    function accessCore() {
+        if (typeof window === 'undefined' && typeof require === 'function') {
+            return require('../access-core.js');
+        }
+        return global.AccessCore;
+    }
+
+    function isAdminOnlyGate(levels) {
+        return !!levels && levels.length > 0 &&
+            levels.every(function (l) { return l === 'admin' || l === 'super_admin'; });
+    }
+
     function canSee(item, user) {
         if (!item || !item.permissionLevels) return true;
-        return !!(user && item.permissionLevels.indexOf(user.permissionLevel) >= 0);
+        if (!user) return false;
+        if (isAdminOnlyGate(item.permissionLevels)) {
+            return item.permissionLevels.indexOf(user.permissionLevel) >= 0;
+        }
+        if (item.permissionLevels.indexOf(user.permissionLevel) >= 0) return true;
+        const Access = accessCore();
+        if (!Access) return false;
+        if (item.permissionLevels.indexOf('elder') !== -1 && Access.readsAsElder(user)) return true;
+        if (item.permissionLevels.indexOf('editor') !== -1 && Access.readsAsEditor(user)) return true;
+        if (item.permissionLevels.indexOf('member') !== -1 && Access.readsAsElder(user)) return true;
+        return false;
     }
 
     // A route as a URL reachable from ANY page — the app's own document or a
@@ -134,7 +170,7 @@
 
     const Destinations = {
         DESTINATIONS, SHELL_PAGES, ROLE_LABELS, DRAWER_HEAD,
-        canSee, routeHref, roleLabel, initials,
+        canSee, routeHref, roleLabel, accountLabel, initials,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Destinations;

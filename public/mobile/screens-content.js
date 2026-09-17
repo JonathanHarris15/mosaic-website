@@ -135,7 +135,7 @@
     return { hidden: hidden, hidePeople: hidePeople };
   }
   function isDirectoryAdmin(user) {
-    return !!user && (user.permissionLevel === "elder" || user.permissionLevel === "super_admin");
+    return !!(window.AccessCore && AccessCore.liftsHidden(user));
   }
 
   // Who may open this screen — asked of the ONE list the tile and the drawer
@@ -221,7 +221,7 @@
     var vis = tagVisibility(tagsSt.data);
     var isAdmin = isDirectoryAdmin(props.user);
     var tagsReady = !tagsSt.loading;
-    var canEdit = !!props.user && ["editor", "elder", "admin", "super_admin"].indexOf(props.user.permissionLevel) >= 0;
+    var canEdit = !!(window.AccessCore && AccessCore.writesAsEditor(props.user));
     var contact = [["mail", p.email], ["phone", p.phone]].filter(function (r) { return r[1]; });
     // Membership tags always resolve via the Track; other tags obey visibility.
     var chipTags = (p.tags || []).filter(function (t) {

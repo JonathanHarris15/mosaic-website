@@ -238,7 +238,11 @@
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var isElder = canReadElder;
     var vm = viewModalS[0];
     var selectedView = views.filter(function (v) { return v.id === selectedS[0]; })[0];
 
@@ -479,12 +483,17 @@
     function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var canWriteEditor = !!(flags && flags.canWriteEditor);
+    var isElder = canReadElder;
     var addBtn = html`<button onClick=${function () { addModalS[1](true); }} aria-label="Add person" style=${Object.assign({}, iconBtn, { color: "var(--primary)", marginRight: 4, width: 40, height: 40 })}>${Ic("user-plus", 20)}</button>`;
 
     return html`
       <${Screen}>
-        <${TopBar} title="People" onBack=${props.back} serif=${false} right=${isElder ? addBtn : null} />
+        <${TopBar} title="People" onBack=${props.back} serif=${false} right=${canWriteEditor ? addBtn : null} />
         <${Body} style=${{ padding: "14px 16px 40px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
@@ -1251,7 +1260,11 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var isElder = canReadElder;
     // A face, a first name and a lock: "you can't open this" answered before
     // it is asked.
     function heldBadge(holder) {

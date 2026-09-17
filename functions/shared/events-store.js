@@ -378,7 +378,11 @@
     // All of them are bounded by how much is actually going on, not by the month.
     async function attachRosters(db, occurrences, options) {
         const opts = options || {};
-        const isEditor = ['editor', 'admin', 'elder', 'super_admin'].indexOf(opts.rank) !== -1;
+        const Access = (typeof AccessCore !== 'undefined') ? AccessCore
+            : (typeof require === 'function' ? require('./access-core.js') : null);
+        const isEditor = Access
+            ? Access.writesAsEditor(opts.rank)
+            : ['editor', 'admin', 'elder', 'super_admin'].indexOf(opts.rank) !== -1;
 
         await Promise.all(occurrences.map(async o => {
             const rosterRef = occurrenceRef(db, o.id).collection(ROSTER);
