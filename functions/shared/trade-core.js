@@ -105,7 +105,15 @@
         COVERED_TAKEN: 'coveredTaken',
         OFFERED_MOVED: 'offeredMoved',
         OFFERED_DECLINED: 'offeredDeclined',
+        // Invite eligibility (MS-529). The picker and inviteToTrade share this
+        // so a Person the screen offers is one the server will accept.
+        NOT_VISIBLE: 'notVisible',
+        NOT_ELIGIBLE: 'notEligible',
     });
+
+    // Locked copy (MS-529). The picker prints this on a row that fails
+    // visibility — character for character, do not rephrase.
+    const INVITE_NO_ACCOUNT_REASON = "No account — can't invite on this event";
 
     // The Assignment state that means "this one is looking for somebody".
     // Restated rather than imported: events-occurrence-core owns the states, and
@@ -464,6 +472,43 @@
         offered: [], chosen: null,
     });
 
+    // ── Who may be invited (MS-529) ──────────────────────────────────────────
+    //
+    // ⚠ THE PICKER AND THE SERVER ASK THE SAME QUESTION. Until this lived in
+    // one place, the picker offered People with no Linked User on a members-only
+    // Event and inviteToTrade refused them: "They are not able to see that one".
+    //
+    // Facts come in already gathered. This module does not look anyone up —
+    // the same bargain as planTransition. The caller (trades-view on the
+    // screen, trade-writes on the server) reads Event visibility, Linked User
+    // rank, and participantIds, and hands the answers here.
+    //
+    // Visibility: the Event is public, OR a Linked User can see it, OR the
+    // Person is already a participant. An unlinked Person stays inviteable on
+    // Sunday Service and on a members-only Event they are already on.
+
+    function inviteVisibility(spec) {
+        const s = spec || {};
+        if (s.eventIsPublic) return true;
+        if (s.linkedUserCanSee) return true;
+        if (s.isParticipant) return true;
+        return false;
+    }
+
+    function inviteEligibility(spec) {
+        const s = spec || {};
+        const inviteeId = s.inviteeId;
+        if (!inviteeId || (s.holderId && inviteeId === s.holderId)) {
+            return refuse(REASONS.YOURSELF);
+        }
+        if ((s.alreadyAsked || []).indexOf(inviteeId) !== -1) {
+            return refuse(REASONS.ALREADY_ASKED);
+        }
+        if (s.roleEligible === false) return refuse(REASONS.NOT_ELIGIBLE);
+        if (!inviteVisibility(s)) return refuse(REASONS.NOT_VISIBLE);
+        return { ok: true };
+    }
+
     const TradeCore = {
         STATES,
         ORIGINS,
@@ -471,6 +516,9 @@
         REASONS,
         CAUSES,
         MAX_INVITATIONS,
+        INVITE_NO_ACCOUNT_REASON,
+        inviteVisibility,
+        inviteEligibility,
         needsTelling,
         noticesFor,
         assignmentKey,

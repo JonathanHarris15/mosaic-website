@@ -100,6 +100,9 @@
             // Which occurrences can reach the open cover list at all. The
             // quiet-or-open choice is only offered where it means something.
             coverable: {},
+            // Occurrences keyed by id, so the invite picker can ask the shared
+            // eligibility helper about visibility without a second read.
+            inviteEvents: {},
 
             // One modal at a time, named by what it is asking.
             asking: null,     // invite: who shall I ask?
@@ -178,8 +181,10 @@
                     // participant-rung Event never can, so the choice is not
                     // offered there rather than being offered and ignored.
                     this.coverable = {};
+                    this.inviteEvents = {};
                     occurrences.forEach(o => {
                         this.coverable[o.id] = Core.canBeCovered(o);
+                        this.inviteEvents[o.id] = o;
                     });
 
                     // `decorate` turns a slug into a Role name, so the names have
@@ -459,6 +464,8 @@
                     hidingTags: this.hidingTags,
                     personId: this.personId,
                     alreadyAsked: asked,
+                    occurrence: this.inviteEvents[this.asking.occurrenceId] ||
+                        null,
                 }).filter(p => !term ||
                     this.nameOf(p.id).toLowerCase().indexOf(term) !== -1)
                     .slice(0, 60);

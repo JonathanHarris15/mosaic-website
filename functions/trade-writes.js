@@ -61,6 +61,9 @@ const WORDING = {
   capReached: ["failed-precondition",
     "You have already asked three people. Wait, or withdraw one."],
   alreadyAsked: ["failed-precondition", "You have already asked them."],
+  notVisible: ["failed-precondition", "They are not able to see that one."],
+  notEligible: ["failed-precondition",
+    "That swap would put somebody in a place the Role does not allow."],
   nothingOffered: ["invalid-argument",
     "Offer something of your own, or simply take it from the cover list."],
   notOffered: ["failed-precondition", "That one was not offered."],
@@ -167,6 +170,27 @@ async function canSee(db, personId, occurrenceId) {
   const occurrence = Object.assign({id: snap.id}, snap.data());
   const rank = await rankOf(db, personId);
   return occurrences.canSee(rank, occurrence, personId);
+}
+
+/**
+ * The facts inviteEligibility wants, gathered from this Event and this Person.
+ *
+ * ⚠ SAME HELPER THE PICKER CALLS (MS-529). Rank comes off their Linked User;
+ * no Linked User means they only pass on a public Event or as a participant.
+ *
+ * @param {Object} occurrence the Event as stored
+ * @param {string} personId who would be invited
+ * @param {?string} rank their Linked User's permission level, or null
+ * @return {Object} {eventIsPublic, linkedUserCanSee, isParticipant}
+ */
+function inviteFacts(occurrence, personId, rank) {
+  return {
+    eventIsPublic: occurrences.visibilityOf(occurrence) === "public",
+    linkedUserCanSee: !!(rank &&
+      occurrences.canSee(rank, occurrence, personId)),
+    isParticipant: ((occurrence && occurrence.participantIds) || [])
+        .indexOf(personId) !== -1,
+  };
 }
 
 /**
@@ -287,6 +311,7 @@ async function describeAssignment(db, ref) {
     },
     eventName: occurrence.name || occurrence.seriesName || "Event",
     roleName: (role && role.name) || null,
+    occurrence: Object.assign({id: occSnap.id}, occurrence),
   };
 }
 
@@ -306,11 +331,13 @@ async function invite(db, spec) {
 
   // ⚠ THE RUNG, FIRST AND ABSOLUTELY. Inviting somebody to a place they cannot
   // see would tell them it exists, which is the whole thing the rung protects.
-  const theyCanSee = await canSee(db, s.counterpartyId, ref.occurrenceId);
-  if (!theyCanSee) {
-    return refuse("failed-precondition",
-        "They are not able to see that one.", "notVisible");
-  }
+  // Asked of the same helper the picker uses (MS-529), so the two cannot drift.
+  const rank = await rankOf(db, s.counterpartyId);
+  const verdict = tradeCore.inviteEligibility(Object.assign({
+    inviteeId: s.counterpartyId,
+    holderId: s.actorId,
+  }, inviteFacts(said.occurrence, s.counterpartyId, rank)));
+  if (!verdict.ok) return refusalFor(verdict.reason);
 
   return runOrLose(db, async (tx) => {
     const held = await readAssignment(tx, db, ref);
