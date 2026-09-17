@@ -504,13 +504,12 @@
 </main>
 
 
-<!-- ══ Who shall I ask? (MS-214) ══════════════════════════════════════════ -->
+<!-- ══ Who shall I ask? (MS-214, MS-529) ══════════════════════════════════ -->
 <!--
-     ⚠ IT OFFERS EVERYBODY, INCLUDING PEOPLE WITH NO ACCOUNT — with a warning.
-     They cannot answer in the app today, but MS-189 will text exactly those
-     people, and a picker that hid them would have to be unpicked. Withdraw is
-     what makes an unanswerable ask harmless: ask them, chase them yourself,
-     take it back.
+     ⚠ IT STILL LISTS PEOPLE WITH NO ACCOUNT — with a warning, or with a
+     reason they cannot be picked. Hiding them would make a typed name vanish.
+     On a public Event they stay selectable (MS-249 will text them). On a
+     members-only Event they are not selectable unless they are already on it.
 
      ⚠ SOMEBODY A TAG HIDES IS ABSENT, NOT GREYED (ADR-0021 §1). A disabled row
      saying why they cannot help still prints the name the tag exists to hide.
@@ -532,11 +531,14 @@
 
             <div class="flex-grow overflow-y-auto">
                 <template x-for="person in askable" :key="person.id">
-                    <button type="button" :disabled="busy || invitesLeft(asking) <= 0"
+                    <button type="button"
+                            :disabled="busy || invitesLeft(asking) <= 0 || person.selectable === false"
                             @click="ask(person)"
+                            :aria-disabled="(person.selectable === false).toString()"
                             class="w-full text-left px-5 py-3 flex items-center gap-3.5
                                    border-b border-outline-variant last:border-b-0
-                                   disabled:opacity-50 hover:bg-surface-container-low">
+                                   disabled:opacity-50 hover:bg-surface-container-low
+                                   disabled:cursor-not-allowed">
 
                         <!-- ⚠ A FACE, NOT A DECORATION. This is a directory of
                              names you half-know, and a face is how somebody
@@ -560,11 +562,18 @@
 
                         <span class="min-w-0 flex-grow">
                             <span class="block text-[15px] text-on-surface"
+                                  :class="person.selectable === false ? 'text-on-surface-variant' : ''"
                                   x-text="nameOf(person.id)"></span>
                             <!-- Shortened to a chip now the face carries the
                                  recognising. The full sentence was the whole
-                                 row, fifteen times over. -->
-                            <span x-show="unreachable(person)"
+                                 row, fifteen times over. Visibility failure
+                                 replaces the chip with the locked reason
+                                 (MS-529) — they still appear, they cannot be
+                                 picked. -->
+                            <span x-show="person.disabledReason"
+                                  class="block mt-[3px] text-[12px] leading-[1.35] text-on-surface-variant"
+                                  x-text="person.disabledReason"></span>
+                            <span x-show="unreachable(person) && !person.disabledReason"
                                   class="inline-flex items-center mt-[3px] px-[7px] py-[2px] rounded
                                          bg-surface-container text-[10.5px] uppercase tracking-[.1em]
                                          text-on-surface-variant">

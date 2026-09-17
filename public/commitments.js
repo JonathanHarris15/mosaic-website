@@ -471,14 +471,17 @@
                     .slice(0, 60);
             },
 
-            // ⚠ SOMEBODY WITH NO ACCOUNT IS OFFERED ANYWAY, and warned about.
-            // They cannot answer in the app today, but MS-189 will text exactly
-            // these people, and a picker that hid them would have to be
-            // unpicked. Withdraw is what makes an unanswerable ask harmless.
+            // ⚠ SOMEBODY WITH NO ACCOUNT IS OFFERED ANYWAY, and warned about —
+            // or, on a members-only Event they are not already on, shown with
+            // the reason they cannot be picked (MS-529). They cannot answer in
+            // the app today, but MS-189 / MS-249 will text exactly these people
+            // on a public Event, and a picker that hid them would have to be
+            // unpicked.
             unreachable(person) { return !person || !person.userId; },
 
             async ask(person) {
                 if (this.busy) return;
+                if (!person || person.selectable === false) return;
                 this.busy = 'ask';
                 try {
                     const call = firebase.functions().httpsCallable('inviteToTrade');
