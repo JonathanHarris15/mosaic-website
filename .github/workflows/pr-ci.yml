@@ -1,5 +1,9 @@
 name: PR CI
 
+# The two commands agents already run: `npm test` and `npm run lint --prefix functions`.
+# Both are red on current main (pre-existing). This workflow still runs them so every
+# PR has the same signal; do not "fix" hundreds of functions eslint findings here.
+
 on:
   pull_request:
 
