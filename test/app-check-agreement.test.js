@@ -107,9 +107,10 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     const wf = fs.readFileSync(wfPath, 'utf8');
     assert.match(wf, /workflow_dispatch/,
         'the deploy workflow cannot be triggered with gh workflow run');
-    assert.doesNotMatch(wf, /^\s+push:\s*$/m,
-        'the deploy workflow still auto-deploys on push to main; Atlas: first ' +
-        'run is workflow_dispatch only so merge cannot ship');
+    assert.match(wf, /^\s+push:\s*$/m,
+        'the deploy workflow no longer auto-deploys on push to main');
+    assert.match(wf, /branches:\s*\n\s+-\s+main/,
+        'the deploy workflow push trigger is not limited to main');
     assert.match(wf, /--only hosting,functions:publicForm/,
         'the deploy workflow no longer ships Hosting + publicForm together');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
