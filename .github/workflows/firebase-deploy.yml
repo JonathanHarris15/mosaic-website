@@ -1,0 +1,106 @@
+name: Deploy Firebase (hosting + publicForm)
+
+# Production Hosting + the public form door. Agents must not `firebase deploy`
+# from the box (AGENTS.md). Trigger from GitHub:
+#   gh workflow run "Deploy Firebase (hosting + publicForm)" --ref main
+#
+# App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
+# for the deploy (gitignored .env, never committed) and never passes enforce.
+# Enforce is an Atlas-escalated param flip:
+# docs/ops/ms-508-app-check-break-glass.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Plan only — do not ship (firebase deploy --dry-run)
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy-mosaic-hymn-database
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Hosting + publicForm
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # firebase.json: CLI analysis of functions/index.js can exceed the
+      # default 10s since MS-278 pulled in the MCP surface.
+      FUNCTIONS_DISCOVERY_TIMEOUT: "120"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Load Firebase service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE }}
+        run: |
+          set -euo pipefail
+          # Do not echo the JSON. GitHub masks secret values in logs; still
+          # never print, never commit.
+          SA_JSON=""
+          USED=""
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT}" ]; then
+            SA_JSON="${FIREBASE_SERVICE_ACCOUNT}"
+            USED="FIREBASE_SERVICE_ACCOUNT"
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE}" ]; then
+            SA_JSON="${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE}"
+            USED="FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE"
+          else
+            echo "::error::No Firebase service account secret. Add FIREBASE_SERVICE_ACCOUNT (preferred) or FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE."
+            exit 1
+          fi
+          echo "Using GitHub Actions secret ${USED}"
+          umask 077
+          printf '%s' "${SA_JSON}" > "${RUNNER_TEMP}/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-sa.json" >> "${GITHUB_ENV}"
+
+      - name: Pin App Check to monitor
+        run: |
+          set -euo pipefail
+          # Runner-only. functions/.env.* is gitignored. Forces monitor so a
+          # leftover remote param cannot silently enforce on this deploy.
+          printf '%s\n' 'PUBLIC_FORM_APP_CHECK_MODE=monitor' \
+            > functions/.env.mosaic-hymn-database
+
+      - name: Deploy hosting + publicForm
+        run: |
+          set -euo pipefail
+          PROJECT_ID="$(node -p "require('./.firebaserc').projects.default")"
+          echo "project=${PROJECT_ID}"
+          echo "sha=${GITHUB_SHA}"
+          echo "targets=hosting,functions:publicForm"
+          echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
+          EXTRA=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            EXTRA+=(--dry-run)
+            echo "dry_run=true"
+          fi
+          npx firebase deploy \
+            --only hosting,functions:publicForm \
+            --project "${PROJECT_ID}" \
+            --non-interactive \
+            "${EXTRA[@]}"

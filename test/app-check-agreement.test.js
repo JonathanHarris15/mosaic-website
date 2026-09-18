@@ -99,3 +99,18 @@ test('turning App Check on still means deploying both halves', () => {
     assert.match(cfg, /enforceAppCheck/,
         'the reminder that platform enforceAppCheck stays false has gone');
 });
+
+test('the GitHub Actions deploy workflow ships both halves and stays on monitor', () => {
+    const wfPath = path.join(ROOT, '.github/workflows/firebase-deploy.yml');
+    assert.ok(fs.existsSync(wfPath),
+        'firebase-deploy.yml is missing; Hosting + publicForm have no Actions path');
+    const wf = fs.readFileSync(wfPath, 'utf8');
+    assert.match(wf, /workflow_dispatch/,
+        'the deploy workflow cannot be triggered with gh workflow run');
+    assert.match(wf, /--only hosting,functions:publicForm/,
+        'the deploy workflow no longer ships Hosting + publicForm together');
+    assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
+        'the deploy workflow no longer pins App Check to monitor');
+    assert.doesNotMatch(wf, /PUBLIC_FORM_APP_CHECK_MODE=enforce/,
+        'the deploy workflow sets enforce — that flip is Atlas-escalated HITL, not CI');
+});
