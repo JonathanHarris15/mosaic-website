@@ -37,6 +37,13 @@ test('the member stage is a real stage, and previous_member is a different one',
     assert.notStrictEqual(Server.MEMBER_STAGE, Server.PREVIOUS_MEMBER_STAGE);
 });
 
+test('Visitor and Regular Attender constants match the Track', () => {
+    assert.strictEqual(Server.VISITOR_STAGE, 'visitor');
+    assert.strictEqual(Server.REGULAR_ATTENDER_STAGE, 'regular_attender');
+    assert.ok(Core.MEMBERSHIP_STAGES.includes(Server.VISITOR_STAGE));
+    assert.ok(Core.MEMBERSHIP_STAGES.includes(Server.REGULAR_ATTENDER_STAGE));
+});
+
 // Every membership shape the projection can be asked about: each stage, no
 // stage at all, and each of those marked Inactive.
 const MEMBERSHIPS = [];

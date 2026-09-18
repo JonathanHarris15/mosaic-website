@@ -52,6 +52,11 @@ const MEMBERSHIP_TAG_IDS = [
 ];
 const MEMBERSHIP_TAG_ID_SET = new Set(MEMBERSHIP_TAG_IDS);
 
+// The first two stages. The attendance rule (ADR-0066) only ever walks this
+// one step: Visitor → Regular Attender.
+const VISITOR_STAGE = "visitor";
+const REGULAR_ATTENDER_STAGE = "regular_attender";
+
 // The stage a Person must reach to count as a member.
 const MEMBER_STAGE = "member";
 
@@ -117,6 +122,8 @@ module.exports = {
   MEMBERSHIP_TAG_IDS,
   MEMBER_TAG_ID,
   INACTIVE_TAG_ID,
+  VISITOR_STAGE,
+  REGULAR_ATTENDER_STAGE,
   MEMBER_STAGE,
   PREVIOUS_MEMBER_STAGE,
   stageIndex,

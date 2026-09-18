@@ -1,5 +1,8 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {
+  onDocumentWritten,
+  onDocumentCreated,
+} = require("firebase-functions/v2/firestore");
 const {onObjectFinalized} = require("firebase-functions/v2/storage");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret, defineString} = require("firebase-functions/params");
@@ -1764,6 +1767,9 @@ const {
 } = require("./member-sync");
 
 const membershipTrack = require("./membership-track");
+const {
+  applyAttendanceRuleSafe,
+} = require("./attendance-rule-writes");
 
 const {
   ELDER_TAG,
@@ -1857,6 +1863,29 @@ exports.syncMemberTagToRole = onDocumentWritten(
 
       await userRef.update({permissionLevel: MEMBER_PERMISSION_LEVEL, role: MEMBER_PERMISSION_LEVEL});
       log(`Promoted user ${userId} from '${permissionLevel}' to '${MEMBER_PERMISSION_LEVEL}' (linked person has the member tag).`);
+    },
+);
+
+/**
+ * Attendance rule (MS-425, ADR-0066): a Visitor marked present at the
+ * Kiosk becomes Regular Attender when they have 4 distinct visit days in
+ * two calendar months. Create only — a re-mark overwrites the same
+ * record, and a delete never moves anyone. Errors are logged, never
+ * rethrown: the Attendance write has already committed.
+ */
+exports.onAttendanceCreated = onDocumentCreated(
+    {
+      document: "event_occurrences/{occurrenceId}/attendance/{personId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const personId = event.params && event.params.personId;
+      if (!personId) return;
+      await applyAttendanceRuleSafe(admin.firestore(), {
+        personId,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.FieldValue.serverTimestamp(),
+      }, log);
     },
 );
 
