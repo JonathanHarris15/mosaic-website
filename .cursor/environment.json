@@ -1,0 +1,11 @@
+{
+  "name": "mosaic-website",
+  "install": "bash .cursor/install.sh",
+  "ports": [
+    { "name": "Firebase Hosting emulator", "port": 5005 },
+    { "name": "Cloud Functions emulator", "port": 5001 },
+    { "name": "Firestore emulator", "port": 8080 },
+    { "name": "Auth emulator", "port": 9099 },
+    { "name": "Emulator UI", "port": 4000 }
+  ]
+}
