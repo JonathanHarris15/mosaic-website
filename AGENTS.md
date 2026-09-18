@@ -39,9 +39,18 @@ npm test                          # root: node --test  (unit suite in test/)
 npm run lint --prefix functions   # functions/: eslint .
 ```
 
-PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on both trees, on Node 20. If they are green locally, CI should be green.
+PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on both trees, on Node **20** (the `functions.engines` version). Cloud Agent VMs may be Node 22; `npm ci --prefix functions` then warns `EBADENGINE` and still installs.
 
-`npm test` is the default gate. It does **not** start emulators. Tests under `test/emulator/` skip unless `FIRESTORE_EMULATOR_HOST` is set.
+`npm test` is the default unit gate. It does **not** start emulators. Tests under `test/emulator/` skip unless `FIRESTORE_EMULATOR_HOST` is set (they `require('firebase-admin')` at load; that module comes from the root `npm ci`).
+
+Both commands currently fail on `main`. That is existing product debt, not a reason to rewrite `functions/` or calendar tests in an unrelated PR:
+
+| Command | Baseline observed 2026-09-18 |
+| --- | --- |
+| `npm test` | ~4424 pass, **59 fail**, 18 skip (AccessCore globals on page modules, calendar page tests, a few glossary/rules assertions) |
+| `npm run lint --prefix functions` | **366** eslint errors (mostly `max-len` / `valid-jsdoc`) |
+
+CI exists so every PR runs the same two commands. Do **not** mass-reformat functions or weaken eslint to make lint green. Do **not** treat a red check as a licence to skip running them — quote what you ran and what failed.
 
 ### Real package scripts (root `package.json`)
 
