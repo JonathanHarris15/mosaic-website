@@ -1,8 +1,11 @@
 name: Deploy Firebase (hosting + publicForm)
 
 # Production Hosting + the public form door. Agents must not `firebase deploy`
-# from the box (AGENTS.md). Trigger from GitHub:
-#   gh workflow run "Deploy Firebase (hosting + publicForm)" --ref main
+# from the box (AGENTS.md). Trigger from GitHub (after this file is on main):
+#   gh workflow run "Deploy Firebase (hosting + publicForm)" --ref main -f dry_run=true
+#
+# ⚠ NO push-to-main trigger. Merging this file must not auto-deploy. Push-on-main
+# comes back in a later PR after dry_run is green and Maintain CLEARs live.
 #
 # App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
 # for the deploy (gitignored .env, never committed) and never passes enforce.
@@ -16,9 +19,6 @@ on:
         description: Plan only — do not ship (firebase deploy --dry-run)
         type: boolean
         default: false
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -95,7 +95,7 @@ jobs:
           echo "targets=hosting,functions:publicForm"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           EXTRA=()
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             EXTRA+=(--dry-run)
             echo "dry_run=true"
           fi
