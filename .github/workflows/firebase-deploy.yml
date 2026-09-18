@@ -89,7 +89,7 @@ jobs:
       - name: Deploy hosting + publicForm
         run: |
           set -euo pipefail
-          PROJECT_ID="$(node -p "require('./.firebaserc').projects.default")"
+          PROJECT_ID="$(node -p "JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).projects.default")"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
           echo "targets=hosting,functions:publicForm"
