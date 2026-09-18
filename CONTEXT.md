@@ -123,7 +123,7 @@ A label that can be applied to a Person. Tags are the primary filter criterion f
 _Avoid_: Label, category, attribute (and "elder-only tag" — visibility is per-tag)
 
 **Membership Track**:
-The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of Permission Level to imply membership. It is deliberately **not** a Permission Level. A Person's stage on the Track is *not* self-editable — only an editor (via the stage slider) can move someone along it.
+The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of Permission Level to imply membership. It is deliberately **not** a Permission Level. A Person's stage on the Track is *not* self-editable. An editor moves it via the stage slider, and two rules move it forward on their own: the account sync to Member ([ADR 0026](docs/adr/0026-the-account-sync-moves-the-stage-not-the-tag.md)), and the attendance rule to Regular Attender ([ADR 0066](docs/adr/0066-the-attendance-rule-advances-a-visitor-to-regular-attender.md)).
 _Avoid_: Membership status (as an enum synonym), member type, member level
 
 **Membership Stage**:
@@ -268,7 +268,7 @@ A User whose `permissionLevel` is `kiosk` — a shared, unattended device accoun
 _Avoid_: Device account, shared account (use Kiosk)
 
 **Attendance**:
-A record that a Person was physically present at a particular Event, marked live at a Kiosk. Stored on the Event occurrence (`event_occurrences/{id}/attendance/{personId}`), not on the Person — the reverse of Involvement, and deliberately so ([ADR 0042](docs/adr/0042-attendance-is-written-live-and-lives-on-the-event.md)): there is no plan behind it to confirm, no nightly conversion, just a tap that is true the moment it's made. Distinct from Involvement, which answers "did they serve," not "were they here" — a Person can have either, both, or neither for the same Event.
+A record that a Person was physically present at a particular Event, marked live at a Kiosk. Stored on the Event occurrence (`event_occurrences/{id}/attendance/{personId}`), not on the Person — the reverse of Involvement, and deliberately so ([ADR 0042](docs/adr/0042-attendance-is-written-live-and-lives-on-the-event.md)): there is no plan behind it to confirm, no nightly conversion, just a tap that is true the moment it's made. Distinct from Involvement, which answers "did they serve," not "were they here" — a Person can have either, both, or neither for the same Event. It also feeds the attendance rule: a Visitor marked present on 4 distinct days in two calendar months is moved to Regular Attender ([ADR 0066](docs/adr/0066-the-attendance-rule-advances-a-visitor-to-regular-attender.md)).
 _Avoid_: Check-in (already claimed by the "Elder Check-in" Note Type), presence, attendance record (use Attendance)
 
 **Kid**:
@@ -362,7 +362,7 @@ A stretch of **whole days** a Person has said they will not be there — a holid
 _Avoid_: unavailable, blackout, absence, out (use Away)
 
 **Membership Change**:
-A Pastoral Record entry that captures a Person's move along the Membership Track (including onto/off of Inactive). Records the previous stage, the new stage, which editor made the change, the source, a timestamp, and an optional Explanation — mirroring Status Change. Generated once per slider move. The underlying Membership Tag swap is performed silently and does **not** generate Tag Changes; the Membership Change is the canonical record of the transition, and the Person's membership history is derived from these entries.
+A Pastoral Record entry that captures a Person's move along the Membership Track (including onto/off of Inactive). Records the previous stage, the new stage, which editor made the change, the source, a timestamp, and an optional Explanation — mirroring Status Change. Generated once per slider move, and also by the two rules that move a Person on their own — authored by "Account sync" or "Attendance rule" with no person ([ADR 0026](docs/adr/0026-the-account-sync-moves-the-stage-not-the-tag.md), [ADR 0066](docs/adr/0066-the-attendance-rule-advances-a-visitor-to-regular-attender.md)). The underlying Membership Tag swap is performed silently and does **not** generate Tag Changes; the Membership Change is the canonical record of the transition, and the Person's membership history is derived from these entries.
 _Avoid_: Status Change (that is Shepherding Status), tag change, track change
 
 **Assignment Change**:
