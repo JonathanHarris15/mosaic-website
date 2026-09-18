@@ -1884,6 +1884,7 @@ exports.onAttendanceCreated = onDocumentCreated(
       await applyAttendanceRuleSafe(admin.firestore(), {
         personId,
         today: ac.churchToday(new Date()),
+        now: admin.firestore.FieldValue.serverTimestamp(),
       }, log);
     },
 );

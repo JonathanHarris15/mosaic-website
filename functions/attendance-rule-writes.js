@@ -14,7 +14,6 @@
  * member-sync / trade-writes.
  */
 
-const admin = require("firebase-admin");
 const rule = require("./attendance-rule");
 const track = require("./membership-track");
 
@@ -99,12 +98,16 @@ async function attendanceDatesInWindow(db, personId, today) {
  * @param {Object} args Who and when.
  * @param {string} args.personId The Person marked present.
  * @param {string} [args.today] Church-local YYYY-MM-DD; defaults to now.
+ * @param {*} args.now Server timestamp (or a Timestamp in tests). The
+ *     trigger passes `FieldValue.serverTimestamp()` from the same Admin
+ *     SDK as `db`, so the emulator and production do not mix prototypes.
  * @return {Promise<Object>} `{moved, reason?, days?}`.
  */
 async function applyAttendanceRule(db, args) {
   const personId = args && args.personId;
   if (!personId) return {moved: false, reason: "no_person"};
   const today = args.today || rule.churchToday(new Date());
+  const now = args.now;
 
   const personRef = db.collection(PEOPLE).doc(personId);
   const personSnap = await personRef.get();
@@ -122,7 +125,7 @@ async function applyAttendanceRule(db, args) {
     return {moved: false, reason: "threshold", days};
   }
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  if (!now) return {moved: false, reason: "no_now"};
   return db.runTransaction(async (tx) => {
     const live = await tx.get(personRef);
     if (!live.exists) return {moved: false, reason: "missing"};

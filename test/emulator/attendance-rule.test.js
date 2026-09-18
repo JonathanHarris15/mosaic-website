@@ -62,7 +62,9 @@ async function personOf(db, personId) {
 }
 
 async function run(db, personId) {
-    return writes.applyAttendanceRule(db, { personId, today: TODAY });
+    return writes.applyAttendanceRule(db, {
+        personId, today: TODAY, now: H.now(),
+    });
 }
 
 suite('the attendance rule writer against Firestore', () => {
