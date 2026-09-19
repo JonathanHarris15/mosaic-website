@@ -8,7 +8,7 @@ name: Deploy Firebase (hosting + publicForm)
 #       gh workflow run "Deploy Firebase (hosting + publicForm)" --ref <branch> -f dry_run=true
 #
 # Standing --only targets (do not one-off around this list):
-#   hosting,functions:publicForm,functions:onAttendanceCreated
+#   hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson
 # Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
 # App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
@@ -106,7 +106,7 @@ jobs:
           PROJECT_ID="$(node -p "JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).projects.default")"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
-          echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated"
+          echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           echo "MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app"
           EXTRA=()
@@ -115,7 +115,7 @@ jobs:
             echo "dry_run=true"
           fi
           npx firebase deploy \
-            --only hosting,functions:publicForm,functions:onAttendanceCreated \
+            --only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson \
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"
