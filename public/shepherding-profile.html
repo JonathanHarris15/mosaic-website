@@ -238,8 +238,8 @@
                     </div>
                 </div>
 
-                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->
-                <div x-show="canEditMembership" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
+                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, canDecide only -->
+                <div x-show="canDecide" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <h2 class="font-headline-md text-headline-md text-primary">Membership Track</h2>
                         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
@@ -921,7 +921,7 @@
                                         <template x-if="entry.source === 'people_list'">
                                             <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
                                         </template>
-                                        <button x-show="canUndoStatusChange(entry)" @click="undoStatusChange(entry)"
+                                        <button x-show="canDecide && canUndoStatusChange(entry)" @click="undoStatusChange(entry)"
                                             class="ml-auto flex items-center gap-xs text-xs text-on-surface-variant hover:text-error transition-colors font-label-md flex-shrink-0"
                                             title="Undo this status change and restore the previous status">
                                             <span class="material-symbols-outlined text-[14px]">undo</span>
