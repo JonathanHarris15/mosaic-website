@@ -78,6 +78,7 @@ async function mountTab(seed, { confirmAnswer = true, denied = [] } = {}) {
     global.confirm = () => confirmAnswer;
 
     const tab = window.RelationshipsTab();
+    tab.canDecide = true;
     tab.toasts = [];
     tab.showToast = (message, type = 'success') => tab.toasts.push({ message, type });
     await tab.loadRelationshipsTab();
@@ -218,6 +219,29 @@ test('deleting a type in use removes its pairs and groups too', async () => {
     assert.deepStrictEqual(Object.keys(storedIn('relationships')), ['e2'], 'only the deleted type\'s edges go');
     assert.deepStrictEqual(Object.keys(storedIn('relationship_groups')), []);
     assert.strictEqual(tab.relTypes.length, 1);
+});
+
+test('a Pastoral Assistant cannot create, edit, or delete a Relationship Type', async () => {
+    const tab = await mountTab({
+        relationship_types: { t1: DISCIPLESHIP },
+        people: PEOPLE,
+    });
+    tab.canDecide = false;
+
+    tab.startNewType();
+    assert.strictEqual(tab.showTypeForm, false, 'New stays closed');
+
+    tab.startEditType(tab.relTypes[0]);
+    assert.strictEqual(tab.showTypeForm, false, 'Edit stays closed');
+
+    tab.typeForm = { ...tab.typeForm, ...DISCIPLESHIP, name: 'Should not write' };
+    await tab.saveType();
+    assert.strictEqual(Object.keys(storedIn('relationship_types')).length, 1);
+    assert.strictEqual(storedIn('relationship_types').t1.name, 'Discipleship');
+
+    await tab.deleteType(tab.relTypes[0]);
+    assert.deepStrictEqual(Object.keys(storedIn('relationship_types')), ['t1']);
+    assert.deepStrictEqual(tab.toasts, [], 'refusal is silent — no click → toast');
 });
 
 test('declining the delete confirmation leaves everything in place', async () => {
