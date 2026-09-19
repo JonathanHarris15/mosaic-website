@@ -321,6 +321,10 @@ suite('the Shepherding Tag tools', () => {
         const gone = await Writes.deleteNote(db, {personId: A, noteId});
         assert.strictEqual(gone.deleted.subject, 'Reworded');
         assert.strictEqual((await Read.listNotes(db, {personId: A})).count, 0);
+
+        // MS-530: deleting the last remaining note clears lastNoteAt.
+        const person = (await db.collection('people').doc(A).get()).data();
+        assert.strictEqual(person.lastNoteAt, null);
     });
 
     test('a note belonging to a Person Panel is not deletable from here', async () => {

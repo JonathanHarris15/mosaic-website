@@ -96,6 +96,10 @@ suite('what the MCP writes on a Person', () => {
         // And the plain-text copy the note list previews from is filled in,
         // the same field the page writes.
         assert.match(note.content, /Her mother is staying/);
+
+        // MS-530: creating a note stamps lastNoteAt on the Person.
+        const person = (await db.collection('people').doc(SUBJECT).get()).data();
+        assert.ok(person.lastNoteAt, 'writeNote must set lastNoteAt');
     });
 
     test('a note reads back out as the prose that went in', async () => {

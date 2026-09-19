@@ -417,7 +417,7 @@
   function ShepherdPeopleScreen(props) {
     var user = props.user || {};
     var loadingS = useState(true), errS = useState(false);
-    var peopleS = useState([]), notesDatesS = useState({}), tagsS = useState([]), viewsS = useState([]);
+    var peopleS = useState([]), tagsS = useState([]), viewsS = useState([]);
     var searchS = useState(""), sortByS = useState("name"), filtersOpenS = useState(false);
     var tagFiltersS = useState([]), tagModeS = useState("any"), statusZonesS = useState([]);
     var showSaveS = useState(false), saveNameS = useState("");
@@ -425,15 +425,15 @@
     var newPersonS = useState({ name: "", email: "", phone: "", address: "", birthday: "", sex: "" });
     var toastS = useState(null);
 
-    var people = peopleS[0], notesDates = notesDatesS[0], tags = tagsS[0], views = viewsS[0];
+    var people = peopleS[0], tags = tagsS[0], views = viewsS[0];
     var tagFilters = tagFiltersS[0], tagMode = tagModeS[0], statusZones = statusZonesS[0];
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
     useEffect(function () {
       var alive = true;
-      Promise.all([data.getShepherdingPeople(), data.getShepherdingLastNoteDates(), data.getShepherdingTags(), data.getShepherdingViews()])
-        .then(function (r) { if (!alive) return; peopleS[1](r[0]); notesDatesS[1](r[1]); tagsS[1](r[2]); viewsS[1](r[3]); loadingS[1](false); })
+      Promise.all([data.getShepherdingPeople(), data.getShepherdingTags(), data.getShepherdingViews()])
+        .then(function (r) { if (!alive) return; peopleS[1](r[0]); tagsS[1](r[1]); viewsS[1](r[2]); loadingS[1](false); })
         .catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, []);
@@ -580,7 +580,7 @@
             ${filtered.map(function (p) {
               var st = p.shepherdingStatus;
               var strong = st && st.urgency === "urgent" && st.importance === "important";
-              var last = fmtShortDate(notesDates[p.id]);
+              var last = fmtShortDate(p.lastNoteAt);
               return html`<div key=${p.id} style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 15 }}>
                 <button onClick=${function () { props.nav("shepherdProfile", { id: p.id, from: "people" }); }} style=${{ width: "100%", display: "flex", alignItems: "flex-start", gap: 10, border: "none", background: "transparent", cursor: "pointer", textAlign: "left", padding: 0 }}>
                   <div style=${{ flex: 1, minWidth: 0 }}>

@@ -146,6 +146,16 @@ test('a Pastoral Assistant may write the record collections and nothing else eld
     );
     assert.match(notes, /allow read: if readsAsElder\(\)/);
     assert.match(notes, /allow write: if writesTheRecord\(\)/);
+
+    // MS-530: lastNoteAt rides on the Person, not on the note. A Pastoral
+    // Assistant who writes a note must be able to update that one field.
+    const person = blockFor(
+        firestore,
+        /match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/,
+        'people'
+    );
+    assert.match(person, /allow update: if writesTheRecord\(\)/);
+    assert.match(person, /hasOnly\(\['lastNoteAt'\]\)/);
 });
 
 test('the Pastoral Record stays elder-only to create, update and delete', () => {

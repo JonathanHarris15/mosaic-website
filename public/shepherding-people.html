@@ -403,9 +403,9 @@
                                 <td class="px-6 py-4">
                                     <div class="flex flex-col gap-0.5">
                                         <span class="font-label-md text-sm font-semibold"
-                                              :class="lastNoteColor(person.id) + ' ' + ShepherdingBlur.pastoralClass()"
-                                              x-text="formatLastNote(person.id)"></span>
-                                        <span x-show="lastNoteDates[person.id]" class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-tighter">Recorded Date</span>
+                                              :class="lastNoteColor(person) + ' ' + ShepherdingBlur.pastoralClass()"
+                                              x-text="formatLastNote(person)"></span>
+                                        <span x-show="person.lastNoteAt" class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-tighter">Recorded Date</span>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-right">

@@ -430,25 +430,15 @@
   function deleteShepherdingView(id) { return db.collection("shepherding_views").doc(id).delete(); }
 
   // ── Shepherding People list ──────────────────────────────────
-  // Latest shepherding-note timestamp per person (one collection-group pass),
-  // powering the People list's "Needs Attention" sort + Last Note column.
-  function getShepherdingLastNoteDates() {
-    return get(db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc"))
-      .then(function (snap) {
-        var latest = {};
-        snap.docs.forEach(function (doc) {
-          var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
-          if (pid && !latest[pid]) latest[pid] = doc.data().createdAt;
-        });
-        return latest;
-      }).catch(function () { return {}; });
-  }
+  // Last-note date lives on Person.lastNoteAt (MS-530). The list reads
+  // People only — it does not collection-group shepherding_notes.
   function addShepherdingPerson(np) {
     var now = firebase.firestore.FieldValue.serverTimestamp();
     return db.collection("people").add({
       name: (np.name || "").trim(), totalInvolvements: 0,
       contact: { email: (np.email || "").trim(), phone: (np.phone || "").trim(), address: (np.address || "").trim() },
       birthday: np.birthday || null, sex: np.sex || null, lastPastoralPrayerDate: null,
+      lastNoteAt: null,
       tags: [], createdAt: now, updatedAt: now,
     }).then(function (ref) { return ref.id; });
   }
@@ -561,6 +551,10 @@
       authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
       authorName: (user && user.name) || "",
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }).then(function (ref) {
+      return window.ShepherdingCore.touchLastNoteAt(
+        db, personId, firebase.firestore.FieldValue.serverTimestamp()
+      ).then(function () { return ref; });
     });
   }
   function updateShepherdingNote(personId, noteId, note, user) {
@@ -571,7 +565,8 @@
     });
   }
   function deleteShepherdingNote(personId, noteId) {
-    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete();
+    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete()
+      .then(function () { return window.ShepherdingCore.refreshLastNoteAt(db, personId); });
   }
   function saveShepherdingExplanation(personId, activityId, text) {
     return db.collection("people").doc(personId).collection("shepherding_activity").doc(activityId)
@@ -1071,7 +1066,11 @@
       authorName: (user && user.name) || "", authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       sourceDocumentId: (opts && opts.sourceDocumentId) || null,
-    }).then(function (ref) { return ref.id; });
+    }).then(function (ref) {
+      return window.ShepherdingCore.touchLastNoteAt(
+        db, personId, firebase.firestore.FieldValue.serverTimestamp()
+      ).then(function () { return ref.id; });
+    });
   }
   function getPanelNote(personId, noteId) {
     return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).get()
@@ -1105,7 +1104,8 @@
     });
   }
   function deletePanelNote(personId, noteId) {
-    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete();
+    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete()
+      .then(function () { return window.ShepherdingCore.refreshLastNoteAt(db, personId); });
   }
   function unlinkPanelNote(personId, noteId) {
     return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId)
@@ -1262,7 +1262,6 @@
     addShepherdingView: addShepherdingView,
     updateShepherdingView: updateShepherdingView,
     deleteShepherdingView: deleteShepherdingView,
-    getShepherdingLastNoteDates: getShepherdingLastNoteDates,
     addShepherdingPerson: addShepherdingPerson,
     getPerson: getPerson,
     getShepherdingNotes: getShepherdingNotes,

@@ -1326,6 +1326,7 @@ function serviceForm() {
                         authorUid: (this.user && this.user.uid) || null,
                         createdAt: now,
                     });
+                    await personRef.update({ lastNoteAt: now });
                     await reqRef.update({ noteGenerated: true });
                     state.noteGenerated = true;
                 }

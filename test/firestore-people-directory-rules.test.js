@@ -123,6 +123,15 @@ test('writing the directory is still editor-only', () => {
     assert.match(DIRECTORY['the directory tag vocabulary'](), /allow create, update, delete: if isEditor\(\)/);
 });
 
+test('a Pastoral Assistant may write lastNoteAt and nothing else on the Person', () => {
+    // MS-530: lastNoteAt is a cache of the latest Shepherding Note. A
+    // Pastoral Assistant writes notes but is not an editor, so they need
+    // this hole — lastNoteAt only — or the People list goes stale.
+    const block = personBlock();
+    assert.match(block, /allow update: if writesTheRecord\(\)/);
+    assert.match(block, /hasOnly\(\['lastNoteAt'\]\)/);
+});
+
 test('a Linked User can still edit their own record', () => {
     // The self-service clause (MS-87, ADR-0012, ADR-0029). Closing reads must
     // not have disturbed it.

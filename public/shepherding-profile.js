@@ -963,6 +963,8 @@ document.addEventListener('alpine:init', () => {
                         authorName: this.currentUserName,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     });
+                    await ShepherdingCore.touchLastNoteAt(
+                        db, this.personId, firebase.firestore.FieldValue.serverTimestamp());
                     this.showToast('Note added');
                 }
 
@@ -998,6 +1000,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 await db.collection('people').doc(this.personId)
                     .collection('shepherding_notes').doc(id).delete();
+                await ShepherdingCore.refreshLastNoteAt(db, this.personId);
                 this.personNotes = this.personNotes.filter(n => n.id !== id);
                 this.showToast('Note deleted');
             } catch (e) {

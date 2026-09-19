@@ -830,6 +830,103 @@
         return commitPastoralChange(db, personId, personUpdate, record);
     }
 
+    // ── lastNoteAt cache (MS-530) ─────────────────────────────────────────
+    // The People list used to collection-group every Shepherding Note to paint
+    // each person's last-note date. That date now lives on the Person. The
+    // notes remain the record; lastNoteAt is a cache, like lastPastoralPrayerDate.
+    //
+    // Delete of the latest note RECOMPUTES from remaining notes (and clears
+    // when none remain). That matches the old collection-group: the column
+    // shows the newest note that still exists, not a stale date and not blank
+    // while older notes sit on the profile.
+    const NOTES_COLLECTION = 'shepherding_notes';
+
+    function noteCreatedAtMs(value) {
+        if (value == null || value === '') return null;
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (value instanceof Date) {
+            const ms = value.getTime();
+            return Number.isFinite(ms) ? ms : null;
+        }
+        if (typeof value.toMillis === 'function') {
+            const ms = value.toMillis();
+            return Number.isFinite(ms) ? ms : null;
+        }
+        if (typeof value.toDate === 'function') {
+            const d = value.toDate();
+            const ms = d && typeof d.getTime === 'function' ? d.getTime() : NaN;
+            return Number.isFinite(ms) ? ms : null;
+        }
+        if (typeof value.seconds === 'number') {
+            return value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6);
+        }
+        const parsed = new Date(value).getTime();
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function latestNoteAt(notes) {
+        let latest = null;
+        let latestMs = null;
+        (notes || []).forEach((note) => {
+            const value = note && Object.prototype.hasOwnProperty.call(note, 'createdAt')
+                ? note.createdAt
+                : note;
+            const ms = noteCreatedAtMs(value);
+            if (ms === null) return;
+            if (latestMs === null || ms > latestMs) {
+                latestMs = ms;
+                latest = value;
+            }
+        });
+        return latest;
+    }
+
+    function lastNoteAtCreatePatch(now) {
+        return { lastNoteAt: now };
+    }
+
+    function lastNoteAtFromRemaining(remainingNotes) {
+        return latestNoteAt(remainingNotes) || null;
+    }
+
+    // True when a delete must re-read remaining notes. A strictly older note
+    // cannot be the cache; missing/equal/newer means recompute (or clear).
+    function shouldRefreshLastNoteAtOnDelete(stored, deletedCreatedAt) {
+        const storedMs = noteCreatedAtMs(stored);
+        const deletedMs = noteCreatedAtMs(deletedCreatedAt);
+        if (storedMs === null || deletedMs === null) return true;
+        return deletedMs >= storedMs;
+    }
+
+    // What to write for one Person during backfill: the newest remaining note
+    // time, or null when they have none. Null when the stored cache already
+    // matches, so a second run is a no-op.
+    function planLastNoteAtWrite(stored, latest) {
+        const storedMs = noteCreatedAtMs(stored);
+        const latestMs = noteCreatedAtMs(latest);
+        if (storedMs === latestMs) return null;
+        return { lastNoteAt: latest == null ? null : latest };
+    }
+
+    async function touchLastNoteAt(db, personId, now) {
+        if (!db || !personId) return;
+        await db.collection('people').doc(personId).update(lastNoteAtCreatePatch(now));
+    }
+
+    async function refreshLastNoteAt(db, personId) {
+        if (!db || !personId) return null;
+        // source: 'server' so a cache-first phone read cannot re-cache the
+        // note we just deleted. Admin SDK ignores the options object.
+        const snap = await db.collection('people').doc(personId)
+            .collection(NOTES_COLLECTION)
+            .orderBy('createdAt', 'desc')
+            .limit(1)
+            .get({ source: 'server' });
+        const lastNoteAt = snap.empty ? null : (snap.docs[0].data().createdAt || null);
+        await db.collection('people').doc(personId).update({ lastNoteAt });
+        return lastNoteAt;
+    }
+
     const ShepherdingCore = {
         NOTE_TYPES,
         URGENCY_LEVELS,
@@ -896,6 +993,16 @@
         buildAssignmentChange,
         describeAssignmentChange,
         commitAssignmentChange,
+        // lastNoteAt cache (MS-530)
+        NOTES_COLLECTION,
+        noteCreatedAtMs,
+        latestNoteAt,
+        lastNoteAtCreatePatch,
+        lastNoteAtFromRemaining,
+        shouldRefreshLastNoteAtOnDelete,
+        planLastNoteAtWrite,
+        touchLastNoteAt,
+        refreshLastNoteAt,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
