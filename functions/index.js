@@ -74,7 +74,27 @@ const mcpServer = require("./mcp-server");
 // Guidance file writes, restores, and the shape of a version (MS-262).
 const gw = require("./guidance-writes");
 const guidanceCore = require("./shared/mcp-guidance-core.js");
-const {assertCanDecide} = require("./access-assert");
+const {assertCanDecide: assertCanDecideCore} = require("./access-assert");
+
+/**
+ * AccessCore canDecide for a callable. The core throws a plain Error with
+ * `.code` so root `npm test` can load it without firebase-functions; this
+ * maps that onto HttpsError so the client still sees the Firebase code.
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertCanDecide(db, authCtx) {
+  try {
+    await assertCanDecideCore(db, authCtx);
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:

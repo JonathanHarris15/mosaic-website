@@ -75,3 +75,11 @@ test('sendPrayerRequestNow asks assertCanDecide, not counted-as-elder', () => {
     assert.doesNotMatch(head, /assertElder/);
     assert.doesNotMatch(src, /async function assertElder/);
 });
+
+test('access-assert does not load firebase-functions (root npm test)', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'access-assert.js'),
+        'utf8'
+    );
+    assert.doesNotMatch(src, /require\(["']firebase-functions/);
+});
