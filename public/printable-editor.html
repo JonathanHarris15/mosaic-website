@@ -651,8 +651,9 @@
                                                     <label class="pe-f"><span>Evangelical</span><input class="pe-in" x-model="data.typed.draft.prayerEvangelical" /></label>
                                                     <label class="pe-f"><span>Un-evangelized</span><input class="pe-in" x-model="data.typed.draft.prayerUnevangelized" /></label>
                                                     <label class="pe-f"><span>Prompts</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.prayerPrompts" placeholder="One prompt per line"></textarea></label>
-                                                    <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://… or upload" /></label>
+                                                    <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://…" /></label>
                                                     <input type="file" accept="image/*" class="pe-typed__file" @change="onTypedCountryImage($event)" />
+                                                    <p class="pe-hint">Upload stores the image in Storage (max 8 MB) and keeps the https URL on this Sunday. A pasted https URL is fine. Large data URLs are refused.</p>
                                                     <p class="pe-typed__h">Mosaic Kids</p>
                                                     <label class="pe-f"><span>Lesson</span><input class="pe-in" x-model="data.typed.draft.kidsLessonTitle" /></label>
                                                     <label class="pe-f"><span>Verse</span><input class="pe-in" x-model="data.typed.draft.kidsLessonVerse" /></label>

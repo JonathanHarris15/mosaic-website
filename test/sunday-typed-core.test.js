@@ -86,3 +86,56 @@ test('draft round-trips and empty page assets are not invented', () => {
     assert.equal(Typed.fromDraft(draft).pastoralPrayer.nation, 'Kenya');
     assert.equal(Typed.fromService(null).pastoralPrayer.countryImage, '');
 });
+
+test('https country-map paste round-trips onto typedContent', () => {
+    const url = 'https://firebasestorage.googleapis.com/v0/b/app/o/sunday_typed%2F2026-09-06%2Fcountry_map%2Fmap.png?alt=media';
+    const content = Typed.fromDraft({ prayerNation: 'Kenya', prayerCountryImage: url });
+    assert.equal(content.pastoralPrayer.countryImage, url);
+    assert.equal(Typed.countryImageWriteError(url), '');
+    assert.equal(Typed.assertCountryImageWritable(url), url);
+    const row = Typed.toRow(content);
+    assert.equal(row.prayerCountryImage, url);
+    const draft = Typed.toDraft(content);
+    assert.equal(draft.prayerCountryImage, url);
+    assert.equal(Typed.fromDraft(draft).pastoralPrayer.countryImage, url);
+});
+
+test('an upload writes a Storage path URL, not a data URL', () => {
+    const date = '2026-09-06';
+    const path = Typed.countryMapStoragePath(date, 'map_kenya.png');
+    assert.equal(path, 'sunday_typed/2026-09-06/country_map/map_kenya.png');
+    const stored = 'https://firebasestorage.googleapis.com/v0/b/x/o/' + encodeURIComponent(path);
+    assert.ok(!Typed.isDataUrl(stored));
+    assert.equal(Typed.isHttpsUrl(stored), true);
+    assert.equal(Typed.countryImageWriteError(stored), '');
+    const content = Typed.fromDraft({ prayerCountryImage: stored });
+    assert.equal(content.pastoralPrayer.countryImage, stored);
+    assert.ok(!content.pastoralPrayer.countryImage.startsWith('data:'));
+});
+
+test('oversized country-map data URLs and uploads are refused before write', () => {
+    const huge = 'data:image/png;base64,' + 'A'.repeat(Typed.MAX_DATA_URL_BYTES + 1);
+    assert.equal(Typed.countryImageWriteError(huge), Typed.OVERSIZE_DATA_URL_MSG);
+    assert.throws(() => Typed.assertCountryImageWritable(huge), (err) => {
+        assert.equal(err.code, 'country-map-size');
+        assert.equal(err.message, Typed.OVERSIZE_DATA_URL_MSG);
+        return true;
+    });
+    const small = 'data:image/png;base64,iVBORw0KGgo=';
+    assert.equal(Typed.countryImageWriteError(small), '');
+    assert.equal(Typed.fileUploadError({ type: 'image/png', size: Typed.MAX_UPLOAD_BYTES + 1 }), Typed.OVERSIZE_UPLOAD_MSG);
+    assert.equal(Typed.fileUploadError({ type: 'application/pdf', size: 12 }), 'The country map must be an image.');
+    assert.equal(Typed.fileUploadError({ type: 'image/jpeg', size: 12000 }), '');
+    assert.match(Typed.countryImageWriteError('http://example.com/map.png'), /https/);
+});
+
+test('the editor uploads the country map to Storage and guards the write', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '../public/printable-editor-data.js'), 'utf8');
+    assert.match(src, /countryMapStoragePath/);
+    assert.match(src, /getDownloadURL/);
+    assert.match(src, /assertCountryImageWritable/);
+    assert.doesNotMatch(src, /readAsDataURL/,
+        'file upload must not write a data URL onto typedContent');
+});
