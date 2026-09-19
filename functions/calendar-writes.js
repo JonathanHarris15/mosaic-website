@@ -43,7 +43,11 @@ const {refuse} = require("./shepherding-writes.js");
 // be hidden from the elder who connected it.
 const RANK = "elder";
 
-/** events-store throws plain Errors; an assistant should get a refusal. */
+/**
+ * events-store throws plain Errors; an assistant should get a refusal.
+ * @param {Function} work the store call
+ * @return {Promise} the store result
+ */
 async function pass(work) {
   try {
     return await work();
@@ -52,7 +56,11 @@ async function pass(work) {
   }
 }
 
-/** One occurrence, as an assistant reads it. */
+/**
+ * One occurrence, as an assistant reads it.
+ * @param {Object} occurrence the stored occurrence
+ * @return {Object} the row an assistant reads
+ */
 function eventRow(occurrence) {
   return {
     eventId: occurrence.id,
@@ -166,8 +174,9 @@ async function createEvent(db, args) {
     kind: made.kind,
     [made.kind === "series" ? "seriesId" : "eventId"]: made.id,
     note: made.kind === "series" ?
-      "A repeating Event. Its dates are computed from the pattern — there are " +
-      "no occurrence documents until something is written on a date." :
+      "A repeating Event. Its dates are computed from the pattern — " +
+      "there are no occurrence documents until something is written " +
+      "on a date." :
       "A single dated Event.",
   };
 }
@@ -192,7 +201,8 @@ async function updateEvent(db, {eventId, ...details}) {
       });
   if (!Object.keys(given).length) throw refuse("Nothing to change.");
 
-  const changed = await pass(() => Store.saveOccurrenceDetails(db, eventId, given));
+  const changed = await pass(
+      () => Store.saveOccurrenceDetails(db, eventId, given));
   return {ok: true, eventId, changed};
 }
 
@@ -204,7 +214,9 @@ async function updateEvent(db, {eventId, ...details}) {
  * @param {object} args seriesId, name, location, description, time, colour
  * @return {Promise<object>} { ok, seriesId, changed }
  */
-async function updateSeries(db, {seriesId, name, location, description, time, colour}) {
+async function updateSeries(db, {
+  seriesId, name, location, description, time, colour,
+}) {
   if (!seriesId) throw refuse("Which Event? Give a seriesId.");
 
   const details = {};
@@ -241,7 +253,8 @@ async function updateSeries(db, {seriesId, name, location, description, time, co
 }
 
 /**
- * Move ONE date of a repeating Event to another date, carrying whoever is on it.
+ * Move ONE date of a repeating Event to another date, carrying whoever
+ * is on it.
  *
  * @param {object} db the Firestore handle
  * @param {object} args seriesId, fromDate, toDate

@@ -60,8 +60,11 @@ function resolveIdentity(db, uid) {
  * @return {Promise<object>} { ok: true, updated } or
  *   { ok: false, rejectedFields, invalidFields }
  */
-async function updateLiturgy(db, {dateKey, fields, uid, serverTimestamp, deleteField}) {
-  const {rejectedFields, invalidFields} = LiturgySaveCore.validateLiturgyUpdate(fields);
+async function updateLiturgy(db, {
+  dateKey, fields, uid, serverTimestamp, deleteField,
+}) {
+  const {rejectedFields, invalidFields} =
+    LiturgySaveCore.validateLiturgyUpdate(fields);
   if (rejectedFields.length || invalidFields.length) {
     return {ok: false, rejectedFields, invalidFields};
   }
@@ -84,7 +87,7 @@ async function updateLiturgy(db, {dateKey, fields, uid, serverTimestamp, deleteF
     const nested = ServiceAuthorship.nestStamps(authorship, deleteField);
     await ref.set(Object.assign(
         {}, LiturgySaveCore.toNestedDoc(fields), {updatedAt: serverTimestamp},
-        nested ? {[ServiceAuthorship.FIELD]: nested} : {}
+        nested ? {[ServiceAuthorship.FIELD]: nested} : {},
     ), {merge: true});
   }
 

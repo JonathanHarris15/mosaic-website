@@ -30,6 +30,14 @@ module.exports = {
       },
       rules: {},
     },
+    {
+      // Dynamic `import()` of the MCP SDK (ESM-only). Parser only — no rule
+      // is relaxed. Node 20 already runs this syntax.
+      files: ["mcp-app.js", "mcp-auth.js", "mcp-server.js"],
+      parserOptions: {
+        "ecmaVersion": 2020,
+      },
+    },
   ],
   globals: {},
 };

@@ -61,7 +61,7 @@ async function getService(db, dateKey) {
  * @param {object} opts
  * @param {object} opts.documentId admin.firestore.FieldPath.documentId()
  * @param {number} [opts.limit] cap on how many come back
- * @return {Promise<{services: Array<object>, truncated: boolean, limit: number}>}
+ * @return {Promise<Object>} services, truncated, limit
  */
 async function getServiceRange(db, from, through, {documentId, limit} = {}) {
   const cap = Math.max(1, Math.min(limit || MAX_RANGE, MAX_RANGE));

@@ -46,7 +46,9 @@ const SERVICES = "services";
  * @param {*} args.deleteField a field-delete sentinel
  * @return {Promise<object>} {ok, action, element, html} or {ok:false, reason}
  */
-async function updateNote(db, {dateKey, element, text, serverTimestamp, deleteField}) {
+async function updateNote(db, {
+  dateKey, element, text, serverTimestamp, deleteField,
+}) {
   if (!NoteCore.isNoteKey(element)) {
     return {ok: false, reason: "unknown-element", element};
   }

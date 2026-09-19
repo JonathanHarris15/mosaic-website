@@ -402,7 +402,8 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "do not write it here. Say where you saw it and let the editor decide.",
     inputSchema: {
       address: z.string().min(1).describe(
-          "The file's address, e.g. 'hymn-selection'. Unknown creates a new one."),
+          "The file's address, e.g. 'hymn-selection'. Unknown creates a " +
+          "new one."),
       title: z.string().nullable().optional().describe("Its name"),
       summary: z.string().nullable().optional()
           .describe("One line saying what is inside, so it can be chosen"),
@@ -413,7 +414,8 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     annotations: {readOnlyHint: false, destructiveHint: false},
   }, async ({address, title, summary, body, enabled}) => {
     if (!isEditor) {
-      return refuse("Editors only — guidance changes how the assistant behaves.");
+      return refuse(
+          "Editors only — guidance changes how the assistant behaves.");
     }
     const slug = GuidanceCore.slugFromUri(address) || String(address).trim();
     if (!GuidanceCore.isValidSlug(slug)) {
@@ -428,7 +430,8 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     if (body != null) fields.body = body;
     if (enabled != null) fields.enabled = enabled;
     if (!Object.keys(fields).length) {
-      return refuse("Nothing to change — send a title, summary, body or enabled.");
+      return refuse(
+          "Nothing to change — send a title, summary, body or enabled.");
     }
 
     const result = await gw.updateGuidance(db, {
@@ -463,8 +466,8 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "YYYY-MM-DD — resolve anything vaguer yourself and say which date you " +
       "settled on, because guessing a year silently is worse than asking. " +
       "A Sunday with nothing planned comes back as exists: false, which is " +
-      "an answer, not a failure. People here are READ-ONLY: oos_update_liturgy " +
-      "cannot change who is preaching.",
+      "an answer, not a failure. People here are READ-ONLY: " +
+      "oos_update_liturgy cannot change who is preaching.",
     inputSchema: {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday, YYYY-MM-DD"),
@@ -617,7 +620,8 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday's date, YYYY-MM-DD"),
       fields: z.object(liturgyFieldsShape())
-          .describe("The liturgy fields to write. Omit what should not change."),
+          .describe(
+              "The liturgy fields to write. Omit what should not change."),
     },
     annotations: {readOnlyHint: false, destructiveHint: false},
   }, async ({dateKey, fields}) => {

@@ -50,8 +50,8 @@ const Tasks = require("./task-writes.js");
 // is a leak this code cannot prevent, so it is named where the assistant reads.
 const PRIVACY =
   " Elder-only. What comes back includes tags and notes that are hidden from " +
-  "everyone below elder — do not repeat them anywhere the elder has not asked " +
-  "for them.";
+  "everyone below elder — do not repeat them anywhere the elder has not " +
+  "asked for them.";
 
 const personId = z.string().min(1).describe(
     "The Person's id, from shep_find_person. Never a name, and never guessed.");
@@ -112,12 +112,14 @@ function register(server, deps) {
     description:
       "Search the church directory by name, email address or phone number, " +
       "and get back the Person id every other tool needs. THE ONLY WAY to " +
-      "turn a name into an id. If more than one person matches, ASK WHICH ONE " +
-      "IS MEANT — do not pick. Writing a note onto the wrong Sarah is not " +
-      "something anybody finds out about later." + PRIVACY,
+      "turn a name into an id. If more than one person matches, ASK WHICH " +
+      "ONE IS MEANT — do not pick. Writing a note onto the wrong Sarah is " +
+      "not something anybody finds out about later." + PRIVACY,
     inputSchema: {
-      query: z.string().min(1).describe("A name, part of a name, an email or a phone number"),
-      limit: z.number().int().positive().optional().describe("How many to return (default 25)"),
+      query: z.string().min(1)
+          .describe("A name, part of a name, an email or a phone number"),
+      limit: z.number().int().positive().optional()
+          .describe("How many to return (default 25)"),
     },
     annotations: read,
   }, (a) => Read.findPerson(db, a));
@@ -125,15 +127,17 @@ function register(server, deps) {
   tool("shep_get_profile", {
     title: "A person's Shepherding Profile",
     description:
-      "Everything an elder sees at the top of somebody's Shepherding Profile: " +
-      "their Shepherding Status, their Shepherding Tags, their Membership " +
-      "Stage, the elder assigned to them, and the most recent entries in " +
-      "their Pastoral Record. Read this before writing about somebody — it is " +
-      "how you find out what has already been said." + PRIVACY,
+      "Everything an elder sees at the top of somebody's Shepherding " +
+      "Profile: their Shepherding Status, their Shepherding Tags, their " +
+      "Membership Stage, the elder assigned to them, and the most recent " +
+      "entries in their Pastoral Record. Read this before writing about " +
+      "somebody — it is how you find out what has already been said." +
+      PRIVACY,
     inputSchema: {
       personId,
       recordLimit: z.number().int().positive().optional()
-          .describe("How many recent Pastoral Record entries to include (default 10)"),
+          .describe("How many recent Pastoral Record entries to include " +
+              "(default 10)"),
     },
     annotations: read,
   }, (a) => Read.getProfile(db, a));
@@ -141,13 +145,14 @@ function register(server, deps) {
   tool("shep_get_pastoral_record", {
     title: "A person's Pastoral Record",
     description:
-      "The full reverse-chronological feed for one Person: Shepherding Notes, " +
-      "Status Changes, Tag Changes, Membership Changes and Assignment " +
+      "The full reverse-chronological feed for one Person: Shepherding " +
+      "Notes, Status Changes, Tag Changes, Membership Changes and Assignment " +
       "Changes, interleaved. Note bodies come back as markdown. Each entry " +
       "says whether a person typed it or an assistant wrote it." + PRIVACY,
     inputSchema: {
       personId,
-      limit: z.number().int().positive().optional().describe("How many entries (default 40)"),
+      limit: z.number().int().positive().optional()
+          .describe("How many entries (default 40)"),
     },
     annotations: read,
   }, (a) => Read.getPastoralRecord(db, a));
@@ -161,7 +166,8 @@ function register(server, deps) {
       PRIVACY,
     inputSchema: {
       personId,
-      limit: z.number().int().positive().optional().describe("How many notes (default 40)"),
+      limit: z.number().int().positive().optional()
+          .describe("How many notes (default 40)"),
     },
     annotations: read,
   }, (a) => Read.listNotes(db, a));
@@ -183,18 +189,21 @@ function register(server, deps) {
     title: "The People list, filtered",
     description:
       "Everybody in the directory, filtered the way the People list filters " +
-      "them: by Shepherding Tag (any of them or all of them), by status zone, " +
-      "by Membership Stage, by which elder they are assigned to, and by how " +
-      "long a tag has been carried. Answering 'who has not been visited " +
-      "since June' is this tool, NOT shep_create_view — a view changes what " +
-      "every elder sees on their landing page." + PRIVACY,
+      "them: by Shepherding Tag (any of them or all of them), by status " +
+      "zone, by Membership Stage, by which elder they are assigned to, and " +
+      "by how long a tag has been carried. Answering 'who has not been " +
+      "visited since June' is this tool, NOT shep_create_view — a view " +
+      "changes what every elder sees on their landing page." + PRIVACY,
     inputSchema: {
-      tagIds: z.array(z.string()).optional().describe("Shepherding Tag ids to filter on"),
-      tagMode: z.enum(["any", "all"]).optional().describe("Carrying any of those tags, or all of them (default any)"),
+      tagIds: z.array(z.string()).optional()
+          .describe("Shepherding Tag ids to filter on"),
+      tagMode: z.enum(["any", "all"]).optional()
+          .describe("Carrying any of those tags, or all of them (default any)"),
       statusZones: z.array(z.string()).optional()
           .describe("Status zone keys, e.g. 'urgent__important'"),
       membershipStage: z.string().optional()
-          .describe("visitor, regular_attender, prospective_member, member, moving_membership or previous_member"),
+          .describe("visitor, regular_attender, prospective_member, " +
+              "member, moving_membership or previous_member"),
       assignedElderId: z.string().optional().describe("The elder's Person id"),
       includeInactive: z.boolean().optional()
           .describe("Inactive People are left out unless this is true"),
@@ -202,8 +211,10 @@ function register(server, deps) {
         tagId: z.string(),
         days: z.number().int().nonnegative(),
         comparator: z.enum(["gte", "lt"]).optional(),
-      }).optional().describe("Held a tag for at least (gte) or less than (lt) this many days"),
-      limit: z.number().int().positive().optional().describe("How many People (default 100)"),
+      }).optional().describe(
+          "Held a tag for at least (gte) or less than (lt) this many days"),
+      limit: z.number().int().positive().optional()
+          .describe("How many People (default 100)"),
     },
     annotations: read,
   }, (a) => Read.listPeople(db, a));
@@ -239,7 +250,8 @@ function register(server, deps) {
       "recorded today.",
     inputSchema: {
       personId,
-      noteId: z.string().min(1).describe("The note to grow, from shep_list_notes"),
+      noteId: z.string().min(1)
+          .describe("The note to grow, from shep_list_notes"),
       markdown: z.string().min(1).describe("What to add, as markdown"),
     },
   }, (a, actor) => Writes.appendToNote(db, Object.assign({}, a, {actor})));
@@ -249,14 +261,15 @@ function register(server, deps) {
     description:
       "Change a Shepherding Note's type, subject or body. ⚠ The body is " +
       "REPLACED, not merged — read the note first with shep_get_note, or use " +
-      "shep_append_to_note if you only mean to add. Anything left out is left " +
-      "as it was.",
+      "shep_append_to_note if you only mean to add. Anything left out is " +
+      "left as it was.",
     inputSchema: {
       personId,
       noteId: z.string().min(1).describe("The note to change"),
       type: z.string().optional().describe("A new Note Type"),
       subject: z.string().optional().describe("A new Subject Line"),
-      markdown: z.string().optional().describe("A new Note Body, replacing the old one"),
+      markdown: z.string().optional()
+          .describe("A new Note Body, replacing the old one"),
     },
   }, (a, actor) => Writes.editNote(db, Object.assign({}, a, {actor})));
 
@@ -264,10 +277,10 @@ function register(server, deps) {
     title: "Delete a note",
     description:
       "Remove a Shepherding Note for good. There is no undo and the page's " +
-      "confirmation dialog is not available to you, so say what you are about " +
-      "to delete and get a clear yes first. What was deleted comes back in " +
-      "the result. A note belonging to a Person Panel in an Elder Document is " +
-      "refused — remove the panel from the document instead.",
+      "confirmation dialog is not available to you, so say what you are " +
+      "about to delete and get a clear yes first. What was deleted comes " +
+      "back in the result. A note belonging to a Person Panel in an Elder " +
+      "Document is refused — remove the panel from the document instead.",
     inputSchema: {
       personId,
       noteId: z.string().min(1).describe("The note to delete"),
@@ -304,14 +317,15 @@ function register(server, deps) {
   tool("shep_add_tags", {
     title: "Apply tags to a person",
     description:
-      "Put one or more Shepherding Tags on somebody, logging a Tag Change for " +
-      "each. Tags are the main thing Filtered Views and the People list filter " +
-      "on, so this is how somebody ends up on the right list. Membership Tags " +
-      "and the Elder Tag are refused — those follow the Membership Track and " +
-      "the Elder role, not manual tagging.",
+      "Put one or more Shepherding Tags on somebody, logging a Tag Change " +
+      "for each. Tags are the main thing Filtered Views and the People list " +
+      "filter on, so this is how somebody ends up on the right list. " +
+      "Membership Tags and the Elder Tag are refused — those follow the " +
+      "Membership Track and the Elder role, not manual tagging.",
     inputSchema: {
       personId,
-      tagIds: z.array(z.string().min(1)).min(1).describe("Tag ids, from shep_list_tags"),
+      tagIds: z.array(z.string().min(1)).min(1)
+          .describe("Tag ids, from shep_list_tags"),
       explanation: z.string().optional().describe("Why, in plain text"),
     },
   }, (a, actor) => Writes.addTags(db, Object.assign({}, a, {actor})));
@@ -332,11 +346,11 @@ function register(server, deps) {
   tool("shep_set_membership_stage", {
     title: "Move somebody along the Membership Track",
     description:
-      "Set somebody's Membership Stage, or mark them inactive. The Membership " +
-      "Tags are re-projected automatically and emit no Tag Changes of their " +
-      "own — the Membership Change is the record. Inactive is separate from " +
-      "the stage: somebody can be marked inactive without losing the stage " +
-      "they had.",
+      "Set somebody's Membership Stage, or mark them inactive. The " +
+      "Membership Tags are re-projected automatically and emit no Tag " +
+      "Changes of their own — the Membership Change is the record. " +
+      "Inactive is separate from the stage: somebody can be marked inactive " +
+      "without losing the stage they had.",
     inputSchema: {
       personId,
       stage: z.string().nullable().optional().describe(
@@ -345,7 +359,8 @@ function register(server, deps) {
       inactive: z.boolean().optional().describe("Mark them inactive"),
       explanation: z.string().optional().describe("Why, in plain text"),
     },
-  }, (a, actor) => Writes.setMembershipStage(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Writes.setMembershipStage(
+      db, Object.assign({}, a, {actor})));
 
   tool("shep_set_elder_assignment", {
     title: "Assign somebody to an elder",
@@ -360,7 +375,8 @@ function register(server, deps) {
           "The elder's Person id, or null to clear the assignment"),
       explanation: z.string().optional().describe("Why, in plain text"),
     },
-  }, (a, actor) => Writes.setElderAssignment(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Writes.setElderAssignment(
+      db, Object.assign({}, a, {actor})));
 
   tool("shep_explain_change", {
     title: "Explain a change already recorded",
@@ -395,12 +411,13 @@ function register(server, deps) {
     title: "Make a new tag",
     description:
       "Create a Shepherding Tag. Check shep_list_tags first — a second tag " +
-      "with nearly the same name splits the people who should be on one list, " +
-      "and this refuses an exact duplicate but cannot catch a near one.",
+      "with nearly the same name splits the people who should be on one " +
+      "list, and this refuses an exact duplicate but cannot catch a near one.",
     inputSchema: {
       name: z.string().min(1).describe("What the tag is called"),
       hidePeople: z.boolean().optional()
-          .describe("Hide the people carrying it from the member-facing directory"),
+          .describe(
+              "Hide the people carrying it from the member-facing directory"),
       hiddenFromOthers: z.boolean().optional()
           .describe("Hide the tag's own name from everyone below elder"),
     },
@@ -425,7 +442,8 @@ function register(server, deps) {
       "are folded away, how many people move, which id survives. CALL THIS " +
       "FIRST and read it back to the elder. A merge cannot be undone.",
     inputSchema: {
-      tagIds: z.array(z.string().min(1)).min(1).describe("The tags to fold away"),
+      tagIds: z.array(z.string().min(1)).min(1)
+          .describe("The tags to fold away"),
       survivorTagId: z.string().min(1).describe("The tag that survives"),
     },
     annotations: read,
@@ -434,14 +452,15 @@ function register(server, deps) {
   tool("shep_merge_tags", {
     title: "Merge tags",
     description:
-      "Fold one or more Shepherding Tags into another. Everybody carrying the " +
-      "merged tags is moved onto the survivor, their Tag Changes are " +
+      "Fold one or more Shepherding Tags into another. Everybody carrying " +
+      "the merged tags is moved onto the survivor, their Tag Changes are " +
       "re-pointed so it inherits the history, and the merged tags are " +
       "deleted. ⚠ THIS CANNOT BE UNDONE and it rewrites Pastoral Records " +
       "across the whole directory. Run shep_preview_tag_merge, read it back, " +
       "and get an explicit yes before calling this.",
     inputSchema: {
-      tagIds: z.array(z.string().min(1)).min(1).describe("The tags to fold away"),
+      tagIds: z.array(z.string().min(1)).min(1)
+          .describe("The tags to fold away"),
       survivorTagId: z.string().min(1).describe("The tag that survives"),
     },
   }, (a) => Tags.mergeTags(db, a));
@@ -451,8 +470,8 @@ function register(server, deps) {
     description:
       "Delete a Shepherding Tag and take it off everybody carrying it. The " +
       "count comes back in the result. Tag Changes already in Pastoral " +
-      "Records are left alone — the tag really was applied at the time. There " +
-      "is no undo, so confirm before calling.",
+      "Records are left alone — the tag really was applied at the time. " +
+      "There is no undo, so confirm before calling.",
     inputSchema: {tagId: z.string().min(1)},
   }, (a) => Tags.deleteTag(db, a));
 
@@ -465,8 +484,10 @@ function register(server, deps) {
       "Pass recursive for everything below a Folder at any depth. Start here " +
       "to find where a document lives before moving or opening it." + PRIVACY,
     inputSchema: {
-      folderId: z.string().optional().describe("A Folder id; the top level if left out"),
-      recursive: z.boolean().optional().describe("Every document below it, at any depth"),
+      folderId: z.string().optional()
+          .describe("A Folder id; the top level if left out"),
+      recursive: z.boolean().optional()
+          .describe("Every document below it, at any depth"),
     },
     annotations: read,
   }, (a) => Docs.listDocuments(db, a));
@@ -475,8 +496,8 @@ function register(server, deps) {
     title: "Read an Elder Document",
     description:
       "One Elder Document, its body as markdown. A Care List or a Form " +
-      "Document carries a payload rather than prose and the result says which " +
-      "tool opens it properly." + PRIVACY,
+      "Document carries a payload rather than prose and the result says " +
+      "which tool opens it properly." + PRIVACY,
     inputSchema: {documentId: z.string().min(1)},
     annotations: read,
   }, (a) => Docs.getDocument(db, a));
@@ -507,7 +528,8 @@ function register(server, deps) {
     inputSchema: {
       documentId: z.string().min(1),
       title: z.string().optional(),
-      markdown: z.string().optional().describe("A new body, replacing the old one"),
+      markdown: z.string().optional()
+          .describe("A new body, replacing the old one"),
     },
   }, (a, actor) => Docs.updateDocument(db, Object.assign({}, a, {actor})));
 
@@ -525,8 +547,9 @@ function register(server, deps) {
   tool("shep_rename_document", {
     title: "Rename an Elder Document",
     description:
-      "Change what an Elder Document is called. Nothing else about it moves — " +
-      "it stays in the same Folder with the same body and the same author.",
+      "Change what an Elder Document is called. Nothing else about it " +
+      "moves — it stays in the same Folder with the same body and the same " +
+      "author.",
     inputSchema: {
       documentId: z.string().min(1),
       title: z.string().min(1).describe("The new title"),
@@ -541,7 +564,8 @@ function register(server, deps) {
       "it to the top level.",
     inputSchema: {
       documentId: z.string().min(1),
-      folderId: z.string().optional().describe("The Folder to move it into; top level if left out"),
+      folderId: z.string().optional()
+          .describe("The Folder to move it into; top level if left out"),
     },
   }, (a) => Docs.moveDocument(db, a));
 
@@ -549,8 +573,8 @@ function register(server, deps) {
     title: "Delete an Elder Document",
     description:
       "Delete an Elder Document for good. Shepherding Notes made from Person " +
-      "Panels inside it stay on their People — those are the pastoral record, " +
-      "this was only the meeting. No undo; confirm first.",
+      "Panels inside it stay on their People — those are the pastoral " +
+      "record, this was only the meeting. No undo; confirm first.",
     inputSchema: {documentId: z.string().min(1)},
   }, (a) => Docs.deleteDocument(db, a));
 
@@ -578,12 +602,13 @@ function register(server, deps) {
   tool("shep_move_folder", {
     title: "Move a Folder",
     description:
-      "Move a Folder, and everything inside it, into another Folder. Moving a " +
-      "Folder into one of its own sub-folders is refused — that would take " +
+      "Move a Folder, and everything inside it, into another Folder. Moving " +
+      "a Folder into one of its own sub-folders is refused — that would take " +
       "the whole subtree out of the Library at once.",
     inputSchema: {
       folderId: z.string().min(1),
-      targetFolderId: z.string().optional().describe("Where to move it; top level if left out"),
+      targetFolderId: z.string().optional()
+          .describe("Where to move it; top level if left out"),
     },
   }, (a) => Docs.moveFolder(db, a));
 
@@ -604,12 +629,12 @@ function register(server, deps) {
   tool("shep_add_person_panel", {
     title: "Put a person into a document",
     description:
-      "Add a Person Panel to an Elder Document, creating the Shepherding Note " +
-      "it is linked to on that Person's profile. THIS IS THE TOOL FOR ELDER " +
-      "MEETING MINUTES: make one document for the meeting, then call this " +
-      "once per person discussed. Each note lands on that Person's Pastoral " +
-      "Record and links back to the meeting it came from, so nobody has to " +
-      "copy anything anywhere afterwards.",
+      "Add a Person Panel to an Elder Document, creating the Shepherding " +
+      "Note it is linked to on that Person's profile. THIS IS THE TOOL FOR " +
+      "ELDER MEETING MINUTES: make one document for the meeting, then call " +
+      "this once per person discussed. Each note lands on that Person's " +
+      "Pastoral Record and links back to the meeting it came from, so " +
+      "nobody has to copy anything anywhere afterwards.",
     inputSchema: {
       documentId: z.string().min(1).describe("The document the panel goes in"),
       personId,
@@ -636,23 +661,26 @@ function register(server, deps) {
   tool("shep_create_form_document", {
     title: "Start a form document about somebody",
     description:
-      "Start a Form Document from a template, about a Person. It takes a COPY " +
-      "of the template's questions, so editing the template later never " +
+      "Start a Form Document from a template, about a Person. It takes a " +
+      "COPY of the template's questions, so editing the template later never " +
       "reaches this record. The questions come back in the result, ready for " +
       "shep_answer_form_document.",
     inputSchema: {
       templateId: z.string().min(1).describe("From shep_list_form_templates"),
       personId: z.string().optional().describe("Who it is about"),
-      title: z.string().optional().describe("What to call it; the template's name if left out"),
+      title: z.string().optional()
+          .describe("What to call it; the template's name if left out"),
       folderId: z.string().optional().describe("Which Folder to file it in"),
     },
-  }, (a, actor) => Payload.createFormDocument(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Payload.createFormDocument(
+      db, Object.assign({}, a, {actor})));
 
   tool("shep_get_form_document", {
     title: "Read a form document",
     description:
       "A Form Document's questions with whatever has been answered so far, " +
-      "so you can see what is still blank before filling anything in." + PRIVACY,
+      "so you can see what is still blank before filling anything in." +
+      PRIVACY,
     inputSchema: {documentId: z.string().min(1)},
     annotations: read,
   }, (a) => Payload.getFormDocument(db, a));
@@ -669,7 +697,8 @@ function register(server, deps) {
       documentId: z.string().min(1),
       answers: z.record(z.any()).describe("Answers keyed by question id"),
     },
-  }, (a, actor) => Payload.answerFormDocument(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Payload.answerFormDocument(
+      db, Object.assign({}, a, {actor})));
 
   // ── F. Care Lists ────────────────────────────────────────────────────────
 
@@ -683,13 +712,15 @@ function register(server, deps) {
       "a person, shep_write_note is almost always the right tool.",
     inputSchema: {
       title: z.string().optional().describe("What the list is called"),
-      viewId: z.string().optional().describe("An existing Filtered View to read"),
+      viewId: z.string().optional()
+          .describe("An existing Filtered View to read"),
       filter: z.object({
         tagIds: z.array(z.string()).optional(),
         tagMode: z.enum(["any", "all"]).optional(),
         statusZones: z.array(z.string()).optional(),
       }).optional().describe("A filter of its own, when no viewId is given"),
-      columns: z.array(z.string()).optional().describe("Column names; one called Notes if left out"),
+      columns: z.array(z.string()).optional()
+          .describe("Column names; one called Notes if left out"),
       folderId: z.string().optional().describe("Which Folder to file it in"),
     },
   }, (a, actor) => Payload.createCareList(db, Object.assign({}, a, {actor})));
@@ -698,8 +729,8 @@ function register(server, deps) {
     title: "Read a Care List",
     description:
       "A Care List: its columns, who is on it, and what each cell says as " +
-      "markdown. Who is on it is worked out from its filter every time, so it " +
-      "changes as people's tags and statuses change." + PRIVACY,
+      "markdown. Who is on it is worked out from its filter every time, so " +
+      "it changes as people's tags and statuses change." + PRIVACY,
     inputSchema: {documentId: z.string().min(1)},
     annotations: read,
   }, (a) => Payload.getCareList(db, a));
@@ -714,7 +745,8 @@ function register(server, deps) {
           documentId: z.string().min(1),
           name: z.string().min(1).describe("What the column is called"),
         },
-      }, (a, actor) => Payload.addCareListColumn(db, Object.assign({}, a, {actor})));
+      }, (a, actor) => Payload.addCareListColumn(
+          db, Object.assign({}, a, {actor})));
 
   tool("shep_write_care_list_cell", {
     title: "Write in a Care List cell",
@@ -726,10 +758,12 @@ function register(server, deps) {
     inputSchema: {
       documentId: z.string().min(1),
       personId,
-      columnId: z.string().optional().describe("Which column; the first one if left out"),
+      columnId: z.string().optional()
+          .describe("Which column; the first one if left out"),
       markdown: z.string().describe("What the cell says, as markdown"),
     },
-  }, (a, actor) => Payload.writeCareListCell(db, Object.assign({}, a, {actor})));
+  }, (a, actor) => Payload.writeCareListCell(
+      db, Object.assign({}, a, {actor})));
 
   // ── G. The Shepherd Landing Page ─────────────────────────────────────────
 
@@ -746,10 +780,10 @@ function register(server, deps) {
     title: "Make a Filtered View",
     description:
       "Create a Filtered View. ⚠ THIS IS SHARED. It appears on EVERY elder's " +
-      "Shepherd Landing Page, not just the one you are working for. To answer " +
-      "a question about who matches a filter without changing anybody's " +
-      "screen, use shep_list_people instead. Only make one when an elder has " +
-      "actually asked for a standing list.",
+      "Shepherd Landing Page, not just the one you are working for. To " +
+      "answer a question about who matches a filter without changing " +
+      "anybody's screen, use shep_list_people instead. Only make one when " +
+      "an elder has actually asked for a standing list.",
     inputSchema: {
       title: z.string().min(1).describe("What the view is called"),
       filter: z.object({
@@ -763,8 +797,8 @@ function register(server, deps) {
   tool("shep_update_view", {
     title: "Change a Filtered View",
     description:
-      "Change a Filtered View's title or filter. Shared, so this changes what " +
-      "every elder sees on their landing page.",
+      "Change a Filtered View's title or filter. Shared, so this changes " +
+      "what every elder sees on their landing page.",
     inputSchema: {
       viewId: z.string().min(1),
       title: z.string().optional(),
@@ -803,9 +837,10 @@ function register(server, deps) {
     title: "What the elders still have to do",
     description:
       "Every Task still outstanding, with who is responsible, who it is for, " +
-      "and which are overdue. Unlike the old reminders, a Task whose date has " +
-      "passed is still here — that is the point of it. A Task nobody has been " +
-      "given reads as unassigned, which means nobody has picked it up yet.\n\n" +
+      "and which are overdue. Unlike the old reminders, a Task whose date " +
+      "has passed is still here — that is the point of it. A Task nobody " +
+      "has been given reads as unassigned, which means nobody has picked it " +
+      "up yet.\n\n" +
       "Give personId to see what the elders owe ONE person — the same list " +
       "their Shepherding Profile shows. That is who the work is FOR, not who " +
       "has to do it; for somebody's own workload read assigneeIds." + PRIVACY,
@@ -824,32 +859,42 @@ function register(server, deps) {
       "It needs a date: without one nothing can ever read as overdue. A time " +
       "on that date is optional and usually wrong to invent.\n\n" +
       "assigneeIds are the ELDERS responsible for it. They are checked, and " +
-      "somebody who is not an elder is refused by name. Leave it empty and the " +
-      "Task shows on every elder's dashboard as unclaimed.\n\n" +
-      "aboutPersonId is a different thing: the one person the work is FOR. Set " +
-      "it and the Task also appears on their Shepherding Profile, so \"ring " +
-      "John\" is about John and assigned to whichever elder is ringing. It is " +
-      "any member, not only an elder, and most Tasks have none — leave it out " +
-      "rather than guessing at one.\n\n" +
+      "somebody who is not an elder is refused by name. Leave it empty and " +
+      "the Task shows on every elder's dashboard as unclaimed.\n\n" +
+      "aboutPersonId is a different thing: the one person the work is FOR. " +
+      "Set it and the Task also appears on their Shepherding Profile, so " +
+      "\"ring John\" is about John and assigned to whichever elder is " +
+      "ringing. It is any member, not only an elder, and most Tasks have " +
+      "none — leave it out rather than guessing at one.\n\n" +
       "Give a recurrence to make it repeat. The reply names the next few " +
       "dates it computes, so a misread pattern is visible now rather than as " +
       "a date quietly missing in three months.",
     inputSchema: {
       title: z.string().min(1).describe("What needs doing"),
       body: z.string().optional().describe("Anything more to say about it"),
-      due: z.string().optional().describe("The day it is due, YYYY-MM-DD. Not needed for a repeat, which starts on its own first date"),
-      dueTime: z.string().optional().describe("A time on that day, HH:MM. Leave out unless it genuinely matters"),
-      assigneeIds: z.array(z.string()).optional().describe("The elders responsible — Person ids, checked against the Elder Tag"),
-      aboutPersonId: z.string().optional().describe("The one Person the work is FOR — puts it on their Shepherding Profile. Any member, not only an elder"),
+      due: z.string().optional()
+          .describe("The day it is due, YYYY-MM-DD. Not needed for a " +
+              "repeat, which starts on its own first date"),
+      dueTime: z.string().optional()
+          .describe("A time on that day, HH:MM. Leave out unless it " +
+              "genuinely matters"),
+      assigneeIds: z.array(z.string()).optional()
+          .describe("The elders responsible — Person ids, checked " +
+              "against the Elder Tag"),
+      aboutPersonId: z.string().optional()
+          .describe("The one Person the work is FOR — puts it on their " +
+              "Shepherding Profile. Any member, not only an elder"),
       recurrence: z.object({
-        freq: z.enum(["weekly", "fortnightly", "monthly"]).describe("How often"),
+        freq: z.enum(["weekly", "fortnightly", "monthly"])
+            .describe("How often"),
         startDate: z.string().describe("The first date, YYYY-MM-DD"),
         ends: z.object({
           kind: z.enum(["never", "onDate", "afterCount"]),
           date: z.string().optional().describe("For onDate"),
           count: z.number().optional().describe("For afterCount"),
         }).optional(),
-      }).optional().describe("Makes it a standing commitment rather than a one-off"),
+      }).optional()
+          .describe("Makes it a standing commitment rather than a one-off"),
     },
   }, (a, actor) => Tasks.createTask(db, Object.assign({}, a, {actor})));
 
@@ -872,8 +917,8 @@ function register(server, deps) {
       "Skip one date of a repeating Task without claiming it was done — " +
       "December, because it is Christmas. Deliberately not the same as " +
       "ticking it: once things get marked done that were not, the completed " +
-      "list stops meaning anything. A one-off cannot be skipped; it is either " +
-      "done or deleted.",
+      "list stops meaning anything. A one-off cannot be skipped; it is " +
+      "either done or deleted.",
     inputSchema: {
       taskId: z.string().min(1),
       date: z.string().min(1).describe("Which date, YYYY-MM-DD"),
@@ -931,26 +976,30 @@ function register(server, deps) {
   tool("cal_create_event", {
     title: "Put a new event on the calendar",
     description:
-      "Create an Event. Without a recurrence it is a single dated event; with " +
-      "one it is a repeating Event whose dates are computed from the pattern. " +
-      "It must say who can see it — that is not optional, and an Event nobody " +
-      "can see is the most common way this goes wrong.",
+      "Create an Event. Without a recurrence it is a single dated event; " +
+      "with one it is a repeating Event whose dates are computed from the " +
+      "pattern. It must say who can see it — that is not optional, and an " +
+      "Event nobody can see is the most common way this goes wrong.",
     inputSchema: {
       name: z.string().min(1).describe("What it is called"),
       visibility: z.enum(["public", "member", "participant", "editor", "elder"])
           .describe("The lowest rung that may see it"),
-      date: z.string().optional().describe("The date, YYYY-MM-DD, for a one-off"),
-      endDate: z.string().optional().describe("The last day, for something spanning days"),
+      date: z.string().optional()
+          .describe("The date, YYYY-MM-DD, for a one-off"),
+      endDate: z.string().optional()
+          .describe("The last day, for something spanning days"),
       time: z.string().optional().describe("Start time, HH:MM"),
       location: z.string().optional().describe("Where"),
-      description: z.string().optional().describe("A line for anyone who has not been"),
+      description: z.string().optional()
+          .describe("A line for anyone who has not been"),
       recurrence: z.object({
         freq: z.string().describe("How often it repeats"),
         startDate: z.string().optional(),
         time: z.string().optional(),
       }).optional().describe("Leave out for a one-off"),
       rosterShared: z.boolean().optional()
-          .describe("Whether the people serving can see the rest of the roster"),
+          .describe("Whether the people serving can see the rest of the " +
+              "roster"),
     },
   }, (a) => Cal.createEvent(db, a));
 
@@ -958,13 +1007,14 @@ function register(server, deps) {
     title: "Change ONE date",
     description:
       "Change one date of an Event — its name, time, place or description — " +
-      "leaving every other date alone. ⚠ THIS IS THE ONE-DATE TOOL. To change " +
-      "the Event itself across all its dates, that is cal_update_series. Asked " +
-      "to 'move Tuesday's prayer meeting', this is the tool for the date and " +
-      "cal_move_event for a re-date; reaching for the series would move a year " +
-      "of Tuesdays.",
+      "leaving every other date alone. ⚠ THIS IS THE ONE-DATE TOOL. To " +
+      "change the Event itself across all its dates, that is " +
+      "cal_update_series. Asked to 'move Tuesday's prayer meeting', this " +
+      "is the tool for the date and cal_move_event for a re-date; reaching " +
+      "for the series would move a year of Tuesdays.",
     inputSchema: {
-      eventId: z.string().min(1).describe("The occurrence id, from cal_list_events"),
+      eventId: z.string().min(1)
+          .describe("The occurrence id, from cal_list_events"),
       name: z.string().optional(),
       time: z.string().optional().describe("HH:MM"),
       location: z.string().optional(),
@@ -1011,7 +1061,8 @@ function register(server, deps) {
     inputSchema: {
       seriesId: z.string().min(1),
       date: z.string().min(1).describe("YYYY-MM-DD"),
-      cancelled: z.boolean().optional().describe("False puts a skipped date back"),
+      cancelled: z.boolean().optional()
+          .describe("False puts a skipped date back"),
     },
   }, (a) => Cal.cancelEvent(db, a));
 
@@ -1019,9 +1070,9 @@ function register(server, deps) {
     title: "Delete one date",
     description:
       "Delete a single Event occurrence and its roster. Only that date — " +
-      "there is deliberately no tool that deletes a whole repeating Event. To " +
-      "stop one date happening while keeping the record, cal_cancel_event is " +
-      "usually what is meant.",
+      "there is deliberately no tool that deletes a whole repeating Event. " +
+      "To stop one date happening while keeping the record, " +
+      "cal_cancel_event is usually what is meant.",
     inputSchema: {eventId: z.string().min(1)},
   }, (a) => Cal.deleteEvent(db, a));
 

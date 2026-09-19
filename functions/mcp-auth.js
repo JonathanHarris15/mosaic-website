@@ -260,9 +260,12 @@ class FirebaseOAuthProvider {
    * @return {Promise<{redirectTo: string}|{error: string}>} where to go next
    */
   async completeSignIn({requestId, idToken}) {
-    const reqRef = this.db.collection(AUTH_REQUESTS).doc(String(requestId || ""));
+    const reqRef = this.db.collection(AUTH_REQUESTS)
+        .doc(String(requestId || ""));
     const reqSnap = await reqRef.get();
-    if (!reqSnap.exists) return {error: "This sign-in link has expired. Start again."};
+    if (!reqSnap.exists) {
+      return {error: "This sign-in link has expired. Start again."};
+    }
     const pending = reqSnap.data();
     if (pending.expiresAt < Date.now()) {
       await reqRef.delete();
@@ -309,11 +312,6 @@ class FirebaseOAuthProvider {
   }
 
   /**
-   * Someone's permission level, read fresh.
-   * @param {string} uid the Firebase uid
-   * @return {Promise<?string>} their level, or null
-   */
-  /**
    * The caller's account, read fresh — Permission Level plus the Pastoral
    * Assistant grant (MS-426).
    * @param {string} uid the Firebase uid
@@ -329,6 +327,11 @@ class FirebaseOAuthProvider {
     };
   }
 
+  /**
+   * Someone's permission level, read fresh.
+   * @param {string} uid the Firebase uid
+   * @return {Promise<?string>} their level, or null
+   */
   async permissionLevelOf(uid) {
     return (await this.accountOf(uid)).permissionLevel;
   }
@@ -344,7 +347,9 @@ class FirebaseOAuthProvider {
     const {InvalidGrantError} = await oauthErrors();
     const snap = await this.db.collection(AUTH_CODES)
         .doc(String(authorizationCode || "")).get();
-    if (!snap.exists) throw new InvalidGrantError("Unknown or already-used code.");
+    if (!snap.exists) {
+      throw new InvalidGrantError("Unknown or already-used code.");
+    }
     const data = snap.data();
     if (!safeEqual(data.clientId, client.client_id)) {
       throw new InvalidGrantError("That code was not issued to this client.");
@@ -373,7 +378,9 @@ class FirebaseOAuthProvider {
 
     const claim = await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(codeRef);
-      if (!snap.exists) throw new InvalidGrantError("Unknown or already-used code.");
+      if (!snap.exists) {
+        throw new InvalidGrantError("Unknown or already-used code.");
+      }
       const data = snap.data();
       if (!safeEqual(data.clientId, client.client_id)) {
         throw new InvalidGrantError("That code was not issued to this client.");
@@ -383,7 +390,8 @@ class FirebaseOAuthProvider {
         throw new InvalidGrantError("That code has expired.");
       }
       if (redirectUri !== undefined && data.redirectUri !== redirectUri) {
-        throw new InvalidGrantError("Redirect URI does not match the one authorized.");
+        throw new InvalidGrantError(
+            "Redirect URI does not match the one authorized.");
       }
       tx.delete(codeRef);
       return data;
@@ -413,15 +421,21 @@ class FirebaseOAuthProvider {
    */
   async exchangeRefreshToken(client, refreshToken, scopes, resource) {
     const {InvalidGrantError} = await oauthErrors();
-    const ref = this.db.collection(TOKENS).doc(hashToken(String(refreshToken || "")));
+    const ref = this.db.collection(TOKENS)
+        .doc(hashToken(String(refreshToken || "")));
 
     const claim = await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) throw new InvalidGrantError("Unknown or already-used refresh token.");
+      if (!snap.exists) {
+        throw new InvalidGrantError("Unknown or already-used refresh token.");
+      }
       const data = snap.data();
-      if (data.type !== "refresh") throw new InvalidGrantError("That is not a refresh token.");
+      if (data.type !== "refresh") {
+        throw new InvalidGrantError("That is not a refresh token.");
+      }
       if (!safeEqual(data.clientId, client.client_id)) {
-        throw new InvalidGrantError("That token was not issued to this client.");
+        throw new InvalidGrantError(
+            "That token was not issued to this client.");
       }
       if (data.expiresAt < Date.now()) {
         tx.delete(ref);
@@ -494,8 +508,12 @@ class FirebaseOAuthProvider {
         .doc(hashToken(String(token || ""))).get();
     if (!snap.exists) throw new InvalidTokenError("Invalid access token.");
     const data = snap.data();
-    if (data.type !== "access") throw new InvalidTokenError("Invalid access token.");
-    if (data.expiresAt < Date.now()) throw new InvalidTokenError("Access token expired.");
+    if (data.type !== "access") {
+      throw new InvalidTokenError("Invalid access token.");
+    }
+    if (data.expiresAt < Date.now()) {
+      throw new InvalidTokenError("Access token expired.");
+    }
 
     const account = await this.accountOf(data.uid);
     if (!Access.readsAsEditor(account)) {
@@ -559,7 +577,8 @@ class FirebaseOAuthProvider {
 
     return `<!doctype html>
 <html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect to Mosaic</title>
 <link rel="icon" href="/mosaic-seal.png" type="image/png">
 <style>
@@ -583,14 +602,17 @@ class FirebaseOAuthProvider {
   h1 { font-size: 1.15rem; margin: 0 0 4px; text-align: center; }
   p.sub { margin: 0 0 20px; font-size: .9rem; opacity: .75; line-height: 1.45;
           text-align: center; }
-  label { display: block; font-size: .8rem; font-weight: 600; margin: 12px 0 5px; }
-  input { width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: .95rem;
+  label { display: block; font-size: .8rem; font-weight: 600;
+          margin: 12px 0 5px; }
+  input { width: 100%; box-sizing: border-box; padding: 9px 11px;
+          font-size: .95rem;
           border: 1px solid #d3d7de; border-radius: 7px; }
   button { width: 100%; margin-top: 20px; padding: 10px; font-size: .95rem;
            font-weight: 600; border: 0; border-radius: 7px; background: #2f6df6;
            color: #fff; cursor: pointer; }
   button[disabled] { opacity: .55; cursor: default; }
-  .err { margin-top: 14px; font-size: .85rem; color: #c02b2b; line-height: 1.45; }
+  .err { margin-top: 14px; font-size: .85rem; color: #c02b2b;
+         line-height: 1.45; }
   @media (prefers-color-scheme: dark) { .err { color: #ff8a8a; } }
 </style>
 </head><body>
@@ -616,7 +638,8 @@ class FirebaseOAuthProvider {
   firebase.initializeApp(${cfg});
   var f = document.getElementById('f'), b = document.getElementById('b'),
       err = document.getElementById('err');
-  function fail(m) { err.textContent = m; err.hidden = false; b.disabled = false;
+  function fail(m) { err.textContent = m; err.hidden = false;
+                     b.disabled = false;
                      b.textContent = 'Sign in and connect'; }
   f.addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -640,7 +663,9 @@ class FirebaseOAuthProvider {
         document.body.appendChild(form);
         form.submit();
       })
-      .catch(function () { fail('That email and password did not match an account.'); });
+      .catch(function () {
+        fail('That email and password did not match an account.');
+      });
   });
 </script>
 </body></html>`;

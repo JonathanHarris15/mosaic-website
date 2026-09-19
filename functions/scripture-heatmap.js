@@ -26,7 +26,12 @@
 
 const SCRIPTURE_USAGE = "scripture_usage";
 
-/** The stored shape, as a plain row. */
+/**
+ * The stored shape, as a plain row.
+ * @param {string} id the document id
+ * @param {Object} data the stored fields
+ * @return {Object} the row
+ */
 function toRow(id, data) {
   return {
     reference: (data && data.reference) || id,

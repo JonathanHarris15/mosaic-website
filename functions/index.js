@@ -117,20 +117,20 @@ if (!admin.apps.length) {
 
 /**
  * A Callable Cloud Function that fetches the entire hymn index from Firestore.
- * 
+ *
  * This function returns a simplified list of hymns with basic metadata,
  * optimized for search and display in the frontend lookup tool.
  * Results are cached in memory for 5 minutes.
- * 
+ *
  * @param {Object} request - The request object.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of hymn objects.
+ * @return {Promise<Array<Object>>} Hymn objects for the lookup tool.
  * @property {string} id - The Firestore document ID.
  * @property {string} hymn_name - The title of the hymn.
- * @property {number} variations - The number of available versions/arrangements.
+ * @property {number} variations Number of available versions/arrangements.
  * @property {string} music_writer - The composer of the music.
  * @property {string} lyrics_writer - The author of the lyrics.
  * @property {string|null} last_played_date - The last date the hymn was played.
- * @property {number} times_played - How many services currently schedule this hymn.
+ * @property {number} times_played Services that currently schedule this hymn.
  * @property {Array<string>} tags - Descriptive tags for the hymn.
  * @property {string} database_url - Relative URL to the hymn details page.
  */
@@ -145,7 +145,9 @@ exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async () => {
 /**
  * A Callable Cloud Function that allows admins to create new users.
  */
-exports.createUser = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.createUser = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   // 1. Check if the caller is an admin
   if (!request.auth) {
     throw new Error("The function must be called while authenticated.");
@@ -154,16 +156,20 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
   const callerUid = request.auth.uid;
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
+
+  if (!callerDoc.exists ||
+      !["admin", "super_admin"].includes(
+          callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can create new users.");
   }
 
   const {email, password, role, permissionLevel} = request.data;
-  const level = permissionLevel || role; // Accept either during the MS-119 migration.
+  // Accept either during the MS-119 migration.
+  const level = permissionLevel || role;
 
   if (!email || !password || !level) {
-    throw new Error("Missing required fields: email, password, or permission level.");
+    throw new Error(
+        "Missing required fields: email, password, or permission level.");
   }
 
   try {
@@ -234,7 +240,9 @@ async function tearDownLogin(uid) {
   log(`Tore down login ${uid}; unlinked ${linked.size} person record(s)`);
 }
 
-exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.deleteUser = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   if (!request.auth) {
     throw new Error("The function must be called while authenticated.");
   }
@@ -243,7 +251,9 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
+  if (!callerDoc.exists ||
+      !["admin", "super_admin"].includes(
+          callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can delete users.");
   }
 
@@ -275,15 +285,20 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
  * remaining admin cannot delete themselves, because that would strand the
  * church with no one who can administer it and no way back in.
  */
-exports.deleteOwnAccount = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.deleteOwnAccount = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in to delete your account.");
+    throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to delete your account.");
   }
 
   const uid = request.auth.uid;
   const db = admin.firestore();
   const userDoc = await db.collection("users").doc(uid).get();
-  const permissionLevel = userDoc.exists ? (userDoc.data().permissionLevel || userDoc.data().role) : null;
+  const permissionLevel = userDoc.exists ?
+    (userDoc.data().permissionLevel || userDoc.data().role) : null;
 
   if (["admin", "super_admin"].includes(permissionLevel)) {
     const admins = await db.collection("users")
@@ -291,8 +306,9 @@ exports.deleteOwnAccount = onCall({cors: true, region: "us-central1"}, async (re
     if (admins.size <= 1) {
       throw new HttpsError(
           "failed-precondition",
-          "You are the only administrator. Make someone else an administrator " +
-          "before deleting your account, or the church will be locked out.",
+          "You are the only administrator. Make someone else an " +
+          "administrator before deleting your account, or the church " +
+          "will be locked out.",
       );
     }
   }
@@ -309,7 +325,9 @@ exports.deleteOwnAccount = onCall({cors: true, region: "us-central1"}, async (re
 /**
  * A Callable Cloud Function that allows admins to update any user's password.
  */
-exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.updateUserPasswordAdmin = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   if (!request.auth) {
     throw new Error("The function must be called while authenticated.");
   }
@@ -317,8 +335,10 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
   const callerUid = request.auth.uid;
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
+
+  if (!callerDoc.exists ||
+      !["admin", "super_admin"].includes(
+          callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can update user passwords.");
   }
 
@@ -354,8 +374,8 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
  * — a string comparison against a plaintext copy of your password kept in your
  * `users` document. Its own doc comment said the quiet part: "since we store it
  * in Firestore, we can verify it here too." That comparison was the only thing
- * in the whole app that genuinely needed the stored copy, and therefore the only
- * thing standing between us and deleting it.
+ * in the whole app that genuinely needed the stored copy, and therefore
+ * the only thing standing between us and deleting it.
  *
  * The browser now re-authenticates against Firebase Auth and calls
  * updatePassword itself (see the change-password form in public/profile.js), so
@@ -395,7 +415,9 @@ const DIRECTORY_REQUESTS_COLLECTION = "directory_requests";
  * person as someone already on file approves onto that record instead, which is
  * the one-click answer to the duplicate-record problem.
  */
-exports.resolveDirectoryRequest = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.resolveDirectoryRequest = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
         "unauthenticated", "Sign in to resolve directory requests.");
@@ -541,7 +563,8 @@ exports.resolveDirectoryRequest = onCall({cors: true, region: "us-central1"}, as
         updatedAt: now,
       }));
     } else {
-      batch.update(familyRef, Object.assign({}, plan.changes, {updatedAt: now}));
+      batch.update(familyRef,
+          Object.assign({}, plan.changes, {updatedAt: now}));
     }
   }
 
@@ -569,7 +592,8 @@ exports.resolveDirectoryRequest = onCall({cors: true, region: "us-central1"}, as
 exports.cleanUpReplacedPhoto = onDocumentWritten(
     {document: "people/{personId}", region: "us-central1"},
     async (event) => {
-      const before = event.data && event.data.before && event.data.before.exists ?
+      const before = event.data && event.data.before &&
+          event.data.before.exists ?
         event.data.before.data() : null;
       const after = event.data && event.data.after && event.data.after.exists ?
         event.data.after.data() : null;
@@ -661,7 +685,8 @@ exports.cleanUpFormUploads = onDocumentWritten(
         event.data.after.data() : null;
       if (after) return; // Created or updated, not deleted.
 
-      const before = event.data && event.data.before && event.data.before.exists ?
+      const before = event.data && event.data.before &&
+          event.data.before.exists ?
         event.data.before.data() : null;
       const answers = (before && before.answers) || {};
 
@@ -688,7 +713,8 @@ exports.cleanUpDeletedAttachment = onDocumentWritten(
       region: "us-central1",
     },
     async (event) => {
-      const before = event.data && event.data.before && event.data.before.exists ?
+      const before = event.data && event.data.before &&
+          event.data.before.exists ?
         event.data.before.data() : null;
       const after = event.data && event.data.after && event.data.after.exists ?
         event.data.after.data() : null;
@@ -725,9 +751,12 @@ exports.cleanUpDeletedAttachment = onDocumentWritten(
  * stopped being a member. The Elder Tag clears itself, because the reciprocal
  * trigger reconciles it from the (now absent) link.
  */
-exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, async (request) => {
+exports.unlinkDirectoryPerson = onCall({
+  cors: true, region: "us-central1",
+}, async (request) => {
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Sign in to disconnect an account.");
+    throw new HttpsError(
+        "unauthenticated", "Sign in to disconnect an account.");
   }
 
   const db = admin.firestore();
@@ -744,7 +773,8 @@ exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, asyn
 
   const {personId} = request.data || {};
   if (!personId) {
-    throw new HttpsError("invalid-argument", "Missing the directory record id.");
+    throw new HttpsError(
+        "invalid-argument", "Missing the directory record id.");
   }
 
   const personRef = db.collection("people").doc(personId);
@@ -1393,11 +1423,14 @@ exports.oosUpdateLiturgy = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
       if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Sign in to update an Order of Service.");
+        throw new HttpsError(
+            "unauthenticated",
+            "Sign in to update an Order of Service.");
       }
 
       const db = admin.firestore();
-      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const callerSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
       const level = callerSnap.exists &&
           (callerSnap.data().permissionLevel || callerSnap.data().role);
       if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
@@ -1518,7 +1551,8 @@ exports.mcpCapabilities = onCall(
         throw new HttpsError("unauthenticated", "Sign in first.");
       }
       const db = admin.firestore();
-      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const callerSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
       const level = callerSnap.exists &&
           (callerSnap.data().permissionLevel || callerSnap.data().role);
       if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
@@ -1559,7 +1593,8 @@ exports.restoreGuidanceVersion = onCall(
         throw new HttpsError("unauthenticated", "Sign in first.");
       }
       const db = admin.firestore();
-      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const callerSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
       const level = callerSnap.exists &&
           (callerSnap.data().permissionLevel || callerSnap.data().role);
       if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
@@ -1568,7 +1603,8 @@ exports.restoreGuidanceVersion = onCall(
 
       const {fileId, versionId} = request.data || {};
       if (!fileId || !versionId) {
-        throw new HttpsError("invalid-argument", "Name the file and the version.");
+        throw new HttpsError(
+            "invalid-argument", "Name the file and the version.");
       }
 
       const identity = await lw.resolveIdentity(db, request.auth.uid);
@@ -1618,7 +1654,8 @@ const MCP_ISSUER_URL = defineString("MCP_ISSUER_URL", {
 
 // App Check on the public form door (MS-508 / MS-534). off | monitor |
 // enforce. Default monitor so a functions deploy cannot brick submits;
-// flipping enforce is Atlas-escalated (docs/ops/ms-508-app-check-break-glass.md).
+// flipping enforce is Atlas-escalated
+// (docs/ops/ms-508-app-check-break-glass.md).
 const PUBLIC_FORM_APP_CHECK_MODE = defineString("PUBLIC_FORM_APP_CHECK_MODE", {
   default: "monitor",
 });
@@ -1851,18 +1888,26 @@ exports.syncMemberTagToRole = onDocumentWritten(
       const userId = after.userId;
       if (!userId) return; // Not linked to a user.
       const tags = after.tags || [];
-      if (!hasMemberTag(tags)) return; // No member tag (any casing): never promote, never demote.
+      // No member tag (any casing): never promote, never demote.
+      if (!hasMemberTag(tags)) return;
 
       const db = admin.firestore();
       const userRef = db.collection("users").doc(userId);
       const userSnap = await userRef.get();
       if (!userSnap.exists) return;
 
-      const permissionLevel = userSnap.data().permissionLevel || userSnap.data().role || "viewer";
-      if (!shouldPromoteToMember(permissionLevel)) return; // Already member+ — never demote, and skip write to avoid a loop.
+      const permissionLevel = userSnap.data().permissionLevel ||
+          userSnap.data().role || "viewer";
+      // Already member+ — never demote, and skip write to avoid a loop.
+      if (!shouldPromoteToMember(permissionLevel)) return;
 
-      await userRef.update({permissionLevel: MEMBER_PERMISSION_LEVEL, role: MEMBER_PERMISSION_LEVEL});
-      log(`Promoted user ${userId} from '${permissionLevel}' to '${MEMBER_PERMISSION_LEVEL}' (linked person has the member tag).`);
+      await userRef.update({
+        permissionLevel: MEMBER_PERMISSION_LEVEL,
+        role: MEMBER_PERMISSION_LEVEL,
+      });
+      log(`Promoted user ${userId} from '${permissionLevel}' to ` +
+          `'${MEMBER_PERMISSION_LEVEL}' ` +
+          `(linked person has the member tag).`);
     },
 );
 
@@ -1891,18 +1936,22 @@ exports.onAttendanceCreated = onDocumentCreated(
 
 /**
  * Elder-Tag projection (ADR-0013, MS-92): the `elder` User role projects an
- * immutable "Elder" tag onto the linked directory Person. Unlike the member sync
- * (add-only), the Elder Tag is a Projected Tag kept in EXACT sync — added when a
- * linked user is an elder, removed when they stop being one or are unlinked.
+ * immutable "Elder" tag onto the linked directory Person. Unlike the
+ * member sync (add-only), the Elder Tag is a Projected Tag kept in EXACT
+ * sync — added when a linked user is an elder, removed when they stop
+ * being one or are unlinked.
  *
- * The tag on a Person is a function of THAT Person's current linked user, so we
- * reconcile from the person's live `userId` rather than trusting the event delta:
- * one `reconcileElderTag(personId)` recomputes the correct state and only writes
- * on a change (which also stops the trigger looping). Both the newly-linked
- * person and any person the user was UNLINKED from get reconciled.
+ * The tag on a Person is a function of THAT Person's current linked user,
+ * so we reconcile from the person's live `userId` rather than trusting
+ * the event delta: one `reconcileElderTag(personId)` recomputes the
+ * correct state and only writes on a change (which also stops the
+ * trigger looping). Both the newly-linked person and any person the user
+ * was UNLINKED from get reconciled.
  *
  * One-directional: the Elder Tag is never hand-applied, so there is no
  * person-tag → user-role counterpart (contrast syncMemberTagToRole).
+ * @param {Object} db Firestore instance.
+ * @param {string} personId Directory person id to reconcile.
  */
 async function reconcileElderTag(db, personId) {
   const personRef = db.collection("people").doc(personId);
@@ -1915,11 +1964,13 @@ async function reconcileElderTag(db, personId) {
   let elder = false;
   if (person.userId) {
     const userSnap = await db.collection("users").doc(person.userId).get();
-    elder = userSnap.exists && isElderPermissionLevel(userSnap.data().permissionLevel || userSnap.data().role);
+    elder = userSnap.exists && isElderPermissionLevel(
+        userSnap.data().permissionLevel || userSnap.data().role);
   }
 
   const has = hasElderTag(tags);
-  if (elder === has) return; // Already correct — skip write to avoid a trigger loop.
+  // Already correct — skip write to avoid a trigger loop.
+  if (elder === has) return;
 
   if (elder) {
     // Register the tag so it shows in the Tags Manager (like the member tag).
@@ -1929,27 +1980,31 @@ async function reconcileElderTag(db, personId) {
       tags: admin.firestore.FieldValue.arrayUnion(ELDER_TAG),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    log(`Tagged person ${personId} as '${ELDER_TAG}' (linked user is an elder).`);
+    log(`Tagged person ${personId} as '${ELDER_TAG}' ` +
+        `(linked user is an elder).`);
   } else {
     await personRef.update({
       tags: admin.firestore.FieldValue.arrayRemove(ELDER_TAG),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    log(`Removed '${ELDER_TAG}' from person ${personId} (linked user no longer an elder).`);
+    log(`Removed '${ELDER_TAG}' from person ${personId} ` +
+        `(linked user no longer an elder).`);
   }
 }
 
 exports.syncElderRoleToTag = onDocumentWritten(
     {document: "users/{uid}", region: "us-central1"},
     async (event) => {
-      const before = event.data && event.data.before && event.data.before.exists ?
+      const before = event.data && event.data.before &&
+          event.data.before.exists ?
         event.data.before.data() : null;
       const after = event.data && event.data.after && event.data.after.exists ?
         event.data.after.data() : null;
 
       const beforePersonId = before && before.personId;
       const afterPersonId = after && after.personId;
-      if (!beforePersonId && !afterPersonId) return; // Never linked — nothing to project.
+      // Never linked — nothing to project.
+      if (!beforePersonId && !afterPersonId) return;
 
       const db = admin.firestore();
 
@@ -1957,8 +2012,9 @@ exports.syncElderRoleToTag = onDocumentWritten(
       if (afterPersonId) await reconcileElderTag(db, afterPersonId);
 
       // If the link moved or was cleared (unlink / relink / user deleted), the
-      // previously-linked person may still carry a stale Elder tag — reconcile it
-      // too (its userId was cleared reciprocally, so it resolves to non-elder).
+      // previously-linked person may still carry a stale Elder tag —
+      // reconcile it too (its userId was cleared reciprocally, so it
+      // resolves to non-elder).
       if (beforePersonId && beforePersonId !== afterPersonId) {
         await reconcileElderTag(db, beforePersonId);
       }
@@ -1970,11 +2026,12 @@ exports.syncElderRoleToTag = onDocumentWritten(
  * ------------------------------------------------------------------ */
 
 /**
- * Throws unless the authenticated caller is an admin/super_admin. The Admin
- * Dashboard is admin-only, but callable functions are reachable directly, so the
- * SMS tools re-check the role server-side rather than trusting the UI gate.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {Object|undefined} authCtx - request.auth
+ * Throws unless the authenticated caller is an admin/super_admin. The
+ * Admin Dashboard is admin-only, but callable functions are reachable
+ * directly, so the SMS tools re-check the role server-side rather than
+ * trusting the UI gate.
+ * @param {Object} db Firestore instance.
+ * @param {Object} authCtx request.auth
  * @return {Promise<void>}
  */
 async function assertAdmin(db, authCtx) {
@@ -1982,17 +2039,20 @@ async function assertAdmin(db, authCtx) {
     throw new HttpsError("unauthenticated", "Sign in to use the SMS tools.");
   }
   const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  if (!callerDoc.exists || !isAdminPermissionLevel(callerDoc.data().permissionLevel || callerDoc.data().role)) {
+  if (!callerDoc.exists ||
+      !isAdminPermissionLevel(
+          callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new HttpsError("permission-denied", "Admins only.");
   }
 }
 
 /**
- * Throws unless the caller is an elder/super_admin — the roles that manage
- * pastoral-prayer subjects and their Prayer Requests (matches isShepherd in the
- * Service Builder and the prayer_requests Firestore rule).
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {Object|undefined} authCtx
+ * Throws unless the caller is an elder/super_admin — the roles that
+ * manage pastoral-prayer subjects and their Prayer Requests (matches
+ * isShepherd in the Service Builder and the prayer_requests Firestore
+ * rule).
+ * @param {Object} db Firestore instance.
+ * @param {Object} authCtx request.auth
  * @return {Promise<void>}
  */
 async function assertElder(db, authCtx) {
@@ -2000,19 +2060,20 @@ async function assertElder(db, authCtx) {
     throw new HttpsError("unauthenticated", "Sign in first.");
   }
   const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  const permissionLevel = callerDoc.exists ? (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  const permissionLevel = callerDoc.exists ?
+    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
   if (!["elder", "super_admin"].includes(permissionLevel)) {
     throw new HttpsError("permission-denied", "Elders only.");
   }
 }
 
 /**
- * Sends one SMS via Textbelt and returns the shaped result. Prayer-request and
- * test sends share this so reply routing and signature verification behave
- * identically. Outbound texts that expect a reply attach the reply webhook.
- * @param {{to: string, body: string, withReplyWebhook?: boolean}} args
- * @return {Promise<{success: boolean, textId: string|null,
- *   quotaRemaining: number|null, error: string|null}>}
+ * Sends one SMS via Textbelt and returns the shaped result. Prayer-request
+ * and test sends share this so reply routing and signature verification
+ * behave identically. Outbound texts that expect a reply attach the reply
+ * webhook.
+ * @param {Object} args to, body, and optional withReplyWebhook.
+ * @return {Promise<Object>} the shaped Textbelt send result.
  */
 async function sendViaTextbelt({to, body, withReplyWebhook = true}) {
   const payload = {phone: to, message: body, key: TEXTBELT_KEY.value()};
@@ -2026,11 +2087,10 @@ async function sendViaTextbelt({to, body, withReplyWebhook = true}) {
 }
 
 /**
- * Records an outbound text in the message log so an inbound reply's textId can
- * be resolved back to its purpose/person/service.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {Object} entry - {to, body, textId, purpose, personId?, serviceDate?,
- *   kind?}
+ * Records an outbound text in the message log so an inbound reply's
+ * textId can be resolved back to its purpose/person/service.
+ * @param {Object} db Firestore instance.
+ * @param {Object} entry to, body, textId, purpose, and optional ids.
  * @return {Promise<void>}
  */
 async function recordOutbound(db, entry) {
@@ -2049,10 +2109,10 @@ async function recordOutbound(db, entry) {
 }
 
 /**
- * Loads the prayer-request config: the resolved message templates (saved values
- * over built-in defaults) and whether automatic sending is enabled.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @return {Promise<{templates: Object, autoSendEnabled: boolean}>}
+ * Loads the prayer-request config: the resolved message templates (saved
+ * values over built-in defaults) and whether automatic sending is enabled.
+ * @param {Object} db Firestore instance.
+ * @return {Promise<Object>} templates and autoSendEnabled.
  */
 async function loadPrayerConfig(db) {
   const snap = await db.doc(PRAYER_CONFIG_DOC).get();
@@ -2079,11 +2139,13 @@ exports.smsCheckQuota = onCall(
         const resp = await fetch(`https://textbelt.com/quota/${key}`);
         const json = await resp.json();
         const result = interpretQuota(json, true);
-        log(`smsCheckQuota: configured, quotaRemaining=${result.quotaRemaining}.`);
+        log(`smsCheckQuota: configured, ` +
+            `quotaRemaining=${result.quotaRemaining}.`);
         return result;
       } catch (err) {
         log(`smsCheckQuota: Textbelt request failed: ${err.message}`);
-        throw new HttpsError("unavailable", "Could not reach Textbelt to check quota.");
+        throw new HttpsError(
+            "unavailable", "Could not reach Textbelt to check quota.");
       }
     },
 );
@@ -2107,7 +2169,8 @@ exports.smsSendTest = onCall(
 
       const to = toE164US(request.data && request.data.phone);
       if (!to) {
-        throw new HttpsError("invalid-argument", "Enter a valid US phone number.");
+        throw new HttpsError(
+            "invalid-argument", "Enter a valid US phone number.");
       }
 
       const message = (request.data && request.data.message || "").trim() ||
@@ -2127,7 +2190,8 @@ exports.smsSendTest = onCall(
         return result;
       } catch (err) {
         log(`smsSendTest: Textbelt request failed: ${err.message}`);
-        throw new HttpsError("unavailable", "Could not reach Textbelt to send the test.");
+        throw new HttpsError(
+            "unavailable", "Could not reach Textbelt to send the test.");
       }
     },
 );
@@ -2137,10 +2201,12 @@ exports.smsSendTest = onCall(
  * reply's textId is looked up in the outbound log: a 'prayer_request' reply
  * fills that Sunday's Prayer Request (and is thanked); anything else (a test
  * send, or an unrecognized id) lands in the sms_test_replies stack the Admin
- * Dashboard shows. Always returns 200 (besides auth) so Textbelt does not retry.
+ * Dashboard shows. Always returns 200 (besides auth) so Textbelt does
+ * not retry.
  *
- * Forged POSTs are rejected by verifying Textbelt's HMAC-SHA256 signature over
- * the raw body using the API key as the secret, so only Textbelt can write here.
+ * Forged POSTs are rejected by verifying Textbelt's HMAC-SHA256 signature
+ * over the raw body using the API key as the secret, so only Textbelt can
+ * write here.
  */
 exports.smsInbound = onRequest(
     {cors: false, region: "us-central1", secrets: [TEXTBELT_KEY]},
@@ -2201,13 +2267,14 @@ exports.smsInbound = onRequest(
 );
 
 /**
- * Applies a pastoral-prayer subject's texted reply: fills that Sunday's Prayer
- * Request (once), generates a "Prayer Request" Shepherding Note, and sends the
- * thank-you. No date cutoff — a reply is accepted whenever it arrives, as long
- * as the request is still empty. A reply for an already-filled request is
- * ignored so a second reply can't duplicate the note.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {{personId: string, serviceDate: string, replyText: string}} args
+ * Applies a pastoral-prayer subject's texted reply: fills that Sunday's
+ * Prayer Request (once), generates a "Prayer Request" Shepherding Note,
+ * and sends the thank-you. No date cutoff — a reply is accepted whenever
+ * it arrives, as long as the request is still empty. A reply for an
+ * already-filled request is ignored so a second reply can't duplicate
+ * the note.
+ * @param {Object} db Firestore instance.
+ * @param {Object} args personId, serviceDate, and replyText.
  * @return {Promise<void>}
  */
 async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
@@ -2216,12 +2283,16 @@ async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
 
   const personRef = db.collection("people").doc(personId);
   const reqRef = personRef.collection("prayer_requests").doc(serviceDate);
-  const [personSnap, reqSnap] = await Promise.all([personRef.get(), reqRef.get()]);
+  const [personSnap, reqSnap] = await Promise.all([
+    personRef.get(), reqRef.get(),
+  ]);
   // Already filled (manually or by an earlier reply) — don't duplicate.
   if (reqSnap.exists && (reqSnap.data().prayerRequest || "").trim()) return;
 
   const personName = personSnap.exists ? (personSnap.data().name || "") : "";
-  const note = pr.buildPrayerRequestNote({personName, serviceDate, requestText: text});
+  const note = pr.buildPrayerRequestNote({
+    personName, serviceDate, requestText: text,
+  });
   const now = admin.firestore.FieldValue.serverTimestamp();
 
   await reqRef.set({
@@ -2267,26 +2338,27 @@ async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
 
 /**
  * Loads a subject's person record and that Sunday's prayer-request state.
- * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object} db Firestore instance.
  * @param {string} personId
  * @param {string} serviceDate
- * @return {Promise<{personSnap: Object, reqSnap: Object, reqRef: Object}>}
+ * @return {Promise<Object>} personSnap, reqSnap, and reqRef.
  */
 async function loadSubjectState(db, personId, serviceDate) {
   const reqRef = db.collection("people").doc(personId)
       .collection("prayer_requests").doc(serviceDate);
   const personRef = db.collection("people").doc(personId);
-  const [personSnap, reqSnap] = await Promise.all([personRef.get(), reqRef.get()]);
+  const [personSnap, reqSnap] = await Promise.all([
+    personRef.get(), reqRef.get(),
+  ]);
   return {personSnap, reqSnap, reqRef};
 }
 
 /**
  * Sends a resolved prayer-request text (initial or reminder) to a subject,
- * records the send-state on the request and the linkage in the outbound log.
- * Shared by the scheduler and the manual button.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {Object} args - {serviceDate, personId, kind, templates, personSnap,
- *   reqRef}
+ * records the send-state on the request and the linkage in the outbound
+ * log. Shared by the scheduler and the manual button.
+ * @param {Object} db Firestore instance.
+ * @param {Object} args serviceDate, personId, kind, templates, snaps.
  * @return {Promise<Object>} the Textbelt send result.
  */
 async function dispatchPrayerText(db, args) {
@@ -2312,15 +2384,16 @@ async function dispatchPrayerText(db, args) {
 }
 
 /**
- * Evaluates one pastoral-prayer subject for the scheduler and sends the initial
- * or reminder when due.
- * @param {import("firebase-admin").firestore.Firestore} db
- * @param {Object} args - {serviceDate, personId, today, localHour, templates}
+ * Evaluates one pastoral-prayer subject for the scheduler and sends the
+ * initial or reminder when due.
+ * @param {Object} db Firestore instance.
+ * @param {Object} args serviceDate, personId, today, localHour, templates.
  * @return {Promise<void>}
  */
 async function processPrayerSubject(db, args) {
   const {serviceDate, personId, today, localHour, templates} = args;
-  const {personSnap, reqSnap, reqRef} = await loadSubjectState(db, personId, serviceDate);
+  const {personSnap, reqSnap, reqRef} =
+      await loadSubjectState(db, personId, serviceDate);
   if (!personSnap.exists) return;
 
   const person = personSnap.data();
@@ -2342,17 +2415,20 @@ async function processPrayerSubject(db, args) {
     serviceDate, personId, kind: action, templates, personSnap, reqRef,
   });
   if (!result.success) {
-    log(`Prayer-request ${action} send failed for ${personId}: ${result.error}`);
+    log(`Prayer-request ${action} send failed for ${personId}: ` +
+        `${result.error}`);
   } else {
-    log(`Sent prayer-request ${action} to ${personId} (service ${serviceDate}).`);
+    log(`Sent prayer-request ${action} to ${personId} ` +
+        `(service ${serviceDate}).`);
   }
 }
 
 /**
- * Hourly scheduled sender for pastoral-prayer Prayer Request texts. Gated by the
- * autoSendEnabled kill switch (default off). For each upcoming Service within
- * the initial-send window, each pastoral-prayer subject (prayerMale/prayerFemale)
- * with an empty request is texted per the 5-day/3-day, 8am-8pm-Central rules.
+ * Hourly scheduled sender for pastoral-prayer Prayer Request texts. Gated
+ * by the autoSendEnabled kill switch (default off). For each upcoming
+ * Service within the initial-send window, each pastoral-prayer subject
+ * (prayerMale/prayerFemale) with an empty request is texted per the
+ * 5-day/3-day, 8am-8pm-Central rules.
  */
 exports.sendPrayerRequestTexts = onSchedule(
     {
@@ -2370,7 +2446,8 @@ exports.sendPrayerRequestTexts = onSchedule(
       }
 
       const {date: today, hour: localHour} = pr.churchDateParts(new Date());
-      if (localHour < pr.WINDOW_OPEN_HOUR || localHour >= pr.WINDOW_CLOSE_HOUR) {
+      if (localHour < pr.WINDOW_OPEN_HOUR ||
+          localHour >= pr.WINDOW_CLOSE_HOUR) {
         return;
       }
 
@@ -2406,13 +2483,14 @@ exports.sendPrayerRequestTexts = onSchedule(
  *
  *   Confirmed → written.
  *   Declined  → never, ever.
- *   Pending   → not written, and NOT discarded: it stays an open question on the
- *               past Event for an editor to answer. An unanswered question stays
- *               unanswered permanently and never counts as serving.
+ *   Pending   → not written, and NOT discarded: it stays an open
+ *               question on the past Event for an editor to answer. An
+ *               unanswered question stays unanswered permanently and
+ *               never counts as serving.
  *
- * Idempotent by construction — the Involvement id is derived from the occurrence,
- * the Role, the slot and the person, so a second run overwrites the same
- * document instead of writing a duplicate.
+ * Idempotent by construction — the Involvement id is derived from the
+ * occurrence, the Role, the slot and the person, so a second run
+ * overwrites the same document instead of writing a duplicate.
  *
  * Runs daily, just after midnight church-local, so "the date has passed" is
  * evaluated where the church is rather than where the server is.
@@ -2427,8 +2505,9 @@ exports.convertConfirmedAssignments = onSchedule(
       const db = admin.firestore();
       const {today, from, to} = ac.conversionWindow(new Date());
 
-      // Strictly past dates only. An Event happening TODAY has not happened yet,
-      // and converting it would be the very bug this job exists to fix.
+      // Strictly past dates only. An Event happening TODAY has not
+      // happened yet, and converting it would be the very bug this job
+      // exists to fix.
       const snap = await db.collection("event_occurrences")
           .where("date", ">=", from)
           .where("date", "<=", to)
@@ -2561,10 +2640,10 @@ exports.convertServiceInvolvement = onSchedule(
 );
 
 /**
- * Manual "Send Prayer Request Text Now" — the Service Builder button. Elder-gated.
- * Bypasses the timing/quiet-hours guards (a human is choosing to send now) but
- * keeps the phone/already-filled guards. Sends initial then reminder, re-sending
- * the reminder on repeat calls.
+ * Manual "Send Prayer Request Text Now" — the Service Builder button.
+ * Elder-gated. Bypasses the timing/quiet-hours guards (a human is choosing
+ * to send now) but keeps the phone/already-filled guards. Sends initial
+ * then reminder, re-sending the reminder on repeat calls.
  */
 exports.sendPrayerRequestNow = onCall(
     {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
@@ -2583,7 +2662,8 @@ exports.sendPrayerRequestNow = onCall(
             "No Textbelt key is configured.");
       }
 
-      const {personSnap, reqSnap, reqRef} = await loadSubjectState(db, personId, serviceDate);
+      const {personSnap, reqSnap, reqRef} =
+          await loadSubjectState(db, personId, serviceDate);
       if (!personSnap.exists) {
         throw new HttpsError("not-found", "That person was not found.");
       }
@@ -2610,7 +2690,8 @@ exports.sendPrayerRequestNow = onCall(
       if (!result.success) {
         throw new HttpsError("unavailable", result.error || "Send failed.");
       }
-      log(`Manual prayer-request ${kind} sent to ${personId} (${serviceDate}).`);
+      log(`Manual prayer-request ${kind} sent to ${personId} ` +
+          `(${serviceDate}).`);
       return {success: true, kind, textId: result.textId,
         quotaRemaining: result.quotaRemaining};
     },
@@ -2660,7 +2741,9 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         db.collection("people").doc(s.id)
             .collection("prayer_requests").doc(serviceDate).get()));
       const filledText = (i) => {
-        if (subjects[i].id === personId) return (after.prayerRequest || "").trim();
+        if (subjects[i].id === personId) {
+          return (after.prayerRequest || "").trim();
+        }
         const snap = reqSnaps[i];
         return ((snap.exists && snap.data().prayerRequest) || "").trim();
       };
@@ -2716,13 +2799,16 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         recipients.push({personId: doc.id, to});
       }
       if (recipients.length === 0) {
-        log(`Elder digest ${serviceDate}: no Elder-tagged recipients with a phone.`);
+        log(`Elder digest ${serviceDate}: no Elder-tagged recipients ` +
+            `with a phone.`);
         return;
       }
 
       for (const r of recipients) {
         try {
-          const result = await sendViaTextbelt({to: r.to, body, withReplyWebhook: false});
+          const result = await sendViaTextbelt({
+            to: r.to, body, withReplyWebhook: false,
+          });
           if (result.success) {
             await recordOutbound(db, {
               to: r.to, body, textId: result.textId,
@@ -2735,7 +2821,8 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
           log(`Elder digest send error for ${r.to}: ${e.message}`);
         }
       }
-      log(`Elder digest sent for ${serviceDate} to ${recipients.length} elder(s).`);
+      log(`Elder digest sent for ${serviceDate} to ` +
+          `${recipients.length} elder(s).`);
     },
 );
 
@@ -2814,7 +2901,9 @@ exports.deleteFormTemplate = onCall(
 
       const formRef = db.collection("forms").doc(formId);
       const formSnap = await formRef.get();
-      if (!formSnap.exists) return {ok: false, message: "There is no form here."};
+      if (!formSnap.exists) {
+        return {ok: false, message: "There is no form here."};
+      }
       const form = formSnap.data();
 
       // A form shut to elders is deleted by an elder and nobody else (MS-404).
@@ -2891,7 +2980,9 @@ exports.publicForm = onCall(
       // Shape-check the id before it reaches a read. A form's id is 128 bits of
       // base58 and nothing else ever addresses one.
       if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
-        return {ok: false, code: "not-found", message: "There is no form here."};
+        return {
+          ok: false, code: "not-found", message: "There is no form here.",
+        };
       }
       if (op !== "fetch" && op !== "submit" && op !== "addPerson") {
         throw new HttpsError("invalid-argument", "Unknown operation.");
@@ -3198,7 +3289,8 @@ exports.shepherdingTask = onCall(
         delete: Tasks.deleteTask,
       };
       if (!ops[op]) {
-        throw new HttpsError("invalid-argument", `"${op}" is not a task operation.`);
+        throw new HttpsError(
+            "invalid-argument", `"${op}" is not a task operation.`);
       }
 
       try {
@@ -3209,7 +3301,8 @@ exports.shepherdingTask = onCall(
         // A refusal from the write module is a sentence written for a person to
         // read, so it is passed through rather than replaced with a code.
         throw new HttpsError(
-            e && e.code === "shepherding-refused" ? "failed-precondition" : "internal",
+            e && e.code === "shepherding-refused" ?
+              "failed-precondition" : "internal",
             (e && e.message) || "That did not work.");
       }
     },

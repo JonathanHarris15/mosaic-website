@@ -59,7 +59,10 @@ function bind(fieldValues) {
   global.firebase = {firestore: {FieldValue: FieldValue}};
 }
 
-/** Whichever sentinel factory was bound, or a readable failure. */
+/**
+ * Whichever sentinel factory was bound, or a readable failure.
+ * @return {object} the bound FieldValue factory
+ */
 function bound() {
   if (!FieldValue) {
     throw new Error(

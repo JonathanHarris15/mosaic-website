@@ -73,6 +73,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.RecurringRosterCore = require('../public/recurring-roster-core.js');
     sandbox.AwayCore = require('../public/away-core.js');
     sandbox.AwayStore = require('../public/away-store.js');
+    sandbox.AccessCore = require('../public/access-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -2761,6 +2762,7 @@ test('the "you" block ignores the grid\u2019s filters \u2014 your own serve is n
     const page = loadComponent('calendar.js', 'calendarPage');
     page.personId = 'p1';
     page.today = '2026-07-31';
+    page.month = '2026-08';
     page.occurrences = [{
         id: 'x', date: '2026-08-02', seriesId: 'sunday_service', name: 'Sunday Service',
         assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'confirmed', label: 'Setup' }],
@@ -2949,6 +2951,7 @@ test('opening a day opens its WEEK, and the rows around it hold still', () => {
     // it has, every day on it shows everything rather than sitting beside empty
     // space with events still hidden.
     const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-08';
     page.cellHeight = 118;
     page.fits = { '2026-08-30': 2, '2026-09-01': 1, '2026-08-23': 2 };
 
@@ -3018,6 +3021,7 @@ test('a week opens from the height it already had, never straight to the answer'
     // never had a number. So it is pinned to where it was first, and the
     // target is measured a drawn frame later.
     const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-08';
     page.cellHeight = 118;
 
     page.openWeek('2026-08', 35, '2026-08-30');

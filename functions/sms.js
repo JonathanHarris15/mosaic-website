@@ -3,9 +3,10 @@
  *
  * The outbound provider is Textbelt (https://textbelt.com). The prepaid API key
  * is held server-side as the Firebase secret TEXTBELT_KEY and is never exposed
- * to the browser — the Admin Dashboard talks to callable functions that read the
- * secret, so this module deliberately contains no network or Firebase code. That
- * keeps the request/response shaping unit-testable without mocks.
+ * to the browser — the Admin Dashboard talks to callable functions that
+ * read the secret, so this module deliberately contains no network or
+ * Firebase code. That keeps the request/response shaping unit-testable
+ * without mocks.
  */
 
 const crypto = require("crypto");
@@ -38,12 +39,12 @@ function isAdminPermissionLevel(permissionLevel) {
 }
 
 /**
- * Shapes Textbelt's GET /quota/:key response into the payload the dashboard
- * renders. `configured` is false when no key is set, so the UI can prompt to set
- * one rather than showing a misleading "0 remaining".
- * @param {{success?: boolean, quotaRemaining?: number, error?: string}} json
- * @param {boolean} hasKey - whether a TEXTBELT_KEY secret value was present.
- * @return {{configured: boolean, quotaRemaining: number|null, error: string|null}}
+ * Shapes Textbelt's GET /quota/:key response into the payload the
+ * dashboard renders. `configured` is false when no key is set, so the UI
+ * can prompt to set one rather than showing a misleading "0 remaining".
+ * @param {Object} json Textbelt quota JSON
+ * @param {boolean} hasKey whether a TEXTBELT_KEY secret value was present.
+ * @return {Object} configured, quotaRemaining, error
  */
 function interpretQuota(json, hasKey) {
   if (!hasKey) {
@@ -66,10 +67,8 @@ function interpretQuota(json, hasKey) {
 
 /**
  * Shapes Textbelt's POST /text response into the dashboard's send result.
- * @param {{success?: boolean, textId?: string, quotaRemaining?: number,
- *   error?: string}} json
- * @return {{success: boolean, textId: string|null, quotaRemaining: number|null,
- *   error: string|null}}
+ * @param {Object} json Textbelt send JSON
+ * @return {Object} success, textId, quotaRemaining, error
  */
 function interpretSend(json) {
   const data = json || {};
@@ -90,13 +89,13 @@ function interpretSend(json) {
 }
 
 /**
- * Normalizes an inbound Textbelt reply webhook body into the record stored in
- * the test-replies stack. Textbelt POSTs {textId, fromNumber, text} when a
- * recipient replies to a text sent with a replyWebhook. Returns null when the
- * payload carries no message text, so the webhook can ignore junk/health pings
- * rather than littering the stack with blank rows.
- * @param {{textId?: string, fromNumber?: string, text?: string}} body
- * @return {{textId: string, fromNumber: string, text: string}|null}
+ * Normalizes an inbound Textbelt reply webhook body into the record stored
+ * in the test-replies stack. Textbelt POSTs {textId, fromNumber, text} when
+ * a recipient replies to a text sent with a replyWebhook. Returns null when
+ * the payload carries no message text, so the webhook can ignore junk/health
+ * pings rather than littering the stack with blank rows.
+ * @param {Object} body Textbelt inbound webhook body
+ * @return {Object} textId, fromNumber, text; or null
  */
 function parseInboundReply(body) {
   const data = body || {};
@@ -113,9 +112,10 @@ function parseInboundReply(body) {
  * Verifies a Textbelt reply webhook so forged POSTs can't inject fake replies.
  * Textbelt signs (timestamp + raw JSON body) with the account's API key as the
  * HMAC-SHA256 secret and sends the hex digest in X-textbelt-signature, plus the
- * UNIX-seconds timestamp in X-textbelt-timestamp. We recompute the HMAC over the
- * RAW body (not a re-serialized object — key order/whitespace would differ) and
- * timing-safe compare, after rejecting stale timestamps to blunt replay.
+ * UNIX-seconds timestamp in X-textbelt-timestamp. We recompute the HMAC
+ * over the RAW body (not a re-serialized object — key order/whitespace
+ * would differ) and timing-safe compare, after rejecting stale timestamps
+ * to blunt replay.
  * @param {Object} args
  * @param {string} args.apiKey - the Textbelt key (HMAC secret).
  * @param {string} args.timestamp - X-textbelt-timestamp header (UNIX seconds).
@@ -124,7 +124,9 @@ function parseInboundReply(body) {
  * @param {number} args.nowMs - current time in ms (injected for testability).
  * @return {boolean}
  */
-function verifyTextbeltSignature({apiKey, timestamp, signature, rawBody, nowMs}) {
+function verifyTextbeltSignature({
+  apiKey, timestamp, signature, rawBody, nowMs,
+}) {
   if (!apiKey || !timestamp || !signature) return false;
 
   const tsSeconds = Number(timestamp);

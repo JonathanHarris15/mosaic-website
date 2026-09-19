@@ -31,13 +31,16 @@ const {FirebaseOAuthProvider} = require("./mcp-auth");
  * @param {object} deps
  * @param {object} deps.db the Firestore handle
  * @param {object} deps.auth the Firebase Auth admin instance
- * @param {string} deps.issuerUrl this server's public base URL, no trailing slash
- * @param {object} deps.webConfig the public Firebase web config, for the sign-in page
+ * @param {string} deps.issuerUrl this server's public base URL, no
+ *     trailing slash
+ * @param {object} deps.webConfig the public Firebase web config, for
+ *     the sign-in page
  * @param {function(): string} deps.geminiKey reads the Gemini secret
  * @param {object} deps.fieldValues {serverTimestamp, deleteField} factories
  * @return {Promise<object>} the Express app
  */
-async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}) {
+async function buildApp(
+    {db, auth, issuerUrl, webConfig, geminiKey, fieldValues}) {
   const [{mcpAuthRouter, getOAuthProtectedResourceMetadataUrl},
     {requireBearerAuth}] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/auth/router.js"),

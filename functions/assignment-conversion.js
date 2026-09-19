@@ -38,10 +38,11 @@ const CHURCH_TIMEZONE = "America/Chicago";
 
 /**
  * How far back the scheduled job looks. Long enough to cover any plausible lag
- * (a missed run, a function outage, a state flipped late), short enough that the
- * daily scan stays cheap. Anything older is resolved by hand — the "did they
- * serve?" surface writes its Involvement directly rather than waiting for this
- * job, and the People's Directory has always allowed a manual add.
+ * (a missed run, a function outage, a state flipped late), short enough
+ * that the daily scan stays cheap. Anything older is resolved by hand —
+ * the "did they serve?" surface writes its Involvement directly rather
+ * than waiting for this job, and the People's Directory has always
+ * allowed a manual add.
  */
 const LOOKBACK_DAYS = 45;
 
@@ -55,8 +56,8 @@ const STATES = {
 /**
  * The ONE reserved slug every one-off Role's Involvement is written under.
  * Never an invented slug per job: RolesCore.roleBySlug resolves names only for
- * liturgical Roles and stored Role Definitions, so an invented slug would render
- * as nothing on every surface showing serve history (ADR-0018 §4).
+ * liturgical Roles and stored Role Definitions, so an invented slug would
+ * render as nothing on every surface showing serve history (ADR-0018 §4).
  */
 const ONE_OFF_SLUG = "one_off";
 
@@ -124,9 +125,8 @@ function hasPassed(date, today) {
  * A deterministic Involvement id, so running the job twice writes one record
  * rather than two. The slot (or the one-off job) is part of the key because one
  * person can legitimately hold two Roles at a single Event.
- * @param {{id?: string, date?: string}} occurrence
- * @param {{roleSlug?: string, slotId?: string, oneOffId?: string,
- *          personId?: string}} assignment
+ * @param {Object} occurrence id and date
+ * @param {Object} assignment roleSlug, slotId, oneOffId, personId
  * @return {string}
  */
 function involvementIdFor(occurrence, assignment) {
@@ -172,9 +172,8 @@ function serveRecordFor(occurrence, assignment) {
  * Split one past Event's assignments into what converts and what stays a
  * question. Safe against an Event with no assignments at all.
  *
- * @param {{id?: string, date?: string, seriesId?: string,
- *          assignments?: Array<object>}} occurrence
- * @return {{serves: Array<object>, questions: Array<object>}}
+ * @param {Object} occurrence id, date, seriesId, assignments
+ * @return {Object} {serves, questions}
  */
 function conversion(occurrence) {
   const serves = [];

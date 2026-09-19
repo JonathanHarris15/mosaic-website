@@ -30,7 +30,11 @@ const IN_CHUNK = 30;
 let cachedIndex = null;
 let lastCacheTime = 0;
 
-/** The stored shape, reduced to what a picker or an assistant needs. */
+/**
+ * The stored shape, reduced to what a picker or an assistant needs.
+ * @param {Object} doc the Firestore document snapshot
+ * @return {Object} the row
+ */
 function toRow(doc) {
   const data = doc.data();
   return {
@@ -50,8 +54,8 @@ function toRow(doc) {
  * Every hymn, with how often and how recently it has been sung.
  *
  * @param {object} db the Firestore handle
- * @param {function(string): void} [log] optional logger
- * @param {{fresh?: boolean}} [opts] `fresh` skips and refills the cache
+ * @param {function(string)} [log] optional logger
+ * @param {Object} [opts] `fresh` skips and refills the cache
  * @return {Promise<Array<object>>} the index
  */
 async function getHymnIndex(db, log, opts) {

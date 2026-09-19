@@ -164,6 +164,17 @@ async function seriesRules(db, seriesId) {
   return Array.isArray(rules) ? rules : [];
 }
 
+/**
+ * Loads the person, Role, relationships, groups, Away and Cross-Role
+ * Rules an eligibility check needs for one Assignment.
+ * @param {Object} db the Firestore handle
+ * @param {string} personId who is being considered
+ * @param {string} roleSlug the Role they would take
+ * @param {string} date the occurrence date (YYYY-MM-DD)
+ * @param {?string} seriesId the series the occurrence belongs to
+ * @return {Promise<Object>} person, roleDef, relationships, groups,
+ *   awayPersonIds, crossRoleRules
+ */
 async function takeContext(db, personId, roleSlug, date, seriesId) {
   const empty = {
     person: null, roleDef: null,

@@ -52,6 +52,7 @@ async function open(permissionLevel) {
     // Read at module-evaluation time (top-level `const { parseBibleReference }
     // = AnalyticsUtils`), so this has to be set before the import, not after.
     global.AnalyticsUtils = require('../public/analytics-utils.js');
+    global.AccessCore = require('../public/access-core.js');
     const { analyticsPage } = await import('../public/analytics.js');
 
     const reads = [];
@@ -121,7 +122,7 @@ test('the dashboard card is injected for editors, not sitting in the page', asyn
     // that would drop the card to the end of every dashboard ever arranged.
     const at = html.indexOf("card.href = 'analytics.html'");
     assert.ok(at !== -1, 'nothing injects the Service Analytics card');
-    assert.ok(html.slice(0, at).lastIndexOf("['editor', 'elder', 'admin', 'super_admin']")
+    assert.ok(html.slice(0, at).lastIndexOf('AccessCore.readsAsEditor')
         > html.slice(0, at).lastIndexOf('grid.appendChild'),
         'the Service Analytics card is injected without an editor gate above it');
     assert.match(html, /cardKey = 'service-analytics'/,

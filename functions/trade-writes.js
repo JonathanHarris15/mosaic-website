@@ -252,22 +252,6 @@ async function verdictFor(db, personId, ref, roster) {
 }
 
 /**
- * Fill in everything about an Assignment the caller must NOT be trusted for.
- *
- * ⚠ THE DATE COMES OFF THE OCCURRENCE, NEVER OFF THE REQUEST. The date is the
- * only clock in this whole feature — it decides what is dead, what may still be
- * offered, and what a settlement may touch. A caller who could send their own
- * would be able to trade a Saturday that has already happened.
- *
- * Same for the Role's name: `roleBySlug` is how a slug becomes a human name and
- * it lives in the browser. A caller sending one up would put arbitrary text
- * on somebody else's screen.
- *
- * @param {Object} db the Firestore handle
- * @param {Object} ref what the caller named: occurrenceId, roleSlug, slotId
- * @return {Promise<?Object>} the reference, the Event's name and the Role's
- */
-/**
  * Who currently holds an Assignment, read from the roster.
  *
  * Outside a transaction on purpose: this is the prologue, and every move below
@@ -290,6 +274,26 @@ async function currentHolderOf(db, ref) {
   return (held && held.personId) || null;
 }
 
+/**
+ * Fill in everything about an Assignment the caller must NOT be trusted
+ * for.
+ *
+ * ⚠ THE DATE COMES OFF THE OCCURRENCE, NEVER OFF THE REQUEST. The date
+ * is the only clock in this whole feature — it decides what is dead,
+ * what may still be offered, and what a settlement may touch. A caller
+ * who could send their own would be able to trade a Saturday that has
+ * already happened.
+ *
+ * Same for the Role's name: `roleBySlug` is how a slug becomes a human
+ * name and it lives in the browser. A caller sending one up would put
+ * arbitrary text on somebody else's screen.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} ref what the caller named: occurrenceId, roleSlug,
+ *   slotId
+ * @return {Promise<?Object>} the reference, the Event's name and the
+ *   Role's
+ */
 async function describeAssignment(db, ref) {
   const r = ref || {};
   if (!r.occurrenceId || !r.roleSlug) return null;

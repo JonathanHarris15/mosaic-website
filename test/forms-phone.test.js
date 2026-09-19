@@ -142,13 +142,8 @@ test('the dashboard offers Forms to editors and above', () => {
 
 test('the dashboard card, the drawer entry and the page agree on who may see it', () => {
     const index = read('index.html');
-    const gate = index.match(/!document\.getElementById\('forms-card'\) &&\s*\n\s*\[([^\]]*)\]/);
+    const gate = index.match(/!document\.getElementById\('forms-card'\) &&\s*\n\s*AccessCore\.readsAsEditor\(account\)/);
     assert.ok(gate, 'the Forms card has no permission gate at all');
-    MAY_MANAGE.forEach(level => {
-        assert.ok(gate[1].includes(`'${level}'`), `the card is closed to ${level}`);
-    });
-    assert.ok(!gate[1].includes("'member'"), 'the card is open to a member, who the page will refuse');
-    assert.ok(!gate[1].includes("'viewer'"), 'the card is open to a viewer, who the page will refuse');
 
     const Destinations = require('../public/mobile/destinations.js');
     const forms = Destinations.DESTINATIONS.find(d => d.key === 'forms');
@@ -164,11 +159,10 @@ test('the dashboard card, the drawer entry and the page agree on who may see it'
 
     // And the page's own check, which is the one that actually refuses.
     const page = fs.readFileSync(path.join(ROOT, 'public', 'forms.js'), 'utf8');
-    const may = page.match(/mayManageForms\(level\) \{[\s\S]*?\n        \}/);
-    assert.ok(may, 'forms.js no longer gates itself');
-    MAY_MANAGE.forEach(level => {
-        assert.ok(may[0].includes(`'${level}'`), `the page refuses ${level}, who the card offers it to`);
-    });
+    assert.match(page, /mayManageForms\(level\) \{\s*return AccessCore\.writesAsEditor\(level\);/,
+        'forms.js no longer gates itself');
+    assert.match(page, /mayOpenForms\(account\) \{\s*return AccessCore\.readsAsEditor\(account\);/,
+        'the page no longer asks AccessCore who may open the library');
 });
 
 test('the phone opens the same library rather than a native copy of it', () => {

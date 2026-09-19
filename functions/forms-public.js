@@ -14,8 +14,8 @@
 //
 // This file deliberately does NOT import public/forms-core.js by path —
 // Cloud Functions deploy only the functions/ directory. It requires the copy in
-// functions/shared/, which scripts/sync-shared-to-functions.js keeps in step and
-// test/functions-shared-sync.test.js fails on when stale.
+// functions/shared/, which scripts/sync-shared-to-functions.js keeps in
+// step and test/functions-shared-sync.test.js fails on when stale.
 
 const FormsCore = require("./shared/forms-core");
 
@@ -228,7 +228,8 @@ function whatToServe(form, caller, today) {
  *
  * Filtering here rather than in the browser is also the stronger version: the
  * people a scope excludes are never sent at all, so a tag's membership cannot
- * be read out of a network response by somebody who was only shown a search box.
+ * be read out of a network response by somebody who was only shown a
+ * search box.
  *
  * @param {!Object} q A `person` question.
  * @param {!Object} person A directory person: {id, name, isMember, tagIds}.
@@ -247,7 +248,8 @@ function personInScope(q, person) {
  * The people each picker on this form may offer, keyed by question id.
  *
  * @param {?Object} form The stored Form Template.
- * @param {!Array<!Object>} directory Everybody, as {id, name, isMember, tagIds}.
+ * @param {!Array<!Object>} directory Everybody, as
+ *   {id, name, isMember, tagIds}.
  * @return {!Object} Question id → [{id, name}].
  */
 function pickerChoices(form, directory) {
@@ -285,7 +287,8 @@ function pickerChoices(form, directory) {
  */
 function uploadPath(formId, responseId, questionId, name, elderOnly) {
   const dot = String(name || "").lastIndexOf(".");
-  const ext = dot > 0 ? String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
+  const ext = dot > 0 ?
+    String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
   // ⚠ A SEPARATE PREFIX, NOT A FLAG (MS-404). Whoever may read an answer may
   // read what came with it, and shutting a form to elders has to shut its
   // files too — but storage.rules cannot see the `elderOnly` on the answer,
@@ -322,7 +325,9 @@ function judgeUploads(form, files) {
       return;
     }
     if (!FormsCore.isUploadType(q.type)) {
-      out.push({id: qid, text: q.text, why: "That question does not take a file."});
+      out.push({
+        id: qid, text: q.text, why: "That question does not take a file.",
+      });
       return;
     }
     const fault = FormsCore.uploadFault(file);
@@ -343,7 +348,8 @@ function judgeUploads(form, files) {
  * May this submission be written, and what should be written.
  *
  * @param {?Object} form The stored Form Template.
- * @param {!Object} attempt {answers, signedIn, rank, personId, alreadyAnswered}.
+ * @param {!Object} attempt {answers, signedIn, rank, personId,
+ *   alreadyAnswered}.
  * @param {string} today The church's today, as YYYY-MM-DD.
  * @return {!Object} {ok, response, ledger, replaces} or {ok:false, code, ...}.
  */

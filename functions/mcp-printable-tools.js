@@ -81,13 +81,16 @@ function editorTool(server, deps, name, spec, run) {
 
   server.registerTool(name, spec, async (args) => {
     const account = deps.auth || {};
-    if (!Actor.isEditor(account)) return refuse(Actor.editorRefusalFor(account));
+    if (!Actor.isEditor(account)) {
+      return refuse(Actor.editorRefusalFor(account));
+    }
 
     try {
       // A read needs no Author. A write refuses without one rather than
       // leaving a page nobody can be traced to (CONTEXT.md, Author).
       const actor = readOnly ?
         null : await Actor.requireActor(deps.db, deps.auth.uid);
+      const level = account.permissionLevel || account.role || null;
       return jsonResult(await run(args || {}, actor, level));
     } catch (e) {
       return refuse(e && e.message ? e.message : "That did not work.");
