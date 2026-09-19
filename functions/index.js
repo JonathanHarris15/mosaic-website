@@ -21,6 +21,11 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const {
+  ACCOUNT_RANK_FIELD,
+  planPersonProjection,
+  personIdsToReconcile,
+} = require("./account-rank-sync");
 const fp = require("./forms-public");
 const appCheckDoor = require("./app-check-door");
 const FormsCore = require("./shared/forms-core");
@@ -232,7 +237,10 @@ async function tearDownLogin(uid) {
       .where("userId", "==", uid).get();
 
   const batch = db.batch();
-  linked.forEach((person) => batch.update(person.ref, {userId: del}));
+  linked.forEach((person) => batch.update(person.ref, {
+    userId: del,
+    [ACCOUNT_RANK_FIELD]: del,
+  }));
   batch.delete(db.collection("users").doc(uid));
   await batch.commit();
 
@@ -748,8 +756,10 @@ exports.cleanUpDeletedAttachment = onDocumentWritten(
  *
  * Deliberately does NOT touch the Person's membership, tags or shepherding
  * records: this corrects an account connection, it does not say somebody
- * stopped being a member. The Elder Tag clears itself, because the reciprocal
- * trigger reconciles it from the (now absent) link.
+ * stopped being a member. The Elder Tag and Account Rank clear themselves,
+ * because the reciprocal triggers reconcile them from the (now absent)
+ * link. The people write also drops `accountRank` so a missing users doc
+ * (no trigger) cannot leave a stale projection.
  */
 exports.unlinkDirectoryPerson = onCall({
   cors: true, region: "us-central1",
@@ -790,6 +800,7 @@ exports.unlinkDirectoryPerson = onCall({
   const batch = db.batch();
   batch.update(personRef, {
     userId: del,
+    [ACCOUNT_RANK_FIELD]: del,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   // The account may already be gone (a login deleted without the reciprocal
@@ -2017,6 +2028,66 @@ exports.syncElderRoleToTag = onDocumentWritten(
       // resolves to non-elder).
       if (beforePersonId && beforePersonId !== afterPersonId) {
         await reconcileElderTag(db, beforePersonId);
+      }
+    },
+);
+
+/**
+ * Account Rank projection (MS-554 / MS-539). Invite-relevant Permission
+ * Level of a Person's Linked User, denormalized onto `people.accountRank`
+ * so the Trade picker can judge Event visibility without reading other
+ * `users` docs (own-only). Matches server `rankOf`: permissionLevel, then
+ * the legacy `role` fallback.
+ *
+ * Trigger: `users/{uid}` write — link, unlink, permission change, or
+ * delete. Reconciles from the Person's live `userId`. Exact sync: written
+ * on link / level change, cleared on unlink. Skip-write when already
+ * correct, so the people-onWrite member sync does not loop.
+ *
+ * Existing links need `scripts/backfill-account-rank.js` once; this
+ * trigger only sees future users writes.
+ * @param {Object} db Firestore instance.
+ * @param {string} personId Directory person id to reconcile.
+ */
+async function reconcileAccountRank(db, personId) {
+  const personRef = db.collection("people").doc(personId);
+  const personSnap = await personRef.get();
+  if (!personSnap.exists) return;
+  const person = personSnap.data();
+
+  let user = null;
+  if (person.userId) {
+    const userSnap = await db.collection("users").doc(person.userId).get();
+    user = userSnap.exists ? userSnap.data() : null;
+  }
+
+  const plan = planPersonProjection(person, user);
+  if (!plan.needsWrite) return;
+
+  await personRef.update({
+    [ACCOUNT_RANK_FIELD]: plan.next,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  log(`Projected ${ACCOUNT_RANK_FIELD}=${plan.next || "null"} ` +
+      `onto person ${personId}.`);
+}
+
+exports.syncAccountRankToPerson = onDocumentWritten(
+    {document: "users/{uid}", region: "us-central1"},
+    async (event) => {
+      const before = event.data && event.data.before &&
+          event.data.before.exists ?
+        event.data.before.data() : null;
+      const after = event.data && event.data.after &&
+          event.data.after.exists ?
+        event.data.after.data() : null;
+
+      const ids = personIdsToReconcile(before, after);
+      if (ids.length === 0) return;
+
+      const db = admin.firestore();
+      for (const personId of ids) {
+        await reconcileAccountRank(db, personId);
       }
     },
 );
