@@ -2384,7 +2384,7 @@ async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
     createdAt: now,
   });
 
-  await personRef.update({ lastNoteAt: now });
+  await personRef.update({lastNoteAt: now});
 
   // Thank the subject. Best-effort: a failed thank-you must not fail the reply.
   try {
