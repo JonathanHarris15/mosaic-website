@@ -575,3 +575,135 @@ test('somebody the Role would not offer is not invited either', () => {
     assert.equal(result.ok, false);
     assert.equal(result.reason, Trade.REASONS.NOT_ELIGIBLE);
 });
+
+// ── canInvite (MS-556 / MS-539) ─────────────────────────────────────────────
+//
+// Person + occurrence. Rank comes off people.accountRank. Matches server
+// rankOf / canSee. "No account…" only when there is no Linked User.
+
+const Occ = require('../public/events-occurrence-core.js');
+
+const RANKS = ['viewer', 'member', 'editor', 'elder'];
+const RUNGS = ['public', 'member', 'participant', 'editor', 'elder'];
+
+const linked = (rank, over) => Object.assign({
+    id: SARAH, userId: 'uid-sarah', accountRank: rank,
+}, over || {});
+
+const unlinked = (over) => Object.assign({ id: SARAH }, over || {});
+
+const eventAt = (visibility, participantIds) => ({
+    id: 'occ-1', visibility: visibility,
+    participantIds: participantIds || [],
+});
+
+const ask = (person, occurrence, extra) =>
+    Trade.canInvite(person, occurrence, Object.assign({
+        holderId: BOB, alreadyAsked: [], roleEligible: true,
+    }, extra || {}));
+
+test('the locked cannot-see reason is the exact picker copy', () => {
+    assert.equal(Trade.INVITE_CANNOT_SEE_REASON, "Can't see this event");
+});
+
+test('accountRankOf ignores a stale rank when there is no Linked User', () => {
+    assert.equal(Trade.accountRankOf({ userId: 'u', accountRank: 'elder' }),
+        'elder');
+    assert.equal(Trade.accountRankOf({ accountRank: 'elder' }), null);
+    assert.equal(Trade.accountRankOf({ userId: 'u' }), null);
+    assert.equal(Trade.accountRankOf(null), null);
+});
+
+RANKS.forEach(rank => {
+    RUNGS.forEach(rung => {
+        test(`canInvite: linked ${rank} × ${rung} matches canSee`, () => {
+            const person = linked(rank);
+            const occurrence = eventAt(rung);
+            const result = ask(person, occurrence);
+            const expected = Occ.canSee(rank, occurrence, person.id);
+            assert.equal(result.ok, expected, `${rank} × ${rung}`);
+            assert.equal(result.selectable, expected);
+            if (expected) {
+                assert.equal(result.disabledReason, null);
+            } else {
+                assert.equal(result.disabledReason,
+                    Trade.INVITE_CANNOT_SEE_REASON);
+                assert.notEqual(result.disabledReason,
+                    Trade.INVITE_NO_ACCOUNT_REASON);
+            }
+        });
+    });
+});
+
+test('a linked viewer is not selectable on a members-only Event', () => {
+    const result = ask(linked('viewer'), eventAt('member'));
+    assert.equal(result.ok, false);
+    assert.equal(result.disabledReason, "Can't see this event");
+    assert.notEqual(result.disabledReason, Trade.INVITE_NO_ACCOUNT_REASON);
+});
+
+test('a linked editor is selectable on an editor Event', () => {
+    const result = ask(linked('editor'), eventAt('editor'));
+    assert.equal(result.ok, true);
+    assert.equal(result.disabledReason, null);
+});
+
+test('a linked elder is selectable on an elders-only Event', () => {
+    const result = ask(linked('elder'), eventAt('elder'));
+    assert.equal(result.ok, true);
+});
+
+test('a linked editor is not selectable on an elders-only Event', () => {
+    const result = ask(linked('editor'), eventAt('elder'));
+    assert.equal(result.ok, false);
+    assert.equal(result.disabledReason, Trade.INVITE_CANNOT_SEE_REASON);
+});
+
+test('a missing occurrence fails closed', () => {
+    const viewer = ask(linked('viewer'), null);
+    assert.equal(viewer.ok, false);
+    assert.equal(viewer.disabledReason, Trade.INVITE_CANNOT_SEE_REASON);
+
+    const nobody = ask(unlinked(), null);
+    assert.equal(nobody.ok, false);
+    assert.equal(nobody.disabledReason, Trade.INVITE_NO_ACCOUNT_REASON);
+});
+
+test('an unlinked Person still gets the no-account copy', () => {
+    const result = ask(unlinked(), eventAt('member'));
+    assert.equal(result.ok, false);
+    assert.equal(result.disabledReason, Trade.INVITE_NO_ACCOUNT_REASON);
+});
+
+test('an unlinked Person stays selectable on a public Event', () => {
+    assert.equal(ask(unlinked(), eventAt('public')).ok, true);
+});
+
+test('an unlinked participant on a members-only Event stays selectable', () => {
+    const result = ask(unlinked(), eventAt('member', [SARAH]));
+    assert.equal(result.ok, true);
+});
+
+test('a Linked User with no projected rank never gets the no-account copy', () => {
+    // Sync has not written accountRank yet. Fail closed, and do not lie
+    // about the account.
+    const result = ask(
+        { id: SARAH, userId: 'uid-sarah' },
+        eventAt('member'));
+    assert.equal(result.ok, false);
+    assert.notEqual(result.disabledReason, Trade.INVITE_NO_ACCOUNT_REASON);
+    assert.equal(result.disabledReason, Trade.INVITE_CANNOT_SEE_REASON);
+});
+
+test('No account is never used when person.userId is set', () => {
+    RANKS.concat(['admin', 'super_admin']).forEach(rank => {
+        RUNGS.forEach(rung => {
+            const result = ask(linked(rank), eventAt(rung));
+            if (!result.ok && result.reason === Trade.REASONS.NOT_VISIBLE) {
+                assert.notEqual(result.disabledReason,
+                    Trade.INVITE_NO_ACCOUNT_REASON,
+                    `${rank} × ${rung}`);
+            }
+        });
+    });
+});

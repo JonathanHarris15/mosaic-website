@@ -47,6 +47,13 @@
 (function (global) {
     'use strict';
 
+    // Event visibility (canSee / visibilityOf). The picker cannot read other
+    // `users` docs; canInvite judges a Linked User from people.accountRank
+    // the same way the server's rankOf / canSee do (MS-556 / MS-539).
+    const Occurrences = (typeof require !== 'undefined')
+        ? require('./events-occurrence-core.js')
+        : (global.EventsOccurrenceCore || null);
+
     const STATES = Object.freeze({
         // Bob has asked; nothing has come back yet. Only an invitation is ever
         // here — an unsolicited offer opens one step further along.
@@ -112,8 +119,14 @@
     });
 
     // Locked copy (MS-529). The picker prints this on a row that fails
-    // visibility — character for character, do not rephrase.
+    // visibility — character for character, do not rephrase. Only when
+    // there is no Linked User (MS-539). Never when person.userId is set.
     const INVITE_NO_ACCOUNT_REASON = "No account — can't invite on this event";
+
+    // Locked copy (MS-539). A Linked User who cannot see this Event. The
+    // picker used to print the no-account sentence for these people too,
+    // which was a lie: they have an account, their rank is the problem.
+    const INVITE_CANNOT_SEE_REASON = "Can't see this event";
 
     // The Assignment state that means "this one is looking for somebody".
     // Restated rather than imported: events-occurrence-core owns the states, and
@@ -509,6 +522,62 @@
         return { ok: true };
     }
 
+    // ── canInvite (MS-556 / MS-539) ──────────────────────────────────────────
+    //
+    // Person + occurrence in; selectable vs disable reason out. Rank comes
+    // off people.accountRank when a Linked User is present — the same
+    // value server rankOf reads from users.permissionLevel. Missing
+    // occurrence fails closed. "No account…" only when there is no
+    // Linked User.
+
+    function accountRankOf(person) {
+        if (!person || !person.userId) return null;
+        return person.accountRank || null;
+    }
+
+    function inviteDisableReason(reason, hasLinkedUser) {
+        if (reason !== REASONS.NOT_VISIBLE) return null;
+        return hasLinkedUser
+            ? INVITE_CANNOT_SEE_REASON
+            : INVITE_NO_ACCOUNT_REASON;
+    }
+
+    function canInvite(person, occurrence, extras) {
+        const extra = extras || {};
+        const hasLinkedUser = !!(person && person.userId);
+        const rank = accountRankOf(person);
+        const occ = occurrence || null;
+        const personId = person && person.id;
+        const eventIsPublic = !!(Occurrences &&
+            Occurrences.visibilityOf(occ) === 'public');
+        const linkedUserCanSee = !!(rank && Occurrences &&
+            Occurrences.canSee(rank, occ, personId));
+        const isParticipant = !!(((occ && occ.participantIds) || [])
+            .indexOf(personId) !== -1);
+
+        const verdict = inviteEligibility({
+            inviteeId: personId,
+            holderId: extra.holderId,
+            alreadyAsked: extra.alreadyAsked,
+            roleEligible: extra.roleEligible !== false,
+            eventIsPublic: eventIsPublic,
+            linkedUserCanSee: linkedUserCanSee,
+            isParticipant: isParticipant,
+        });
+        if (verdict.ok) {
+            return {
+                ok: true, selectable: true,
+                reason: null, disabledReason: null,
+            };
+        }
+        return {
+            ok: false, selectable: false,
+            reason: verdict.reason,
+            disabledReason: inviteDisableReason(
+                verdict.reason, hasLinkedUser),
+        };
+    }
+
     const TradeCore = {
         STATES,
         ORIGINS,
@@ -517,8 +586,11 @@
         CAUSES,
         MAX_INVITATIONS,
         INVITE_NO_ACCOUNT_REASON,
+        INVITE_CANNOT_SEE_REASON,
+        accountRankOf,
         inviteVisibility,
         inviteEligibility,
+        canInvite,
         needsTelling,
         noticesFor,
         assignmentKey,
