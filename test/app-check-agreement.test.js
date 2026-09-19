@@ -111,10 +111,23 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'the deploy workflow no longer auto-deploys on push to main');
     assert.match(wf, /branches:\s*\n\s+-\s+main/,
         'the deploy workflow push trigger is not limited to main');
-    assert.match(wf, /--only hosting,functions:publicForm/,
-        'the deploy workflow no longer ships Hosting + publicForm together');
+    // MS-545 option B: standing set must include the attendance trigger.
+    // The old prefix `--only hosting,functions:publicForm` still matches the
+    // widened string, so pin the full list (and fail if onAttendanceCreated
+    // is dropped).
+    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated/,
+        'the deploy workflow no longer ships Hosting + publicForm + onAttendanceCreated');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
     assert.doesNotMatch(wf, /PUBLIC_FORM_APP_CHECK_MODE=enforce/,
         'the deploy workflow sets enforce — that flip is Atlas-escalated HITL, not CI');
+
+    const opsPath = path.join(ROOT, 'docs/ops/ms-545-functions-deploy-set.md');
+    assert.ok(fs.existsSync(opsPath),
+        'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
+    const ops = fs.readFileSync(opsPath, 'utf8');
+    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated/,
+        'the ops note no longer lists the standing --only targets');
+    assert.match(ops, /onAttendanceCreated/,
+        'the ops note dropped onAttendanceCreated');
 });

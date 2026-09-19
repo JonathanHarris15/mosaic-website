@@ -2,7 +2,7 @@
 
 Firebase-hosted church app. Static frontend in `public/`, Cloud Functions in `functions/`, domain language in `CONTEXT.md`, Jira board rules in `CLAUDE.md`. Product tickets are **MS-***.
 
-Do not edit `firestore.rules` or `storage.rules` unless the ticket is explicitly about those rules. Do not deploy from this box (`firebase deploy` / `npm run deploy --prefix functions`). Hosting + `publicForm` ship via GitHub Actions `.github/workflows/firebase-deploy.yml` (`workflow_dispatch` or push to `main`). Do not commit secrets. Do not set App Check to enforce in that workflow.
+Do not edit `firestore.rules` or `storage.rules` unless the ticket is explicitly about those rules. Do not deploy from this box (`firebase deploy` / `npm run deploy --prefix functions`). Hosting + `publicForm` + `onAttendanceCreated` ship via GitHub Actions `.github/workflows/firebase-deploy.yml` (`workflow_dispatch` or push to `main`). Standing `--only` set: `docs/ops/ms-545-functions-deploy-set.md`. Do not commit secrets. Do not set App Check to enforce in that workflow.
 
 ## Cursor Cloud
 
