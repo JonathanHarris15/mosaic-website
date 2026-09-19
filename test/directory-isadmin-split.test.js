@@ -68,13 +68,13 @@ test('canReadElder is the View-as-Member read lift; canDecide is isAnElder', () 
     assert.doesNotMatch(decide, /readsAsElder/);
 });
 
-test('an editor-level PA reads hidden directory vocab but cannot decide hide flags', () => {
+test('an editor-level PA reads hidden directory vocab and can decide hide flags', () => {
     const memberPa = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
     assert.equal(memberPa.canReadElder, true);
-    assert.equal(memberPa.canDecide, false);
+    assert.equal(memberPa.canDecide, true);
     const editorPa = Access.pageFlags({ permissionLevel: 'editor', pastoralAssistant: true });
     assert.equal(editorPa.canReadElder, true);
-    assert.equal(editorPa.canDecide, false);
+    assert.equal(editorPa.canDecide, true);
     const elder = Access.pageFlags({ permissionLevel: 'elder' });
     assert.equal(elder.canReadElder, true);
     assert.equal(elder.canDecide, true);

@@ -1,20 +1,23 @@
-// Access Core — who may read as an elder, write the record, or count as an
-// elder (MS-426, ADR-0065).
+// Access Core — who may read as an elder, write the record, decide in
+// software, or count as an elder (MS-426, ADR-0065, MS-594).
 //
 // Pastoral Assistant is a boolean grant on the User account
 // (`users.pastoralAssistant`), stacked on Permission Level, not a new level.
 // Every surface that used to ask its own rank list asks here instead, so a
 // grant cannot be remembered in one place and forgotten in another.
 //
-// Four questions, from `permissionLevel` (legacy `role` fallback) plus the
+// Five questions, from `permissionLevel` (legacy `role` fallback) plus the
 // grant:
 //
 //   reads as elder     — elder / super admin, or Pastoral Assistant
 //   reads as editor    — the editor ladder, or Pastoral Assistant
 //   writes the record  — elder / super admin, or Pastoral Assistant
 //                        (Elder Documents, Folders, Shepherding Notes, Tasks)
-//   is an elder        — elder / super admin only (every decision, and every
-//                        place that counts someone as an elder)
+//   can decide         — elder / super admin, or Pastoral Assistant
+//                        (shepherding decision/write actions in software;
+//                        MS-594 overrides the MS-426 denial)
+//   is an elder        — elder / super admin only (counted as an elder:
+//                        Elder Tag, pickers, Elder Digest)
 //
 // writes as editor stays the existing editor ladder; the grant adds nothing
 // to it. Event visibility rungs and hidden-tag lifting follow reads-as-elder.
@@ -90,6 +93,12 @@
         return isAnElder(value) || isPastoralAssistant(value);
     }
 
+    // MS-594: a Pastoral Assistant has elder software powers for shepherding
+    // decision/write actions. They still do not *count* as an elder.
+    function canDecide(value) {
+        return isAnElder(value) || isPastoralAssistant(value);
+    }
+
     function eventRungsFor(value) {
         if (readsAsElder(value)) return VISIBILITY_RUNGS.slice();
         const listed = RUNGS_BY_LEVEL[permissionLevelOf(value)];
@@ -113,7 +122,7 @@
             currentPermissionLevel: account.permissionLevel || 'viewer',
             pastoralAssistant: account.pastoralAssistant,
             canReadElder: readsAsElder(account),
-            canDecide: isAnElder(account),
+            canDecide: canDecide(account),
             canWriteRecord: writesTheRecord(account),
             canWriteEditor: writesAsEditor(account),
             canReadEditor: readsAsEditor(account),
@@ -133,6 +142,7 @@
         readsAsElder,
         readsAsEditor,
         writesTheRecord,
+        canDecide,
         eventRungsFor,
         liftsHidden,
         badgeLabel,
