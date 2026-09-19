@@ -101,6 +101,32 @@ function visitDays(occurrenceDates, today, lastChangeDay) {
 }
 
 /**
+ * Church-local day of the latest Membership Change stamp, or null if
+ * none can be read. Stamps look like Firestore Timestamps (`toMillis`,
+ * `toDate`). Same-millisecond ties keep the later one in the list.
+ * @param {?Array<*>} stamps createdAt values from Membership Changes.
+ * @return {?string} YYYY-MM-DD, or null.
+ */
+function lastChangeDayFromStamps(stamps) {
+  let latestMs = -1;
+  let latest = null;
+  for (const created of stamps || []) {
+    if (!created || typeof created.toMillis !== "function") continue;
+    const ms = created.toMillis();
+    if (ms >= latestMs) {
+      latestMs = ms;
+      latest = created;
+    }
+  }
+  if (!latest || typeof latest.toDate !== "function") return null;
+  const date = latest.toDate();
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return churchToday(date);
+}
+
+/**
  * Eligible and at least 4 counted visit days.
  * @param {?Object} membership The Person's `membership` block.
  * @param {?Array<string>} days Counted visit days.
@@ -187,6 +213,7 @@ module.exports = {
   churchToday,
   windowStart,
   visitDays,
+  lastChangeDayFromStamps,
   shouldMove,
   regularAttenderAdvanceUpdate,
   formatVisitExplanation,

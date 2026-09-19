@@ -5,9 +5,11 @@
  * their latest Membership Change, and Attendance under Event occurrences
  * dated inside the window, then — if the rule says move — writes the
  * slider's move in one transaction: stage, re-projected tags, one
- * Membership Change. The transaction re-reads the Person and aborts if
- * they are no longer a Visitor, so two marks landing together produce one
- * entry.
+ * Membership Change. The transaction re-reads the Person and the latest
+ * Membership Change, then recounts, and aborts if they are no longer a
+ * Visitor or the reset now leaves them short — so two marks landing
+ * together produce one entry, and an elder move-back in the same
+ * second is not overwritten (MS-544).
  *
  * Takes a `db` rather than reaching for one, so test/emulator/ can drive
  * the writes against real Firestore semantics. Same split as
@@ -24,15 +26,25 @@ const ATTENDANCE = "attendance";
 const TAGS = "people_tags";
 
 /**
- * Church-local day of a Firestore Timestamp, or null if it cannot be read.
- * @param {?FirebaseFirestore.Timestamp} createdAt The stamp.
+ * This Person's Membership Changes. One query, used both for the
+ * exported helper and the transactional re-read, so they cannot drift.
+ * @param {FirebaseFirestore.DocumentReference} personRef The Person.
+ * @return {FirebaseFirestore.Query} kind == membership_change.
+ */
+function membershipChanges(personRef) {
+  return personRef.collection(ACTIVITY)
+      .where("kind", "==", "membership_change");
+}
+
+/**
+ * Church-local day of the latest Membership Change in a snapshot.
+ * @param {FirebaseFirestore.QuerySnapshot} snap The changes.
  * @return {?string} YYYY-MM-DD, or null.
  */
-function dayOf(createdAt) {
-  if (!createdAt || typeof createdAt.toDate !== "function") return null;
-  const date = createdAt.toDate();
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-  return rule.churchToday(date);
+function lastChangeDayFromSnap(snap) {
+  const stamps = [];
+  snap.forEach((doc) => stamps.push(doc.get("createdAt")));
+  return rule.lastChangeDayFromStamps(stamps);
 }
 
 /**
@@ -44,22 +56,21 @@ function dayOf(createdAt) {
  * @return {Promise<?string>} YYYY-MM-DD, or null.
  */
 async function lastMembershipChangeDay(db, personId) {
-  const snap = await db.collection(PEOPLE).doc(personId)
-      .collection(ACTIVITY)
-      .where("kind", "==", "membership_change")
-      .get();
-  let latestMs = -1;
-  let latest = null;
-  snap.forEach((doc) => {
-    const created = doc.get("createdAt");
-    if (!created || typeof created.toMillis !== "function") return;
-    const ms = created.toMillis();
-    if (ms >= latestMs) {
-      latestMs = ms;
-      latest = created;
-    }
-  });
-  return dayOf(latest);
+  const snap = await membershipChanges(
+      db.collection(PEOPLE).doc(personId)).get();
+  return lastChangeDayFromSnap(snap);
+}
+
+/**
+ * Re-read the reset boundary inside a transaction so an elder move-back
+ * that landed after the un-transacted reads is not ignored (MS-568).
+ * @param {FirebaseFirestore.Transaction} tx The open transaction.
+ * @param {FirebaseFirestore.DocumentReference} personRef The Person.
+ * @return {Promise<?string>} YYYY-MM-DD, or null.
+ */
+async function lastMembershipChangeDayInTx(tx, personRef) {
+  const snap = await tx.get(membershipChanges(personRef));
+  return lastChangeDayFromSnap(snap);
 }
 
 /**
@@ -93,7 +104,8 @@ async function attendanceDatesInWindow(db, personId, today) {
 /**
  * Read the Person, stop unless they are an eligible Visitor, count visit
  * days, and move them to Regular Attender in one transaction when the
- * rule says so.
+ * rule says so. The latest Membership Change is re-read inside that
+ * transaction, before the count that can promote.
  * @param {FirebaseFirestore.Firestore} db The database.
  * @param {Object} args Who and when.
  * @param {string} args.personId The Person marked present.
@@ -118,11 +130,13 @@ async function applyAttendanceRule(db, args) {
     return {moved: false, reason: "ineligible"};
   }
 
-  const lastChangeDay = await lastMembershipChangeDay(db, personId);
   const dates = await attendanceDatesInWindow(db, personId, today);
-  const days = rule.visitDays(dates, today, lastChangeDay);
-  if (!rule.shouldMove(membership, days)) {
-    return {moved: false, reason: "threshold", days};
+  // Cheap refuse: even with no reset they do not have 4 days in the window.
+  // The live Membership Change is re-read inside the transaction before
+  // the count that can promote (MS-568).
+  const unconstrained = rule.visitDays(dates, today, null);
+  if (unconstrained.length < rule.VISIT_THRESHOLD) {
+    return {moved: false, reason: "threshold", days: unconstrained};
   }
 
   if (!now) return {moved: false, reason: "no_now"};
@@ -132,6 +146,12 @@ async function applyAttendanceRule(db, args) {
     const data = live.data();
     if (!rule.isEligible(data.membership || {})) {
       return {moved: false, reason: "ineligible"};
+    }
+
+    const lastChangeDay = await lastMembershipChangeDayInTx(tx, personRef);
+    const days = rule.visitDays(dates, today, lastChangeDay);
+    if (!rule.shouldMove(data.membership || {}, days)) {
+      return {moved: false, reason: "threshold", days};
     }
 
     const update = rule.regularAttenderAdvanceUpdate(data.tags);
