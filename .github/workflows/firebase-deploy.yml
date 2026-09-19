@@ -1,14 +1,15 @@
 name: Deploy Firebase (hosting + publicForm)
 
-# Production Hosting + the documented functions set (MS-545 option B).
-# Agents must not `firebase deploy` from the box (AGENTS.md). Standing
-# ship path after dry_run green + Maintain CLEAR live:
+# Production Hosting + the documented functions set + firestore:rules
+# (MS-545 option B, widened again by MS-565). Agents must not
+# `firebase deploy` from the box (AGENTS.md). Standing ship path after
+# dry_run green + Maintain CLEAR live:
 #   - push to `main` deploys for real
 #   - workflow_dispatch can still plan only:
 #       gh workflow run "Deploy Firebase (hosting + publicForm)" --ref <branch> -f dry_run=true
 #
 # Standing --only targets (do not one-off around this list):
-#   hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson
+#   hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules
 # Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
 # App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
@@ -38,7 +39,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Hosting + documented functions set
+    name: Hosting + documented functions set + Firestore rules
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -100,13 +101,13 @@ jobs:
             'MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app' \
             > functions/.env.mosaic-hymn-database
 
-      - name: Deploy hosting + documented functions set
+      - name: Deploy hosting + documented functions set + firestore:rules
         run: |
           set -euo pipefail
           PROJECT_ID="$(node -p "JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).projects.default")"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
-          echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson"
+          echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           echo "MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app"
           EXTRA=()
@@ -115,7 +116,7 @@ jobs:
             echo "dry_run=true"
           fi
           npx firebase deploy \
-            --only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson \
+            --only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules \
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"
