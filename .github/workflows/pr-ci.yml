@@ -1,8 +1,9 @@
 name: PR CI
 
 # The two commands agents already run: `npm test` and `npm run lint --prefix functions`.
-# Both are red on current main (pre-existing). This workflow still runs them so every
-# PR has the same signal; do not "fix" hundreds of functions eslint findings here.
+# Both are green on main after MS-543 / PR #65. The old red baseline is recorded in
+# docs/ops/ms-543-ci-baseline-inventory.md (landed with #65). This workflow still
+# runs them so every PR has the same signal; do not weaken eslint or skip the jobs.
 
 on:
   pull_request:
