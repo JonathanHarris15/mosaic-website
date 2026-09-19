@@ -78,6 +78,11 @@
   // ── The tab ─────────────────────────────────────────────────────────────────
   function RelationshipsTab(props) {
     var showToast = props.showToast;
+    // Open/read stays canReadElder (parent Manage Tags already uses it). Write
+    // chrome below is canDecide — a PA can still view the tab.
+    var flags = props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
 
     var loadingS = useState(true);
     var typesS = useState([]), pairsS = useState([]), groupsS = useState([]), peopleS = useState([]);
@@ -126,6 +131,7 @@
 
     // ── Relationship Types ──
     function saveType() {
+      if (!canDecide) return;
       var st = formS[0]; if (!st) return;
       var existing = st.editingId ? typeById(st.editingId) : null;
       var check = existing ? RC.validateEdit(existing, st.form) : RC.validateType(st.form);
@@ -142,6 +148,7 @@
     }
 
     function reallyDeleteType() {
+      if (!canDecide) return;
       var id = confirmDelS[0], t = typeById(id);
       if (!t) { confirmDelS[1](null); return; }
       data.deleteRelationshipType(id, pairsFor(id), groupsFor(id)).then(function () {
@@ -156,6 +163,7 @@
 
     // ── Pairwise ──
     function addPair() {
+      if (!canDecide) return;
       var pm = pairModalS[0]; if (!pm) return;
       var t = typeById(pm.typeId);
       if (!t || !pm.holderId || !pm.counterpartId) { showToast("Pick two people", "error"); return; }
@@ -173,6 +181,7 @@
       }).catch(function () { showToast("Error adding relationship", "error"); });
     }
     function removePair(p) {
+      if (!canDecide) return;
       data.deleteRelationshipPair(p.id).then(function () {
         pairsS[1](pairs.filter(function (x) { return x.id !== p.id; }));
         showToast("Relationship removed");
@@ -181,6 +190,7 @@
 
     // ── Groups — every roster change goes through RelationshipGroupCore ──
     function createGroup(typeId) {
+      if (!canDecide) return;
       var name = String(newGroupS[0][typeId] || "").trim();
       if (!name) return;
       data.createRelationshipGroup(typeId, name).then(function (g) {
@@ -191,11 +201,13 @@
       }).catch(function () { showToast("Error creating group", "error"); });
     }
     function writeGroup(next) {
+      if (!canDecide) return;
       return data.writeRelationshipGroup(next).then(function () {
         groupsS[1](groups.map(function (g) { return g.id === next.id ? next : g; }));
       }).catch(function () { showToast("Error updating group", "error"); });
     }
     function deleteGroup(g) {
+      if (!canDecide) return;
       data.deleteRelationshipGroup(g.id).then(function () {
         groupsS[1](groups.filter(function (x) { return x.id !== g.id; }));
         showToast("Group deleted");
@@ -244,8 +256,8 @@
               ${labels} · ${count} ${isGroup ? (count === 1 ? "group" : "groups") : (count === 1 ? "pair" : "pairs")}
             </div>
           </div>
-          <button onClick=${function (e) { e.stopPropagation(); formS[1]({ editingId: t.id, form: Object.assign({}, BLANK_FORM, t) }); }} style=${iconBtn} aria-label="Edit type">${Ic("pencil", 17)}</button>
-          <button onClick=${function (e) { e.stopPropagation(); confirmDelS[1](t.id); }} style=${iconBtn} aria-label="Delete type">${Ic("trash-2", 17)}</button>
+          ${canDecide ? html`<button onClick=${function (e) { e.stopPropagation(); formS[1]({ editingId: t.id, form: Object.assign({}, BLANK_FORM, t) }); }} style=${iconBtn} aria-label="Edit type">${Ic("pencil", 17)}</button>` : null}
+          ${canDecide ? html`<button onClick=${function (e) { e.stopPropagation(); confirmDelS[1](t.id); }} style=${iconBtn} aria-label="Delete type">${Ic("trash-2", 17)}</button>` : null}
           <span style=${{ display: "flex", color: "var(--on-surface-variant)" }}>${Ic(open ? "chevron-up" : "chevron-down", 18)}</span>
         </div>
 
@@ -265,13 +277,13 @@
               || (personName(p.fromId) + " — " + personName(p.toId));
             return html`<div key=${p.id} style=${{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", background: "var(--surface-container-low)", borderRadius: "var(--radius)" }}>
               <span style=${{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface)" }}>${sentence}</span>
-              <button onClick=${function () { removePair(p); }} style=${iconBtn} aria-label="Remove">${Ic("x", 16)}</button>
+              ${canDecide ? html`<button onClick=${function () { removePair(p); }} style=${iconBtn} aria-label="Remove">${Ic("x", 16)}</button>` : null}
             </div>`;
           })}
-        <button onClick=${function () { pairModalS[1]({ typeId: t.id, holderId: "", holderName: "", counterpartId: "", counterpartName: "" }); }}
+        ${canDecide ? html`<button onClick=${function () { pairModalS[1]({ typeId: t.id, holderId: "", holderName: "", counterpartId: "", counterpartName: "" }); }}
           style=${Object.assign({}, pill(), { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, alignSelf: "flex-start" })}>
           ${Ic("plus", 16)} Add ${t.name}
-        </button>
+        </button>` : null}
       </div>`;
     }
 
@@ -282,7 +294,7 @@
           return html`<div key=${g.id} style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", overflow: "hidden" }}>
             <div style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "var(--surface-container-low)" }}>
               <span style=${{ flex: 1, fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)" }}>${g.name}</span>
-              <button onClick=${function () { deleteGroup(g); }} style=${iconBtn} aria-label="Delete group">${Ic("trash-2", 16)}</button>
+              ${canDecide ? html`<button onClick=${function () { deleteGroup(g); }} style=${iconBtn} aria-label="Delete group">${Ic("trash-2", 16)}</button>` : null}
             </div>
             <div style=${{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               ${t.priority ? html`<div>
@@ -291,9 +303,9 @@
                   ? html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 8px", border: "1px solid var(--warning)", borderRadius: "var(--radius)" }}>
                       <${Avatar} name=${personName(g.leaderId)} />
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600 }}>${personName(g.leaderId)}</span>
-                      <button onClick=${function () { writeGroup(GC.clearLeader(g)); }} style=${iconBtn} aria-label="Stand down">${Ic("x", 15)}</button>
+                      ${canDecide ? html`<button onClick=${function () { writeGroup(GC.clearLeader(g)); }} style=${iconBtn} aria-label="Stand down">${Ic("x", 15)}</button>` : null}
                     </div>`
-                  : html`<div style=${{ padding: "8px 10px", border: "1px dashed var(--outline-variant)", borderRadius: "var(--radius)", fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>No leader yet — tap a member's star, or leave it open.</div>`}
+                  : html`<div style=${{ padding: "8px 10px", border: "1px dashed var(--outline-variant)", borderRadius: "var(--radius)", fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${canDecide ? "No leader yet — tap a member's star, or leave it open." : "No leader yet."}</div>`}
               </div>` : null}
 
               <div>
@@ -303,30 +315,30 @@
                     return html`<span key=${mid} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 6px", background: "var(--surface-container-low)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)" }}>
                       <${Avatar} name=${personName(mid)} tone="ocean" size=${24} />
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600 }}>${personName(mid)}</span>
-                      ${t.priority && !g.leaderId ? html`<button onClick=${function () { writeGroup(GC.setLeader(g, mid)); }} style=${Object.assign({}, iconBtn, { width: 26, height: 26 })} aria-label="Make leader">${Ic("star", 14)}</button>` : null}
-                      <button onClick=${function () { writeGroup(GC.removeMember(g, mid)); }} style=${Object.assign({}, iconBtn, { width: 26, height: 26 })} aria-label="Remove">${Ic("x", 14)}</button>
+                      ${canDecide && t.priority && !g.leaderId ? html`<button onClick=${function () { writeGroup(GC.setLeader(g, mid)); }} style=${Object.assign({}, iconBtn, { width: 26, height: 26 })} aria-label="Make leader">${Ic("star", 14)}</button>` : null}
+                      ${canDecide ? html`<button onClick=${function () { writeGroup(GC.removeMember(g, mid)); }} style=${Object.assign({}, iconBtn, { width: 26, height: 26 })} aria-label="Remove">${Ic("x", 14)}</button>` : null}
                     </span>`;
                   })}
                   ${g.memberIds.length === 0 ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>Empty roster — that's fine.</span>` : null}
                 </div>
-                <button onClick=${function () { pickerS[1]({ slot: "member", groupId: g.id, query: "" }); }}
+                ${canDecide ? html`<button onClick=${function () { pickerS[1]({ slot: "member", groupId: g.id, query: "" }); }}
                   style=${{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 10px", border: "1px dashed var(--outline-variant)", background: "transparent", borderRadius: "var(--radius)", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
                   ${Ic("user-plus", 15)} Add ${String(labelFor(t, "member")).toLowerCase()}
-                </button>
+                </button>` : null}
               </div>
             </div>
           </div>`;
         })}
-        ${list.length === 0 ? html`<div style=${{ padding: 14, border: "1px dashed var(--outline-variant)", borderRadius: "var(--radius)", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13 }}>No groups yet. Name one below.</div>` : null}
+        ${list.length === 0 ? html`<div style=${{ padding: 14, border: "1px dashed var(--outline-variant)", borderRadius: "var(--radius)", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${canDecide ? "No groups yet. Name one below." : "No groups yet."}</div>` : null}
 
-        <div style=${{ display: "flex", gap: 8 }}>
+        ${canDecide ? html`<div style=${{ display: "flex", gap: 8 }}>
           <input value=${newGroupS[0][t.id] || ""}
             onInput=${function (e) { var n = Object.assign({}, newGroupS[0]); n[t.id] = e.target.value; newGroupS[1](n); }}
             onKeyDown=${function (e) { if (e.key === "Enter") createGroup(t.id); }}
             placeholder="New group name…" style=${Object.assign({}, inputStyle, { flex: 1 })} />
           <button onClick=${function () { createGroup(t.id); }} disabled=${!String(newGroupS[0][t.id] || "").trim()}
             style=${Object.assign({}, pill(), { opacity: String(newGroupS[0][t.id] || "").trim() ? 1 : 0.5, whiteSpace: "nowrap" })}>Create</button>
-        </div>
+        </div>` : null}
       </div>`;
     }
 
@@ -483,24 +495,24 @@
         Define the relationship types elders can apply, and manage who holds them. Types and named groups can only be created here.
       </p>
 
-      <button onClick=${function () { formS[1]({ editingId: null, form: Object.assign({}, BLANK_FORM) }); }}
+      ${canDecide ? html`<button onClick=${function () { formS[1]({ editingId: null, form: Object.assign({}, BLANK_FORM) }); }}
         style=${Object.assign({}, pill(), { display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 16 })}>
         ${Ic("plus", 16)} New Relationship Type
-      </button>
+      </button>` : html`<p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Relationship vocabulary is an elder's decision. You can read every type.</p>`}
 
       <div style=${Object.assign({}, OVER, { marginBottom: 10 })}>All Types · ${types.length}</div>
 
       ${types.length === 0
         ? html`<div style=${{ padding: "44px 20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
             <div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("users", 38)}</div>
-            <p style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontStyle: "italic", marginTop: 10 }}>No relationship types yet. Create one above.</p>
+            <p style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontStyle: "italic", marginTop: 10 }}>${canDecide ? "No relationship types yet. Create one above." : "No relationship types yet."}</p>
           </div>`
         : html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>${types.map(typeCard)}</div>`}
 
-      ${typeFormModal()}
-      ${pairModal()}
-      ${pickerModal()}
-      ${deleteModal()}
+      ${canDecide ? typeFormModal() : null}
+      ${canDecide ? pairModal() : null}
+      ${canDecide ? pickerModal() : null}
+      ${canDecide ? deleteModal() : null}
     </${Fragment}>`;
   }
 
