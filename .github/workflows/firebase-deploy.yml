@@ -1,11 +1,15 @@
 name: Deploy Firebase (hosting + publicForm)
 
-# Production Hosting + the public form door. Agents must not `firebase deploy`
-# from the box (AGENTS.md). Standing ship path after dry_run green + Maintain
-# CLEAR live:
-#   - push to `main` deploys for real (hosting + publicForm)
+# Production Hosting + the documented functions set (MS-545 option B).
+# Agents must not `firebase deploy` from the box (AGENTS.md). Standing
+# ship path after dry_run green + Maintain CLEAR live:
+#   - push to `main` deploys for real
 #   - workflow_dispatch can still plan only:
-#       gh workflow run "Deploy Firebase (hosting + publicForm)" --ref main -f dry_run=true
+#       gh workflow run "Deploy Firebase (hosting + publicForm)" --ref <branch> -f dry_run=true
+#
+# Standing --only targets (do not one-off around this list):
+#   hosting,functions:publicForm,functions:onAttendanceCreated
+# Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
 # App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
 # for the deploy (gitignored .env, never committed) and never passes enforce.
@@ -34,7 +38,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Hosting + publicForm
+    name: Hosting + documented functions set
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -89,20 +93,20 @@ jobs:
           # Runner-only. functions/.env.* is gitignored. Forces monitor so a
           # leftover remote param cannot silently enforce on this deploy.
           # MCP_ISSUER_URL is required in non-interactive mode: deploying
-          # functions:publicForm still loads functions/index.js, which
+          # any named function still loads functions/index.js, which
           # defineString-s the MCP issuer.
           printf '%s\n' \
             'PUBLIC_FORM_APP_CHECK_MODE=monitor' \
             'MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app' \
             > functions/.env.mosaic-hymn-database
 
-      - name: Deploy hosting + publicForm
+      - name: Deploy hosting + documented functions set
         run: |
           set -euo pipefail
           PROJECT_ID="$(node -p "JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).projects.default")"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
-          echo "targets=hosting,functions:publicForm"
+          echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           echo "MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app"
           EXTRA=()
@@ -111,7 +115,7 @@ jobs:
             echo "dry_run=true"
           fi
           npx firebase deploy \
-            --only hosting,functions:publicForm \
+            --only hosting,functions:publicForm,functions:onAttendanceCreated \
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"
