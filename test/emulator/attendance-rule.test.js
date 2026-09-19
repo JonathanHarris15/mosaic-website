@@ -5,12 +5,14 @@ const H = require('./harness.js');
 const writes = require('../../functions/attendance-rule-writes.js');
 const Core = require('../../public/shepherding-core.js');
 
-// The attendance rule writer (MS-425 / MS-463) against a real Firestore.
+// The attendance rule writer (MS-425 / MS-463 / MS-544) against a real
+// Firestore.
 //
 // The decisions are already pinned in test/attendance-rule.test.js. These
 // prove the I/O the unit suite cannot: the Person, tags, and one Membership
 // Change land together; a Prospective Member is left alone; an elder reset
-// holds; two concurrent runs produce one entry; a thrown rule does not
+// holds; two concurrent runs produce one entry; an elder reset racing a
+// Kiosk mark does not promote on the old boundary; a thrown rule does not
 // escape to the Kiosk.
 
 const TODAY = '2026-09-14';
@@ -220,6 +222,51 @@ suite('the attendance rule writer against Firestore', () => {
             const changes = (await activityOf(db, VISITOR))
                 .filter(e => e.kind === 'membership_change');
             assert.equal(changes.length, 1);
+        });
+
+    test('an elder reset concurrent with a Kiosk mark does not promote on the old boundary',
+        async () => {
+            await seedVisitor(db, VISITOR);
+            await seedAttendance(db, VISITOR, FOUR_DAYS);
+
+            // Same reset as the sequential case: 3 Aug, so only two days
+            // after it count. It lands after the un-transacted reads and
+            // before the transaction opens — the window a Person-only
+            // re-read used to miss (MS-569).
+            const changeAt = admin().firestore.Timestamp.fromDate(
+                new Date('2026-08-03T17:00:00Z'));
+            const elderReset = () => db.collection('people').doc(VISITOR)
+                .collection('shepherding_activity').doc()
+                .set({
+                    kind: 'membership_change',
+                    previousStage: 'regular_attender',
+                    newStage: 'visitor',
+                    previousInactive: false,
+                    newInactive: false,
+                    authorUid: 'elder-1',
+                    authorName: 'Sam',
+                    source: 'profile',
+                    sourceDocumentId: null,
+                    explanation: 'Moved back',
+                    createdAt: changeAt,
+                });
+
+            const result = await writes.applyAttendanceRule(
+                H.interruptedBy(db, elderReset),
+                {personId: VISITOR, today: TODAY, now: H.now()});
+
+            assert.equal(result.moved, false,
+                'the reset must be seen inside the transaction');
+            assert.equal(result.reason, 'threshold');
+            assert.equal(
+                (await personOf(db, VISITOR)).membership.stage, 'visitor');
+
+            const activity = await activityOf(db, VISITOR);
+            const byRule = activity.filter(e => e.source === 'attendance_rule');
+            assert.equal(byRule.length, 0);
+            const changes = activity.filter(e => e.kind === 'membership_change');
+            assert.equal(changes.length, 1, 'only the elder reset landed');
+            assert.equal(changes[0].source, 'profile');
         });
 
     test('same-day Events count once, and a future occurrence does not count',
