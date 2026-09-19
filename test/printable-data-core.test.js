@@ -238,6 +238,58 @@ test('a hymn with empty or missing page assets skips them and does not invent im
     assert.deepEqual(Data.hymnSheetPages(null), []);
 });
 
+test('Sunday booklet text resolves from typedContent and does not leak across Sundays', () => {
+    const data = SUNDAYS();
+    data.services['2026-09-06'].typedContent = {
+        pastoralPrayer: { nation: 'Kenya', capital: 'Nairobi' },
+        mosaicKids: { lessonTitle: 'The Lost Sheep', lessonVerse: 'Luke 15' },
+        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
+    };
+    data.services['2026-09-13'].typedContent = {
+        pastoralPrayer: { nation: 'Japan' },
+        mosaicKids: { lessonTitle: 'Jonah' },
+        announcements: [{ title: 'Choir practice', content: 'Thursday' }],
+    };
+    const a = Data.resolve('sunday_typed', { when: { mode: 'this' } }, data, { today: TODAY });
+    const b = Data.resolve('sunday_typed', { when: { mode: 'next' } }, data, { today: TODAY });
+    assert.equal(a.rows[0].prayerNation, 'Kenya');
+    assert.equal(a.rows[0].kidsLessonTitle, 'The Lost Sheep');
+    assert.match(a.rows[0].announcements, /Picnic/);
+    assert.equal(b.rows[0].prayerNation, 'Japan');
+    assert.equal(b.rows[0].kidsLessonTitle, 'Jonah');
+    assert.ok(!String(b.rows[0].announcements).includes('Picnic'));
+    assert.ok(!String(a.rows[0].announcements).includes('Choir'));
+    assert.ok(!String(b.rows[0].prayerNation).includes('Kenya'));
+});
+
+test('a Printable bound to Sunday booklet text reads the typed fields', () => {
+    const Render = require('../public/printable-render-core.js');
+    const Core = require('../public/printable-core.js');
+    const data = SUNDAYS();
+    data.services['2026-09-06'].typedContent = {
+        pastoralPrayer: { nation: 'Kenya' },
+        mosaicKids: { lessonTitle: 'The Lost Sheep' },
+        announcements: [{ title: 'Picnic', content: 'Park' }],
+    };
+    const resolved = Data.resolve('sunday_typed', {}, data, { today: TODAY });
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const page = Core.buildPage(t, { id: 'pg', nodes: [
+        { id: 'nation', tag: 'p', text: 'Country', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'prayerNation' } } },
+        { id: 'kids', tag: 'p', text: 'Lesson', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'kidsLessonTitle' } } },
+        { id: 'ann', tag: 'p', text: 'News', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'announcements' } } },
+    ] });
+    const r = Render.expandPage(page, {
+        rowsFor: () => null,
+        valueFor: (bind) => {
+            const v = resolved.rows[0][bind.field];
+            return v ? { ok: true, value: v } : { ok: false, why: 'empty' };
+        },
+    });
+    assert.equal(r.nodes[0].text, 'Kenya');
+    assert.equal(r.nodes[1].text, 'The Lost Sheep');
+    assert.match(r.nodes[2].text, /Picnic/);
+});
+
 test('Sundays in a range make a preaching schedule', () => {
     const r = Data.resolve('sundays', { range: { mode: 'relative', fromDays: 0, toDays: 14 } }, SUNDAYS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.theme), ['Grace', 'Hope']);
@@ -329,6 +381,7 @@ test('a dated source asks the store for a window, not the whole collection', () 
     assert.deepEqual(n.occurrenceRange, { from: '2026-09-03', to: '2026-09-10' });
     assert.equal(n.series, true);
     assert.deepEqual(Data.needsFor('sunday', {}, TODAY).services, ['2026-09-06']);
+    assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY).services, ['2026-09-06']);
     assert.equal(Data.needsFor('people', {}, TODAY).people, true);
 });
 

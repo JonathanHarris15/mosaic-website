@@ -45,6 +45,12 @@
         return null;
     }
 
+    function typedCore() {
+        if (typeof SundayTypedCore !== 'undefined') return SundayTypedCore;
+        if (typeof require === 'function') return require('./sunday-typed-core.js');
+        return null;
+    }
+
     function levelRank(level) {
         const i = LEVELS.indexOf(level);
         return i < 0 ? -1 : i;
@@ -261,6 +267,16 @@
                 { key: 'page', label: 'Page number', kind: 'number' },
                 { key: 'pageCount', label: 'Pages in this hymn', kind: 'number' },
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
+            ],
+        },
+        {
+            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', minLevel: 'viewer',
+            blurb: 'What an editor types once for this Sunday — country facts for the prayer page, Mosaic Kids lesson, and announcements. Every bound Printable reads the same fields.',
+            params: [WHEN_PARAM],
+            fields: (typedCore() && typedCore().FIELDS) || [
+                { key: 'prayerNation', label: 'Prayer country', kind: 'text' },
+                { key: 'kidsLessonTitle', label: 'Mosaic Kids lesson', kind: 'text' },
+                { key: 'announcements', label: 'Announcements', kind: 'text' },
             ],
         },
         {
@@ -661,6 +677,22 @@
         return { rows: rows, warnings: warnings, date: date };
     }
 
+    function resolveSundayTyped(params, data, ctx) {
+        const Typed = typedCore();
+        const p = Object.assign(defaultParams('sunday_typed'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const s = serviceAt(data, date);
+        const warnings = [];
+        if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
+        const content = Typed ? Typed.fromService(s) : {};
+        const row = Typed ? Typed.toRow(content, date) : { _id: date, date: date };
+        row.date = formatDate(date);
+        if (s && Typed && Typed.isBlank(content)) {
+            warnings.push('No booklet text has been entered for ' + formatDate(date) + ' yet.');
+        }
+        return { rows: [row], warnings: warnings, date: date };
+    }
+
     function resolveSundays(params, data, ctx) {
         const p = Object.assign(defaultParams('sundays'), params || {});
         const r = resolveRange(p.range, ctx.today);
@@ -796,6 +828,7 @@
         sunday: resolveSunday,
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
+        sunday_typed: resolveSundayTyped,
         sundays: resolveSundays,
         event_dates: resolveEventDates,
         role_holder: resolveRoleHolder,
@@ -831,7 +864,7 @@
         switch (sourceKey) {
             case 'people': return { people: true, families: true, households: true };
             case 'households': return { people: true, families: true, households: true };
-            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday': case 'sunday_rows': case 'sunday_typed': return { services: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
             case 'sundays': return { serviceRange: resolveRange(p.range, t) };
             case 'event_dates': return { series: true, occurrenceRange: resolveRange(p.range, t) };

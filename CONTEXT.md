@@ -1098,8 +1098,12 @@ How an [[Element]] takes its width and its height, said the way the layout tools
 _Avoid_: auto layout (Figma's word, and it names the parent's side of it), stretch (that is one align, not a size), hug contents
 
 **Data drawer**:
-The editor's right panel: everything the website can tell a Printable, grouped by where it comes from — **People**, **Sunday**, **Events**, **Forms** — each **source** listing its **fields** by kind (text, image, date, number). What it offers is exactly what the signed-in viewer may read: the catalog (`printable-data-core.js`) is the first half of the permission boundary and holds nothing elder-only at all; `firestore.rules` is the second. A source is a **single** (one row — this Sunday, who holds a role) or a **list** (many rows — the directory, the fortnight's events).
+The editor's right panel: everything the website can tell a Printable, grouped by where it comes from — **People**, **Sunday**, **Events**, **Forms** — each **source** listing its **fields** by kind (text, image, date, number). What it offers is exactly what the signed-in viewer may read: the catalog (`printable-data-core.js`) is the first half of the permission boundary and holds nothing elder-only at all; `firestore.rules` is the second. A source is a **single** (one row — this Sunday, who holds a role, this Sunday's booklet text) or a **list** (many rows — the directory, the fortnight's events).
 _Avoid_: variables panel, connectors (the brief's word; a field is what you drag)
+
+**Sunday booklet text**:
+The weekly typed values that belong to a Sunday, not to a Printable's box tree: prayer-country facts, Mosaic Kids lesson, and announcements (`services/{date}.typedContent`). An editor types them once — in the Printable data drawer, or they are read through from that week's Service Guide if the store is still empty. Every Printable bound to that Sunday reads the same fields. Sunday A's values never appear on Sunday B.
+_Avoid_: guide values (that is the old editor's map), weekly copy (prose)
 
 **Binding** (a **wire**):
 Which field feeds which element — the text of a text element, the picture of an image. Made by dragging a field chip from the drawer onto the element; a wire is drawn from chip to element while dragging and whenever the element is selected. A binding is either **global** (a single source with its params: "next Sunday's theme") or an **item** binding (a field of each row of the [[Repeat]] the element sits inside). Unwired on the element panel.

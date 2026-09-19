@@ -607,10 +607,10 @@
                                                     <div>
                                                         <div class="pe-f" x-show="param.kind === 'when'"><span x-text="param.label"></span>
                                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'last'" @click="sourceParams(src)[param.key] = { mode: 'last' }">Last</button>
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'this'" @click="sourceParams(src)[param.key] = { mode: 'this' }">This</button>
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'next'" @click="sourceParams(src)[param.key] = { mode: 'next' }">Next</button>
-                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="sourceParams(src)[param.key] = { mode: 'date', date: $event.target.value }" />
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'last'" @click="setSourceWhen(src, param.key, { mode: 'last' })">Last</button>
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'this'" @click="setSourceWhen(src, param.key, { mode: 'this' })">This</button>
+                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'next'" @click="setSourceWhen(src, param.key, { mode: 'next' })">Next</button>
+                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="setSourceWhen(src, param.key, { mode: 'date', date: $event.target.value })" />
                                                             </span></div>
                                                         <div class="pe-f" x-show="param.kind === 'when-event'"><span x-text="param.label"></span>
                                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
@@ -636,6 +636,41 @@
                                                             <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
                                                         </span>
                                                     </template>
+                                                </div>
+                                                <div class="pe-typed" x-show="src.key === 'sunday_typed' && canEdit && data.typed.draft">
+                                                    <p class="pe-hint">Type these once for <strong x-text="data.typed.date ? formatTypedDate(data.typed.date) : 'this Sunday'"></strong>. Layout stays on the page; next week reads the next Sunday.</p>
+                                                    <p class="pe-typed__h">Prayer country</p>
+                                                    <label class="pe-f"><span>Country</span><input class="pe-in" x-model="data.typed.draft.prayerNation" /></label>
+                                                    <label class="pe-f"><span>Continent</span><input class="pe-in" x-model="data.typed.draft.prayerContinent" /></label>
+                                                    <label class="pe-f"><span>Capital</span><input class="pe-in" x-model="data.typed.draft.prayerCapital" /></label>
+                                                    <label class="pe-f"><span>Population</span><input class="pe-in" x-model="data.typed.draft.prayerPopulation" /></label>
+                                                    <label class="pe-f"><span>Language</span><input class="pe-in" x-model="data.typed.draft.prayerLanguage" /></label>
+                                                    <label class="pe-f"><span>Total languages</span><input class="pe-in" x-model="data.typed.draft.prayerTotalLanguages" /></label>
+                                                    <label class="pe-f"><span>Literacy</span><input class="pe-in" x-model="data.typed.draft.prayerLiteracy" /></label>
+                                                    <label class="pe-f"><span>Christian</span><input class="pe-in" x-model="data.typed.draft.prayerChristian" /></label>
+                                                    <label class="pe-f"><span>Evangelical</span><input class="pe-in" x-model="data.typed.draft.prayerEvangelical" /></label>
+                                                    <label class="pe-f"><span>Un-evangelized</span><input class="pe-in" x-model="data.typed.draft.prayerUnevangelized" /></label>
+                                                    <label class="pe-f"><span>Prompts</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.prayerPrompts" placeholder="One prompt per line"></textarea></label>
+                                                    <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://… or upload" /></label>
+                                                    <input type="file" accept="image/*" class="pe-typed__file" @change="onTypedCountryImage($event)" />
+                                                    <p class="pe-typed__h">Mosaic Kids</p>
+                                                    <label class="pe-f"><span>Lesson</span><input class="pe-in" x-model="data.typed.draft.kidsLessonTitle" /></label>
+                                                    <label class="pe-f"><span>Verse</span><input class="pe-in" x-model="data.typed.draft.kidsLessonVerse" /></label>
+                                                    <label class="pe-f"><span>Summary</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsSummary" placeholder="One point per line"></textarea></label>
+                                                    <label class="pe-f"><span>Questions</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsQuestions" placeholder="One question per line"></textarea></label>
+                                                    <p class="pe-typed__h">Announcements</p>
+                                                    <template x-for="(item, i) in data.typed.draft.announcements" :key="'ann-' + i">
+                                                        <div class="pe-typed__ann">
+                                                            <label class="pe-f"><span>Title</span><input class="pe-in" x-model="item.title" /></label>
+                                                            <label class="pe-f"><span>Body</span><textarea class="pe-in pe-ta" rows="2" x-model="item.content"></textarea></label>
+                                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="removeTypedAnnouncement(i)">Remove</button>
+                                                        </div>
+                                                    </template>
+                                                    <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-typed__add" @click="addTypedAnnouncement()">Add an announcement</button>
+                                                    <button type="button" class="m-btn m-btn--primary m-btn--sm pe-typed__save" @click="saveTypedDraft()" :disabled="data.typed.saving">
+                                                        <span class="m-btn__label" x-text="data.typed.saving ? 'Saving…' : 'Save this Sunday'"></span>
+                                                    </button>
+                                                    <p class="pe-hint" x-show="data.typed.status" x-text="data.typed.status"></p>
                                                 </div>
                                             </div>
                                         </template>
@@ -764,6 +799,7 @@
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <script src="sunday-typed-core.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
@@ -928,6 +964,11 @@
         .pe-src__chev { font-size: 18px; color: var(--on-surface-variant); transition: transform var(--duration) var(--ease-standard); }
         .pe-src.is-open .pe-src__chev { transform: rotate(180deg); }
         .pe-src__detail { padding: 4px 10px 10px; border-top: 1px solid var(--outline-variant); }
+        .pe-typed { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--outline-variant); display: flex; flex-direction: column; gap: 6px; }
+        .pe-typed__h { margin: 8px 0 0; font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-typed__ann { padding: 6px 0; border-bottom: 1px solid var(--outline-variant); }
+        .pe-typed__add, .pe-typed__save { width: 100%; justify-content: center; }
+        .pe-typed__file { font-size: 11px; }
         .pe-src__iter { width: 100%; justify-content: center; margin: 6px 0; height: auto; min-height: 34px; padding: 7px 10px; white-space: normal; }
         .pe-src__iter .m-btn__label { white-space: normal; text-align: center; line-height: 1.25; }
         .pe-src--pick { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
