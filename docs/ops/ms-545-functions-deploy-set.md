@@ -37,16 +37,17 @@ Agents must not `firebase deploy` from a cloud box (AGENTS.md). Adding
 another function — or `firestore:rules` — to prod means adding it here
 (and to the agreement test), not a laptop CLI that skips the workflow.
 
-## Dry-run (MS-561) — Maintain CLEAR before live
+## Dry-run (MS-566) — Maintain CLEAR before live
 
-Same B path as MS-545 / MS-547. Plan only, through the **widened**
+Same B path as MS-545 / MS-557. Plan only, through the **widened**
 workflow. Do not omit `-f dry_run=true`: `workflow_dispatch` defaults to
-a live deploy.
+a live deploy. Operator sequence (proof shape, #69 unlock) is
+`docs/ops/ms-566-rules-first.md`.
 
 From a machine with `gh` and Actions write on this repo:
 
 ```bash
-gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-557 -f dry_run=true
+gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-565 -f dry_run=true
 ```
 
 Then open the run under Actions and confirm the log prints
@@ -55,7 +56,7 @@ and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
 on Maintain **CLEAR**. Do not merge this branch. Do not live-deploy. Do
-not merge MS-539 / PR #67. Do not one-off CLI deploy.
+not merge MS-530 / PR #69. Do not one-off CLI deploy.
 
 ## Backfill (after live function install)
 
