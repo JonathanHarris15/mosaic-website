@@ -147,7 +147,7 @@ test('the rendered markup never leaks "undefined" or "[object Object]"', async (
     assert.doesNotMatch(out, /\[object Object\]/);
 });
 
-test('a Pastoral Assistant can read types but does not get write chrome', async () => {
+test('a Pastoral Assistant can read types and gets the same write chrome as an elder', async () => {
     const out = await renderTab({
         types: [DISCIPLESHIP, BIBLE_STUDY],
         people: PEOPLE,
@@ -155,8 +155,8 @@ test('a Pastoral Assistant can read types but does not get write chrome', async 
     });
     assert.match(out, /Discipleship/);
     assert.match(out, /Bible Study/);
-    assert.match(out, /Relationship vocabulary is an elder's decision/);
-    assert.doesNotMatch(out, /New Relationship Type/);
-    assert.doesNotMatch(out, /aria-label="Edit type"/);
-    assert.doesNotMatch(out, /aria-label="Delete type"/);
+    assert.doesNotMatch(out, /Relationship vocabulary is an elder's decision/);
+    assert.match(out, /New Relationship Type/);
+    assert.match(out, /aria-label="Edit type"/);
+    assert.match(out, /aria-label="Delete type"/);
 });

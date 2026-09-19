@@ -126,9 +126,10 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
-        // Elder decisions only. A Pastoral Assistant never gets hide-vocab chrome.
+        // Hide-vocab writes follow AccessCore.canDecide (MS-594: PA included).
+        // Honours View as Member.
         get canDecide() {
-            return AccessCore.isAnElder({
+            return AccessCore.canDecide({
                 permissionLevel: this.effectivePermissionLevel,
                 pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
             });

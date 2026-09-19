@@ -43,7 +43,7 @@ test('web shepherd and editor-workroom pages ask the access core, not a private 
     SHEPHERD_JS.forEach((rel) => {
         const src = fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
         assert.doesNotMatch(src, PRIVATE_ELDER, rel + ' still has a private elder list');
-        assert.match(src, /AccessCore\.(pageFlags|readsAsElder|readsAsEditor|writesAsEditor|writesTheRecord|isAnElder|liftsHidden)/, rel + ' never asks the access core');
+        assert.match(src, /AccessCore\.(pageFlags|readsAsElder|readsAsEditor|writesAsEditor|writesTheRecord|isAnElder|canDecide|liftsHidden)/, rel + ' never asks the access core');
     });
 });
 

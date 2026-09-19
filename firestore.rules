@@ -87,6 +87,13 @@ service cloud.firestore {
       return isElder() || isPastoralAssistant();
     }
 
+    // MS-594: shepherding decision/write actions in software. Same grant as
+    // writesTheRecord; a separate name so counted-as-elder (isElder) stays
+    // permission-level only.
+    function canDecide() {
+      return isElder() || isPastoralAssistant();
+    }
+
     // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
     // ADR-0041). Parallel to isElder()/isAdmin(): an allowlist of one value.
     function isKiosk() {
@@ -495,13 +502,17 @@ service cloud.firestore {
       allow create: if isKiosk();
       allow update: if isEditor();
 
-      // MS-530: lastNoteAt is a cache of the latest Shepherding Note. A
-      // Pastoral Assistant writes notes (writesTheRecord) but is not an
-      // editor, so they cannot otherwise update the Person. This hole is
-      // lastNoteAt only — nothing else on the Person moves with a note.
-      allow update: if writesTheRecord()
+      // MS-530 / MS-594: a Pastoral Assistant is not an editor, so they
+      // cannot otherwise update the Person. This hole is the cache field a
+      // note write moves (lastNoteAt) plus the shepherding decision fields
+      // elders write on the Person — status, tags, hide projection,
+      // assignment, membership track. Directory identity (name/contact)
+      // and create/delete stay editor writes.
+      allow update: if canDecide()
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['lastNoteAt']);
+            .hasOnly(['lastNoteAt', 'shepherdingStatus', 'tags',
+                      'shepherdingHidden', 'updatedAt', 'membership',
+                      'shepherding']);
 
       // Self-service (MS-87, ADR-0012): a Linked User may update ONLY their own
       // linked Person, and ONLY the self-editable fields — contact, birthday, and
@@ -542,7 +553,7 @@ service cloud.firestore {
       // Keyed by service date so they line up with the order of service.
       match /prayer_requests/{requestId} {
         allow read: if readsAsElder();
-        allow write: if isElder();
+        allow write: if canDecide();
       }
 
       // Away (MS-188): stretches of whole days this Person said they will not
@@ -599,7 +610,7 @@ service cloud.firestore {
     // by the directory, so it is closed with it (MS-197, ADR-0031).
     match /people_tags/{tagId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if isEditor() || canDecide();
     }
 
     // Families (ADR-0012, MS-88): household entities for the Membership Directory.
@@ -636,7 +647,7 @@ service cloud.firestore {
     // Shepherding System — elders and super_admins only
     match /shepherding_tags/{tagId} {
       allow read: if readsAsElder();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
 
     // Relationships (ADR-0012, MS-89; enriched by ADR-0014, MS-97): the
@@ -670,11 +681,11 @@ service cloud.firestore {
 
     match /relationships/{edgeId} {
       allow read: if canReadRelationshipRecord();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
     match /relationship_types/{typeId} {
       allow read: if canReadRelationshipRecord();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
     // A roster names everyone in it, so sharing one Group-kind Type is a larger
     // disclosure than sharing a pairwise Type. Deliberate (MS-141 needs group
@@ -682,19 +693,19 @@ service cloud.firestore {
     // entirely an elder's choice, Type by Type.
     match /relationship_groups/{groupId} {
       allow read: if canReadRelationshipRecord();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
 
     match /shepherding_views/{viewId} {
       allow read: if readsAsElder();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
 
     // Superseded by shepherding_tasks (MS-79). Left readable so the migration
     // can be checked before anything is thrown away.
     match /shepherding_reminders/{reminderId} {
       allow read: if readsAsElder();
-      allow write: if isElder();
+      allow write: if canDecide();
     }
 
     // A Task, and the standing commitment behind a repeating one — one
@@ -750,8 +761,8 @@ service cloud.firestore {
     // filed under somebody else's name is not a record.
     match /people/{personId}/shepherding_activity/{activityId} {
       allow read: if readsAsElder();
-      allow update, delete: if isElder();
-      allow create: if isElder()
+      allow update, delete: if canDecide();
+      allow create: if canDecide()
         || (isEditor()
             && request.resource.data.kind == 'membership_change'
             && request.resource.data.authorUid == request.auth.uid);

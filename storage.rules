@@ -121,6 +121,13 @@ service firebase.storage {
       return isEditorAccount() || isPastoralAssistantAccount();
     }
 
+    // MS-594: restates AccessCore.canDecide. Storage has no elder-only
+    // shepherding write path today; the helper is here so the restatement
+    // cannot drift from Firestore / the core.
+    function canDecideAccount() {
+      return isElderAccount() || isPastoralAssistantAccount();
+    }
+
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
     // flyer, a sign-up sheet, a floor plan, whatever file type the church
     // needs.

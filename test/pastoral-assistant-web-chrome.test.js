@@ -3,11 +3,23 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// MS-540 / MS-570 — leftover Shepherd *web* decision chrome must ask
-// AccessCore.canDecide so a Pastoral Assistant never gets a click → toast.
+// MS-540 / MS-570 / MS-597 — leftover Shepherd *web* decision chrome asks
+// AccessCore.canDecide. MS-594 gives a Pastoral Assistant that flag, so the
+// same chrome is visible and usable for them.
+
+const Access = require('../public/access-core.js');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
+
+test('a Pastoral Assistant has canDecide, so web decision chrome is visible', () => {
+    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flags.canDecide, true);
+    const member = Access.pageFlags({ permissionLevel: 'member' });
+    assert.equal(member.canDecide, false);
+    const elder = Access.pageFlags({ permissionLevel: 'elder' });
+    assert.equal(elder.canDecide, true);
+});
 
 function between(src, from, to) {
     const a = src.indexOf(from);

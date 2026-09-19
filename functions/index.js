@@ -74,6 +74,27 @@ const mcpServer = require("./mcp-server");
 // Guidance file writes, restores, and the shape of a version (MS-262).
 const gw = require("./guidance-writes");
 const guidanceCore = require("./shared/mcp-guidance-core.js");
+const {assertCanDecide: assertCanDecideCore} = require("./access-assert");
+
+/**
+ * AccessCore canDecide for a callable. The core throws a plain Error with
+ * `.code` so root `npm test` can load it without firebase-functions; this
+ * maps that onto HttpsError so the client still sees the Firebase code.
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertCanDecide(db, authCtx) {
+  try {
+    await assertCanDecideCore(db, authCtx);
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -2118,27 +2139,6 @@ async function assertAdmin(db, authCtx) {
 }
 
 /**
- * Throws unless the caller is an elder/super_admin — the roles that
- * manage pastoral-prayer subjects and their Prayer Requests (matches
- * isShepherd in the Service Builder and the prayer_requests Firestore
- * rule).
- * @param {Object} db Firestore instance.
- * @param {Object} authCtx request.auth
- * @return {Promise<void>}
- */
-async function assertElder(db, authCtx) {
-  if (!authCtx) {
-    throw new HttpsError("unauthenticated", "Sign in first.");
-  }
-  const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  const permissionLevel = callerDoc.exists ?
-    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
-  if (!["elder", "super_admin"].includes(permissionLevel)) {
-    throw new HttpsError("permission-denied", "Elders only.");
-  }
-}
-
-/**
  * Sends one SMS via Textbelt and returns the shaped result. Prayer-request
  * and test sends share this so reply routing and signature verification
  * behave identically. Outbound texts that expect a reply attach the reply
@@ -2714,7 +2714,8 @@ exports.convertServiceInvolvement = onSchedule(
 
 /**
  * Manual "Send Prayer Request Text Now" — the Service Builder button.
- * Elder-gated. Bypasses the timing/quiet-hours guards (a human is choosing
+ * canDecide-gated (MS-594): elders, super admins, and a Pastoral
+ * Assistant. Bypasses the timing/quiet-hours guards (a human is choosing
  * to send now) but keeps the phone/already-filled guards. Sends initial
  * then reminder, re-sending the reminder on repeat calls.
  */
@@ -2722,7 +2723,7 @@ exports.sendPrayerRequestNow = onCall(
     {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
     async (request) => {
       const db = admin.firestore();
-      await assertElder(db, request.auth);
+      await assertCanDecide(db, request.auth);
 
       const serviceDate = request.data && request.data.serviceDate;
       const personId = request.data && request.data.personId;

@@ -79,7 +79,7 @@
   function RelationshipsTab(props) {
     var showToast = props.showToast;
     // Open/read stays canReadElder (parent Manage Tags already uses it). Write
-    // chrome below is canDecide — a PA can still view the tab.
+    // chrome below is canDecide — PA now decides too (MS-594).
     var flags = props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);

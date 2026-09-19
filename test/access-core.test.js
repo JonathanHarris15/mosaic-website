@@ -16,37 +16,37 @@ const ALL_RUNGS = ['public', 'member', 'participant', 'editor', 'elder'];
 const TODAY = {
     viewer: {
         readsAsElder: false, readsAsEditor: false, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: false,
+        canDecide: false, isAnElder: false, writesAsEditor: false,
         rungs: ['public'], liftsHidden: false,
     },
     member: {
         readsAsElder: false, readsAsEditor: false, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: false,
+        canDecide: false, isAnElder: false, writesAsEditor: false,
         rungs: ['public', 'member'], liftsHidden: false,
     },
     editor: {
         readsAsElder: false, readsAsEditor: true, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: true,
+        canDecide: false, isAnElder: false, writesAsEditor: true,
         rungs: ['public', 'member', 'participant', 'editor'], liftsHidden: false,
     },
     elder: {
         readsAsElder: true, readsAsEditor: true, writesTheRecord: true,
-        isAnElder: true, writesAsEditor: true,
+        canDecide: true, isAnElder: true, writesAsEditor: true,
         rungs: ALL_RUNGS, liftsHidden: true,
     },
     admin: {
         readsAsElder: false, readsAsEditor: true, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: true,
+        canDecide: false, isAnElder: false, writesAsEditor: true,
         rungs: ['public', 'member', 'participant', 'editor'], liftsHidden: false,
     },
     super_admin: {
         readsAsElder: true, readsAsEditor: true, writesTheRecord: true,
-        isAnElder: true, writesAsEditor: true,
+        canDecide: true, isAnElder: true, writesAsEditor: true,
         rungs: ALL_RUNGS, liftsHidden: true,
     },
     kiosk: {
         readsAsElder: false, readsAsEditor: false, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: false,
+        canDecide: false, isAnElder: false, writesAsEditor: false,
         rungs: ['public'], liftsHidden: false,
     },
 };
@@ -59,6 +59,7 @@ function answers(expected, actual, label) {
     assert.equal(actual.readsAsElder, expected.readsAsElder, label + ' readsAsElder');
     assert.equal(actual.readsAsEditor, expected.readsAsEditor, label + ' readsAsEditor');
     assert.equal(actual.writesTheRecord, expected.writesTheRecord, label + ' writesTheRecord');
+    assert.equal(actual.canDecide, expected.canDecide, label + ' canDecide');
     assert.equal(actual.isAnElder, expected.isAnElder, label + ' isAnElder');
     assert.equal(actual.writesAsEditor, expected.writesAsEditor, label + ' writesAsEditor');
     assert.deepEqual(actual.rungs, expected.rungs, label + ' eventRungsFor');
@@ -70,6 +71,7 @@ function ask(acc) {
         readsAsElder: Access.readsAsElder(acc),
         readsAsEditor: Access.readsAsEditor(acc),
         writesTheRecord: Access.writesTheRecord(acc),
+        canDecide: Access.canDecide(acc),
         isAnElder: Access.isAnElder(acc),
         writesAsEditor: Access.writesAsEditor(acc),
         rungs: Access.eventRungsFor(acc),
@@ -88,7 +90,7 @@ test('every Permission Level without the grant keeps today\'s answers', () => {
 test('a missing account is nobody', () => {
     const nobody = {
         readsAsElder: false, readsAsEditor: false, writesTheRecord: false,
-        isAnElder: false, writesAsEditor: false,
+        canDecide: false, isAnElder: false, writesAsEditor: false,
         rungs: ['public'], liftsHidden: false,
     };
     answers(nobody, ask(null), 'null');
@@ -104,6 +106,7 @@ test('every Permission Level with the grant reads as elder and editor and writes
             readsAsElder: true,
             readsAsEditor: true,
             writesTheRecord: true,
+            canDecide: true,
             isAnElder: today.isAnElder,
             writesAsEditor: today.writesAsEditor,
             rungs: ALL_RUNGS,
@@ -119,6 +122,7 @@ test('a member-level Pastoral Assistant reads as elder and editor, writes the re
     assert.equal(Access.readsAsElder(acc), true);
     assert.equal(Access.readsAsEditor(acc), true);
     assert.equal(Access.writesTheRecord(acc), true);
+    assert.equal(Access.canDecide(acc), true);
     assert.equal(Access.isAnElder(acc), false);
     assert.equal(Access.writesAsEditor(acc), false);
     assert.deepEqual(Access.eventRungsFor(acc), ALL_RUNGS);
@@ -209,8 +213,29 @@ test('pageFlags is the one object a surface stores after reading the account', (
     assert.equal(flags.canReadElder, true);
     assert.equal(flags.canReadEditor, true);
     assert.equal(flags.canWriteRecord, true);
-    assert.equal(flags.canDecide, false);
+    assert.equal(flags.canDecide, true);
     assert.equal(flags.canWriteEditor, false);
     assert.equal(flags.pastoralAssistant, true);
     assert.equal(flags.currentPermissionLevel, 'member');
+});
+
+// MS-594 — PA vs elder vs member for decide/write and counted-as-elder.
+test('a Pastoral Assistant decides and writes like an elder, and is still not an elder', () => {
+    const member = account('member', false);
+    const pa = account('member', true);
+    const elder = account('elder', false);
+
+    assert.equal(Access.canDecide(member), false);
+    assert.equal(Access.writesTheRecord(member), false);
+    assert.equal(Access.isAnElder(member), false);
+
+    assert.equal(Access.canDecide(pa), true);
+    assert.equal(Access.writesTheRecord(pa), true);
+    assert.equal(Access.isAnElder(pa), false);
+    assert.equal(Access.pageFlags(pa).canDecide, true);
+
+    assert.equal(Access.canDecide(elder), true);
+    assert.equal(Access.writesTheRecord(elder), true);
+    assert.equal(Access.isAnElder(elder), true);
+    assert.equal(Access.pageFlags(elder).canDecide, true);
 });
