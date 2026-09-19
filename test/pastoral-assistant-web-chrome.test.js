@@ -134,3 +134,58 @@ test('Service Builder Send prayer now is a canDecide write, not canReadElder', (
     assert.ok(sendBtn !== -1);
     assert.match(html.slice(Math.max(0, sendBtn - 400), sendBtn), /x-show="canDecide"/);
 });
+
+// ── MS-572 / MS-573 / MS-574 — leftover chrome after MS-540 ────────────────
+// Additive. Do not reopen the MS-540 pins above.
+
+test('the profile hides Undo unless canDecide', () => {
+    const html = read('shepherding-profile.html');
+    const btn = html.indexOf('undoStatusChange(entry)');
+    assert.ok(btn !== -1, 'Undo is gone');
+    assert.match(
+        html.slice(Math.max(0, btn - 80), btn),
+        /x-show="canDecide && canUndoStatusChange\(entry\)"/
+    );
+    const src = read('shepherding-profile.js');
+    const can = src.slice(src.indexOf('canUndoStatusChange(entry)'), src.indexOf('canUndoStatusChange(entry)') + 180);
+    assert.match(can, /this\.canDecide/, 'canUndoStatusChange no longer asks canDecide');
+    const undo = src.slice(src.indexOf('async undoStatusChange'), src.indexOf('async undoStatusChange') + 140);
+    assert.match(undo, /if\s*\(\s*!this\.canDecide/, 'undoStatusChange can still run for a PA');
+});
+
+test('the profile Membership Track is canDecide, not canWriteEditor', () => {
+    const html = read('shepherding-profile.html');
+    const track = between(html, '<!-- Membership Track', '<!-- Shepherding Tags Panel');
+    assert.match(track, /x-show="canDecide"/);
+    assert.doesNotMatch(track, /canWriteEditor/);
+    const src = read('shepherding-profile.js');
+    const getter = src.slice(src.indexOf('get canEditMembership'), src.indexOf('get canEditMembership') + 90);
+    assert.match(getter, /return this\.canDecide/);
+    assert.doesNotMatch(getter, /canWriteEditor/);
+    const commit = src.slice(src.indexOf('async commitMembership'), src.indexOf('async commitMembership') + 90);
+    assert.match(commit, /if\s*\(\s*!this\.canDecide\s*\)\s*return/);
+});
+
+test('the Relationships tab hides type New / Edit / Delete unless canDecide', () => {
+    const html = read('shepherding-tags.html');
+    const types = between(html, '<!-- ═══ LEFT: the vocabulary', '<!-- kind + priority');
+    assert.match(types, /startNewType\(\)/);
+    assert.match(types, /x-show="canDecide"/);
+    assert.match(types, /startEditType\(type\)/);
+    assert.match(types, /deleteType\(type\)/);
+    const src = read('shepherding-relationships.js');
+    for (const name of ['startNewType', 'startEditType', 'async saveType', 'async deleteType']) {
+        const start = src.indexOf(name);
+        assert.ok(start !== -1, name + ' is gone');
+        const open = src.indexOf('{', start);
+        const head = src.slice(open, open + 80);
+        assert.match(head, /if\s*\(\s*!this\.canDecide\s*\)\s*return/, name + ' can still run for a PA');
+    }
+});
+
+test('the Elder Document person-panel trigger extension is handed canDecide', () => {
+    const src = read('shepherding-document.js');
+    const ext = between(src, 'const trigExt = createInlineTriggersExtension', 'onStatusUndo');
+    assert.match(ext, /canDecide:\s*!!_canDecide/);
+    assert.match(src, /_canDecide\s*=\s*!!this\.canDecide/);
+});

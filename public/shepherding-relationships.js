@@ -313,11 +313,13 @@ window.RelationshipsTab = () => ({
     },
 
     startNewType() {
+        if (!this.canDecide) return;
         this.resetTypeForm();
         this.showTypeForm = true;
     },
 
     startEditType(type) {
+        if (!this.canDecide) return;
         this.typeForm = {
             name: type.name || '',
             kind: type.kind,
@@ -334,6 +336,7 @@ window.RelationshipsTab = () => ({
     },
 
     async saveType() {
+        if (!this.canDecide) return;
         const existing = this.editingTypeId ? this.relTypes.find(t => t.id === this.editingTypeId) : null;
         // An edit may not change the kind — flipping it would orphan every instance.
         const check = existing
@@ -377,6 +380,7 @@ window.RelationshipsTab = () => ({
     // Deleting a type in use cascades — so it says how much it will take with it
     // before the elder confirms (ADR-0014 s7).
     async deleteType(type) {
+        if (!this.canDecide) return;
         const pairs = this.pairsForType(type.id);
         const groups = this.groupsForType(type.id);
         const parts = [];
