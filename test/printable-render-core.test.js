@@ -123,3 +123,40 @@ test('pages are planned slice by slice until the rows run out', () => {
     const plan = Render.planPages(rows, 0, (pageIndex, start, n) => n <= (pageIndex === 0 ? 4 : 3));
     assert.deepEqual(plan.map(p => [p.start, p.end]), [[0, 4], [4, 7], [7, 10]]);
 });
+
+// MS-587 — a booklet hymn page is one iterated image; every sheet row lands.
+function hymnSheetPage() {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    return Core.buildPage(t, { id: 'hymn', nodes: [
+        { id: 'sheet', tag: 'div', name: 'Sheet', repeat: { source: 'sunday_hymns', params: {}, layout: { direction: 'column', perLine: 1, gap: 0, maxPerPage: 1 }, overflow: 'new-page' }, children: [
+            { id: 'title', tag: 'p', text: 'Hymn', bind: { text: { scope: 'item', field: 'name' } } },
+            { id: 'img', tag: 'img', attrs: { src: '' }, bind: { src: { scope: 'item', field: 'image' } } },
+        ] },
+    ] });
+}
+
+test('a booklet hymn bind draws every sheet-music page, in sequence', () => {
+    const rows = [
+        { name: 'Amazing Grace', image: 'ag1.png', page: 1 },
+        { name: 'Amazing Grace', image: 'ag2.png', page: 2 },
+        { name: 'Doxology', image: 'dox.png', page: 1 },
+    ];
+    const r = Render.expandPage(hymnSheetPage(), data(rows, {}));
+    const copies = r.nodes[0].children;
+    assert.equal(copies.length, 3);
+    assert.deepEqual(copies.map(c => c.children[0].text), ['Amazing Grace', 'Amazing Grace', 'Doxology']);
+    assert.deepEqual(copies.map(c => c.children[1].attrs.src), ['ag1.png', 'ag2.png', 'dox.png']);
+});
+
+test('a missing hymn sheet asset stays blank and does not invent an image', () => {
+    const rows = [
+        { name: 'A Literal Hymn', image: '', page: 1 },
+        { name: 'Doxology', image: 'dox.png', page: 1 },
+    ];
+    const r = Render.expandPage(hymnSheetPage(), data(rows, {}));
+    const copies = r.nodes[0].children;
+    assert.equal(copies[0].children[1].attrs.src, '', 'missing asset: the img stays, src stays empty');
+    assert.equal(copies[1].children[1].attrs.src, 'dox.png');
+    assert.ok(r.warnings.some(w => /No image for A Literal Hymn/.test(w.message)));
+    assert.ok(!copies.some(c => /placeholder|invented|missing\.png/i.test(c.children[1].attrs.src || '')));
+});

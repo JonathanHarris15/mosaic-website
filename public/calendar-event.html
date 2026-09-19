@@ -59,10 +59,12 @@
     <script src="printable-core.js"></script>
     <script src="printable-dom.js"></script>
     <script src="printable-store.js"></script>
+    <script src="sunday-typed-core.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
     <script src="printable-live.js"></script>
+    <script src="printable-export-core.js"></script>
     <script src="printable-pdf.js"></script>
     <!-- The shape of a document written on the Files tab (ADR-0049). -->
     <script src="document-body-core.js"></script>
@@ -525,6 +527,9 @@
                     <p x-show="!printables.length && canLinkPrintables" class="text-[12.5px] text-on-surface-variant">
                         Nothing linked yet. A linked printable opens from every date of this event and can be filed here as a PDF.
                     </p>
+                    <p x-show="printables.length" class="text-[12.5px] text-on-surface-variant mt-2">
+                        Filed PDFs are flat and padded to a multiple of 4. On the church copier, use Booklet / Saddle Stitch — Mosaic does not reorder pages.
+                    </p>
                     <div x-show="printables.length" class="m-card-list">
                         <template x-for="p in printables" :key="p.id">
                             <div class="m-row cal-printable">
@@ -542,7 +547,7 @@
                                 </a>
                                 <button type="button" x-show="canManageAttachments" @click="filePrintableSnapshot(p)"
                                         :disabled="snapshotBusy" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
-                                        :aria-label="'File a PDF snapshot of ' + p.name" title="File a PDF snapshot of it, as it stands today, in this date's files">
+                                        :aria-label="'File a PDF snapshot of ' + p.name" title="File a flat PDF (padded to a multiple of 4). Use the printer's Booklet / Saddle mode — Mosaic does not reorder pages.">
                                     <span class="material-symbols-outlined text-[18px]" :class="snapshotBusy === p.id ? 'm-spinner' : ''"
                                           x-text="snapshotBusy === p.id ? 'progress_activity' : 'picture_as_pdf'"></span>
                                 </button>

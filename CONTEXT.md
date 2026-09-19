@@ -1098,15 +1098,19 @@ How an [[Element]] takes its width and its height, said the way the layout tools
 _Avoid_: auto layout (Figma's word, and it names the parent's side of it), stretch (that is one align, not a size), hug contents
 
 **Data drawer**:
-The editor's right panel: everything the website can tell a Printable, grouped by where it comes from — **People**, **Sunday**, **Events**, **Forms** — each **source** listing its **fields** by kind (text, image, date, number). What it offers is exactly what the signed-in viewer may read: the catalog (`printable-data-core.js`) is the first half of the permission boundary and holds nothing elder-only at all; `firestore.rules` is the second. A source is a **single** (one row — this Sunday, who holds a role) or a **list** (many rows — the directory, the fortnight's events).
+The editor's right panel: everything the website can tell a Printable, grouped by where it comes from — **People**, **Sunday**, **Events**, **Forms** — each **source** listing its **fields** by kind (text, image, date, number). What it offers is exactly what the signed-in viewer may read: the catalog (`printable-data-core.js`) is the first half of the permission boundary and holds nothing elder-only at all; `firestore.rules` is the second. A source is a **single** (one row — this Sunday, who holds a role, this Sunday's booklet text) or a **list** (many rows — the directory, the fortnight's events).
 _Avoid_: variables panel, connectors (the brief's word; a field is what you drag)
+
+**Sunday booklet text**:
+The weekly typed values that belong to a Sunday, not to a Printable's box tree: prayer-country facts, Mosaic Kids lesson, and announcements (`services/{date}.typedContent`). An editor types them once — in the Printable data drawer, or they are read through from that week's Service Guide if the store is still empty. Every Printable bound to that Sunday reads the same fields. Sunday A's values never appear on Sunday B.
+_Avoid_: guide values (that is the old editor's map), weekly copy (prose)
 
 **Binding** (a **wire**):
 Which field feeds which element — the text of a text element, the picture of an image. Made by dragging a field chip from the drawer onto the element; a wire is drawn from chip to element while dragging and whenever the element is selected. A binding is either **global** (a single source with its params: "next Sunday's theme") or an **item** binding (a field of each row of the [[Repeat]] the element sits inside). Unwired on the element panel.
 _Avoid_: connection, link (that is a Printable on an event), data-bind
 
 **Repeat** (an **iterated element**):
-A box that stands for one row of a list and is drawn once per row — right-click › **Make this element iterated**, pick a list source, set its **filters** (members / non-members / everyone, a tag, inactive people, a sort; for dated sources a **date range** that is static or relative to today) and its **layout** (down or across, per line, gap, a cap per page). The first copy keeps the element's own id and is the one you edit; the rest carry the row number after a tilde and are drawn, never edited. **Overflow** is either **Clip** (the list stops at the margin) or **Makes a new page**: the list stops before the margin and continues on **generated pages** that copy the page it started on — or a page chosen instead — until the rows run out. How many rows fit is measured in the browser and decided by a pure bisection (`printable-render-core.js`).
+A box that stands for one row of a list and is drawn once per row — right-click › **Make this element iterated**, pick a list source, set its **filters** (members / non-members / everyone, a tag, inactive people, a sort; for dated sources a **date range** that is static or relative to today) and its **layout** (down or across, per line, gap, a cap per page). The first copy keeps the element's own id and is the one you edit; the rest carry the row number after a tilde and are drawn, never edited. **Overflow** is either **Clip** (the list stops at the margin) or **Makes a new page**: the list stops before the margin and continues on **generated pages** that copy the page it started on — or a page chosen instead — until the rows run out. How many rows fit is measured in the browser and decided by a pure bisection (`printable-render-core.js`). The Sunday hymns list is one row per **sheet-music page** (MS-481), so a booklet page with **Makes a new page** and one copy per page places every page of a multi-page hymn, in order. A missing image stays blank; nothing is invented.
 _Avoid_: loop, list element, template row
 
 **Stand-in**:
@@ -1114,7 +1118,7 @@ What an element shows when no data is loaded or its field has nothing today: its
 _Avoid_: placeholder (fine in prose), fallback, default value
 
 **View-only page**:
-`printable-view.html` — a Printable resolved with today's data, laid out page by page, read-only, with a Print button. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks).
+`printable-view.html` — a Printable resolved with today's data, laid out page by page, read-only, with a Print button. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks). **Print** and the event PDF snapshot pad the flat page count to a **multiple of 4** (blank leaves at the end) so the church printer's booklet / saddle mode can fold the stack. Pages are not reordered in software (`docs/ops/ms-481-printer-booklet-mode.md`).
 _Avoid_: preview, print preview, share page
 
 **Linked Printable**:

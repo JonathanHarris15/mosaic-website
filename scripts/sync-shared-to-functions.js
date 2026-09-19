@@ -98,6 +98,10 @@ const MODULES = [
     // fields it may wire, and it is the permission boundary's first half — it
     // holds nothing elder-only, which is exactly why it is safe to hand over.
     'printable-core.js',
+    // MS-588. Per-Sunday booklet text (prayer-country facts, Mosaic Kids,
+    // announcements). printable-data-core.js reads it for the sunday_typed
+    // source, so the copy has to travel with the catalog.
+    'sunday-typed-core.js',
     'printable-data-core.js',
     // MS-489 / MS-433. The assistant is refused at a box an elder holds, and
     // "is this box held" has to be the page's answer — heartbeat expiry, the

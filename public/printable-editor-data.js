@@ -40,6 +40,7 @@
                 options: { series: [], roles: [], forms: [] },
                 warnings: [],
                 picking: false,        // choosing a list for the selected element
+                typed: { date: '', draft: null, saving: false, status: '' },
             },
             layout: [],                // what the canvas draws: pages, generated ones included
             dragField: null,           // the chip in the air
@@ -118,10 +119,13 @@
                 return this.layout;
             },
 
-            // The pages for print: the same layout.
+            // The pages for print: the same layout, padded to ×4 for the
+            // church printer's booklet mode (MS-589). Order is unchanged.
             printPages() {
                 const entries = this.computeLayout();
-                return entries.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }) }));
+                const Ex = global.PrintableExportCore;
+                const padded = Ex ? Ex.padEntries(entries) : entries;
+                return padded.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
             },
 
             // ── The drawer ───────────────────────────────────────────────
@@ -173,6 +177,15 @@
                 return this.data.params[source.key];
             },
 
+            setSourceWhen(source, paramKey, when) {
+                this.sourceParams(source)[paramKey] = when;
+                if (source.key === 'sunday_typed') this.loadTypedDraft();
+            },
+
+            formatTypedDate(date) {
+                return Data.formatDate(date, 'medium');
+            },
+
             fieldsOf(source) {
                 return Data.fieldsFor(source, this.sourceParams(source), this.data.options)
                     .filter(f => !f.minLevel || Data.mayRead(this.permissionLevel, f.minLevel));
@@ -180,6 +193,7 @@
 
             toggleSource(key) {
                 this.data.open[key] = !this.data.open[key];
+                if (key === 'sunday_typed' && this.data.open[key]) this.loadTypedDraft();
                 this.$nextTick(() => this.refreshWires());
             },
 
@@ -512,6 +526,83 @@
                 if (w.kind === 'element' && w.pageId) {
                     this.select(w.pageId, w.nodeId);
                     this.scrollToPage(w.pageId);
+                }
+            },
+
+            // ── Sunday booklet text (MS-588) ─────────────────────────────
+            // Typed once on the Sunday; every bound Printable reads it.
+            // The form lives in the existing data drawer — no new editor.
+
+            typedSundayDate() {
+                const src = Data.sourceByKey('sunday_typed');
+                if (!src) return Data.toDateStr(new Date());
+                return Data.resolveWhen(this.sourceParams(src).when, Data.toDateStr(new Date()));
+            },
+
+            async loadTypedDraft() {
+                const Typed = global.SundayTypedCore;
+                if (!Typed) return;
+                const date = this.typedSundayDate();
+                let service = (ui.bundle && ui.bundle.services && ui.bundle.services[date]) || null;
+                if (!service && typeof db !== 'undefined' && db) {
+                    try {
+                        const doc = await db.collection('services').doc(date).get();
+                        if (doc && doc.exists) {
+                            service = doc.data();
+                            if (!ui.bundle) ui.bundle = { services: {} };
+                            ui.bundle.services = ui.bundle.services || {};
+                            ui.bundle.services[date] = service;
+                        }
+                    } catch (e) { service = null; }
+                }
+                this.data.typed.date = date;
+                this.data.typed.draft = Typed.toDraft(Typed.fromService(service));
+                this.data.typed.status = '';
+            },
+
+            addTypedAnnouncement() {
+                if (!this.data.typed.draft) return;
+                this.data.typed.draft.announcements.push({ title: '', content: '' });
+            },
+
+            removeTypedAnnouncement(i) {
+                if (!this.data.typed.draft) return;
+                this.data.typed.draft.announcements.splice(i, 1);
+                if (!this.data.typed.draft.announcements.length) {
+                    this.data.typed.draft.announcements.push({ title: '', content: '' });
+                }
+            },
+
+            onTypedCountryImage(e) {
+                const file = e.target.files && e.target.files[0];
+                if (!file || !this.data.typed.draft) return;
+                const reader = new FileReader();
+                reader.onload = () => { this.data.typed.draft.prayerCountryImage = reader.result; };
+                reader.readAsDataURL(file);
+            },
+
+            async saveTypedDraft() {
+                const Typed = global.SundayTypedCore;
+                if (!Typed || !this.data.typed.draft || !this.canEdit) return;
+                const date = this.typedSundayDate();
+                this.data.typed.saving = true;
+                this.data.typed.status = '';
+                try {
+                    const content = Typed.fromDraft(this.data.typed.draft);
+                    await db.collection('services').doc(date).set({ typedContent: Typed.normalise(content) }, { merge: true });
+                    if (!ui.bundle) ui.bundle = { services: {} };
+                    ui.bundle.services = ui.bundle.services || {};
+                    const cur = ui.bundle.services[date] || {};
+                    ui.bundle.services[date] = Object.assign({}, cur, { typedContent: Typed.normalise(content) });
+                    this.data.typed.date = date;
+                    this.data.typed.status = 'Saved for ' + Data.formatDate(date, 'medium') + '. Bound pages will read it.';
+                    this.rebindData();
+                    this.renderAll();
+                } catch (e) {
+                    console.error(e);
+                    this.data.typed.status = 'Could not save. Check your connection and try again.';
+                } finally {
+                    this.data.typed.saving = false;
                 }
             },
         };
