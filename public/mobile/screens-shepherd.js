@@ -1166,7 +1166,10 @@
     // Parity with the desktop profile card: this APPLIES vocabulary defined in
     // Manage Tags and Relationships, and authors Family by write-through. It never
     // creates a Relationship Type or a named group.
-    function qaOpen(mode) { qaModeS[1](mode); qaFormS[1]({ typeId: "", side: "holder", groupId: "", asLeader: false, familyKind: "spouse", otherId: "", otherName: "" }); }
+    function qaOpen(mode) {
+      if (!canDecide) return;
+      qaModeS[1](mode); qaFormS[1]({ typeId: "", side: "holder", groupId: "", asLeader: false, familyKind: "spouse", otherId: "", otherName: "" });
+    }
     function qaClose() { qaModeS[1](null); }
     function setQa(patch) { qaFormS[1](Object.assign({}, qaFormS[0], patch)); }
 
@@ -1213,12 +1216,14 @@
     }
 
     function deleteRelationship(edgeId) {
+      if (!canDecide) return;
       data.deleteRelationshipPair(edgeId).then(function () {
         relsS[1](rels.filter(function (r) { return r.id !== edgeId; }));
         showToast("Relationship removed");
       }).catch(function () { showToast("Error removing relationship", "error"); });
     }
     function qaAddPairwise() {
+      if (!canDecide) return;
       var type = qaSelectedType(), otherId = qaForm.otherId;
       if (!type || !otherId) { showToast("Pick a relationship type and a person", "error"); return; }
       var iAmHolder = !type.priority || qaForm.side === "holder";
@@ -1233,6 +1238,7 @@
       }).catch(function () { showToast("Error adding relationship", "error"); });
     }
     function qaJoinGroup() {
+      if (!canDecide) return;
       var group = qaSelectedGroup();
       if (!group) { showToast("Pick a group to join", "error"); return; }
       var next = (qaForm.asLeader && qaLeaderSeatOpen()) ? GC.setLeader(group, pid) : GC.addMember(group, pid);
@@ -1242,6 +1248,7 @@
       }).catch(function () { showToast("Error joining group", "error"); });
     }
     function qaLeaveGroup(row) {
+      if (!canDecide) return;
       if (!window.confirm("Remove " + person.name + ' from "' + row.groupName + '"?')) return;
       var next = row.leading ? GC.clearLeader(row.group) : GC.removeMember(row.group, pid);
       data.writeRelationshipGroup(next).then(function () {
@@ -1250,6 +1257,7 @@
       }).catch(function () { showToast("Error leaving group", "error"); });
     }
     function qaAddFamily() {
+      if (!canDecide) return;
       var otherId = qaForm.otherId;
       if (!otherId) { showToast("Pick a person", "error"); return; }
       var plan = window.FamilyCore.planAddFamilyRelation(families, pid, qaForm.familyKind, otherId, personById);
@@ -1263,6 +1271,7 @@
         .catch(function () { showToast("Error updating family", "error"); });
     }
     function qaRemoveFamily(row) {
+      if (!canDecide) return;
       var plan = window.FamilyCore.planRemoveFamilyRelation(families, pid, row.familyKind, row.otherId);
       if (!plan.valid) { showToast(plan.errors[0], "error"); return; }
       var message = "Remove " + rosterName(row.otherId) + " as " + person.name + "'s " + row.label.toLowerCase() + "?";
@@ -1414,19 +1423,19 @@
                     <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(rowIcon(r), 15)}</span>
                     <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${rowText(r)}</span>
                   </div>
-                  ${r.removable
+                  ${canDecide && r.removable
                     ? html`<button onClick=${function () { removeRow(r); }} aria-label="Remove" style=${{ flexShrink: 0, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", borderRadius: 6 }}>${Ic("x", 15)}</button>`
-                    : html`<span title="Emergent from the family — remove a parent or child instead" style=${{ flexShrink: 0, display: "inline-flex", color: "var(--on-surface-variant)" }}>${Ic("lock", 13)}</span>`}
+                    : !r.removable ? html`<span title="Emergent from the family — remove a parent or child instead" style=${{ flexShrink: 0, display: "inline-flex", color: "var(--on-surface-variant)" }}>${Ic("lock", 13)}</span>` : null}
                 </div>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No relationships recorded.</span>`}
               </div>
 
-              ${!qaMode ? html`<div style=${{ display: "flex", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+              ${!qaMode && canDecide ? html`<div style=${{ display: "flex", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
                 <button onClick=${function () { qaOpen("pairwise"); }} style=${actionBtn}>${Ic("arrow-left-right", 19)}<span>Relationship</span></button>
                 <button onClick=${function () { qaOpen("group"); }} style=${actionBtn}>${Ic("users", 19)}<span>Join group</span></button>
                 <button onClick=${function () { qaOpen("family"); }} style=${actionBtn}>${Ic("heart", 19)}<span>Family</span></button>
               </div>` : null}
 
-              ${qaMode === "pairwise" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+              ${qaMode === "pairwise" && canDecide ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
                 <div style=${{ position: "relative" }}>
                   <select value=${qaForm.typeId} onChange=${function (e) { setQa({ typeId: e.target.value }); }} style=${selectStyle}>
                     <option value="">Choose a relationship type…</option>
@@ -1443,7 +1452,7 @@
                 <button onClick=${qaAddPairwise} disabled=${!qaForm.typeId || !qaForm.otherId} style=${Object.assign({}, applyBtn, { opacity: (qaForm.typeId && qaForm.otherId) ? 1 : 0.45 })}>Add relationship</button>
               </div>` : null}
 
-              ${qaMode === "group" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+              ${qaMode === "group" && canDecide ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
                 <div style=${{ position: "relative" }}>
                   <select value=${qaForm.groupId} onChange=${function (e) { setQa({ groupId: e.target.value, asLeader: false }); }} style=${selectStyle}>
                     <option value="">Choose a group to join…</option>
@@ -1459,7 +1468,7 @@
                 <button onClick=${qaJoinGroup} disabled=${!qaForm.groupId} style=${Object.assign({}, applyBtn, { opacity: qaForm.groupId ? 1 : 0.45 })}>Join group</button>
               </div>` : null}
 
-              ${qaMode === "family" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+              ${qaMode === "family" && canDecide ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
                 <div style=${{ display: "flex", gap: 6 }}>
                   ${["spouse", "parent", "child"].map(function (k) { return html`<button key=${k} onClick=${function () { setQa({ familyKind: k }); }} style=${toggleBtn(qaForm.familyKind === k)}>${k}</button>`; })}
                 </div>

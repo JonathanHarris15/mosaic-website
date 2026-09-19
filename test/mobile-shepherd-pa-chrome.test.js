@@ -3,12 +3,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// MS-541 / MS-575 / MS-576 — phone Shepherd decision chrome asks
+// MS-541 / MS-575 / MS-576 / MS-577 — phone Shepherd decision chrome asks
 // AccessCore.canDecide so a Pastoral Assistant never gets a click → toast.
 // Screen entry stays canReadElder (a PA still opens Shepherd).
 
 const SRC = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd.js'),
+    'utf8'
+);
+const TAGS = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd-tags.js'),
     'utf8'
 );
 
@@ -19,11 +23,15 @@ function between(src, from, to) {
     return src.slice(a, b === -1 ? a + 2000 : b);
 }
 
-function headOf(name) {
-    const start = SRC.indexOf(name);
+function headOfIn(src, name) {
+    const start = src.indexOf(name);
     assert.ok(start !== -1, name + ' is gone');
-    const open = SRC.indexOf('{', start);
-    return SRC.slice(open, open + 80);
+    const open = src.indexOf('{', start);
+    return src.slice(open, open + 80);
+}
+
+function headOf(name) {
+    return headOfIn(SRC, name);
 }
 
 test('phone Shepherd no longer aliases isElder = canReadElder', () => {
@@ -87,6 +95,49 @@ test('profile explanation edit is canDecide; Add Note is not', () => {
 
 test('profile write methods refuse without canDecide before they toast', () => {
     for (const name of ['function setStatus', 'function commitMembership', 'function toggleTag', 'function createTag', 'function saveExpl']) {
+        assert.match(headOf(name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
+    }
+});
+
+test('people-list tag editor write chrome is canDecide', () => {
+    assert.match(SRC, /canDecide \? html`<button onClick=\$\{function \(\) \{ tagModalS\[1\]\(p\); \}\} aria-label="Edit tags"/);
+    assert.match(SRC, /tagModalPerson && canDecide \? html`<\$\{Modal\} onClose=\$\{function \(\) \{ tagModalS\[1\]\(null\); \}\} title="Manage Tags"/);
+    assert.match(headOf('function togglePersonTag'), /if\s*\(\s*!canDecide\s*\)\s*return/);
+    const modal = between(SRC, 'title="Manage Tags"', 'Add New Person');
+    assert.match(modal, /togglePersonTag\(tagModalPerson, t\.id\)/);
+});
+
+test('Manage Tags rename/merge/delete are canDecide; Create stays gated; entry is canReadElder', () => {
+    assert.match(TAGS, /isElder\s*=\s*canReadElder/);
+    assert.match(TAGS, /: !isElder \? html`<div style=\$\{\{ padding: "60px 24px"/);
+    assert.match(TAGS, /canDecide \? html`<div style=\$\{Object\.assign\(\{\}, OVER, \{ marginBottom: 8 \}\)\}>Create a Tag/);
+    assert.match(TAGS, /isEditing && canDecide \? html`<div style=\$\{\{ display: "flex", gap: 8 \}\}/);
+    assert.match(TAGS, /canDecide \? html`<div style=\$\{\{ display: "flex", alignItems: "center", gap: 2/);
+    assert.match(TAGS, /: canDecide \? html`<button onClick=\$\{function \(\) \{ actionsOpenS\[1\]/);
+    assert.match(TAGS, /mergeSource && canDecide \? html`<\$\{Modal\}/);
+    assert.match(TAGS, /confirmDelete && canDecide \? html`<\$\{Modal\}/);
+    for (const name of ['function createTag', 'function commitRename', 'function doMerge', 'function doDelete', 'function toggleFlag']) {
+        assert.match(headOfIn(TAGS, name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
+    }
+});
+
+test('profile relationship add/remove are canDecide', () => {
+    const rels = between(SRC, '>Relationships</h2>', '>Shepherding Tags</h2>');
+    assert.match(rels, /!qaMode && canDecide \? html`<div style=\$\{\{ display: "flex", gap: 6/);
+    assert.match(rels, /qaOpen\("pairwise"\)/);
+    assert.match(rels, /qaOpen\("group"\)/);
+    assert.match(rels, /qaOpen\("family"\)/);
+    assert.match(rels, /canDecide && r\.removable/);
+    assert.match(rels, /aria-label="Remove"/);
+    for (const name of [
+        'function qaOpen',
+        'function qaAddPairwise',
+        'function qaAddFamily',
+        'function qaJoinGroup',
+        'function deleteRelationship',
+        'function qaLeaveGroup',
+        'function qaRemoveFamily',
+    ]) {
         assert.match(headOf(name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
     }
 });
