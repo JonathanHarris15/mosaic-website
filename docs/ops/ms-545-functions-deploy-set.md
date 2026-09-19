@@ -32,3 +32,22 @@ and never writes `enforce`. Enforce is an Atlas-escalated param flip:
 Agents must not `firebase deploy` from a cloud box (AGENTS.md). Adding
 another function to prod means adding it here (and to the agreement
 test), not a laptop CLI that skips the workflow.
+
+## Dry-run (MS-547) — Maintain CLEAR before live
+
+Plan only, through the **widened** workflow. Do not omit `-f dry_run=true`:
+`workflow_dispatch` defaults to a live deploy.
+
+From a machine with `gh` and Actions write on this repo:
+
+```bash
+gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-545 -f dry_run=true
+```
+
+Then open the run under Actions and confirm the log prints
+`targets=hosting,functions:publicForm,functions:onAttendanceCreated` and
+`dry_run=true`.
+
+Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
+on Maintain **CLEAR**. That is MS-548. Do not merge or ship from this
+note.
