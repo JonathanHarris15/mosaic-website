@@ -24,6 +24,7 @@ const SARAH = 'person-sarah';
 const RAY = 'person-ray';
 const JEN = 'person-jen';
 const KIM = 'person-kim';
+const ANN = 'person-ann';
 
 const OCC_A = 'occ-2026-03-14';
 const OCC_B = 'occ-2026-03-28';
@@ -233,6 +234,73 @@ suite('the five ways a Trade moves', () => {
 
         assert.equal(result.ok, false);
         assert.deepEqual(await tradesNow(), []);
+    });
+
+    // ── Unlinked invitees (MS-538 / MS-593) ──────────────────────────────────
+    //
+    // beforeEach seeds every named person as a member Linked User, so the
+    // unlinked accept/refuse paths inviteFacts walks have never been asked
+    // against Firestore. These three seed a Person with no users row and
+    // assert that before inviting — a fixture slip cannot false-pass.
+
+    test('an unlinked Person who is not on a members-only Event is refused',
+        async () => {
+            await H.seedPerson(db, ANN);
+            await H.assertUnlinked(db, ANN);
+
+            const result = await invite(ANN);
+
+            assert.equal(result.ok, false);
+            assert.equal(result.reason, Core.REASONS.NOT_VISIBLE);
+            assert.deepEqual(await tradesNow(), []);
+        });
+
+    test('an unlinked Person already on a members-only Event is accepted',
+        async () => {
+            await H.seedPerson(db, ANN);
+            await H.assertUnlinked(db, ANN);
+            // Already a participant — inviting them discloses nothing.
+            await H.seedOccurrence(db, {
+                id: OCC_A, date: KIDS.date, visibility: 'member',
+                name: 'Morning Service',
+                roster: [
+                    assignment('kids', 's1', BOB, 'declined'),
+                    assignment('coffee', 's1', ANN, 'confirmed'),
+                ],
+            });
+
+            const result = await invite(ANN);
+
+            assert.equal(result.ok, true);
+            const all = await tradesNow();
+            assert.equal(all.length, 1);
+            assert.equal(all[0].counterpartyId, ANN);
+            assert.equal(all[0].state, Core.STATES.INVITED);
+        });
+
+    test('an unlinked Person is accepted on a public Event', async () => {
+        await H.seedPerson(db, ANN);
+        await H.assertUnlinked(db, ANN);
+        await H.seedOccurrence(db, {
+            id: 'occ-public', date: '2026-03-21', visibility: 'public',
+            name: 'Sunday Service',
+            roster: [assignment('kids', 's1', BOB, 'declined')],
+        });
+
+        const result = await writes.invite(db, {
+            actorId: BOB, counterpartyId: ANN,
+            assignment: {
+                occurrenceId: 'occ-public', roleSlug: 'kids', slotId: 's1',
+                date: '2026-03-21',
+            },
+            today: TODAY, now: H.now(),
+        });
+
+        assert.equal(result.ok, true);
+        const all = await tradesNow();
+        assert.equal(all.length, 1);
+        assert.equal(all[0].counterpartyId, ANN);
+        assert.equal(all[0].state, Core.STATES.INVITED);
     });
 
 // ── Quiet or open (MS-213) ───────────────────────────────────────────────
