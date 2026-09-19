@@ -119,10 +119,13 @@
                 return this.layout;
             },
 
-            // The pages for print: the same layout.
+            // The pages for print: the same layout, padded to ×4 for the
+            // church printer's booklet mode (MS-589). Order is unchanged.
             printPages() {
                 const entries = this.computeLayout();
-                return entries.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }) }));
+                const Ex = global.PrintableExportCore;
+                const padded = Ex ? Ex.padEntries(entries) : entries;
+                return padded.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
             },
 
             // ── The drawer ───────────────────────────────────────────────

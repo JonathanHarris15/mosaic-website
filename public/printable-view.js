@@ -26,6 +26,14 @@ function printableView() {
         get template() { return this.project ? this.project.template : null; },
         get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get editorHref() { return 'printable-editor.html?id=' + encodeURIComponent(this.id); },
+        get printPageCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.paddedPageCount(this.entries.length) : this.entries.length;
+        },
+        get bookletPadCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.blankPadCount(this.entries.length) : 0;
+        },
 
         async init() {
             this.id = new URLSearchParams(location.search).get('id') || '';
@@ -113,6 +121,11 @@ function printableView() {
             });
         },
 
+        printEntries() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.padEntries(this.entries) : this.entries;
+        },
+
         printPrintable() {
             const layer = document.getElementById('pv-print');
             if (!layer || !this.template) return;
@@ -124,7 +137,7 @@ function printableView() {
                 + ' .pv-print-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pv-print-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            this.entries.forEach(entry => {
+            this.printEntries().forEach(entry => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-print-sheet';
                 sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id }));

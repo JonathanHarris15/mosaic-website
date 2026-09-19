@@ -26,7 +26,7 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title m-header__title--serif" x-text="project ? project.name : 'Printable'"></h1>
-                    <span class="m-header__sub" x-show="template" x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') : '')) : ''"></span>
+                    <span class="m-header__sub" x-show="template" x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + (bookletPadCount ? ' · print ' + printPageCount + ' (padded ×4)' : '') : '')) : ''"></span>
                 </div>
             </div>
             <div class="m-header__actions">
@@ -34,7 +34,7 @@
                     <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
                 </button>
                 <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" title="Prints a flat PDF padded to a multiple of 4. Use the printer's Booklet / Saddle mode — Mosaic does not reorder pages."><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
             </div>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -52,6 +52,13 @@
             <div class="m-notice__body">
                 <span class="m-notice__title">Not all data could be pulled</span>
                 <template x-for="(w, i) in warnings" :key="i"><span class="m-notice__text pv-warn" x-text="w.label + ': ' + w.message"></span></template>
+            </div>
+        </div>
+        <div class="m-notice m-notice--info pv-booklet" x-show="!loading && !problem && entries.length">
+            <span class="material-symbols-outlined m-notice__icon">print</span>
+            <div class="m-notice__body">
+                <span class="m-notice__title">Church printer booklet mode</span>
+                <span class="m-notice__text">Print sends a <strong>flat</strong> stack of <span x-text="printPageCount"></span> pages (a multiple of 4<span x-show="bookletPadCount" x-text="', including ' + bookletPadCount + ' blank'"></span>). On the copier, choose <strong>Booklet</strong> / <strong>Saddle Stitch</strong> / <strong>Fold &amp; Staple</strong>. Mosaic does not reorder pages — the printer folds this stack. See <code>docs/ops/ms-481-printer-booklet-mode.md</code>.</span>
             </div>
         </div>
         <div id="pv-pages" class="pv-pages" x-show="!loading && !problem"></div>
@@ -78,6 +85,7 @@
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
     <script src="printable-live.js"></script>
+    <script src="printable-export-core.js"></script>
     <script src="printable-view.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 

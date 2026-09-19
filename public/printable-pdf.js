@@ -43,14 +43,18 @@
         await ready();
         const Dom = global.PrintableDom;
         const t = project.template;
+        // Flat booklet: pad to ×4. No imposition — printer saddle mode
+        // folds this stack (MS-589).
+        const Export = global.PrintableExportCore;
+        const pages = (o.padToMultipleOf4 === false || !Export) ? (entries || []) : Export.padEntries(entries || []);
         const host = document.createElement('div');
         host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + t.widthPx + 'px;pointer-events:none;';
         document.body.appendChild(host);
         try {
             const orientation = t.widthIn > t.heightIn ? 'landscape' : 'portrait';
             const doc = new global.jspdf.jsPDF({ unit: 'in', format: [t.widthIn, t.heightIn], orientation: orientation, compress: true });
-            for (let i = 0; i < entries.length; i++) {
-                const entry = entries[i];
+            for (let i = 0; i < pages.length; i++) {
+                const entry = pages[i];
                 host.innerHTML = '';
                 const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id });
                 host.appendChild(page);
@@ -61,7 +65,7 @@
                 });
                 if (i > 0) doc.addPage([t.widthIn, t.heightIn], orientation);
                 doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, t.widthIn, t.heightIn, undefined, 'FAST');
-                if (o.onProgress) o.onProgress(i + 1, entries.length);
+                if (o.onProgress) o.onProgress(i + 1, pages.length);
             }
             return doc.output('blob');
         } finally {

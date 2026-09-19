@@ -2134,7 +2134,9 @@
                     document.body.appendChild(host);
                     let entries;
                     try { entries = PrintableLive.layoutPages(project, resolver, host); } finally { host.remove(); }
-                    this.snapshotProgress = 'Drawing ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + '…';
+                    const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+                    const printCount = Ex ? Ex.paddedPageCount(entries.length) : entries.length;
+                    this.snapshotProgress = 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…';
                     const blob = await PrintablePdf.render(project, entries, {
                         scale: 1,
                         onProgress: (done, total) => { this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…'; },

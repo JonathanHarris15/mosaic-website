@@ -1118,7 +1118,7 @@ What an element shows when no data is loaded or its field has nothing today: its
 _Avoid_: placeholder (fine in prose), fallback, default value
 
 **View-only page**:
-`printable-view.html` — a Printable resolved with today's data, laid out page by page, read-only, with a Print button. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks).
+`printable-view.html` — a Printable resolved with today's data, laid out page by page, read-only, with a Print button. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks). **Print** and the event PDF snapshot pad the flat page count to a **multiple of 4** (blank leaves at the end) so the church printer's booklet / saddle mode can fold the stack. Pages are not reordered in software (`docs/ops/ms-481-printer-booklet-mode.md`).
 _Avoid_: preview, print preview, share page
 
 **Linked Printable**:
