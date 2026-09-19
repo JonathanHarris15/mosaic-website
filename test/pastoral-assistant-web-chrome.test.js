@@ -165,17 +165,20 @@ test('the profile hides Undo unless canDecide', () => {
     assert.match(undo, /if\s*\(\s*!this\.canDecide/, 'undoStatusChange can still run for a PA');
 });
 
-test('the profile Membership Track is canDecide, not canWriteEditor', () => {
+// MS-601 — Track is canDecide || canEditMembership. canEditMembership is the
+// editor write ladder, not another name for canDecide. Full matrix lives in
+// test/editor-membership-track.test.js.
+test('the profile Membership Track is canDecide || canEditMembership', () => {
     const html = read('shepherding-profile.html');
     const track = between(html, '<!-- Membership Track', '<!-- Shepherding Tags Panel');
-    assert.match(track, /x-show="canDecide"/);
+    assert.match(track, /x-show="canDecide \|\| canEditMembership"/);
     assert.doesNotMatch(track, /canWriteEditor/);
     const src = read('shepherding-profile.js');
-    const getter = src.slice(src.indexOf('get canEditMembership'), src.indexOf('get canEditMembership') + 90);
-    assert.match(getter, /return this\.canDecide/);
-    assert.doesNotMatch(getter, /canWriteEditor/);
-    const commit = src.slice(src.indexOf('async commitMembership'), src.indexOf('async commitMembership') + 90);
-    assert.match(commit, /if\s*\(\s*!this\.canDecide\s*\)\s*return/);
+    const getter = src.slice(src.indexOf('get canEditMembership'), src.indexOf('get canEditMembership') + 140);
+    assert.match(getter, /canWriteEditor/);
+    assert.doesNotMatch(getter, /return this\.canDecide/);
+    const commit = src.slice(src.indexOf('async commitMembership'), src.indexOf('async commitMembership') + 140);
+    assert.match(commit, /canDecide \|\| this\.canEditMembership/);
 });
 
 test('the Relationships tab hides type New / Edit / Delete unless canDecide', () => {

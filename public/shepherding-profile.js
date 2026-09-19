@@ -696,11 +696,13 @@ document.addEventListener('alpine:init', () => {
 
         // ── Membership Track (ADR-0012) — the stage slider, also on the profile ──
         // The same Track control the People list has, driven off this Person and
-        // committing one Membership Change (silent tag swap) per move. A decision:
-        // same AccessCore flag as Relations Viewer, not canWriteEditor. MS-594
-        // gives a Pastoral Assistant the slider too.
+        // committing one Membership Change (silent tag swap) per move.
+        // canEditMembership is the editor write ladder (AccessCore.writesAsEditor /
+        // pageFlags.canWriteEditor), not an alias of canDecide. The Track surface
+        // asks canDecide || canEditMembership so a Pastoral Assistant still walks
+        // it (MS-594) and a non-elder editor keeps the slider MS-573 removed.
         get canEditMembership() {
-            return this.canDecide;
+            return !!this.canWriteEditor;
         },
         get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
         get membershipIndex() {
@@ -726,7 +728,7 @@ document.addEventListener('alpine:init', () => {
             await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
         },
         async commitMembership(next) {
-            if (!this.canDecide) return;
+            if (!(this.canDecide || this.canEditMembership)) return;
             const person = this.person;
             if (!person) return;
             const previous = {
