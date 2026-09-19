@@ -69,7 +69,7 @@
           ${URG.map(function (u) {
             var sel = props.selected(u, imp);
             var st = cellStyle(u, imp, sel);
-            return html`<button key=${u} onClick=${function () { props.onCell(u, imp); }} style=${{ width: cell, height: cell, border: "2px solid " + st.border, background: st.bg, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", margin: "0 auto", boxShadow: sel ? "0 0 0 3px rgba(24,47,87,0.15)" : "none" }}>
+            return html`<button key=${u} onClick=${function () { if (!props.disabled) props.onCell(u, imp); }} style=${{ width: cell, height: cell, border: "2px solid " + st.border, background: st.bg, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: props.disabled ? "default" : "pointer", margin: "0 auto", boxShadow: sel ? "0 0 0 3px rgba(24,47,87,0.15)" : "none" }}>
               ${st.dot ? html`<span style=${{ width: cell > 40 ? 10 : 8, height: cell > 40 ? 10 : 8, borderRadius: "50%", background: "var(--on-primary)" }}></span>` : null}
             </button>`;
           })}
@@ -160,6 +160,12 @@
     var toast = toastS[0];
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
 
+    var userKnown = props.user !== undefined; // undefined = still resolving auth
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+
     // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
     useEffect(function () {
       var alive = true;
@@ -188,9 +194,16 @@
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
     // ── Filtered Views ──
-    function openNewView() { viewModalS[1]({ editingId: null, title: "", filterTags: [], filterMode: "any", statusZones: [] }); }
-    function openEditView(v) { viewModalS[1]({ editingId: v.id, title: v.title || "", filterTags: (v.filterTags || []).slice(), filterMode: v.filterMode || "any", statusZones: (v.statusZoneFilters || []).slice() }); }
+    function openNewView() {
+      if (!canDecide) return;
+      viewModalS[1]({ editingId: null, title: "", filterTags: [], filterMode: "any", statusZones: [] });
+    }
+    function openEditView(v) {
+      if (!canDecide) return;
+      viewModalS[1]({ editingId: v.id, title: v.title || "", filterTags: (v.filterTags || []).slice(), filterMode: v.filterMode || "any", statusZones: (v.statusZoneFilters || []).slice() });
+    }
     function saveView() {
+      if (!canDecide) return;
       var vm = viewModalS[0];
       if (!vm || !vm.title.trim()) return;
       if (vm.editingId) {
@@ -210,6 +223,7 @@
       }
     }
     function deleteView(id) {
+      if (!canDecide) return;
       if (!window.confirm("Are you sure you want to delete this view?")) return;
       data.deleteShepherdingView(id).then(function () {
         viewsS[1](views.filter(function (v) { return v.id !== id; }));
@@ -237,12 +251,6 @@
       { icon: "list-checks", title: "Tasks & Reminders", desc: "What the elders have to do, and what got done.", go: function () { props.nav("shepherdTasks"); } },
     ];
 
-    var userKnown = props.user !== undefined; // undefined = still resolving auth
-    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
-    var canReadElder = !!(flags && flags.canReadElder);
-    var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
-    var isElder = canReadElder;
     var vm = viewModalS[0];
     var selectedView = views.filter(function (v) { return v.id === selectedS[0]; })[0];
 
@@ -253,7 +261,7 @@
           ${!userKnown ? html`<div style=${{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 20px", color: "var(--on-surface-variant)" }}>
               <span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span>
             </div>`
-          : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+          : !canReadElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}>
               <div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div>
               <p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p>
             </div>`
@@ -278,7 +286,7 @@
 
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <span style=${OVER}>Filtered Views</span>
-            <button onClick=${openNewView} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New View</button>
+            ${canDecide ? html`<button onClick=${openNewView} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New View</button>` : null}
           </div>
 
           ${loadingS[0] ? html`<p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)", margin: "0 0 22px" }}>Loading…</p>`
@@ -317,7 +325,7 @@
         </${Body}>
 
 
-        ${vm ? html`<${Modal} onClose=${function () { viewModalS[1](null); }} title=${vm.editingId ? "Edit Filtered View" : "New Filtered View"}
+        ${vm && canDecide ? html`<${Modal} onClose=${function () { viewModalS[1](null); }} title=${vm.editingId ? "Edit Filtered View" : "New Filtered View"}
           footer=${html`<${Fragment}><button onClick=${function () { viewModalS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${saveView} style=${pill()}>${vm.editingId ? "Save Changes" : "Create View"}</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 16 }}>
             <${Field} label="View title"><input value=${vm.title} onInput=${function (e) { viewModalS[1](Object.assign({}, vm, { title: e.target.value })); }} placeholder="e.g. Red Flag Members" style=${inputStyle} /></${Field}>
@@ -372,10 +380,10 @@
               ${!(v.filterTags || []).length && !(v.statusZoneFilters || []).length ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>All active members</span>` : null}
             </div>
           </div>
-          <div style=${{ display: "flex", gap: 4, flexShrink: 0 }}>
+          ${canDecide ? html`<div style=${{ display: "flex", gap: 4, flexShrink: 0 }}>
             <button onClick=${function () { openEditView(v); }} aria-label="Edit view" style=${iconBtn}>${Ic("pencil", 16)}</button>
             <button onClick=${function () { deleteView(v.id); }} aria-label="Delete view" style=${Object.assign({}, iconBtn, { color: "var(--error)" })}>${Ic("trash-2", 16)}</button>
-          </div>
+          </div>` : null}
         </div>
         ${vp.length === 0 ? html`<div style=${{ padding: 16, fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No people match this filter.</div>`
           : vp.map(function (p, i) {
@@ -430,6 +438,13 @@
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
 
+    var userKnown = props.user !== undefined;
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var canWriteEditor = !!(flags && flags.canWriteEditor);
+
     useEffect(function () {
       var alive = true;
       Promise.all([data.getShepherdingPeople(), data.getShepherdingTags(), data.getShepherdingViews()])
@@ -475,6 +490,7 @@
       }).catch(function () { showToast("Error adding person", "error"); });
     }
     function saveView() {
+      if (!canDecide) return;
       var t = saveNameS[0].trim(); if (!t) return;
       data.addShepherdingView({ title: t, filterTags: tagFilters.slice(), filterMode: tagMode, statusZoneFilters: statusZones.slice(), sortBy: sortByS[0], tagHoldFilters: {}, tagHoldCmp: {} }, user)
         .then(function () { saveNameS[1](""); showSaveS[1](false); data.getShepherdingViews().then(viewsS[1]); showToast("View saved"); })
@@ -482,13 +498,6 @@
     }
     function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
 
-    var userKnown = props.user !== undefined;
-    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
-    var canReadElder = !!(flags && flags.canReadElder);
-    var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
-    var canWriteEditor = !!(flags && flags.canWriteEditor);
-    var isElder = canReadElder;
     var addBtn = html`<button onClick=${function () { addModalS[1](true); }} aria-label="Add person" style=${Object.assign({}, iconBtn, { color: "var(--primary)", marginRight: 4, width: 40, height: 40 })}>${Ic("user-plus", 20)}</button>`;
 
     return html`
@@ -496,7 +505,7 @@
         <${TopBar} title="People" onBack=${props.back} serif=${false} right=${canWriteEditor ? addBtn : null} />
         <${Body} style=${{ padding: "14px 16px 40px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
-          : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
+          : !canReadElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
           : html`
           <div style=${{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--primary)" }}>People</div>
@@ -530,9 +539,9 @@
             <div style=${{ padding: 16, borderBottom: "1px solid var(--outline-variant)" }}>
               <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <span style=${SP_OVER}>Saved Views</span>
-                <button onClick=${function () { showSaveS[1](!showSaveS[0]); }} aria-label="Save current filters" style=${Object.assign({}, iconBtn, { width: 28, height: 28 })}>${Ic("bookmark-plus", 16)}</button>
+                ${canDecide ? html`<button onClick=${function () { showSaveS[1](!showSaveS[0]); }} aria-label="Save current filters" style=${Object.assign({}, iconBtn, { width: 28, height: 28 })}>${Ic("bookmark-plus", 16)}</button>` : null}
               </div>
-              ${showSaveS[0] ? html`<div style=${{ display: "flex", gap: 6, marginBottom: 10 }}>
+              ${showSaveS[0] && canDecide ? html`<div style=${{ display: "flex", gap: 6, marginBottom: 10 }}>
                 <input value=${saveNameS[0]} onInput=${function (e) { saveNameS[1](e.target.value); }} placeholder="View name…" style=${Object.assign({}, inputStyle, { flex: 1, padding: "7px 10px", fontSize: 13 })} />
                 <button onClick=${saveView} style=${Object.assign({}, pill(), { padding: "7px 12px", fontSize: 12 })}>Save</button>
               </div>` : null}
@@ -540,7 +549,7 @@
                 : views.map(function (v) {
                   return html`<div key=${v.id} style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "4px 0" }}>
                     <button onClick=${function () { loadView(v); }} style=${{ flex: 1, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 500, color: "var(--on-surface)" }}>${v.title}</button>
-                    <button onClick=${function () { data.deleteShepherdingView(v.id).then(function () { viewsS[1](views.filter(function (x) { return x.id !== v.id; })); }); }} aria-label="Delete saved view" style=${Object.assign({}, iconBtn, { width: 26, height: 26 })}>${Ic("x", 15)}</button>
+                    ${canDecide ? html`<button onClick=${function () { if (!canDecide) return; data.deleteShepherdingView(v.id).then(function () { viewsS[1](views.filter(function (x) { return x.id !== v.id; })); }); }} aria-label="Delete saved view" style=${Object.assign({}, iconBtn, { width: 26, height: 26 })}>${Ic("x", 15)}</button>` : null}
                   </div>`;
                 })}
             </div>
@@ -924,6 +933,12 @@
     function relTypeById(id) { for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === id) return relTypes[i]; } return null; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
+
+    var userKnown = props.user !== undefined;
+    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    var canReadElder = !!(flags && flags.canReadElder);
+    var canDecide = !!(flags && flags.canDecide);
+    var canWriteRecord = !!(flags && flags.canWriteRecord);
     // Live (MS-490): everything on this screen is watched rather than read
     // once, the way the web profile is, so another elder's note, status or tag
     // shows up here without leaving and coming back. Leaving the screen stops
@@ -1055,6 +1070,7 @@
     }
 
     function setStatus(urg, imp) {
+      if (!canDecide) return;
       var cur = person.shepherdingStatus;
       var same = cur && cur.urgency === urg && cur.importance === imp;
       var next = same ? null : { urgency: urg, importance: imp };
@@ -1066,6 +1082,7 @@
     // source of truth; data.setMembership re-projects the Membership Tags and logs
     // one Membership Change. Inactive keeps the stage but flips the flag.
     function commitMembership(next) {
+      if (!canDecide) return;
       var m = person.membership || {};
       var previous = { stage: m.stage || null, inactive: !!m.inactive };
       if (previous.stage === next.stage && previous.inactive === next.inactive) return;
@@ -1084,6 +1101,7 @@
       commitMembership({ stage: m.stage || null, inactive: !m.inactive });
     }
     function toggleTag(tagId) {
+      if (!canDecide) return;
       if (window.ShepherdingCore.isProjectedTagId(tagId)) { showToast("This tag is set by the system, not manual tagging", "error"); return; }
       var has = (person.tags || []).indexOf(tagId) !== -1;
       var newTags = has ? (person.tags || []).filter(function (x) { return x !== tagId; }) : (person.tags || []).concat([tagId]);
@@ -1094,6 +1112,7 @@
       }).catch(function () { showToast("Error updating tags", "error"); });
     }
     function createTag() {
+      if (!canDecide) return;
       var name = newTagS[0].trim(); if (!name) return;
       if (tags.some(function (t) { return t.name.toLowerCase() === name.toLowerCase(); })) { showToast("Tag already exists", "error"); return; }
       data.createShepherdingTag(name).then(function (tag) {
@@ -1126,6 +1145,7 @@
         .catch(function () { showToast("Error deleting note", "error"); });
     }
     function saveExpl(id) {
+      if (!canDecide) return;
       var draft = explEditS[0][id] || "";
       data.saveShepherdingExplanation(pid, id, draft.trim()).then(function () {
         var n = Object.assign({}, explEditS[0]); delete n[id]; explEditS[1](n); showToast("Explanation saved");
@@ -1259,12 +1279,6 @@
       }).catch(function () { showToast("Error updating family", "error"); });
     }
 
-    var userKnown = props.user !== undefined;
-    var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
-    var canReadElder = !!(flags && flags.canReadElder);
-    var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
-    var isElder = canReadElder;
     // A face, a first name and a lock: "you can't open this" answered before
     // it is asked.
     function heldBadge(holder) {
@@ -1282,7 +1296,7 @@
       return html`<${Screen}><${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "16px" }}><div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div></${Body}></${Screen}>`;
     }
-    if (!isElder) {
+    if (!canReadElder) {
       return html`<${Screen}><${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><div style=${{ display: "inline-flex", opacity: 0.5, color: "var(--on-surface-variant)" }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12, color: "var(--on-surface-variant)" }}>Elder-only tools.</p></${Body}></${Screen}>`;
     }
@@ -1458,24 +1472,24 @@
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Shepherding Tags</h2>
             <div style=${{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              ${(person.tags || []).length ? (person.tags || []).map(function (t) { var mt = window.ShepherdingCore.isProjectedTagId(t); return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: mt ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: mt ? "var(--primary-fixed)" : "var(--primary)", color: mt ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
+              ${(person.tags || []).length ? (person.tags || []).map(function (t) { var mt = window.ShepherdingCore.isProjectedTagId(t); return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: mt || !canDecide ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: mt ? "var(--primary-fixed)" : "var(--primary)", color: mt ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
                 ${mt ? html`${Ic("lock", 11)}` : null}${tagName(t)}
-                ${mt ? null : html`<button onClick=${function () { toggleTag(t); }} aria-label="Remove tag" style=${{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", opacity: 0.8 }}>${Ic("x", 12)}</button>`}
+                ${mt || !canDecide ? null : html`<button onClick=${function () { toggleTag(t); }} aria-label="Remove tag" style=${{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", opacity: 0.8 }}>${Ic("x", 12)}</button>`}
               </span>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No tags applied.</span>`}
             </div>
-            ${addableTags.length ? html`<${Fragment}>
+            ${canDecide && addableTags.length ? html`<${Fragment}>
               <div style=${Object.assign({}, SF_OVER, { margin: "14px 0 8px" })}>Add tag</div>
               <div style=${{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 ${addableTags.map(function (t) { return html`<button key=${t.id} onClick=${function () { toggleTag(t.id); }} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: "var(--radius-full)", border: "none", background: "var(--surface-container)", color: "var(--on-surface)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>${Ic("plus", 13)} ${t.name}</button>`; })}
               </div>
             </${Fragment}>` : null}
-            <div style=${{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--outline-variant)" }}>
+            ${canDecide ? html`<div style=${{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--outline-variant)" }}>
               <div style=${Object.assign({}, SF_OVER, { marginBottom: 8 })}>Create tag</div>
               <div style=${{ display: "flex", gap: 8 }}>
                 <input value=${newTagS[0]} onInput=${function (e) { newTagS[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === "Enter") createTag(); }} placeholder="New tag name…" style=${Object.assign({}, inputStyle, { flex: 1 })} />
                 <button onClick=${createTag} style=${pill()}>Create</button>
               </div>
-            </div>
+            </div>` : null}
           </div>
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
@@ -1483,6 +1497,7 @@
               <h2 style=${SF_H2}>Membership Track</h2>
               <span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", background: (person.membership && person.membership.inactive) ? "var(--surface-container-high)" : "var(--primary-fixed)", color: (person.membership && person.membership.inactive) ? "var(--on-surface-variant)" : "var(--primary)" }}>${membershipLabel(person.membership) || "Not set"}</span>
             </div>
+            ${canDecide ? html`<${Fragment}>
             <input type="range" min="0" max=${Core.MEMBERSHIP_STAGES.length - 1} step="1"
               value=${Math.max(0, Core.MEMBERSHIP_STAGES.indexOf(person.membership && person.membership.stage))}
               disabled=${!!(person.membership && person.membership.inactive)}
@@ -1497,11 +1512,12 @@
             <button onClick=${toggleInactive} style=${{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, border: "1px solid " + ((person.membership && person.membership.inactive) ? "var(--primary)" : "var(--outline-variant)"), background: (person.membership && person.membership.inactive) ? "var(--primary)" : "transparent", color: (person.membership && person.membership.inactive) ? "var(--on-primary)" : "var(--on-surface-variant)" }}>
               ${Ic((person.membership && person.membership.inactive) ? "toggle-right" : "toggle-left", 15)} ${(person.membership && person.membership.inactive) ? "Inactive — tap to reactivate" : "Mark inactive"}
             </button>
+            </${Fragment}>` : null}
           </div>
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <h2 style=${Object.assign({}, SF_H2, { marginBottom: 14 })}>Pastoral Status</h2>
-            <${StatusMatrix} cell=${50} labelW=${70}
+            <${StatusMatrix} cell=${50} labelW=${70} disabled=${!canDecide}
               selected=${function (u, i) { return person.shepherdingStatus && person.shepherdingStatus.urgency === u && person.shepherdingStatus.importance === i; }}
               onCell=${setStatus}
             />
@@ -1509,8 +1525,8 @@
               ${person.shepherdingStatus ? html`<${Fragment}>
                 <span style=${{ color: "var(--secondary)", display: "inline-flex" }}>${Ic("circle-dot", 15)}</span>
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 500, color: "var(--on-surface)" }}>${fmtStatus(person.shepherdingStatus)}</span>
-                <button onClick=${function () { setStatus(person.shepherdingStatus.urgency, person.shepherdingStatus.importance); }} style=${{ marginLeft: "auto", border: "none", background: "none", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>Clear</button>
-              </${Fragment}>` : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>Tap a cell to set status.</span>`}
+                ${canDecide ? html`<button onClick=${function () { setStatus(person.shepherdingStatus.urgency, person.shepherdingStatus.importance); }} style=${{ marginLeft: "auto", border: "none", background: "none", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>Clear</button>` : null}
+              </${Fragment}>` : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>${canDecide ? "Tap a cell to set status." : "No status."}</span>`}
             </div>
           </div>
               </div>
@@ -1577,7 +1593,7 @@
                       </div>
                     </div>` : html`<div style=${{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                       ${e.explanation ? html`<p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface)" }}>${e.explanation}</p>` : html`<span></span>`}
-                      <button onClick=${function () { var n = Object.assign({}, explEditS[0]); n[e.id] = e.explanation || ""; explEditS[1](n); }} style=${{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>${Ic("pencil-line", 14)} ${e.explanation ? "Edit" : "Add"} explanation</button>
+                      ${canDecide ? html`<button onClick=${function () { var n = Object.assign({}, explEditS[0]); n[e.id] = e.explanation || ""; explEditS[1](n); }} style=${{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>${Ic("pencil-line", 14)} ${e.explanation ? "Edit" : "Add"} explanation</button>` : null}
                     </div>`}
                   </div>
                 </div>`;
