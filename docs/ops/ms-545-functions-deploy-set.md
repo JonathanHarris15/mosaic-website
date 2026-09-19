@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules
+hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules
 ```
 
 | Target | Why it is in the set |
@@ -17,13 +17,16 @@ hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccount
 | `functions:publicForm` | Public form door (ADR-0051). |
 | `functions:onAttendanceCreated` | Attendance rule (MS-425 / ADR-0066). Export name in `functions/index.js`. Create on `event_occurrences/{occurrenceId}/attendance/{personId}`. Without this target the Visitor → Regular Attender promotion never installs. |
 | `functions:syncAccountRankToPerson` | Account Rank projection (MS-539 / MS-557). Export name in `functions/index.js`. Write on `users/{uid}` (link, unlink, permission change, delete). Without this target `people.accountRank` never updates; merging the Trade picker before it is live fail-closes existing Linked Users on non-public Trades. |
+| `functions:sendPrayerRequestNow` | Service Builder "Send Prayer Request Text Now" (MS-598). Export name in `functions/index.js` (`onCall`). Without this target a Hosting merge that admits Pastoral Assistants on that button (MS-594 / #82) would show PA chrome against an elder-only deployed function. |
+| `functions:mcp` | MCP HTTP surface (MS-598). Export name in `functions/index.js` (`onRequest`). Without this target a Hosting merge that admits PAs on `shep_` DECIDE tools (MS-594 / #82) would show PA chrome against a stale deployed MCP. |
 | `firestore:rules` | Live `firestore.rules` (MS-565). Without this target a Hosting merge that needs a rules hole (MS-530 / #69 Pastoral Assistant `lastNoteAt`) ships writers against the old rules. `firestore:indexes` stays out of this set. |
 
 The CLI filter uses the **export name** (`onAttendanceCreated`,
-`syncAccountRankToPerson`), not a renamed Cloud Console label. The
-functions codebase is `default`; `functions:<export>` is enough.
-`firestore:rules` is the Firebase CLI rules target (`firebase.json`
-→ `firestore.rules`), not a function export.
+`syncAccountRankToPerson`, `sendPrayerRequestNow`, `mcp`), not a
+renamed Cloud Console label. The functions codebase is `default`;
+`functions:<export>` is enough. `firestore:rules` is the Firebase CLI
+rules target (`firebase.json` → `firestore.rules`), not a function
+export.
 
 ## App Check stays monitor
 
@@ -37,26 +40,26 @@ Agents must not `firebase deploy` from a cloud box (AGENTS.md). Adding
 another function — or `firestore:rules` — to prod means adding it here
 (and to the agreement test), not a laptop CLI that skips the workflow.
 
-## Dry-run (MS-566) — Maintain CLEAR before live
+## Dry-run (MS-600) — Maintain CLEAR before live
 
-Same B path as MS-545 / MS-557. Plan only, through the **widened**
-workflow. Do not omit `-f dry_run=true`: `workflow_dispatch` defaults to
-a live deploy. Operator sequence (proof shape, #69 unlock) is
-`docs/ops/ms-566-rules-first.md`.
+Same B path as MS-545 / MS-557 / MS-565. Plan only, through the
+**widened** workflow. Do not omit `-f dry_run=true`: `workflow_dispatch`
+defaults to a live deploy. Operator sequence (proof shape, #82 unlock)
+is `docs/ops/ms-600-prayer-mcp-first.md`.
 
 From a machine with `gh` and Actions write on this repo:
 
 ```bash
-gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-565 -f dry_run=true
+gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run=true
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules`
+`targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
 on Maintain **CLEAR**. Do not merge this branch. Do not live-deploy. Do
-not merge MS-530 / PR #69. Do not one-off CLI deploy.
+not merge MS-594 / PR #82. Do not one-off CLI deploy.
 
 ## Backfill (after live function install)
 
