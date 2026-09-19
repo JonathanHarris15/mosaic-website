@@ -75,6 +75,7 @@
 
     // ── Create ──
     function createTag() {
+      if (!canDecide) return;
       var name = newTagS[0].trim();
       if (!name) return;
       if (tags.some(function (x) { return x.name.toLowerCase() === name.toLowerCase(); })) { showToast("That tag already exists", "error"); return; }
@@ -94,6 +95,7 @@
 
     // ── Rename (identity is a stable auto-id, so carriers are untouched) ──
     function commitRename() {
+      if (!canDecide) return;
       var ed = editingS[0];
       if (!ed) return;
       if (rejectLocked(ed.id)) { editingS[1](null); return; }
@@ -109,6 +111,7 @@
 
     // ── Merge (directional: mergeSource folds into the chosen survivor) ──
     function doMerge(targetId) {
+      if (!canDecide) return;
       if (busyS[0]) return;
       var sourceId = mergeSourceS[0], target = tagById(targetId), source = tagById(sourceId);
       if (!source || !target || sourceId === targetId) { mergeSourceS[1](null); return; }
@@ -127,6 +130,7 @@
 
     // ── Delete (removes the tag from every carrier) ──
     function doDelete() {
+      if (!canDecide) return;
       if (busyS[0]) return;
       var id = confirmDeleteS[0], tag = tagById(id);
       if (!tag) { confirmDeleteS[1](null); return; }
@@ -141,6 +145,7 @@
 
     // ── Visibility flags (hiddenFromOthers / hidePeople) ──
     function toggleFlag(t, field) {
+      if (!canDecide) return;
       if (rejectLocked(t.id)) return;
       var newVal = !t[field];
       data.toggleShepherdingTagFlag(t.id, field, newVal, tags).then(function () {
@@ -216,7 +221,7 @@
                 var actionsOpen = actionsOpenS[0] === t.id;
                 var locked = isLocked(t.id); // Membership Tag — code-defined, no actions (ADR-0012)
                 return html`<div key=${t.id} style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 14 }}>
-                  ${isEditing ? html`<div style=${{ display: "flex", gap: 8 }}>
+                  ${isEditing && canDecide ? html`<div style=${{ display: "flex", gap: 8 }}>
                     <input autofocus value=${ed.value} onInput=${function (e) { editingS[1]({ id: t.id, value: e.target.value }); }} onKeyDown=${function (e) { if (e.key === "Enter") commitRename(); if (e.key === "Escape") editingS[1](null); }} style=${Object.assign({}, inputStyle, { flex: 1 })} />
                     <button onClick=${commitRename} aria-label="Save name" style=${Object.assign({}, iconBtn, { width: 40, height: 40, background: "var(--primary)", color: "var(--on-primary)" })}>${Ic("check", 18)}</button>
                     <button onClick=${function () { editingS[1](null); }} aria-label="Cancel rename" style=${Object.assign({}, iconBtn, { width: 40, height: 40, background: "var(--surface-container)" })}>${Ic("x", 18)}</button>
@@ -227,16 +232,16 @@
                       <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${t.name}</div>
                       <div style=${{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>${Ic("users", 13)} ${count} member${count === 1 ? "" : "s"}</div>
                     </div>
-                    <div style=${{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, overflow: "hidden", maxWidth: actionsOpen ? 184 : 0, opacity: actionsOpen ? 1 : 0, pointerEvents: actionsOpen ? "auto" : "none", transition: "max-width 0.26s ease, opacity 0.2s ease" }}>
+                    ${canDecide ? html`<div style=${{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, overflow: "hidden", maxWidth: actionsOpen ? 184 : 0, opacity: actionsOpen ? 1 : 0, pointerEvents: actionsOpen ? "auto" : "none", transition: "max-width 0.26s ease, opacity 0.2s ease" }}>
                       <button onClick=${function () { actionsOpenS[1](null); editingS[1]({ id: t.id, value: t.name }); }} aria-label=${"Rename " + t.name} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0 })}>${Ic("pencil", 16)}</button>
                       <button onClick=${function () { mergeSourceS[1](t.id); }} disabled=${tags.length < 2} aria-label=${"Merge " + t.name} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, opacity: tags.length < 2 ? 0.35 : 1, cursor: tags.length < 2 ? "default" : "pointer" })}>${Ic("git-merge", 16)}</button>
                       <button onClick=${function () { toggleFlag(t, "hiddenFromOthers"); }} aria-label=${t.hiddenFromOthers ? "Tag hidden from non-admins — tap to show" : "Tag visible to all — tap to hide from non-admins"} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, color: t.hiddenFromOthers ? "var(--primary)" : "var(--on-surface-variant)" })}>${Ic(t.hiddenFromOthers ? "eye-off" : "eye", 16)}</button>
                       <button onClick=${function () { toggleFlag(t, "hidePeople"); }} aria-label=${t.hidePeople ? "Carriers hidden from non-admins — tap to show" : "Carriers visible — tap to hide from non-admins"} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, color: t.hidePeople ? "var(--primary)" : "var(--on-surface-variant)" })}>${Ic(t.hidePeople ? "user-x" : "user", 16)}</button>
                       <button onClick=${function () { confirmDeleteS[1](t.id); }} aria-label=${"Delete " + t.name} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, color: "var(--error)" })}>${Ic("trash-2", 16)}</button>
-                    </div>
+                    </div>` : null}
                     ${locked
                       ? html`<span aria-label="Managed by the Membership Track" title="Managed by the Membership Track" style=${{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 11 }}>${Ic("lock", 15)} System</span>`
-                      : html`<button onClick=${function () { actionsOpenS[1](actionsOpen ? null : t.id); }} aria-label=${actionsOpen ? "Hide actions for " + t.name : "Show actions for " + t.name} aria-expanded=${actionsOpen} style=${Object.assign({}, iconBtn, { flexShrink: 0, transform: actionsOpen ? "rotate(180deg)" : "none", transition: "transform 0.26s ease" })}>${Ic("chevron-left", 18)}</button>`}
+                      : canDecide ? html`<button onClick=${function () { actionsOpenS[1](actionsOpen ? null : t.id); }} aria-label=${actionsOpen ? "Hide actions for " + t.name : "Show actions for " + t.name} aria-expanded=${actionsOpen} style=${Object.assign({}, iconBtn, { flexShrink: 0, transform: actionsOpen ? "rotate(180deg)" : "none", transition: "transform 0.26s ease" })}>${Ic("chevron-left", 18)}</button>` : null}
                   </div>`}
                 </div>`;
               })}
@@ -245,7 +250,7 @@
           `}
         </${Body}>
 
-        ${mergeSource ? html`<${Modal} onClose=${function () { if (!busyS[0]) mergeSourceS[1](null); }} title="Merge Tag"
+        ${mergeSource && canDecide ? html`<${Modal} onClose=${function () { if (!busyS[0]) mergeSourceS[1](null); }} title="Merge Tag"
           footer=${html`<button onClick=${function () { if (!busyS[0]) mergeSourceS[1](null); }} style=${pill("ghost")}>Cancel</button>`}>
           <p style=${{ margin: "0 0 4px", fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface)" }}>Move every member from <strong style=${{ color: "var(--primary)" }}>${mergeSource.name}</strong> onto another tag, then remove it.</p>
           <p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 12, fontStyle: "italic", color: "var(--on-surface-variant)" }}>${countFor(mergeSource.id)} member${countFor(mergeSource.id) === 1 ? "" : "s"} will be moved. This cannot be undone.</p>
@@ -262,7 +267,7 @@
           </div>
         </${Modal}>` : null}
 
-        ${confirmDelete ? html`<${Modal} onClose=${function () { if (!busyS[0]) confirmDeleteS[1](null); }} title="Delete Tag"
+        ${confirmDelete && canDecide ? html`<${Modal} onClose=${function () { if (!busyS[0]) confirmDeleteS[1](null); }} title="Delete Tag"
           footer=${html`<${Fragment}><button onClick=${function () { if (!busyS[0]) confirmDeleteS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${doDelete} disabled=${busyS[0]} style=${Object.assign({}, pill(), { background: "var(--error)", opacity: busyS[0] ? 0.6 : 1 })}>Delete Tag</button></${Fragment}>`}>
           <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>Delete <strong style=${{ color: "var(--primary)" }}>${confirmDelete.name}</strong>? It will be removed from ${countFor(confirmDelete.id)} member${countFor(confirmDelete.id) === 1 ? "" : "s"}. This cannot be undone.</p>
         </${Modal}>` : null}

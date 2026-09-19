@@ -473,6 +473,7 @@
     var tagModalPerson = tagModalS[0] ? people.filter(function (p) { return p.id === tagModalS[0].id; })[0] : null;
 
     function togglePersonTag(person, tagId) {
+      if (!canDecide) return;
       var has = (person.tags || []).indexOf(tagId) !== -1;
       var newTags = has ? (person.tags || []).filter(function (x) { return x !== tagId; }) : (person.tags || []).concat([tagId]);
       var hid = hiddenIdsFrom(tags);
@@ -602,7 +603,7 @@
                   <span style=${{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--on-surface-variant)" }}>${Ic("chevron-right", 17)}</span>
                 </button>
                 <div style=${{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--outline-variant)" }}>
-                  <button onClick=${function () { tagModalS[1](p); }} aria-label="Edit tags" style=${Object.assign({}, iconBtn, { width: 28, height: 28, background: "var(--surface-container)", flexShrink: 0 })}>${Ic("pencil", 14)}</button>
+                  ${canDecide ? html`<button onClick=${function () { tagModalS[1](p); }} aria-label="Edit tags" style=${Object.assign({}, iconBtn, { width: 28, height: 28, background: "var(--surface-container)", flexShrink: 0 })}>${Ic("pencil", 14)}</button>` : null}
                   <div style=${{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 5 }}>
                     ${(p.tags || []).length ? (p.tags || []).map(function (t) { return html`<span key=${t} style=${{ padding: "2px 8px", borderRadius: "var(--radius-sm)", background: "rgba(24,47,87,0.10)", color: "var(--primary)", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" }}>${tagName(t)}</span>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontStyle: "italic", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--outline)" }}>No tags</span>`}
                   </div>
@@ -614,7 +615,7 @@
           `}
         </${Body}>
 
-        ${tagModalPerson ? html`<${Modal} onClose=${function () { tagModalS[1](null); }} title="Manage Tags"
+        ${tagModalPerson && canDecide ? html`<${Modal} onClose=${function () { tagModalS[1](null); }} title="Manage Tags"
           footer=${html`<button onClick=${function () { tagModalS[1](null); }} style=${pill()}>Done</button>`}>
           <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", marginBottom: 12 }}>${tagModalPerson.name}</div>
           ${tags.length === 0 ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No tags defined. Create some on the Manage Tags page.</div>`
