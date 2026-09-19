@@ -95,8 +95,8 @@
                                 <span x-show="selectedTags.includes(tag)" class="material-symbols-outlined text-sm">check</span>
                             </button>
                             
-                            <!-- Admin Visibility Controls -->
-                            <div x-show="isAdmin" class="flex items-center gap-0.5 opacity-0 group-hover/tagrow:opacity-100 transition-opacity">
+                            <!-- Hide-vocabulary controls: elder decision, not the PA read lift -->
+                            <div x-show="canDecide" class="flex items-center gap-0.5 opacity-0 group-hover/tagrow:opacity-100 transition-opacity">
                                 <button @click.stop="toggleTagVisibility(tag)" 
                                         :class="tagMetadata[tag]?.hiddenFromOthers ? 'text-primary bg-primary/10' : 'text-outline-variant hover:text-primary'"
                                         class="p-1 rounded transition-colors"

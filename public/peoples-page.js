@@ -83,7 +83,11 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                Object.assign(this, AccessCore.pageFlags(userData));
+                const flags = AccessCore.pageFlags(userData);
+                // canReadElder / canDecide are getters so View as Member is honoured.
+                delete flags.canReadElder;
+                delete flags.canDecide;
+                Object.assign(this, flags);
                 this.currentUserUid = user.uid;
                 this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
                 if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel)
@@ -112,8 +116,19 @@ document.addEventListener('alpine:init', () => {
             return (this.isSuperAdmin && this.viewAsMember) ? 'member' : this.currentPermissionLevel;
         },
 
-        get isAdmin() {
+        // Hidden people/tags follow reads-as-elder (PA included). Honours View
+        // as Member. This is a read lift, not a write power — hide toggles
+        // use canDecide.
+        get canReadElder() {
             return AccessCore.readsAsElder({
+                permissionLevel: this.effectivePermissionLevel,
+                pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
+            });
+        },
+
+        // Elder decisions only. A Pastoral Assistant never gets hide-vocab chrome.
+        get canDecide() {
+            return AccessCore.isAnElder({
                 permissionLevel: this.effectivePermissionLevel,
                 pastoralAssistant: this.viewAsMember ? false : this.pastoralAssistant,
             });
@@ -151,7 +166,7 @@ document.addEventListener('alpine:init', () => {
                         hidePeople: data.hidePeople || false
                     };
                     
-                    if (this.isAdmin || !data.hiddenFromOthers) {
+                    if (this.canReadElder || !data.hiddenFromOthers) {
                         tags.push(tagName);
                     }
                 });
@@ -164,7 +179,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async toggleTagVisibility(tagName) {
-            if (!this.isAdmin) return;
+            if (!this.canDecide) return;
             const current = this.tagMetadata[tagName]?.hiddenFromOthers || false;
             try {
                 await db.collection('people_tags').doc(tagName).update({
@@ -180,7 +195,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async togglePeopleVisibility(tagName) {
-            if (!this.isAdmin) return;
+            if (!this.canDecide) return;
             const current = this.tagMetadata[tagName]?.hidePeople || false;
             try {
                 await db.collection('people_tags').doc(tagName).update({
@@ -1082,9 +1097,10 @@ document.addEventListener('alpine:init', () => {
         get filteredPeople() {
             let list = [...this.people];
             
-            // Filter out people with tags marked as hidePeople: true for non-admins,
-            // or explicitly hidden by the shepherding system
-            if (!this.isAdmin) {
+            // Filter out people with tags marked as hidePeople: true, or
+            // explicitly hidden by the shepherding system, unless the viewer
+            // reads as elder (PA included).
+            if (!this.canReadElder) {
                 list = list.filter(p => {
                     const personTags = p.tags || [];
                     return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople) && !p.shepherdingHidden;
