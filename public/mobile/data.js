@@ -430,19 +430,8 @@
   function deleteShepherdingView(id) { return db.collection("shepherding_views").doc(id).delete(); }
 
   // ── Shepherding People list ──────────────────────────────────
-  // Latest shepherding-note timestamp per person (one collection-group pass),
-  // powering the People list's "Needs Attention" sort + Last Note column.
-  function getShepherdingLastNoteDates() {
-    return get(db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc"))
-      .then(function (snap) {
-        var latest = {};
-        snap.docs.forEach(function (doc) {
-          var pid = doc.ref.parent.parent && doc.ref.parent.parent.id;
-          if (pid && !latest[pid]) latest[pid] = doc.data().createdAt;
-        });
-        return latest;
-      }).catch(function () { return {}; });
-  }
+  // Last-note date lives on Person.lastNoteAt (MS-530). The list reads
+  // People only — it does not collection-group shepherding_notes.
   function addShepherdingPerson(np) {
     var now = firebase.firestore.FieldValue.serverTimestamp();
     return db.collection("people").add({
@@ -1273,7 +1262,6 @@
     addShepherdingView: addShepherdingView,
     updateShepherdingView: updateShepherdingView,
     deleteShepherdingView: deleteShepherdingView,
-    getShepherdingLastNoteDates: getShepherdingLastNoteDates,
     addShepherdingPerson: addShepherdingPerson,
     getPerson: getPerson,
     getShepherdingNotes: getShepherdingNotes,

@@ -12,7 +12,6 @@ document.addEventListener('alpine:init', () => {
         currentPermissionLevel: null,
 
         people: [],
-        lastNoteDates: {},
         shepherdingTags: [],
 
         search: '',
@@ -126,22 +125,6 @@ document.addEventListener('alpine:init', () => {
                 console.error('Error loading people:', e);
                 this.showToast('Error loading people', 'error');
             }
-
-            try {
-                const notesSnap = await db.collectionGroup('shepherding_notes')
-                    .orderBy('createdAt', 'desc')
-                    .get();
-                const latestByPerson = {};
-                notesSnap.docs.forEach(doc => {
-                    const personId = doc.ref.parent.parent.id;
-                    if (!latestByPerson[personId]) {
-                        latestByPerson[personId] = doc.data().createdAt;
-                    }
-                });
-                this.lastNoteDates = latestByPerson;
-            } catch (e) {
-                console.error('Error loading last note dates (collection group query may need a Firestore index):', e);
-            }
         },
 
         async loadTags() {
@@ -198,13 +181,13 @@ document.addEventListener('alpine:init', () => {
 
             if (this.sortBy === 'attention') {
                 result = [...result].sort((a, b) => {
-                    const aTs = this.lastNoteDates[a.id];
-                    const bTs = this.lastNoteDates[b.id];
+                    const aTs = a.lastNoteAt;
+                    const bTs = b.lastNoteAt;
                     if (!aTs && !bTs) return (a.name || '').localeCompare(b.name || '');
                     if (!aTs) return -1;
                     if (!bTs) return 1;
-                    const aTime = aTs.toDate ? aTs.toDate().getTime() : new Date(aTs).getTime();
-                    const bTime = bTs.toDate ? bTs.toDate().getTime() : new Date(bTs).getTime();
+                    const aTime = ShepherdingCore.noteCreatedAtMs(aTs);
+                    const bTime = ShepherdingCore.noteCreatedAtMs(bTs);
                     return aTime - bTime;
                 });
             }
@@ -468,18 +451,20 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        formatLastNote(personId) {
-            const ts = this.lastNoteDates[personId];
+        formatLastNote(person) {
+            const ts = person && person.lastNoteAt;
             if (!ts) return 'Never';
-            const date = ts.toDate ? ts.toDate() : new Date(ts);
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const ms = ShepherdingCore.noteCreatedAtMs(ts);
+            if (ms == null) return 'Never';
+            return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         },
 
-        lastNoteColor(personId) {
-            const ts = this.lastNoteDates[personId];
+        lastNoteColor(person) {
+            const ts = person && person.lastNoteAt;
             if (!ts) return 'text-error';
-            const date = ts.toDate ? ts.toDate() : new Date(ts);
-            const daysSince = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
+            const ms = ShepherdingCore.noteCreatedAtMs(ts);
+            if (ms == null) return 'text-error';
+            const daysSince = (Date.now() - ms) / (1000 * 60 * 60 * 24);
             if (daysSince > 90) return 'text-error';
             if (daysSince > 30) return 'text-on-surface-variant';
             return 'text-secondary';

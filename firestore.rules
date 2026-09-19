@@ -757,7 +757,9 @@ service cloud.firestore {
             && request.resource.data.authorUid == request.auth.uid);
     }
 
-    // Collection group query for shepherding_notes (used by People list page)
+    // Collection group query for shepherding_notes (@-mention picker and
+    // document/care-list mention data). The People list reads Person.lastNoteAt
+    // and no longer uses this query (MS-530).
     match /{path=**}/shepherding_notes/{noteId} {
       allow read: if readsAsElder();
     }
