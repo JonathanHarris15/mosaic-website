@@ -74,7 +74,9 @@ const HTML_HELP =
  * @param {object} deps see buildServer in mcp-server.js
  * @param {string} name the tool name
  * @param {object} spec title, description, inputSchema, annotations
- * @param {Function} run (args, actor) => data
+ * @param {Function} run (args, actor, level) => data. `level` is the
+ *     caller's permissionLevel or role (may be null) and is passed
+ *     into printable_data_catalog.
  */
 function editorTool(server, deps, name, spec, run) {
   const readOnly = !!(spec.annotations && spec.annotations.readOnlyHint);

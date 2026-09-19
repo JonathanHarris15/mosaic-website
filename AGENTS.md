@@ -43,14 +43,9 @@ PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on b
 
 `npm test` is the default unit gate. It does **not** start emulators. Tests under `test/emulator/` skip unless `FIRESTORE_EMULATOR_HOST` is set (they `require('firebase-admin')` at load; that module comes from the root `npm ci`).
 
-Both commands currently fail on `main`. That is existing product debt, not a reason to rewrite `functions/` or calendar tests in an unrelated PR:
+Both commands are green on `main` after MS-543 / PR #65 (`npm test` exit 0, `npm run lint --prefix functions` exit 0). The old red baseline (~59 unit failures, ~366 eslint errors) is history — see `docs/ops/ms-543-ci-baseline-inventory.md`, which landed with #65. Do not treat that inventory as current, and do not re-open the pay-down in an unrelated PR.
 
-| Command | Baseline observed 2026-09-18 |
-| --- | --- |
-| `npm test` | ~4424 pass, **59 fail**, 18 skip (AccessCore globals on page modules, calendar page tests, a few glossary/rules assertions) |
-| `npm run lint --prefix functions` | **366** eslint errors (mostly `max-len` / `valid-jsdoc`) |
-
-CI exists so every PR runs the same two commands. Do **not** mass-reformat functions or weaken eslint to make lint green. Do **not** treat a red check as a licence to skip running them — quote what you ran and what failed.
+CI exists so every PR runs the same two commands. Do **not** mass-reformat functions or weaken eslint to keep lint green. Quote what you ran and what failed.
 
 ### Real package scripts (root `package.json`)
 
