@@ -72,9 +72,9 @@ test('the floor is editor — no member or viewer tier appears in the predicate'
 
 // ── Writes stay exactly where they were ──────────────────────────────────────
 
-test('writing a relationship record is still elder-only', () => {
+test('writing a relationship record is a canDecide write', () => {
     RELATIONSHIP_COLLECTIONS.forEach(collection => {
-        assert.match(blockFor(collection), /allow write: if isElder\(\)/, collection);
+        assert.match(blockFor(collection), /allow write: if canDecide\(\)/, collection);
     });
 });
 
@@ -93,7 +93,7 @@ test('the other elder-only collections did not get swept along', () => {
         const m = rules.match(new RegExp('match /' + collection + '/\\{[^}]+\\}\\s*\\{([\\s\\S]*?)\\n    \\}'));
         if (!m) return; // not every one exists
         assert.match(m[1], /allow read: if readsAsElder\(\)/, collection);
-        assert.match(m[1], /allow write: if isElder\(\)/, collection);
+        assert.match(m[1], /allow write: if canDecide\(\)/, collection);
     });
 });
 

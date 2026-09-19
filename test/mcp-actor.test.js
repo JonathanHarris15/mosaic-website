@@ -85,18 +85,21 @@ describe('the rank an assistant must hold', () => {
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_document'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_write_note'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_task'), true);
-        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_status'), false);
-        assert.strictEqual(Actor.mayUseTool(pa, 'shep_add_tags'), false);
-        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_elder_assignment'), false);
-        assert.strictEqual(Actor.mayUseTool(pa, 'shep_explain_change'), false);
-        assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_view'), false);
+        assert.strictEqual(Actor.canDecide(pa), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_status'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_add_tags'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_elder_assignment'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_explain_change'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_view'), true);
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_membership_stage'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'cal_create_event'), false);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_unclassified_future'), false);
+        assert.strictEqual(Actor.isElder(pa), false);
     });
 
-    test('a Pastoral Assistant refused a decision hears it is about the role', () => {
+    test('a Pastoral Assistant refused a counted-as-elder write hears it is about the role', () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const message = Actor.refusalFor(pa, 'shep_set_status');
+        const message = Actor.refusalFor(pa, 'cal_create_event');
         assert.match(message, /Pastoral Assistant/);
         assert.match(message, /elder's decision/);
         assert.doesNotMatch(message, /raise it to elder/);

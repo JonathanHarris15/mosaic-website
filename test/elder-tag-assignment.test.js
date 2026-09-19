@@ -59,6 +59,12 @@ test('isElderUser is true only for the elder role', () => {
     assert.strictEqual(Core.isElderUser(undefined), false);
 });
 
+test('a Pastoral Assistant grant does not project the Elder Tag', () => {
+    const pa = {permissionLevel: 'member', pastoralAssistant: true};
+    assert.strictEqual(Core.isElderUser(pa), false);
+    assert.deepStrictEqual(Core.applyElderTag(['Member'], Core.isElderUser(pa)), ['Member']);
+});
+
 // ── applyElderTag — the pure projection ─────────────────────────────────────
 // Re-project the Elder Tag onto a Person's tags: drop it, then re-add iff elder.
 // Idempotent and order-preserving, exactly like applyMembershipTags.

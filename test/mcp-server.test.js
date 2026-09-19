@@ -402,7 +402,7 @@ describe('the Order of Service MCP server', () => {
         }
     });
 
-    test('a Pastoral Assistant is refused each decision tool with the role named', async () => {
+    test('a Pastoral Assistant is admitted on shepherding decision writes', async () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
         const {client} = await connectAs(pa);
         const cases = [
@@ -412,14 +412,23 @@ describe('the Order of Service MCP server', () => {
             ['shep_explain_change', {personId: 'p1', activityId: 'a1', explanation: 'x'}],
             ['shep_create_view', {title: 'Urgent', filter: {}}],
             ['shep_set_membership_stage', {personId: 'p1', stage: 'member'}],
-            ['cal_create_event', {name: 'Meeting', visibility: 'elder', date: '2026-09-20'}],
         ];
         for (const [name, args] of cases) {
             const result = await client.callTool({name, arguments: args});
-            assert.strictEqual(result.isError, true, name);
-            assert.match(textOf(result), /Pastoral Assistant keeps the record/, name);
-            assert.doesNotMatch(textOf(result), /raise it to elder/, name);
+            assert.ok(!result.isError, name + ' refused: ' + textOf(result));
         }
+    });
+
+    test('a Pastoral Assistant is refused counted-as-elder calendar writes', async () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const {client} = await connectAs(pa);
+        const result = await client.callTool({
+            name: 'cal_create_event',
+            arguments: {name: 'Meeting', visibility: 'elder', date: '2026-09-20'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.match(textOf(result), /Pastoral Assistant keeps the record/);
+        assert.doesNotMatch(textOf(result), /raise it to elder/);
     });
 
     test('a member-level Pastoral Assistant is refused Order of Service and Printable writes', async () => {

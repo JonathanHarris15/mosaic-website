@@ -189,6 +189,17 @@ function writesTheRecord(value) {
 }
 
 /**
+ * May this caller make a shepherding decision write in software?
+ * MS-594: the grant admits a Pastoral Assistant. They still do not count
+ * as an elder (Elder Tag / pickers / digest stay isElder).
+ * @param {string|object} value the caller's level or account
+ * @return {boolean} whether they may decide
+ */
+function canDecide(value) {
+  return Access.canDecide(value);
+}
+
+/**
  * The gate this `shep_` / `cal_` tool is classified under, or null.
  * @param {string} name the tool name
  * @return {?string} `read`, `record`, `decide`, or null
@@ -209,7 +220,15 @@ function mayUseTool(account, name) {
   const gate = gateFor(name);
   if (gate === READ) return Access.readsAsElder(account);
   if (gate === RECORD) return Access.writesTheRecord(account);
-  if (gate === DECIDE) return Access.isAnElder(account);
+  if (gate === DECIDE) {
+    // shep_ decision writes admit a Pastoral Assistant (MS-594).
+    // cal_ DECIDE stays counted-as-elder — calendar writes are not
+    // shepherding decision actions.
+    if (typeof name === "string" && name.indexOf("shep_") === 0) {
+      return Access.canDecide(account);
+    }
+    return Access.isAnElder(account);
+  }
   return Access.isAnElder(account);
 }
 
@@ -349,6 +368,7 @@ module.exports = {
   isEditor,
   readsAsElder,
   writesTheRecord,
+  canDecide,
   gateFor,
   mayUseTool,
   refusalFor,

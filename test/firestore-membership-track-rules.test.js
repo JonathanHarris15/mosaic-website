@@ -63,8 +63,8 @@ test('an entry cannot be edited or erased by an editor', () => {
     // Append-only for them. A history somebody can rewrite is not a history,
     // and revertPastoralChange (which deletes) is an elder surface.
     const block = activityBlock();
-    assert.match(block, /allow update, delete: if isElder\(\);/,
-        'update/delete is no longer elder-only');
+    assert.match(block, /allow update, delete: if canDecide\(\);/,
+        'update/delete is no longer a decide write');
     assert.doesNotMatch(block, /allow write/,
         'a blanket write rule is back, which would hand an editor delete as well');
 });

@@ -123,13 +123,15 @@ test('writing the directory is still editor-only', () => {
     assert.match(DIRECTORY['the directory tag vocabulary'](), /allow create, update, delete: if isEditor\(\)/);
 });
 
-test('a Pastoral Assistant may write lastNoteAt and nothing else on the Person', () => {
-    // MS-530: lastNoteAt is a cache of the latest Shepherding Note. A
-    // Pastoral Assistant writes notes but is not an editor, so they need
-    // this hole — lastNoteAt only — or the People list goes stale.
+test('a Pastoral Assistant may write lastNoteAt and shepherding decision fields on the Person', () => {
+    // MS-530 / MS-594: a Pastoral Assistant is not an editor. They need
+    // this hole for lastNoteAt (note cache) and the decision fields elders
+    // write on the Person. Directory identity stays editor-only.
     const block = personBlock();
-    assert.match(block, /allow update: if writesTheRecord\(\)/);
-    assert.match(block, /hasOnly\(\['lastNoteAt'\]\)/);
+    assert.match(block, /allow update: if canDecide\(\)/);
+    assert.match(block, /lastNoteAt/);
+    assert.match(block, /shepherdingStatus/);
+    assert.match(block, /hasOnly\(/);
 });
 
 test('a Linked User can still edit their own record', () => {
@@ -206,5 +208,5 @@ test('Shepherding data is still elder-only', () => {
     assert.match(notes, /allow read: if readsAsElder\(\)/);
     assert.match(notes, /allow write: if writesTheRecord\(\)/);
     assert.match(requests, /allow read: if readsAsElder\(\)/);
-    assert.match(requests, /allow write: if isElder\(\)/);
+    assert.match(requests, /allow write: if canDecide\(\)/);
 });
