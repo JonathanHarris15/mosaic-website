@@ -256,7 +256,7 @@
                             <span class="font-sans text-[11px] font-semibold uppercase tracking-[.14em] text-on-surface-variant">Types</span>
                             <span class="font-sans text-[11px] font-semibold text-on-surface-variant bg-surface-container-high px-[7px] rounded-sm" x-text="relTypes.length"></span>
                         </div>
-                        <button @click="startNewType()"
+                        <button x-show="canDecide" @click="startNewType()"
                             class="inline-flex items-center gap-[4px] bg-primary text-on-primary rounded-[9px] px-[11px] py-[7px] font-sans text-[11px] font-semibold uppercase tracking-[.08em] shadow-xs hover:bg-primary/90 active:scale-[.98] transition-all">
                             <span class="material-symbols-outlined text-[17px]">add</span>New
                         </button>
@@ -276,7 +276,7 @@
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center justify-between gap-xs">
                                         <span class="font-sans text-[14.5px] font-semibold text-navy-900 truncate" x-text="type.name"></span>
-                                        <div class="rel-actions flex gap-[2px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div x-show="canDecide" class="rel-actions flex gap-[2px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button @click.stop="startEditType(type)" title="Edit type"
                                                 class="w-[28px] h-[28px] rounded-sm flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors">
                                                 <span class="material-symbols-outlined text-[17px]">edit</span>

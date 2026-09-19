@@ -696,9 +696,11 @@ document.addEventListener('alpine:init', () => {
 
         // ── Membership Track (ADR-0012) — the stage slider, also on the profile ──
         // The same Track control the People list has, driven off this Person and
-        // committing one Membership Change (silent tag swap) per move. Editors only.
+        // committing one Membership Change (silent tag swap) per move. A decision:
+        // same AccessCore flag as Relations Viewer, not canWriteEditor (an
+        // editor + Pastoral Assistant must not keep the slider).
         get canEditMembership() {
-            return this.canWriteEditor;
+            return this.canDecide;
         },
         get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
         get membershipIndex() {
@@ -724,6 +726,7 @@ document.addEventListener('alpine:init', () => {
             await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
         },
         async commitMembership(next) {
+            if (!this.canDecide) return;
             const person = this.person;
             if (!person) return;
             const previous = {
@@ -1311,14 +1314,16 @@ document.addEventListener('alpine:init', () => {
         },
 
         canUndoStatusChange(entry) {
-            return !!entry && entry.id === this.latestStatusChangeId;
+            return !!this.canDecide && !!entry && entry.id === this.latestStatusChangeId;
         },
 
         // Undo an accidental status change straight from the timeline: restore
         // the status this change replaced and delete the change's record, in one
-        // atomic batch (ADR-0005 mirror — revertPastoralChange).
+        // atomic batch (ADR-0005 mirror — revertPastoralChange). A decision —
+        // canUndoStatusChange already asks canDecide; refuse here too so a
+        // Pastoral Assistant never reaches the toast.
         async undoStatusChange(entry) {
-            if (!this.canUndoStatusChange(entry)) return;
+            if (!this.canDecide || !this.canUndoStatusChange(entry)) return;
             const restored = entry.previousStatus || null;
             try {
                 await ShepherdingCore.revertPastoralChange(db, this.personId, {

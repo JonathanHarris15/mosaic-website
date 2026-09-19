@@ -3,6 +3,7 @@ let _currentDocId    = null;
 let _currentDocTitle = '';
 let _currentUserName = '';
 let _currentUserId   = '';
+let _canDecide       = false;
 
 let _docEditor = null;
 
@@ -707,6 +708,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             const { Editor, StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight, Image, Link, TextAlign } = window._TipTap;
             const trigExt = createInlineTriggersExtension({
                 personId: attrs.personId,
+                canDecide: !!_canDecide,
                 getAllTags:       () => _allTagsList,
                 getPersonTags:   () => panelPersonTags,
                 getCurrentStatus: () => panelCurrentStatus,
@@ -977,6 +979,7 @@ document.addEventListener('alpine:init', () => {
                 this.currentUserName = (userData && userData.email) ? userData.email.split('@')[0] : 'Elder';
                 _currentUserName = this.currentUserName;
                 _currentUserId   = user.uid;
+                _canDecide       = !!this.canDecide;
 
                 // Dev-only privacy screen (shepherding-blur.js).
                 ShepherdingBlur.configure({
