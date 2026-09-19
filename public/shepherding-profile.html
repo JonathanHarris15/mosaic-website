@@ -238,8 +238,8 @@
                     </div>
                 </div>
 
-                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, canDecide only -->
-                <div x-show="canDecide" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
+                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, canDecide || canEditMembership -->
+                <div x-show="canDecide || canEditMembership" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <h2 class="font-headline-md text-headline-md text-primary">Membership Track</h2>
                         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
