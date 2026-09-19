@@ -162,6 +162,8 @@ async function writeNote(
     createdAt: F.now(),
   }, Actor.provenance()));
 
+  await ShepherdingCore.touchLastNoteAt(db, personId, F.now());
+
   return {ok: true, noteId: ref.id, personId};
 }
 
@@ -275,6 +277,7 @@ async function deleteNote(db, {personId, noteId}) {
   }
 
   await ref.delete();
+  await ShepherdingCore.refreshLastNoteAt(db, personId);
   return {
     ok: true,
     deleted: {

@@ -449,6 +449,7 @@
       name: (np.name || "").trim(), totalInvolvements: 0,
       contact: { email: (np.email || "").trim(), phone: (np.phone || "").trim(), address: (np.address || "").trim() },
       birthday: np.birthday || null, sex: np.sex || null, lastPastoralPrayerDate: null,
+      lastNoteAt: null,
       tags: [], createdAt: now, updatedAt: now,
     }).then(function (ref) { return ref.id; });
   }
@@ -561,6 +562,10 @@
       authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
       authorName: (user && user.name) || "",
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }).then(function (ref) {
+      return window.ShepherdingCore.touchLastNoteAt(
+        db, personId, firebase.firestore.FieldValue.serverTimestamp()
+      ).then(function () { return ref; });
     });
   }
   function updateShepherdingNote(personId, noteId, note, user) {
@@ -571,7 +576,8 @@
     });
   }
   function deleteShepherdingNote(personId, noteId) {
-    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete();
+    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete()
+      .then(function () { return window.ShepherdingCore.refreshLastNoteAt(db, personId); });
   }
   function saveShepherdingExplanation(personId, activityId, text) {
     return db.collection("people").doc(personId).collection("shepherding_activity").doc(activityId)
@@ -1071,7 +1077,11 @@
       authorName: (user && user.name) || "", authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       sourceDocumentId: (opts && opts.sourceDocumentId) || null,
-    }).then(function (ref) { return ref.id; });
+    }).then(function (ref) {
+      return window.ShepherdingCore.touchLastNoteAt(
+        db, personId, firebase.firestore.FieldValue.serverTimestamp()
+      ).then(function () { return ref.id; });
+    });
   }
   function getPanelNote(personId, noteId) {
     return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).get()
@@ -1105,7 +1115,8 @@
     });
   }
   function deletePanelNote(personId, noteId) {
-    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete();
+    return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId).delete()
+      .then(function () { return window.ShepherdingCore.refreshLastNoteAt(db, personId); });
   }
   function unlinkPanelNote(personId, noteId) {
     return db.collection("people").doc(personId).collection("shepherding_notes").doc(noteId)

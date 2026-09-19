@@ -495,6 +495,14 @@ service cloud.firestore {
       allow create: if isKiosk();
       allow update: if isEditor();
 
+      // MS-530: lastNoteAt is a cache of the latest Shepherding Note. A
+      // Pastoral Assistant writes notes (writesTheRecord) but is not an
+      // editor, so they cannot otherwise update the Person. This hole is
+      // lastNoteAt only — nothing else on the Person moves with a note.
+      allow update: if writesTheRecord()
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastNoteAt']);
+
       // Self-service (MS-87, ADR-0012): a Linked User may update ONLY their own
       // linked Person, and ONLY the self-editable fields — contact, birthday, and
       // sex while it is still unset. Membership (the Track), tags, and all

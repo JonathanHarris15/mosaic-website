@@ -517,6 +517,8 @@ async function addPersonPanel(
     createdAt: F.now(),
   }, Actor.provenance()));
 
+  await ShepherdingCore.touchLastNoteAt(db, personId, F.now());
+
   const panel = {
     type: "personPanel",
     attrs: {

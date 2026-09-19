@@ -480,6 +480,7 @@ An individual whose involvement with the church is tracked. This is the primary 
     - `status`: 'member', 'regular_attender', 'visitor', or 'inactive'.
     - `joinedAt`: Date they became a member.
   - `lastPastoralPrayerDate`: The newest date (YYYY-MM-DD) in this person's `pastoral_prayer_history`, denormalised so the prayer rotation can rank everybody without opening a subcollection each. A **cache, never the record** — the history is the record, and anything holding the history reads that instead (ADR-0022). A Sunday still ahead counts: being booked is already a commitment to pray for that person, so it must stop the rotation offering them. `null` means never prayed for; the legacy `'0000-00-00'` is normalised away on read.
+  - `lastNoteAt`: The `createdAt` of this person's newest [[Shepherding Note]], denormalised so the People list (web + phone) can show and sort last-note dates without a notes collection-group. A **cache, never the record** — the notes are the record. Written on note create (set to now) and on note delete (recomputed from remaining notes; cleared to `null` when none remain). Absent or `null` means never noted.
   - `baptismDate`: The date (YYYY-MM-DD) this person was baptized, derived from the Service at which they were a Baptism Candidate. Absent if they have not been recorded as baptized.
   - `createdAt`: Timestamp when the record was created.
   - `updatedAt`: Timestamp of the last modification.

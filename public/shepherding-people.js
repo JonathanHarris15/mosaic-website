@@ -398,6 +398,7 @@ document.addEventListener('alpine:init', () => {
                     birthday: this.newPerson.birthday || null,
                     sex: this.newPerson.sex || null,
                     lastPastoralPrayerDate: null,
+                    lastNoteAt: null,
                     tags: [],
                     createdAt: now,
                     updatedAt: now

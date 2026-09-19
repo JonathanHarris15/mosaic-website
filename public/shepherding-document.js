@@ -322,6 +322,8 @@ function createInlinePickerPlugin() {
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                         sourceDocumentId: _currentDocId,
                     });
+                await ShepherdingCore.touchLastNoteAt(
+                    db, person.id, firebase.firestore.FieldValue.serverTimestamp());
                 const noteId = ref.id;
                 const { state } = view;
                 const maxPos = state.doc.content.size;
@@ -1356,6 +1358,8 @@ document.addEventListener('alpine:init', () => {
                             createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
                             sourceDocumentId: this.docId,
                         });
+                    await ShepherdingCore.touchLastNoteAt(
+                        db, person.id, firebase.firestore.FieldValue.serverTimestamp());
                     noteId = ref.id;
                 } else {
                     noteId = existId;
@@ -1406,6 +1410,7 @@ document.addEventListener('alpine:init', () => {
                     // Delete old note
                     await db.collection('people').doc(oldPersonId)
                         .collection('shepherding_notes').doc(oldNoteId).delete();
+                    await ShepherdingCore.refreshLastNoteAt(db, oldPersonId);
                 } catch (e) {
                     console.error('Error moving note:', e);
                 }
@@ -1487,6 +1492,7 @@ document.addEventListener('alpine:init', () => {
                 try {
                     await db.collection('people').doc(personId)
                         .collection('shepherding_notes').doc(noteId).delete();
+                    await ShepherdingCore.refreshLastNoteAt(db, personId);
                 } catch (e) {
                     console.error('Error deleting note:', e);
                     this.showToast('Error deleting note', 'error');
