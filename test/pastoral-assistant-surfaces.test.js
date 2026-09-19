@@ -20,6 +20,7 @@ const SHEPHERD_JS = [
     'analytics.js',
     'peoples-page.js',
     'service-builder.js',
+    'relations-viewer.js',
     'forms.js',
     'form.js',
     'printables.js',

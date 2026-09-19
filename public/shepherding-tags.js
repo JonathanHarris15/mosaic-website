@@ -93,6 +93,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addTag() {
+            if (!this.canDecide) return;
             const name = this.newTagName.trim();
             if (!name) return;
             if (this.shepherdingTags.find(t => t.name.toLowerCase() === name.toLowerCase())) {
@@ -132,6 +133,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         startRenameTag(tag) {
+            if (!this.canDecide) return;
             if (this.rejectIfMembershipTag(tag.id)) return;
             this.editingTagId = tag.id;
             this.editingTagName = tag.name;
@@ -144,6 +146,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async renameTag(id) {
+            if (!this.canDecide) { this.cancelRenameTag(); return; }
             if (this.rejectIfMembershipTag(id)) { this.cancelRenameTag(); return; }
             const name = this.editingTagName.trim();
             const tag = this.shepherdingTags.find(t => t.id === id);
@@ -169,6 +172,7 @@ document.addEventListener('alpine:init', () => {
         // ── Tag Merge (ADR-0011) — fold this tag into a surviving tag. Directional:
         // the row's tag is the merged one; the elder picks the survivor.
         startMergeTag(tag) {
+            if (!this.canDecide) return;
             if (this.rejectIfMembershipTag(tag.id)) return;
             this.mergingTagId = tag.id;
             this.editingTagId = null;
@@ -179,6 +183,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async mergeTagInto(survivorId) {
+            if (!this.canDecide) { this.cancelMergeTag(); return; }
             const sourceId = this.mergingTagId;
             if (!sourceId || !survivorId || sourceId === survivorId) { this.cancelMergeTag(); return; }
             // Neither side may be a Membership Tag: not as the merged source, and
@@ -256,6 +261,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteTag(id, name) {
+            if (!this.canDecide) return;
             if (this.rejectIfMembershipTag(id)) return;
             if (!confirm(`Delete tag "${name}"? It will be removed from all people.`)) return;
             const tag = this.shepherdingTags.find(t => t.id === id);
@@ -286,6 +292,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async toggleTagFlag(id, field) {
+            if (!this.canDecide) return;
             if (this.rejectIfMembershipTag(id)) return;
             const idx = this.shepherdingTags.findIndex(t => t.id === id);
             if (idx === -1) return;
