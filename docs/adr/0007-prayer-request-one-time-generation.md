@@ -36,3 +36,9 @@ After generation the two are **independent**: the Shepherding Note is an ordinar
 - The note and the order-of-service entry can diverge if edited later. This is acceptable and intended: the note is the durable pastoral record; the order-of-service entry is that Sunday's snapshot.
 - Duplicate-note prevention relies on the `noteGenerated` flag / "already filled" guard. Any future capture path must honour the same guard.
 - This mirrors the denormalization trade-off in ADR 0005 (a denormalized field kept alongside a richer record) — chosen for the same reason: the list/contextual view needs its own record rather than deriving from the history.
+
+## Refinement — a subject's own change may refresh the generated note (MS-247)
+
+The once-only note guard stands. A second save or a duplicate reply still cannot create a second Shepherding Note.
+
+What MS-247 adds is a later edit *by the subject*, on the page an [Answer link](0067-an-answer-link-is-a-personal-expiring-door.md) opens, before that Sunday has ended. That change may update the generated note **only while it still holds exactly the text it was generated with**. An Elder edit always wins: the note is left alone. There is never a second generated note.
