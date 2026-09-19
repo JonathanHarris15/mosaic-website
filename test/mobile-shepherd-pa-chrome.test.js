@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// MS-541 / MS-575 / MS-576 / MS-577 — phone Shepherd decision chrome asks
-// AccessCore.canDecide so a Pastoral Assistant never gets a click → toast.
+// MS-541 / MS-575 / MS-576 / MS-577 / MS-580 — phone Shepherd decision chrome
+// asks AccessCore.canDecide so a Pastoral Assistant never gets a click → toast.
 // Screen entry stays canReadElder (a PA still opens Shepherd).
 
 const SRC = fs.readFileSync(
@@ -13,6 +13,10 @@ const SRC = fs.readFileSync(
 );
 const TAGS = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd-tags.js'),
+    'utf8'
+);
+const RELS = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd-relationships.js'),
     'utf8'
 );
 
@@ -139,5 +143,38 @@ test('profile relationship add/remove are canDecide', () => {
         'function qaRemoveFamily',
     ]) {
         assert.match(headOf(name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
+    }
+});
+
+test('Relationships-tab type New/Edit/Delete are canDecide; open/read stays canReadElder', () => {
+    assert.match(RELS, /var canReadElder = !!\(flags && flags.canReadElder\)/);
+    assert.match(RELS, /var canDecide = !!\(flags && flags.canDecide\)/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ formS\[1\]\(\{ editingId: null/);
+    assert.match(RELS, /New Relationship Type/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(e\) \{ e\.stopPropagation\(\); formS\[1\]\(\{ editingId: t\.id/);
+    assert.match(RELS, /aria-label="Edit type"/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(e\) \{ e\.stopPropagation\(\); confirmDelS\[1\]\(t\.id\)/);
+    assert.match(RELS, /aria-label="Delete type"/);
+    assert.match(RELS, /canDecide \? typeFormModal\(\)/);
+    assert.match(RELS, /canDecide \? deleteModal\(\)/);
+    for (const name of ['function saveType', 'function reallyDeleteType']) {
+        assert.match(headOfIn(RELS, name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
+    }
+});
+
+test('Relationships-tab pair and group roster add/remove are canDecide', () => {
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ removePair\(p\); \}\}/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ pairModalS\[1\]\(\{ typeId: t\.id/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ deleteGroup\(g\); \}\}/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ writeGroup\(GC\.clearLeader\(g\)\)/);
+    assert.match(RELS, /canDecide && t\.priority && !g\.leaderId \? html`<button onClick=\$\{function \(\) \{ writeGroup\(GC\.setLeader\(g, mid\)\)/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ writeGroup\(GC\.removeMember\(g, mid\)\)/);
+    assert.match(RELS, /canDecide \? html`<button onClick=\$\{function \(\) \{ pickerS\[1\]\(\{ slot: "member"/);
+    assert.match(RELS, /canDecide \? html`<div style=\$\{\{ display: "flex", gap: 8 \}\}>/);
+    assert.match(RELS, /createGroup\(t\.id\)/);
+    assert.match(RELS, /canDecide \? pairModal\(\)/);
+    assert.match(RELS, /canDecide \? pickerModal\(\)/);
+    for (const name of ['function addPair', 'function removePair', 'function createGroup', 'function writeGroup', 'function deleteGroup']) {
+        assert.match(headOfIn(RELS, name), /if\s*\(\s*!canDecide\s*\)\s*return/, name + ' can still run for a PA');
     }
 });

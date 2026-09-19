@@ -59,6 +59,7 @@ function mountShell(seed, hooks) {
     // The tab leans on the same shared cores the desktop manager does.
     require('../public/relationship-core.js');
     require('../public/relationship-group-core.js');
+    require('../public/access-core.js');
     delete require.cache[require.resolve('../public/mobile/screens-shepherd-relationships.js')];
     require('../public/mobile/screens-shepherd-relationships.js');
     return M;
@@ -77,7 +78,8 @@ const BIBLE_STUDY = { id: 'tb', name: 'Bible Study', kind: 'group', priority: tr
 async function renderTab(seed) {
     const hooks = makeHooks();
     const M = mountShell(seed, hooks);
-    const el = h(M.RelationshipsTab, { showToast: () => {} });
+    const user = seed.user || { permissionLevel: 'elder' };
+    const el = h(M.RelationshipsTab, { showToast: () => {}, user: user });
 
     hooks.rewind(); render(el);
     hooks.flush();
@@ -143,4 +145,18 @@ test('the rendered markup never leaks "undefined" or "[object Object]"', async (
     });
     assert.doesNotMatch(out, /undefined/);
     assert.doesNotMatch(out, /\[object Object\]/);
+});
+
+test('a Pastoral Assistant can read types but does not get write chrome', async () => {
+    const out = await renderTab({
+        types: [DISCIPLESHIP, BIBLE_STUDY],
+        people: PEOPLE,
+        user: { permissionLevel: 'member', pastoralAssistant: true },
+    });
+    assert.match(out, /Discipleship/);
+    assert.match(out, /Bible Study/);
+    assert.match(out, /Relationship vocabulary is an elder's decision/);
+    assert.doesNotMatch(out, /New Relationship Type/);
+    assert.doesNotMatch(out, /aria-label="Edit type"/);
+    assert.doesNotMatch(out, /aria-label="Delete type"/);
 });
