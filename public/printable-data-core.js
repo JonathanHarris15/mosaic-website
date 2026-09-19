@@ -244,12 +244,14 @@
         },
         {
             key: 'sunday_hymns', region: 'Sunday', label: 'Hymns of a Sunday', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per hymn, with its sheet music where the hymn is in the hymn book.',
+            blurb: 'One row per sheet-music page, in service order. A hymn with three pages is three rows. Missing images stay blank — nothing is invented.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'name', label: 'Hymn name', kind: 'text' },
                 { key: 'slot', label: 'Where it comes', kind: 'text' },
-                { key: 'image', label: 'Sheet music (first page)', kind: 'image' },
+                { key: 'image', label: 'Sheet music page', kind: 'image' },
+                { key: 'page', label: 'Page number', kind: 'number' },
+                { key: 'pageCount', label: 'Pages in this hymn', kind: 'number' },
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
             ],
         },
@@ -544,6 +546,27 @@
         return raw ? normaliseService(raw) : null;
     }
 
+    // Every real sheet-music image a hymn already has, in page order. Empty
+    // slots are skipped. Nothing is invented — a missing asset is simply
+    // absent, and the bind leaves the image blank.
+    function pageImageUrl(page) {
+        if (page == null) return '';
+        if (typeof page === 'string') return page.trim();
+        if (typeof page === 'object') return String(page.url || page.src || '').trim();
+        return '';
+    }
+
+    function hymnSheetPages(hymn) {
+        const raw = (hymn && hymn.versions && hymn.versions[0] && hymn.versions[0].pages) || [];
+        if (!Array.isArray(raw)) return [];
+        const out = [];
+        raw.forEach(p => {
+            const url = pageImageUrl(p);
+            if (url) out.push(url);
+        });
+        return out;
+    }
+
     function resolveSunday(params, data, ctx) {
         const p = Object.assign(defaultParams('sunday'), params || {});
         const date = resolveWhen(p.when, ctx.today);
@@ -607,15 +630,24 @@
             const h = lit[slot];
             if (!h || !h.name) return;
             const hymn = h.id ? (data.hymns || {})[h.id] : null;
-            const pages = (hymn && hymn.versions && hymn.versions[0] && hymn.versions[0].pages) || [];
+            const pages = hymnSheetPages(hymn);
+            const name = (hymn && hymn.hymn_name) || h.name;
             if (!hymn) warnings.push('"' + h.name + '" is not in the hymn book, so it has no sheet music.');
-            rows.push({
-                _id: slot,
-                name: (hymn && hymn.hymn_name) || h.name,
-                slot: HYMN_SLOT_LABELS[slot] || slot,
-                image: pages[0] || '',
-                attribution: (hymn && hymn.attribution) || '',
-                number: rows.length + 1,
+            else if (!pages.length) warnings.push('"' + name + '" has no sheet-music pages.');
+            // One row per real page. A hymn with nothing to show still gets
+            // one blank row so the slot is not silently dropped.
+            const images = pages.length ? pages : [''];
+            images.forEach((image, i) => {
+                rows.push({
+                    _id: slot + '~' + i,
+                    name: name,
+                    slot: HYMN_SLOT_LABELS[slot] || slot,
+                    image: image,
+                    page: i + 1,
+                    pageCount: images.length,
+                    attribution: (hymn && hymn.attribution) || '',
+                    number: rows.length + 1,
+                });
             });
         });
         return { rows: rows, warnings: warnings, date: date };
@@ -853,6 +885,8 @@
         propFor,
         fieldLabel,
         normaliseService,
+        pageImageUrl,
+        hymnSheetPages,
         resolve,
         needsFor,
         describeParams,

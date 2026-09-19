@@ -214,13 +214,28 @@ test('order of service rows come in service order, skip empty slots and removed 
     assert.equal(r.rows[0].number, 1);
 });
 
-test('the hymns of a Sunday carry their first sheet image, and a literal hymn warns', () => {
+test('the hymns of a Sunday return every sheet-music page, in slot then page order', () => {
     const r = Data.resolve('sunday_hymns', {}, SUNDAYS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.name), ['Amazing Grace', 'A Literal Hymn']);
-    assert.equal(r.rows[0].image, 'ag1.png');
+    assert.deepEqual(r.rows.map(x => x.name), ['Amazing Grace', 'Amazing Grace', 'A Literal Hymn']);
+    assert.deepEqual(r.rows.map(x => x.image), ['ag1.png', 'ag2.png', '']);
+    assert.deepEqual(r.rows.map(x => x.page), [1, 2, 1]);
+    assert.equal(r.rows[0].pageCount, 2);
     assert.equal(r.rows[0].attribution, 'Newton');
-    assert.equal(r.rows[1].image, '');
+    assert.equal(r.rows[0]._id, 'preparatoryHymn~0');
+    assert.equal(r.rows[1]._id, 'preparatoryHymn~1');
     assert.match(r.warnings[0], /A Literal Hymn.*no sheet music/);
+});
+
+test('a hymn with empty or missing page assets skips them and does not invent images', () => {
+    const data = SUNDAYS();
+    data.hymns.h1.versions[0].pages = ['ag1.png', '', { url: '  ' }, { src: 'ag3.png' }, null];
+    const r = Data.resolve('sunday_hymns', {}, data, { today: TODAY });
+    const grace = r.rows.filter(x => x.name === 'Amazing Grace');
+    assert.deepEqual(grace.map(x => x.image), ['ag1.png', 'ag3.png']);
+    assert.equal(grace.length, 2);
+    grace.forEach(row => assert.ok(row.image, 'no invented placeholder'));
+    assert.deepEqual(Data.hymnSheetPages({ versions: [{ pages: ['', null, { url: '' }] }] }), []);
+    assert.deepEqual(Data.hymnSheetPages(null), []);
 });
 
 test('Sundays in a range make a preaching schedule', () => {
