@@ -85,7 +85,7 @@ test('the glossary carries Form Document', () => {
 
 test('the glossary says the awkward parts, not only the good ones', () => {
     const entry = CONTEXT.slice(CONTEXT.indexOf('### Form Document'), CONTEXT.indexOf('### Answering rung'));
-    assert.match(entry, /elder-only today/,
+    assert.match(entry, /elder-gated today/,
         'the glossary does not say who can actually use one');
     assert.match(entry, /open one but not yet make one/,
         'the glossary does not mention the phone limitation');

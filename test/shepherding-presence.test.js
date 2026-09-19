@@ -108,9 +108,9 @@ function block(name) {
 
 test('only elders can read Shepherding presence', () => {
     const b = block('shepherding_presence');
-    assert.match(b, /allow read: if isElder\(\);/,
+    assert.match(b, /allow read: if readsAsElder\(\);/,
         'a Shepherding claim says which person an elder is looking at');
-    assert.doesNotMatch(b, /isEditor\(\)/, 'editors must not learn where elders are looking');
+    assert.doesNotMatch(b, /readsAsEditor\(\)|isEditor\(\)/, 'editors must not learn where elders are looking');
 });
 
 test('nobody can write somebody else\'s Shepherding presence', () => {
@@ -120,6 +120,6 @@ test('nobody can write somebody else\'s Shepherding presence', () => {
 
 test('the Order of Service presence rule is unchanged', () => {
     const b = block('presence');
-    assert.match(b, /allow read: if isEditor\(\);/);
+    assert.match(b, /allow read: if readsAsEditor\(\);/);
     assert.match(b, /allow write, delete: if isEditor\(\) && request\.auth\.uid == uid;/);
 });

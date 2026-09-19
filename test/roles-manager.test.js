@@ -96,6 +96,7 @@ function fakeDb(seed = {}, { deny = [], failWrites = false } = {}) {
 }
 
 global.window = global;
+global.AccessCore = require('../public/access-core.js');
 const Roles = require('../public/roles-core.js');
 const EventsCore = require('../public/events-core.js');
 require('../public/relationship-core.js');

@@ -123,6 +123,7 @@ test('it opens on writing in it, and is not tied to focus', () => {
 // editor sixty-one tools that will refuse them by rank on the first call.
 
 const {mcpManager} = require('../public/mcp-manager.js');
+const AccessCore = require('../public/access-core.js');
 
 /** A manifest of the shape describeCapabilities now returns. */
 function manifest() {
@@ -138,7 +139,8 @@ function manifest() {
 function page(level) {
     const m = mcpManager();
     m.capabilities = manifest();
-    m.permissionLevel = level || 'editor';
+    Object.assign(m, AccessCore.pageFlags({permissionLevel: level || 'editor'}));
+    m.permissionLevel = m.currentPermissionLevel;
     return m;
 }
 
@@ -280,7 +282,7 @@ test('only an elder is offered the lock', () => {
 test('the rules close a locked file rather than merely hiding it', () => {
     const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
     assert.match(rules, /function guidanceLocked/);
-    assert.match(rules, /allow read: if isElder\(\) \|\| \(isEditor\(\) && !guidanceLocked/);
+    assert.match(rules, /allow read: if readsAsElder\(\) \|\| \(readsAsEditor\(\) && !guidanceLocked/);
     // An editor must not be able to lift one either.
     assert.match(rules, /allow update: if isElder\(\)[\s\S]{0,200}request\.resource\.data/);
 });
