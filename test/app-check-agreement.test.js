@@ -111,12 +111,12 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'the deploy workflow no longer auto-deploys on push to main');
     assert.match(wf, /branches:\s*\n\s+-\s+main/,
         'the deploy workflow push trigger is not limited to main');
-    // MS-545 option B, widened again by MS-557: standing set must include
-    // the attendance trigger AND the account-rank sync. The old prefix
-    // `--only hosting,functions:publicForm,functions:onAttendanceCreated`
-    // still matches the widened string, so pin the full list (and fail if
-    // syncAccountRankToPerson is dropped).
-    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson/,
+    // MS-545 option B, widened by MS-557 then MS-565: standing set must
+    // include the attendance trigger, the account-rank sync, AND
+    // firestore:rules. The old prefix without firestore:rules still
+    // matches the widened string, so pin the full list (and fail if
+    // firestore:rules is dropped).
+    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules/,
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -127,10 +127,10 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson/,
+    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,firestore:rules/,
         'the ops note no longer lists the standing --only targets');
-    assert.match(ops, /syncAccountRankToPerson/,
-        'the ops note dropped syncAccountRankToPerson');
+    assert.match(ops, /firestore:rules/,
+        'the ops note dropped firestore:rules');
 
     assert.ok(fs.existsSync(path.join(ROOT, 'functions/account-rank-sync.js')),
         'functions/account-rank-sync.js is missing; the trigger has no writer');
