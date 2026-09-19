@@ -57,15 +57,16 @@ test('directory hide chrome is canDecide, not the read-elder alias', () => {
     assert.doesNotMatch(controls, /canReadElder/);
 });
 
-test('canReadElder is the View-as-Member read lift; canDecide is isAnElder', () => {
+test('canReadElder is the View-as-Member read lift; canDecide follows AccessCore', () => {
     const readLift = getter('canReadElder');
     assert.match(readLift, /AccessCore\.readsAsElder/);
     assert.match(readLift, /viewAsMember/);
     assert.match(readLift, /pastoralAssistant/);
     const decide = getter('canDecide');
-    assert.match(decide, /AccessCore\.isAnElder/);
+    assert.match(decide, /AccessCore\.canDecide/);
     assert.match(decide, /viewAsMember/);
     assert.doesNotMatch(decide, /readsAsElder/);
+    assert.doesNotMatch(decide, /AccessCore\.isAnElder/);
 });
 
 test('an editor-level PA reads hidden directory vocab and can decide hide flags', () => {

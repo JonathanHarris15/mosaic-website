@@ -697,8 +697,8 @@ document.addEventListener('alpine:init', () => {
         // ── Membership Track (ADR-0012) — the stage slider, also on the profile ──
         // The same Track control the People list has, driven off this Person and
         // committing one Membership Change (silent tag swap) per move. A decision:
-        // same AccessCore flag as Relations Viewer, not canWriteEditor (an
-        // editor + Pastoral Assistant must not keep the slider).
+        // same AccessCore flag as Relations Viewer, not canWriteEditor. MS-594
+        // gives a Pastoral Assistant the slider too.
         get canEditMembership() {
             return this.canDecide;
         },
@@ -1321,7 +1321,7 @@ document.addEventListener('alpine:init', () => {
         // the status this change replaced and delete the change's record, in one
         // atomic batch (ADR-0005 mirror — revertPastoralChange). A decision —
         // canUndoStatusChange already asks canDecide; refuse here too so a
-        // Pastoral Assistant never reaches the toast.
+        // caller without decide never reaches the toast.
         async undoStatusChange(entry) {
             if (!this.canDecide || !this.canUndoStatusChange(entry)) return;
             const restored = entry.previousStatus || null;

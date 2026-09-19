@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// MS-541 / MS-575 / MS-576 / MS-577 / MS-580 — phone Shepherd decision chrome
-// asks AccessCore.canDecide so a Pastoral Assistant never gets a click → toast.
+// MS-541 / MS-575 / MS-576 / MS-577 / MS-580 / MS-597 — phone Shepherd
+// decision chrome asks AccessCore.canDecide. MS-594 gives a Pastoral
+// Assistant that flag, so the same chrome is visible and usable for them.
 // Screen entry stays canReadElder (a PA still opens Shepherd).
+
+const Access = require('../public/access-core.js');
 
 const SRC = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd.js'),
@@ -19,6 +22,14 @@ const RELS = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd-relationships.js'),
     'utf8'
 );
+
+test('a Pastoral Assistant has canDecide, so phone decision chrome is visible', () => {
+    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flags.canDecide, true);
+    assert.match(SRC, /var canDecide = !!\(flags && flags.canDecide\)/);
+    assert.match(TAGS, /var canDecide = !!\(flags && flags.canDecide\)/);
+    assert.match(RELS, /var canDecide = !!\(flags && flags.canDecide\)/);
+});
 
 function between(src, from, to) {
     const a = src.indexOf(from);
