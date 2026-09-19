@@ -131,6 +131,33 @@ function seedPerson(db, id, fields) {
 }
 
 /**
+ * Assert this Person has no Linked User.
+ *
+ * The unlinked invite path is a false-pass if a fixture quietly wrote
+ * `users/{uid}.personId` or `people.userId`. Call after seeding, before the
+ * move, so the suite is proving the unlinked path and not an accidental member.
+ *
+ * @param {object} db the Firestore handle
+ * @param {string} personId who must be unlinked
+ * @return {Promise<void>}
+ */
+async function assertUnlinked(db, personId) {
+    const [userSnap, personSnap] = await Promise.all([
+        db.collection('users').where('personId', '==', personId).limit(1).get(),
+        db.collection('people').doc(personId).get(),
+    ]);
+    if (!userSnap.empty) {
+        throw new Error(personId + ' has a Linked User; the unlinked path ' +
+            'was not exercised');
+    }
+    const userId = personSnap.exists && personSnap.data().userId;
+    if (userId) {
+        throw new Error(personId + ' has userId ' + userId +
+            '; the unlinked path was not exercised');
+    }
+}
+
+/**
  * One Role definition. The collection is `roles` — named wrongly, every Role
  * rule silently stops being checked, which is a bug this project has already
  * shipped once.
@@ -274,6 +301,7 @@ module.exports = {
     wipe,
     seedOccurrence,
     seedPerson,
+    assertUnlinked,
     seedRole,
     rosterIdFor,
     rosterOf,

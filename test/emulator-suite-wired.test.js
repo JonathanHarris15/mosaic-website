@@ -38,6 +38,25 @@ test('the emulator suite still covers both callables’ writes', () => {
     assert.match(suite, /writes\.take\(/, 'taking is no longer exercised');
 });
 
+// The three unlinked invite paths MS-529's helper accepted, and the emulator
+// suite never asked (MS-538). Without this, the cases can vanish and a plain
+// `npm test` still greens — every emulator file skips when the host is unset.
+test('the emulator invite suite still covers unlinked invitees', () => {
+    const suite = read('test/emulator/trade-writes.test.js');
+    [
+        [/unlinked Person who is not on a members-only Event is refused/,
+            'unlinked + members-only + not participant refuses'],
+        [/unlinked Person already on a members-only Event is accepted/,
+            'unlinked + members-only + participant accepts'],
+        [/unlinked Person is accepted on a public Event/,
+            'unlinked + public accepts'],
+        [/assertUnlinked/,
+            'setup asserts the invitee is unlinked'],
+    ].forEach(([pattern, claim]) => {
+        assert.match(suite, pattern, 'nothing now proves that ' + claim);
+    });
+});
+
 // The four claims MS-217 was filed for. Each is a sentence in the code's own
 // comments that was, until that suite, only a claim.
 test('it still proves the three things that fail silently', () => {
