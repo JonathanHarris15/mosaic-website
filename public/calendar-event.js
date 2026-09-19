@@ -2047,6 +2047,15 @@
                 return bits.join(' · ');
             },
 
+            isSundayBookletPrintable(p) {
+                const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+                return !!(Ex && Ex.isSundayBookletPath(p));
+            },
+
+            get hasSundayBookletPrintable() {
+                return (this.printables || []).some(p => this.isSundayBookletPrintable(p));
+            },
+
             async startLinkPrintable() {
                 if (!this.canLinkPrintables) return;
                 this.linkingPrintable = true;
@@ -2135,8 +2144,11 @@
                     let entries;
                     try { entries = PrintableLive.layoutPages(project, resolver, host); } finally { host.remove(); }
                     const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-                    const printCount = Ex ? Ex.paddedPageCount(entries.length) : entries.length;
-                    this.snapshotProgress = 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…';
+                    const booklet = !!(Ex && Ex.isSundayBookletPath(project));
+                    const printCount = Ex ? Ex.exportPageCount(entries.length, project) : entries.length;
+                    this.snapshotProgress = booklet
+                        ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
+                        : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
                     const blob = await PrintablePdf.render(project, entries, {
                         scale: 1,
                         onProgress: (done, total) => { this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…'; },

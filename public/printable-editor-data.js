@@ -119,13 +119,19 @@
                 return this.layout;
             },
 
-            // The pages for print: the same layout, padded to ×4 for the
-            // church printer's booklet mode (MS-589). Order is unchanged.
+            get wantsBookletExport() {
+                const Ex = global.PrintableExportCore;
+                return !!(Ex && Ex.isSundayBookletPath(this.project));
+            },
+
+            // The pages for print: Sunday booklet path pads to ×4 for the
+            // church printer's booklet mode (MS-589 / MS-592). Other
+            // Printables print as laid out. Order is unchanged.
             printPages() {
                 const entries = this.computeLayout();
                 const Ex = global.PrintableExportCore;
-                const padded = Ex ? Ex.padEntries(entries) : entries;
-                return padded.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
+                const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
+                return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
             },
 
             // ── The drawer ───────────────────────────────────────────────

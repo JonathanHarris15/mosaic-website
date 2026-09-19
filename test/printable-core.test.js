@@ -339,6 +339,20 @@ test('a printable rebuilds its pages through the model, so every page has margin
     assert.ok(p.pages[0].id);
     assert.deepEqual(p.pages[0].margins, { top: 75, right: 75, bottom: 75, left: 75 });
     assert.equal(p.pages[0].css, '');
+    assert.equal(p.bookletExport, false, 'a directory is not a Sunday booklet unless flagged');
+});
+
+test('bookletExport survives build and duplicate', () => {
+    const p = Core.buildPrintable({
+        name: 'Sunday booklet',
+        bookletExport: true,
+        template: { paper: 'letter' },
+        pages: [],
+    });
+    assert.equal(p.bookletExport, true);
+    const copy = Core.duplicatePrintable(p, ['Sunday booklet']);
+    assert.equal(copy.bookletExport, true);
+    assert.equal(Core.buildPrintable({ name: 'x', bookletExport: 'yes' }).bookletExport, false);
 });
 
 test('a version-1 record (library only, no paper yet) still opens', () => {

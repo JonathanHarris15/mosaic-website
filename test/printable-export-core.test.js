@@ -89,4 +89,78 @@ test('odd-length sample Sunday content pads to ×4 after bind', () => {
     assert.equal(padded.length % 4, 0);
     assert.equal(padded.length, 4);
     assert.deepEqual(padded.slice(0, 3).map(e => e.key), ['cover', 'h1', 'h2']);
+
+    const booklet = Export.exportEntries(entries, {
+        pages: [{ nodes: [
+            { bind: { text: { scope: 'global', source: 'sunday_typed', field: 'prayerNation' } } },
+        ] }],
+    });
+    assert.equal(booklet.length % 4, 0);
+    assert.equal(booklet.length, 4);
+});
+
+test('a non-booklet Printable does not pad and is not a Sunday booklet path', () => {
+    const directory = {
+        name: 'Directory',
+        pages: [{ nodes: [
+            { tag: 'p', text: 'Name', bind: { text: { scope: 'item', field: 'name' } },
+                repeat: { source: 'people', params: {} } },
+        ] }],
+    };
+    assert.equal(Export.isSundayBookletPath(directory), false);
+    assert.equal(Export.wantsBookletPad(directory), false);
+    const entries = [
+        { key: 'p1', page: { id: 'p1', nodes: [] }, nodes: [{ id: 'n', tag: 'p', text: 'Ada' }] },
+    ];
+    const printed = Export.exportEntries(entries, directory);
+    assert.equal(printed.length, 1, 'a 1-page directory is not forced to four leaves');
+    assert.equal(Export.exportPageCount(entries.length, directory), 1);
+    assert.equal(Export.exportPadCount(entries.length, directory), 0);
+    assert.deepEqual(printed.map(e => e.key), ['p1']);
+});
+
+test('Sunday booklet binds and bookletExport flag both take the pad path', () => {
+    const hymns = {
+        pages: [{ nodes: [
+            { repeat: { source: 'sunday_hymns', params: {} }, children: [
+                { bind: { src: { scope: 'item', field: 'image' } } },
+            ] },
+        ] }],
+    };
+    const typed = {
+        pages: [{ nodes: [
+            { bind: { text: { scope: 'global', source: 'sunday_typed', field: 'prayerNation' } } },
+        ] }],
+    };
+    const flagged = { bookletExport: true, pages: [{ nodes: [{ tag: 'p', text: 'Cover' }] }] };
+    const liturgyOnly = {
+        pages: [{ nodes: [
+            { bind: { text: { scope: 'global', source: 'sunday', field: 'theme' } } },
+        ] }],
+    };
+    assert.equal(Export.isSundayBookletPath(hymns), true);
+    assert.equal(Export.isSundayBookletPath(typed), true);
+    assert.equal(Export.isSundayBookletPath(flagged), true);
+    assert.equal(Export.isSundayBookletPath(liturgyOnly), false, 'liturgy-only is not the Sunday booklet path');
+
+    const three = [
+        { key: 'a', page: { id: 'a' }, nodes: [] },
+        { key: 'b', page: { id: 'b' }, nodes: [] },
+        { key: 'c', page: { id: 'c' }, nodes: [] },
+    ];
+    assert.equal(Export.exportEntries(three, hymns).length % 4, 0);
+    assert.equal(Export.exportEntries(three, flagged).length, 4);
+    assert.equal(Export.exportEntries(three, liturgyOnly).length, 3);
+    assert.equal(Export.exportPageCount(3, typed), 4);
+    assert.equal(Export.exportPadCount(3, typed), 1);
+});
+
+test('view-only booklet banner is gated on the Sunday booklet path', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const html = fs.readFileSync(path.join(__dirname, '../public/printable-view.html'), 'utf8');
+    assert.match(html, /pv-booklet[^>]*wantsBookletExport/,
+        'the booklet-mode banner must not show on every Printable');
+    assert.doesNotMatch(html, /pv-booklet" x-show="!loading && !problem && entries\.length"/,
+        'the MS-481 unscoped banner must not return');
 });

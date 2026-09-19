@@ -34,7 +34,7 @@
                     <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
                 </button>
                 <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" title="Prints a flat PDF padded to a multiple of 4. Use the printer's Booklet / Saddle mode — Mosaic does not reorder pages."><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" :title="wantsBookletExport ? 'Prints a flat PDF padded to a multiple of 4. Use the printer\'s Booklet / Saddle mode — Mosaic does not reorder pages.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
             </div>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -54,7 +54,7 @@
                 <template x-for="(w, i) in warnings" :key="i"><span class="m-notice__text pv-warn" x-text="w.label + ': ' + w.message"></span></template>
             </div>
         </div>
-        <div class="m-notice m-notice--info pv-booklet" x-show="!loading && !problem && entries.length">
+        <div class="m-notice m-notice--info pv-booklet" x-show="!loading && !problem && entries.length && wantsBookletExport">
             <span class="material-symbols-outlined m-notice__icon">print</span>
             <div class="m-notice__body">
                 <span class="m-notice__title">Church printer booklet mode</span>
