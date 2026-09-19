@@ -43,7 +43,11 @@ const TAGS = "people_tags";
 // a merge across a big directory is easily more than one batch.
 const BATCH_LIMIT = 450;
 
-/** Every tag, as a list, sorted the way the Manage Tags page sorts them. */
+/**
+ * Every tag, as a list, sorted the way the Manage Tags page sorts them.
+ * @param {object} db the Firestore handle
+ * @return {Promise<object>} { count, tags }
+ */
 async function listTags(db) {
   const snap = await db.collection(TAGS).get();
   const tags = snap.docs.map((doc) => {
@@ -62,7 +66,12 @@ async function listTags(db) {
   return {count: tags.length, tags};
 }
 
-/** One tag, or a refusal. */
+/**
+ * One tag, or a refusal.
+ * @param {object} db the Firestore handle
+ * @param {string} tagId which tag
+ * @return {Promise<object>} { ref, data }
+ */
 async function loadTag(db, tagId) {
   if (!tagId) throw refuse("No tag id was given.");
   const ref = db.collection(TAGS).doc(tagId);
@@ -71,7 +80,11 @@ async function loadTag(db, tagId) {
   return {ref, data: snap.data() || {}};
 }
 
-/** Refuses a Membership Tag or the Elder Tag, which are not manual tagging. */
+/**
+ * Refuses a Membership Tag or the Elder Tag, which are not manual tagging.
+ * @param {string} tagId which tag
+ * @param {string} what what the caller was trying to do
+ */
 function refuseIfProjected(tagId, what) {
   if (!ShepherdingCore.isProjectedTagId(tagId)) return;
   throw refuse(
@@ -121,7 +134,9 @@ async function renameTag(db, {tagId, name}) {
 
   const label = String(name || "").trim();
   if (!label) throw refuse("A tag needs a name.");
-  if (label === data.name) return {ok: true, tagId, name: label, note: "Already called that."};
+  if (label === data.name) {
+    return {ok: true, tagId, name: label, note: "Already called that."};
+  }
 
   const existing = await listTags(db);
   const clash = existing.tags.find(
@@ -190,18 +205,26 @@ async function previewMerge(db, {tagIds, survivorTagId}) {
 
   return {
     survivor: {tagId: survivorTagId, name: survivor.data.name || survivorTagId},
-    merging: merged.map((tagId) => ({tagId, name: names[tagId], carriers: byTag[tagId]})),
+    merging: merged.map((tagId) => ({
+      tagId, name: names[tagId], carriers: byTag[tagId],
+    })),
     peopleAffected: Object.keys(carriers).length,
     reversible: false,
     note:
-      "This cannot be undone. The merged tags are deleted, their carriers are " +
+        "This cannot be undone. The merged tags are deleted, their " +
+        "carriers are " +
       `moved onto "${survivor.data.name || survivorTagId}", and their Tag ` +
       "Changes are re-pointed at it so it inherits the Tag Hold. Read this " +
       "back to the elder before calling shep_merge_tags.",
   };
 }
 
-/** Apply a list of (batch) => void operations, respecting Firestore's cap. */
+/**
+ * Apply a list of (batch) => void operations, respecting Firestore's cap.
+ * @param {object} db the Firestore handle
+ * @param {Array} ops each given a batch and writing onto it
+ * @return {Promise<void>}
+ */
 async function commitInChunks(db, ops) {
   for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
     const batch = db.batch();
@@ -306,7 +329,8 @@ async function deleteTag(db, {tagId}) {
     const update = {tags: F.arrayRemove(tagId)};
     if (data.hidePeople) {
       const remaining = (doc.data().tags || []).filter((t) => t !== tagId);
-      update.shepherdingHidden = remaining.some((t) => otherHidePeople.includes(t));
+      update.shepherdingHidden = remaining.some(
+          (t) => otherHidePeople.includes(t));
     }
     batch.update(doc.ref, update);
   });

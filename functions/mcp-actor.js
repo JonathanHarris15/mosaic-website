@@ -153,24 +153,46 @@ const MISSING_AUTHOR = "missing-author";
  * May this caller count as an elder — decisions, pickers, the Elder Tag.
  * Accepts a Permission Level string or an account (`permissionLevel` +
  * `pastoralAssistant`).
+ * @param {string|object} value the caller's level or account
+ * @return {boolean} whether they count as an elder
  */
 function isElder(value) {
   return Access.isAnElder(value);
 }
 
-/** May this caller write as an editor? The grant adds nothing. */
+/**
+ * May this caller write as an editor? The grant adds nothing.
+ * @param {string|object} value the caller's level or account
+ * @return {boolean} whether they write as an editor
+ */
 function isEditor(value) {
   return Access.writesAsEditor(value);
 }
 
+/**
+ * May this caller read as an elder? The grant admits a Pastoral Assistant.
+ * @param {string|object} value the caller's level or account
+ * @return {boolean} whether they read as an elder
+ */
 function readsAsElder(value) {
   return Access.readsAsElder(value);
 }
 
+/**
+ * May this caller write the Pastoral Record? The grant admits a Pastoral
+ * Assistant.
+ * @param {string|object} value the caller's level or account
+ * @return {boolean} whether they write the record
+ */
 function writesTheRecord(value) {
   return Access.writesTheRecord(value);
 }
 
+/**
+ * The gate this `shep_` / `cal_` tool is classified under, or null.
+ * @param {string} name the tool name
+ * @return {?string} `read`, `record`, `decide`, or null
+ */
 function gateFor(name) {
   return Object.prototype.hasOwnProperty.call(SHEP_CAL_GATES, name) ?
     SHEP_CAL_GATES[name] : null;
@@ -179,6 +201,9 @@ function gateFor(name) {
 /**
  * May this account call this `shep_` / `cal_` tool?
  * An unclassified tool refuses a Pastoral Assistant and admits only elders.
+ * @param {string|object} account the caller's account
+ * @param {string} name the tool name
+ * @return {boolean} whether they may call it
  */
 function mayUseTool(account, name) {
   const gate = gateFor(name);
@@ -188,6 +213,11 @@ function mayUseTool(account, name) {
   return Access.isAnElder(account);
 }
 
+/**
+ * The caller's permission level, quoted for a refusal sentence.
+ * @param {string|object} value the caller's level or account
+ * @return {string} the quoted level, or "no permission level"
+ */
 function heldLabel(value) {
   const level = Access.permissionLevelOf(value);
   return level ? `"${level}"` : "no permission level";

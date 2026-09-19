@@ -83,7 +83,11 @@ async function listFormTemplates(db) {
   return {count: templates.length, templates};
 }
 
-/** One question, as much of it as an assistant needs to answer it. */
+/**
+ * One question, as much of it as an assistant needs to answer it.
+ * @param {object} question the question
+ * @return {object} the row
+ */
 function questionRow(question) {
   return {
     questionId: question.id,
@@ -109,7 +113,8 @@ function questionRow(question) {
  * @param {object} args templateId, personId, title, folderId, actor
  * @return {Promise<object>} { ok, documentId }
  */
-async function createFormDocument(db, {templateId, personId, title, folderId, actor}) {
+async function createFormDocument(
+    db, {templateId, personId, title, folderId, actor}) {
   const snap = await db.collection(FORMS).doc(templateId).get();
   if (!snap.exists) throw refuse(`No Form Template with id "${templateId}".`);
 
@@ -162,7 +167,8 @@ async function createFormDocument(db, {templateId, personId, title, folderId, ac
     documentId: ref.id,
     title: record.title,
     personId: personId || null,
-    questions: (record.questions || []).filter((q) => !q.retired).map(questionRow),
+    questions: (record.questions || [])
+        .filter((q) => !q.retired).map(questionRow),
   };
 }
 
@@ -235,7 +241,10 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
       continue;
     }
     if (question.type === "file" || question.type === "image") {
-      skipped.push({questionId, why: "an upload needs a file, which an assistant has none of"});
+      skipped.push({
+        questionId,
+        why: "an upload needs a file, which an assistant has none of",
+      });
       continue;
     }
     proposed[questionId] = value;
@@ -282,7 +291,8 @@ function filterConfig(filter) {
   return {
     filterTags: (f.tagIds || f.filterTags || []).filter(Boolean),
     filterMode: f.tagMode === "all" || f.filterMode === "all" ? "all" : "any",
-    statusZoneFilters: (f.statusZones || f.statusZoneFilters || []).filter(Boolean),
+    statusZoneFilters: (f.statusZones || f.statusZoneFilters || [])
+        .filter(Boolean),
     tagHoldFilters: f.tagHoldFilters || {},
     tagHoldCmp: f.tagHoldCmp || {},
     sortBy: "name",
@@ -295,7 +305,8 @@ function filterConfig(filter) {
  * @param {object} args title, filter, viewId, columns, folderId, actor
  * @return {Promise<object>} { ok, documentId }
  */
-async function createCareList(db, {title, filter, viewId, columns, folderId, actor}) {
+async function createCareList(
+    db, {title, filter, viewId, columns, folderId, actor}) {
   const record = DocsCore.buildElderDocument({
     title: String(title || "").trim() || "New Care List",
     docType: "care-list",
@@ -329,7 +340,12 @@ async function createCareList(db, {title, filter, viewId, columns, folderId, act
   };
 }
 
-/** One Care List, or a refusal. */
+/**
+ * One Care List, or a refusal.
+ * @param {object} db the Firestore handle
+ * @param {string} documentId which document
+ * @return {Promise<object>} { ref, data }
+ */
 async function loadCareList(db, documentId) {
   const {ref, data} = await loadDocument(db, documentId);
   if ((data.docType || "note") !== "care-list") {
@@ -408,7 +424,8 @@ async function addCareListColumn(db, {documentId, name, actor}) {
  * @param {object} args documentId, personId, columnId, markdown, actor
  * @return {Promise<object>} { ok }
  */
-async function writeCareListCell(db, {documentId, personId, columnId, markdown, actor}) {
+async function writeCareListCell(
+    db, {documentId, personId, columnId, markdown, actor}) {
   const {data} = await loadCareList(db, documentId);
   await loadPerson(db, personId);
 
@@ -511,7 +528,9 @@ async function updateView(db, {viewId, title, filter, actor}) {
   if (!snap.exists) throw refuse(`No Filtered View with id "${viewId}".`);
 
   const update = {updatedAt: F.now(), updatedByName: actor.name};
-  if (title !== undefined && title !== null) update.title = String(title).trim();
+  if (title !== undefined && title !== null) {
+    update.title = String(title).trim();
+  }
   if (filter) Object.assign(update, filterConfig(filter));
 
   await ref.update(Object.assign(update, Actor.provenance()));
@@ -533,7 +552,8 @@ async function deleteView(db, {viewId}) {
 
   // A Care List can be built on a preset view. Deleting the view out from
   // under it leaves a list that opens on nobody, so say which ones.
-  const docs = await db.collection(DOCUMENTS).where("filterId", "==", viewId).get();
+  const docs = await db.collection(DOCUMENTS)
+      .where("filterId", "==", viewId).get();
 
   await ref.delete();
   return {

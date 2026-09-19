@@ -22,9 +22,9 @@
  * written to end. Same trick liturgy-writes.js uses for MosaicIdentity.
  *
  * ⚠ EVERY WRITE IS AUTHORED AND MARKED. `actor` comes from mcp-actor.js, which
- * refuses rather than returning a half-author. `source` is 'mcp' and the record
- * carries `writtenVia: 'mcp'`, so an elder reading their own Pastoral Record can
- * see what an agent did.
+ * refuses rather than returning a half-author. `source` is 'mcp' and the
+ * record carries `writtenVia: 'mcp'`, so an elder reading their own Pastoral
+ * Record can see what an agent did.
  */
 
 // ⚠ THE FIRESTORE SENTINELS ARE PASSED IN, NEVER REACHED FOR. `functions/`
@@ -50,7 +50,11 @@ const ACTIVITY = "shepherding_activity";
 // correctly here would produce an empty tag list and no error at all.
 const TAGS = "people_tags";
 
-/** A refusal a tool can hand straight back to the assistant. */
+/**
+ * A refusal a tool can hand straight back to the assistant.
+ * @param {string} message what to say
+ * @return {Error} the refusal
+ */
 function refuse(message) {
   const err = new Error(message);
   err.code = "shepherding-refused";
@@ -81,7 +85,11 @@ async function loadPerson(db, personId) {
   return {ref, data: snap.data() || {}};
 }
 
-/** Every Shepherding Tag, by id, for naming a tag in a Tag Change. */
+/**
+ * Every Shepherding Tag, by id, for naming a tag in a Tag Change.
+ * @param {object} db the Firestore handle
+ * @return {Promise<object>} tags keyed by id
+ */
 async function loadTags(db) {
   const snap = await db.collection(TAGS).get();
   const byId = {};
@@ -124,7 +132,8 @@ function marked(record, explanation) {
  * @param {object} args.actor the connected Elder
  * @return {Promise<object>} { ok, noteId }
  */
-async function writeNote(db, {personId, type, subject, markdown, sourceDocumentId, actor}) {
+async function writeNote(
+    db, {personId, type, subject, markdown, sourceDocumentId, actor}) {
   await loadPerson(db, personId);
 
   const noteType = String(type || "").trim();
@@ -207,7 +216,8 @@ async function appendToNote(db, {personId, noteId, markdown, actor}) {
  * @param {object} args personId, noteId, type, subject, markdown, actor
  * @return {Promise<object>} { ok, noteId }
  */
-async function editNote(db, {personId, noteId, type, subject, markdown, actor}) {
+async function editNote(
+    db, {personId, noteId, type, subject, markdown, actor}) {
   const {ref} = await loadNote(db, personId, noteId);
 
   const update = {
@@ -285,7 +295,8 @@ async function deleteNote(db, {personId, noteId}) {
  * @param {object} args personId, urgency, importance, explanation, actor
  * @return {Promise<object>} { ok, status, activityId }
  */
-async function setStatus(db, {personId, urgency, importance, explanation, actor}) {
+async function setStatus(
+    db, {personId, urgency, importance, explanation, actor}) {
   const {data} = await loadPerson(db, personId);
 
   if (!ShepherdingCore.URGENCY_LEVELS.includes(urgency)) {
@@ -324,7 +335,10 @@ async function clearStatus(db, {personId, explanation, actor}) {
   const {data} = await loadPerson(db, personId);
 
   if (!data.shepherdingStatus) {
-    return {ok: true, personId, status: null, activityId: null, note: "Already had no status."};
+    return {
+      ok: true, personId, status: null, activityId: null,
+      note: "Already had no status.",
+    };
   }
 
   const activityId = await ShepherdingCore.commitPastoralChange(
@@ -357,7 +371,8 @@ async function clearStatus(db, {personId, explanation, actor}) {
  * every tag. Written in the same batch as the tag itself.
  *
  * @param {object} db the Firestore handle
- * @param {object} args personId, tagIds, action ('added'|'removed'), explanation, actor
+   * @param {object} args personId, tagIds, action ('added'|'removed'),
+   *   explanation, actor
  * @return {Promise<object>} { ok, changed, skipped }
  */
 async function changeTags(db, {personId, tagIds, action, explanation, actor}) {
@@ -374,7 +389,10 @@ async function changeTags(db, {personId, tagIds, action, explanation, actor}) {
 
   for (const tagId of wanted) {
     if (ShepherdingCore.isProjectedTagId(tagId)) {
-      skipped.push({tagId, why: "set by the Membership Track or the Elder role, not by hand"});
+      skipped.push({
+        tagId,
+        why: "set by the Membership Track or the Elder role, not by hand",
+      });
       continue;
     }
     if (!allTags[tagId]) {
@@ -383,7 +401,9 @@ async function changeTags(db, {personId, tagIds, action, explanation, actor}) {
     }
     const carries = tags.includes(tagId);
     if (carries === adding) {
-      skipped.push({tagId, why: adding ? "already carried" : "was not carried"});
+      skipped.push({
+        tagId, why: adding ? "already carried" : "was not carried",
+      });
       continue;
     }
 
@@ -448,15 +468,18 @@ function removeTags(db, args) {
  * @param {object} args personId, stage, inactive, explanation, actor
  * @return {Promise<object>} { ok, membership, activityId }
  */
-async function setMembershipStage(db, {personId, stage, inactive, explanation, actor}) {
+async function setMembershipStage(
+    db, {personId, stage, inactive, explanation, actor}) {
   const {data} = await loadPerson(db, personId);
 
-  const wanted = stage === null || stage === undefined || stage === "" ? null : String(stage);
+  const wanted = stage === null || stage === undefined ||
+      stage === "" ? null : String(stage);
   if (wanted !== null && !ShepherdingCore.MEMBERSHIP_STAGES.includes(wanted)) {
     throw refuse(
         `"${wanted}" is not a Membership Stage. Use one of: ` +
         ShepherdingCore.MEMBERSHIP_STAGES.join(", ") +
-        " — or no stage at all, with inactive true, to mark somebody inactive.");
+        " — or no stage at all, with inactive true, to mark " +
+        "somebody inactive.");
   }
 
   const previous = {
@@ -470,14 +493,15 @@ async function setMembershipStage(db, {personId, stage, inactive, explanation, a
       note: "Already on that stage."};
   }
 
-  const activityId = await ShepherdingCore.commitMembershipChange(db, personId, {
-    currentTags: data.tags || [],
-    previous,
-    next,
-    authorUid: actor.uid,
-    authorName: actor.name,
-    source: Actor.SOURCE,
-  });
+  const activityId = await ShepherdingCore.commitMembershipChange(
+      db, personId, {
+        currentTags: data.tags || [],
+        previous,
+        next,
+        authorUid: actor.uid,
+        authorName: actor.name,
+        source: Actor.SOURCE,
+      });
 
   await annotate(db, personId, activityId, explanation);
   return {ok: true, personId, membership: next, activityId};
@@ -495,7 +519,8 @@ async function setMembershipStage(db, {personId, stage, inactive, explanation, a
  * @param {object} args personId, elderPersonId, explanation, actor
  * @return {Promise<object>} { ok, assignedElderId, activityId }
  */
-async function setElderAssignment(db, {personId, elderPersonId, explanation, actor}) {
+async function setElderAssignment(
+    db, {personId, elderPersonId, explanation, actor}) {
   const {data} = await loadPerson(db, personId);
   const nextId = elderPersonId || null;
 
@@ -506,7 +531,8 @@ async function setElderAssignment(db, {personId, elderPersonId, explanation, act
   let nextName = "";
   if (nextId) {
     const elder = await loadPerson(db, nextId);
-    if (!ShepherdingCore.isElderPerson(Object.assign({id: nextId}, elder.data))) {
+    if (!ShepherdingCore.isElderPerson(
+        Object.assign({id: nextId}, elder.data))) {
       throw refuse(
           `${elder.data.name || nextId} does not carry the Elder Tag, so ` +
           "nobody can be assigned to them.");
@@ -526,13 +552,14 @@ async function setElderAssignment(db, {personId, elderPersonId, explanation, act
     prevName = (snap.exists && snap.data().name) || "";
   }
 
-  const activityId = await ShepherdingCore.commitAssignmentChange(db, personId, {
-    previous: {elderId: prevId, elderName: prevName},
-    next: {elderId: nextId, elderName: nextName},
-    authorUid: actor.uid,
-    authorName: actor.name,
-    source: Actor.SOURCE,
-  });
+  const activityId = await ShepherdingCore.commitAssignmentChange(
+      db, personId, {
+        previous: {elderId: prevId, elderName: prevName},
+        next: {elderId: nextId, elderName: nextName},
+        authorUid: actor.uid,
+        authorName: actor.name,
+        source: Actor.SOURCE,
+      });
 
   await annotate(db, personId, activityId, explanation);
   return {ok: true, personId, assignedElderId: nextId, activityId};

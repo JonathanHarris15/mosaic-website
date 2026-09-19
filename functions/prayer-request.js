@@ -1,8 +1,9 @@
 /**
- * @fileoverview Pure pastoral-prayer domain logic for the Prayer Request texting
- * flow. No Firebase or Textbelt I/O — the orchestrator in index.js loads the
- * editable templates, performs sends, and writes Firestore; this module only
- * decides and shapes, so every rule here is unit-testable directly.
+ * @fileoverview Pure pastoral-prayer domain logic for the Prayer Request
+ * texting flow. No Firebase or Textbelt I/O — the orchestrator in index.js
+ * loads the editable templates, performs sends, and writes Firestore; this
+ * module only decides and shapes, so every rule here is unit-testable
+ * directly.
  */
 
 /** The church's local timezone — drives the send window and day countdown. */
@@ -83,7 +84,8 @@ function resolveTemplates(config) {
  * @return {string}
  */
 function renderPrayerRequestMessage(kind, firstName, templates) {
-  const tpl = (templates && templates[kind]) || DEFAULT_PRAYER_MESSAGES[kind] || "";
+  const tpl = (templates && templates[kind]) ||
+    DEFAULT_PRAYER_MESSAGES[kind] || "";
   const name = (typeof firstName === "string" && firstName.trim()) ?
     firstName.trim() : "there";
   return tpl.split("{name}").join(name);
@@ -175,8 +177,9 @@ function prayerRequestAction(state) {
 /**
  * The manual ("Send now") decision: a human is choosing to text now, so the
  * timing/quiet-hours guards are bypassed, but the hard guards remain — refuse
- * with no phone or an already-filled request. Initial if none sent yet, reminder
- * once it has (a repeat click re-sends the reminder as a deliberate nudge).
+ * with no phone or an already-filled request. Initial if none sent yet,
+ * reminder once it has (a repeat click re-sends the reminder as a
+ * deliberate nudge).
  * @param {Object} state
  * @param {boolean} state.hasPhone
  * @param {boolean} state.requestFilled
@@ -210,7 +213,7 @@ function tiptapFromText(text) {
  * Builds the core "Prayer Request" Shepherding Note payload from a reply. The
  * caller adds author and timestamp fields before writing.
  * @param {{personName: string, serviceDate: string, requestText: string}} args
- * @return {{type: string, subject: string, content: string, contentJson: Object}}
+ * @return {Object} type, subject, content, contentJson
  */
 function buildPrayerRequestNote(args) {
   const {serviceDate, requestText} = args;
@@ -229,12 +232,17 @@ function buildPrayerRequestNote(args) {
  * completed the set came by text reply, and the set was not already complete
  * before this write (so manual fills and later edits never trigger it).
  * @param {Object} args
- * @param {Array<{filled: boolean}>} args.subjectStates - one per designated subject
- * @param {?string} args.changedSource - prayerRequestSource of the just-written doc
- * @param {boolean} args.wasCompleteBefore - all subjects filled before this write
+ * @param {Array} args.subjectStates one per designated subject, each
+ *   {filled}
+ * @param {?string} args.changedSource prayerRequestSource of the
+ *   just-written doc
+ * @param {boolean} args.wasCompleteBefore all subjects filled before
+ *   this write
  * @return {boolean}
  */
-function elderDigestDecision({subjectStates, changedSource, wasCompleteBefore}) {
+function elderDigestDecision({
+  subjectStates, changedSource, wasCompleteBefore,
+}) {
   if (!Array.isArray(subjectStates) || subjectStates.length === 0) return false;
   if (!subjectStates.every((s) => s && s.filled)) return false;
   if (wasCompleteBefore) return false;
@@ -266,7 +274,7 @@ function formatServiceDate(serviceDate) {
  * Renders the elder digest: substitutes {date} with the friendly service date
  * and {requests} with one "Name — request" line per filled subject.
  * @param {string} [template]
- * @param {{serviceDate: string, subjects: Array<{name: string, request: string}>}} data
+ * @param {Object} data serviceDate and subjects (name, request)
  * @return {string}
  */
 function renderElderDigest(template, data) {

@@ -42,7 +42,11 @@ function readsLocked(options) {
   });
 }
 
-/** The stored shape, as the MCP serves it. */
+/**
+ * The stored shape, as the MCP serves it.
+ * @param {Object} doc the Firestore document snapshot
+ * @return {Object} the row
+ */
 function toRow(doc) {
   const d = doc.data();
   return {
@@ -65,6 +69,7 @@ function toRow(doc) {
  * whole library every time somebody asked what was available.
  *
  * @param {object} db the Firestore handle
+ * @param {object} [options] {level, pastoralAssistant}
  * @return {Promise<Array<object>>} slug, title and summary for each
  */
 async function listGuidance(db, options) {
@@ -91,6 +96,7 @@ async function listGuidance(db, options) {
  *
  * @param {object} db the Firestore handle
  * @param {string} slug the file's address
+ * @param {object} [options] {level, pastoralAssistant}
  * @return {Promise<?object>} the file, or null
  */
 async function getGuidance(db, slug, options) {
@@ -106,7 +112,9 @@ async function getGuidance(db, slug, options) {
   // Saying "that one is elder-only" would confirm it exists and hand over its
   // address, which is most of what the lock is for.
   const doc = snap.docs[0];
-  if ((doc.data() || {}).eldersOnly === true && !readsLocked(options)) return null;
+  if ((doc.data() || {}).eldersOnly === true && !readsLocked(options)) {
+    return null;
+  }
 
   return toRow(doc);
 }

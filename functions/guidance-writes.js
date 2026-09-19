@@ -39,7 +39,9 @@ const GUIDANCE = "mcp_guidance";
  * @param {*} args.serverTimestamp a server timestamp value
  * @return {Promise<object>} {ok, action, slug} or {ok:false, problems}
  */
-async function updateGuidance(db, {slug, fields, uid, name, source, serverTimestamp}) {
+async function updateGuidance(db, {
+  slug, fields, uid, name, source, serverTimestamp,
+}) {
   const existing = await bySlug(db, slug);
 
   // An edit only has to send what it is changing; the rest stands. An

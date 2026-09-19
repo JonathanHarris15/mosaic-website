@@ -7,11 +7,12 @@
  *
  * WHAT IS STORED, AND WHAT IS NOT (ADR-0060). `shepherding_tasks` holds a
  * one-off Task and the standing commitment behind a repeating one — the same
- * collection, because a series IS a Task that happens more than once. A repeat's
- * dates are never written down. `shepherding_task_occurrences` holds only the
- * dates something has been SAID about: ticked, skipped, reassigned, nudged, or
- * given words of their own. A month nobody did has no document at all, and is
- * overdue because the rule produced its date and nothing answered.
+ * collection, because a series IS a Task that happens more than once. A
+ * repeat's dates are never written down. `shepherding_task_occurrences`
+ * holds only the dates something has been SAID about: ticked, skipped,
+ * reassigned, nudged, or given words of their own. A month nobody did has
+ * no document at all, and is overdue because the rule produced its date
+ * and nothing answered.
  *
  * WHAT AN OCCURRENCE MAY OVERRIDE. Title, body, assignees, time, and the day
  * itself — nothing else, and never the recurrence, and never the Subject. "Rob
@@ -20,9 +21,9 @@
  * Same rule an Event occurrence obeys, so elders learn it once.
  *
  * WHO CAN BE GIVEN ONE (ADR-0059, still). Assignees are Elders, checked against
- * the Elder Tag rather than the directory. Handing a Task to somebody who cannot
- * open the page is a Task nobody will ever do, so it is refused at the door
- * rather than accepted and quietly lost.
+ * the Elder Tag rather than the directory. Handing a Task to somebody who
+ * cannot open the page is a Task nobody will ever do, so it is refused at
+ * the door rather than accepted and quietly lost.
  *
  * WHO IT IS FOR (ADR-0061). A Task may also name a SUBJECT — `aboutPersonId`,
  * at most one, ANY member of the directory rather than only an elder, because
@@ -148,7 +149,7 @@ async function assigneesOf(db, assigneeIds) {
  */
 async function aboutPersonOf(db, aboutPersonId) {
   if (!aboutPersonId) return null;
-  await loadPerson(db, String(aboutPersonId));   // refuses an id nobody has
+  await loadPerson(db, String(aboutPersonId)); // refuses an id nobody has
   return String(aboutPersonId);
 }
 
@@ -163,7 +164,11 @@ async function aboutPersonOf(db, aboutPersonId) {
 function recurrenceOf(recurrence) {
   if (!recurrence) return null;
   const freq = String(recurrence.freq || "");
-  const allowed = [TasksCore.FREQ.WEEKLY, TasksCore.FREQ.FORTNIGHTLY, TasksCore.FREQ.MONTHLY];
+  const allowed = [
+    TasksCore.FREQ.WEEKLY,
+    TasksCore.FREQ.FORTNIGHTLY,
+    TasksCore.FREQ.MONTHLY,
+  ];
   if (allowed.indexOf(freq) === -1) {
     throw refuse(
         `"${freq}" is not a repeat this app knows. Use weekly, fortnightly ` +
@@ -175,7 +180,11 @@ function recurrenceOf(recurrence) {
 
   const ends = recurrence.ends || {};
   const kind = String(ends.kind || TasksCore.ENDS.NEVER);
-  const endKinds = [TasksCore.ENDS.NEVER, TasksCore.ENDS.ON_DATE, TasksCore.ENDS.AFTER_COUNT];
+  const endKinds = [
+    TasksCore.ENDS.NEVER,
+    TasksCore.ENDS.ON_DATE,
+    TasksCore.ENDS.AFTER_COUNT,
+  ];
   if (endKinds.indexOf(kind) === -1) {
     throw refuse(`"${kind}" is not a way for a repeat to stop.`);
   }
@@ -189,9 +198,9 @@ function recurrenceOf(recurrence) {
   return {
     freq: freq,
     startDate: recurrence.startDate,
-    ends: kind === TasksCore.ENDS.ON_DATE ? {kind, date: ends.date}
-      : kind === TasksCore.ENDS.AFTER_COUNT ? {kind, count: Number(ends.count)}
-        : {kind: TasksCore.ENDS.NEVER},
+    ends: kind === TasksCore.ENDS.ON_DATE ? {kind, date: ends.date} :
+      kind === TasksCore.ENDS.AFTER_COUNT ? {kind, count: Number(ends.count)} :
+        {kind: TasksCore.ENDS.NEVER},
   };
 }
 
@@ -230,7 +239,8 @@ function occurrenceRef(db, task, date) {
   if (!isDateStr(date)) {
     throw refuse(`"${date}" is not a date. Give the date of the one you mean.`);
   }
-  return db.collection(OCCURRENCES).doc(TasksCore.occurrenceIdFor(task.id || task.taskId, date));
+  return db.collection(OCCURRENCES)
+      .doc(TasksCore.occurrenceIdFor(task.id || task.taskId, date));
 }
 
 /**
@@ -270,7 +280,9 @@ async function writeToDate(db, taskId, date, patch) {
  *     recurrence, actor
  * @return {Promise<object>} { ok, taskId, title, due, repeats, nextDates }
  */
-async function createTask(db, {title, body, due, dueTime, assigneeIds, aboutPersonId, recurrence, actor}) {
+async function createTask(db, {
+  title, body, due, dueTime, assigneeIds, aboutPersonId, recurrence, actor,
+}) {
   const label = titleOf(title);
   const rule = recurrenceOf(recurrence);
   const assignees = await assigneesOf(db, assigneeIds);
@@ -332,14 +344,18 @@ function upcomingDates(rule, howMany) {
  *     aboutPersonId, recurrence
  * @return {Promise<object>} what changed
  */
-async function editTask(db, {taskId, date, title, body, dueTime, assigneeIds, aboutPersonId, recurrence}) {
+async function editTask(db, {
+  taskId, date, title, body, dueTime, assigneeIds, aboutPersonId, recurrence,
+}) {
   const {ref} = await loadTask(db, taskId);
   const patch = {};
 
   if (title !== undefined) patch.title = titleOf(title);
   if (body !== undefined) patch.body = String(body || "");
   if (dueTime !== undefined) patch.dueTime = dueTimeOf(dueTime);
-  if (assigneeIds !== undefined) patch.assigneeIds = await assigneesOf(db, assigneeIds);
+  if (assigneeIds !== undefined) {
+    patch.assigneeIds = await assigneesOf(db, assigneeIds);
+  }
 
   if (date) {
     if (recurrence !== undefined) {
@@ -355,7 +371,9 @@ async function editTask(db, {taskId, date, title, body, dueTime, assigneeIds, ab
           "Who a task is for is changed on the task itself, never on one of " +
           "its dates — every date of it is for the same person.");
     }
-    if (!Object.keys(patch).length) return {ok: true, taskId, date, changed: []};
+    if (!Object.keys(patch).length) {
+      return {ok: true, taskId, date, changed: []};
+    }
     const out = await writeToDate(db, taskId, date, patch);
     return Object.assign({ok: true, changed: Object.keys(patch)}, out);
   }
@@ -551,7 +569,7 @@ async function namesFor(db, ids) {
  */
 async function listTasks(db, opts) {
   const personId = (opts && opts.personId) || null;
-  if (personId) await loadPerson(db, personId);   // refuses an id nobody has
+  if (personId) await loadPerson(db, personId); // refuses an id nobody has
 
   const all = await resolveAll(db);
   const forOne = personId ? TasksCore.forPerson(all, personId) : all;

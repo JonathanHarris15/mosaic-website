@@ -17,9 +17,10 @@
  * LITURGY CONVERTS UNCONDITIONALLY
  *
  * A Servant Role's Assignment converts only when Confirmed, because somebody
- * had to say yes. Liturgy has no such state: there is no Pending or Confirmed on
- * `preacherId`. Being on the printed booklet IS the commitment a state would
- * otherwise record — the guide went out with their name on it.
+ * had to say yes. Liturgy has no such state: there is no Pending or
+ * Confirmed on `preacherId`. Being on the printed booklet IS the
+ * commitment a state would otherwise record — the guide went out with
+ * their name on it.
  *
  * The alternative was to treat liturgy holders like Pending assignments and
  * raise a "did they serve?" question every week. Rejected: that is a question
@@ -59,7 +60,8 @@ const SERVING_FIELDS = Object.freeze([
   {idField: "serviceLeaderId", slug: "service_leader"},
   {idField: "musicLeaderId", slug: "worship_leader"},
   {idField: "preacherId", slug: "preacher"},
-  {idField: "prayerPraiseId", slug: "prayer", metadata: {prayer_type: "praise"}},
+  {idField: "prayerPraiseId", slug: "prayer",
+    metadata: {prayer_type: "praise"}},
   {idField: "prayerConfessionId", slug: "prayer",
     metadata: {prayer_type: "confession"}},
   {idField: "elementsId", slug: "elements"},
@@ -85,7 +87,8 @@ function servingInvolvement(service) {
 
   SERVING_FIELDS.forEach((f) => {
     const ids = f.list ?
-      (Array.isArray(doc[f.idField]) ? doc[f.idField] : []).map((h) => h && h.id) :
+      (Array.isArray(doc[f.idField]) ? doc[f.idField] : [])
+          .map((h) => h && h.id) :
       [doc[f.idField]];
 
     ids.filter(Boolean).forEach((personId) => {
@@ -107,7 +110,7 @@ function servingInvolvement(service) {
  * Music Helpers therefore share an id under different people, which is correct
  * — they are two documents.
  * @param {string} date YYYY-MM-DD
- * @param {{type?: string, metadata?: Object}} record
+ * @param {Object} record type and optional metadata
  * @return {?string}
  */
 function involvementId(date, record) {
@@ -119,8 +122,9 @@ function involvementId(date, record) {
 }
 
 /**
- * The records owed by a Service whose date has passed, each stamped with its id.
- * Returns nothing for a date still ahead — that is the whole timing rule.
+ * The records owed by a Service whose date has passed, each stamped with
+ * its id. Returns nothing for a date still ahead — that is the whole
+ * timing rule.
  * @param {Object} service The stored `services/{date}` document.
  * @param {string} date YYYY-MM-DD
  * @param {string} today YYYY-MM-DD, church-local

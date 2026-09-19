@@ -47,7 +47,11 @@ const SEARCH_LIMIT = 25;
 // context, not a biography.
 const RECORD_LIMIT = 40;
 
-/** Whatever Firestore gave us, as milliseconds, or 0. */
+/**
+ * Whatever Firestore gave us, as milliseconds, or 0.
+ * @param {*} value a Firestore timestamp, Date, or empty
+ * @return {number} milliseconds, or 0
+ */
 function millis(value) {
   if (!value) return 0;
   if (typeof value.toDate === "function") return value.toDate().getTime();
@@ -55,19 +59,31 @@ function millis(value) {
   return 0;
 }
 
-/** A timestamp an assistant can read, rather than a Firestore sentinel. */
+/**
+ * A timestamp an assistant can read, rather than a Firestore sentinel.
+ * @param {*} value a Firestore timestamp, Date, or empty
+ * @return {?string} ISO string, or null
+ */
 function isoOf(value) {
   const ms = millis(value);
   return ms ? new Date(ms).toISOString() : null;
 }
 
-/** Everyone, as plain objects with their id. */
+/**
+ * Everyone, as plain objects with their id.
+ * @param {object} db the Firestore handle
+ * @return {Promise<Array>} people
+ */
 async function allPeople(db) {
   const snap = await db.collection(PEOPLE).get();
   return snap.docs.map((doc) => Object.assign({id: doc.id}, doc.data()));
 }
 
-/** Every Shepherding Tag, by id. */
+/**
+ * Every Shepherding Tag, by id.
+ * @param {object} db the Firestore handle
+ * @return {Promise<object>} tags keyed by id
+ */
 async function tagsById(db) {
   const snap = await db.collection(TAGS).get();
   const byId = {};
@@ -77,7 +93,12 @@ async function tagsById(db) {
   return byId;
 }
 
-/** The bones of a Person, enough to tell two of them apart. */
+/**
+ * The bones of a Person, enough to tell two of them apart.
+ * @param {object} person the Person
+ * @param {object} tags Shepherding Tags keyed by id
+ * @return {object} the summary
+ */
 function personSummary(person, tags) {
   const membership = person.membership || {};
   return {
@@ -88,7 +109,8 @@ function personSummary(person, tags) {
     membershipStage: membership.stage || null,
     inactive: ShepherdingCore.isInactiveMembership(membership),
     shepherdingStatus: person.shepherdingStatus || null,
-    assignedElderId: (person.shepherding && person.shepherding.assignedElderId) || null,
+    assignedElderId: (person.shepherding &&
+      person.shepherding.assignedElderId) || null,
     tags: (person.tags || []).map((id) => ({
       tagId: id,
       name: (tags[id] && tags[id].name) || id,
@@ -168,7 +190,8 @@ async function getProfile(db, {personId, recordLimit}) {
   const snap = await db.collection(PEOPLE).doc(personId).get();
   if (!snap.exists) {
     return {found: false, personId,
-      note: "No Person with that id. Use shep_find_person to look somebody up."};
+      note: "No Person with that id. Use shep_find_person to look " +
+        "somebody up."};
   }
 
   const person = Object.assign({id: personId}, snap.data());
@@ -178,7 +201,8 @@ async function getProfile(db, {personId, recordLimit}) {
   ]);
 
   let assignedElder = null;
-  const elderId = (person.shepherding && person.shepherding.assignedElderId) || null;
+  const elderId = (person.shepherding &&
+    person.shepherding.assignedElderId) || null;
   if (elderId) {
     const elder = await db.collection(PEOPLE).doc(elderId).get();
     assignedElder = {
@@ -217,7 +241,8 @@ async function getPastoralRecord(db, {personId, limit}) {
   ]);
 
   const notes = noteSnap.docs.map((d) => Object.assign({id: d.id}, d.data()));
-  const activity = activitySnap.docs.map((d) => Object.assign({id: d.id}, d.data()));
+  const activity = activitySnap.docs.map(
+      (d) => Object.assign({id: d.id}, d.data()));
 
   const assembled = ShepherdingCore.assemblePastoralRecord(notes, activity);
   const entries = assembled.slice(0, cap).map(readableEntry);
@@ -288,11 +313,17 @@ function readableEntry(entry) {
   });
 }
 
-/** The sentence a Status Change reads as. */
+/**
+ * The sentence a Status Change reads as.
+ * @param {object} entry the Status Change
+ * @return {string} the sentence
+ */
 function describeStatusChange(entry) {
   const say = (status) => status ?
     `${ShepherdingCore.URGENCY_LABEL[status.urgency] || status.urgency}` +
-      ` / ${ShepherdingCore.IMPORTANCE_LABEL[status.importance] || status.importance}` :
+      " / " +
+      (ShepherdingCore.IMPORTANCE_LABEL[status.importance] ||
+        status.importance) :
     "no status";
   return `Status ${say(entry.previousStatus)} → ${say(entry.newStatus)}`;
 }
@@ -304,7 +335,8 @@ function describeStatusChange(entry) {
  * @return {Promise<object>} { personId, notes }
  */
 async function listNotes(db, {personId, limit}) {
-  const snap = await db.collection(PEOPLE).doc(personId).collection(NOTES).get();
+  const snap = await db.collection(PEOPLE).doc(personId)
+      .collection(NOTES).get();
   const notes = snap.docs
       .map((d) => Object.assign({id: d.id}, d.data()))
       .sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
@@ -387,22 +419,26 @@ async function listPeople(db, args) {
 
     if (wantTags.length) {
       const hits = wantTags.filter((id) => carried.includes(id));
-      if (mode === "all" ? hits.length !== wantTags.length : !hits.length) return false;
+      if (mode === "all" ?
+          hits.length !== wantTags.length : !hits.length) return false;
     }
 
     if (zones.length) {
       const status = person.shepherdingStatus;
       if (!status) return false;
       if (!zones.includes(
-          ShepherdingCore.statusZoneKey(status.urgency, status.importance))) return false;
+          ShepherdingCore.statusZoneKey(
+              status.urgency, status.importance))) return false;
     }
 
     if (opts.membershipStage) {
-      if (((person.membership || {}).stage || null) !== opts.membershipStage) return false;
+      if (((person.membership || {}).stage || null) !==
+          opts.membershipStage) return false;
     }
 
     if (opts.assignedElderId) {
-      const assigned = (person.shepherding && person.shepherding.assignedElderId) || null;
+      const assigned = (person.shepherding &&
+        person.shepherding.assignedElderId) || null;
       if (assigned !== opts.assignedElderId) return false;
     }
 
@@ -425,17 +461,20 @@ async function listPeople(db, args) {
       const snap = await db.collection(PEOPLE).doc(person.id)
           .collection(ACTIVITY).get();
       const activity = snap.docs.map((d) => d.data());
-      const holds = ShepherdingCore.deriveTagHolds(activity, person.tags || [], nowMs);
+      const holds = ShepherdingCore.deriveTagHolds(
+          activity, person.tags || [], nowMs);
       const found = holds[hold.tagId];
       if (!found) continue;
       if (!ShepherdingCore.holdSatisfies(
-          found.durationMs, Number(hold.days) || 0, hold.comparator || "gte")) continue;
+          found.durationMs, Number(hold.days) || 0,
+          hold.comparator || "gte")) continue;
       kept.push(person);
     }
     matched = kept;
   }
 
-  matched.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  matched.sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || "")));
 
   const cap = Math.max(1, Math.min(Number(opts.limit) || 100, 500));
   return {

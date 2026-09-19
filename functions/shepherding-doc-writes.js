@@ -45,7 +45,11 @@ const STRUCTURE_DOC = "root";
 const PEOPLE = "people";
 const NOTES = "shepherding_notes";
 
-/** The folder tree, or an empty one the first time anybody looks. */
+/**
+ * The folder tree, or an empty one the first time anybody looks.
+ * @param {object} db the Firestore handle
+ * @return {Promise<object>} the tree
+ */
 async function loadTree(db) {
   const snap = await db.collection(STRUCTURE).doc(STRUCTURE_DOC).get();
   const data = snap.exists ? snap.data() : null;
@@ -73,7 +77,12 @@ async function withTree(db, change) {
   return result;
 }
 
-/** An Elder Document, or a refusal. */
+/**
+ * An Elder Document, or a refusal.
+ * @param {object} db the Firestore handle
+ * @param {string} documentId which document
+ * @return {Promise<object>} { ref, data }
+ */
 async function loadDocument(db, documentId) {
   if (!documentId) throw refuse("No document id was given.");
   const ref = db.collection(DOCUMENTS).doc(documentId);
@@ -86,7 +95,12 @@ async function loadDocument(db, documentId) {
   return {ref, data: snap.data() || {}};
 }
 
-/** One document, as a row in a listing. */
+/**
+ * One document, as a row in a listing.
+ * @param {string} id the document id
+ * @param {object} data the stored record
+ * @return {object} the listing row
+ */
 function documentRow(id, data) {
   return {
     documentId: id,
@@ -104,7 +118,8 @@ function documentRow(id, data) {
  *
  * @param {object} db the Firestore handle
  * @param {object} args
- * @param {?string} [args.folderId] the Folder to look in; the top level if absent
+   * @param {?string} [args.folderId] the Folder to look in; the top
+   *   level if absent
  * @param {boolean} [args.recursive] every document at any depth below it
  * @return {Promise<object>} folders and documents
  */
@@ -126,7 +141,11 @@ async function listDocuments(db, {folderId, recursive}) {
     folderName: node.name || "Document Library",
     folders: (node.children || [])
         .filter((c) => c.type === "folder")
-        .map((c) => ({folderId: c.id, name: c.name || "", items: (c.children || []).length})),
+        .map((c) => ({
+          folderId: c.id,
+          name: c.name || "",
+          items: (c.children || []).length,
+        })),
     documents: snaps
         .filter((s) => s.exists)
         .map((s) => documentRow(s.id, s.data())),
@@ -162,7 +181,8 @@ async function getDocument(db, {documentId}) {
  * @param {object} args title, markdown, folderId, ownerPersonId, actor
  * @return {Promise<object>} { ok, documentId }
  */
-async function createDocument(db, {title, markdown, folderId, ownerPersonId, actor}) {
+async function createDocument(
+    db, {title, markdown, folderId, ownerPersonId, actor}) {
   if (ownerPersonId) await loadPerson(db, ownerPersonId);
 
   const record = DocsCore.buildElderDocument({
@@ -215,7 +235,9 @@ async function updateDocument(db, {documentId, title, markdown, actor}) {
   refuseIfNotProse(data, "written into");
 
   const update = {updatedAt: F.now(), updatedByName: actor.name};
-  if (title !== undefined && title !== null) update.title = String(title).trim();
+  if (title !== undefined && title !== null) {
+    update.title = String(title).trim();
+  }
   if (markdown !== undefined && markdown !== null) {
     update.contentJson = NoteMarkdownCore.fromMarkdown(String(markdown));
   }
@@ -246,7 +268,11 @@ async function appendToDocument(db, {documentId, markdown, actor}) {
   return {ok: true, documentId};
 }
 
-/** A Care List and a Form Document hold a payload, not prose. */
+/**
+ * A Care List and a Form Document hold a payload, not prose.
+ * @param {object} data the document record
+ * @param {string} what what the caller was trying to do
+ */
 function refuseIfNotProse(data, what) {
   const docType = data.docType || "note";
   if (docType === "note") return;
@@ -301,9 +327,13 @@ async function deleteDocument(db, {documentId}) {
   await ref.delete();
   return {
     ok: true,
-    deleted: {documentId, title: data.title || "", docType: data.docType || "note"},
-    note: "Shepherding Notes made from Person Panels in this document stay on " +
-      "their People — they are the record, this was the meeting.",
+    deleted: {
+      documentId,
+      title: data.title || "",
+      docType: data.docType || "note",
+    },
+    note: "Shepherding Notes made from Person Panels in this document " +
+      "stay on their People — they are the record, this was the meeting.",
   };
 }
 
@@ -325,11 +355,15 @@ async function createFolder(db, {name, parentFolderId}) {
       DocsCore.getFolderById(tree, parentFolderId) : tree;
     if (!parent) return false;
     if (!parent.children) parent.children = [];
-    parent.children.push({type: "folder", id: folderId, name: label, children: []});
+    parent.children.push({
+      type: "folder", id: folderId, name: label, children: [],
+    });
     return true;
   });
 
-  if (!made) throw refuse(`No Folder with id "${parentFolderId}" to put it in.`);
+  if (!made) {
+    throw refuse(`No Folder with id "${parentFolderId}" to put it in.`);
+  }
   return {ok: true, folderId, name: label};
 }
 
@@ -380,7 +414,8 @@ async function moveFolder(db, {folderId, targetFolderId}) {
     if (target === folderId) {
       throw refuse("A folder cannot be moved into itself.");
     }
-    if (target !== DocsCore.ROOT && DocsCore.isDescendant(tree, target, folderId)) {
+    if (target !== DocsCore.ROOT &&
+        DocsCore.isDescendant(tree, target, folderId)) {
       throw refuse("A folder cannot be moved into one of its own sub-folders.");
     }
     return DocsCore.moveNode(tree, {type: "folder", id: folderId}, target);
@@ -449,7 +484,8 @@ async function deleteFolder(db, {folderId, confirmDocumentCount}) {
  * @param {object} args documentId, personId, noteType, markdown, actor
  * @return {Promise<object>} { ok, noteId }
  */
-async function addPersonPanel(db, {documentId, personId, noteType, markdown, actor}) {
+async function addPersonPanel(
+    db, {documentId, personId, noteType, markdown, actor}) {
   const {ref, data} = await loadDocument(db, documentId);
   refuseIfNotProse(data, "given a Person Panel");
   const person = await loadPerson(db, personId);
@@ -502,7 +538,8 @@ async function addPersonPanel(db, {documentId, personId, noteType, markdown, act
       // would leave a blank line above every panel.
       content: body.content
           .filter((node, i) => !(i === 0 && node.type === "paragraph" &&
-            !(node.content && node.content.length) && body.content.length === 1))
+              !(node.content && node.content.length) &&
+              body.content.length === 1))
           .concat([panel]),
     },
     updatedAt: F.now(),
