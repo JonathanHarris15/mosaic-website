@@ -230,6 +230,19 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // Country map on a Sunday's typed booklet text (MS-591). The Sunday
+    // record keeps an https URL, not the bytes — Firestore cannot hold
+    // an unbounded data URL. Same door as printable_assets: an editor
+    // writes an image under 8MB; getDownloadURL() is the token the
+    // Printable binds. No client deletes. Nothing else is widened.
+    match /sunday_typed/{dateId}/country_map/{fileId} {
+      allow read: if request.auth != null;
+      allow write: if isEditorAccount()
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }

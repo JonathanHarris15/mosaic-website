@@ -527,8 +527,8 @@
                     <p x-show="!printables.length && canLinkPrintables" class="text-[12.5px] text-on-surface-variant">
                         Nothing linked yet. A linked printable opens from every date of this event and can be filed here as a PDF.
                     </p>
-                    <p x-show="printables.length" class="text-[12.5px] text-on-surface-variant mt-2">
-                        Filed PDFs are flat and padded to a multiple of 4. On the church copier, use Booklet / Saddle Stitch — Mosaic does not reorder pages.
+                    <p x-show="printables.length && hasSundayBookletPrintable" class="text-[12.5px] text-on-surface-variant mt-2 cal-printable-booklet">
+                        Sunday booklet PDFs are flat and padded to a multiple of 4. On the church copier, use Booklet / Saddle Stitch — Mosaic does not reorder pages.
                     </p>
                     <div x-show="printables.length" class="m-card-list">
                         <template x-for="p in printables" :key="p.id">
@@ -547,7 +547,7 @@
                                 </a>
                                 <button type="button" x-show="canManageAttachments" @click="filePrintableSnapshot(p)"
                                         :disabled="snapshotBusy" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
-                                        :aria-label="'File a PDF snapshot of ' + p.name" title="File a flat PDF (padded to a multiple of 4). Use the printer's Booklet / Saddle mode — Mosaic does not reorder pages.">
+                                        :aria-label="'File a PDF snapshot of ' + p.name" :title="isSundayBookletPrintable(p) ? 'File a flat PDF (padded to a multiple of 4). Use the printer\'s Booklet / Saddle mode — Mosaic does not reorder pages.' : 'File a PDF snapshot of these pages as they stand.'">
                                     <span class="material-symbols-outlined text-[18px]" :class="snapshotBusy === p.id ? 'm-spinner' : ''"
                                           x-text="snapshotBusy === p.id ? 'progress_activity' : 'picture_as_pdf'"></span>
                                 </button>

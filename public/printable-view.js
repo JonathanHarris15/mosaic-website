@@ -26,13 +26,17 @@ function printableView() {
         get template() { return this.project ? this.project.template : null; },
         get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get editorHref() { return 'printable-editor.html?id=' + encodeURIComponent(this.id); },
+        get wantsBookletExport() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return !!(Ex && Ex.isSundayBookletPath(this.project));
+        },
         get printPageCount() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return Ex ? Ex.paddedPageCount(this.entries.length) : this.entries.length;
+            return Ex ? Ex.exportPageCount(this.entries.length, this.project) : this.entries.length;
         },
         get bookletPadCount() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return Ex ? Ex.blankPadCount(this.entries.length) : 0;
+            return Ex ? Ex.exportPadCount(this.entries.length, this.project) : 0;
         },
 
         async init() {
@@ -123,7 +127,7 @@ function printableView() {
 
         printEntries() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return Ex ? Ex.padEntries(this.entries) : this.entries;
+            return Ex ? Ex.exportEntries(this.entries, this.project) : this.entries;
         },
 
         printPrintable() {

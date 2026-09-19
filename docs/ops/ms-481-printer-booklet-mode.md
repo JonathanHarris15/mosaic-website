@@ -10,8 +10,11 @@ pages into saddle-stitch spreads.
 A saddle-stitched booklet is a folded stack. Each physical sheet
 holds four booklet pages (front-left, front-right, back-left,
 back-right). A 5-page document cannot fold cleanly; a 8-page one
-can. Print and PDF export pad with empty white pages so
-`pageCount % 4 === 0`.
+can. On the **Sunday booklet Printable path** (a project that
+binds `sunday_typed` / `sunday_hymns`, or has `bookletExport`),
+print and PDF export pad with empty white pages so
+`pageCount % 4 === 0`. Other Printables print as laid out
+(MS-592) — a one-page directory is not forced to four leaves.
 
 ## Operator steps (church copier)
 

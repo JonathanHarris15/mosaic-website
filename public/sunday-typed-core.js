@@ -59,6 +59,61 @@
         return '';
     }
 
+    // Country-map write policy (MS-591). File bytes go to Storage; the
+    // Sunday record keeps an https URL. A pasted data URL that would
+    // blow the Firestore 1MB cap is refused before write. https paste
+    // stays valid. Matches the Storage rule on
+    // sunday_typed/{date}/country_map/{fileId}.
+    const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+    const MAX_DATA_URL_BYTES = 200 * 1024;
+    const COUNTRY_MAP_STORAGE_PREFIX = 'sunday_typed';
+    const OVERSIZE_DATA_URL_MSG = 'That country map is too large to keep in the Sunday record. Upload the image (it is stored in Storage) or paste an https URL.';
+    const OVERSIZE_UPLOAD_MSG = 'That country map is too large to upload (max 8 MB). Choose a smaller image.';
+    const NOT_IMAGE_MSG = 'The country map must be an image.';
+    const NEED_HTTPS_MSG = 'Paste an https URL for the country map, or upload the image.';
+
+    function isHttpsUrl(value) {
+        return /^https:\/\//i.test(str(value));
+    }
+
+    function isDataUrl(value) {
+        return /^data:/i.test(str(value));
+    }
+
+    function countryImageWriteError(value) {
+        const url = imageUrl(value);
+        if (!url) return '';
+        if (isHttpsUrl(url)) return '';
+        if (isDataUrl(url)) {
+            return url.length > MAX_DATA_URL_BYTES ? OVERSIZE_DATA_URL_MSG : '';
+        }
+        return NEED_HTTPS_MSG;
+    }
+
+    function assertCountryImageWritable(value) {
+        const err = countryImageWriteError(value);
+        if (err) {
+            const e = new Error(err);
+            e.code = 'country-map-size';
+            throw e;
+        }
+        return imageUrl(value);
+    }
+
+    function fileUploadError(file) {
+        if (!file) return 'Choose a country map image.';
+        if (file.type && !/^image\//.test(file.type)) return NOT_IMAGE_MSG;
+        if (typeof file.size === 'number' && file.size > MAX_UPLOAD_BYTES) return OVERSIZE_UPLOAD_MSG;
+        return '';
+    }
+
+    function countryMapStoragePath(date, fileId) {
+        const d = str(date);
+        const id = str(fileId);
+        if (!d || !id) return '';
+        return COUNTRY_MAP_STORAGE_PREFIX + '/' + d + '/country_map/' + id;
+    }
+
     function emptyPrayer() {
         return {
             nation: '', continent: '', capital: '', population: '',
@@ -332,6 +387,11 @@
 
     const SundayTypedCore = {
         FIELDS,
+        MAX_UPLOAD_BYTES,
+        MAX_DATA_URL_BYTES,
+        COUNTRY_MAP_STORAGE_PREFIX,
+        OVERSIZE_DATA_URL_MSG,
+        OVERSIZE_UPLOAD_MSG,
         empty,
         normalise,
         fromService,
@@ -346,6 +406,13 @@
         asAnnouncements,
         announcementsText,
         listText,
+        imageUrl,
+        isHttpsUrl,
+        isDataUrl,
+        countryImageWriteError,
+        assertCountryImageWritable,
+        fileUploadError,
+        countryMapStoragePath,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -252,6 +252,11 @@
             version: RECORD_VERSION,
             name: normaliseName(s.name),
             folderId: s.folderId || null,
+            // Sunday booklet export (MS-592): pad-to-×4 + printer booklet
+            // chrome. Usually inferred from sunday_typed / sunday_hymns
+            // binds; this flag is the explicit opt-in when those wires are
+            // not on the tree. Not a second export product.
+            bookletExport: s.bookletExport === true,
             template: template,
             pages: Array.isArray(s.pages) ? s.pages.map(p => buildPage(template, p)) : [],
         };
@@ -265,6 +270,7 @@
         return buildPrintable({
             name: copyName(p.name, taken),
             folderId: p.folderId || null,
+            bookletExport: p.bookletExport === true,
             template: p.template || null,
             pages: p.pages || [],
         });

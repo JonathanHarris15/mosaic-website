@@ -119,13 +119,19 @@
                 return this.layout;
             },
 
-            // The pages for print: the same layout, padded to ×4 for the
-            // church printer's booklet mode (MS-589). Order is unchanged.
+            get wantsBookletExport() {
+                const Ex = global.PrintableExportCore;
+                return !!(Ex && Ex.isSundayBookletPath(this.project));
+            },
+
+            // The pages for print: Sunday booklet path pads to ×4 for the
+            // church printer's booklet mode (MS-589 / MS-592). Other
+            // Printables print as laid out. Order is unchanged.
             printPages() {
                 const entries = this.computeLayout();
                 const Ex = global.PrintableExportCore;
-                const padded = Ex ? Ex.padEntries(entries) : entries;
-                return padded.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
+                const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
+                return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
             },
 
             // ── The drawer ───────────────────────────────────────────────
@@ -573,12 +579,35 @@
                 }
             },
 
-            onTypedCountryImage(e) {
+            async onTypedCountryImage(e) {
                 const file = e.target.files && e.target.files[0];
+                if (e.target) e.target.value = '';
                 if (!file || !this.data.typed.draft) return;
-                const reader = new FileReader();
-                reader.onload = () => { this.data.typed.draft.prayerCountryImage = reader.result; };
-                reader.readAsDataURL(file);
+                const Typed = global.SundayTypedCore;
+                if (!Typed) return;
+                const err = Typed.fileUploadError(file);
+                if (err) { this.data.typed.status = err; return; }
+                this.data.typed.status = 'Uploading country map…';
+                try {
+                    const date = this.typedSundayDate();
+                    const safe = (file.name || 'map').replace(/[^\w.-]+/g, '_');
+                    const fileId = (global.PrintableCore && PrintableCore.newId
+                        ? PrintableCore.newId('map')
+                        : String(Date.now())) + '_' + safe;
+                    const path = Typed.countryMapStoragePath(date, fileId);
+                    if (!path || typeof firebase === 'undefined' || !firebase.storage) {
+                        this.data.typed.status = 'Country map upload is not available.';
+                        return;
+                    }
+                    const ref = firebase.storage().ref(path);
+                    await ref.put(file, { contentType: file.type || 'image/jpeg' });
+                    const url = await ref.getDownloadURL();
+                    this.data.typed.draft.prayerCountryImage = url;
+                    this.data.typed.status = 'Country map uploaded. Save to keep it on this Sunday.';
+                } catch (ex) {
+                    console.error(ex);
+                    this.data.typed.status = 'That country map did not upload.';
+                }
             },
 
             async saveTypedDraft() {
@@ -588,7 +617,9 @@
                 this.data.typed.saving = true;
                 this.data.typed.status = '';
                 try {
+                    Typed.assertCountryImageWritable(this.data.typed.draft.prayerCountryImage);
                     const content = Typed.fromDraft(this.data.typed.draft);
+                    Typed.assertCountryImageWritable(content.pastoralPrayer.countryImage);
                     await db.collection('services').doc(date).set({ typedContent: Typed.normalise(content) }, { merge: true });
                     if (!ui.bundle) ui.bundle = { services: {} };
                     ui.bundle.services = ui.bundle.services || {};
@@ -600,7 +631,9 @@
                     this.renderAll();
                 } catch (e) {
                     console.error(e);
-                    this.data.typed.status = 'Could not save. Check your connection and try again.';
+                    this.data.typed.status = (e && e.code === 'country-map-size' && e.message)
+                        ? e.message
+                        : 'Could not save. Check your connection and try again.';
                 } finally {
                     this.data.typed.saving = false;
                 }

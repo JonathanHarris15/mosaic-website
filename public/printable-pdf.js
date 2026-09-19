@@ -43,10 +43,11 @@
         await ready();
         const Dom = global.PrintableDom;
         const t = project.template;
-        // Flat booklet: pad to ×4. No imposition — printer saddle mode
-        // folds this stack (MS-589).
+        // Sunday booklet path: pad to ×4. No imposition — printer saddle
+        // mode folds this stack (MS-589 / MS-592). Other Printables stay
+        // as laid out unless the caller forces padToMultipleOf4.
         const Export = global.PrintableExportCore;
-        const pages = (o.padToMultipleOf4 === false || !Export) ? (entries || []) : Export.padEntries(entries || []);
+        const pages = Export ? Export.exportEntries(entries || [], project, o) : (entries || []);
         const host = document.createElement('div');
         host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + t.widthPx + 'px;pointer-events:none;';
         document.body.appendChild(host);
