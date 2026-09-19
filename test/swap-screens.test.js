@@ -68,6 +68,10 @@ test('a Person who cannot see this Event is listed, not hidden, and not selectab
         assert.match(page, /x-text="person\.disabledReason"/);
         assert.match(page, /:disabled="busy \|\| invitesLeft\(asking\) <= 0 \|\| person\.selectable === false"/);
         assert.match(script, /if \(!person \|\| person\.selectable === false\) return;/);
+        // MS-539: rank comes from canInvite, never a blanket member.
+        const view = read('trades-view.js');
+        assert.match(view, /Core\.canInvite\(/);
+        assert.doesNotMatch(view, /canSee\('member'/);
     });
 
 test('the phone uses the same Commitments picker, inside the shell', () => {

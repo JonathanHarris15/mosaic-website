@@ -25,10 +25,6 @@
         ? require('./roles-core.js')
         : global.RolesCore;
 
-    const Occurrences = (typeof require !== 'undefined')
-        ? require('./events-occurrence-core.js')
-        : global.EventsOccurrenceCore;
-
     // What somebody may do to this Trade from where they stand. Advisory: the
     // callable checks it all again, and the server's answer is the wall.
     function actionsFor(trade, personId) {
@@ -240,17 +236,13 @@
     // People with no Linked User stay selectable on a public Event, and on a
     // members-only Event they already participate in.
     //
-    // ⚠ A LINKED USER IS JUDGED AS A MEMBER. The picker cannot read other
-    // people's ranks (users docs are own-only). Member is the account floor,
-    // and it is who a members-only Event is for.
+    // A Linked User is judged by people.accountRank (MS-539 / MS-554), the
+    // same rank server rankOf reads. canInvite (MS-556) is the one helper;
+    // this only draws what it returns. Never "No account…" when userId is set.
     function askableFrom(people, options) {
         const opts = options || {};
         const already = opts.alreadyAsked || [];
         const occ = opts.occurrence || null;
-        const eventIsPublic = Occurrences &&
-            Occurrences.visibilityOf(occ) === 'public';
-        const participantIds = (occ && occ.participantIds) ||
-            opts.participantIds || [];
 
         return Roles.assignablePeople(people, {
             rank: opts.rank, hidingTags: opts.hidingTags,
@@ -259,32 +251,19 @@
             .map(p => inviteeRow(p, {
                 holderId: opts.personId,
                 alreadyAsked: already,
-                eventIsPublic: eventIsPublic,
-                participantIds: participantIds,
                 occurrence: occ,
             }));
     }
 
     function inviteeRow(person, opts) {
-        const hasLinkedUser = !!(person && person.userId);
-        const linkedUserCanSee = hasLinkedUser && Occurrences &&
-            Occurrences.canSee('member', opts.occurrence, person.id);
-        const verdict = Core.inviteEligibility({
-            inviteeId: person.id,
+        const verdict = Core.canInvite(person, opts.occurrence, {
             holderId: opts.holderId,
             alreadyAsked: opts.alreadyAsked,
             roleEligible: true,
-            eventIsPublic: opts.eventIsPublic === true,
-            linkedUserCanSee: linkedUserCanSee,
-            isParticipant: (opts.participantIds || []).indexOf(person.id) !== -1,
         });
         return Object.assign({}, person, {
             selectable: verdict.ok,
-            disabledReason: verdict.ok ? null : (
-                verdict.reason === Core.REASONS.NOT_VISIBLE
-                    ? Core.INVITE_NO_ACCOUNT_REASON
-                    : null
-            ),
+            disabledReason: verdict.disabledReason,
         });
     }
 

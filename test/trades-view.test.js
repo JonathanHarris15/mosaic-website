@@ -290,40 +290,42 @@ test('offers crowding in do not use up the three', () => {
     assert.equal(View.invitesLeft(live, KIDS, TODAY), Core.MAX_INVITATIONS);
 });
 
-// ── Visibility (MS-529 / MS-532) ────────────────────────────────────────────
+// ── Visibility (MS-529 / MS-532 / MS-539) ───────────────────────────────────
 //
 // The picker still LISTS people who cannot see the Event — hiding a typed name
 // would look like Mosaic did not recognise them. They are not selectable.
+// Linked Users are judged by people.accountRank, not as a blanket member.
 
 const PUBLIC_OCC = { id: 'occ-sun', visibility: 'public', participantIds: [] };
 const MEMBER_OCC = { id: 'occ-youth', visibility: 'member', participantIds: [] };
 const MEMBER_ON_IT = {
     id: 'occ-youth', visibility: 'member', participantIds: ['p1'],
 };
+const ELDER_OCC = { id: 'occ-elders', visibility: 'elder', participantIds: [] };
 
 const DIRECTORY = [
     { id: 'p1', name: 'Ann' },
-    { id: 'p5', name: 'Eve', userId: 'uid-eve' },
+    { id: 'p5', name: 'Eve', userId: 'uid-eve', accountRank: 'member' },
+    { id: 'p6', name: 'Vic', userId: 'uid-vic', accountRank: 'viewer' },
+    { id: 'p7', name: 'Ed', userId: 'uid-ed', accountRank: 'editor' },
+    { id: 'p8', name: 'Eld', userId: 'uid-eld', accountRank: 'elder' },
     { id: BOB, name: 'Bob' },
 ];
 
+const pick = (occurrence) => View.askableFrom(DIRECTORY, {
+    rank: 'member', hidingTags: [], personId: BOB,
+    occurrence: occurrence,
+});
+
 test('an unlinked Person stays selectable on a public Event', () => {
-    const found = View.askableFrom(DIRECTORY, {
-        rank: 'member', hidingTags: [], personId: BOB,
-        occurrence: PUBLIC_OCC,
-    });
-    const ann = found.find(p => p.id === 'p1');
+    const ann = pick(PUBLIC_OCC).find(p => p.id === 'p1');
     assert.ok(ann);
     assert.equal(ann.selectable, true);
     assert.equal(ann.disabledReason, null);
 });
 
 test('an unlinked Person is listed, not hidden, on a members-only Event', () => {
-    const found = View.askableFrom(DIRECTORY, {
-        rank: 'member', hidingTags: [], personId: BOB,
-        occurrence: MEMBER_OCC,
-    });
-    const ann = found.find(p => p.id === 'p1');
+    const ann = pick(MEMBER_OCC).find(p => p.id === 'p1');
     assert.ok(ann, 'hiding them would make a typed name vanish');
     assert.equal(ann.selectable, false);
     assert.equal(ann.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
@@ -331,20 +333,52 @@ test('an unlinked Person is listed, not hidden, on a members-only Event', () => 
 });
 
 test('an unlinked participant on a members-only Event stays selectable', () => {
-    const found = View.askableFrom(DIRECTORY, {
-        rank: 'member', hidingTags: [], personId: BOB,
-        occurrence: MEMBER_ON_IT,
-    });
-    const ann = found.find(p => p.id === 'p1');
+    const ann = pick(MEMBER_ON_IT).find(p => p.id === 'p1');
     assert.equal(ann.selectable, true);
 });
 
-test('a Linked User who can see a members-only Event stays selectable', () => {
-    const found = View.askableFrom(DIRECTORY, {
-        rank: 'member', hidingTags: [], personId: BOB,
-        occurrence: MEMBER_OCC,
-    });
-    const eve = found.find(p => p.id === 'p5');
+test('a Linked member who can see a members-only Event stays selectable', () => {
+    const eve = pick(MEMBER_OCC).find(p => p.id === 'p5');
     assert.equal(eve.selectable, true);
     assert.equal(eve.disabledReason, null);
+});
+
+test('a Linked viewer is listed, not selectable, on a members-only Event', () => {
+    const vic = pick(MEMBER_OCC).find(p => p.id === 'p6');
+    assert.ok(vic, 'hiding them would make a typed name vanish');
+    assert.equal(vic.selectable, false);
+    assert.equal(vic.disabledReason, Core.INVITE_CANNOT_SEE_REASON);
+    assert.notEqual(vic.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
+});
+
+test('a Linked editor is selectable on an Event their rank can see', () => {
+    const ed = pick({ id: 'occ-ed', visibility: 'editor', participantIds: [] })
+        .find(p => p.id === 'p7');
+    assert.equal(ed.selectable, true);
+    assert.equal(ed.disabledReason, null);
+});
+
+test('a Linked elder is selectable on an elders-only Event', () => {
+    const eld = pick(ELDER_OCC).find(p => p.id === 'p8');
+    assert.equal(eld.selectable, true);
+    assert.equal(eld.disabledReason, null);
+});
+
+test('a Linked editor is listed with cannot-see on an elders-only Event', () => {
+    const ed = pick(ELDER_OCC).find(p => p.id === 'p7');
+    assert.ok(ed);
+    assert.equal(ed.selectable, false);
+    assert.equal(ed.disabledReason, Core.INVITE_CANNOT_SEE_REASON);
+    assert.notEqual(ed.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
+});
+
+test('a missing occurrence fails closed and never says No account for a Linked User', () => {
+    const found = pick(null);
+    const eve = found.find(p => p.id === 'p5');
+    const ann = found.find(p => p.id === 'p1');
+    assert.equal(eve.selectable, false);
+    assert.notEqual(eve.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
+    assert.equal(eve.disabledReason, Core.INVITE_CANNOT_SEE_REASON);
+    assert.equal(ann.selectable, false);
+    assert.equal(ann.disabledReason, Core.INVITE_NO_ACCOUNT_REASON);
 });
