@@ -10,6 +10,7 @@ const {
     churchToday,
     windowStart,
     visitDays,
+    lastChangeDayFromStamps,
     shouldMove,
     regularAttenderAdvanceUpdate,
     formatVisitExplanation,
@@ -162,6 +163,45 @@ test('four visit days after an elder reset still move', () => {
     const days = visitDays(afterReset, TODAY, '2026-08-03');
     assert.deepStrictEqual(days, afterReset);
     assert.strictEqual(shouldMove({ stage: 'visitor' }, days), true);
+});
+
+function stamp(iso) {
+    const date = new Date(iso);
+    return {
+        toMillis: () => date.getTime(),
+        toDate: () => date,
+    };
+}
+
+test('lastChangeDayFromStamps is null when nothing can be read', () => {
+    assert.strictEqual(lastChangeDayFromStamps(null), null);
+    assert.strictEqual(lastChangeDayFromStamps([]), null);
+    assert.strictEqual(lastChangeDayFromStamps([{}, null, 'x']), null);
+});
+
+test('lastChangeDayFromStamps picks the latest church-local day', () => {
+    // 17:00 UTC is noon in Chicago — the same clock visit days use.
+    assert.strictEqual(
+        lastChangeDayFromStamps([
+            stamp('2026-07-20T17:00:00Z'),
+            stamp('2026-08-03T17:00:00Z'),
+        ]),
+        '2026-08-03');
+});
+
+test('lastChangeDayFromStamps skips junk and keeps a later tie', () => {
+    const noon = stamp('2026-08-03T17:00:00Z');
+    const alsoNoon = stamp('2026-08-03T17:00:00Z');
+    assert.strictEqual(
+        lastChangeDayFromStamps([null, noon, {}, alsoNoon]),
+        '2026-08-03');
+});
+
+test('lastChangeDayFromStamps refuses a stamp whose date is unreadable', () => {
+    assert.strictEqual(lastChangeDayFromStamps([{
+        toMillis: () => 1,
+        toDate: () => new Date('nope'),
+    }]), null);
 });
 
 test('junk and missing dates are skipped, not thrown', () => {
