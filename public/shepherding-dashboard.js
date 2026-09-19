@@ -166,6 +166,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addView() {
+            if (!this.canDecide) return;
             if (!this.newView.title.trim()) return;
             try {
                 const docRef = await db.collection('shepherding_views').add({
@@ -244,6 +245,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         openEditView(view) {
+            if (!this.canDecide) return;
             this.editingViewId = view.id;
             // Seed per-tag sliders, expanding a legacy single minHoldDays across
             // all of the view's filter tags.
@@ -268,6 +270,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async updateView() {
+            if (!this.canDecide) return;
             if (!this.editingViewId || !this.newView.title.trim()) return;
             try {
                 await db.collection('shepherding_views').doc(this.editingViewId).update({
@@ -295,6 +298,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteView(id) {
+            if (!this.canDecide) return;
             if (!confirm('Are you sure you want to delete this view?')) return;
             try {
                 await db.collection('shepherding_views').doc(id).delete();

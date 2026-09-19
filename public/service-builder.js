@@ -945,6 +945,8 @@ function serviceForm() {
                         this.currentPermissionLevel = permissionLevel;
                         Object.assign(this, AccessCore.pageFlags(userData));
                         this.canEdit = this.canWriteEditor;
+                        // Read the pastoral-prayer panel as an elder (or PA).
+                        // Writing or texting a Prayer Request is a decision.
                         this.isShepherd = this.canReadElder;
                         // Who this is, as a Person — stamped onto every element
                         // they decide (MS-246).
@@ -1295,7 +1297,7 @@ function serviceForm() {
         },
 
         async savePrayerRequest(which) {
-            if (!this.isShepherd) return;
+            if (!this.canDecide) return;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) {
                 alert('Save the service with this person selected before adding a prayer request.');
@@ -1340,6 +1342,7 @@ function serviceForm() {
         // Whether the manual "Send Now" button can fire: a subject with a phone
         // whose request isn't filled yet (mirrors the server's hard guards).
         canSendPrayerText(which) {
+            if (!this.canDecide) return false;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return false;
             if ((this.prayerRequests[which].text || '').trim()) return false;
@@ -1357,6 +1360,7 @@ function serviceForm() {
         },
 
         async sendPrayerRequestNow(which) {
+            if (!this.canDecide) return;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id || !this.canSendPrayerText(which)) return;
             if (!this.date) { alert('Save the service first.'); return; }

@@ -99,6 +99,7 @@
     this.activityById = {};      // personId -> shepherding_activity, loaded lazily
     this.newTagName = '';        // the create-tag box, kept across re-renders
     this.writing = false;        // a write is in flight; the panel refuses a second
+    this.canDecide = false;      // AccessCore: elder/super-admin decisions only
     this.me = { uid: null, name: 'Elder', personId: null, permissionLevel: 'viewer' };
   }
 
@@ -1345,21 +1346,24 @@
         esc(ShepherdingCore.MEMBERSHIP_STAGE_LABEL[st]) + '</span>';
     }).join('');
 
+    var decide = this.canDecide;
     var slider = '<div style="padding:10px 2px 2px;border:1px solid var(--outline-variant);border-radius:10px;' +
-      'display:flex;flex-direction:column;gap:6px;' + (inactive ? 'opacity:.5' : '') + '">' +
+      'display:flex;flex-direction:column;gap:6px;' + (inactive || !decide ? 'opacity:.5' : '') + '">' +
       '<input type="range" data-act="setStage" class="track-slider" min="0" max="' + (stages.length - 1) + '" step="1"' +
-        ' value="' + idx + '"' + (inactive ? ' disabled' : '') +
+        ' value="' + idx + '"' + (inactive || !decide ? ' disabled' : '') +
         ' style="color:var(--primary);--track-index:' + idx + ';--track-stops:' + stages.length + '">' +
       '<div style="display:flex;padding:0 2px 8px">' + ticks + '</div>' +
     '</div>';
 
-    var toggle = '<button data-act="personInactive" style="align-self:flex-start;margin-top:10px;display:inline-flex;' +
-      'align-items:center;gap:6px;padding:6px 12px;border-radius:9px;cursor:pointer;font-family:var(--font-sans);' +
-      'font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;border:1px solid ' +
-      (inactive ? 'var(--primary);background:var(--primary);color:var(--on-primary)'
-                : 'var(--outline-variant);background:var(--surface-container-lowest);color:var(--on-surface-variant)') +
-      '"><span class="msy" style="font-size:15px">' + (inactive ? 'toggle_on' : 'toggle_off') + '</span>' +
-      (inactive ? 'Inactive — click to reactivate' : 'Mark inactive') + '</button>';
+    var toggle = decide
+      ? '<button data-act="personInactive" style="align-self:flex-start;margin-top:10px;display:inline-flex;' +
+        'align-items:center;gap:6px;padding:6px 12px;border-radius:9px;cursor:pointer;font-family:var(--font-sans);' +
+        'font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;border:1px solid ' +
+        (inactive ? 'var(--primary);background:var(--primary);color:var(--on-primary)'
+                  : 'var(--outline-variant);background:var(--surface-container-lowest);color:var(--on-surface-variant)') +
+        '"><span class="msy" style="font-size:15px">' + (inactive ? 'toggle_on' : 'toggle_off') + '</span>' +
+        (inactive ? 'Inactive — click to reactivate' : 'Mark inactive') + '</button>'
+      : '';
 
     return this.sectionShell('Membership Track',
       '<div style="display:flex;flex-direction:column">' + slider + toggle + '</div>', chip);
@@ -1384,6 +1388,7 @@
         }).join('') +
       '</div>';
 
+    var decide = this.canDecide;
     imps.forEach(function (imp) {
       html += '<div style="' + grid + '">' +
         '<span style="text-align:right;padding-right:6px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-variant);line-height:1.15">' +
@@ -1394,13 +1399,15 @@
           // profile uses (Tailwind classes, already in mosaic.css); only the
           // selected one is painted here, so the two never fight.
           var cls = on ? '' : ShepherdingCore.statusCellColor(urg, imp);
-          var style = 'height:44px;border-width:2px;border-style:solid;border-radius:9px;cursor:pointer;' +
+          var style = 'height:44px;border-width:2px;border-style:solid;border-radius:9px;' +
             'display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s;' +
+            (decide ? 'cursor:pointer;' : 'cursor:default;') +
             (on ? 'background:var(--primary);border-color:var(--primary)' : '');
-          return '<button data-act="setStatus" data-urg="' + urg + '" data-imp="' + imp + '"' +
-            ' class="' + cls + '" style="' + style + '">' +
+          var tag = decide ? 'button' : 'div';
+          var act = decide ? ' data-act="setStatus" data-urg="' + urg + '" data-imp="' + imp + '"' : '';
+          return '<' + tag + act + ' class="' + cls + '" style="' + style + '">' +
             (on ? '<span style="width:11px;height:11px;border-radius:50%;background:var(--on-primary)"></span>' : '') +
-            '</button>';
+            '</' + tag + '>';
         }).join('') +
       '</div>';
     });
@@ -1412,10 +1419,14 @@
           '<span class="' + blur + '" style="font-size:13px;font-weight:500;color:var(--on-surface)">' +
             esc((ShepherdingCore.URGENCY_LABEL[cur.urgency] || cur.urgency) + ' · ' +
                 (ShepherdingCore.IMPORTANCE_LABEL[cur.importance] || cur.importance)) + '</span>' +
-          '<button data-act="clearStatus" style="margin-left:auto;border:none;background:transparent;cursor:pointer;' +
-            'font-family:var(--font-sans);font-size:11.5px;color:var(--on-surface-variant)">Clear</button>' +
+          (decide
+            ? '<button data-act="clearStatus" style="margin-left:auto;border:none;background:transparent;cursor:pointer;' +
+              'font-family:var(--font-sans);font-size:11.5px;color:var(--on-surface-variant)">Clear</button>'
+            : '') +
         '</div>'
-      : '<p style="margin:12px 0 0;font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">Click a cell to set status.</p>';
+      : (decide
+        ? '<p style="margin:12px 0 0;font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">Click a cell to set status.</p>'
+        : '<p style="margin:12px 0 0;font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">No status set.</p>');
 
     return this.sectionShell('Pastoral Status', html + foot);
   };
@@ -1434,6 +1445,7 @@
     // render; an empty record simply means no hold is shown yet.
     var holds = ShepherdingCore.deriveTagHolds(this.activityById[n.id] || [], applied, Date.now());
 
+    var decide = this.canDecide;
     var chips = applied.map(function (tagId) {
       var projected = ShepherdingCore.isProjectedTagId(tagId);
       var hold = holds[tagId] ? ShepherdingCore.formatHoldDuration(holds[tagId].durationMs) : '';
@@ -1443,8 +1455,10 @@
         (hold ? '<span style="opacity:.7;font-size:10.5px" title="Held for ' + esc(hold) + '">· ' + esc(hold) + '</span>' : '') +
         (projected
           ? '<span class="msy" style="font-size:13px;opacity:.7" title="Set by the Membership Track, not by hand">lock</span>'
-          : '<button data-act="removeTag" data-tag="' + esc(tagId) + '" title="Remove" style="border:none;background:transparent;' +
-            'color:inherit;cursor:pointer;padding:0;display:inline-flex;align-items:center"><span class="msy" style="font-size:14px">close</span></button>') +
+          : (decide
+            ? '<button data-act="removeTag" data-tag="' + esc(tagId) + '" title="Remove" style="border:none;background:transparent;' +
+              'color:inherit;cursor:pointer;padding:0;display:inline-flex;align-items:center"><span class="msy" style="font-size:14px">close</span></button>'
+            : '')) +
         '</span>';
     }).join('');
     if (!applied.length) {
@@ -1465,22 +1479,26 @@
         (this.tagVocab.length ? 'All tags applied.' : 'No tags defined yet.') + '</span>';
     }
 
+    var addBlock = decide
+      ? '<div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">' +
+          '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Add tag</span>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px">' + addRow + '</div>' +
+        '</div>' +
+        '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-variant);display:flex;flex-direction:column;gap:7px">' +
+          '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Create tag</span>' +
+          '<div style="display:flex;gap:6px">' +
+            '<input data-rv="newTag" placeholder="New tag name…" value="' + esc(this.newTagName) + '"' +
+              ' style="flex:1 1 auto;min-width:0;height:34px;padding:0 10px;border:1px solid var(--outline-variant);' +
+              'border-radius:9px;background:var(--surface);font-family:var(--font-sans);font-size:13px;color:var(--navy-900);outline:none">' +
+            '<button data-act="createTag" style="flex:0 0 auto;padding:0 12px;height:34px;border:none;border-radius:9px;' +
+              'background:var(--primary);color:var(--on-primary);cursor:pointer;font-family:var(--font-sans);font-size:12px;font-weight:600">Create</button>' +
+          '</div>' +
+        '</div>'
+      : '';
+
     var inner =
       '<div style="display:flex;flex-wrap:wrap;gap:6px">' + chips + '</div>' +
-      '<div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">' +
-        '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Add tag</span>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' + addRow + '</div>' +
-      '</div>' +
-      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-variant);display:flex;flex-direction:column;gap:7px">' +
-        '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Create tag</span>' +
-        '<div style="display:flex;gap:6px">' +
-          '<input data-rv="newTag" placeholder="New tag name…" value="' + esc(this.newTagName) + '"' +
-            ' style="flex:1 1 auto;min-width:0;height:34px;padding:0 10px;border:1px solid var(--outline-variant);' +
-            'border-radius:9px;background:var(--surface);font-family:var(--font-sans);font-size:13px;color:var(--navy-900);outline:none">' +
-          '<button data-act="createTag" style="flex:0 0 auto;padding:0 12px;height:34px;border:none;border-radius:9px;' +
-            'background:var(--primary);color:var(--on-primary);cursor:pointer;font-family:var(--font-sans);font-size:12px;font-weight:600">Create</button>' +
-        '</div>' +
-      '</div>';
+      addBlock;
 
     return this.sectionShell('Shepherding Tags', inner);
   };
@@ -1523,7 +1541,7 @@
   RelationsViewer.prototype.commitMembership = function (next) {
     var self = this, id = this.selectedId;
     var p = this.personFor(id), node = this.byId[id];
-    if (!p || !node || this.writing) return;
+    if (!this.canDecide || !p || !node || this.writing) return;
     var m = p.membership || {};
     var previous = { stage: m.stage || null, inactive: !!m.inactive };
     if (previous.stage === next.stage && previous.inactive === next.inactive) return;
@@ -1560,7 +1578,7 @@
   RelationsViewer.prototype.setStatus = function (urgency, importance) {
     var self = this, id = this.selectedId;
     var p = this.personFor(id);
-    if (!p || this.writing) return;
+    if (!this.canDecide || !p || this.writing) return;
     var previousStatus = p.shepherdingStatus || null;
     var clearing = !!previousStatus && previousStatus.urgency === urgency && previousStatus.importance === importance;
     var newStatus = clearing ? null : { urgency: urgency, importance: importance };
@@ -1589,7 +1607,7 @@
   RelationsViewer.prototype.toggleTag = function (tagId) {
     var self = this, id = this.selectedId;
     var p = this.personFor(id);
-    if (!p || !tagId || this.writing) return;
+    if (!this.canDecide || !p || !tagId || this.writing) return;
     if (ShepherdingCore.isProjectedTagId(tagId)) {
       this.toast('This tag is set by the system, not by hand', 'error');
       return;
@@ -1637,7 +1655,7 @@
   RelationsViewer.prototype.createTag = function () {
     var self = this;
     var name = (this.newTagName || '').trim();
-    if (!name || this.writing) return;
+    if (!this.canDecide || !name || this.writing) return;
     var lower = name.toLowerCase();
     if (this.tagVocab.some(function (t) { return t.name.toLowerCase() === lower; })) {
       this.toast('Tag already exists', 'error');
@@ -1738,25 +1756,27 @@
   // ---------- boot (elder-gated) ----------
   function boot(user) {
     getUserData(user.uid).then(function (userData) {
-      var role = (userData && userData.role) || 'viewer';
-      if (['elder', 'super_admin'].indexOf(role) < 0) { window.location.href = 'index.html'; return; }
+      var flags = AccessCore.pageFlags(userData);
+      if (!flags.canReadElder) { window.location.href = 'index.html'; return; }
       var mount = document.getElementById('app');
       var view = new RelationsViewer(mount);
       // Who is making the edits — stamped onto every Membership Change, Status
       // Change and Tag Change the panel writes (MS-280).
+      view.canDecide = !!flags.canDecide;
       view.me = {
         uid: user.uid,
         // The same author name the Shepherding Profile records, so the two
         // surfaces sign a Pastoral Record entry identically.
         name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
         personId: (userData && userData.personId) || null,
-        permissionLevel: (userData && (userData.permissionLevel || userData.role)) || 'viewer',
+        permissionLevel: flags.currentPermissionLevel,
       };
       // The dev-only privacy screen over pastoral content, same terms as the
       // profile: a real elder never sees a blur, the super admin does.
       if (window.ShepherdingBlur) {
         ShepherdingBlur.configure({
           permissionLevel: view.me.permissionLevel,
+          pastoralAssistant: flags.pastoralAssistant,
           uid: view.me.uid,
           personId: view.me.personId,
         });

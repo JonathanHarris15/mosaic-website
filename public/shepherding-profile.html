@@ -292,8 +292,8 @@
                               class="text-on-surface-variant italic text-sm">No tags applied.</span>
                     </div>
 
-                    <!-- Add tags -->
-                    <div class="flex flex-col gap-xs">
+                    <!-- Add tags — a Pastoral Assistant reads tags; adding one is a decision. -->
+                    <div x-show="canDecide" class="flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Add tag</span>
                         <div class="flex flex-wrap gap-xs">
                             <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id) && !ShepherdingCore.isProjectedTagId(t.id))" :key="tag.id">
@@ -310,7 +310,7 @@
                     </div>
 
                     <!-- Create new tag -->
-                    <div class="flex flex-col gap-xs pt-xs border-t border-outline-variant">
+                    <div x-show="canDecide" class="flex flex-col gap-xs pt-xs border-t border-outline-variant">
                         <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Create tag</span>
                         <div class="flex gap-xs">
                             <input type="text" x-model="newTagName"
@@ -524,11 +524,14 @@
                         </div>
                     </template>
 
-                    <!-- No assignment yet -->
+                    <!-- No assignment yet — the empty-state button is the same decision as Change. -->
                     <template x-if="!assignedElderId && !showAssignElder">
-                        <button @click="showAssignElder = true" class="self-start px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[16px]">add</span> Assign an elder
-                        </button>
+                        <div>
+                            <button x-show="canDecide" @click="showAssignElder = true" class="self-start px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">add</span> Assign an elder
+                            </button>
+                            <p x-show="!canDecide" class="text-on-surface-variant italic text-sm">No elder assigned.</p>
+                        </div>
                     </template>
 
                     <!-- Picker -->
@@ -960,7 +963,7 @@
                                         <template x-if="!editingExplanation[entry.id]">
                                             <div class="flex items-start justify-between gap-sm">
                                                 <p x-show="entry.explanation" class="text-sm text-on-surface" :class="ShepherdingBlur.contentClass(entry.authorUid, {ownProfile})" x-text="entry.explanation"></p>
-                                                <button @click="startEditExplanation(entry.id, entry.explanation)"
+                                                <button x-show="canDecide" @click="startEditExplanation(entry.id, entry.explanation)"
                                                     class="text-xs text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-xs flex-shrink-0 ml-auto">
                                                     <span class="material-symbols-outlined text-[14px]">edit_note</span>
                                                     <span x-text="entry.explanation ? 'Edit explanation' : 'Add explanation'"></span>
@@ -1011,7 +1014,7 @@
                                         <template x-if="!editingExplanation[entry.id]">
                                             <div class="flex items-start justify-between gap-sm">
                                                 <p x-show="entry.explanation" class="text-sm text-on-surface" :class="ShepherdingBlur.contentClass(entry.authorUid, {ownProfile})" x-text="entry.explanation"></p>
-                                                <button @click="startEditExplanation(entry.id, entry.explanation)"
+                                                <button x-show="canDecide" @click="startEditExplanation(entry.id, entry.explanation)"
                                                     class="text-xs text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-xs flex-shrink-0 ml-auto">
                                                     <span class="material-symbols-outlined text-[14px]">edit_note</span>
                                                     <span x-text="entry.explanation ? 'Edit explanation' : 'Add explanation'"></span>

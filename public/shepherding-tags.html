@@ -150,8 +150,8 @@
 
         <div x-show="activeTab === 'tags'" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
 
-            <!-- Create new tag -->
-            <div class="flex gap-sm">
+            <!-- Create new tag — vocabulary writes are a decision. -->
+            <div x-show="canDecide" class="flex gap-sm">
                 <input type="text" x-model="newTagName" placeholder="New tag name"
                        @keydown.enter="addTag()"
                        class="flex-grow border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
@@ -176,7 +176,7 @@
                                 <span class="material-symbols-outlined text-[18px]">lock</span>
                                 <span>System</span>
                             </span>
-                            <div x-show="!tag.locked" class="tag-actions flex items-center gap-sm flex-shrink-0"
+                            <div x-show="canDecide && !tag.locked" class="tag-actions flex items-center gap-sm flex-shrink-0"
                                  :class="editingTagId === tag.id || mergingTagId === tag.id ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'">
                                 <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
                                     class="text-primary transition-colors" title="Save name">
@@ -210,7 +210,7 @@
                             </div>
                         </div>
                         <!-- Merge survivor picker -->
-                        <div x-show="mergingTagId === tag.id" class="flex flex-col gap-xs bg-surface-container-low rounded-lg p-sm">
+                        <div x-show="canDecide && mergingTagId === tag.id" class="flex flex-col gap-xs bg-surface-container-low rounded-lg p-sm">
                             <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
                             <div class="flex flex-wrap gap-xs">
                                 <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id && !t.locked)" :key="other.id">
