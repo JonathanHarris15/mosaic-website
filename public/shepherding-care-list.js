@@ -444,6 +444,7 @@ document.addEventListener('alpine:init', () => {
             const self = this;
             return createInlineTriggersExtension({
                 personId: person.id,
+                canDecide: !!self.canDecide,
                 getAllTags:      () => self.shepherdingTags,
                 getPersonTags:  () => { const p = self.people.find(x => x.id === person.id); return p?.tags || []; },
                 getCurrentStatus: () => { const p = self.people.find(x => x.id === person.id); return p?.shepherdingStatus || null; },

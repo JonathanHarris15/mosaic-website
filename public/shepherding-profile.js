@@ -658,6 +658,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async setAssignedElder(elderId) {
+            if (!this.canDecide) return;
             const newId = elderId || null;
             const prevId = this.assignedElderId;
             if (newId === prevId) return;
@@ -1066,6 +1067,7 @@ document.addEventListener('alpine:init', () => {
         hasTag(tagId) { return (this.person?.tags || []).includes(tagId); },
 
         async toggleTag(tagId) {
+            if (!this.canDecide) return;
             // Projected Tags follow their source of truth (ADR-0012 Membership
             // Track, ADR-0013 Elder role), never manual tagging.
             if (ShepherdingCore.isProjectedTagId(tagId)) {
@@ -1099,6 +1101,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async createTag() {
+            if (!this.canDecide) return;
             const name = this.newTagName.trim();
             if (!name) return;
             const exists = this.shepherdingTags.some(t => t.name.toLowerCase() === name.toLowerCase());
@@ -1342,11 +1345,13 @@ document.addEventListener('alpine:init', () => {
         // ── Explanations ──────────────────────────────────────────────────────
 
         startEditExplanation(activityId, currentText) {
+            if (!this.canDecide) return;
             this.explanationDraft = { ...this.explanationDraft, [activityId]: currentText || '' };
             this.editingExplanation = { ...this.editingExplanation, [activityId]: true };
         },
 
         async saveExplanation(activityId) {
+            if (!this.canDecide) return;
             const text = (this.explanationDraft[activityId] || '').trim();
             try {
                 await db.collection('people').doc(this.personId)

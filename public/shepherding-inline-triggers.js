@@ -151,10 +151,16 @@ function _createActionChipNode(onChipDeleted) {
 
 function createInlineTriggersExtension(config) {
     // config: { personId, getAllTags, getPersonTags, getCurrentStatus,
-    //           createTag, onTagAdd, onTagRemove, onStatusChange }
+    //           createTag, onTagAdd, onTagRemove, onStatusChange,
+    //           canDecide }
     // onStatusChange(urgency|null, importance|null) — null means clear
+    // canDecide defaults on so a caller that has not asked AccessCore yet
+    // keeps today's behaviour; pass false to silence # / -# / $$.
+
+    const triggersEnabled = config.canDecide !== false;
 
     function onChipDeleted(attrs) {
+        if (!triggersEnabled) return;
         try {
             if (attrs.chipKind === 'tag') {
                 if (attrs.action === 'added') {
@@ -402,6 +408,7 @@ function createInlineTriggersExtension(config) {
                     },
 
                     handleTextInput(v, from, to, text) {
+                        if (!triggersEnabled) return false;
                         if (text === '#') {
                             const pre = from > 0 ? v.state.doc.textBetween(Math.max(0, from - 1), from) : '';
                             if (pre === '-') {
