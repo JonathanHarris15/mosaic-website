@@ -126,3 +126,16 @@ a rule weaken.
 
 Build order after this note: MS-550 (`npm test` exit 0) → MS-551
 (functions lint exit 0) → MS-552 (parent PR + CI proof).
+
+## After (MS-552)
+
+Re-run on `MS-543` after MS-550 + MS-551 (2026-09-19):
+
+| Command | Before (`875bbc8`) | After |
+| --- | --- | --- |
+| `npm test` | 59 fail / 4457 pass / 19 skip, exit 1 | **0 fail** / 4516 pass / 19 skip, exit 0 |
+| `npm run lint --prefix functions` | 366 errors, exit 1 | **0 errors**, exit 0 |
+
+The 19 skips are still emulator suites (`FIRESTORE_EMULATOR_HOST` unset).
+PR CI jobs stay required. Eslint rules were not weakened. Maintain
+CLEAR is required before merge; after merge leave MS-543 In Review.
