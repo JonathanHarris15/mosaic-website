@@ -250,6 +250,131 @@
     </label>`;
   }
 
+  // Pending Directory Requests, above the Members and Non-members tabs.
+  // The plan decides the label, the summary, and which buttons a kind gets.
+  // Answering calls the same resolve the computer directory already uses.
+  function DirectoryQueue(props) {
+    var Req = window.PhoneDirectoryRequests;
+    var rowsS = useState(Req.oldestFirst(props.requests || []));
+    var answeringS = useState({});
+    var lockS = useState({});
+    var overrideS = useState(null);
+    var queryS = useState("");
+    useEffect(function () {
+      rowsS[1](Req.oldestFirst(props.requests || []));
+    }, [props.requests]);
+    function nameOf(id) {
+      var people = props.people || [];
+      for (var i = 0; i < people.length; i++) {
+        if (people[i].id === id) return people[i].name || null;
+      }
+      return null;
+    }
+    function release(requestId) {
+      delete lockS[0][requestId];
+      answeringS[1](Object.assign({}, lockS[0]));
+    }
+    function afterAnswer(request, decision, ok, error) {
+      release(request.id);
+      if (!ok) {
+        window.alert(Req.refusalWords(error));
+        return;
+      }
+      var remaining = Req.queueAfter(rowsS[0], request.id, true);
+      rowsS[1](remaining);
+      if (overrideS[0] && overrideS[0].id === request.id) {
+        overrideS[1](null);
+        queryS[1]("");
+      }
+      data.getPeopleFresh().then(function (list) {
+        if (props.onPeople) props.onPeople(list);
+      }).catch(function () {
+        window.alert(Req.DIRECTORY_FAILED);
+      });
+      data.refreshDirectoryFamilies().catch(function () {});
+      data.getPendingDirectoryRequests().then(function (list) {
+        var next = Req.oldestFirst(list || []);
+        rowsS[1](next);
+        if (props.onRequests) props.onRequests(next);
+      }).catch(function () {});
+      window.alert(Req.outcomeMessage(decision));
+    }
+    function send(request, decision, personId, reason) {
+      var held = lockS[0][request.id] ? request.id : null;
+      if (!Req.mayAnswer(held, request.id)) return;
+      lockS[0][request.id] = true;
+      answeringS[1](Object.assign({}, lockS[0]));
+      data.resolveDirectoryRequest(request, decision, personId, reason).then(function () {
+        afterAnswer(request, decision, true);
+      }).catch(function (e) {
+        afterAnswer(request, decision, false, e);
+      });
+    }
+    function confirmRequest(request, personId) {
+      send(request, "approve", personId || null, null);
+    }
+    function declineRequest(request) {
+      var held = lockS[0][request.id] ? request.id : null;
+      if (!Req.mayAnswer(held, request.id)) return;
+      var decided = Req.declineAnswer(window.prompt(Req.DECLINE_QUESTION, ""));
+      if (!decided.write) return;
+      send(request, "decline", null, decided.reason);
+    }
+    function openAlready(request) {
+      var held = lockS[0][request.id] ? request.id : null;
+      if (!Req.mayAnswer(held, request.id)) return;
+      if (!Req.offerAlreadyOnFile(request)) return;
+      overrideS[1](request);
+      queryS[1](Req.searchStartsAs(request));
+    }
+    function cancelAlready() {
+      overrideS[1](null);
+      queryS[1]("");
+    }
+    var rows = rowsS[0] || [];
+    if (!rows.length) return null;
+    var btn = { padding: "8px 12px", borderRadius: "var(--radius-full)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, cursor: "pointer" };
+    return html`<div style=${{ padding: "0 16px 12px" }}>
+      <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--primary)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px" }}>
+          <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--primary)" }}>Directory Requests</span>
+          <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 700, color: "var(--on-primary)", background: "var(--primary)", borderRadius: "var(--radius-full)", padding: "1px 7px" }}>${rows.length}</span>
+        </div>
+        ${rows.map(function (req) {
+          var contact = Req.proposedContact(req);
+          var note = Req.noteOf(req);
+          var held = answeringS[0][req.id] ? req.id : null;
+          var busy = !Req.mayAnswer(held, req.id);
+          var open = !!(overrideS[0] && overrideS[0].id === req.id);
+          var hits = open ? Req.unclaimedSearch(props.people || [], queryS[0]) : [];
+          var missed = open ? Req.noMatch(queryS[0], hits) : "";
+          return html`<div key=${req.id} style=${{ padding: "12px 14px", borderTop: "1px solid var(--outline-variant)" }}>
+            <div style=${{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline" }}>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>${Req.labelOf(req)}</span>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)", lineHeight: 1.35 }}>${Req.summaryOf(req, nameOf)}</span>
+            </div>
+            ${contact ? html`<div style=${{ marginTop: 4, fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${contact}</div>` : null}
+            ${note ? html`<div style=${{ marginTop: 4, fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13.5, color: "var(--on-surface-variant)" }}>“${note}”</div>` : null}
+            <div style=${{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              <button type="button" disabled=${busy} onClick=${function () { confirmRequest(req); }} style=${Object.assign({}, btn, { border: "none", background: "var(--primary)", color: "var(--on-primary)" })}>${Req.confirmLabel(req)}</button>
+              ${Req.offerAlreadyOnFile(req) ? html`<button type="button" disabled=${busy} onClick=${function () { openAlready(req); }} style=${Object.assign({}, btn, { border: "1px solid var(--outline-variant)", background: "transparent", color: "var(--on-surface-variant)" })}>${Req.ALREADY_ON_FILE}</button>` : null}
+              <button type="button" disabled=${busy} onClick=${function () { declineRequest(req); }} style=${Object.assign({}, btn, { border: "none", background: "transparent", color: "var(--error)" })}>Decline</button>
+            </div>
+            ${open ? html`<div style=${{ marginTop: 10 }}>
+              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface)", marginBottom: 6 }}>${Req.OVERRIDE_QUESTION}</div>
+              <input aria-label="Search the directory" value=${queryS[0]} onInput=${function (e) { queryS[1](e.target.value); }} style=${{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14 }} />
+              ${hits.map(function (candidate) {
+                return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { confirmRequest(req, candidate.id); }} style=${{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginTop: 6, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, cursor: "pointer" }}>${candidate.name}</button>`;
+              })}
+              ${missed ? html`<p style=${{ margin: "8px 0 0", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13, color: "var(--on-surface-variant)" }}>${Req.NO_MATCH}</p>` : null}
+              <button type="button" onClick=${cancelAlready} style=${Object.assign({}, btn, { marginTop: 8, border: "none", background: "transparent", color: "var(--on-surface-variant)", paddingLeft: 0 })}>Cancel</button>
+            </div>` : null}
+          </div>`;
+        })}
+      </div>
+    </div>`;
+  }
+
   function PeopleScreen(props) {
     // The read is skipped rather than issued and refused — since MS-197 the
     // directory needs an account (ADR-0031), so for a guest this could only
@@ -267,9 +392,14 @@
       });
     }, []);
     var editOn = Track.offerEdits(props.user, modeS[0]);
+    var Req = window.PhoneDirectoryRequests;
+    var seeQueue = Req.offerQueue(props.user);
     var mayOpen = mayOpenDirectory(props.user);
     var reloadS = useState(0);
+    var freshPeopleS = useState(null);
+    var queueOverrideS = useState(null);
     var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
+    var requestsSt = useAsync(seeQueue ? data.getPendingDirectoryRequests : noPeople, [seeQueue]);
     var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
     var addOpenS = useState(false), addDraftS = useState(emptyAddDraft()), addingS = useState(false);
@@ -277,7 +407,8 @@
     var overrideS = useState({});
     var savingS = useState({});
     var tagsReady = !tagsSt.loading;
-    var people = (st.data || []).map(function (p) { return overrideS[0][p.id] || p; });
+    var people = (freshPeopleS[0] || st.data || []).map(function (p) { return overrideS[0][p.id] || p; });
+    var pending = queueOverrideS[0] || requestsSt.data || [];
     var vocabulary = (tagsSt.data || []).concat(extraTagsS[0]);
     var vis = tagVisibility(tagsSt.data);
     var tabs = [["members", "Members"], ["non_members", "Non-members"]];
@@ -386,6 +517,8 @@
               <${CalSwitch} on=${editOn} />
             </button>
           </div>` : null}
+          ${seeQueue && requestsSt.error ? html`<p style=${{ margin: "0 16px 12px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>${Req.QUEUE_FAILED}</p>` : null}
+          ${Req.showQueue(props.user, editOn, pending) ? html`<${DirectoryQueue} requests=${pending} people=${people} onPeople=${function (list) { freshPeopleS[1](list); }} onRequests=${function (list) { queueOverrideS[1](list); }} />` : null}
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
@@ -656,6 +789,33 @@
     }
     var editS = useState(null);   // null = closed; else the working draft
     var savingS = useState(false);
+    var unlinkingS = useState(false);
+    var unlinkLockS = useState({ current: false });
+    var Req = window.PhoneDirectoryRequests;
+    function disconnectAccount() {
+      var lock = unlinkLockS[0];
+      if (!Req.mayDisconnect(lock.current || unlinkingS[0])) return;
+      if (!window.confirm(Req.disconnectMessage(p.name))) return;
+      lock.current = true;
+      unlinkingS[1](true);
+      data.disconnectDirectoryAccount(p.id).then(function () {
+        pS[1](Req.personAfterDisconnect(p, true));
+        window.alert(Req.DISCONNECTED);
+        lock.current = false;
+        unlinkingS[1](false);
+        return data.getPeopleFresh().then(function (list) {
+          var found = null;
+          for (var i = 0; i < (list || []).length; i++) {
+            if (list[i].id === p.id) found = list[i];
+          }
+          if (found) pS[1](found);
+        }).catch(function () {});
+      }).catch(function (e) {
+        lock.current = false;
+        unlinkingS[1](false);
+        window.alert(Req.disconnectRefusal(e));
+      });
+    }
     var invOpenS = useState(false);
     var invRowsS = useState(null);
     function openEdit() {
@@ -775,6 +935,10 @@
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
             <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
+            ${Req.offerAccount(props.user, editOn, p) ? html`<div style=${{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--primary)" }}>${Req.ACCOUNT}</span>
+              <button type="button" disabled=${!Req.mayDisconnect(unlinkingS[0])} onClick=${disconnectAccount} style=${{ padding: "8px 14px", borderRadius: "var(--radius-full)", border: "1px solid var(--error)", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Disconnect</button>
+            </div>` : null}
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
               <${Badge} tone=${Track.directoryLabel(p, props.user) === "Inactive" ? "secondary" : "primary"}>${Track.directoryLabel(p, props.user)}<//>
               ${editOn ? null : chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}

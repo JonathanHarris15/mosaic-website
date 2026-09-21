@@ -26,6 +26,14 @@
   // answered from the device when we already have it.
   function get(query) { return Cache ? Cache.read(query) : query.get(); }
 
+  // A Directory Request queue, and the people list after one is answered,
+  // cannot be the copy on the device. Someone else may already have answered
+  // it, and a cached person would still show the record from before the answer.
+  function serverGet(query) {
+    if (Cache && typeof Cache.fresh === "function") return Cache.fresh(query);
+    return query.get({ source: "server" });
+  }
+
   // The drawer's destination list, its role labels and its initials rule live in
   // mobile/destinations.js, because the SHELL's drawer (mobile-shell-header.js,
   // on a desktop page opened with ?shell=mobile) builds the same drawer and
@@ -234,6 +242,41 @@
   function getPeople() {
     return get(db.collection("people")).then(peopleFromSnap);
   }
+  function getPeopleFresh() {
+    return serverGet(db.collection("people")).then(peopleFromSnap);
+  }
+  function getPendingDirectoryRequests() {
+    var Core = window.DirectoryRequestCore;
+    return serverGet(
+      db.collection(Core.REQUEST_PATH).where("status", "==", Core.STATUS.PENDING)
+    ).then(function (snap) {
+      var out = [];
+      snap.forEach(function (doc) {
+        out.push(Object.assign({ id: doc.id }, doc.data()));
+      });
+      return window.PhoneDirectoryRequests.oldestFirst(out);
+    });
+  }
+  function callDirectoryPlan(plan) {
+    return firebase.functions().httpsCallable(plan.callable)(plan.data);
+  }
+  function resolveDirectoryRequest(request, decision, personId, reason) {
+    var plan = window.PhoneDirectoryRequests.resolveCall(request, decision, personId, reason);
+    return callDirectoryPlan(plan);
+  }
+  function disconnectDirectoryAccount(personId) {
+    var plan = window.PhoneDirectoryRequests.unlinkCall(personId);
+    return callDirectoryPlan(plan);
+  }
+  // The next Family read after an answered request. A cache-first read would
+  // still show the household from before the answer.
+  var familiesAfterAnswer = null;
+  function refreshDirectoryFamilies() {
+    familiesAfterAnswer = serverGet(db.collection("families")).then(function (snap) {
+      return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    });
+    return familiesAfterAnswer;
+  }
   function peopleFromSnap(snap) {
     var out = [];
     snap.forEach(function (doc) {
@@ -269,6 +312,9 @@
         // Shepherding visibility (mirrors desktop): people carrying a hidePeople
         // tag are flagged hidden and suppressed from the directory for non-admins.
         shepherdingHidden: !!d.shepherdingHidden,
+        // Whether a login is connected (ADR-0028). The account's email is not
+        // on this record; the directory does not go and read it.
+        userId: d.userId || null,
       });
     });
     out.sort(function (a, b) { return a.name.localeCompare(b.name); });
@@ -877,6 +923,11 @@
   // All Families (ADR-0012, MS-88) — the household graph. Small collection;
   // fetched whole so FamilyCore can resolve a Person's relations client-side.
   function getFamilies() {
+    if (familiesAfterAnswer) {
+      var pending = familiesAfterAnswer;
+      familiesAfterAnswer = null;
+      return pending;
+    }
     return db.collection("families").get()
       .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); });
   }
@@ -1305,7 +1356,12 @@
     signIn: signIn, signUp: signUp, signOut: signOut,
     sendPasswordReset: sendPasswordReset,
     DESTINATIONS: DESTINATIONS, canSee: canSee,
-    getHymns: getHymns, getPeople: getPeople, getServices: getServices,
+    getHymns: getHymns, getPeople: getPeople, getPeopleFresh: getPeopleFresh,
+    getPendingDirectoryRequests: getPendingDirectoryRequests,
+    resolveDirectoryRequest: resolveDirectoryRequest,
+    disconnectDirectoryAccount: disconnectDirectoryAccount,
+    refreshDirectoryFamilies: refreshDirectoryFamilies,
+    getServices: getServices,
     getNextService: getNextService,
     getShepherdingPanelTasks: getShepherdingPanelTasks,
     getPersonTasks: getPersonTasks,
