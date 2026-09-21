@@ -3721,9 +3721,9 @@ test('a deployed page is never left running against yesterday\'s script', () => 
     // `hosting` became a LIST when the MCP server got its own site (MS-262).
     // These pages are the church website's, so find that site by name — not
     // by position, which a third site could quietly change.
-    const site = (config.hosting || []).find(h => h.site === 'mosaic-hymn-database');
-    assert.ok(site, 'the church website is no longer in firebase.json under ' +
-        'the site id this cache rule was written for');
+    const site = (config.hosting || []).find(h => h.target === 'church');
+    assert.ok(site, 'the church website is no longer the "church" hosting ' +
+        'target this cache rule was written for');
     const headers = site.headers || [];
 
     const code = headers.find(h => /html\|js\|css|js\|css/.test(h.source || ''));

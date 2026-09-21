@@ -1,7 +1,7 @@
 {
   "hosting": [
     {
-      "site": "mosaic-hymn-database",
+      "target": "church",
       "public": "public",
       "ignore": [
         "firebase.json",
@@ -50,7 +50,7 @@
     },
     {
       "//": "The Order of Service MCP server (MS-262, ADR-0038) gets its OWN hosting site, and that is not tidiness — it is required. The OAuth discovery specs put /authorize, /token, /register and /revoke at the ROOT of whatever origin serves them, so hosting this on the church domain would claim all four there. Everything below is a rewrite to the single `mcp` function; mcp-site/ holds only a placeholder page for anyone who visits the bare domain. ⚠ The origin here must match MCP_ISSUER_URL in functions/index.js exactly — it is the issuer clients pin to and the audience every access token is minted for, so a mismatch means either nothing connects or passes minted elsewhere are accepted.",
-      "site": "mosaic-hymn-mcp",
+      "target": "mcp",
       "public": "mcp-site",
       "ignore": [
         "firebase.json",

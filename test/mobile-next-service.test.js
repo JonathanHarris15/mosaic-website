@@ -76,6 +76,8 @@ function loadData(answers) {
         MosaicDestinations: require(path.join(ROOT, 'public', 'mobile', 'destinations.js')),
         MosaicLocalCache: null,   // the cache is off; reads go straight through
     };
+    const configSrc = fs.readFileSync(path.join(ROOT, 'public', 'firebase-config.js'), 'utf8');
+    new Function('window', configSrc)(window);
     const fn = new Function('window', 'firebase', 'M', 'console', SRC + '\nreturn M.data;');
     return { data: fn(window, fake.firebase, M, console), asked: fake.asked };
 }

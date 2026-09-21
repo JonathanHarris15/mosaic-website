@@ -34,20 +34,15 @@
         fatal((r && r.message) || String(r || ''));
     });
 
-    // ⚠ DUPLICATED FROM auth.js ON PURPOSE. This page deliberately does not
-    // load auth.js — that module calls firebase.firestore() and brings the
-    // whole signed-in UI with it, neither of which belongs on a stranger's
-    // page. The key is public by design (it ships in every browser), so this is
-    // a tidiness cost rather than a security one. If a third page ever needs
-    // it, lift it into firebase-config.js and have auth.js read that.
-    const firebaseConfig = {
-        apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
-        authDomain: "mosaic-hymn-database.firebaseapp.com",
-        projectId: "mosaic-hymn-database",
-        storageBucket: "mosaic-hymn-database.firebasestorage.app",
-        messagingSenderId: "1004095249066",
-        appId: "1:1004095249066:web:0dcbf3cbbcd0be2ff4bbdd",
-    };
+    // This page deliberately does not load auth.js — that module calls
+    // firebase.firestore() and brings the whole signed-in UI with it, neither
+    // of which belongs on a stranger's page. The web config still has to be
+    // the one copy in firebase-config.js (the form app, which is a different
+    // Firebase web app than the church pages). The key is public by design.
+    const firebaseConfig = window.MosaicFirebaseProject && window.MosaicFirebaseProject.form;
+    if (!firebaseConfig || !firebaseConfig.projectId) {
+        throw new Error('firebase-config.js must load before form-answer.js');
+    }
 
     // ── App Check ────────────────────────────────────────────────────────────
     //

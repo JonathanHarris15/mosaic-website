@@ -42,6 +42,9 @@ const GuideStore = require(path.join(PUBLIC, 'guide-store.js'));
 globalThis.DateUtils = DateUtils;
 globalThis.GuideComponents = GuideComponents;
 
+require('./firebase-project').requireProject(process.argv, {
+    hardcoded: 'mosaic-hymn-database',
+});
 admin.initializeApp({
     credential: admin.credential.cert(require(path.join(ROOT, SERVICE_ACCOUNT_FILE))),
     projectId: FIREBASE_PROJECT_ID,

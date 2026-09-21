@@ -3,15 +3,13 @@
  * Shared Firebase configuration and authentication logic.
  */
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
-    authDomain: "mosaic-hymn-database.firebaseapp.com",
-    projectId: "mosaic-hymn-database",
-    storageBucket: "mosaic-hymn-database.firebasestorage.app",
-    messagingSenderId: "55153890298",
-    appId: "1:55153890298:web:4ca1f526f0169fb7920a43",
-    measurementId: "G-64N3W268V9"
-};
+// One copy of the web config, written by scripts/apply-firebase-project.js.
+// Loaded by firebase-config.js before this file. A deploy fails when the
+// projectId in that file disagrees with --project.
+const firebaseConfig = window.MosaicFirebaseProject && window.MosaicFirebaseProject.church;
+if (!firebaseConfig || !firebaseConfig.projectId) {
+    throw new Error('firebase-config.js must load before auth.js');
+}
 
 // Initialize Firebase if it hasn't been initialized yet
 if (!firebase.apps.length) {

@@ -1,0 +1,26 @@
+{
+  "mosaic-hymn-database": {
+    "projectId": "mosaic-hymn-database",
+    "apiKey": "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+    "authDomain": "mosaic-hymn-database.firebaseapp.com",
+    "storageBucket": "mosaic-hymn-database.firebasestorage.app",
+    "mcpIssuerUrl": "https://mosaic-hymn-mcp.web.app",
+    "smsReplyWebhookUrl": "https://us-central1-mosaic-hymn-database.cloudfunctions.net/smsInbound",
+    "liveOrigin": "https://mosaic-hymn-database.web.app",
+    "hosting": {
+      "church": "mosaic-hymn-database",
+      "mcp": "mosaic-hymn-mcp"
+    },
+    "apps": {
+      "church": {
+        "messagingSenderId": "55153890298",
+        "appId": "1:55153890298:web:4ca1f526f0169fb7920a43",
+        "measurementId": "G-64N3W268V9"
+      },
+      "form": {
+        "messagingSenderId": "1004095249066",
+        "appId": "1:1004095249066:web:0dcbf3cbbcd0be2ff4bbdd"
+      }
+    }
+  }
+}

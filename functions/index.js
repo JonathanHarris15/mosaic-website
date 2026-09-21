@@ -8,6 +8,10 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret, defineString} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+// Written by scripts/apply-firebase-project.js. A string at load time, which
+// is what the Storage trigger needs: FIREBASE_CONFIG carries no bucket during
+// deploy analysis, and a missing bucket fails the whole codebase.
+const firebaseProject = require("./firebase-project.json");
 const {
   toE164US,
   isAdminPermissionLevel,
@@ -115,8 +119,7 @@ const GEMINI_KEY = defineSecret("GEMINI_KEY");
  * here so test-text replies land in the sms_test_replies stack. This is the
  * stable cloudfunctions.net alias for the deployed function.
  */
-const SMS_REPLY_WEBHOOK_URL =
-  "https://us-central1-mosaic-hymn-database.cloudfunctions.net/smsInbound";
+const SMS_REPLY_WEBHOOK_URL = firebaseProject.smsReplyWebhookUrl;
 
 /** Firestore collection holding inbound replies to test texts. */
 const SMS_REPLIES_COLLECTION = "sms_test_replies";
@@ -676,7 +679,7 @@ exports.cleanUpReplacedPhoto = onDocumentWritten(
 // storageBucket during deploy analysis, and onObjectFinalized throws at load
 // without one — which fails the whole codebase, not just this function.
 exports.sealEventAttachment = onObjectFinalized(
-    {region: "us-central1", bucket: "mosaic-hymn-database.firebasestorage.app"},
+    {region: "us-central1", bucket: firebaseProject.storageBucket},
     async (event) => {
       const object = event.data || {};
       const name = object.name;
@@ -1692,13 +1695,9 @@ const PUBLIC_FORM_APP_CHECK_MODE = defineString("PUBLIC_FORM_APP_CHECK_MODE", {
   default: "monitor",
 });
 
-// The same public config already served in public/auth.js. It identifies the
-// project to Firebase Auth; it is not a secret and never has been.
-const MCP_WEB_CONFIG = {
-  apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
-  authDomain: "mosaic-hymn-database.firebaseapp.com",
-  projectId: "mosaic-hymn-database",
-};
+// The same public config firebase-config.js serves to the church pages.
+// It identifies the project to Firebase Auth. It is not a secret.
+const MCP_WEB_CONFIG = firebaseProject.mcpWeb;
 
 let mcpAppPromise = null;
 

@@ -1,0 +1,11 @@
+{
+  "projectId": "mosaic-hymn-database",
+  "storageBucket": "mosaic-hymn-database.firebasestorage.app",
+  "smsReplyWebhookUrl": "https://us-central1-mosaic-hymn-database.cloudfunctions.net/smsInbound",
+  "mcpIssuerUrl": "https://mosaic-hymn-mcp.web.app",
+  "mcpWeb": {
+    "apiKey": "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+    "authDomain": "mosaic-hymn-database.firebaseapp.com",
+    "projectId": "mosaic-hymn-database"
+  }
+}

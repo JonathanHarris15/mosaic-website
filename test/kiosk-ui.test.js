@@ -164,6 +164,7 @@ test('a kiosk header has no User Page', () => {
     sandbox.window = sandbox;
     sandbox.window.addEventListener = () => {};
     vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
     vm.runInContext(AUTH, sandbox);
     store.mosaicUserDoc = JSON.stringify({
         uid: 'kiosk-1',

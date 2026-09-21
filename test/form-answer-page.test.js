@@ -84,6 +84,7 @@ function loadPage(reply, locationOver) {
 
     const code = fs.readFileSync(path.join(__dirname, '..', 'public', 'form-answer.js'), 'utf8');
     vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
     vm.runInContext(code, sandbox);
 
     const page = sandbox.answerPage();

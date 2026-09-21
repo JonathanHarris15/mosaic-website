@@ -163,6 +163,10 @@ test('the storage trigger names its bucket rather than inferring one', () => {
     const functions = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
     const block = /exports\.sealEventAttachment = onObjectFinalized\(\s*\{([^}]*)\}/.exec(functions);
     assert.ok(block, 'sealEventAttachment has moved or been renamed');
-    assert.match(block[1], /bucket: "[^"]+"/,
+    assert.match(block[1], /bucket:\s*firebaseProject\.storageBucket/,
         'without a named bucket the whole functions codebase fails to deploy');
+    const project = JSON.parse(fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'firebase-project.json'), 'utf8'));
+    assert.strictEqual(project.storageBucket, 'mosaic-hymn-database.firebasestorage.app',
+        'the named bucket has to be the church bucket, not an inferred default');
 });

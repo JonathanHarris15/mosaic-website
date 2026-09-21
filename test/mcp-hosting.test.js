@@ -25,15 +25,20 @@ const functionsIndex = fs.readFileSync(
     path.join(ROOT, 'functions', 'index.js'), 'utf8');
 
 const MCP_SITE = 'mosaic-hymn-mcp';
-const site = config.hosting.find(h => h.site === MCP_SITE);
+const site = config.hosting.find(h => h.target === 'mcp');
+const firebaserc = JSON.parse(fs.readFileSync(path.join(ROOT, '.firebaserc'), 'utf8'));
 
 const sourcesOf = () => (site.rewrites || []).map(r => r.source);
 
 test('the MCP server has a hosting site of its own', () => {
-    assert.ok(site, `no hosting entry for ${MCP_SITE} — if this moved, the ` +
+    assert.ok(site, `no hosting target "mcp" — if this moved, the ` +
         'OAuth paths may now be claiming the church domain\'s root');
     assert.notStrictEqual(site.public, 'public',
         'the MCP site must not serve the church website\'s files');
+    assert.deepStrictEqual(
+        firebaserc.targets['mosaic-hymn-database'].hosting.mcp,
+        [MCP_SITE],
+        'the mcp target must still be the mosaic-hymn-mcp site');
 });
 
 test('every path the sign-in flow needs is routed to the function', () => {
@@ -71,7 +76,7 @@ test('the issuer the code advertises is the origin that is actually served', () 
 });
 
 test('the church website is still its own separate site', () => {
-    const main = config.hosting.find(h => h.site === 'mosaic-hymn-database');
+    const main = config.hosting.find(h => h.target === 'church');
     assert.ok(main, 'the church website has lost its hosting entry');
     assert.strictEqual(main.public, 'public');
     assert.ok(!main.rewrites || !main.rewrites.some(

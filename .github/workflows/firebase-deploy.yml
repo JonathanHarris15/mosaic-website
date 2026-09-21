@@ -101,10 +101,15 @@ jobs:
             'MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app' \
             > functions/.env.mosaic-hymn-database
 
+      - name: Refuse a deploy whose config is not the church project
+        run: node scripts/check-firebase-deploy.js --project mosaic-hymn-database --i-mean-prod
+
       - name: Deploy hosting + documented functions set + firestore:rules
         run: |
           set -euo pipefail
-          PROJECT_ID="$(node -p "JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).projects.default")"
+          # Pinned. Do not read .firebaserc default — flipping that alias
+          # would retarget this job at whatever project the alias named.
+          PROJECT_ID="mosaic-hymn-database"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
           echo "targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules"
