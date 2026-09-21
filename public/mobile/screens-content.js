@@ -280,19 +280,24 @@
         window.alert(Req.refusalWords(error));
         return;
       }
-      rowsS[1](Req.queueAfter(rowsS[0], request.id, true));
+      var remaining = Req.queueAfter(rowsS[0], request.id, true);
+      rowsS[1](remaining);
       if (overrideS[0] && overrideS[0].id === request.id) {
         overrideS[1](null);
         queryS[1]("");
       }
-      window.alert(Req.outcomeMessage(decision));
-      if (props.onAnswered) props.onAnswered();
       data.getPeopleFresh().then(function (list) {
         if (props.onPeople) props.onPeople(list);
       }).catch(function () {
-        window.alert("Couldn't load the directory.");
+        window.alert(Req.DIRECTORY_FAILED);
       });
       data.refreshDirectoryFamilies().catch(function () {});
+      data.getPendingDirectoryRequests().then(function (list) {
+        var next = Req.oldestFirst(list || []);
+        rowsS[1](next);
+        if (props.onRequests) props.onRequests(next);
+      }).catch(function () {});
+      window.alert(Req.outcomeMessage(decision));
     }
     function send(request, decision, personId, reason) {
       var held = lockS[0][request.id] ? request.id : null;
@@ -388,13 +393,13 @@
     }, []);
     var editOn = Track.offerEdits(props.user, modeS[0]);
     var Req = window.PhoneDirectoryRequests;
-    var seeQueue = Req.offerQueue(props.user, editOn);
+    var seeQueue = Req.offerQueue(props.user);
     var mayOpen = mayOpenDirectory(props.user);
     var reloadS = useState(0);
-    var queueTickS = useState(0);
     var freshPeopleS = useState(null);
+    var queueOverrideS = useState(null);
     var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
-    var requestsSt = useAsync(seeQueue ? data.getPendingDirectoryRequests : noPeople, [seeQueue, queueTickS[0]]);
+    var requestsSt = useAsync(seeQueue ? data.getPendingDirectoryRequests : noPeople, [seeQueue]);
     var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
     var addOpenS = useState(false), addDraftS = useState(emptyAddDraft()), addingS = useState(false);
@@ -403,6 +408,7 @@
     var savingS = useState({});
     var tagsReady = !tagsSt.loading;
     var people = (freshPeopleS[0] || st.data || []).map(function (p) { return overrideS[0][p.id] || p; });
+    var pending = queueOverrideS[0] || requestsSt.data || [];
     var vocabulary = (tagsSt.data || []).concat(extraTagsS[0]);
     var vis = tagVisibility(tagsSt.data);
     var tabs = [["members", "Members"], ["non_members", "Non-members"]];
@@ -511,8 +517,8 @@
               <${CalSwitch} on=${editOn} />
             </button>
           </div>` : null}
-          ${seeQueue && requestsSt.error ? html`<p style=${{ margin: "0 16px 12px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>Couldn't load Directory Requests. It did not work.</p>` : null}
-          ${seeQueue && requestsSt.data && requestsSt.data.length ? html`<${DirectoryQueue} requests=${requestsSt.data} people=${people} onPeople=${function (list) { freshPeopleS[1](list); }} onAnswered=${function () { queueTickS[1](function (n) { return n + 1; }); }} />` : null}
+          ${seeQueue && requestsSt.error ? html`<p style=${{ margin: "0 16px 12px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>${Req.QUEUE_FAILED}</p>` : null}
+          ${Req.showQueue(props.user, editOn, pending) ? html`<${DirectoryQueue} requests=${pending} people=${people} onPeople=${function (list) { freshPeopleS[1](list); }} onRequests=${function (list) { queueOverrideS[1](list); }} />` : null}
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
@@ -930,7 +936,7 @@
             <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             ${Req.offerAccount(props.user, editOn, p) ? html`<div style=${{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
-              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--primary)" }}>Account</span>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--primary)" }}>${Req.ACCOUNT}</span>
               <button type="button" disabled=${!Req.mayDisconnect(unlinkingS[0])} onClick=${disconnectAccount} style=${{ padding: "8px 14px", borderRadius: "var(--radius-full)", border: "1px solid var(--error)", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Disconnect</button>
             </div>` : null}
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>

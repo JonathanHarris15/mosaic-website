@@ -26,6 +26,8 @@
     const RESOLVE_FAILED = 'Could not resolve that request';
     const DISCONNECT_FAILED = 'Could not disconnect that account';
     const DISCONNECTED = 'Account disconnected';
+    const QUEUE_FAILED = "Couldn't load Directory Requests. It did not work.";
+    const DIRECTORY_FAILED = "Couldn't load the directory. It did not work.";
     const KEEP = 'They will keep their directory record, their membership and every shepherding note — they just will not be signed in as this person any more. You can reconnect an account afterwards.';
     const SEARCH_LIMIT = 15;
 
@@ -45,8 +47,8 @@
         return global && global.AccessCore;
     }
 
-    // The same set that may turn Edit Mode on. Edit Mode itself is not the
-    // gate: answering a request is not editing a person.
+    // The same set that may turn Edit Mode on. The switch is not the gate:
+    // answering a request is not editing a person, so this does not read it.
     function offerQueue(user) {
         return !!(access() && access().writesAsEditor(user));
     }
@@ -209,6 +211,8 @@
         RESOLVE_FAILED,
         DISCONNECT_FAILED,
         DISCONNECTED,
+        QUEUE_FAILED,
+        DIRECTORY_FAILED,
         SEARCH_LIMIT,
         offerQueue,
         offerAccount,

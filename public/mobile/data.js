@@ -257,18 +257,25 @@
       return window.PhoneDirectoryRequests.oldestFirst(out);
     });
   }
+  function callDirectoryPlan(plan) {
+    return firebase.functions().httpsCallable(plan.callable)(plan.data);
+  }
   function resolveDirectoryRequest(request, decision, personId, reason) {
     var plan = window.PhoneDirectoryRequests.resolveCall(request, decision, personId, reason);
-    return firebase.functions().httpsCallable(plan.callable)(plan.data);
+    return callDirectoryPlan(plan);
   }
   function disconnectDirectoryAccount(personId) {
     var plan = window.PhoneDirectoryRequests.unlinkCall(personId);
-    return firebase.functions().httpsCallable(plan.callable)(plan.data);
+    return callDirectoryPlan(plan);
   }
+  // The next Family read after an answered request. A cache-first read would
+  // still show the household from before the answer.
+  var familiesAfterAnswer = null;
   function refreshDirectoryFamilies() {
-    return serverGet(db.collection("families")).then(function (snap) {
+    familiesAfterAnswer = serverGet(db.collection("families")).then(function (snap) {
       return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
     });
+    return familiesAfterAnswer;
   }
   function peopleFromSnap(snap) {
     var out = [];
@@ -916,6 +923,11 @@
   // All Families (ADR-0012, MS-88) — the household graph. Small collection;
   // fetched whole so FamilyCore can resolve a Person's relations client-side.
   function getFamilies() {
+    if (familiesAfterAnswer) {
+      var pending = familiesAfterAnswer;
+      familiesAfterAnswer = null;
+      return pending;
+    }
     return db.collection("families").get()
       .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); });
   }
