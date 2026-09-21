@@ -443,10 +443,122 @@
       </${Screen}>`;
   }
 
+  // A Family write. The phone plan decides what is written; this only calls
+  // the Family create and update Shepherding already uses. A refusal writes
+  // nothing. The caller keeps the previous Families when this rejects.
+  function applyDirectoryFamily(families, planned) {
+    var Fam = window.PhoneDirectoryFamily;
+    if (!planned || !planned.write) {
+      if (planned && planned.sentence) window.alert(planned.sentence);
+      return Promise.resolve(null);
+    }
+    var doc = Fam.documentFor(planned);
+    var write = doc
+      ? data.addFamily(doc)
+      : data.updateFamily(planned.plan.familyId, planned.plan.changes);
+    return write.then(function (saved) {
+      return Fam.familiesAfter(families, planned, saved && saved.id);
+    });
+  }
+
+  // Spouse, children, and — for an editor in Edit Mode — the controls. The
+  // read line is the computer directory card. The anniversary stays in the
+  // editor. Searches sit in the page so a finger can reach them.
+  function DirectoryFamily(props) {
+    var Fam = window.PhoneDirectoryFamily;
+    var person = props.person;
+    var families = props.families || [];
+    var people = props.people || [];
+    var spouseQS = useState("");
+    var childQS = useState("");
+    var editor = Fam.familyEditor(props.user, props.editMode, person);
+    var busy = !!props.busy;
+    function personById(id) {
+      if (person && person.id === id) return person;
+      for (var i = 0; i < people.length; i++) {
+        if (people[i].id === id) return people[i];
+      }
+      return null;
+    }
+    function nameOf(id) {
+      var found = personById(id);
+      return found && found.name ? found.name : "(unknown)";
+    }
+    var line = Fam.familyLineText(Fam.familyLine(families, person && person.id, nameOf));
+    var spouseId = Fam.spouseIdOf(families, person && person.id);
+    var children = Fam.childIdsOf(families, person && person.id);
+    var spouseHits = Fam.spouseSearch(families, people, person, spouseQS[0]);
+    var childHits = Fam.childSearch(families, people, person, childQS[0]);
+    function removeDirectorySpouse() {
+      var ask = Fam.removalConfirmation("spouse");
+      if (ask && !window.confirm(ask)) return;
+      props.onWrite(Fam.planRelation(families, person, "spouse", spouseId, personById, true));
+    }
+    function removeDirectoryChild(childId) {
+      props.onWrite(Fam.planRelation(families, person, "child", childId, personById, true));
+    }
+    function chooseSpouse(otherId) {
+      props.onWrite(Fam.planRelation(families, person, "spouse", otherId, personById)).then(function (next) {
+        if (next) spouseQS[1]("");
+      });
+    }
+    function chooseChild(otherId) {
+      props.onWrite(Fam.planRelation(families, person, "child", otherId, personById)).then(function (next) {
+        if (next) childQS[1]("");
+      });
+    }
+    if (!line && !editor.sentence && !editor.show) return null;
+    var field = { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14 };
+    var hit = { display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, cursor: "pointer" };
+    var removeBtn = { border: "none", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 0" };
+    return html`<div style=${{ marginBottom: 18 }}>
+      ${line ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, color: "var(--on-surface)", margin: "0 0 8px 4px" }}>${line}</div>` : null}
+      ${editor.sentence ? html`<p style=${{ margin: "0 0 8px 4px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>${editor.sentence}</p>` : null}
+      ${editor.show ? html`<div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>${Fam.spouseSeatLabel(person)}</div>
+          ${spouseId ? html`<div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }}>${nameOf(spouseId)}</span>
+            <button type="button" aria-label="Remove spouse" disabled=${busy} onClick=${removeDirectorySpouse} style=${removeBtn}>Remove</button>
+          </div>` : html`<div>
+            <input aria-label="Search to set spouse" placeholder="Search to set spouse" disabled=${busy} value=${spouseQS[0]} onInput=${function (e) { spouseQS[1](e.target.value); }} style=${field} />
+            ${Fam.searchListOpen(spouseQS[0], spouseHits) ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
+              ${spouseHits.map(function (candidate) {
+                return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { chooseSpouse(candidate.id); }} style=${hit}>${candidate.name}</button>`;
+              })}
+            </div>` : null}
+          </div>`}
+        </div>
+        <div>
+          <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>Children</div>
+          ${children.map(function (childId) {
+            var childName = nameOf(childId);
+            return html`<div key=${childId} style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
+              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }}>${childName}</span>
+              <button type="button" aria-label=${"Remove " + childName} disabled=${busy} onClick=${function () { removeDirectoryChild(childId); }} style=${removeBtn}>Remove</button>
+            </div>`;
+          })}
+          <input aria-label="Search to add a child" placeholder="Search to add a child" disabled=${busy} value=${childQS[0]} onInput=${function (e) { childQS[1](e.target.value); }} style=${field} />
+          ${Fam.searchListOpen(childQS[0], childHits) ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
+            ${childHits.map(function (candidate) {
+              return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { chooseChild(candidate.id); }} style=${hit}>${candidate.name}</button>`;
+            })}
+          </div>` : null}
+        </div>
+        <label style=${{ display: "block" }}>
+          <span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>Anniversary</span>
+          <input type="date" aria-label="Anniversary" disabled=${busy} value=${Fam.anniversaryValue(families, person && person.id)} onChange=${function (e) { props.onWrite(Fam.planAnniversary(families, person, e.target.value)); }} style=${field} />
+        </label>
+      </div>` : null}
+    </div>`;
+  }
+
   // ── Person Detail ────────────────────────────────────────
   // Member-facing person page: contact + membership, no shepherding surface.
   // Editors (editor/elder/admin/super_admin) get an inline Edit Details modal
   // that writes the same contact fields as the shepherd person file.
+  // The Family line is on this page for anyone who can open it. The controls
+  // are here only while Edit Mode is on, and they are not inside Edit Details.
   function PersonDetailScreen(props) {
     var Edit = window.PhoneDirectoryEdit;
     var Track = window.PhoneDirectoryTrack;
@@ -493,6 +605,35 @@
       return !window.ShepherdingCore.isMembershipTagId(t) && (isAdmin || (tagsReady && !vis.hidden[t]));
     });
 
+    var mayOpen = mayOpenDirectory(props.user);
+    var familiesSt = useAsync(mayOpen ? data.getFamilies : noPeople, [mayOpen]);
+    var peopleSt = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen]);
+    var familiesS = useState(null);
+    var familyBusyS = useState(false);
+    var familyLockS = useState({ current: false });
+    var families = familiesS[0] || familiesSt.data || [];
+    var directoryPeople = peopleSt.data || [];
+    function onFamily(planned) {
+      var lock = familyLockS[0];
+      if (lock.current) return Promise.resolve(null);
+      var writing = !!(planned && planned.write);
+      if (writing) {
+        lock.current = true;
+        familyBusyS[1](true);
+      }
+      return applyDirectoryFamily(families, planned).then(function (next) {
+        if (writing) {
+          lock.current = false;
+          familyBusyS[1](false);
+        }
+        if (next) familiesS[1](next);
+        return next;
+      }).catch(function () {
+        lock.current = false;
+        familyBusyS[1](false);
+        window.alert(window.PhoneDirectoryFamily.SAVE_FAILED);
+      });
+    }
     var editS = useState(null);   // null = closed; else the working draft
     var savingS = useState(false);
     var invOpenS = useState(false);
@@ -576,6 +717,7 @@
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r[1]}</span>
               </div>`; })}
             </div>` : null}
+          ${(familiesSt.loading || peopleSt.loading) ? null : html`<${DirectoryFamily} person=${p} user=${props.user} editMode=${editOn} families=${families} people=${directoryPeople} busy=${familyBusyS[0]} onWrite=${onFamily} />`}
           ${mayEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
           ${editOn ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             <${Button} variant="secondary" size="md" style=${{ width: "100%" }} onClick=${openInvolvement}>Involvement<//>
