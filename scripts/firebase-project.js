@@ -223,8 +223,11 @@ function assertDeploy({root, projectId, iMeanProd}) {
                     'MCP_ISSUER_URL default in functions/index.js does not match the catalog.');
             }
         }
+        // The committed App Check file names the church origin. A ghost leaves
+        // App Check off (PUBLIC_FORM_APP_CHECK_MODE=off), so that literal is
+        // not rewritten and is not required to match the ghost origin.
         const appCheckPath = path.join(root, 'public', 'app-check-config.js');
-        if (fs.existsSync(appCheckPath)) {
+        if (fs.existsSync(appCheckPath) && projectId === PROD_PROJECT_ID) {
             const appCheck = fs.readFileSync(appCheckPath, 'utf8');
             const live = `liveOrigin: '${project.liveOrigin}'`;
             if (!appCheck.includes(live)) {

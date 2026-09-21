@@ -26,7 +26,8 @@
  * put them in, and any name they gave the series. A second run reports "no
  * changes" and writes nothing.
  *
- * Run:  node scripts/seed-events.js [--dry-run]
+ * Run:  node scripts/seed-events.js --project <id> [--dry-run]
+ * The church project also needs --i-mean-prod.
  */
 
 const admin = require('firebase-admin');
@@ -34,22 +35,24 @@ const path = require('path');
 const EventsCore = require('../public/events-core.js');
 const RolesCore = require('../public/roles-core.js');
 
-const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
 const EVENTS_COLLECTION = 'events';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
+const { requireProject } = require('./firebase-project');
 const { serviceAccount } = require('./service-account.js');
+
+const projectId = requireProject(process.argv);
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount()),
-    projectId: FIREBASE_PROJECT_ID,
+    projectId,
 });
 
 const db = admin.firestore();
 
 async function run() {
-    console.log('Seeding Event series' + (DRY_RUN ? ' (dry run)' : ''));
+    console.log(`Seeding Event series on ${projectId}` + (DRY_RUN ? ' (dry run)' : ''));
 
     const ref = db.collection(EVENTS_COLLECTION).doc(EventsCore.SUNDAY_SERVICE_ID);
     const snap = await ref.get();
