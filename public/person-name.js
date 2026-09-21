@@ -4,7 +4,7 @@
 // name is the only name every screen reads. The parts are remembered beside
 // it (nameParts), never as a top-level firstName/lastName pair. A person who
 // only has a full name is not parsed apart. A person with no last name is
-// still a person. (ADR 0067, MS-602)
+// still a person. (ADR 0069, MS-602)
 //
 // Loaded as a classic <script> (window.PersonName) and exported for Node tests.
 

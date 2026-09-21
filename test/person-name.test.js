@@ -5,7 +5,7 @@ const Name = require('../public/person-name.js');
 
 // A name is entered as a first name, a last name, and an optional suffix.
 // The full name is those parts in that order. The last name is what a
-// Household is called after. A suffix never is. (ADR 0067, MS-609)
+// Household is called after. A suffix never is. (ADR 0069, MS-609)
 
 test('Jonathan / Harris / Jr. is the full name Jonathan Harris Jr.', () => {
     const entered = Name.enteredName({
