@@ -39,14 +39,14 @@ document.addEventListener('alpine:init', () => {
         showStatusFilter: true,
 
         showAddPersonModal: false,
-        newPerson: {
-            name: '',
+        newPerson: Object.assign(PersonName.emptyBlanks(), {
             email: '',
             phone: '',
             address: '',
             birthday: '',
             sex: ''
-        },
+        }),
+        nameFault: '',
         isSubmitting: false,
 
         showTagManagementModal: false,
@@ -364,14 +364,19 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addPerson() {
-            const name = this.newPerson.name.trim();
-            if (!name) return;
-            
+            const fields = PersonName.fieldsForNewPerson(this.newPerson);
+            if (fields.fault) {
+                this.nameFault = fields.fault;
+                return;
+            }
+            this.nameFault = '';
+
             this.isSubmitting = true;
             try {
                 const now = firebase.firestore.FieldValue.serverTimestamp();
                 const docRef = await db.collection('people').add({
-                    name: name,
+                    name: fields.name,
+                    nameParts: fields.nameParts,
                     totalInvolvements: 0,
                     contact: {
                         email: (this.newPerson.email || '').trim(),
@@ -388,7 +393,9 @@ document.addEventListener('alpine:init', () => {
                 });
                 
                 const newId = docRef.id;
-                this.newPerson = { name: '', email: '', phone: '', address: '', birthday: '', sex: '' };
+                this.newPerson = Object.assign(PersonName.emptyBlanks(), {
+                    email: '', phone: '', address: '', birthday: '', sex: '',
+                });
                 await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');

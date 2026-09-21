@@ -430,7 +430,10 @@
     var tagFiltersS = useState([]), tagModeS = useState("any"), statusZonesS = useState([]);
     var showSaveS = useState(false), saveNameS = useState("");
     var tagModalS = useState(null), addModalS = useState(false);
-    var newPersonS = useState({ name: "", email: "", phone: "", address: "", birthday: "", sex: "" });
+    var blankPerson = function () {
+      return Object.assign(window.PersonName.emptyBlanks(), { email: "", phone: "", address: "", birthday: "", sex: "" });
+    };
+    var newPersonS = useState(blankPerson());
     var toastS = useState(null);
 
     var people = peopleS[0], tags = tagsS[0], views = viewsS[0];
@@ -484,11 +487,12 @@
     }
     function addPerson() {
       var np = newPersonS[0];
-      if (!np.name.trim()) return;
+      var fields = window.PersonName.fieldsForNewPerson(np);
+      if (fields.fault) { showToast(fields.fault, "error"); return; }
       data.addShepherdingPerson(np).then(function (newId) {
-        newPersonS[1]({ name: "", email: "", phone: "", address: "", birthday: "", sex: "" });
+        newPersonS[1](blankPerson());
         addModalS[1](false); props.nav("shepherdProfile", { id: newId, from: "people" });
-      }).catch(function () { showToast("Error adding person", "error"); });
+      }).catch(function (e) { showToast((e && e.message) || "Error adding person", "error"); });
     }
     function saveView() {
       if (!canDecide) return;
@@ -632,7 +636,14 @@
         ${addModalS[0] ? html`<${Modal} onClose=${function () { addModalS[1](false); }} title="Add New Person"
           footer=${html`<${Fragment}><button onClick=${function () { addModalS[1](false); }} style=${pill("ghost")}>Cancel</button><button onClick=${addPerson} style=${pill()}>Add Person</button></${Fragment}>`}>
           <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-            ${[["name", "Full Name", "text", "Required"], ["email", "Email", "email", ""], ["phone", "Phone", "tel", ""], ["birthday", "Birthday", "date", ""]].map(function (f) {
+            <${Field} label="First name"><input type="text" value=${newPersonS[0].firstName} onInput=${function (e) { newPersonS[1](Object.assign({}, newPersonS[0], { firstName: e.target.value })); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Last name"><input type="text" value=${newPersonS[0].lastName} disabled=${newPersonS[0].noLastName} onInput=${function (e) { newPersonS[1](Object.assign({}, newPersonS[0], { lastName: e.target.value })); }} style=${inputStyle} /></${Field}>
+            <${Field} label="Suffix"><input type="text" value=${newPersonS[0].suffix} placeholder="Jr." onInput=${function (e) { newPersonS[1](Object.assign({}, newPersonS[0], { suffix: e.target.value })); }} style=${inputStyle} /></${Field}>
+            <label style=${{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>
+              <input type="checkbox" checked=${newPersonS[0].noLastName} onChange=${function (e) { newPersonS[1](Object.assign({}, newPersonS[0], { noLastName: e.target.checked })); }} />
+              No last name
+            </label>
+            ${[["email", "Email", "email", ""], ["phone", "Phone", "tel", ""], ["birthday", "Birthday", "date", ""]].map(function (f) {
               return html`<${Field} key=${f[0]} label=${f[1]}><input type=${f[2]} value=${newPersonS[0][f[0]]} placeholder=${f[3]} onInput=${function (e) { var n = {}; n[f[0]] = e.target.value; newPersonS[1](Object.assign({}, newPersonS[0], n)); }} style=${inputStyle} /></${Field}>`;
             })}
             <${Field} label="Address"><textarea rows=${2} value=${newPersonS[0].address} onInput=${function (e) { newPersonS[1](Object.assign({}, newPersonS[0], { address: e.target.value })); }} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea></${Field}>

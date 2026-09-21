@@ -216,21 +216,37 @@ function kioskPage() {
         },
         // ── The person form ──────────────────────────────────────────────────
         startCreate() {
+            // A search that found nobody is a first name, not a last name.
+            // The household name follows once a last name is typed.
             const seed = this.query.trim();
+            const people = [Object.assign(Household.emptyCreatePerson(), { firstName: seed })];
+            const named = Household.householdNameForDraft(people, '', null);
             this.draftTarget = null;
-            this.draft = {
-                name: Household.suggestedHouseholdName([], seed),
-                people: [Object.assign(Household.emptyCreatePerson(), { name: seed })],
-            };
+            this.draft = { name: named.name, suggested: named.suggestion, people: people };
             this.error = '';
             this.view = 'create';
         },
         startAddPeople() {
             if (!this.selected) return;
             this.draftTarget = this.selected;
-            this.draft = { name: this.selected.name, people: [Household.emptyCreatePerson()] };
+            this.draft = {
+                name: this.selected.name,
+                suggested: this.selected.name,
+                people: [Household.emptyCreatePerson()],
+            };
             this.error = '';
             this.view = 'create';
+        },
+        // While the household name still equals the suggestion, it follows the
+        // last name being typed. A name the greeter has changed is left alone.
+        // Adding to a household that already exists does not rename it.
+        refreshHouseholdName() {
+            if (!this.draft || this.addingToHousehold) return;
+            const named = Household.householdNameForDraft(
+                this.draft.people, this.draft.name, this.draft.suggested
+            );
+            this.draft.suggested = named.suggestion;
+            this.draft.name = named.name;
         },
         cancelDraft() {
             if (this.draftTarget) {

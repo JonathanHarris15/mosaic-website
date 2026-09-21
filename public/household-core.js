@@ -10,16 +10,16 @@
 (function (global) {
     'use strict';
 
+    const PersonName = (typeof require !== 'undefined')
+        ? require('./person-name.js')
+        : (global && global.PersonName);
+
     function lastWord(name) {
-        const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-        return parts.length ? parts[parts.length - 1] : '';
+        return PersonName.lastWord(name);
     }
 
     function householdNameFromMembers(members) {
-        const first = (members || []).find(function (m) { return m && !m.kid; })
-            || (members || [])[0];
-        const surname = lastWord(first && first.name);
-        return surname ? ('The ' + surname + ' Household') : 'A Household';
+        return PersonName.householdName(members);
     }
 
     function personMap(people) {
@@ -33,9 +33,12 @@
     function memberOf(byId, personId, kid) {
         const p = byId[personId];
         if (!p) return null;
+        const remembered = PersonName.rememberedLastName(p);
         return {
             personId: personId,
             name: p.name || '',
+            lastName: remembered.lastName,
+            noLastName: remembered.noLastName,
             kid: kid == null ? !!p.kid : !!kid,
         };
     }
@@ -104,7 +107,8 @@
 
         (people || []).forEach(function (p) {
             if (!p || !p.id || seated[p.id]) return;
-            const members = [{ personId: p.id, name: p.name || '', kid: !!p.kid }];
+            const one = memberOf(byId, p.id, !!p.kid);
+            const members = one ? [one] : [];
             households.push({
                 id: 'person:' + p.id,
                 name: householdNameFromMembers(members),
@@ -128,19 +132,37 @@
     }
 
     function emptyCreatePerson() {
-        return { name: '', phone: '', sex: '', kid: false };
+        return {
+            firstName: '', lastName: '', suffix: '', noLastName: false,
+            phone: '', sex: '', kid: false,
+        };
     }
 
     function suggestedHouseholdName(people, query) {
-        const named = (people || []).find(function (p) { return p && p.name && !p.kid; })
-            || (people || []).find(function (p) { return p && p.name; });
-        if (named && named.name) return householdNameFromMembers([{ name: named.name, kid: !!named.kid }]);
-        const q = String(query || '').trim();
-        return q ? ('The ' + lastWord(q) + ' Household') : 'A Household';
+        return PersonName.suggestedHouseholdName(people, query);
+    }
+
+    function householdNameForDraft(people, currentName, previousSuggestion, options) {
+        return PersonName.householdNameForDraft(people, currentName, previousSuggestion, options);
     }
 
     function createFault(people) {
-        const rows = (people || []).filter(function (p) { return p && String(p.name || '').trim(); });
+        const rows = [];
+        (people || []).forEach(function (p) {
+            if (!p) return;
+            if (PersonName.isNameEntry(p)) {
+                const entered = PersonName.enteredName(p);
+                if (entered.empty) return;
+                if (entered.fault) {
+                    rows.fault = entered.fault;
+                    return;
+                }
+                rows.push(p);
+                return;
+            }
+            if (String(p.name || '').trim()) rows.push(p);
+        });
+        if (rows.fault) return rows.fault;
         if (!rows.length) return 'Add at least one person.';
         const missing = rows.find(function (p) { return p.sex !== 'male' && p.sex !== 'female'; });
         if (missing) return 'Say whether each person is male or female.';
@@ -148,8 +170,11 @@
     }
 
     function personWrite(draft, now) {
-        const name = String(draft && draft.name || '').trim();
-        return {
+        const entered = PersonName.enteredName(draft);
+        const name = (!entered.empty && !entered.fault)
+            ? entered.name
+            : String(draft && draft.name || '').trim();
+        const doc = {
             name: name,
             contact: {
                 email: '',
@@ -165,6 +190,11 @@
             createdAt: now,
             updatedAt: now,
         };
+        // Beside `name`, never instead of it, and never as top-level
+        // firstName/lastName — that pair is how a screen once showed the
+        // wrong name while its tests stayed green.
+        if (entered.parts) doc.nameParts = entered.parts;
+        return doc;
     }
 
     function householdWrite(name, members, now) {
@@ -241,7 +271,7 @@
         });
         const hits = [];
         (people || []).forEach(function (p) {
-            const hit = p && have[normalName(p.name)];
+            const hit = p && have[normalName(PersonName.fullName(p))];
             if (hit && hits.indexOf(hit) === -1) hits.push(hit);
         });
         return hits;
@@ -254,6 +284,7 @@
         searchHouseholds,
         emptyCreatePerson,
         suggestedHouseholdName,
+        householdNameForDraft,
         createFault,
         personWrite,
         householdWrite,

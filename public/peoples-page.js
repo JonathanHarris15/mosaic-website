@@ -26,14 +26,17 @@ document.addEventListener('alpine:init', () => {
         sortDirection: 'desc',
         
         // Form data for adding a person
-        newPerson: {
-            name: '',
+        newPerson: Object.assign(PersonName.emptyBlanks(), {
             email: '',
             phone: '',
             address: '',
             birthday: '',
             sex: '' // '' or 'male' or 'female'
-        },
+        }),
+        // The three blanks on an existing person. Kept off the Person so a
+        // first name never becomes a field the rest of the app reads.
+        nameEntry: PersonName.emptyBlanks(),
+        nameFault: '',
         
         // Involvement tracking
         selectedPerson: null,
@@ -914,14 +917,19 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addPerson() {
-            const name = this.newPerson.name.trim();
-            if (!name) return;
-            
+            const fields = PersonName.fieldsForNewPerson(this.newPerson);
+            if (fields.fault) {
+                this.nameFault = fields.fault;
+                return;
+            }
+            this.nameFault = '';
+
             this.isSubmitting = true;
             try {
                 const now = firebase.firestore.FieldValue.serverTimestamp();
                 await db.collection('people').add({
-                    name: name,
+                    name: fields.name,
+                    nameParts: fields.nameParts,
                     totalInvolvements: 0,
                     contact: {
                         email: (this.newPerson.email || '').trim(),
@@ -935,7 +943,9 @@ document.addEventListener('alpine:init', () => {
                     createdAt: now,
                     updatedAt: now
                 });
-                this.newPerson = { name: '', email: '', phone: '', address: '', birthday: '', sex: '' };
+                this.newPerson = Object.assign(PersonName.emptyBlanks(), {
+                    email: '', phone: '', address: '', birthday: '', sex: '',
+                });
                 await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');
@@ -965,6 +975,10 @@ document.addEventListener('alpine:init', () => {
             if (!this.selectedPerson.contact) {
                 this.selectedPerson.contact = {};
             }
+            // An unsplit name opens with the blanks empty. The full name stays
+            // on the record until the blanks are filled.
+            this.nameEntry = PersonName.blanksFor(person);
+            this.nameFault = '';
             this.showInvolvementModal = true;
             this.loadInvolvement(person.id);
         },
@@ -973,9 +987,16 @@ document.addEventListener('alpine:init', () => {
             if (!this.selectedPerson) return;
             this.isSubmitting = true;
             try {
+                const saved = PersonName.saveExisting(this.selectedPerson, this.nameEntry);
+                if (saved.fault) {
+                    this.nameFault = saved.fault;
+                    this.isSubmitting = false;
+                    return;
+                }
+                this.nameFault = '';
                 const personRef = db.collection('people').doc(this.selectedPerson.id);
                 const updates = {
-                    name: this.selectedPerson.name.trim(),
+                    name: saved.name,
                     'contact.email': (this.selectedPerson.contact?.email || '').trim(),
                     'contact.phone': (this.selectedPerson.contact?.phone || '').trim(),
                     'contact.address': (this.selectedPerson.contact?.address || '').trim(),
@@ -984,8 +1005,11 @@ document.addEventListener('alpine:init', () => {
                     kid: !!this.selectedPerson.kid,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+                if (saved.writeParts) updates.nameParts = saved.nameParts;
 
                 await personRef.update(updates);
+                this.selectedPerson.name = saved.name;
+                if (saved.writeParts) this.selectedPerson.nameParts = saved.nameParts;
                 
                 // Update local list
                 const idx = this.people.findIndex(p => p.id === this.selectedPerson.id);

@@ -446,10 +446,23 @@
                     </button>
                 </header>
                 <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                    <p class="text-sm text-error" x-show="nameFault" x-text="nameFault"></p>
                     <div class="flex flex-col gap-1">
-                        <label class="m-label">Full Name</label>
-                        <input type="text" x-model="newPerson.name" placeholder="Required" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                        <label class="m-label">First name</label>
+                        <input type="text" x-model="newPerson.firstName" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="m-label">Last name</label>
+                        <input type="text" x-model="newPerson.lastName" :disabled="newPerson.noLastName" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm disabled:opacity-50">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="m-label">Suffix</label>
+                        <input type="text" x-model="newPerson.suffix" placeholder="Jr." class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-on-surface">
+                        <input type="checkbox" x-model="newPerson.noLastName" class="rounded border-outline-variant text-primary">
+                        <span>No last name</span>
+                    </label>
                     <div class="flex flex-col gap-1">
                         <label class="m-label">Email</label>
                         <input type="email" x-model="newPerson.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
@@ -477,7 +490,7 @@
                 </div>
                 <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end gap-3">
                     <button @click="showAddPersonModal = false" class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all">Cancel</button>
-                    <button @click="addPerson()" :disabled="isSubmitting || !newPerson.name.trim()" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
+                    <button @click="addPerson()" :disabled="isSubmitting" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
                         <span x-show="isSubmitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                         <span x-text="isSubmitting ? 'Adding...' : 'Add Person'"></span>
                     </button>
@@ -535,6 +548,7 @@
     <script src="access-core.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
+    <script src="person-name.js"></script>
     <script src="shepherding-people.js"></script>
 </body>
 </html>
