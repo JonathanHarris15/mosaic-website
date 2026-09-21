@@ -35,6 +35,13 @@
     <script src="auth.js"></script>
     <!-- Guide Logic -->
     <script src="guide-image-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="event-announcement-core.js"></script>
+    <script src="event-announcement-store.js"></script>
+    <script src="printed-announcement-lines.js"></script>
+    <script src="printed-announcement-guide.js"></script>
     <script src="service-guide.js"></script>
     <!-- Alpine -->
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
@@ -446,10 +453,11 @@
                                     <div class="latex-hr mb-2"></div>
                                     
                                     <div class="min-h-[2.2in] mb-4 overflow-hidden">
-                                        <template x-for="item in (el.items || [])">
+                                        <template x-for="item in announcementsOnThePage(el)">
                                             <div class="mb-2 last:mb-0 text-[10pt] leading-snug">
                                                 <span class="font-bold" x-text="item.title + (item.title ? ': ' : '')"></span>
-                                                <span x-html="item.content"></span>
+                                                <span x-show="!item.plain" x-html="item.content"></span>
+                                                <span x-show="item.plain" class="whitespace-pre-line" x-text="item.prose"></span>
                                             </div>
                                         </template>
                                     </div>

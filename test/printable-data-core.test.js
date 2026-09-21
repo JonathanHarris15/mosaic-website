@@ -262,6 +262,96 @@ test('Sunday booklet text resolves from typedContent and does not leak across Su
     assert.ok(!String(b.rows[0].prayerNation).includes('Kenya'));
 });
 
+test('printed event announcements follow the typed ones and are not written onto the Sunday', () => {
+    const data = SUNDAYS();
+    const date = '2026-09-06';
+    data.services[date].typedContent = {
+        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
+    };
+    const before = JSON.parse(JSON.stringify(data.services[date].typedContent));
+    data.printedEventsBySunday = {};
+    data.printedEventsBySunday[date] = [
+        {
+            id: 'hall',
+            name: 'Hall work day',
+            visibility: 'public',
+            startTime: '09:00',
+            occurrence: { id: 'hall', date: '2026-09-12', name: 'Hall work day' },
+            announcements: [{
+                id: 'work', title: 'Work day', prose: 'Bring gloves\nand a hat',
+                way: 'printed', weeks: 1, order: 0,
+            }],
+        },
+        {
+            id: 'members',
+            name: 'Members meeting',
+            visibility: 'member',
+            occurrence: { id: 'members', date: '2026-09-10' },
+            announcements: [{
+                id: 'mm', title: 'Members only', prose: 'Stay after',
+                way: 'printed', weeks: 1, order: 0,
+            }],
+        },
+        {
+            id: 'elders',
+            name: 'Session',
+            visibility: 'elder',
+            occurrence: { id: 'elders', date: '2026-09-10' },
+            announcements: [{
+                id: 'session', title: 'Session', prose: 'Closed',
+                way: 'printed', weeks: 1, order: 0,
+            }],
+        },
+        {
+            id: 'told-event',
+            name: 'Public picnic',
+            visibility: 'public',
+            occurrence: { id: 'told-event', date: '2026-09-12' },
+            announcements: [{
+                id: 'told', title: 'Choir', prose: 'Practice',
+                way: 'told', tags: ['choir'],
+            }],
+        },
+        {
+            id: 'sunday_service',
+            seriesId: 'sunday_service',
+            name: 'Sunday Service',
+            visibility: 'member',
+            rule: { freq: 'weekly', weekday: 0, startDate: '2023-01-01', time: '10:30' },
+            startTime: '10:30',
+            stored: [],
+            announcements: [{
+                id: 'lunch', title: 'Lunch', prose: 'After church',
+                way: 'printed', weeks: 1, order: 0,
+            }],
+        },
+    ];
+    const resolved = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
+    const text = resolved.rows[0].announcements;
+    assert.match(text, /^Picnic\nBring a plate/);
+    assert.match(text, /Lunch\nAfter church/);
+    assert.match(text, /Work day\nBring gloves\nand a hat/);
+    assert.ok(text.indexOf('Lunch') < text.indexOf('Work day'));
+    assert.equal(resolved.rows[0].announcementCount, 3);
+    assert.ok(!text.includes('Members only'));
+    assert.ok(!text.includes('Session'));
+    assert.ok(!text.includes('Choir'));
+    assert.deepEqual(data.services[date].typedContent, before);
+
+    data.printedEventsBySunday[date][0].announcements[0].title = 'Work morning';
+    const edited = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
+    assert.match(edited.rows[0].announcements, /Work morning/);
+    assert.ok(!edited.rows[0].announcements.includes('Work day'));
+    assert.deepEqual(data.services[date].typedContent, before);
+
+    data.printedEventsBySunday[date][0].announcements = [];
+    const removed = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
+    assert.ok(!removed.rows[0].announcements.includes('Work morning'));
+    assert.match(removed.rows[0].announcements, /Picnic/);
+    assert.match(removed.rows[0].announcements, /Lunch/);
+    assert.deepEqual(data.services[date].typedContent, before);
+});
+
 test('a Printable bound to Sunday booklet text reads the typed fields', () => {
     const Render = require('../public/printable-render-core.js');
     const Core = require('../public/printable-core.js');
@@ -382,6 +472,7 @@ test('a dated source asks the store for a window, not the whole collection', () 
     assert.equal(n.series, true);
     assert.deepEqual(Data.needsFor('sunday', {}, TODAY).services, ['2026-09-06']);
     assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY).services, ['2026-09-06']);
+    assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY).printedAnnouncements, ['2026-09-06']);
     assert.equal(Data.needsFor('people', {}, TODAY).people, true);
 });
 

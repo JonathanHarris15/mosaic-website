@@ -102,6 +102,9 @@ const MODULES = [
     // announcements). printable-data-core.js reads it for the sunday_typed
     // source, so the copy has to travel with the catalog.
     'sunday-typed-core.js',
+    // MS-622. Which printed event announcements belong on a Sunday. The
+    // booklet resolver calls it, so the assistant and the page agree.
+    'printed-announcement-lines.js',
     'printable-data-core.js',
     // MS-489 / MS-433. The assistant is refused at a box an elder holds, and
     // "is this box held" has to be the page's answer — heartbeat expiry, the

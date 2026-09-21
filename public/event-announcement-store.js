@@ -2,10 +2,14 @@
 //
 // The words (title, prose, order) are one record, readable by whoever can
 // already read the event's standing description. How it goes out — the way,
-// when, and the tag ids — is a second record, readable and writable only by
-// an editor. Firestore cannot hide a field, which is why these are two
-// documents. The pure model decides a draft is savable before anything is
-// written.
+// when, and the tag ids — is a second record. A told record stays
+// editor-only, because its tags must stay hidden. A printed record is a
+// week count and no tags, and that week count is readable by whoever can
+// already read the words (MS-622). Firestore cannot hide a field, which is
+// why these are two documents, and why a printed read is a query for the
+// printed way rather than the whole collection — a told record in the same
+// collection would fail the read for anyone who is not an editor. The pure
+// model decides a draft is savable before anything is written.
 //
 // A repeating event keeps both on the series. A one-off keeps both on its
 // occurrence. A date of a series does not get a copy: it reads the series.
@@ -81,11 +85,41 @@
 
         return wordsSnap.docs
             .map(doc => Ann.joined(doc.id, doc.data(), goingOut[doc.id] || null))
-            .sort((a, b) => {
-                const order = (a.order || 0) - (b.order || 0);
-                if (order) return order;
-                return String(a.id).localeCompare(String(b.id));
-            });
+            .sort(byWrittenOrder);
+    }
+
+    function byWrittenOrder(a, b) {
+        const order = (a.order || 0) - (b.order || 0);
+        if (order) return order;
+        return String(a.id).localeCompare(String(b.id));
+    }
+
+    // The week count, for someone who can already read the words. Told
+    // records are not in this query, so their tags, dates, and time are
+    // not returned. The event tab does not call this — a member there
+    // still sees the words alone.
+    async function loadPrintedAnnouncements(db, place) {
+        const parent = parentRef(db, place);
+        let wordsSnap;
+        try {
+            wordsSnap = await parent.collection(Ann.WORDS).get();
+        } catch (e) {
+            if (e && e.code === 'permission-denied') return [];
+            throw e;
+        }
+        let goingSnap;
+        try {
+            goingSnap = await parent.collection(Ann.GOING_OUT).where('way', '==', Ann.PRINTED).get();
+        } catch (e) {
+            if (e && e.code === 'permission-denied') return [];
+            throw e;
+        }
+        const goingOut = {};
+        goingSnap.docs.forEach(doc => { goingOut[doc.id] = doc.data(); });
+        return wordsSnap.docs
+            .map(doc => Ann.joined(doc.id, doc.data(), goingOut[doc.id] || null))
+            .filter(item => item.way === Ann.PRINTED)
+            .sort(byWrittenOrder);
     }
 
     async function deleteAnnouncement(db, place, id) {
@@ -102,6 +136,7 @@
     const EventAnnouncementStore = {
         saveAnnouncement,
         loadAnnouncements,
+        loadPrintedAnnouncements,
         deleteAnnouncement,
     };
 

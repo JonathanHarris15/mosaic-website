@@ -13,6 +13,8 @@ function guideEditor() {
         elements: [],
         previousAnnouncements: [],
         previousAnnouncementsDate: '',
+        printedAnnouncementLines: [],
+        personId: null,
         hymnDetails: {},
         keyVerseText: '',
         schedule: [],
@@ -39,6 +41,7 @@ function guideEditor() {
                 }
                 
                 self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
+                self.personId = userData.personId || null;
 
                 const urlParams = new URLSearchParams(window.location.search);
                 self.date = urlParams.get('date');
@@ -48,6 +51,7 @@ function guideEditor() {
                 }
 
                 await self.loadService();
+                await self.loadPrintedAnnouncements();
                 await self.fetchHymnDetails();
                 await self.fetchSchedule();
                 await self.fetchPreviousAnnouncements();
@@ -477,6 +481,30 @@ function guideEditor() {
             this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
+        },
+
+        // Printed event announcements are read when the guide is opened.
+        // They are drawn after the typed lines and are not part of `elements`,
+        // so a save, a rebuild, and last week's suggestions leave them out.
+        announcementsOnThePage(el) {
+            const Lines = window.PrintedAnnouncementLines;
+            const typed = (el && el.items) || [];
+            if (!Lines) return typed;
+            return Lines.pageItems(typed, this.printedAnnouncementLines);
+        },
+
+        async loadPrintedAnnouncements() {
+            const Guide = window.PrintedAnnouncementGuide;
+            if (!Guide || !this.date) return;
+            try {
+                this.printedAnnouncementLines = await Guide.loadLinesForSunday(db, this.date, {
+                    level: this.permissionLevel,
+                    personId: this.personId,
+                });
+            } catch (error) {
+                console.error('Printed announcements could not be read:', error);
+                this.printedAnnouncementLines = [];
+            }
         },
 
         async save() {
