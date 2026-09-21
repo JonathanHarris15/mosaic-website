@@ -193,6 +193,15 @@ test('the size ladder reads the announcement text, not its markup', () => {
     assert.strictEqual(withTags, plain);
     // No declared box (the legacy full-page placement) means no shrinking.
     assert.strictEqual(Components.announcementsSizePt([2000, 2000], undefined), 10);
+    const broken = Components.announcementSegments({ title: 'A', content: 'short<br>note' });
+    const flat = Components.announcementSegments({ title: 'A', content: 'short note' });
+    assert.strictEqual(broken.length, 2);
+    assert.strictEqual(flat.length, 1);
+    const manyBroken = Components.announcementsSizePt(
+        Array.from({ length: 6 }, () => broken), 9);
+    const manyFlat = Components.announcementsSizePt(
+        Array.from({ length: 6 }, () => flat), 9);
+    assert.ok(manyBroken < manyFlat, 'a line break takes a line, so the type steps down');
 });
 
 test('every Mosaic page resolves with no leftover unknown component tags', () => {

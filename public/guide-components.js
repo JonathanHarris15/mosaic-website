@@ -454,32 +454,55 @@
     const ANNC_CHARS_PER_LINE = 85;   // at base size, across the booklet's column
                                       // (measured off a printed back cover)
 
+    // The body as plain lines. Rich-text tags are not characters. A <br> is a
+    // line break, including the one a printed event announcement uses so its
+    // prose is not markup.
+    function announcementPlainLines(item) {
+        const body = String((item && item.content) || '')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&[a-z]+;|&#\d+;/gi, ' ');
+        const lines = body.split('\n');
+        return lines.length ? lines : [''];
+    }
+
     // What one announcement contributes to the estimate: its bold title plus its
     // body as plain text (the body is rich text, so tags are not characters).
     function announcementLength(item) {
         const title = (item && item.title) || '';
-        const body = String((item && item.content) || '')
-            .replace(/<[^>]*>/g, '')
-            .replace(/&[a-z]+;|&#\d+;/gi, ' ');
+        const body = announcementPlainLines(item).join('');
         return (title ? title.length + 2 : 0) + body.length;
+    }
+
+    // One length per visual line. The title shares the first line. A break
+    // starts the next, so a short note with a line break is not measured as
+    // one wrapped line.
+    function announcementSegments(item) {
+        const title = (item && item.title) || '';
+        const lines = announcementPlainLines(item);
+        const first = (title ? title.length + 2 : 0) + lines[0].length;
+        return [first].concat(lines.slice(1).map(line => line.length));
     }
 
     function announcementsSizePt(lengths, fitLines) {
         const lines = Number(fitLines);
         if (!lines || !(lines > 0)) return ANNC_BASE_PT;
+        const items = (lengths || []).map(len => Array.isArray(len) ? len : [len]);
         const capacity = lines * ANNC_LINE * ANNC_BASE_PT;   // box height, in points
-        const gaps = Math.max(0, lengths.length - 1) * ANNC_GAP_EM;
+        const gaps = Math.max(0, items.length - 1) * ANNC_GAP_EM;
         for (let pt = ANNC_BASE_PT; pt > ANNC_MIN_PT; pt -= ANNC_STEP_PT) {
             const perLine = ANNC_CHARS_PER_LINE * (ANNC_BASE_PT / pt);
             let textLines = 0;
-            for (const len of lengths) textLines += Math.max(1, Math.ceil(len / perLine));
+            for (const segs of items) {
+                for (const len of segs) textLines += Math.max(1, Math.ceil(len / perLine));
+            }
             if ((textLines * ANNC_LINE + gaps) * pt <= capacity) return pt;
         }
         return ANNC_MIN_PT;
     }
 
     function renderAnnouncements(list, attrs) {
-        const pt = announcementsSizePt(list.map(announcementLength), (attrs || {})['fit-lines']);
+        const pt = announcementsSizePt(list.map(announcementSegments), (attrs || {})['fit-lines']);
         const items = list.map((it, i) => {
             const gap = i === list.length - 1 ? '0' : ANNC_GAP_EM + 'em';
             const title = (it.title || '') + (it.title ? ': ' : '');
@@ -579,7 +602,7 @@
 
     const GuideComponents = {
         esc, attrEsc, shortDate, baptismNamesClass,
-        announcementLength, announcementsSizePt,
+        announcementLength, announcementSegments, announcementsSizePt,
         V1_COMPONENTS,
         components: V1_COMPONENTS,
         makeCatalog,
