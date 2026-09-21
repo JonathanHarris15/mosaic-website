@@ -22,5 +22,28 @@
         "appId": "1:1004095249066:web:0dcbf3cbbcd0be2ff4bbdd"
       }
     }
+  },
+  "mosaic-manager-ghost": {
+    "projectId": "mosaic-manager-ghost",
+    "apiKey": "AIzaSyCTWnOKjZXa_snrk5biYQaTy27zfCDENbI",
+    "authDomain": "mosaic-manager-ghost.firebaseapp.com",
+    "storageBucket": "mosaic-manager-ghost.firebasestorage.app",
+    "mcpIssuerUrl": "https://mosaic-manager-ghost-mcp.web.app",
+    "smsReplyWebhookUrl": "https://us-central1-mosaic-manager-ghost.cloudfunctions.net/smsInbound",
+    "liveOrigin": "https://mosaic-manager-ghost.web.app",
+    "hosting": {
+      "church": "mosaic-manager-ghost",
+      "mcp": "mosaic-manager-ghost-mcp"
+    },
+    "apps": {
+      "church": {
+        "messagingSenderId": "231269270874",
+        "appId": "1:231269270874:web:ab5b97bc670a7e007c9f63"
+      },
+      "form": {
+        "messagingSenderId": "231269270874",
+        "appId": "1:231269270874:web:ab5b97bc670a7e007c9f63"
+      }
+    }
   }
 }

@@ -49,6 +49,24 @@ test('the catalog knows the church project and keeps the two web apps apart', ()
     assert.strictEqual(project.hosting.mcp, 'mosaic-hymn-mcp');
 });
 
+test('the ghost uses the one web app that was registered, and does not report Analytics', () => {
+    const project = loadProject(ROOT, 'mosaic-manager-ghost');
+    const church = webConfig(project, 'church');
+    const form = webConfig(project, 'form');
+    assert.strictEqual(project.projectId, 'mosaic-manager-ghost');
+    assert.strictEqual(church.appId, '1:231269270874:web:ab5b97bc670a7e007c9f63');
+    assert.strictEqual(form.appId, church.appId);
+    assert.strictEqual(church.measurementId, undefined);
+    assert.strictEqual(form.measurementId, undefined);
+    assert.strictEqual(project.liveOrigin, 'https://mosaic-manager-ghost.web.app');
+    assert.strictEqual(project.mcpIssuerUrl, 'https://mosaic-manager-ghost-mcp.web.app');
+    assert.strictEqual(project.hosting.church, 'mosaic-manager-ghost');
+    assert.strictEqual(project.hosting.mcp, 'mosaic-manager-ghost-mcp');
+    assert.strictEqual(
+        requireProject(['node', 'script.js', '--project', 'mosaic-manager-ghost'], {root: ROOT}),
+        'mosaic-manager-ghost');
+});
+
 test('an unknown project is refused', () => {
     assert.throws(
         () => loadProject(ROOT, 'mosaic-hymn-ghost'),
