@@ -4,6 +4,8 @@ Firebase-hosted church app. Static frontend in `public/`, Cloud Functions in `fu
 
 Do not edit `firestore.rules` or `storage.rules` unless the ticket is explicitly about those rules. Do not deploy from this box (`firebase deploy` / `npm run deploy --prefix functions`). Hosting + `publicForm` + `onAttendanceCreated` + `syncAccountRankToPerson` + `sendPrayerRequestNow` + `mcp` + `firestore:rules` ship via GitHub Actions `.github/workflows/firebase-deploy.yml` (`workflow_dispatch` or push to `main`). That workflow pins `--project mosaic-hymn-database` and refuses to ship when `public/firebase-config.js` names another project (`scripts/check-firebase-deploy.js`). Do not point it back at `.firebaserc` `default`. Standing `--only` set: `docs/ops/ms-545-functions-deploy-set.md`. Do not commit secrets. Do not set App Check to enforce in that workflow.
 
+The ghost is the one exception, and only through `.github/workflows/firebase-deploy-ghost.yml`. That job deploys `mosaic-manager-ghost` from `workflow_dispatch` (not push to `main`), uses the `FIREBASE_SERVICE_ACCOUNT_GHOST` secret, and refuses a key whose `project_id` is anything else. Agents may run `gh workflow run "Deploy Firebase ghost" --ref <branch> -f dry_run=true`. They still must not `firebase deploy` from the box, must not put the church service account in that secret, and must not aim the church workflow at the ghost. A synthetic congregation is `node scripts/seed-ghost.js --project mosaic-manager-ghost` (add `--commit` to write). It refuses `mosaic-hymn-database` even with `--i-mean-prod`.
+
 ## Cursor Cloud
 
 Cloud agents start from a checkout of this repo. Dependencies are **not** in git. There are two npm packages, each with its own lockfile:

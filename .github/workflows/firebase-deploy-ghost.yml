@@ -1,0 +1,155 @@
+name: Deploy Firebase ghost
+
+# The ghost (mosaic-manager-ghost) is the Firebase project agents may change.
+# This job is the only ship path. It is not push-to-main: a merge of the
+# church app must not publish the ghost, and this job must not publish the
+# church. Dispatch it:
+#   gh workflow run "Deploy Firebase ghost" --ref <branch> -f dry_run=true
+# Omit dry_run=true only when the plan already passed and you mean to ship.
+#
+# The whole backend goes, because the ghost is empty until it does:
+#   hosting,functions,firestore:rules,firestore:indexes,storage
+# The church workflow stays the narrower MS-545 set and stays pinned to
+# mosaic-hymn-database. Do not point this file at that project.
+#
+# App Check stays off. A ghost web origin does not collect a token, and this
+# job never writes monitor or enforce. TEXTBELT_KEY and GEMINI_KEY are created
+# as non-sending placeholders only when Secret Manager does not already have
+# them, so a later real Gemini key is kept. autoSendEnabled stays at its
+# default (off) — this job does not turn texts on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Plan only — do not ship (firebase deploy --dry-run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy-mosaic-manager-ghost
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Ghost hosting, functions, rules, indexes, storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FUNCTIONS_DISCOVERY_TIMEOUT: "120"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Load the ghost service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT_GHOST: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GHOST }}
+        run: |
+          set -euo pipefail
+          # Do not echo the JSON. GitHub masks the secret; still never print it.
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT_GHOST}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT_GHOST is empty."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "${FIREBASE_SERVICE_ACCOUNT_GHOST}" > "${RUNNER_TEMP}/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-sa.json" >> "${GITHUB_ENV}"
+          node <<'NODE'
+          const fs = require('fs');
+          const file = process.env.RUNNER_TEMP + '/firebase-sa.json';
+          let key;
+          try {
+            key = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch (err) {
+            console.error('::error::Could not parse FIREBASE_SERVICE_ACCOUNT_GHOST as JSON.');
+            process.exit(1);
+          }
+          const id = key.project_id || '';
+          const email = key.client_email || '';
+          if (id !== 'mosaic-manager-ghost' || email.includes('mosaic-hymn-database')) {
+            console.error('::error::Refusing a service account that is not mosaic-manager-ghost.');
+            process.exit(1);
+          }
+          console.log('service_account_project=mosaic-manager-ghost');
+          NODE
+
+      - name: Write the ghost Firebase config
+        run: node scripts/apply-firebase-project.js --project mosaic-manager-ghost
+
+      - name: Write functions dotenv for the ghost
+        run: |
+          set -euo pipefail
+          # Runner-only. functions/.env.* is gitignored. App Check stays off.
+          printf '%s\n' \
+            'PUBLIC_FORM_APP_CHECK_MODE=off' \
+            'MCP_ISSUER_URL=https://mosaic-manager-ghost-mcp.web.app' \
+            > functions/.env.mosaic-manager-ghost
+
+      - name: Refuse a deploy that is not the ghost
+        run: node scripts/check-firebase-deploy.js --project mosaic-manager-ghost
+
+      - name: Placeholder secrets, only when missing
+        run: |
+          set -euo pipefail
+          PROJECT_ID="mosaic-manager-ghost"
+          if [ "${PROJECT_ID}" = "mosaic-hymn-database" ]; then
+            echo "::error::Refusing the church project."
+            exit 1
+          fi
+          ensure() {
+            local name="$1"
+            local value="$2"
+            if npx firebase functions:secrets:access "${name}" --project "${PROJECT_ID}" --non-interactive >/dev/null 2>&1; then
+              echo "${name} already set; leaving it"
+              return 0
+            fi
+            # --non-interactive stores the secret and does not redeploy functions.
+            printf '%s' "${value}" | npx firebase functions:secrets:set "${name}" \
+              --project "${PROJECT_ID}" \
+              --data-file - \
+              --non-interactive
+            echo "${name} was missing; wrote a non-sending placeholder"
+          }
+          ensure TEXTBELT_KEY ghost-does-not-send
+          ensure GEMINI_KEY ghost-gemini-unset
+
+      - name: Deploy the ghost
+        run: |
+          set -euo pipefail
+          PROJECT_ID="mosaic-manager-ghost"
+          SHIPPED="$(node -e 'process.stdout.write(require("./functions/firebase-project.json").projectId)')"
+          if [ "${PROJECT_ID}" = "mosaic-hymn-database" ] || [ "${SHIPPED}" != "${PROJECT_ID}" ]; then
+            echo "::error::Refusing to deploy ${SHIPPED} as the ghost."
+            exit 1
+          fi
+          echo "project=${PROJECT_ID}"
+          echo "sha=${GITHUB_SHA}"
+          echo "targets=hosting,functions,firestore:rules,firestore:indexes,storage"
+          echo "PUBLIC_FORM_APP_CHECK_MODE=off"
+          echo "MCP_ISSUER_URL=https://mosaic-manager-ghost-mcp.web.app"
+          EXTRA=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            EXTRA+=(--dry-run)
+            echo "dry_run=true"
+          fi
+          npx firebase deploy \
+            --only hosting,functions,firestore:rules,firestore:indexes,storage \
+            --project "${PROJECT_ID}" \
+            --non-interactive \
+            "${EXTRA[@]}"

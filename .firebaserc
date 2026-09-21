@@ -1,7 +1,8 @@
 {
   "projects": {
     "default": "mosaic-hymn-database",
-    "prod": "mosaic-hymn-database"
+    "prod": "mosaic-hymn-database",
+    "ghost": "mosaic-manager-ghost"
   },
   "targets": {
     "mosaic-hymn-database": {
@@ -14,6 +15,16 @@
         ],
         "test-site": [
           "mosaic-hymn-test-shifting-1"
+        ]
+      }
+    },
+    "mosaic-manager-ghost": {
+      "hosting": {
+        "church": [
+          "mosaic-manager-ghost"
+        ],
+        "mcp": [
+          "mosaic-manager-ghost-mcp"
         ]
       }
     }
