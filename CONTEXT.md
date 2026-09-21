@@ -173,8 +173,12 @@ A first-class entity (its own `families` collection) that groups a household for
 - **A serving rule can name a Family, and it reads the directory.** "No two people from the same Family" and "…the same Marriage" are the two [[Relationship Group]] types a Role may restrict on WITHOUT an elder sharing anything: they are projected from the `families` collection, not rostered by hand. `family` and `marriage` are reserved type ids for exactly this, and a Custom Relationship Type may not use them. Marriage is the two spouses; Family is the whole household — the narrower rule exists for the Role where a couple serving together is the problem but their teenager helping is not.
 _Avoid_: Household (that is a [[Household]] — the kiosk grouping, not this kinship tree), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
 
+**Person name**:
+A Person's name is one full name. It is entered as a first name, a last name, and an optional suffix. The last name is what a [[Household]] is called after. A suffix is part of the name and is never the household's name. A person who has no last name is still a person — nothing refuses them for lacking one ([ADR 0067](docs/adr/0067-a-persons-name-is-entered-in-parts.md)).
+_Avoid_: given name, surname (say first name and last name)
+
 **Household**:
-A named collection of people who belong together at the foyer — "The Harris Household" might be a married couple, their children, and a grandmother. Distinct from [[Family]], which is the kinship tree (husband, wife, children) and is not stretched to fit whoever walked in together. Stored in its own `households` collection ([ADR 0043](docs/adr/0043-households-are-stored-as-their-own-collection.md)). A Person may belong to more than one Household (a child of separated parents).
+A named collection of people who belong together at the foyer — "The Harris Household" might be a married couple, their children, and a grandmother. The name is informed by a last name, not by a suffix. Distinct from [[Family]], which is the kinship tree (husband, wife, children) and is not stretched to fit whoever walked in together. Stored in its own `households` collection ([ADR 0043](docs/adr/0043-households-are-stored-as-their-own-collection.md)). A Person may belong to more than one Household (a child of separated parents).
 - **A Household is minted the first time somebody uses it** ([ADR 0044](docs/adr/0044-a-household-is-minted-the-first-time-it-is-used.md)). A Family still **projects** as a Household, and a Person in no Family and no stored Household still appears as a singleton, so search is never empty on day one — but a projection is the *guess*, and the moment a greeter marks people present from one or adds somebody to it, it is written down. The minted document keeps the projection's own id (`family:<id>` / `person:<id>`), which is what makes minting idempotent: **two greeters minting the same Household write one document, not two.** That is the duplicate the original design accepted and this one closes.
 - **A Kiosk may add to a Household, and nothing else.** It cannot rename one or drop anybody from one — the rules pin that, not the page. Growing a household is a greeter's job on a Sunday morning; renaming or emptying one is an editor's, afterwards. Being able to add is what stops a greeter minting a second Harris household the day a brother turns up.
 - **A Household is not a Family, and the two are allowed to disagree.** A Family that gains a child does not change the Household minted from it; the foyer catches up when somebody adds them. They are two collections precisely so neither has to lie about the other.
@@ -469,7 +473,7 @@ _Avoid_: OOS Editor, Service Guide Editor, guide builder
 ### Person
 An individual whose involvement with the church is tracked. This is the primary container for all data related to a church member or affiliate.
 - **Fields**:
-  - `name`: Full name.
+  - `name`: Full name — the one name every screen reads. When it was entered as a first name, a last name, and an optional suffix, this is those parts in that order, skipping a blank. A person entered before that, or a person with no last name, still has this field and is not refused for the missing part ([ADR 0067](docs/adr/0067-a-persons-name-is-entered-in-parts.md)).
   - `totalInvolvements`: Total count of involvement records.
   - `contact`: (Nested Object) Contact information.
     - `email`: Email address.
