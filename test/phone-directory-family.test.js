@@ -158,7 +158,6 @@ test('a search list opens only once a name has been typed and someone matches', 
 test('an anniversary for someone with no Family of their own creates that Family and seats them by sex', () => {
     const planned = Fam.planAnniversary(families, ben, '2020-01-02');
     assert.equal(planned.write, true);
-    assert.equal(planned.deletesFamily, false);
     assert.equal(planned.plan.action, 'create');
     assert.equal(planned.plan.familyId, null);
     assert.equal(planned.plan.changes.husbandId, 'ben');
@@ -201,7 +200,6 @@ test('clearing an anniversary writes it empty and does not delete the Family', (
     for (const value of ['', null, undefined]) {
         const planned = Fam.planAnniversary(families, adam, value);
         assert.equal(planned.write, true, JSON.stringify(value));
-        assert.equal(planned.deletesFamily, false);
         assert.equal(planned.plan.action, 'update');
         assert.equal(planned.plan.familyId, 'west');
         assert.deepStrictEqual(planned.plan.changes, { anniversary: null });
@@ -368,6 +366,10 @@ test('the Family line and controls are on the person page, not the list or Edit 
     assert.equal(sheet.includes('DirectoryFamily'), false);
     assert.equal(sheet.includes('planAnniversary'), false);
     assert.equal(sheet.includes('Anniversary'), false);
+    assert.match(page, /familiesSt\.error/);
+    assert.match(page, /peopleSt\.error/);
+    assert.match(page, /Couldn't load this Family\. It did not work\./);
+    assert.ok(page.indexOf("Couldn't load this Family") < page.indexOf('${DirectoryFamily}'));
     assert.match(page, /person=\$\{p\}/);
     assert.equal(page.includes('person=${editS'), false);
 
@@ -376,8 +378,9 @@ test('the Family line and controls are on the person page, not the list or Edit 
     assert.match(family, /searchListOpen/);
     assert.match(family, /aria-label="Anniversary"/);
     assert.match(family, /aria-label="Remove spouse"/);
-    assert.match(family, /aria-label="Search to set spouse"/);
-    assert.match(family, /aria-label="Search to add a child"/);
+    assert.match(family, /Search to set spouse/);
+    assert.match(family, /Search to add a child/);
+    assert.match(family, /searchBox/);
     assert.equal(family.includes('hover'), false);
     assert.equal(family.includes('absolute'), false);
     assert.ok(family.indexOf('aria-label="Anniversary"') > family.indexOf('editor.show'));
@@ -406,6 +409,8 @@ test('the security rules are not how the phone writes a Family', () => {
     const data = read('public/mobile/data.js');
     const add = fnBody(data, 'addFamily');
     const update = fnBody(data, 'updateFamily');
+    const load = fnBody(data, 'getFamilies');
+    assert.equal(load.includes('return []'), false);
     assert.match(add, /collection\("families"\)/);
     assert.match(update, /collection\("families"\)/);
     assert.equal(add.includes('httpsCallable'), false);

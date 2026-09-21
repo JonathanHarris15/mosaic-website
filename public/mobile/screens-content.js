@@ -511,6 +511,16 @@
     var field = { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14 };
     var hit = { display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, cursor: "pointer" };
     var removeBtn = { border: "none", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 0" };
+    function searchBox(aria, placeholder, queryState, hits, onChoose) {
+      return html`<div>
+        <input aria-label=${aria} placeholder=${placeholder} disabled=${busy} value=${queryState[0]} onInput=${function (e) { queryState[1](e.target.value); }} style=${field} />
+        ${Fam.searchListOpen(queryState[0], hits) ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
+          ${hits.map(function (candidate) {
+            return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { onChoose(candidate.id); }} style=${hit}>${candidate.name}</button>`;
+          })}
+        </div>` : null}
+      </div>`;
+    }
     return html`<div style=${{ marginBottom: 18 }}>
       ${line ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, color: "var(--on-surface)", margin: "0 0 8px 4px" }}>${line}</div>` : null}
       ${editor.sentence ? html`<p style=${{ margin: "0 0 8px 4px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>${editor.sentence}</p>` : null}
@@ -520,14 +530,7 @@
           ${spouseId ? html`<div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <span style=${{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }}>${nameOf(spouseId)}</span>
             <button type="button" aria-label="Remove spouse" disabled=${busy} onClick=${removeDirectorySpouse} style=${removeBtn}>Remove</button>
-          </div>` : html`<div>
-            <input aria-label="Search to set spouse" placeholder="Search to set spouse" disabled=${busy} value=${spouseQS[0]} onInput=${function (e) { spouseQS[1](e.target.value); }} style=${field} />
-            ${Fam.searchListOpen(spouseQS[0], spouseHits) ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
-              ${spouseHits.map(function (candidate) {
-                return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { chooseSpouse(candidate.id); }} style=${hit}>${candidate.name}</button>`;
-              })}
-            </div>` : null}
-          </div>`}
+          </div>` : searchBox("Search to set spouse", "Search to set spouse", spouseQS, spouseHits, chooseSpouse)}
         </div>
         <div>
           <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>Children</div>
@@ -538,12 +541,7 @@
               <button type="button" aria-label=${"Remove " + childName} disabled=${busy} onClick=${function () { removeDirectoryChild(childId); }} style=${removeBtn}>Remove</button>
             </div>`;
           })}
-          <input aria-label="Search to add a child" placeholder="Search to add a child" disabled=${busy} value=${childQS[0]} onInput=${function (e) { childQS[1](e.target.value); }} style=${field} />
-          ${Fam.searchListOpen(childQS[0], childHits) ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
-            ${childHits.map(function (candidate) {
-              return html`<button type="button" key=${candidate.id} disabled=${busy} onClick=${function () { chooseChild(candidate.id); }} style=${hit}>${candidate.name}</button>`;
-            })}
-          </div>` : null}
+          ${searchBox("Search to add a child", "Search to add a child", childQS, childHits, chooseChild)}
         </div>
         <label style=${{ display: "block" }}>
           <span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>Anniversary</span>
@@ -611,6 +609,7 @@
     var familiesS = useState(null);
     var familyBusyS = useState(false);
     var familyLockS = useState({ current: false });
+    var familyFailed = !!(familiesSt.error || peopleSt.error);
     var families = familiesS[0] || familiesSt.data || [];
     var directoryPeople = peopleSt.data || [];
     function onFamily(planned) {
@@ -717,7 +716,9 @@
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r[1]}</span>
               </div>`; })}
             </div>` : null}
-          ${(familiesSt.loading || peopleSt.loading) ? null : html`<${DirectoryFamily} person=${p} user=${props.user} editMode=${editOn} families=${families} people=${directoryPeople} busy=${familyBusyS[0]} onWrite=${onFamily} />`}
+          ${familyFailed ? html`<p style=${{ margin: "0 0 18px 4px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>Couldn't load this Family. It did not work.</p>`
+            : (familiesSt.loading || peopleSt.loading) ? null
+            : html`<${DirectoryFamily} person=${p} user=${props.user} editMode=${editOn} families=${families} people=${directoryPeople} busy=${familyBusyS[0]} onWrite=${onFamily} />`}
           ${mayEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
           ${editOn ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             <${Button} variant="secondary" size="md" style=${{ width: "100%" }} onClick=${openInvolvement}>Involvement<//>

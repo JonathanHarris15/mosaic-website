@@ -29,7 +29,7 @@
     }
 
     function refusedSex() {
-        return { write: false, sentence: SEX_UNSET, plan: null, deletesFamily: false };
+        return { write: false, sentence: SEX_UNSET, plan: null };
     }
 
     function fromPlanner(plan) {
@@ -37,8 +37,11 @@
             write: !!plan.valid,
             sentence: plan.valid ? null : ((plan.errors && plan.errors[0]) || null),
             plan: plan,
-            deletesFamily: false,
         };
+    }
+
+    function ready(plan) {
+        return { write: true, sentence: null, plan: plan };
     }
 
     // A spouse or child change. `removing` asks the removal planner. Until sex
@@ -67,33 +70,23 @@
         if (!mine) {
             const changes = { husbandId: null, wifeId: null, childIds: [], anniversary: anniversary };
             changes[seatFor(person)] = person.id;
-            return {
-                write: true,
-                sentence: null,
-                deletesFamily: false,
-                plan: {
-                    valid: true,
-                    errors: [],
-                    collection: 'families',
-                    action: 'create',
-                    familyId: null,
-                    changes: changes,
-                },
-            };
-        }
-        return {
-            write: true,
-            sentence: null,
-            deletesFamily: false,
-            plan: {
+            return ready({
                 valid: true,
                 errors: [],
                 collection: 'families',
-                action: 'update',
-                familyId: mine.id,
-                changes: { anniversary: anniversary },
-            },
-        };
+                action: 'create',
+                familyId: null,
+                changes: changes,
+            });
+        }
+        return ready({
+            valid: true,
+            errors: [],
+            collection: 'families',
+            action: 'update',
+            familyId: mine.id,
+            changes: { anniversary: anniversary },
+        });
     }
 
     // What a create writes. The same base the computer directory stores, so a
@@ -149,20 +142,25 @@
         return null;
     }
 
+    function firstMatches(people, person, query, accept) {
+        const out = [];
+        (people || []).forEach(function (candidate) {
+            if (out.length >= SEARCH_LIMIT) return;
+            if (!candidate || !person || candidate.id === person.id) return;
+            if (!nameMatches(candidate, query)) return;
+            if (!accept(candidate)) return;
+            out.push(candidate);
+        });
+        return out;
+    }
+
     function spouseSearch(families, people, person, query) {
         const need = oppositeSex(person);
         if (!person || !need) return [];
         const core = familyCore();
-        const out = [];
-        (people || []).forEach(function (candidate) {
-            if (out.length >= SEARCH_LIMIT) return;
-            if (!candidate || candidate.id === person.id) return;
-            if (candidate.sex !== need) return;
-            if (!nameMatches(candidate, query)) return;
-            if (core.familyOfSpouse(families, candidate.id)) return;
-            out.push(candidate);
+        return firstMatches(people, person, query, function (candidate) {
+            return candidate.sex === need && !core.familyOfSpouse(families, candidate.id);
         });
-        return out;
     }
 
     function childSearch(families, people, person, query) {
@@ -171,17 +169,11 @@
         const mine = core.familyOfSpouse(families, person.id);
         const spouseId = core.spouseOf(mine, person.id);
         const existing = mine ? (mine.childIds || []) : [];
-        const out = [];
-        (people || []).forEach(function (candidate) {
-            if (out.length >= SEARCH_LIMIT) return;
-            if (!candidate || candidate.id === person.id) return;
-            if (candidate.id === spouseId) return;
-            if (existing.indexOf(candidate.id) !== -1) return;
-            if (core.familyOfChild(families, candidate.id)) return;
-            if (!nameMatches(candidate, query)) return;
-            out.push(candidate);
+        return firstMatches(people, person, query, function (candidate) {
+            return candidate.id !== spouseId
+                && existing.indexOf(candidate.id) === -1
+                && !core.familyOfChild(families, candidate.id);
         });
-        return out;
     }
 
     // The list stays closed until a name is typed and somebody matches, so an
