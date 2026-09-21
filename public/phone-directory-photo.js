@@ -58,11 +58,10 @@
         const policy = photo();
         const personId = person && person.id;
         if (!policy || !personId) return false;
-        const level = access()
-            ? access().permissionLevelOf(user)
-            : (user && (user.permissionLevel || user.role));
+        const gate = access();
+        if (!gate) return false;
         const myPersonId = user && user.personId;
-        return policy.canManagePhoto(level, myPersonId, personId);
+        return policy.canManagePhoto(gate.permissionLevelOf(user), myPersonId, personId);
     }
 
     function refused(error) {
@@ -102,10 +101,6 @@
     // shows the same circle the computer card will show.
     function framingForNewPhoto() {
         return Object.assign({}, photo().DEFAULT_CROP);
-    }
-
-    function framingKept(person) {
-        return photo().normalizeCrop(person && person.photoCrop);
     }
 
     function photoAfterUpload(person, saved) {
@@ -153,7 +148,6 @@
         planChosenFile,
         planRemoval,
         framingForNewPhoto,
-        framingKept,
         photoAfterUpload,
         photoAfterClear,
         uploadFailureMessage,

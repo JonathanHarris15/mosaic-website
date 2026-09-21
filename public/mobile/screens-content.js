@@ -560,12 +560,12 @@
     var person = props.person;
     var offered = Plan.offerControls(props.user, props.editMode);
     var buttons = Plan.controls(person);
+    var chooseLabel = buttons.add || buttons.replace;
     var busy = !!props.busy;
     return html`<${M.Fragment}>
       <${Avatar} name=${person.name} photoUrl=${person.photoUrl} photoCrop=${person.photoCrop} size=${82} />
       ${offered ? html`<div style=${{ display: "flex", gap: 8, marginTop: 12, justifyContent: "center", flexWrap: "wrap" }}>
-        ${buttons.add ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${buttons.add}<//>` : null}
-        ${buttons.replace ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${buttons.replace}<//>` : null}
+        ${chooseLabel ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${chooseLabel}<//>` : null}
         ${buttons.remove ? html`<${Button} type="button" variant="danger-outline" size="sm" disabled=${busy} onClick=${props.onRemove}>${buttons.remove}<//>` : null}
       </div>
       <input type="file" id="phone-directory-photo-input" accept=${Plan.ACCEPT} onChange=${props.onFile} style=${{ display: "none" }} />` : null}

@@ -135,8 +135,11 @@ test('a new photo is the centred framing the upload already stores, not the old 
     assert.deepStrictEqual(Photo.DEFAULT_CROP, { x: 50, y: 50, zoom: 1 });
 });
 
-test('a photo that was not replaced keeps the framing it already had', () => {
-    assert.deepStrictEqual(Plan.framingKept(framed), Photo.normalizeCrop(framed.photoCrop));
+test('a refused file does not invent a new framing, so the photo keeps the one it had', () => {
+    const refused = Plan.planChosenFile(editor, framed, true, { type: 'image/gif', size: 10 });
+    assert.equal(refused.write, false);
+    assert.equal(refused.framing, null);
+    assert.deepStrictEqual(framed.photoCrop, { x: 12, y: 80, zoom: 2 });
 });
 
 test('the page after an upload shows the new picture, recentred', () => {
