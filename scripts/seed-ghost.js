@@ -14,6 +14,7 @@
  * Logins (Email/Password), after --commit:
  *   ada.cole@example.test   elder
  *   ben.cole@example.test   member
+ *   sam.reed@example.test   super_admin
  *   password: ghost-login-1
  */
 
@@ -66,6 +67,17 @@ const PEOPLE = [
         stage: 'visitor',
         tags: ['Visitor'],
     },
+    {
+        id: 'ghost-sam-reed',
+        name: 'Sam Reed',
+        sex: 'male',
+        kid: false,
+        phone: '+15555550105',
+        email: 'sam.reed@example.test',
+        stage: 'member',
+        tags: ['Member'],
+        permissionLevel: 'super_admin',
+    },
 ];
 
 function assertGhostTarget(projectId) {
@@ -112,7 +124,7 @@ function congregation(now, userIds) {
         } : null,
     }));
     const householdMembers = PEOPLE
-        .filter(row => row.id !== 'ghost-drew-lane')
+        .filter(row => row.id.endsWith('-cole'))
         .map(row => ({personId: row.id, kid: row.kid, name: row.name}));
     return {
         people,
