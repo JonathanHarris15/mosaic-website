@@ -195,7 +195,7 @@ test('every read that decides a write asks the server', () => {
     const sites = [
         ['profile.js', 3],                 // user↔person link: old + new person, and the user doc
         ['service-builder.js', 3],         // clearing involvements, a baptism date, and the prayer history a new lastPastoralPrayerDate is computed from
-        ['service-calendar.js', 2],        // clearing involvements, and re-deriving lastPastoralPrayerDate
+        ['service-calendar.js', 3],        // clearing involvements, the history the person picker decides from, and re-deriving lastPastoralPrayerDate after a schedule shift
         ['shepherding-profile.js', 3],     // deleting notes, activity, and status/tag history
         ['shepherding-relationships.js', 1], // re-projecting a shared type
         ['shepherding-tags.js', 4],        // merge carriers + their activity, and both hide-people sweeps

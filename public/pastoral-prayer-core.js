@@ -100,6 +100,171 @@
         return date ? `Last: ${date}` : 'Never prayed for';
     }
 
+    // The two pastoral-prayer subjects on a Sunday. Empty slots are absent.
+    // The same person in both slots is one subject.
+    function subjectIds(sunday) {
+        const ids = [];
+        ['prayerMaleId', 'prayerFemaleId'].forEach(key => {
+            const id = sunday && sunday[key];
+            if (typeof id === 'string' && id && ids.indexOf(id) === -1) ids.push(id);
+        });
+        return ids;
+    }
+
+    function storedDates(historyByPerson, personId) {
+        const raw = historyByPerson && historyByPerson[personId];
+        if (!Array.isArray(raw)) return [];
+        return raw.map(normalizeDate).filter(Boolean);
+    }
+
+    // Who gains a history doc, who loses one, and what each cached date becomes,
+    // for the Sunday a save is about to write (`savedSunday`) compared with the
+    // Sunday that was on the page when editing started (`loadedSunday`).
+    //
+    // `historyByPerson` maps a person id to the service dates already stored.
+    // The doc id is that date, so a date in the list means the doc exists and
+    // must be left alone — an existing record keeps the time it was first
+    // written. A subject on the saved Sunday whose date is missing still gets
+    // the doc, even when their id did not change. A subject who was on the
+    // loaded Sunday and is not on the saved one loses that date.
+    //
+    // The cached date is the newest stored date after that add or remove.
+    // A Sunday still ahead counts.
+    function decidePastoralPrayerSave(loadedSunday, savedSunday, historyByPerson) {
+        const serviceDate = historyDocId(savedSunday && savedSunday.date);
+        if (!serviceDate) return { records: [], caches: [] };
+
+        const loaded = subjectIds(loadedSunday);
+        const saved = subjectIds(savedSunday);
+        const people = loaded.concat(saved).filter((id, index, all) => all.indexOf(id) === index);
+        people.sort();
+
+        const records = [];
+        const caches = [];
+        people.forEach(personId => {
+            const dates = storedDates(historyByPerson, personId);
+            const hasSunday = dates.indexOf(serviceDate) !== -1;
+            const isSubject = saved.indexOf(personId) !== -1;
+            const wasSubject = loaded.indexOf(personId) !== -1;
+            let change = null;
+            if (isSubject && !hasSunday) change = 'add';
+            else if (!isSubject && wasSubject) change = 'remove';
+            if (!change) return;
+            records.push({ personId: personId, serviceDate: serviceDate, change: change });
+            caches.push({
+                personId: personId,
+                lastPastoralPrayerDate: nextLastPrayerDate(dates, serviceDate, isSubject),
+            });
+        });
+        return { records: records, caches: caches };
+    }
+
+    // Person ids the history read still has to cover before the save can decide.
+    function unreadSubjectIds(loadedSunday, savedSunday, historyByPerson) {
+        return subjectIds(loadedSunday).concat(subjectIds(savedSunday))
+            .filter((id, index, all) => all.indexOf(id) === index)
+            .filter(id => !historyByPerson || !Object.prototype.hasOwnProperty.call(historyByPerson, id));
+    }
+
+    // Read stored history, then take the Sunday as it stands. A subject chosen
+    // while that read was in flight is on the Sunday returned here, and their
+    // history has been read, so the Service write and the history write name
+    // the same people. A subject chosen during the last read is not taken —
+    // the page still has them as unsaved, and the next save writes them.
+    //
+    // `loadLive` returns `{ prayerMaleId, prayerFemaleId }` for the Sunday on
+    // the page right now. `readHistory(personIds)` resolves to
+    // `{ [personId]: serviceDate[] }`.
+    async function takeSundayAfterHistoryRead(loadedSunday, loadLive, readHistory) {
+        const stored = {};
+        let chosen = null;
+        for (let pass = 0; pass < 4; pass++) {
+            const live = loadLive();
+            const missing = unreadSubjectIds(loadedSunday, live, stored);
+            if (missing.length === 0) {
+                chosen = live;
+                break;
+            }
+            Object.assign(stored, await readHistory(missing));
+        }
+        if (!chosen) {
+            chosen = loadLive();
+            const missing = unreadSubjectIds(loadedSunday, chosen, stored);
+            if (missing.length) Object.assign(stored, await readHistory(missing));
+        }
+        const saved = chosen || {};
+        return {
+            savedSunday: {
+                date: (loadedSunday && loadedSunday.date) || saved.date || null,
+                prayerMaleId: saved.prayerMaleId || null,
+                prayerFemaleId: saved.prayerFemaleId || null,
+            },
+            historyByPerson: stored,
+        };
+    }
+
+    // Put the decision into one batch: history doc and cached date together.
+    // `people` is the people collection. `createdAt` is the server timestamp
+    // for a new history doc; an existing doc is not rewritten, so the time it
+    // was first written stays.
+    function writePastoralPrayerDecision(batch, people, decision, createdAt) {
+        (decision.records || []).forEach(record => {
+            const ref = people.doc(record.personId)
+                .collection(HISTORY_COLLECTION)
+                .doc(historyDocId(record.serviceDate));
+            if (record.change === 'add') {
+                const data = historyRecord(record.serviceDate);
+                if (createdAt !== undefined) data.createdAt = createdAt;
+                batch.set(ref, data);
+            } else if (record.change === 'remove') {
+                batch.delete(ref);
+            }
+        });
+        (decision.caches || []).forEach(cache => {
+            batch.update(people.doc(cache.personId), {
+                lastPastoralPrayerDate: cache.lastPastoralPrayerDate,
+            });
+        });
+    }
+
+    // History docs a repair should create from Service slots, and the cached
+    // date each of those people should then hold. A slot that already has a
+    // history doc is not a create. A Sunday still ahead is included. The
+    // cached date is the newest date once every create for that person is in.
+    function planPastoralPrayerRepair(services, historyByPerson) {
+        const adds = [];
+        (services || []).forEach(service => {
+            const sunday = {
+                date: service.date,
+                prayerMaleId: service.prayerMaleId || null,
+                prayerFemaleId: service.prayerFemaleId || null,
+            };
+            const names = {};
+            if (sunday.prayerMaleId) names[sunday.prayerMaleId] = service.prayerMaleName || '';
+            if (sunday.prayerFemaleId) names[sunday.prayerFemaleId] = service.prayerFemaleName || '';
+            const decision = decidePastoralPrayerSave(sunday, sunday, historyByPerson);
+            decision.records.forEach(record => {
+                if (record.change !== 'add') return;
+                adds.push({
+                    personId: record.personId,
+                    name: names[record.personId] || '',
+                    serviceDate: record.serviceDate,
+                });
+            });
+        });
+
+        const addedDates = {};
+        adds.forEach(add => {
+            (addedDates[add.personId] = addedDates[add.personId] || []).push(add.serviceDate);
+        });
+        const caches = Object.keys(addedDates).sort().map(personId => ({
+            personId: personId,
+            lastPastoralPrayerDate: latestDate(
+                storedDates(historyByPerson, personId).concat(addedDates[personId])),
+        }));
+        return { adds: adds, caches: caches };
+    }
+
     const PastoralPrayerCore = {
         HISTORY_COLLECTION,
         LEGACY_NEVER,
@@ -110,6 +275,10 @@
         latestDate,
         nextLastPrayerDate,
         lastPrayedLabel,
+        decidePastoralPrayerSave,
+        takeSundayAfterHistoryRead,
+        writePastoralPrayerDecision,
+        planPastoralPrayerRepair,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
