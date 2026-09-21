@@ -113,19 +113,16 @@
   }
 
   // ── Membership Directory (ADR-0012) ──────────────────────
-  // The congregation-facing directory: two tabs — Members (carries the Member
-  // tag) and Non-members (active People without it). This surface browses as a
-  // plain viewer (editors manage People in the shepherd screens), so Inactive
-  // People are hidden here.
-  // The stage is editors-only reading: a plain member is told Member or
-  // Non-member and nothing more. Same rule as the web directory, same function.
-  function membershipStageLabel(p, canEdit) {
-    return window.ShepherdingCore.directoryMembershipLabel(p && p.membership, canEdit);
-  }
+  // Two tabs — Members (carries the Member tag) and Non-members (everyone else
+  // the viewer may see). An editor sees Inactive people on Non-members, labeled
+  // Inactive, even with Edit Mode off. A member does not see them. The stage
+  // slider, the Inactive control, and tag editing are Edit Mode only, and they
+  // call the phone plan then the same writes the computer directory uses.
   // Which shepherding-tag ids are hidden from this viewer, keyed for O(1) lookup.
   // hiddenFromOthers → the tag chip itself is hidden; hidePeople → the whole
-  // person is suppressed. Both are lifted only for admins (elder/super_admin),
-  // mirroring the desktop directory's isAdmin gate.
+  // person is suppressed. Both lift for someone who reads as an elder: an
+  // elder, a super admin, or a Pastoral Assistant. The same lift as the
+  // computer directory.
   function tagVisibility(tagMeta) {
     var hidden = {}, hidePeople = {};
     (tagMeta || []).forEach(function (t) {
@@ -155,6 +152,83 @@
   function emptyAddDraft() {
     return { name: "", email: "", phone: "", address: "", birthday: "", sex: "" };
   }
+  function saveDirectoryTrack(person, user, action) {
+    var Track = window.PhoneDirectoryTrack;
+    var plan = Track.planTrackMove(person.membership, action);
+    if (!plan.write) return Promise.resolve(null);
+    return data.saveDirectoryMembership(Track.directoryTrackWrite(person, user, plan.next)).then(function () {
+      return Track.personAfterTrackMove(person, plan.next);
+    });
+  }
+  function saveDirectoryTag(person, vocabulary, action) {
+    var Track = window.PhoneDirectoryTrack;
+    var plan = Track.planTagChange(person.tags, vocabulary, action);
+    if (!plan.write) {
+      if (plan.reason === "projected") window.alert(Track.TAG_LOCKED);
+      return Promise.resolve(null);
+    }
+    return data.saveDirectoryTags(person.id, plan).then(function () {
+      return { person: Track.personAfterTagWrite(person, plan.tags), create: plan.create };
+    });
+  }
+  function DirectoryTrack(props) {
+    var Track = window.PhoneDirectoryTrack;
+    var membership = props.person.membership || {};
+    var inactive = !!membership.inactive;
+    var index = Track.sliderIndex(membership);
+    var busy = !!props.busy;
+    return html`<div style=${{ marginTop: 10 }}>
+      <input type="range" min="0" max=${Track.STAGES.length - 1} step="1" value=${String(index)}
+        disabled=${inactive || busy}
+        aria-label="Membership Track"
+        onChange=${function (e) {
+          props.onTrack({ kind: "stage", stage: Track.STAGES[Number(e.target.value)] });
+        }}
+        style=${{ width: "100%", accentColor: "var(--primary)", opacity: inactive ? 0.45 : 1 }} />
+      <div style=${{ display: "flex", justifyContent: "space-between", gap: 2, marginTop: 4 }}>
+        ${Track.STAGES.map(function (stage, i) {
+          var on = !inactive && Track.STAGES.indexOf(membership.stage) === i;
+          return html`<span key=${stage} style=${{ flex: 1, textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 8.5, lineHeight: 1.15, color: on ? "var(--primary)" : "var(--on-surface-variant)", fontWeight: on ? 700 : 400 }}>${Track.STAGE_LABEL[stage]}</span>`;
+        })}
+      </div>
+      <button type="button" disabled=${busy} onClick=${function () { props.onTrack({ kind: "inactive", inactive: !inactive }); }}
+        style=${{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, border: "1px solid " + (inactive ? "var(--primary)" : "var(--outline-variant)"), background: inactive ? "var(--primary)" : "transparent", color: inactive ? "var(--on-primary)" : "var(--on-surface-variant)" }}>
+        ${inactive ? "Inactive — tap to reactivate" : "Mark inactive"}
+      </button>
+    </div>`;
+  }
+  function DirectoryTags(props) {
+    var Track = window.PhoneDirectoryTrack;
+    var draftS = useState("");
+    var busy = !!props.busy;
+    var tags = (props.person.tags || []).filter(function (tag) {
+      return Track.tagVisible(tag, props.user, props.visibility);
+    });
+    function add(event) {
+      event.preventDefault();
+      if (busy) return;
+      var name = draftS[0];
+      draftS[1]("");
+      props.onTag({ kind: "add", name: name });
+    }
+    return html`<div style=${{ marginTop: 10 }}>
+      <div style=${{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        ${tags.map(function (tag) {
+          var locked = Track.tagLocked(tag);
+          return html`<span key=${tag} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: locked ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: locked ? "var(--primary-fixed)" : "var(--primary)", color: locked ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
+            ${locked ? html`${Ic("lock", 11)}` : null}${tag}
+            ${locked ? null : html`<button type="button" aria-label=${"Remove " + tag} disabled=${busy} onClick=${function () { props.onTag({ kind: "remove", name: tag }); }} style=${{ border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", display: "flex", padding: 0 }}>${Ic("x", 12)}</button>`}
+          </span>`;
+        })}
+      </div>
+      <form onSubmit=${add} style=${{ display: "flex", gap: 8, marginTop: 8 }}>
+        <input aria-label="Add a tag" value=${draftS[0]} disabled=${busy} placeholder="Add a tag" onInput=${function (e) { draftS[1](e.target.value); }}
+          style=${{ flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14 }} />
+        <button type="submit" disabled=${busy} style=${{ padding: "8px 12px", borderRadius: "var(--radius-full)", border: "none", background: "var(--primary)", color: "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add tag</button>
+      </form>
+    </div>`;
+  }
+
   function SexSelect(props) {
     return html`<label class="m-field">
       <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>${props.label || "Sex"}</span>
@@ -174,9 +248,16 @@
     // fail, and a failure logged on a screen that already knows the answer is
     // noise. Re-runs when we learn who is looking.
     var Edit = window.PhoneDirectoryEdit;
+    var Track = window.PhoneDirectoryTrack;
     var mayEdit = Edit.mayOfferEditMode(props.user);
     var modeS = useState(Edit.isOn());
-    useEffect(function () { return Edit.subscribe(function (on) { modeS[1](on); }); }, []);
+    var chosenS = useState([]);
+    useEffect(function () {
+      return Edit.subscribe(function (on) {
+        modeS[1](on);
+        if (!on) chosenS[1]([]);
+      });
+    }, []);
     var editOn = mayEdit && modeS[0];
     var mayOpen = mayOpenDirectory(props.user);
     var reloadS = useState(0);
@@ -184,9 +265,12 @@
     var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
     var addOpenS = useState(false), addDraftS = useState(emptyAddDraft()), addingS = useState(false);
-    var people = st.data || [];
+    var extraTagsS = useState([]);
+    var overrideS = useState({});
+    var savingS = useState(null);
+    var people = (st.data || []).map(function (p) { return overrideS[0][p.id] || p; });
+    var vocabulary = (tagsSt.data || []).concat(extraTagsS[0]);
     var vis = tagVisibility(tagsSt.data);
-    var isAdmin = isDirectoryAdmin(props.user);
     var tabs = [["members", "Members"], ["non_members", "Non-members"]];
     var q = qS[0], tab = fS[0];
     function setAdd(key, value) {
@@ -219,12 +303,56 @@
         window.alert(Edit.ADD_FAILED);
       });
     }
+    function toggleChosen(tagId) {
+      var chosen = chosenS[0];
+      var on = chosen.indexOf(tagId) !== -1;
+      chosenS[1](on ? chosen.filter(function (id) { return id !== tagId; }) : chosen.concat([tagId]));
+    }
+    function rememberPerson(next) {
+      if (!next) return;
+      var patch = Object.assign({}, overrideS[0]);
+      patch[next.id] = next;
+      overrideS[1](patch);
+    }
+    function rememberTag(created) {
+      if (!created) return;
+      extraTagsS[1](extraTagsS[0].concat([Object.assign({ hiddenFromOthers: false, hidePeople: false }, created)]));
+    }
+    function onTrack(p, action) {
+      if (savingS[0]) return;
+      savingS[1](p.id);
+      saveDirectoryTrack(p, props.user, action).then(function (next) {
+        rememberPerson(next);
+        savingS[1](null);
+      }).catch(function () {
+        savingS[1](null);
+        window.alert(Track.TRACK_FAILED);
+      });
+    }
+    function onTag(p, action) {
+      if (savingS[0]) return;
+      savingS[1](p.id);
+      saveDirectoryTag(p, vocabulary, action).then(function (result) {
+        savingS[1](null);
+        if (!result) return;
+        rememberPerson(result.person);
+        rememberTag(result.create);
+      }).catch(function () {
+        savingS[1](null);
+        window.alert(Track.TAG_FAILED);
+      });
+    }
+    var offered = editOn ? Track.tagsOffered(vocabulary, props.user) : [];
+    var chosen = Track.chosenTagsWhen(editOn, chosenS[0]);
     var results = people.filter(function (p) {
-      var mq = !q || data.lc(p.name).indexOf(data.lc(q)) >= 0;
-      if (!mq || !window.ShepherdingCore.personMatchesDirectoryTab(p, tab, false)) return false;
-      // Respect shepherding visibility: hidden people are suppressed for non-admins.
-      if (!isAdmin && (p.shepherdingHidden || (p.tags || []).some(function (t) { return vis.hidePeople[t]; }))) return false;
-      return true;
+      return Track.visibleInDirectory(p, {
+        tab: tab,
+        search: q,
+        chosenTags: chosen,
+        editMode: editOn,
+        user: props.user,
+        visibility: vis,
+      });
     });
     return html`
       <${Screen}>
@@ -240,6 +368,11 @@
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
+          ${offered.length ? html`<div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
+            ${offered.map(function (tag) {
+              return html`<${Chip} key=${tag.id} active=${chosen.indexOf(tag.id) !== -1} onClick=${function () { toggleChosen(tag.id); }}>${tag.name}<//>`;
+            })}
+          </div>` : null}
           ${props.user === undefined ? html`<${Loading} label="Loading people…" />`
             : props.user === null ? html`<${ErrorNote}>The directory is for people with an account. Sign in to see it.<//>`
             : !mayOpen ? html`<${ErrorNote}>The directory isn't available on your account yet. Ask an admin to connect you.<//>`
@@ -249,17 +382,23 @@
               <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
                 ${results.map(function (p, i) {
                   var s = statusTone(p.shepherding);
-                  return html`<button key=${p.id} onClick=${function () { props.nav("personDetail", { person: p }); }} style=${{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "12px 14px", cursor: "pointer", border: "none", background: "transparent", borderBottom: i === results.length - 1 ? "none" : "1px solid var(--outline-variant)" }}>
-                    <div style=${{ position: "relative", flexShrink: 0 }}>
-                      <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${44} />
-                      ${s ? html`<span style=${{ position: "absolute", right: -1, bottom: -1, width: 13, height: 13, borderRadius: "50%", background: s.color, border: "2px solid var(--surface-container-lowest)" }}></span>` : null}
-                    </div>
-                    <div style=${{ flex: 1, minWidth: 0 }}>
-                      <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.name}</div>
-                      ${p.role ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.role}</div>` : null}
-                    </div>
-                    <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
-                  </button>`;
+                  var label = Track.directoryLabel(p, props.user);
+                  return html`<div key=${p.id} style=${{ padding: "12px 14px", borderBottom: i === results.length - 1 ? "none" : "1px solid var(--outline-variant)" }}>
+                    <button type="button" onClick=${function () { props.nav("personDetail", { person: p }); }} style=${{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", border: "none", background: "transparent", padding: 0 }}>
+                      <div style=${{ position: "relative", flexShrink: 0 }}>
+                        <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${44} />
+                        ${s ? html`<span style=${{ position: "absolute", right: -1, bottom: -1, width: 13, height: 13, borderRadius: "50%", background: s.color, border: "2px solid var(--surface-container-lowest)" }}></span>` : null}
+                      </div>
+                      <div style=${{ flex: 1, minWidth: 0 }}>
+                        <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.name}</div>
+                        ${p.role ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.role}</div>` : null}
+                        <div style=${{ marginTop: 4 }}><${Badge} tone=${label === "Inactive" ? "secondary" : "primary"}>${label}<//></div>
+                      </div>
+                      <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
+                    </button>
+                    ${editOn ? html`<${DirectoryTrack} person=${p} busy=${savingS[0] === p.id} onTrack=${function (action) { onTrack(p, action); }} />` : null}
+                    ${editOn ? html`<${DirectoryTags} key=${p.id} person=${p} user=${props.user} visibility=${vis} busy=${savingS[0] === p.id} onTag=${function (action) { onTag(p, action); }} />` : null}
+                  </div>`;
                 })}
                 ${results.length === 0 ? html`<${Empty}>No people match.<//>` : null}
               </div>
@@ -289,6 +428,7 @@
   // that writes the same contact fields as the shepherd person file.
   function PersonDetailScreen(props) {
     var Edit = window.PhoneDirectoryEdit;
+    var Track = window.PhoneDirectoryTrack;
     var mayEdit = Edit.mayOfferEditMode(props.user);
     var editFlagS = useState(Edit.isOn());
     useEffect(function () { return Edit.subscribe(function (on) { editFlagS[1](on); }); }, []);
@@ -296,9 +436,38 @@
     var pS = useState((props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 });
     var p = pS[0];
     var tagsSt = useAsync(data.getShepherdingTags, []);
+    var extraTagsS = useState([]);
+    var savingTrackS = useState(false);
     var vis = tagVisibility(tagsSt.data);
     var isAdmin = isDirectoryAdmin(props.user);
     var tagsReady = !tagsSt.loading;
+    var vocabulary = (tagsSt.data || []).concat(extraTagsS[0]);
+    function onTrack(action) {
+      if (savingTrackS[0]) return;
+      savingTrackS[1](true);
+      saveDirectoryTrack(p, props.user, action).then(function (next) {
+        if (next) pS[1](next);
+        savingTrackS[1](false);
+      }).catch(function () {
+        savingTrackS[1](false);
+        window.alert(Track.TRACK_FAILED);
+      });
+    }
+    function onTag(action) {
+      if (savingTrackS[0]) return;
+      savingTrackS[1](true);
+      saveDirectoryTag(p, vocabulary, action).then(function (result) {
+        savingTrackS[1](false);
+        if (!result) return;
+        pS[1](result.person);
+        if (result.create) {
+          extraTagsS[1](extraTagsS[0].concat([Object.assign({ hiddenFromOthers: false, hidePeople: false }, result.create)]));
+        }
+      }).catch(function () {
+        savingTrackS[1](false);
+        window.alert(Track.TAG_FAILED);
+      });
+    }
     var contact = [["mail", p.email], ["phone", p.phone]].filter(function (r) { return r[1]; });
     // Membership tags always resolve via the Track; other tags obey visibility.
     var chipTags = (p.tags || []).filter(function (t) {
@@ -372,9 +541,13 @@
             <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              <${Badge} tone=${(mayEdit && p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p, mayEdit)}<//>
-              ${chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
+              <${Badge} tone=${Track.directoryLabel(p, props.user) === "Inactive" ? "secondary" : "primary"}>${Track.directoryLabel(p, props.user)}<//>
+              ${editOn ? null : chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
             </div>
+            ${editOn ? html`<div style=${{ width: "100%", marginTop: 8 }}>
+              <${DirectoryTrack} person=${p} busy=${savingTrackS[0]} onTrack=${onTrack} />
+              <${DirectoryTags} person=${p} user=${props.user} visibility=${vis} busy=${savingTrackS[0]} onTag=${onTag} />
+            </div>` : null}
           </div>
           ${contact.length ? html`
             <${Overline} style=${{ margin: "0 0 8px 4px" }}>Contact<//>
