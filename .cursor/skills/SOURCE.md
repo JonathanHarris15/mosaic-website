@@ -1,11 +1,11 @@
 # Provenance
 
-Asked source: `https://github.com/JonathanHarris15/claude-config` `skills/` tree.
+Upstream: `https://github.com/JonathanHarris15/claude-config` `skills/` tree.
 
-This Cloud Agent’s GitHub App token can see **mosaic-website only**. `claude-config` is private (GitHub 404 / “repository not found”). The folders here are therefore the skills **this repo already names**, written from:
+**Clone succeeded** (repo is public). This directory is that tree, overlaid into `.cursor/skills/`, with only these Mosaic / Cursor Cloud adaptations:
 
-- `CLAUDE.md` board spine and integrity doors
-- Live MS PRDs (MS-247, MS-543, MS-594, MS-601) and Maintain comments
-- The user’s adaptations (Cursor Cloud + Atlassian MCP; Grok Bot operator note)
+- [plan-ticket/JIRA.md](plan-ticket/JIRA.md) and [plan-ticket/SKILL.md](plan-ticket/SKILL.md) load Jira via **Atlassian MCP** on Cursor Cloud Agents, not Claude `ToolSearch` or `~/.claude`.
+- [plan-ticket/SKILL.md](plan-ticket/SKILL.md) and [create-epic/SKILL.md](create-epic/SKILL.md) carry the operator note: Cursor Agents run them; Grok Bot answers routine questions for Jonathan and escalates only crucial decisions.
+- `implement`, `to-prd`, and `to-issues` point at that same JIRA.md / Atlassian MCP connector.
 
-They are not a byte copy of the private tree. Overlay exact folders if that repo is added to the Cursor GitHub App. Grok Bot’s skill library stays out of scope.
+Mosaic `CLAUDE.md` still wins where it disagrees with [plan-ticket/BOARD.md](plan-ticket/BOARD.md) (`On Deck` is the front of the queue here, not a parking space). Grok Bot’s skill library stays out of scope.

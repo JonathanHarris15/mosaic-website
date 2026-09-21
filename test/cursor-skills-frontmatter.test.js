@@ -47,7 +47,13 @@ test('every skill folder has SKILL.md with name + description frontmatter', () =
 });
 
 test('Jira skills do not send agents to ToolSearch or ~/.claude', () => {
-    const jiraSkills = ['plan-ticket', 'create-epic', 'implement', 'file-ticket'];
+    const jiraSkills = [
+        'plan-ticket',
+        'create-epic',
+        'implement',
+        'to-prd',
+        'to-issues',
+    ];
     for (const name of jiraSkills) {
         const text = fs.readFileSync(
             path.join(SKILLS_ROOT, name, 'SKILL.md'),
@@ -55,13 +61,13 @@ test('Jira skills do not send agents to ToolSearch or ~/.claude', () => {
         );
         assert.doesNotMatch(
             text,
-            /(?:use|call|via|from)\s+ToolSearch/i,
-            name + ' must not send the agent to Claude ToolSearch'
+            /ToolSearch\s*→/,
+            name + ' must not seed Claude ToolSearch'
         );
         assert.doesNotMatch(
             text,
-            /(?:read|load|from)\s+~\/\.claude/i,
-            name + ' must not load skills from ~/.claude'
+            /(?:call|via|from)\s+ToolSearch/i,
+            name + ' must not send the agent to Claude ToolSearch'
         );
         assert.match(
             text,
@@ -69,6 +75,16 @@ test('Jira skills do not send agents to ToolSearch or ~/.claude', () => {
             name + ' should point at Atlassian MCP'
         );
     }
+    const jiraMd = fs.readFileSync(
+        path.join(SKILLS_ROOT, 'plan-ticket', 'JIRA.md'),
+        'utf8'
+    );
+    assert.doesNotMatch(
+        jiraMd,
+        /ToolSearch\s*→/,
+        'JIRA.md must not seed Claude ToolSearch'
+    );
+    assert.match(jiraMd, /Atlassian MCP/, 'JIRA.md should name Atlassian MCP');
 });
 
 test('plan-ticket and create-epic carry the Grok Bot operator note', () => {

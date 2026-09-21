@@ -1,25 +1,36 @@
 # Cursor Cloud skills (Mosaic)
 
-Project skills for Cursor Cloud Agents. Each folder is `.cursor/skills/<skill-name>/` with a `SKILL.md`.
+Upstream `skills/` from [JonathanHarris15/claude-config](https://github.com/JonathanHarris15/claude-config), overlaid at `.cursor/skills/<skill-name>/`. See [SOURCE.md](SOURCE.md).
 
-These are the board-spine skills this repo already names (`CLAUDE.md`, live MS PRDs, Maintain comments). They are adapted for **Cursor Cloud Agents + Atlassian MCP**. Claude-only tooling (`ToolSearch`, `~/.claude`) is not used.
-
-Grok Bot’s own skill library is out of scope.
+Jira calls use **Atlassian MCP** on Cursor Cloud Agents. Mosaic board override: `CLAUDE.md` wins over [plan-ticket/BOARD.md](plan-ticket/BOARD.md).
 
 ## Skills ported
 
-| Skill | When |
+| Skill | Role |
 | --- | --- |
-| `file-ticket` | File a thin idea in **To Plan** |
-| `grill-with-docs` | Settle decisions against `CONTEXT.md`, ADRs, and the code before a PRD |
-| `plan-ticket` | Write the PRD, split subtasks, move right of To Plan only when thinking is finished |
-| `create-epic` | Open an Epic (never a board card) and child level-0 tickets |
-| `prototype` | Light HTML specimen for a ticket — not product |
-| `implement` | Build a ticket that already has a PRD |
-| `maintain` | Review the PR: CLEAR / CLEAR-with-nits / HOLD |
+| `plan-ticket` | Front door: To Plan → PRD + sub-tasks → To Do / On Deck |
+| `create-epic` | Epic (never a board card) + sibling level-0 tickets |
+| `to-prd` | Write the PRD onto the ticket description |
+| `to-issues` | Slice a specced ticket into AFK/HITL sub-tasks |
+| `implement` | Build a ticket that has a PRD; drive the board |
+| `grill-with-docs` | Grill against CONTEXT.md, ADRs, and the code |
+| `grilling` | Interview in rounds |
+| `prototype` | Light specimen (logic / UI) |
+| `research` | Factual unknowns |
+| `diagnose` | Reproduce a bug first |
+| `review` | Code / spec / domain review |
+| `retro` | Look back |
+| `tdd` | Red-green-refactor |
+| `domain-modeling` | CONTEXT.md and ADRs |
+| `codebase-design` | Module / seam vocabulary |
+| `improve-codebase-architecture` | Architecture pass |
+| `design-sync` | Design system ↔ code |
+| `design-pull` | Pull design into code |
+| `design-push` | Push code into design |
+| `design-prototype` | Design-system specimen |
+| `wait-what` | Clarify a surprise |
+| `wizard` | Guided script |
+| `writing-for-agents` | Writing style |
+| `sync-config` | Sync the claude-config git remote |
 
-Shared notes (not skills): `_shared/`.
-
-## Mosaic board (authoritative)
-
-Read `CLAUDE.md` before any Jira move. Where `_shared/BOARD.md` and `CLAUDE.md` disagree, **`CLAUDE.md` wins**.
+Grok Bot’s skill library is out of scope.

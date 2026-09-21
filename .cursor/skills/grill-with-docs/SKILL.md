@@ -1,21 +1,29 @@
 ---
 name: grill-with-docs
-description: Grill an unset Mosaic product decision against CONTEXT.md, ADRs, and the code before writing a PRD. Use when a ticket needs design decisions, a grill-with-docs session, or when plan-ticket finds an open lock.
+description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
 ---
 
-# Grill with docs
+# Grill With Docs
 
-Use this **before** `/plan-ticket` lands a PRD, or when Plan finds a hole.
+Run a **`/grilling`** session, using the **`/domain-modeling`** skill throughout.
 
-## Read, do not invent
+That's the whole skill. `grilling` owns the interrogation — the design tree, the rounds,
+the recommended answer on every question. `domain-modeling` owns the paperwork — challenging
+terms against `CONTEXT.md`, sharpening fuzzy language, and writing the glossary and ADRs the
+moment a decision crystallises rather than batching them to the end.
 
-1. The ticket (Atlassian `getJiraIssue`, markdown).
-2. `CONTEXT.md` — the words the product already uses.
-3. `docs/adr/` for any decision the idea touches. **Do not re-litigate an ADR in a feature PR.**
-4. The code paths the ticket names. Where a design note and the code disagree, the code wins — and say so, because that disagreement is a bug in one of them.
+Two things this composition adds on top:
 
-## Output
-
-A short list of **settled** vs **open** decisions. Each settled line cites the doc or code path. Each open line is a question Grok Bot can answer routinely, or a **crucial** question to escalate to Jonathan.
-
-Do not write new product behavior into the ticket. Carry settled lines into the PRD’s **Locked decisions** when `/plan-ticket` runs. Optional: a new ADR only when the decision is hard to reverse — that is a subtask, not a side effect of grilling.
+- **Docs are updated inline, not afterwards.** A term resolved in round three goes into
+  `CONTEXT.md` in round three. Batched documentation is documentation that never happens.
+- **When the plan is fog rather than a plan**, the first round has nothing to interrogate,
+  so lead with your own reading: name the two or three genuinely different things the work
+  could mean, say which you'd back and why, and let the user react. Reacting is far easier
+  than inventing. Once the change has a name, grill it normally.
+- **The implementation calls you make yourself still get written down — sometimes.** `grilling`
+  says a choice between two implementations that reach the same agreed behaviour is yours, not
+  the user's. That doesn't make it invisible. Run it past the ADR test: hard to reverse,
+  surprising without context, a real trade-off with genuine alternatives. All three, and it
+  earns an ADR even though nobody was asked. Fewer than three, and it's just work — do it and
+  say what you did. That same test is also how you check you were right not to ask: a call that
+  passes it is usually one the user would have wanted framed as an outcome and put to them.
