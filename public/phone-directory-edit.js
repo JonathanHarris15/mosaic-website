@@ -17,6 +17,9 @@
     const ADD_FAILED = "Couldn't add this person. It did not work.";
     const DELETE_PERSON_FAILED = "Couldn't delete this person. It did not work.";
     const DELETE_INVOLVEMENT_FAILED = "Couldn't remove that Involvement. It did not work.";
+    // What the list shows when a Person has no name. It is a label, never a name
+    // to write back.
+    const DISPLAY_NAME_FALLBACK = '(no name)';
 
     // What Add person asks for. The Kid mark is not one of them.
     const ADD_PERSON_FIELDS = Object.freeze([
@@ -113,8 +116,21 @@
         return payload;
     }
 
+    // The name an editor may change. The list's "(no name)" is only what we
+    // show when there isn't one, so it must not land in the field.
+    function storedDirectoryName(person) {
+        if (!person) return '';
+        if (Object.prototype.hasOwnProperty.call(person, 'directoryName')) {
+            return trim(person.directoryName);
+        }
+        const shown = trim(person.name);
+        if (!shown || shown === DISPLAY_NAME_FALLBACK) return '';
+        return shown;
+    }
+
     // What the person page shows after a save. Dismissing the editor never
-    // calls this, so the old values stay.
+    // calls this, so the old values stay. A blank name stays blank in the
+    // record and shows as the list's fallback.
     function savedPersonView(person, fields, editModeOn) {
         const next = Object.assign({}, person, {
             email: trim(fields && fields.email),
@@ -123,11 +139,38 @@
             birthday: (fields && fields.birthday) || '',
         });
         if (editModeOn) {
-            next.name = trim(fields && fields.name);
+            const name = trim(fields && fields.name);
+            next.directoryName = name;
+            next.name = name || DISPLAY_NAME_FALLBACK;
             next.sex = (fields && fields.sex) || null;
             next.kid = !!(fields && fields.kid);
         }
         return next;
+    }
+
+    function titleCaseSlug(type) {
+        return String(type).split('_').map((word) => (
+            word ? word.charAt(0).toUpperCase() + word.slice(1) : ''
+        )).join(' ');
+    }
+
+    // How one Involvement record reads. Liturgical slugs use RolesCore's
+    // names (Music Leader, not the slug). A one-off keeps the label it was
+    // given. A record with no Role is not named after the record.
+    function involvementLabel(record) {
+        const type = record && record.type;
+        if (!type) return '';
+        if (type === 'one_off') {
+            const label = record.metadata && typeof record.metadata.label === 'string'
+                ? record.metadata.label.trim() : '';
+            return label || 'One-off Role';
+        }
+        const Roles = global && global.RolesCore;
+        if (Roles && typeof Roles.roleBySlug === 'function') {
+            const def = Roles.roleBySlug(type, []);
+            if (def && def.name) return def.name;
+        }
+        return titleCaseSlug(type);
     }
 
     // Deletes the person document and nothing else. A linked account stays linked.
@@ -162,6 +205,7 @@
         ADD_FAILED,
         DELETE_PERSON_FAILED,
         DELETE_INVOLVEMENT_FAILED,
+        DISPLAY_NAME_FALLBACK,
         ADD_PERSON_FIELDS,
         subscribe,
         isOn,
@@ -170,7 +214,9 @@
         mayOfferEditMode,
         addPersonDocument,
         savePayload,
+        storedDirectoryName,
         savedPersonView,
+        involvementLabel,
         personRemoval,
         involvementRemoval,
     };

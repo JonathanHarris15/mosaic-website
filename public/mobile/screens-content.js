@@ -152,15 +152,20 @@
   }
   function noPeople() { return []; }
 
-  var sexSelectStyle = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" };
-
   function emptyAddDraft() {
     return { name: "", email: "", phone: "", address: "", birthday: "", sex: "" };
   }
-  function involvementRole(type) {
-    return String(type || "Involvement").split("_").map(function (word) {
-      return word ? word.charAt(0).toUpperCase() + word.slice(1) : "";
-    }).join(" ");
+  function SexSelect(props) {
+    return html`<label class="m-field">
+      <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>${props.label || "Sex"}</span>
+      <span class="m-select-wrap">
+        <select class="m-select" value=${props.value || ""} onChange=${props.onChange}>
+          <option value="">Select Sex...</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </span>
+    </label>`;
   }
 
   function PeopleScreen(props) {
@@ -170,9 +175,9 @@
     // noise. Re-runs when we learn who is looking.
     var Edit = window.PhoneDirectoryEdit;
     var mayEdit = Edit.mayOfferEditMode(props.user);
-    var editS = useState(Edit.isOn());
-    useEffect(function () { return Edit.subscribe(function (on) { editS[1](on); }); }, []);
-    var editOn = mayEdit && editS[0];
+    var modeS = useState(Edit.isOn());
+    useEffect(function () { return Edit.subscribe(function (on) { modeS[1](on); }); }, []);
+    var editOn = mayEdit && modeS[0];
     var mayOpen = mayOpenDirectory(props.user);
     var reloadS = useState(0);
     var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
@@ -265,20 +270,13 @@
           <form onSubmit=${function (e) { e.preventDefault(); submitAdd(); }} style=${{ padding: "16px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
             ${Edit.ADD_PERSON_FIELDS.map(function (field) {
               if (field.type === "sex") {
-                return html`<label key=${field.key} class="m-field">
-                  <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>${field.label}</span>
-                  <select value=${addDraftS[0][field.key] || ""} onChange=${function (e) { setAdd(field.key, e.target.value); }} style=${sexSelectStyle}>
-                    <option value="">Select Sex...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
-                </label>`;
+                return html`<${SexSelect} key=${field.key} label=${field.label} value=${addDraftS[0][field.key] || ""} onChange=${function (e) { setAdd(field.key, e.target.value); }} />`;
               }
               return html`<${Input} key=${field.key} label=${field.label} type=${field.type} value=${addDraftS[0][field.key] || ""} onInput=${function (e) { setAdd(field.key, e.target.value); }} />`;
             })}
             <div style=${{ display: "flex", gap: 10, marginTop: 4 }}>
-              <button type="button" onClick=${closeAdd} style=${{ flex: 1, padding: "12px 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--outline)", background: "transparent", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-              <button type="submit" disabled=${addingS[0]} style=${{ flex: 1, padding: "12px 16px", borderRadius: "var(--radius-full)", border: "none", background: "var(--primary)", color: "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>${addingS[0] ? "Adding…" : "Add person"}</button>
+              <${Button} type="button" variant="secondary" style=${{ flex: 1 }} onClick=${closeAdd}>Cancel<//>
+              <${Button} type="submit" variant="primary" disabled=${addingS[0]} style=${{ flex: 1 }}>${addingS[0] ? "Adding…" : "Add person"}<//>
             </div>
           </form>
         </${CalSheet}>` : null}
@@ -314,7 +312,7 @@
     function openEdit() {
       var draft = { email: p.email || "", phone: p.phone || "", address: p.address || "", birthday: p.birthday || "" };
       if (editOn) {
-        draft.name = p.name || "";
+        draft.name = Edit.storedDirectoryName(p);
         draft.sex = p.sex || "";
         draft.kid = !!p.kid;
       }
@@ -389,7 +387,7 @@
           ${mayEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
           ${editOn ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             <${Button} variant="secondary" size="md" style=${{ width: "100%" }} onClick=${openInvolvement}>Involvement<//>
-            <button type="button" onClick=${deleteThisPerson} style=${{ width: "100%", padding: "12px 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--error)", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Delete person</button>
+            <${Button} type="button" variant="danger-outline" style=${{ width: "100%" }} onClick=${deleteThisPerson}>Delete person<//>
           </div>` : null}
         </${Body}>
         ${editS[0] ? html`<${CalSheet} title="Edit Details" subtitle=${p.name} onClose=${dismissEdit}>
@@ -400,19 +398,12 @@
             <${Input} label="Address" value=${editS[0].address} onInput=${function (e) { setField("address", e.target.value); }} />
             <${Input} label="Birthday" type="date" value=${editS[0].birthday} onInput=${function (e) { setField("birthday", e.target.value); }} />
             ${editOn ? html`<${M.Fragment}>
-              <label class="m-field">
-                <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>Sex</span>
-                <select value=${editS[0].sex || ""} onChange=${function (e) { setField("sex", e.target.value); }} style=${sexSelectStyle}>
-                  <option value="">Select Sex...</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                </select>
-              </label>
-              <label style=${{ display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>
+              <${SexSelect} value=${editS[0].sex || ""} onChange=${function (e) { setField("sex", e.target.value); }} />
+              <label class="m-check">
                 <input type="checkbox" checked=${!!editS[0].kid} onChange=${function (e) { setField("kid", e.target.checked); }} />
                 Kid
               </label>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: -6 }}>Gets a child tag and a pickup stub at the kiosk</div>
+              <div class="m-input-hint">Gets a child tag and a guardian stub at the kiosk</div>
             </${M.Fragment}>` : null}
             <${Button} variant="primary" size="md" style=${{ width: "100%", marginTop: 4 }} onClick=${saveEdit}>${savingS[0] ? "Saving…" : "Save Details"}<//>
           </div>
@@ -424,10 +415,10 @@
               : invRowsS[0].map(function (item) {
                 return html`<div key=${item.id} style=${{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--outline-variant)" }}>
                   <div style=${{ flex: 1, minWidth: 0 }}>
-                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--primary)" }}>${involvementRole(item.type)}</div>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--primary)" }}>${Edit.involvementLabel(item)}</div>
                     <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${item.serviceDate || ""}</div>
                   </div>
-                  <button type="button" onClick=${function () { deleteInvolvementRecord(item.id); }} style=${{ border: "1px solid var(--outline)", background: "var(--surface-container-lowest)", color: "var(--error)", borderRadius: "var(--radius-full)", padding: "8px 14px", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  <${Button} type="button" variant="danger-outline" onClick=${function () { deleteInvolvementRecord(item.id); }}>Delete<//>
                 </div>`;
               })}
           </div>

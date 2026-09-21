@@ -11,6 +11,7 @@ const path = require('node:path');
 // screen source are the prior art in mobile-directory-gate.test.js.
 
 require('../public/access-core.js');
+global.RolesCore = require('../public/roles-core.js');
 const Shepherding = require('../public/shepherding-core.js');
 const Edit = require('../public/phone-directory-edit.js');
 
@@ -195,6 +196,29 @@ test('the saved view the phone shows is the fields that were saved, and only tho
     assert.equal(off.email, 'new@x');
 });
 
+test('the list fallback is not the name an editor saves', () => {
+    const unnamed = { name: Edit.DISPLAY_NAME_FALLBACK, directoryName: '' };
+    assert.equal(Edit.storedDirectoryName(unnamed), '');
+    assert.equal(Edit.storedDirectoryName({ name: Edit.DISPLAY_NAME_FALLBACK }), '');
+    assert.equal(Edit.storedDirectoryName({ name: 'Ada' }), 'Ada');
+    const saved = Edit.savedPersonView(unnamed, {
+        name: '   ', email: '', phone: '', address: '', birthday: '',
+    }, true);
+    assert.equal(saved.directoryName, '');
+    assert.equal(saved.name, Edit.DISPLAY_NAME_FALLBACK);
+    const payload = Edit.savePayload({ name: '' }, { editMode: true, now: 1 });
+    assert.equal(payload.name, '');
+});
+
+test('an Involvement reads as its Role, and a one-off reads as its label', () => {
+    assert.equal(Edit.involvementLabel({ type: 'worship_leader' }), 'Music Leader');
+    assert.equal(Edit.involvementLabel({ type: 'worship_helper' }), 'Music Helper');
+    assert.equal(Edit.involvementLabel({ type: 'one_off', metadata: { label: 'Unlock the hall' } }), 'Unlock the hall');
+    assert.equal(Edit.involvementLabel({ type: 'one_off' }), 'One-off Role');
+    assert.equal(Edit.involvementLabel({ type: 'kids_ministry' }), 'Kids Ministry');
+    assert.equal(Edit.involvementLabel({ serviceDate: '2026-01-01' }), '');
+});
+
 test('delete person uses the computer confirmation and does not disconnect a linked account', () => {
     assert.equal(
         Edit.DELETE_PERSON_CONFIRM,
@@ -254,7 +278,11 @@ test('the phone directory offers Edit Mode and Add person only after it is on', 
     assert.match(list, /mayEdit && editOn \? html`<\$\{FAB\} icon="user-plus" label="Add person"/);
     assert.equal((list.match(/label="Add person"/g) || []).length, 1);
     const person = fnBody(src, 'PersonDetailScreen');
+    assert.match(person, /storedDirectoryName\(p\)/);
     assert.match(person, />Edit Details</);
+    assert.match(person, /guardian stub/);
+    assert.equal(person.includes('pickup stub'), false);
+    assert.match(person, /involvementLabel\(item\)/);
     assert.match(person, /label="Email"/);
     assert.match(person, /label="Phone"/);
     assert.match(person, /label="Address"/);

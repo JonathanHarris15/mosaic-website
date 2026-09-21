@@ -242,10 +242,12 @@
     var out = [];
     snap.forEach(function (doc) {
       var d = doc.data() || {};
-      var name = d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "(no name)";
+      var directoryName = String(d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "").trim();
+      var name = directoryName || "(no name)";
       out.push({
         id: doc.id,
         name: name,
+        directoryName: directoryName,
         // sex seats a Person in a Family (husband/wife) and genders the Family
         // role labels — the quick-assign card on the profile needs it.
         sex: d.sex || null,
