@@ -44,6 +44,12 @@
     const ATTENDANCE = 'attendance';
     const ATTACHMENTS = 'attachments';
     const DOCUMENTS = 'documents';
+    // Event announcement records (MS-631). The names are owned by
+    // event-announcement-core.js. They are repeated here so deleting a
+    // one-off — children first — does not make every page that loads this
+    // store also load that model. event-announcement-store.test.js pins them.
+    const ANNOUNCEMENT_WORDS = 'announcements';
+    const ANNOUNCEMENT_PLANS = 'announcement_plans';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -928,13 +934,21 @@
             );
         }
 
-        const roster = await occurrenceRef(db, id).collection(ROSTER).get()
+        const childCollection = name => occurrenceRef(db, id).collection(name).get()
             .catch(() => ({ docs: [] }));
+        const [roster, words, plans] = await Promise.all([
+            childCollection(ROSTER),
+            childCollection(ANNOUNCEMENT_WORDS),
+            childCollection(ANNOUNCEMENT_PLANS),
+        ]);
 
-        // The roster FIRST, the document last. The other way round leaves a
+        // The children FIRST, the document last. The other way round leaves a
         // subcollection under a document that is gone — rows nothing can reach
-        // and nothing will ever clean up.
+        // and nothing will ever clean up. Announcements go with the one-off
+        // the same way the roster does.
         const writes = roster.docs.map(d => ({ kind: 'delete', ref: d.ref }));
+        words.docs.forEach(d => writes.push({ kind: 'delete', ref: d.ref }));
+        plans.docs.forEach(d => writes.push({ kind: 'delete', ref: d.ref }));
         writes.push({ kind: 'delete', ref: occurrenceRef(db, id) });
 
         await commitInBatches(db, writes);
@@ -1835,6 +1849,8 @@
         ROSTER,
         ATTENDANCE,
         ATTACHMENTS,
+        ANNOUNCEMENT_WORDS,
+        ANNOUNCEMENT_PLANS,
         shiftOccurrences,
         shiftDays,
         seesEveryRung,

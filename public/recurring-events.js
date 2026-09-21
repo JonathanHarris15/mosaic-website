@@ -77,7 +77,7 @@
     const WINDOW = 8;
 
     window.recurringEventsPage = function recurringEventsPage() {
-        return {
+        return Object.assign({
             loading: true,
             error: '',
             rank: null,
@@ -169,6 +169,8 @@
                 // but Dates is the tab both roles share and the one that
                 // answers "what's next" without a grid to read first.
                 this.tab = 'dates';
+                const askedTab = new URLSearchParams(window.location.search).get('tab');
+                if (askedTab === 'announcements') this.tab = 'announcements';
 
                 try {
                     // The directory is the GRID's ingredient — names for the
@@ -220,6 +222,7 @@
                         if (!user) return resolve(null);
                         try {
                             const data = await getUserData(user.uid);
+                            this.account = data || null;
                             this.personId = (data && data.personId) || null;
                             resolve((data && (data.permissionLevel || data.role)) || 'viewer');
                         } catch (e) {
@@ -343,6 +346,7 @@
                 // actually wrong. It used to happen on the way into the second
                 // page, which no longer exists.
                 if (this.isEditor && id === Core.SUNDAY_SERVICE_ID) await this.reconcileSunday();
+                await this.loadAnnouncements();
             },
 
             // Never fatal. A church whose Sunday drifted still gets to read the
@@ -395,6 +399,7 @@
                 const all = [
                     { id: 'dates', label: 'Dates', editorOnly: false },
                     { id: 'event', label: 'The event', editorOnly: false },
+                    { id: 'announcements', label: 'Announcements', editorOnly: false },
                     { id: 'rota', label: 'Rota', editorOnly: true },
                     { id: 'roles', label: 'Roles & rules', editorOnly: true },
                     { id: 'who', label: 'Who can see it', editorOnly: true },
@@ -1458,6 +1463,6 @@
                     this.saving = false;
                 }
             },
-        };
+        }, EventAnnouncementPanel.bindings());
     };
 })();

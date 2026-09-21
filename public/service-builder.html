@@ -1537,6 +1537,11 @@
          head of its IIFE and calls servingGroups when the Roles picker loads.
          Without it the picker throws mid-load and stays empty (MS-321). -->
     <script src="family-core.js"></script>
+    <!-- calendar-event.js mixes in the Announcements tab at load. This host
+         does not draw that tab; the module still has to be here. -->
+    <script src="event-announcement-core.js"></script>
+    <script src="event-announcement-store.js"></script>
+    <script src="event-announcement-panel.js"></script>
     <script src="calendar-event.js"></script>
 
     <!-- Fills the data-roles-panel placeholders. Must run AFTER them and BEFORE

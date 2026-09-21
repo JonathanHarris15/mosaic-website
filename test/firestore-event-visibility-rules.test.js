@@ -274,3 +274,51 @@ test('an Event Document reads the occurrence\'s own stamp, like everything else 
 test('only an editor may write an Event Document', () => {
     assert.match(documentsBlock(), /allow create, update, delete: if isEditor\(\)/);
 });
+
+// ── Event announcements (MS-621) ──────────────────────────────────────────────
+//
+// The words and the plan are two records because a rule cannot hide a field.
+// A non-editor who can read the event can read the words and cannot read the
+// plan, and cannot write either record.
+
+const seriesWords = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const seriesPlans = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcement_plans\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const occurrenceWords = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const occurrencePlans = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcement_plans\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+
+test('series announcement words follow the series read, and do not widen it', () => {
+    const block = seriesWords();
+    assert.match(block, /eventId == 'sunday_service'/);
+    assert.match(block, /rankCanSee\(/);
+    assert.doesNotMatch(block, /participantIds/);
+    assert.doesNotMatch(block, /allow read: if true/);
+});
+
+test('a series announcement plan is editor-only, read and write', () => {
+    const block = seriesPlans();
+    assert.match(block, /allow read: if isEditor\(\)/);
+    assert.match(block, /allow create, update, delete: if isEditor\(\)/);
+    assert.doesNotMatch(block, /rankCanSee/);
+    assert.doesNotMatch(block, /readsAsEditor/);
+});
+
+test('a non-editor cannot write series announcement words', () => {
+    assert.match(seriesWords(), /allow create, update, delete: if isEditor\(\)/);
+    assert.doesNotMatch(seriesWords(), /readsAsEditor/);
+});
+
+test('occurrence announcement words are the one-off, and a date of a series is closed', () => {
+    const block = occurrenceWords();
+    assert.match(block, /oneOffOccurrence\(\)/);
+    assert.match(block, /rankCanSee\(/);
+    assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);
+    assert.doesNotMatch(block, /readsAsEditor/);
+});
+
+test('an occurrence announcement plan is editor-only, and only on a one-off', () => {
+    const block = occurrencePlans();
+    assert.match(block, /allow read: if isEditor\(\) && oneOffOccurrence\(\)/);
+    assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);
+    assert.doesNotMatch(block, /rankCanSee/);
+    assert.doesNotMatch(block, /readsAsEditor/);
+});

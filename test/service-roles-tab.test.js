@@ -38,6 +38,10 @@ function sandboxFor(extra) {
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.ServiceInvolvementCore = require('../public/service-involvement-core.js');
+    sandbox.AccessCore = require('../public/access-core.js');
+    sandbox.EventAnnouncementCore = require('../public/event-announcement-core.js');
+    sandbox.EventAnnouncementStore = require('../public/event-announcement-store.js');
+    sandbox.EventAnnouncementPanel = require('../public/event-announcement-panel.js');
 
     sandbox.location = { search: '?date=2026-10-12', href: '' };
     sandbox.auth = { onAuthStateChanged() {} };
