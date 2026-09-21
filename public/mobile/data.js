@@ -718,6 +718,34 @@
     if (!plan.ok) return Promise.reject(new Error(window.PhoneDirectoryEdit.DELETE_PERSON_FAILED));
     return db.collection(plan.collection).doc(plan.personId).delete();
   }
+  // The same Membership Track commit the computer directory writes. The plan
+  // has already decided the next stage and Inactive flag. Source names the
+  // phone Membership Directory.
+  function saveDirectoryMembership(write) {
+    return window.ShepherdingCore.commitMembershipChange(db, write.personId, {
+      currentTags: write.currentTags,
+      previous: write.previous,
+      next: write.next,
+      authorUid: write.authorUid,
+      authorName: write.authorName,
+      source: write.source,
+    });
+  }
+  // An ordinary tag add or remove, the way the computer directory does it:
+  // create a missing vocabulary entry and set the person's tags, in one
+  // batch. No Tag Change. A Projected Tag never reaches this function.
+  function saveDirectoryTags(personId, plan) {
+    if (!plan || plan.write !== true) return Promise.resolve();
+    var batch = db.batch();
+    if (plan.create) {
+      batch.set(db.collection("people_tags").doc(plan.create.id), { name: plan.create.name });
+    }
+    batch.update(db.collection("people").doc(personId), {
+      tags: plan.tags,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return batch.commit();
+  }
   function deleteDirectoryInvolvement(personId, involvementId) {
     var plan = window.PhoneDirectoryEdit.involvementRemoval(personId, involvementId);
     if (!plan.ok) return Promise.reject(new Error(window.PhoneDirectoryEdit.DELETE_INVOLVEMENT_FAILED));
@@ -1325,6 +1353,8 @@
     addDirectoryPerson: addDirectoryPerson,
     deleteDirectoryPerson: deleteDirectoryPerson,
     deleteDirectoryInvolvement: deleteDirectoryInvolvement,
+    saveDirectoryMembership: saveDirectoryMembership,
+    saveDirectoryTags: saveDirectoryTags,
     getPersonInvolvement: getPersonInvolvement,
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
