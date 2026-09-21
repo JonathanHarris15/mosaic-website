@@ -336,6 +336,12 @@
 
   function nav(route, params, opts) {
     var replace = !!(opts && opts.replace);
+    // A fresh opening of the Membership Directory starts Edit Mode off.
+    // Opening a person is the same visit, so this is not run for personDetail.
+    // Coming back uses the phone's back gesture, which does not enter nav.
+    if (route === "people" && window.PhoneDirectoryEdit) {
+      window.PhoneDirectoryEdit.beginDirectoryVisit();
+    }
     // Opening an editor is the last moment we know the thing being edited is
     // about to change. What data.js remembered about it has to go now — the
     // editor is a whole new document, so nothing here runs again to do it

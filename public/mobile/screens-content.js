@@ -152,20 +152,68 @@
   }
   function noPeople() { return []; }
 
+  var sexSelectStyle = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" };
+
+  function emptyAddDraft() {
+    return { name: "", email: "", phone: "", address: "", birthday: "", sex: "" };
+  }
+  function involvementRole(type) {
+    return String(type || "Involvement").split("_").map(function (word) {
+      return word ? word.charAt(0).toUpperCase() + word.slice(1) : "";
+    }).join(" ");
+  }
+
   function PeopleScreen(props) {
     // The read is skipped rather than issued and refused — since MS-197 the
     // directory needs an account (ADR-0031), so for a guest this could only
     // fail, and a failure logged on a screen that already knows the answer is
     // noise. Re-runs when we learn who is looking.
+    var Edit = window.PhoneDirectoryEdit;
+    var mayEdit = Edit.mayOfferEditMode(props.user);
+    var editS = useState(Edit.isOn());
+    useEffect(function () { return Edit.subscribe(function (on) { editS[1](on); }); }, []);
+    var editOn = mayEdit && editS[0];
     var mayOpen = mayOpenDirectory(props.user);
-    var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen]);
+    var reloadS = useState(0);
+    var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
     var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
+    var addOpenS = useState(false), addDraftS = useState(emptyAddDraft()), addingS = useState(false);
     var people = st.data || [];
     var vis = tagVisibility(tagsSt.data);
     var isAdmin = isDirectoryAdmin(props.user);
     var tabs = [["members", "Members"], ["non_members", "Non-members"]];
     var q = qS[0], tab = fS[0];
+    function setAdd(key, value) {
+      var next = Object.assign({}, addDraftS[0]);
+      next[key] = value;
+      addDraftS[1](next);
+    }
+    function openAdd() {
+      addDraftS[1](emptyAddDraft());
+      addOpenS[1](true);
+    }
+    function closeAdd() {
+      if (addingS[0]) return;
+      addOpenS[1](false);
+      addDraftS[1](emptyAddDraft());
+    }
+    function submitAdd() {
+      if (addingS[0]) return;
+      var draft = addDraftS[0];
+      var built = Edit.addPersonDocument(draft, { now: null });
+      if (!built.ok) { window.alert(built.error); return; }
+      addingS[1](true);
+      data.addDirectoryPerson(draft).then(function () {
+        addingS[1](false);
+        closeAdd();
+        fS[1]("non_members");
+        reloadS[1](reloadS[0] + 1);
+      }).catch(function () {
+        addingS[1](false);
+        window.alert(Edit.ADD_FAILED);
+      });
+    }
     var results = people.filter(function (p) {
       var mq = !q || data.lc(p.name).indexOf(data.lc(q)) >= 0;
       if (!mq || !window.ShepherdingCore.personMatchesDirectoryTab(p, tab, false)) return false;
@@ -178,6 +226,12 @@
         <${TopBar} title="Membership Directory" onMenu=${props.openMenu} />
         <${Body} style=${{ paddingTop: 14 }}>
           <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search people" value=${q} onChange=${function (e) { qS[1](e.target.value); }} /></div>
+          ${mayEdit ? html`<div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-surface)" }}>Edit Mode</span>
+            <button type="button" aria-label="Edit Mode" aria-pressed=${editOn ? "true" : "false"} onClick=${function () { Edit.setOn(!Edit.isOn()); }} style=${{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
+              <${CalSwitch} on=${editOn} />
+            </button>
+          </div>` : null}
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
@@ -206,7 +260,28 @@
               </div>
             </div>`}
         </${Body}>
-        <${FAB} icon="user-plus" label="Add person" />
+        ${mayEdit && editOn ? html`<${FAB} icon="user-plus" label="Add person" onClick=${openAdd} />` : null}
+        ${addOpenS[0] ? html`<${CalSheet} title="Add person" subtitle="They show on Non-members" onClose=${closeAdd}>
+          <form onSubmit=${function (e) { e.preventDefault(); submitAdd(); }} style=${{ padding: "16px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+            ${Edit.ADD_PERSON_FIELDS.map(function (field) {
+              if (field.type === "sex") {
+                return html`<label key=${field.key} class="m-field">
+                  <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>${field.label}</span>
+                  <select value=${addDraftS[0][field.key] || ""} onChange=${function (e) { setAdd(field.key, e.target.value); }} style=${sexSelectStyle}>
+                    <option value="">Select Sex...</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </label>`;
+              }
+              return html`<${Input} key=${field.key} label=${field.label} type=${field.type} value=${addDraftS[0][field.key] || ""} onInput=${function (e) { setAdd(field.key, e.target.value); }} />`;
+            })}
+            <div style=${{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button" onClick=${closeAdd} style=${{ flex: 1, padding: "12px 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--outline)", background: "transparent", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button type="submit" disabled=${addingS[0]} style=${{ flex: 1, padding: "12px 16px", borderRadius: "var(--radius-full)", border: "none", background: "var(--primary)", color: "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>${addingS[0] ? "Adding…" : "Add person"}</button>
+            </div>
+          </form>
+        </${CalSheet}>` : null}
       </${Screen}>`;
   }
 
@@ -215,13 +290,17 @@
   // Editors (editor/elder/admin/super_admin) get an inline Edit Details modal
   // that writes the same contact fields as the shepherd person file.
   function PersonDetailScreen(props) {
+    var Edit = window.PhoneDirectoryEdit;
+    var mayEdit = Edit.mayOfferEditMode(props.user);
+    var editFlagS = useState(Edit.isOn());
+    useEffect(function () { return Edit.subscribe(function (on) { editFlagS[1](on); }); }, []);
+    var editOn = mayEdit && editFlagS[0];
     var pS = useState((props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 });
     var p = pS[0];
     var tagsSt = useAsync(data.getShepherdingTags, []);
     var vis = tagVisibility(tagsSt.data);
     var isAdmin = isDirectoryAdmin(props.user);
     var tagsReady = !tagsSt.loading;
-    var canEdit = !!(window.AccessCore && AccessCore.writesAsEditor(props.user));
     var contact = [["mail", p.email], ["phone", p.phone]].filter(function (r) { return r[1]; });
     // Membership tags always resolve via the Track; other tags obey visibility.
     var chipTags = (p.tags || []).filter(function (t) {
@@ -230,16 +309,62 @@
 
     var editS = useState(null);   // null = closed; else the working draft
     var savingS = useState(false);
-    function openEdit() { editS[1]({ email: p.email || "", phone: p.phone || "", address: p.address || "", birthday: p.birthday || "" }); }
+    var invOpenS = useState(false);
+    var invRowsS = useState(null);
+    function openEdit() {
+      var draft = { email: p.email || "", phone: p.phone || "", address: p.address || "", birthday: p.birthday || "" };
+      if (editOn) {
+        draft.name = p.name || "";
+        draft.sex = p.sex || "";
+        draft.kid = !!p.kid;
+      }
+      editS[1](draft);
+    }
+    function dismissEdit() {
+      if (savingS[0]) return;
+      editS[1](null);
+    }
     function saveEdit() {
       var d = editS[0]; if (!d) return;
       savingS[1](true);
-      data.updateShepherdingPersonDetails(p.id, d).then(function () {
-        pS[1](Object.assign({}, p, { email: (d.email || "").trim(), phone: (d.phone || "").trim(), address: (d.address || "").trim(), birthday: d.birthday || "" }));
-        savingS[1](false); editS[1](null);
-      }).catch(function () { savingS[1](false); window.alert("Couldn't save details. Please try again."); });
+      data.saveDirectoryPerson(p.id, d, props.user, editOn).then(function () {
+        pS[1](Edit.savedPersonView(p, d, editOn));
+        savingS[1](false);
+        editS[1](null);
+      }).catch(function () {
+        savingS[1](false);
+        window.alert(Edit.SAVE_FAILED);
+      });
     }
     function setField(k, v) { var o = Object.assign({}, editS[0]); o[k] = v; editS[1](o); }
+    function deleteThisPerson() {
+      if (!window.confirm(Edit.DELETE_PERSON_CONFIRM)) return;
+      data.deleteDirectoryPerson(p.id).then(function () {
+        if (props.back) props.back();
+      }).catch(function () {
+        window.alert(Edit.DELETE_PERSON_FAILED);
+      });
+    }
+    function openInvolvement() {
+      invOpenS[1](true);
+      invRowsS[1](null);
+      data.getPersonInvolvement(p.id).then(function (rows) {
+        invRowsS[1](rows || []);
+      }).catch(function () {
+        invOpenS[1](false);
+        window.alert("Couldn't load Involvement. It did not work.");
+      });
+    }
+    function deleteInvolvementRecord(id) {
+      if (!window.confirm(Edit.DELETE_INVOLVEMENT_CONFIRM)) return;
+      var plan = Edit.involvementRemoval(p.id, id);
+      data.deleteDirectoryInvolvement(p.id, id).then(function () {
+        invRowsS[1]((invRowsS[0] || []).filter(function (row) { return row.id !== id; }));
+        pS[1](Object.assign({}, p, { totalInvolvements: (p.totalInvolvements || 0) + (plan.ok ? plan.countDelta : -1) }));
+      }).catch(function () {
+        window.alert(Edit.DELETE_INVOLVEMENT_FAILED);
+      });
+    }
 
     return html`
       <${Screen}>
@@ -249,7 +374,7 @@
             <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              <${Badge} tone=${(canEdit && p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p, canEdit)}<//>
+              <${Badge} tone=${(mayEdit && p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p, mayEdit)}<//>
               ${chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
             </div>
           </div>
@@ -261,17 +386,52 @@
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r[1]}</span>
               </div>`; })}
             </div>` : null}
-          ${canEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
+          ${mayEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
+          ${editOn ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+            <${Button} variant="secondary" size="md" style=${{ width: "100%" }} onClick=${openInvolvement}>Involvement<//>
+            <button type="button" onClick=${deleteThisPerson} style=${{ width: "100%", padding: "12px 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--error)", background: "transparent", color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Delete person</button>
+          </div>` : null}
         </${Body}>
-        ${editS[0] ? html`<${CalSheet} title="Edit Details" subtitle=${p.name} onClose=${function () { if (!savingS[0]) editS[1](null); }}>
+        ${editS[0] ? html`<${CalSheet} title="Edit Details" subtitle=${p.name} onClose=${dismissEdit}>
           <div style=${{ padding: "16px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+            ${editOn ? html`<${Input} label="Name" value=${editS[0].name || ""} onInput=${function (e) { setField("name", e.target.value); }} />` : null}
             <${Input} label="Email" type="email" value=${editS[0].email} onInput=${function (e) { setField("email", e.target.value); }} />
             <${Input} label="Phone" type="tel" value=${editS[0].phone} onInput=${function (e) { setField("phone", e.target.value); }} />
             <${Input} label="Address" value=${editS[0].address} onInput=${function (e) { setField("address", e.target.value); }} />
             <${Input} label="Birthday" type="date" value=${editS[0].birthday} onInput=${function (e) { setField("birthday", e.target.value); }} />
+            ${editOn ? html`<${M.Fragment}>
+              <label class="m-field">
+                <span class="m-label" style=${{ display: "block", marginBottom: 6 }}>Sex</span>
+                <select value=${editS[0].sex || ""} onChange=${function (e) { setField("sex", e.target.value); }} style=${sexSelectStyle}>
+                  <option value="">Select Sex...</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </label>
+              <label style=${{ display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>
+                <input type="checkbox" checked=${!!editS[0].kid} onChange=${function (e) { setField("kid", e.target.checked); }} />
+                Kid
+              </label>
+              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: -6 }}>Gets a child tag and a pickup stub at the kiosk</div>
+            </${M.Fragment}>` : null}
             <${Button} variant="primary" size="md" style=${{ width: "100%", marginTop: 4 }} onClick=${saveEdit}>${savingS[0] ? "Saving…" : "Save Details"}<//>
           </div>
         <//>` : null}
+        ${invOpenS[0] ? html`<${CalSheet} title="Involvement" subtitle=${p.name} onClose=${function () { invOpenS[1](false); }}>
+          <div style=${{ padding: "8px 0 18px" }}>
+            ${invRowsS[0] === null ? html`<div style=${{ padding: 24, textAlign: "center", fontFamily: "var(--font-serif)", fontStyle: "italic", color: "var(--on-surface-variant)" }}>Loading…</div>`
+              : invRowsS[0].length === 0 ? html`<div style=${{ padding: 24, textAlign: "center", fontFamily: "var(--font-serif)", fontStyle: "italic", color: "var(--on-surface-variant)" }}>No involvement records.</div>`
+              : invRowsS[0].map(function (item) {
+                return html`<div key=${item.id} style=${{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--outline-variant)" }}>
+                  <div style=${{ flex: 1, minWidth: 0 }}>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--primary)" }}>${involvementRole(item.type)}</div>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${item.serviceDate || ""}</div>
+                  </div>
+                  <button type="button" onClick=${function () { deleteInvolvementRecord(item.id); }} style=${{ border: "1px solid var(--outline)", background: "var(--surface-container-lowest)", color: "var(--error)", borderRadius: "var(--radius-full)", padding: "8px 14px", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                </div>`;
+              })}
+          </div>
+        </${CalSheet}>` : null}
       </${Screen}>`;
   }
 
