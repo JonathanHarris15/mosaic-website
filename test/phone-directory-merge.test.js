@@ -460,3 +460,191 @@ test('Merge is offered in Edit Mode to an editor, admin, elder, or super admin, 
     assert.equal(Merge.offerMerge(editor, false), false);
     assert.equal(Merge.offerMerge(null, true), false);
 });
+
+// MS-648 — the write reads the server, asks the plan, and writes that.
+// A copy of the directory already on the phone is not an input.
+
+function serverPerson(id, name, email) {
+    return {
+        id: id,
+        name: name,
+        contact: { email: email, phone: '', address: '' },
+        birthday: '',
+        sex: '',
+        tags: [],
+        lastPastoralPrayerDate: null,
+    };
+}
+
+test('the merge reads both people and both histories by id, and a cached blank does not decide the fill', async () => {
+    const phoneCopy = {
+        retired: { id: 'old', contact: { email: 'stale@church.org' } },
+        kept: { id: 'keep', contact: { email: '' } },
+    };
+    const loaded = [];
+    const applied = [];
+    const result = await Merge.runDirectoryMerge({
+        loadPerson: (id) => {
+            loaded.push('person:' + id);
+            if (id === 'old') return Promise.resolve(serverPerson('old', 'Ada Duplicate', ''));
+            if (id === 'keep') return Promise.resolve(serverPerson('keep', 'Ada Lovelace', 'kept@church.org'));
+            return Promise.resolve(null);
+        },
+        loadInvolvement: (id) => {
+            loaded.push('involvement:' + id);
+            if (id === 'old') {
+                return Promise.resolve([serve('r1', '2024-02-04', 'piano', 'sunday_service')]);
+            }
+            return Promise.resolve([serve('k1', '2024-01-07', 'piano', 'sunday_service')]);
+        },
+        loadPrayers: (id) => {
+            loaded.push('prayer:' + id);
+            if (id === 'old') return Promise.resolve([prayer('2024-03-03')]);
+            return Promise.resolve([prayer('2024-01-07')]);
+        },
+        apply: (planned) => {
+            applied.push(planned);
+            return Promise.resolve();
+        },
+    }, 'old', 'keep');
+
+    assert.equal(phoneCopy.kept.contact.email, '');
+    assert.deepStrictEqual(loaded, [
+        'person:old', 'person:keep',
+        'involvement:old', 'involvement:keep',
+        'prayer:old', 'prayer:keep',
+    ]);
+    assert.equal(result.ok, true);
+    assert.equal(result.wrote, true);
+    assert.equal(result.message, 'Successfully merged "Ada Duplicate" into "Ada Lovelace"');
+    assert.equal(applied.length, 1);
+    assert.equal(applied[0].personUpdate['contact.email'], undefined);
+    assert.equal(applied[0].copyInvolvement.length, 1);
+    assert.equal(applied[0].copyPrayers[0].id, '2024-03-03');
+    assert.equal(applied[0].deletePersonId, 'old');
+    assert.equal(applied[0].personUpdate.totalInvolvements, 2);
+});
+
+test('a blank the server still has is filled, even when the phone copy already shows an email', async () => {
+    const applied = [];
+    const result = await Merge.runDirectoryMerge({
+        loadPerson: (id) => Promise.resolve(id === 'old'
+            ? serverPerson('old', 'Ada Duplicate', 'ada@church.org')
+            : serverPerson('keep', 'Ada Lovelace', '')),
+        loadInvolvement: () => Promise.resolve([]),
+        loadPrayers: () => Promise.resolve([]),
+        apply: (planned) => {
+            applied.push(planned);
+            return Promise.resolve();
+        },
+    }, 'old', 'keep');
+    assert.equal(result.ok, true);
+    assert.equal(applied[0].personUpdate['contact.email'], 'ada@church.org');
+});
+
+test('a missing record or a failed read writes nothing and says Merge operation failed', async () => {
+    let applied = 0;
+    const missing = await Merge.runDirectoryMerge({
+        loadPerson: (id) => Promise.resolve(id === 'old' ? serverPerson('old', 'Ada', 'a@b.c') : null),
+        loadInvolvement: () => Promise.resolve([]),
+        loadPrayers: () => Promise.resolve([]),
+        apply: () => {
+            applied += 1;
+            return Promise.resolve();
+        },
+    }, 'old', 'keep');
+    assert.equal(missing.ok, false);
+    assert.equal(missing.wrote, false);
+    assert.equal(missing.message, 'Merge operation failed');
+    assert.equal(applied, 0);
+
+    const same = await Merge.runDirectoryMerge({
+        loadPerson: () => Promise.resolve(serverPerson('same', 'Ada', '')),
+        loadInvolvement: () => Promise.resolve([]),
+        loadPrayers: () => Promise.resolve([]),
+        apply: () => {
+            applied += 1;
+            return Promise.resolve();
+        },
+    }, 'same', 'same');
+    assert.equal(same.ok, false);
+    assert.equal(same.wrote, false);
+    assert.equal(applied, 0);
+
+    const failed = await Merge.runDirectoryMerge({
+        loadPerson: () => Promise.reject(new Error('offline')),
+        loadInvolvement: () => Promise.resolve([]),
+        loadPrayers: () => Promise.resolve([]),
+        apply: () => {
+            applied += 1;
+            return Promise.resolve();
+        },
+    }, 'old', 'keep');
+    assert.equal(failed.ok, false);
+    assert.equal(failed.message, 'Merge operation failed');
+    assert.equal(failed.wrote, false);
+    assert.equal(applied, 0);
+});
+
+const root = path.join(__dirname, '..');
+
+function read(rel) {
+    return fs.readFileSync(path.join(root, rel), 'utf8');
+}
+
+function fnBody(src, name) {
+    const at = src.indexOf('function ' + name + '(');
+    assert.notEqual(at, -1, name + ' is missing');
+    const open = src.indexOf('{', at);
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') {
+            depth--;
+            if (depth === 0) return src.slice(at, i + 1);
+        }
+    }
+    assert.fail('unclosed ' + name);
+}
+
+test('the phone write reads the server, asks the plan, and adds no callable or rule', () => {
+    const data = read('public/mobile/data.js');
+    const merge = fnBody(data, 'mergeDirectoryPeople');
+    const person = fnBody(data, 'directoryPersonFromServer');
+    const history = fnBody(data, 'directoryHistoryFromServer');
+    const apply = fnBody(data, 'applyDirectoryMerge');
+    const fresh = fnBody(data, 'freshRead');
+    const fromServer = fnBody(data, 'getPeopleFromServer');
+
+    assert.match(merge, /runDirectoryMerge/);
+    assert.match(merge, /directoryPersonFromServer/);
+    assert.match(merge, /directoryHistoryFromServer/);
+    assert.match(merge, /applyDirectoryMerge/);
+    assert.equal(merge.includes('httpsCallable'), false);
+    assert.equal(merge.includes('getPeople('), false);
+
+    assert.match(person, /freshRead/);
+    assert.equal(person.includes('get('), false);
+    assert.match(history, /freshRead/);
+    assert.equal(history.includes('get('), false);
+    assert.match(fresh, /source:\s*"server"/);
+
+    assert.match(apply, /involvement/);
+    assert.match(apply, /HISTORY_COLLECTION/);
+    assert.match(apply, /personUpdate/);
+    assert.match(apply, /serverTimestamp/);
+    assert.match(apply, /\.update\(/);
+    assert.match(apply, /\.delete\(/);
+    assert.equal(apply.includes('httpsCallable'), false);
+    assert.equal(apply.includes('families'), false);
+    assert.equal(apply.includes('userId'), false);
+    assert.equal(apply.includes('photoUrl'), false);
+
+    assert.match(fromServer, /freshRead|source:\s*"server"/);
+    assert.match(data, /getPeopleFromServer:\s*getPeopleFromServer/);
+    assert.match(data, /mergeDirectoryPeople:\s*mergeDirectoryPeople/);
+
+    const rules = read('firestore.rules');
+    assert.equal(rules.includes('phone-directory-merge'), false);
+    assert.equal(read('public/mobile.html').includes('phone-directory-merge.js'), true);
+});
