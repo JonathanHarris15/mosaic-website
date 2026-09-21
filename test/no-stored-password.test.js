@@ -179,6 +179,16 @@ const ALLOWED = [
         line: 'return { password: deleteSentinel };',
         why: 'the cleanup patch that DELETES the field',
     },
+    {
+        file: 'scripts/seed-ghost.js',
+        line: 'password: GHOST_PASSWORD,',
+        why: 'the invented ghost login, handed to admin.auth().createUser and never written on the users document',
+    },
+    {
+        file: 'scripts/seed-ghost.js',
+        line: 'password: account.password,',
+        why: 'handed to admin.auth().createUser — the users document written beside it has no password field',
+    },
 ];
 
 function passwordKeyOccurrences() {
