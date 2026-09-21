@@ -661,7 +661,7 @@ Managing an [[Event series]] itself rather than one date of it — **everything 
 - **Announcements are edited here**, including on the Sunday Service. Locked protects the liturgical Roles, not an announcement. One date links an editor back to this tab.
 
 ### Event Announcement
-What the church should hear about an [[Event series]] or a one-off Event: a title, a short piece of plain prose, and exactly one way of going out. Printed in the Sunday service guide a whole number of weeks ahead, or told to the people who carry every chosen tag. A printed note and a tell are two announcements. The words belong to the event — a repeating event keeps them on the series, a one-off keeps them on its occurrence — and a date of a repeating event can read them and cannot change them. How it goes out, and who would be told, is not part of the words someone who can see the event may read.
+What the church should hear about an [[Event series]] or a one-off Event: a title, a short piece of plain prose, and exactly one way of going out. Printed in the Sunday service guide a whole number of weeks ahead, or told to the people who carry every chosen tag. A printed note and a tell are two announcements. The words belong to the event — a repeating event keeps them on the series, a one-off keeps them on its occurrence — and a date of a repeating event can read them and cannot change them. How it goes out, and who would be told, is not part of the words someone who can see the event may read. When it is printed, each Sunday inside those weeks shows it beside that Sunday's typed announcements and does not keep a copy. A date that is not happening contributes nothing; a moved date is counted from the day it was moved to. The same announcement is shown once on a Sunday. It appears only for an event anyone can already see — a public event, or the Sunday Service — so the booklet does not publish a gathering the event itself hides.
 _Avoid_: weekly typed announcements (those belong to one Sunday's guide, not to the event); calling how it goes out a plan (a plan is an [[Assignment]]) or a slot (a slot is a place in a Role)
 
 ### Assignment
@@ -1108,7 +1108,7 @@ The editor's right panel: everything the website can tell a Printable, grouped b
 _Avoid_: variables panel, connectors (the brief's word; a field is what you drag)
 
 **Sunday booklet text**:
-The weekly typed values that belong to a Sunday, not to a Printable's box tree: prayer-country facts, Mosaic Kids lesson, and announcements (`services/{date}.typedContent`). An editor types them once — in the Printable data drawer, or they are read through from that week's Service Guide if the store is still empty. Every Printable bound to that Sunday reads the same fields. Sunday A's values never appear on Sunday B.
+The weekly typed values that belong to a Sunday, not to a Printable's box tree: prayer-country facts, Mosaic Kids lesson, and announcements (`services/{date}.typedContent`). An editor types them once — in the Printable data drawer, or they are read through from that week's Service Guide if the store is still empty. Every Printable bound to that Sunday reads the same fields. Sunday A's values never appear on Sunday B. The announcements a Printable reads also include each printed [[Event Announcement]] in its weeks. Those are not stored in the typed values.
 _Avoid_: guide values (that is the old editor's map), weekly copy (prose)
 
 **Binding** (a **wire**):
