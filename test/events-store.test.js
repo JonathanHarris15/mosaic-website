@@ -682,6 +682,30 @@ test('deleting a one-off takes its roster with it, roster first', async () => {
     );
 });
 
+test('deleting a one-off takes its announcements with it, children first', async () => {
+    const db = fakeDb({
+        event_occurrences: {
+            supper: { seriesId: null, date: '2026-07-11', name: 'Harvest Supper', visibility: 'member', participantIds: [] },
+        },
+        'event_occurrences/supper/announcements': {
+            bring: { title: 'Bring tables', prose: 'We are eating after.', order: 0 },
+        },
+        'event_occurrences/supper/announcement_going_out': {
+            bring: { way: 'printed', weeks: 1 },
+        },
+    }, { rank: 'editor' });
+
+    await Store.deleteOccurrence(db, 'supper');
+
+    const paths = db._flatWrites().map(w => w.path);
+    assert.deepStrictEqual(paths, [
+        'event_occurrences/supper/announcements/bring',
+        'event_occurrences/supper/announcement_going_out/bring',
+        'event_occurrences/supper',
+    ]);
+    assert.ok(paths.indexOf('event_occurrences/supper') === paths.length - 1);
+});
+
 test('a date of a series is never deleted — the pattern would draw it back', async () => {
     const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'editor' });
     await assert.rejects(

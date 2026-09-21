@@ -284,12 +284,45 @@ service cloud.firestore {
         || eventId == 'sunday_service'
         || rankCanSee(stampedVisibility());
       allow create, update, delete: if isEditor();
+
+      // Event announcement words (MS-621). Whoever can already read the
+      // series — its standing description — can read the title and the prose.
+      // A participant-visibility series stays editor-and-above: this read uses
+      // the same rankCanSee as the series itself, and does not add a
+      // participant clause. The Sunday Service is named, as the series is.
+      match /announcements/{announcementId} {
+        allow read: if isKiosk()
+          || eventId == 'sunday_service'
+          || rankCanSee(get(/databases/$(database)/documents/events/$(eventId)).data.visibility);
+        allow create, update, delete: if isEditor();
+      }
+
+      // How the announcement goes out: the way, when, and the tag ids.
+      // Firestore cannot hide a field on the words, so this is a second
+      // record. Only an editor may read or write it. ADR 0065 says a
+      // pastoral assistant reads everything an elder reads; this ticket
+      // names the exception. Who would be told is not an editor-rung event
+      // read. A pastoral assistant who is not an editor does not gain it.
+      // The gate is isEditor(), not readsAsEditor().
+      match /announcement_going_out/{announcementId} {
+        allow read: if isEditor();
+        allow create, update, delete: if isEditor();
+      }
     }
 
     // Event occurrences (ADR-0018 §3): the dated instances. SPARSE — a document
     // exists only once something lands on the date, so an untouched date still
     // appears in the Calendar, computed from the series' recurrence rule.
     match /event_occurrences/{occurrenceId} {
+      // A one-off has no series. A date of a series carries seriesId, and must
+      // not grow its own announcement. An absent seriesId and an explicit null
+      // are both a one-off — older writes used either. Defined here so
+      // occurrenceId is the path this match is on.
+      function oneOffOccurrence() {
+        let occ = get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data;
+        return !('seriesId' in occ) || occ.seriesId == null || occ.seriesId == '';
+      }
+
       allow read: if isKiosk()
         || rankCanSee(stampedVisibility())
         || (stampedVisibility() == 'participant' && isEventParticipant());
@@ -357,6 +390,25 @@ service cloud.firestore {
               && request.auth != null
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
         allow create, update, delete: if isEditor();
+      }
+
+      // Event announcement words on a ONE-OFF. The occurrence is the event,
+      // so the read is the occurrence's own visibility. A date of a series
+      // does not store a copy: a seriesId on the occurrence closes both
+      // records. How it goes out is editor-only, same split as on the series.
+      match /announcements/{announcementId} {
+        allow read: if oneOffOccurrence()
+          && (isKiosk()
+            || rankCanSee(get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility)
+            || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
+                && request.auth != null
+                && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds));
+        allow create, update, delete: if isEditor() && oneOffOccurrence();
+      }
+
+      match /announcement_going_out/{announcementId} {
+        allow read: if isEditor() && oneOffOccurrence();
+        allow create, update, delete: if isEditor() && oneOffOccurrence();
       }
     }
 

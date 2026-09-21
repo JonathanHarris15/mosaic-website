@@ -74,6 +74,9 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AwayCore = require('../public/away-core.js');
     sandbox.AwayStore = require('../public/away-store.js');
     sandbox.AccessCore = require('../public/access-core.js');
+    sandbox.EventAnnouncementCore = require('../public/event-announcement-core.js');
+    sandbox.EventAnnouncementStore = require('../public/event-announcement-store.js');
+    sandbox.EventAnnouncementPanel = require('../public/event-announcement-panel.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -1926,7 +1929,7 @@ test('the page offers both, and says which people go with it', () => {
     assert.match(page.deleteSentence, /^2 people/);
 });
 
-test('deleting a one-off takes its roster and leaves the page', async () => {
+test('deleting a one-off takes its roster and its announcements and leaves the page', async () => {
     const writes = [];
     const fakeDb = {
         collection: name => ({
@@ -1959,7 +1962,12 @@ test('deleting a one-off takes its roster and leaves the page', async () => {
 
     await page.deleteThisEvent();
 
-    assert.deepStrictEqual(writes, ['event_occurrences/harvest/roster/r1', 'event_occurrences/harvest']);
+    assert.deepStrictEqual(writes, [
+        'event_occurrences/harvest/roster/r1',
+        'event_occurrences/harvest/announcements/r1',
+        'event_occurrences/harvest/announcement_going_out/r1',
+        'event_occurrences/harvest',
+    ]);
     assert.match(location.href, /calendar\.html/,
         'the page stays open on something that is gone');
 });
@@ -7029,16 +7037,18 @@ test('a member reaches Dates and a read-only Event, never a tab that writes', ()
     // literal on the right, and deepStrictEqual's prototype check would fail
     // on that alone. The same reason most array assertions in this file use
     // deepEqual against a loadComponent page.
-    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event'],
+    // Announcements is shared, the way The event is: a member reads the title
+    // and the prose, and the write controls sit behind announcementTab().editable.
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'announcements'],
         'a member is offered a tab that writes');
 
     page.rank = 'editor';
-    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'rota', 'roles', 'who']);
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'announcements', 'rota', 'roles', 'who']);
 });
 
 test('the browse lane offers nothing that writes', () => {
-    // The Dates and Event tabs are the two a member can reach (proven by the
-    // test above). Dates must carry nothing that writes at all; the Event tab
+    // Dates, The event, and Announcements are what a member can reach (proven
+    // by the test above). Dates must carry nothing that writes at all; the Event tab
     // is SHARED with an editor, so its write controls are still in the
     // markup — they just have to sit behind their own `x-show="isEditor"`
     // (or `patternEditable`, which is isEditor under a different name),

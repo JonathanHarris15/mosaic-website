@@ -119,9 +119,19 @@ test('every editor-read an elder has names readsAsEditor', () => {
     // guidance versions, roster, attendance — any remaining `allow read` that
     // still says isEditor() and not readsAsEditor() is a gap a Pastoral
     // Assistant would fall through.
+    //
+    // How an announcement goes out (MS-621) is the exception, and it is named
+    // in the PRD against ADR 0065: who would be told is not an editor-rung
+    // event read. A pastoral assistant who is not an editor does not read it.
+    // The gate stays isEditor(), on the series and on a one-off.
+    const ANNOUNCEMENT_PLAN_READS = [
+        'allow read: if isEditor();',
+        'allow read: if isEditor() && oneOffOccurrence();',
+    ];
     const allowLines = firestoreCode.split('\n').filter(line => /^\s*allow /.test(line));
     const editorReads = allowLines.filter(line =>
         /\bread\b/.test(line) && /isEditor\(\)/.test(line) && !/readsAsEditor\(\)/.test(line)
+        && !ANNOUNCEMENT_PLAN_READS.some(kept => line.trim() === kept)
     );
     assert.deepEqual(
         editorReads,

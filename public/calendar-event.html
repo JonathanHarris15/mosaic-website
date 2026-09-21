@@ -52,6 +52,9 @@
     <script src="fairness-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <script src="event-announcement-core.js"></script>
+    <script src="event-announcement-store.js"></script>
+    <script src="event-announcement-panel.js"></script>
     <script src="event-attachments-core.js"></script>
     <!-- Printables linked to this event (MS-400): the model, the store, the
          live data and the PDF snapshot. -->
@@ -419,6 +422,9 @@
                           class="text-on-surface-variant"
                           x-text="attachments.length + documents.length"></span>
                 </button>
+                <button type="button" class="m-tabs__tab"
+                        :class="tab === 'announcements' && 'm-tabs__tab--current'"
+                        @click="tab = 'announcements'">Announcements</button>
                 <button type="button" class="m-tabs__tab" x-show="isEditor"
                         :class="tab === 'attendance' && 'm-tabs__tab--current'"
                         @click="tab = 'attendance'">
@@ -431,6 +437,103 @@
             <!-- Who was present — shared markup, mounted only here. -->
             <div class="mt-gutter" x-show="isEditor && tab === 'attendance'">
                 <div data-roles-panel="attendance"></div>
+            </div>
+
+            <!-- Announcements (MS-621). Words for anyone who can see the event.
+                 How it goes out — when, the tags, the names — is an editor's.
+                 A date of a repeating event reads the series and does not change it. -->
+            <div class="mt-gutter max-w-[640px]" x-show="tab === 'announcements'">
+                <h3 class="font-display text-[18px] text-primary">Announcements</h3>
+                <p class="text-[12.5px] text-on-surface-variant mb-sm">What the church should hear about this event.</p>
+                <p class="mb-sm" x-show="announcementTab().seriesHref">
+                    <a class="m-btn m-btn--secondary m-btn--sm" :href="announcementTab().seriesHref">Edit on the series</a>
+                </p>
+                <p class="text-[14px] text-on-surface-variant mb-sm" x-show="!announcements.length && !announcementForm">Nothing has been written yet.</p>
+                <template x-for="item in announcements" :key="item.id">
+                    <article class="m-card mb-sm">
+                        <h4 class="text-[16px] text-on-surface" x-text="item.title"></h4>
+                        <p class="text-[14px] whitespace-pre-wrap mt-1" x-text="item.prose"></p>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1" x-show="announcementTab().showsGoingOut" x-text="announcementSchedule(item)"></p>
+                        <div class="flex gap-sm mt-sm" x-show="announcementTab().editable">
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="editAnnouncement(item)">Change</button>
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="deleteAnnouncement(item.id)">Delete</button>
+                        </div>
+                    </article>
+                </template>
+                <p class="text-[12.5px] text-on-surface-variant mb-sm" x-show="!announcementTab().showsGoingOut">The title and the prose are what you can read here.</p>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm mb-sm"
+                        x-show="announcementTab().editable && !announcementForm"
+                        @click="startAnnouncement()">Add an announcement</button>
+                <template x-if="announcementForm">
+                    <form class="m-card" @submit.prevent="saveAnnouncement()">
+                        <label class="m-field">
+                            <span class="m-label">Title</span>
+                            <input type="text" class="m-input" maxlength="120" x-model="announcementForm.title" />
+                        </label>
+                        <label class="m-field mt-sm">
+                            <span class="m-label">Prose</span>
+                            <textarea class="m-input" rows="4" maxlength="2000" x-model="announcementForm.prose"></textarea>
+                        </label>
+                        <fieldset class="mt-sm">
+                            <legend class="m-label">How it goes out</legend>
+                            <label class="flex items-center gap-2 mt-1">
+                                <input type="radio" :checked="announcementForm.way === 'printed'" @change="setAnnouncementWay('printed')" />
+                                Printed in the Sunday service guide
+                            </label>
+                            <label class="flex items-center gap-2 mt-1">
+                                <input type="radio" :checked="announcementForm.way === 'told'" @change="setAnnouncementWay('told')" />
+                                Told
+                            </label>
+                        </fieldset>
+                        <label class="m-field mt-sm" x-show="announcementForm.way === 'printed'">
+                            <span class="m-label">Weeks ahead</span>
+                            <input type="number" min="1" step="1" class="m-input" x-model.number="announcementForm.weeks" />
+                        </label>
+                        <div class="mt-sm" x-show="announcementForm.way === 'told' && announcementPlace() && announcementPlace().kind === 'one-off'">
+                            <template x-for="(when, index) in announcementForm.dates" :key="index">
+                                <div class="flex flex-wrap gap-sm mb-1">
+                                    <input type="date" class="m-input" x-model="when.date" />
+                                    <input type="time" class="m-input" x-model="when.time" />
+                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="removeAnnouncementDate(index)">Remove</button>
+                                </div>
+                            </template>
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="addAnnouncementDate()">Add a date</button>
+                        </div>
+                        <div class="mt-sm" x-show="announcementForm.way === 'told' && announcementPlace() && announcementPlace().kind === 'repeating'">
+                            <label class="m-field">
+                                <span class="m-label">Days before each occurrence</span>
+                                <input type="number" min="0" step="1" class="m-input" x-model.number="announcementForm.daysBefore" />
+                            </label>
+                            <label class="m-field mt-sm">
+                                <span class="m-label">Time</span>
+                                <input type="time" class="m-input" x-model="announcementForm.time" />
+                            </label>
+                        </div>
+                        <div class="mt-sm" x-show="announcementForm.way === 'told'">
+                            <p class="m-label">Tags</p>
+                            <template x-for="tag in offeredAnnouncementTags()" :key="tag.id">
+                                <label class="flex items-center gap-2 mt-1">
+                                    <input type="checkbox" :checked="announcementTagChosen(tag.id)" @change="toggleAnnouncementTag(tag.id)" />
+                                    <span x-text="tag.name"></span>
+                                </label>
+                            </template>
+                            <template x-for="tag in privateAnnouncementTags()" :key="tag.id">
+                                <p class="text-[13px] text-on-surface-variant mt-1">Private</p>
+                            </template>
+                            <p class="m-label mt-sm">Who matches today</p>
+                            <ul>
+                                <template x-for="name in announcementNames" :key="name">
+                                    <li x-text="name"></li>
+                                </template>
+                            </ul>
+                        </div>
+                        <p class="text-[13px] text-error mt-sm" x-show="announcementRefusal" x-text="announcementRefusal"></p>
+                        <div class="flex gap-sm mt-sm">
+                            <button type="submit" class="m-btn m-btn--primary m-btn--sm" :disabled="announcementSaving">Save</button>
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelAnnouncement()">Cancel</button>
+                        </div>
+                    </form>
+                </template>
             </div>
 
             <!-- ── Files (MS-287) ──────────────────────────────────────────
