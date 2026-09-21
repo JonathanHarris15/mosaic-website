@@ -551,6 +551,27 @@
     </div>`;
   }
 
+  // The Directory Photo on the person page. The picture stays visible. The
+  // buttons sit under it, on screen, and only while Edit Mode offers them.
+  // The list does not grow this control. A change goes through the phone
+  // photo plan, then the upload or clear the computer directory already uses.
+  function DirectoryPhoto(props) {
+    var Plan = window.PhoneDirectoryPhoto;
+    var person = props.person;
+    var offered = Plan.offerControls(props.user, props.editMode);
+    var buttons = Plan.controls(person);
+    var busy = !!props.busy;
+    return html`<${M.Fragment}>
+      <${Avatar} name=${person.name} photoUrl=${person.photoUrl} photoCrop=${person.photoCrop} size=${82} />
+      ${offered ? html`<div style=${{ display: "flex", gap: 8, marginTop: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        ${buttons.add ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${buttons.add}<//>` : null}
+        ${buttons.replace ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${buttons.replace}<//>` : null}
+        ${buttons.remove ? html`<${Button} type="button" variant="danger-outline" size="sm" disabled=${busy} onClick=${props.onRemove}>${buttons.remove}<//>` : null}
+      </div>
+      <input type="file" id="phone-directory-photo-input" accept=${Plan.ACCEPT} onChange=${props.onFile} style=${{ display: "none" }} />` : null}
+    </${M.Fragment}>`;
+  }
+
   // ── Person Detail ────────────────────────────────────────
   // Member-facing person page: contact + membership, no shepherding surface.
   // Editors (editor/elder/admin/super_admin) get an inline Edit Details modal
@@ -691,13 +712,68 @@
         window.alert(Edit.DELETE_INVOLVEMENT_FAILED);
       });
     }
+    var PhotoPlan = window.PhoneDirectoryPhoto;
+    var photoLockS = useState({ saving: false });
+    var photoBusyS = useState(false);
+    function choosePhoto() {
+      if (photoLockS[0].saving) return;
+      var input = document.getElementById("phone-directory-photo-input");
+      if (input) input.click();
+    }
+    function onPhotoFile(event) {
+      var input = event.target;
+      var file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      var session = photoLockS[0];
+      if (!PhotoPlan.claimSave(session)) return;
+      var planned = PhotoPlan.planChosenFile(props.user, p, editOn, file);
+      if (!planned.write) {
+        PhotoPlan.releaseSave(session);
+        if (planned.error) window.alert(planned.error);
+        return;
+      }
+      photoBusyS[1](true);
+      window.PersonPhotoCore.uploadPersonPhoto(data.db, p.id, file).then(function (saved) {
+        pS[1](PhotoPlan.photoAfterUpload(p, saved));
+        PhotoPlan.releaseSave(session);
+        photoBusyS[1](false);
+      }).catch(function (err) {
+        PhotoPlan.releaseSave(session);
+        photoBusyS[1](false);
+        window.alert(PhotoPlan.uploadFailureMessage(err));
+      });
+    }
+    function removePhoto() {
+      var session = photoLockS[0];
+      if (session.saving) return;
+      var asked = PhotoPlan.planRemoval(props.user, p, editOn, false);
+      if (!asked.ok) return;
+      if (!window.confirm(asked.question)) return;
+      if (!PhotoPlan.claimSave(session)) return;
+      var planned = PhotoPlan.planRemoval(props.user, p, editOn, true);
+      if (!planned.write) {
+        PhotoPlan.releaseSave(session);
+        return;
+      }
+      photoBusyS[1](true);
+      window.PersonPhotoCore.clearPersonPhoto(data.db, p.id).then(function () {
+        pS[1](PhotoPlan.photoAfterClear(p));
+        PhotoPlan.releaseSave(session);
+        photoBusyS[1](false);
+      }).catch(function () {
+        PhotoPlan.releaseSave(session);
+        photoBusyS[1](false);
+        window.alert(PhotoPlan.REMOVE_FAILED);
+      });
+    }
 
     return html`
       <${Screen}>
         <${TopBar} title="Directory" onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "22px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${82} />
+            <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
               <${Badge} tone=${Track.directoryLabel(p, props.user) === "Inactive" ? "secondary" : "primary"}>${Track.directoryLabel(p, props.user)}<//>
