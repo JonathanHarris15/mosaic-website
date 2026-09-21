@@ -214,11 +214,25 @@
 
     // A Projected Tag stays visible — it is the Track, and it is locked.
     // An ordinary tag hidden from non-elders stays hidden from an editor.
-    function tagVisible(tagId, user, visibility) {
+    function tagVisible(tagId, user, visibility, tagsReady) {
         if (tagLocked(tagId)) return true;
         if (readsAsElder(user)) return true;
+        // Until the vocabulary is loaded, an ordinary tag might be one hidden
+        // from non-elders. Do not show the name on that guess.
+        if (tagsReady === false) return false;
         const hidden = (visibility && visibility.hidden) || {};
         return !hidden[tagId];
+    }
+
+    // What the chip says. The person's tags hold the vocabulary id; the name
+    // is what an editor typed and what the filter offers.
+    function tagLabel(tagId, vocabulary) {
+        const list = vocabulary || [];
+        for (let i = 0; i < list.length; i++) {
+            const tag = tagIdentity(list[i]);
+            if (tag && (tag.id === tagId || tag.name === tagId)) return tag.name;
+        }
+        return tagId;
     }
 
     // The slider, the Inactive control, and tag editing. Same door as Edit Mode.
@@ -250,26 +264,26 @@
         return tags.some((tag) => hidePeople[tag]);
     }
 
-    function carriesEveryChosenTag(who, chosen) {
-        const tags = (who && who.tags) || [];
+    function carriesEveryChosenTag(person, chosen) {
+        const tags = (person && person.tags) || [];
         return (chosen || []).every((tag) => tags.indexOf(tag) !== -1);
     }
 
-    function nameMatches(who, search) {
+    function nameMatches(person, search) {
         const query = trim(search).toLowerCase();
         if (!query) return true;
-        return String(who && who.name || '').toLowerCase().indexOf(query) !== -1;
+        return String(person && person.name || '').toLowerCase().indexOf(query) !== -1;
     }
 
     // Tab, search, and — while Edit Mode is on — every chosen tag. Edit Mode
     // off ignores a leftover choice so the next lookup is the whole tab.
-    function visibleInDirectory(who, opts) {
+    function visibleInDirectory(person, opts) {
         const options = opts || {};
-        if (!matchesDirectoryTab(who, options.tab, options.user)) return false;
-        if (personHiddenFrom(who, options.user, options.visibility)) return false;
-        if (!nameMatches(who, options.search)) return false;
+        if (!matchesDirectoryTab(person, options.tab, options.user)) return false;
+        if (personHiddenFrom(person, options.user, options.visibility)) return false;
+        if (!nameMatches(person, options.search)) return false;
         if (options.editMode && options.chosenTags && options.chosenTags.length) {
-            if (!carriesEveryChosenTag(who, options.chosenTags)) return false;
+            if (!carriesEveryChosenTag(person, options.chosenTags)) return false;
         }
         return true;
     }
@@ -307,6 +321,7 @@
         tagLocked,
         personAfterTagWrite,
         tagVisible,
+        tagLabel,
         offerEdits,
         matchesDirectoryTab,
         directoryLabel,

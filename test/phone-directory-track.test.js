@@ -313,6 +313,16 @@ test('a tag hidden from non-elders stays off an editor, and a Projected Tag stay
     assert.equal(Track.tagVisible('Member', editor, visibility), true);
     assert.equal(Track.tagVisible('Elder', member, visibility), true);
     assert.equal(Track.tagVisible('Choir', editor, visibility), true);
+    assert.equal(Track.tagVisible('Private', editor, { hidden: {} }, false), false);
+    assert.equal(Track.tagVisible('Choir', editor, { hidden: {} }, false), false);
+    assert.equal(Track.tagVisible('Member', editor, { hidden: {} }, false), true);
+    assert.equal(Track.tagVisible('Private', elder, { hidden: {} }, false), true);
+});
+
+test('a tag chip says the vocabulary name, not a different id', () => {
+    assert.equal(Track.tagLabel('abc', [{ id: 'abc', name: 'Choir' }]), 'Choir');
+    assert.equal(Track.tagLabel('Choir', ['Choir']), 'Choir');
+    assert.equal(Track.tagLabel('Ushers', []), 'Ushers');
 });
 
 function read(rel) {
@@ -354,7 +364,11 @@ test('the list and the person page share one slider and one tag control, without
     }
     assert.match(track, /aria-label="Membership Track"/);
     assert.match(track, /Mark inactive/);
-    assert.match(track, /disabled=\$\{inactive/);
+    assert.match(track, /sliderMoves/);
+    assert.match(list, /offerEdits\(props\.user, modeS\[0\]\)/);
+    assert.match(page, /offerEdits\(props\.user, editFlagS\[0\]\)/);
+    assert.match(fnBody(src, 'DirectoryTags'), /tagLabel/);
+    assert.match(fnBody(src, 'DirectoryTags'), /tagsReady/);
     assert.equal(track.includes('hover'), false);
     assert.match(tags, /aria-label="Add a tag"/);
     assert.match(tags, /tagLocked/);

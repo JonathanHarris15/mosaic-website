@@ -152,6 +152,9 @@
   function emptyAddDraft() {
     return { name: "", email: "", phone: "", address: "", birthday: "", sex: "" };
   }
+  function vocabularyEntry(created) {
+    return Object.assign({ hiddenFromOthers: false, hidePeople: false }, created);
+  }
   function saveDirectoryTrack(person, user, action) {
     var Track = window.PhoneDirectoryTrack;
     var plan = Track.planTrackMove(person.membership, action);
@@ -174,26 +177,30 @@
   function DirectoryTrack(props) {
     var Track = window.PhoneDirectoryTrack;
     var membership = props.person.membership || {};
-    var inactive = !!membership.inactive;
+    var moves = Track.sliderMoves(membership);
     var index = Track.sliderIndex(membership);
     var busy = !!props.busy;
     return html`<div style=${{ marginTop: 10 }}>
       <input type="range" min="0" max=${Track.STAGES.length - 1} step="1" value=${String(index)}
-        disabled=${inactive || busy}
+        disabled=${!moves || busy}
         aria-label="Membership Track"
         onChange=${function (e) {
           props.onTrack({ kind: "stage", stage: Track.STAGES[Number(e.target.value)] });
         }}
-        style=${{ width: "100%", accentColor: "var(--primary)", opacity: inactive ? 0.45 : 1 }} />
+        style=${{ width: "100%", accentColor: "var(--primary)", opacity: moves ? 1 : 0.45 }} />
       <div style=${{ display: "flex", justifyContent: "space-between", gap: 2, marginTop: 4 }}>
         ${Track.STAGES.map(function (stage, i) {
-          var on = !inactive && Track.STAGES.indexOf(membership.stage) === i;
+          var on = moves && Track.STAGES.indexOf(membership.stage) === i;
           return html`<span key=${stage} style=${{ flex: 1, textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 8.5, lineHeight: 1.15, color: on ? "var(--primary)" : "var(--on-surface-variant)", fontWeight: on ? 700 : 400 }}>${Track.STAGE_LABEL[stage]}</span>`;
         })}
       </div>
-      <button type="button" disabled=${busy} onClick=${function () { props.onTrack({ kind: "inactive", inactive: !inactive }); }}
-        style=${{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, border: "1px solid " + (inactive ? "var(--primary)" : "var(--outline-variant)"), background: inactive ? "var(--primary)" : "transparent", color: inactive ? "var(--on-primary)" : "var(--on-surface-variant)" }}>
-        ${inactive ? "Inactive — tap to reactivate" : "Mark inactive"}
+      <button type="button" disabled=${busy} onClick=${function () {
+          // moves means they are not Inactive, so this press marks them Inactive.
+          // Otherwise it clears Inactive and the stage comes back.
+          props.onTrack({ kind: "inactive", inactive: moves });
+        }}
+        style=${{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, border: "1px solid " + (moves ? "var(--outline-variant)" : "var(--primary)"), background: moves ? "transparent" : "var(--primary)", color: moves ? "var(--on-surface-variant)" : "var(--on-primary)" }}>
+        ${moves ? "Mark inactive" : "Inactive — tap to reactivate"}
       </button>
     </div>`;
   }
@@ -202,7 +209,7 @@
     var draftS = useState("");
     var busy = !!props.busy;
     var tags = (props.person.tags || []).filter(function (tag) {
-      return Track.tagVisible(tag, props.user, props.visibility);
+      return Track.tagVisible(tag, props.user, props.visibility, props.tagsReady);
     });
     function add(event) {
       event.preventDefault();
@@ -215,9 +222,10 @@
       <div style=${{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         ${tags.map(function (tag) {
           var locked = Track.tagLocked(tag);
+          var label = Track.tagLabel(tag, props.vocabulary);
           return html`<span key=${tag} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: locked ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: locked ? "var(--primary-fixed)" : "var(--primary)", color: locked ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
-            ${locked ? html`${Ic("lock", 11)}` : null}${tag}
-            ${locked ? null : html`<button type="button" aria-label=${"Remove " + tag} disabled=${busy} onClick=${function () { props.onTag({ kind: "remove", name: tag }); }} style=${{ border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", display: "flex", padding: 0 }}>${Ic("x", 12)}</button>`}
+            ${locked ? html`${Ic("lock", 11)}` : null}${label}
+            ${locked ? null : html`<button type="button" aria-label=${"Remove " + label} disabled=${busy} onClick=${function () { props.onTag({ kind: "remove", name: tag }); }} style=${{ border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", display: "flex", padding: 0 }}>${Ic("x", 12)}</button>`}
           </span>`;
         })}
       </div>
@@ -258,7 +266,7 @@
         if (!on) chosenS[1]([]);
       });
     }, []);
-    var editOn = mayEdit && modeS[0];
+    var editOn = Track.offerEdits(props.user, modeS[0]);
     var mayOpen = mayOpenDirectory(props.user);
     var reloadS = useState(0);
     var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
@@ -267,7 +275,8 @@
     var addOpenS = useState(false), addDraftS = useState(emptyAddDraft()), addingS = useState(false);
     var extraTagsS = useState([]);
     var overrideS = useState({});
-    var savingS = useState(null);
+    var savingS = useState({});
+    var tagsReady = !tagsSt.loading;
     var people = (st.data || []).map(function (p) { return overrideS[0][p.id] || p; });
     var vocabulary = (tagsSt.data || []).concat(extraTagsS[0]);
     var vis = tagVisibility(tagsSt.data);
@@ -308,37 +317,49 @@
       var on = chosen.indexOf(tagId) !== -1;
       chosenS[1](on ? chosen.filter(function (id) { return id !== tagId; }) : chosen.concat([tagId]));
     }
+    function setSaving(id, on) {
+      savingS[1](function (prev) {
+        var next = Object.assign({}, prev || {});
+        if (on) next[id] = true;
+        else delete next[id];
+        return next;
+      });
+    }
     function rememberPerson(next) {
       if (!next) return;
-      var patch = Object.assign({}, overrideS[0]);
-      patch[next.id] = next;
-      overrideS[1](patch);
+      overrideS[1](function (prev) {
+        var patch = Object.assign({}, prev || {});
+        patch[next.id] = next;
+        return patch;
+      });
     }
     function rememberTag(created) {
       if (!created) return;
-      extraTagsS[1](extraTagsS[0].concat([Object.assign({ hiddenFromOthers: false, hidePeople: false }, created)]));
+      extraTagsS[1](function (prev) {
+        return (prev || []).concat([vocabularyEntry(created)]);
+      });
     }
     function onTrack(p, action) {
-      if (savingS[0]) return;
-      savingS[1](p.id);
+      if (savingS[0][p.id]) return;
+      setSaving(p.id, true);
       saveDirectoryTrack(p, props.user, action).then(function (next) {
         rememberPerson(next);
-        savingS[1](null);
+        setSaving(p.id, false);
       }).catch(function () {
-        savingS[1](null);
+        setSaving(p.id, false);
         window.alert(Track.TRACK_FAILED);
       });
     }
     function onTag(p, action) {
-      if (savingS[0]) return;
-      savingS[1](p.id);
+      if (savingS[0][p.id]) return;
+      setSaving(p.id, true);
       saveDirectoryTag(p, vocabulary, action).then(function (result) {
-        savingS[1](null);
+        setSaving(p.id, false);
         if (!result) return;
         rememberPerson(result.person);
         rememberTag(result.create);
       }).catch(function () {
-        savingS[1](null);
+        setSaving(p.id, false);
         window.alert(Track.TAG_FAILED);
       });
     }
@@ -396,8 +417,8 @@
                       </div>
                       <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
                     </button>
-                    ${editOn ? html`<${DirectoryTrack} person=${p} busy=${savingS[0] === p.id} onTrack=${function (action) { onTrack(p, action); }} />` : null}
-                    ${editOn ? html`<${DirectoryTags} key=${p.id} person=${p} user=${props.user} visibility=${vis} busy=${savingS[0] === p.id} onTag=${function (action) { onTag(p, action); }} />` : null}
+                    ${editOn ? html`<${DirectoryTrack} person=${p} busy=${!!savingS[0][p.id]} onTrack=${function (action) { onTrack(p, action); }} />` : null}
+                    ${editOn ? html`<${DirectoryTags} key=${p.id} person=${p} user=${props.user} vocabulary=${vocabulary} visibility=${vis} tagsReady=${tagsReady} busy=${!!savingS[0][p.id]} onTag=${function (action) { onTag(p, action); }} />` : null}
                   </div>`;
                 })}
                 ${results.length === 0 ? html`<${Empty}>No people match.<//>` : null}
@@ -432,7 +453,7 @@
     var mayEdit = Edit.mayOfferEditMode(props.user);
     var editFlagS = useState(Edit.isOn());
     useEffect(function () { return Edit.subscribe(function (on) { editFlagS[1](on); }); }, []);
-    var editOn = mayEdit && editFlagS[0];
+    var editOn = Track.offerEdits(props.user, editFlagS[0]);
     var pS = useState((props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 });
     var p = pS[0];
     var tagsSt = useAsync(data.getShepherdingTags, []);
@@ -460,9 +481,7 @@
         savingTrackS[1](false);
         if (!result) return;
         pS[1](result.person);
-        if (result.create) {
-          extraTagsS[1](extraTagsS[0].concat([Object.assign({ hiddenFromOthers: false, hidePeople: false }, result.create)]));
-        }
+        if (result.create) extraTagsS[1](extraTagsS[0].concat([vocabularyEntry(result.create)]));
       }).catch(function () {
         savingTrackS[1](false);
         window.alert(Track.TAG_FAILED);
@@ -546,7 +565,7 @@
             </div>
             ${editOn ? html`<div style=${{ width: "100%", marginTop: 8 }}>
               <${DirectoryTrack} person=${p} busy=${savingTrackS[0]} onTrack=${onTrack} />
-              <${DirectoryTags} person=${p} user=${props.user} visibility=${vis} busy=${savingTrackS[0]} onTag=${onTag} />
+              <${DirectoryTags} person=${p} user=${props.user} vocabulary=${vocabulary} visibility=${vis} tagsReady=${tagsReady} busy=${savingTrackS[0]} onTag=${onTag} />
             </div>` : null}
           </div>
           ${contact.length ? html`
