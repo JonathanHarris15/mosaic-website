@@ -878,8 +878,7 @@
   // fetched whole so FamilyCore can resolve a Person's relations client-side.
   function getFamilies() {
     return db.collection("families").get()
-      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
-      .catch(function () { return []; });
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); });
   }
 
   // Family write-through (ADR-0014 s4). The profile's quick-assign card authors
