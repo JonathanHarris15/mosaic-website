@@ -646,5 +646,65 @@ test('the phone write reads the server, asks the plan, and adds no callable or r
 
     const rules = read('firestore.rules');
     assert.equal(rules.includes('phone-directory-merge'), false);
-    assert.equal(read('public/mobile.html').includes('phone-directory-merge.js'), true);
+    const html = read('public/mobile.html');
+    const eventsAt = html.indexOf('events-core.js');
+    const prayerAt = html.indexOf('pastoral-prayer-core.js');
+    const mergeAt = html.indexOf('phone-directory-merge.js');
+    const trackAt = html.indexOf('phone-directory-track.js');
+    assert.ok(eventsAt !== -1 && mergeAt > eventsAt);
+    assert.ok(prayerAt !== -1 && mergeAt > prayerAt);
+    assert.ok(trackAt !== -1 && mergeAt > trackAt);
+});
+
+test('Merge is on the person page in Edit Mode, and absent from the list and from Edit Details', () => {
+    const src = read('public/mobile/screens-content.js');
+    const page = fnBody(src, 'PersonDetailScreen');
+    const list = fnBody(src, 'PeopleScreen');
+    const mergeUi = fnBody(src, 'DirectoryMerge');
+    const onMerge = fnBody(src, 'onDirectoryMerge');
+    const after = fnBody(src, 'afterDirectoryMerge');
+
+    assert.match(page, /<\$\{DirectoryMerge\}/);
+    const mergeAt = page.indexOf('<${DirectoryMerge}');
+    const editAt = page.lastIndexOf('editOn ? html', mergeAt);
+    assert.ok(editAt !== -1 && editAt < mergeAt);
+    assert.ok(mergeAt < page.indexOf('title="Edit Details"'));
+    assert.equal(list.includes('<${DirectoryMerge}'), false);
+    assert.equal(list.includes('survivorSearch'), false);
+    assert.equal(list.includes('mergeDirectoryPeople'), false);
+    assert.match(list, /consumeServerList/);
+    assert.match(list, /getPeopleFromServer/);
+
+    const sheet = page.slice(page.indexOf('title="Edit Details"'), page.indexOf('title="Involvement"'));
+    assert.equal(sheet.includes('DirectoryMerge'), false);
+    assert.equal(sheet.includes('survivorSearch'), false);
+
+    assert.match(mergeUi, /offerMerge/);
+    assert.match(mergeUi, /survivorSearch/);
+    assert.match(mergeUi, /confirmation\(/);
+    assert.match(mergeUi, />Merge</);
+    assert.match(mergeUi, /Search for the record to keep/);
+    assert.match(mergeUi, /words\.title/);
+    assert.match(mergeUi, /words\.warning/);
+    assert.match(mergeUi, /words\.lines/);
+    assert.match(mergeUi, /words\.deleted/);
+    assert.match(mergeUi, /words\.confirm/);
+    assert.match(mergeUi, /words\.cancel/);
+    assert.match(mergeUi, /MERGE_FAILED/);
+    assert.match(mergeUi, /lockS\[0\]\.current/);
+    assert.equal(mergeUi.includes('hover'), false);
+    assert.equal(mergeUi.includes('absolute'), false);
+    assert.equal(mergeUi.includes('httpsCallable'), false);
+
+    const choose = fnBody(mergeUi, 'choose');
+    const cancel = fnBody(mergeUi, 'cancel');
+    assert.equal(choose.includes('onMerge'), false);
+    assert.equal(choose.includes('mergeDirectoryPeople'), false);
+    assert.equal(cancel.includes('onMerge'), false);
+    assert.equal(cancel.includes('mergeDirectoryPeople'), false);
+
+    assert.match(onMerge, /mergeDirectoryPeople\(retired\.id, kept\.id\)/);
+    assert.equal(onMerge.includes('httpsCallable'), false);
+    assert.match(after, /markListFromServer/);
+    assert.match(after, /props\.back/);
 });
