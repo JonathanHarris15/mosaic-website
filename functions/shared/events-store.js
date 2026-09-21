@@ -49,7 +49,7 @@
     // one-off — children first — does not make every page that loads this
     // store also load that model. event-announcement-store.test.js pins them.
     const ANNOUNCEMENT_WORDS = 'announcements';
-    const ANNOUNCEMENT_PLANS = 'announcement_plans';
+    const ANNOUNCEMENT_GOING_OUT = 'announcement_going_out';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -936,10 +936,10 @@
 
         const childCollection = name => occurrenceRef(db, id).collection(name).get()
             .catch(() => ({ docs: [] }));
-        const [roster, words, plans] = await Promise.all([
+        const [roster, words, goingOut] = await Promise.all([
             childCollection(ROSTER),
             childCollection(ANNOUNCEMENT_WORDS),
-            childCollection(ANNOUNCEMENT_PLANS),
+            childCollection(ANNOUNCEMENT_GOING_OUT),
         ]);
 
         // The children FIRST, the document last. The other way round leaves a
@@ -948,7 +948,7 @@
         // the same way the roster does.
         const writes = roster.docs.map(d => ({ kind: 'delete', ref: d.ref }));
         words.docs.forEach(d => writes.push({ kind: 'delete', ref: d.ref }));
-        plans.docs.forEach(d => writes.push({ kind: 'delete', ref: d.ref }));
+        goingOut.docs.forEach(d => writes.push({ kind: 'delete', ref: d.ref }));
         writes.push({ kind: 'delete', ref: occurrenceRef(db, id) });
 
         await commitInBatches(db, writes);
@@ -1850,7 +1850,7 @@
         ATTENDANCE,
         ATTACHMENTS,
         ANNOUNCEMENT_WORDS,
-        ANNOUNCEMENT_PLANS,
+        ANNOUNCEMENT_GOING_OUT,
         shiftOccurrences,
         shiftDays,
         seesEveryRung,

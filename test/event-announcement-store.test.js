@@ -94,18 +94,18 @@ test('saving a legal announcement and reading it back keeps the title, prose, wa
     assert.equal(back[0].weeks, 2);
 });
 
-test('the words and the plan are stored as two records', async () => {
+test('the words and how it goes out are stored as two records', async () => {
     const db = memoryDb();
     const saved = await Store.saveAnnouncement(db, oneOff, printed, { existing: [] });
     assert.ok(db._docs['event_occurrences/supper/announcements/' + saved.id]);
-    assert.ok(db._docs['event_occurrences/supper/announcement_plans/' + saved.id]);
+    assert.ok(db._docs['event_occurrences/supper/announcement_going_out/' + saved.id]);
     const words = db._docs['event_occurrences/supper/announcements/' + saved.id];
-    const plan = db._docs['event_occurrences/supper/announcement_plans/' + saved.id];
+    const goingOut = db._docs['event_occurrences/supper/announcement_going_out/' + saved.id];
     assert.equal(words.title, 'Membership Matters');
     assert.equal(words.way, undefined);
-    assert.equal(plan.way, 'printed');
-    assert.equal(plan.weeks, 2);
-    assert.equal(plan.title, undefined);
+    assert.equal(goingOut.way, 'printed');
+    assert.equal(goingOut.weeks, 2);
+    assert.equal(goingOut.title, undefined);
 });
 
 test('a repeating event stores both records on the series', async () => {
@@ -113,7 +113,7 @@ test('a repeating event stores both records on the series', async () => {
     const saved = await Store.saveAnnouncement(db, series, Object.assign({}, printed, { weeks: 1 }), { existing: [] });
     assert.equal(saved.ok, true, saved.refusal);
     assert.ok(db._docs['events/midweek/announcements/' + saved.id]);
-    assert.equal(db._docs['events/midweek/announcement_plans/' + saved.id].weeks, 1);
+    assert.equal(db._docs['events/midweek/announcement_going_out/' + saved.id].weeks, 1);
 });
 
 test('a date of a repeating event has no announcement of its own', async () => {
@@ -153,10 +153,10 @@ test('deleting one announcement removes it and leaves the others in the same ord
     assert.deepEqual(left.map(item => item.title), ['Choir practice']);
     assert.equal(left[0].order, second.order);
     assert.equal(db._docs['event_occurrences/supper/announcements/' + first.id], undefined);
-    assert.equal(db._docs['event_occurrences/supper/announcement_plans/' + first.id], undefined);
+    assert.equal(db._docs['event_occurrences/supper/announcement_going_out/' + first.id], undefined);
 });
 
-test('someone who is not an editor is not handed the plan', async () => {
+test('someone who is not an editor is not handed how it goes out', async () => {
     const db = memoryDb();
     await Store.saveAnnouncement(db, oneOff, printed, { existing: [] });
     db._reads.length = 0;
@@ -166,7 +166,7 @@ test('someone who is not an editor is not handed the plan', async () => {
     assert.equal(member[0].way, undefined);
     assert.equal(member[0].weeks, undefined);
     assert.equal(
-        db._reads.some(path => path.indexOf('announcement_plans') !== -1),
+        db._reads.some(path => path.indexOf('announcement_going_out') !== -1),
         false
     );
 });
@@ -175,8 +175,8 @@ test('a refused draft is not written', async () => {
     const db = memoryDb();
     const cases = [
         { title: '  ', prose: 'Hello.', way: 'printed', weeks: 1 },
-        { title: 'Night', prose: 'Too late.', way: 'told', eventKind: 'one-off', slots: [{ date: '2026-05-03', time: '20:00' }], tagIds: ['choir'], savedTagIds: [], visibleTagIds: ['choir'] },
-        { title: 'Everyone', prose: 'No.', way: 'told', slots: [{ date: '2026-05-03', time: '08:00' }], tagIds: [], savedTagIds: [], visibleTagIds: ['choir'] },
+        { title: 'Night', prose: 'Too late.', way: 'told', eventKind: 'one-off', dates: [{ date: '2026-05-03', time: '20:00' }], tagIds: ['choir'], savedTagIds: [], visibleTagIds: ['choir'] },
+        { title: 'Everyone', prose: 'No.', way: 'told', dates: [{ date: '2026-05-03', time: '08:00' }], tagIds: [], savedTagIds: [], visibleTagIds: ['choir'] },
     ];
     for (const draft of cases) {
         const result = await Store.saveAnnouncement(db, oneOff, draft, { existing: [] });
@@ -185,27 +185,27 @@ test('a refused draft is not written', async () => {
     assert.deepEqual(db._docs, {});
 });
 
-test('a tell keeps its tags on the plan and not on the words', async () => {
+test('a tell keeps its tags off the words', async () => {
     const db = memoryDb();
     const saved = await Store.saveAnnouncement(db, oneOff, {
         title: 'Choir',
         prose: 'Rehearsal is moved.',
         way: 'told',
-        slots: [{ date: '2026-05-03', time: '18:00' }],
+        dates: [{ date: '2026-05-03', time: '18:00' }],
         tagIds: ['choir'],
         savedTagIds: ['choir', 'under_care'],
         visibleTagIds: ['choir'],
     }, { existing: [] });
     assert.equal(saved.ok, true, saved.refusal);
     const words = db._docs['event_occurrences/supper/announcements/' + saved.id];
-    const plan = db._docs['event_occurrences/supper/announcement_plans/' + saved.id];
+    const goingOut = db._docs['event_occurrences/supper/announcement_going_out/' + saved.id];
     assert.equal(words.tagIds, undefined);
-    assert.deepEqual(plan.tagIds, ['choir', 'under_care']);
-    assert.equal(plan.weeks, undefined);
+    assert.deepEqual(goingOut.tagIds, ['choir', 'under_care']);
+    assert.equal(goingOut.weeks, undefined);
 });
 
 test('the collection names the one-off delete uses are the announcement records', () => {
     const eventsStore = require('../public/events-store.js');
     assert.equal(eventsStore.ANNOUNCEMENT_WORDS, Ann.WORDS);
-    assert.equal(eventsStore.ANNOUNCEMENT_PLANS, Ann.PLANS);
+    assert.equal(eventsStore.ANNOUNCEMENT_GOING_OUT, Ann.GOING_OUT);
 });

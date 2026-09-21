@@ -571,7 +571,9 @@
                     // picker the note is written for. Failing here costs a
                     // subtitle, never the roster.
                     if (this.isEditor) await this.loadFairness();
-                    await this.loadAnnouncements();
+                    // The service page hosts this same page for Roles only.
+                    // It does not offer Announcements, so it does not read them.
+                    if (!cfg.rolesOnly) await this.loadAnnouncements();
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')

@@ -17,7 +17,10 @@
     const PROSE_MAX = 2000;
     const INACTIVE_TAG_ID = 'Inactive';
     const WORDS = 'announcements';
-    const PLANS = 'announcement_plans';
+    // How the announcement goes out — the way, when, and the tags. Not a
+    // plan: a plan is an Assignment. Kept apart from the words because
+    // whoever can read the words must not read who would be told.
+    const GOING_OUT = 'announcement_going_out';
 
     // Church-local clock, the same window the prayer texts use: 8:00am
     // inclusive, 8:00pm exclusive. A time here is a clock face, not an
@@ -80,7 +83,7 @@
         return out;
     }
 
-    // Tags already on the plan that this editor cannot see stay. The ones
+    // Tags already saved that this editor cannot see stay. The ones
     // they can see are whatever they left chosen. A printed announcement
     // never calls this — a print stores no tags.
     function tagsKept(draft) {
@@ -117,27 +120,27 @@
 
     function acceptOneOffTell(draft) {
         // Days-before belongs to a repeating event. A one-off names dates.
-        const slots = Array.isArray(draft.slots) ? draft.slots : [];
-        if (!slots.length) {
+        const dates = Array.isArray(draft.dates) ? draft.dates : [];
+        if (!dates.length) {
             return refusal('A one-off tell needs at least one date.');
         }
         const seen = new Set();
         const kept = [];
-        for (let i = 0; i < slots.length; i++) {
-            const slot = slots[i] || {};
-            const date = trimmed(slot.date);
+        for (let i = 0; i < dates.length; i++) {
+            const when = dates[i] || {};
+            const date = trimmed(when.date);
             if (!isDate(date)) return refusal('A tell needs a real date.');
             if (seen.has(date)) return refusal('The same date cannot be told twice.');
-            if (!timeAllowed(slot.time)) return refusal(TIME_REFUSAL);
+            if (!timeAllowed(when.time)) return refusal(TIME_REFUSAL);
             seen.add(date);
-            kept.push({ date, time: clockFace(slot.time) });
+            kept.push({ date, time: clockFace(when.time) });
         }
-        return { way: TOLD, slots: kept };
+        return { way: TOLD, dates: kept };
     }
 
     function acceptRepeatingTell(draft) {
-        const slots = Array.isArray(draft.slots) ? draft.slots : [];
-        if (slots.length) {
+        const dates = Array.isArray(draft.dates) ? draft.dates : [];
+        if (dates.length) {
             return refusal('A repeating event is not told on a calendar date.');
         }
         const daysBefore = wholeNumber(draft.daysBefore);
@@ -160,33 +163,33 @@
             return refusal('An announcement belongs to a one-off or a repeating event.');
         }
 
-        let plan;
+        let goingOut;
         if (input.way === PRINTED) {
-            plan = acceptPrinted(input);
+            goingOut = acceptPrinted(input);
         } else if (input.eventKind === 'repeating') {
-            plan = acceptRepeatingTell(input);
+            goingOut = acceptRepeatingTell(input);
         } else {
-            plan = acceptOneOffTell(input);
+            goingOut = acceptOneOffTell(input);
         }
-        if (plan.ok === false) return plan;
+        if (goingOut.ok === false) return goingOut;
 
         const announcement = {
             title: words.title,
             prose: words.prose,
-            way: plan.way,
+            way: goingOut.way,
         };
-        if (plan.way === PRINTED) {
-            announcement.weeks = plan.weeks;
+        if (goingOut.way === PRINTED) {
+            announcement.weeks = goingOut.weeks;
         } else {
             const tagIds = tagsKept(input);
             if (!tagIds.length) {
                 return refusal('A tell needs at least one tag. An empty filter is not everyone.');
             }
             announcement.tagIds = tagIds;
-            if (plan.slots) announcement.slots = plan.slots;
-            if (plan.daysBefore != null) {
-                announcement.daysBefore = plan.daysBefore;
-                announcement.time = plan.time;
+            if (goingOut.dates) announcement.dates = goingOut.dates;
+            if (goingOut.daysBefore != null) {
+                announcement.daysBefore = goingOut.daysBefore;
+                announcement.time = goingOut.time;
             }
         }
         return { ok: true, announcement };
@@ -205,7 +208,7 @@
         return tagIds.every(id => tags.indexOf(id) !== -1);
     }
 
-    // Who matches today. The saved audience is the tag ids; this list is not
+    // Who matches today. What is saved is the tag ids; this list is not
     // saved. Hidden people are omitted, and the result does not say how many.
     function whoWouldBeTold(spec) {
         const input = spec || {};
@@ -254,7 +257,7 @@
             const seriesId = input.seriesId;
             return {
                 editable: false,
-                showsPlan: false,
+                showsGoingOut: false,
                 seriesHref: editor && seriesId
                     ? 'recurring-events.html?series=' + encodeURIComponent(seriesId) + '&tab=announcements'
                     : null,
@@ -264,7 +267,7 @@
         // locked series is not consulted.
         return {
             editable: editor,
-            showsPlan: editor,
+            showsGoingOut: editor,
             seriesHref: null,
         };
     }
@@ -289,23 +292,24 @@
             prose: item.prose,
             order: order,
         };
-        const plan = { way: item.way };
+        const goingOut = { way: item.way };
         if (item.way === PRINTED) {
-            plan.weeks = item.weeks;
+            goingOut.weeks = item.weeks;
         } else {
-            plan.tagIds = (item.tagIds || []).slice();
-            if (item.slots) plan.slots = item.slots.map(slot => ({ date: slot.date, time: slot.time }));
+            goingOut.tagIds = (item.tagIds || []).slice();
+            if (item.dates) goingOut.dates = item.dates.map(when => ({ date: when.date, time: when.time }));
             if (item.daysBefore != null) {
-                plan.daysBefore = item.daysBefore;
-                plan.time = item.time;
+                goingOut.daysBefore = item.daysBefore;
+                goingOut.time = item.time;
             }
         }
-        return { words, plan };
+        return { words, goingOut };
     }
 
     // Join a stored pair back into the announcement an editor edits. With no
-    // plan, only the words come back — that is what a member is allowed to see.
-    function joined(id, words, plan) {
+    // record of how it goes out, only the words come back — that is what a
+    // member is allowed to see.
+    function joined(id, words, goingOut) {
         const w = words || {};
         const announcement = {
             id: id,
@@ -313,13 +317,13 @@
             prose: w.prose || '',
             order: w.order,
         };
-        if (!plan) return announcement;
-        announcement.way = plan.way;
-        if (plan.way === PRINTED) announcement.weeks = plan.weeks;
-        if (plan.slots) announcement.slots = plan.slots;
-        if (plan.daysBefore != null) announcement.daysBefore = plan.daysBefore;
-        if (plan.time) announcement.time = plan.time;
-        if (plan.tagIds) announcement.tagIds = plan.tagIds.slice();
+        if (!goingOut) return announcement;
+        announcement.way = goingOut.way;
+        if (goingOut.way === PRINTED) announcement.weeks = goingOut.weeks;
+        if (goingOut.dates) announcement.dates = goingOut.dates;
+        if (goingOut.daysBefore != null) announcement.daysBefore = goingOut.daysBefore;
+        if (goingOut.time) announcement.time = goingOut.time;
+        if (goingOut.tagIds) announcement.tagIds = goingOut.tagIds.slice();
         return announcement;
     }
 
@@ -328,7 +332,7 @@
         PROSE_MAX,
         INACTIVE_TAG_ID,
         WORDS,
-        PLANS,
+        GOING_OUT,
         PRINTED,
         TOLD,
         accept,

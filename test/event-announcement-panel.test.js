@@ -114,7 +114,7 @@ test('a time outside 8:00am–8:00pm is refused and is not there after reload', 
     const page = host({ occurrence: { id: 'supper' } });
     fill(page, {
         way: 'told',
-        slots: [{ date: '2026-05-03', time: '20:00' }],
+        dates: [{ date: '2026-05-03', time: '20:00' }],
         tagIds: ['choir'],
     });
     await page.saveAnnouncement();
@@ -129,7 +129,7 @@ test('a tell with no tags cannot be saved, and with tags the editor sees who mat
     const page = host({ occurrence: { id: 'supper' } });
     fill(page, {
         way: 'told',
-        slots: [{ date: '2026-05-03', time: '08:00' }],
+        dates: [{ date: '2026-05-03', time: '08:00' }],
         tagIds: [],
     });
     await page.saveAnnouncement();
@@ -160,7 +160,7 @@ test('an editor on a repeating event saves on the series, and a date cannot', as
     await date.loadAnnouncements();
     assert.equal(date.announcements[0].title, 'Membership Matters');
     assert.equal(date.announcementTab().editable, false);
-    assert.equal(date.announcementTab().showsPlan, false);
+    assert.equal(date.announcementTab().showsGoingOut, false);
     assert.equal(date.announcements[0].way, undefined);
     assert.equal(
         date.announcementTab().seriesHref,
@@ -174,7 +174,7 @@ test('an editor on a repeating event saves on the series, and a date cannot', as
         prose: 'Must not be stored.',
         way: 'printed',
         weeks: 1,
-        slots: [],
+        dates: [],
         daysBefore: 0,
         time: '08:00',
         tagIds: [],
@@ -188,7 +188,7 @@ test('an editor on a repeating event saves on the series, and a date cannot', as
     );
 });
 
-test('a member sees the title and the prose, and not the plan', async () => {
+test('a member sees the title and the prose, and not how it goes out', async () => {
     globalThis.db = memoryDb();
     const editor = host({ occurrence: { id: 'supper' } });
     fill(editor);
@@ -205,7 +205,7 @@ test('a member sees the title and the prose, and not the plan', async () => {
     assert.equal(member.announcements[0].prose, 'Meets in the hall after the service.');
     assert.equal(member.announcements[0].way, undefined);
     assert.equal(member.announcementTab().editable, false);
-    assert.equal(member.announcementTab().showsPlan, false);
+    assert.equal(member.announcementTab().showsGoingOut, false);
     member.startAnnouncement();
     assert.equal(member.announcementForm, null);
 });
@@ -231,7 +231,7 @@ test('the event pages offer the Announcements tab and load the model first', () 
         assert.match(html, />Announcements</);
         assert.match(html, /announcementTab\(\)/);
         assert.match(html, /saveAnnouncement\(\)/);
-        assert.match(html, /x-show="!announcementTab\(\)\.showsPlan"/);
+        assert.match(html, /x-show="!announcementTab\(\)\.showsGoingOut"/);
         const core = html.indexOf('src="event-announcement-core.js"');
         const store = html.indexOf('src="event-announcement-store.js"');
         const panel = html.indexOf('src="event-announcement-panel.js"');

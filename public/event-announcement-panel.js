@@ -69,7 +69,7 @@
             prose: '',
             way: Ann.PRINTED,
             weeks: 1,
-            slots: [{ date: '', time: '08:00' }],
+            dates: [{ date: '', time: '08:00' }],
             daysBefore: 0,
             time: '08:00',
             tagIds: [],
@@ -84,8 +84,8 @@
             const weeks = item.weeks;
             return 'Printed ' + weeks + (weeks === 1 ? ' week' : ' weeks') + ' ahead.';
         }
-        if (item.slots && item.slots.length) {
-            return 'Told ' + item.slots.map(slot => slot.date + ' at ' + slot.time).join(', ') + '.';
+        if (item.dates && item.dates.length) {
+            return 'Told ' + item.dates.map(when => when.date + ' at ' + when.time).join(', ') + '.';
         }
         if (item.daysBefore === 0) return 'Told on the day, at ' + item.time + '.';
         return 'Told ' + item.daysBefore + ' days before each occurrence, at ' + item.time + '.';
@@ -105,7 +105,7 @@
 
             announcementTab() {
                 const surface = surfaceOf(this);
-                if (!surface) return { editable: false, showsPlan: false, seriesHref: null };
+                if (!surface) return { editable: false, showsGoingOut: false, seriesHref: null };
                 const locked = !!(this.chosen && this.chosen.locked);
                 return Ann.whatTheTabShows({
                     surface,
@@ -176,8 +176,8 @@
                     prose: item.prose || '',
                     way: item.way || Ann.PRINTED,
                     weeks: item.weeks != null ? item.weeks : 1,
-                    slots: (item.slots && item.slots.length)
-                        ? item.slots.map(slot => ({ date: slot.date, time: slot.time }))
+                    dates: (item.dates && item.dates.length)
+                        ? item.dates.map(when => ({ date: when.date, time: when.time }))
                         : [{ date: '', time: '08:00' }],
                     daysBefore: item.daysBefore != null ? item.daysBefore : 0,
                     time: item.time || '08:00',
@@ -202,14 +202,14 @@
                 this.refreshAnnouncementNames();
             },
 
-            addAnnouncementSlot() {
+            addAnnouncementDate() {
                 if (!this.announcementForm) return;
-                this.announcementForm.slots.push({ date: '', time: '08:00' });
+                this.announcementForm.dates.push({ date: '', time: '08:00' });
             },
 
-            removeAnnouncementSlot(index) {
+            removeAnnouncementDate(index) {
                 if (!this.announcementForm) return;
-                this.announcementForm.slots.splice(index, 1);
+                this.announcementForm.dates.splice(index, 1);
             },
 
             toggleAnnouncementTag(id) {
@@ -261,7 +261,7 @@
                     prose: form.prose,
                     way: form.way,
                     weeks: form.weeks,
-                    slots: form.way === Ann.TOLD && place.kind === 'one-off' ? form.slots : [],
+                    dates: form.way === Ann.TOLD && place.kind === 'one-off' ? form.dates : [],
                     daysBefore: form.daysBefore,
                     time: form.time,
                     tagIds: form.tagIds,

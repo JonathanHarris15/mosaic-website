@@ -277,14 +277,14 @@ test('only an editor may write an Event Document', () => {
 
 // ── Event announcements (MS-621) ──────────────────────────────────────────────
 //
-// The words and the plan are two records because a rule cannot hide a field.
-// A non-editor who can read the event can read the words and cannot read the
-// plan, and cannot write either record.
+// The words and how the announcement goes out are two records because a rule
+// cannot hide a field. A non-editor who can read the event can read the words
+// and cannot read how it goes out, and cannot write either record.
 
 const seriesWords = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
-const seriesPlans = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcement_plans\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const seriesPlans = () => blockFor(/match \/events\/\{eventId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
 const occurrenceWords = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcements\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
-const occurrencePlans = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcement_plans\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
+const occurrencePlans = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{[\s\S]*?match \/announcement_going_out\/\{announcementId\}\s*\{([\s\S]*?)\n      \}/);
 
 test('series announcement words follow the series read, and do not widen it', () => {
     const block = seriesWords();
@@ -294,7 +294,7 @@ test('series announcement words follow the series read, and do not widen it', ()
     assert.doesNotMatch(block, /allow read: if true/);
 });
 
-test('a series announcement plan is editor-only, read and write', () => {
+test('how a series announcement goes out is editor-only, read and write', () => {
     const block = seriesPlans();
     assert.match(block, /allow read: if isEditor\(\)/);
     assert.match(block, /allow create, update, delete: if isEditor\(\)/);
@@ -315,7 +315,7 @@ test('occurrence announcement words are the one-off, and a date of a series is c
     assert.doesNotMatch(block, /readsAsEditor/);
 });
 
-test('an occurrence announcement plan is editor-only, and only on a one-off', () => {
+test('how an occurrence announcement goes out is editor-only, and only on a one-off', () => {
     const block = occurrencePlans();
     assert.match(block, /allow read: if isEditor\(\) && oneOffOccurrence\(\)/);
     assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);

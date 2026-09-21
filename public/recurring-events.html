@@ -738,14 +738,14 @@
                                 <article class="m-card">
                                     <h4 class="text-[16px] text-on-surface" x-text="item.title"></h4>
                                     <p class="text-[14px] whitespace-pre-wrap mt-1" x-text="item.prose"></p>
-                                    <p class="text-[12.5px] text-on-surface-variant mt-1" x-show="announcementTab().showsPlan" x-text="announcementSchedule(item)"></p>
+                                    <p class="text-[12.5px] text-on-surface-variant mt-1" x-show="announcementTab().showsGoingOut" x-text="announcementSchedule(item)"></p>
                                     <div class="flex gap-sm mt-sm" x-show="announcementTab().editable">
                                         <button type="button" class="m-btn m-btn--quiet m-btn--sm re-focus" @click="editAnnouncement(item)">Change</button>
                                         <button type="button" class="m-btn m-btn--quiet m-btn--sm re-focus" @click="deleteAnnouncement(item.id)">Delete</button>
                                     </div>
                                 </article>
                             </template>
-                            <p class="text-[12.5px] text-on-surface-variant" x-show="!announcementTab().showsPlan">The title and the prose are what you can read here.</p>
+                            <p class="text-[12.5px] text-on-surface-variant" x-show="!announcementTab().showsGoingOut">The title and the prose are what you can read here.</p>
                             <button type="button" class="m-btn m-btn--secondary m-btn--sm re-focus"
                                     x-show="announcementTab().editable && !announcementForm"
                                     @click="startAnnouncement()">Add an announcement</button>

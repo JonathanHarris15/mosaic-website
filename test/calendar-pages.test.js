@@ -1965,7 +1965,7 @@ test('deleting a one-off takes its roster and its announcements and leaves the p
     assert.deepStrictEqual(writes, [
         'event_occurrences/harvest/roster/r1',
         'event_occurrences/harvest/announcements/r1',
-        'event_occurrences/harvest/announcement_plans/r1',
+        'event_occurrences/harvest/announcement_going_out/r1',
         'event_occurrences/harvest',
     ]);
     assert.match(location.href, /calendar\.html/,

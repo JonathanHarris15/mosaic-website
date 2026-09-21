@@ -297,11 +297,14 @@ service cloud.firestore {
         allow create, update, delete: if isEditor();
       }
 
-      // The plan — the way, the schedule, and the tag ids. Firestore cannot
-      // hide a field on the words, so this is a second record. Only an editor
-      // may read or write it. A pastoral assistant who is not an editor does
-      // not gain that here: the gate is isEditor(), not readsAsEditor().
-      match /announcement_plans/{announcementId} {
+      // How the announcement goes out: the way, when, and the tag ids.
+      // Firestore cannot hide a field on the words, so this is a second
+      // record. Only an editor may read or write it. ADR 0065 says a
+      // pastoral assistant reads everything an elder reads; this ticket
+      // names the exception. Who would be told is not an editor-rung event
+      // read. A pastoral assistant who is not an editor does not gain it.
+      // The gate is isEditor(), not readsAsEditor().
+      match /announcement_going_out/{announcementId} {
         allow read: if isEditor();
         allow create, update, delete: if isEditor();
       }
@@ -392,7 +395,7 @@ service cloud.firestore {
       // Event announcement words on a ONE-OFF. The occurrence is the event,
       // so the read is the occurrence's own visibility. A date of a series
       // does not store a copy: a seriesId on the occurrence closes both
-      // records. The plan is editor-only, same split as on the series.
+      // records. How it goes out is editor-only, same split as on the series.
       match /announcements/{announcementId} {
         allow read: if oneOffOccurrence()
           && (isKiosk()
@@ -403,7 +406,7 @@ service cloud.firestore {
         allow create, update, delete: if isEditor() && oneOffOccurrence();
       }
 
-      match /announcement_plans/{announcementId} {
+      match /announcement_going_out/{announcementId} {
         allow read: if isEditor() && oneOffOccurrence();
         allow create, update, delete: if isEditor() && oneOffOccurrence();
       }

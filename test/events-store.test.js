@@ -690,7 +690,7 @@ test('deleting a one-off takes its announcements with it, children first', async
         'event_occurrences/supper/announcements': {
             bring: { title: 'Bring tables', prose: 'We are eating after.', order: 0 },
         },
-        'event_occurrences/supper/announcement_plans': {
+        'event_occurrences/supper/announcement_going_out': {
             bring: { way: 'printed', weeks: 1 },
         },
     }, { rank: 'editor' });
@@ -700,7 +700,7 @@ test('deleting a one-off takes its announcements with it, children first', async
     const paths = db._flatWrites().map(w => w.path);
     assert.deepStrictEqual(paths, [
         'event_occurrences/supper/announcements/bring',
-        'event_occurrences/supper/announcement_plans/bring',
+        'event_occurrences/supper/announcement_going_out/bring',
         'event_occurrences/supper',
     ]);
     assert.ok(paths.indexOf('event_occurrences/supper') === paths.length - 1);

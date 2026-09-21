@@ -661,8 +661,8 @@ Managing an [[Event series]] itself rather than one date of it — **everything 
 - **Announcements are edited here**, including on the Sunday Service. Locked protects the liturgical Roles, not an announcement. One date links an editor back to this tab.
 
 ### Event Announcement
-What the church should hear about an [[Event series]] or a one-off Event: a title, a short piece of plain prose, and exactly one way of going out. Printed in the Sunday service guide a whole number of weeks ahead, or told to the people who carry every chosen tag. A printed note and a tell are two announcements. The words belong to the event — a repeating event keeps them on the series, a one-off keeps them on its occurrence — and a date of a repeating event can read them and cannot change them.
-_Avoid_: weekly typed announcements (those belong to one Sunday's guide, not to the event)
+What the church should hear about an [[Event series]] or a one-off Event: a title, a short piece of plain prose, and exactly one way of going out. Printed in the Sunday service guide a whole number of weeks ahead, or told to the people who carry every chosen tag. A printed note and a tell are two announcements. The words belong to the event — a repeating event keeps them on the series, a one-off keeps them on its occurrence — and a date of a repeating event can read them and cannot change them. How it goes out, and who would be told, is not part of the words someone who can see the event may read.
+_Avoid_: weekly typed announcements (those belong to one Sunday's guide, not to the event); calling how it goes out a plan (a plan is an [[Assignment]]) or a slot (a slot is a place in a Role)
 
 ### Assignment
 A Person placed in one slot of one Role on an [[Event occurrence]] — **the plan, not the record**. Mutable, and never itself a serve record.

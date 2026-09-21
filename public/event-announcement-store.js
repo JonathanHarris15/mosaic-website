@@ -1,8 +1,8 @@
 // Event Announcement store — the two records on the event (MS-631).
 //
 // The words (title, prose, order) are one record, readable by whoever can
-// already read the event's standing description. The plan (the way, the
-// schedule, the tag ids) is a second record, readable and writable only by
+// already read the event's standing description. How it goes out — the way,
+// when, and the tag ids — is a second record, readable and writable only by
 // an editor. Firestore cannot hide a field, which is why these are two
 // documents. The pure model decides a draft is savable before anything is
 // written.
@@ -22,6 +22,7 @@
 
     const SERIES = 'events';
     const OCCURRENCES = 'event_occurrences';
+    const DATE_REFUSAL = 'A date of a repeating event cannot change the announcement. Edit it on the series.';
 
     function parentRef(db, place) {
         const where = Ann.whereAnnouncementsLive(place);
@@ -34,12 +35,7 @@
     async function saveAnnouncement(db, place, draft, options) {
         const opts = options || {};
         const where = Ann.whereAnnouncementsLive(place);
-        if (!where.writable) {
-            return {
-                ok: false,
-                refusal: 'A date of a repeating event cannot change the announcement. Edit it on the series.',
-            };
-        }
+        if (!where.writable) return { ok: false, refusal: DATE_REFUSAL };
 
         const accepted = Ann.accept(Object.assign({}, draft, {
             eventKind: place.kind,
@@ -52,7 +48,7 @@
         const parent = parentRef(db, place);
         const batch = db.batch();
         batch.set(parent.collection(Ann.WORDS).doc(id), records.words);
-        batch.set(parent.collection(Ann.PLANS).doc(id), records.plan);
+        batch.set(parent.collection(Ann.GOING_OUT).doc(id), records.goingOut);
         await batch.commit();
         return {
             ok: true,
@@ -77,14 +73,14 @@
             throw e;
         }
 
-        const plans = {};
+        const goingOut = {};
         if (opts.isEditor && where.writable) {
-            const planSnap = await parent.collection(Ann.PLANS).get();
-            planSnap.docs.forEach(doc => { plans[doc.id] = doc.data(); });
+            const goingOutSnap = await parent.collection(Ann.GOING_OUT).get();
+            goingOutSnap.docs.forEach(doc => { goingOut[doc.id] = doc.data(); });
         }
 
         return wordsSnap.docs
-            .map(doc => Ann.joined(doc.id, doc.data(), plans[doc.id] || null))
+            .map(doc => Ann.joined(doc.id, doc.data(), goingOut[doc.id] || null))
             .sort((a, b) => {
                 const order = (a.order || 0) - (b.order || 0);
                 if (order) return order;
@@ -94,16 +90,11 @@
 
     async function deleteAnnouncement(db, place, id) {
         const where = Ann.whereAnnouncementsLive(place);
-        if (!where.writable) {
-            return {
-                ok: false,
-                refusal: 'A date of a repeating event cannot change the announcement. Edit it on the series.',
-            };
-        }
+        if (!where.writable) return { ok: false, refusal: DATE_REFUSAL };
         const parent = parentRef(db, place);
         const batch = db.batch();
         batch.delete(parent.collection(Ann.WORDS).doc(id));
-        batch.delete(parent.collection(Ann.PLANS).doc(id));
+        batch.delete(parent.collection(Ann.GOING_OUT).doc(id));
         await batch.commit();
         return { ok: true };
     }
