@@ -149,7 +149,7 @@ The People directory as seen by the whole congregation, split into two tabs. The
 _Avoid_: People directory (ambiguous with the editor-facing People Manager), member list
 
 **Edit Mode**:
-A toggle available to editors (and above) on the Membership Directory that turns the read-only directory into an inline People manager — the same surface, switched from viewing to editing People attributes (contact info, Membership Track slider, tags). The **stage slider sits on the card itself**, so an editor walks somebody along the Track without opening anything; the person modal carries the same slider, and the two are one control writing through one path. Off by default; a plain member never sees the toggle.
+A toggle available to editors (and above) on the Membership Directory that turns the read-only directory into an inline People manager — the same surface, switched from viewing to editing People attributes (contact info, Membership Track slider, tags). The **stage slider sits on the card itself**, so an editor walks somebody along the Track without opening anything; the person modal carries the same slider, and the two are one control writing through one path. Off by default; a plain member never sees the toggle. The phone Membership Directory keeps its own Edit Mode and does not open the computer directory inside the phone. That switch is off each time the directory is opened, stays on while a person is opened and the editor comes back, and is offered to an editor, an admin, an elder, or a super admin. A [[Pastoral Assistant]] does not see it: the grant does not add directory writes.
 _Avoid_: Manage mode, admin mode
 
 **Linked User**:

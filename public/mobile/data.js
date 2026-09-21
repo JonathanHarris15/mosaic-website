@@ -242,10 +242,12 @@
     var out = [];
     snap.forEach(function (doc) {
       var d = doc.data() || {};
-      var name = d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "(no name)";
+      var directoryName = String(d.name || [d.firstName, d.lastName].filter(Boolean).join(" ") || "").trim();
+      var name = directoryName || "(no name)";
       out.push({
         id: doc.id,
         name: name,
+        directoryName: directoryName,
         // sex seats a Person in a Family (husband/wife) and genders the Family
         // role labels — the quick-assign card on the profile needs it.
         sex: d.sex || null,
@@ -260,6 +262,10 @@
         photoUrl: d.photoUrl || null,
         photoCrop: d.photoCrop || null,
         birthday: d.birthday || "",
+        // The foyer name-tag flag (Kid), and the involvement count the computer
+        // directory keeps on the person. Both are what Edit Mode reads and writes.
+        kid: !!d.kid,
+        totalInvolvements: typeof d.totalInvolvements === "number" ? d.totalInvolvements : 0,
         tags: Array.isArray(d.tags) ? d.tags : [],
         involvements: typeof d.involvements === "number" ? d.involvements : 0,
         lastPrayed: d.lastPrayed || d.lastPrayedFor || null,
@@ -686,17 +692,48 @@
         return commitTagOpsInChunks(ops);
       });
   }
-  function updateShepherdingPersonDetails(personId, d, user) {
-    return db.collection("people").doc(personId).update({
-      "contact.email": (d.email || "").trim(),
-      "contact.phone": (d.phone || "").trim(),
-      "contact.address": (d.address || "").trim(),
-      birthday: d.birthday || null,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      // Who saved it, so an elder with the details open elsewhere is told by
-      // name that they changed (MS-490).
+  // Directory fields from the phone. Edit Mode adds name, sex, and the Kid
+  // mark; without it the write stays the four contact fields. Same documents
+  // the computer page writes, plus who saved it (MS-490, MS-614).
+  function saveDirectoryPerson(personId, fields, user, editMode) {
+    var payload = window.PhoneDirectoryEdit.savePayload(fields, {
+      editMode: !!editMode,
       updatedByName: (user && user.name) || "",
+      now: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    return db.collection("people").doc(personId).update(payload);
+  }
+  function updateShepherdingPersonDetails(personId, d, user) {
+    return saveDirectoryPerson(personId, d, user, false);
+  }
+  function addDirectoryPerson(fields) {
+    var built = window.PhoneDirectoryEdit.addPersonDocument(fields, {
+      now: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    if (!built.ok) return Promise.reject(new Error(built.error));
+    return db.collection("people").add(built.doc).then(function (ref) { return ref.id; });
+  }
+  function deleteDirectoryPerson(personId) {
+    var plan = window.PhoneDirectoryEdit.personRemoval(personId);
+    if (!plan.ok) return Promise.reject(new Error(window.PhoneDirectoryEdit.DELETE_PERSON_FAILED));
+    return db.collection(plan.collection).doc(plan.personId).delete();
+  }
+  function deleteDirectoryInvolvement(personId, involvementId) {
+    var plan = window.PhoneDirectoryEdit.involvementRemoval(personId, involvementId);
+    if (!plan.ok) return Promise.reject(new Error(window.PhoneDirectoryEdit.DELETE_INVOLVEMENT_FAILED));
+    var personRef = db.collection("people").doc(plan.personId);
+    var batch = db.batch();
+    batch.delete(personRef.collection("involvement").doc(plan.involvementId));
+    var update = {};
+    update[plan.countField] = firebase.firestore.FieldValue.increment(plan.countDelta);
+    batch.update(personRef, update);
+    return batch.commit();
+  }
+  function getPersonInvolvement(personId) {
+    return get(db.collection("people").doc(personId).collection("involvement").orderBy("serviceDate", "desc"))
+      .then(function (snap) {
+        return snap.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
+      });
   }
 
   // ── Pastoral Record dual-writes (ADR-0005 via ShepherdingCore) ──
@@ -1284,6 +1321,11 @@
     deleteShepherdingTag: deleteShepherdingTag,
     toggleShepherdingTagFlag: toggleShepherdingTagFlag,
     updateShepherdingPersonDetails: updateShepherdingPersonDetails,
+    saveDirectoryPerson: saveDirectoryPerson,
+    addDirectoryPerson: addDirectoryPerson,
+    deleteDirectoryPerson: deleteDirectoryPerson,
+    deleteDirectoryInvolvement: deleteDirectoryInvolvement,
+    getPersonInvolvement: getPersonInvolvement,
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,

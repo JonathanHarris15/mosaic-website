@@ -119,7 +119,7 @@
   // ── Design-system components ──────────────────────────────
   function Button(props) {
     return html`
-      <button class=${cx("m-btn", "m-btn--" + (props.variant || "primary"), props.size && props.size !== "md" && "m-btn--" + props.size)}
+      <button type=${props.type || null} class=${cx("m-btn", "m-btn--" + (props.variant || "primary"), props.size && props.size !== "md" && "m-btn--" + props.size)}
         onClick=${props.onClick} disabled=${props.disabled} style=${props.style || null}>
         ${props.icon}<span>${props.children}</span>
       </button>`;
