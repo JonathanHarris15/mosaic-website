@@ -22,6 +22,9 @@ if (fs.existsSync(`./${SERVICE_ACCOUNT_FILE}`)) {
 
 const serviceAccount = require(serviceAccountPath.startsWith('.') ? `../${SERVICE_ACCOUNT_FILE}` : serviceAccountPath);
 
+require('./firebase-project').requireProject(process.argv, {
+    hardcoded: 'mosaic-hymn-database',
+});
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });

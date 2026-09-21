@@ -20,6 +20,9 @@ const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
 const serviceAccountPath = path.join(__dirname, '..', SERVICE_ACCOUNT_FILE);
 const serviceAccount = require(serviceAccountPath);
 
+require('./firebase-project').requireProject(process.argv, {
+    hardcoded: 'mosaic-hymn-database',
+});
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     projectId: FIREBASE_PROJECT_ID

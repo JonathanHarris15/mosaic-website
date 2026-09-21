@@ -80,6 +80,9 @@ async function rosterOf(occurrenceId) {
 
 /** Walk the cover list and clear what is no longer true. */
 async function main() {
+    require('./firebase-project').requireProject(process.argv, {
+        hardcoded: 'mosaic-hymn-database',
+    });
     admin.initializeApp({projectId: FIREBASE_PROJECT_ID});
     db = admin.firestore();
 

@@ -10,6 +10,9 @@ const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
 const serviceAccount = require('./mosaic-hymn-database-firebase-adminsdk-fbsvc-8d55863f5a.json');
 
 try {
+    require('./firebase-project').requireProject(process.argv, {
+        hardcoded: 'mosaic-hymn-database',
+    });
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
         projectId: FIREBASE_PROJECT_ID,

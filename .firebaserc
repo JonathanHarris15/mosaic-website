@@ -1,10 +1,17 @@
 {
   "projects": {
-    "default": "mosaic-hymn-database"
+    "default": "mosaic-hymn-database",
+    "prod": "mosaic-hymn-database"
   },
   "targets": {
     "mosaic-hymn-database": {
       "hosting": {
+        "church": [
+          "mosaic-hymn-database"
+        ],
+        "mcp": [
+          "mosaic-hymn-mcp"
+        ],
         "test-site": [
           "mosaic-hymn-test-shifting-1"
         ]

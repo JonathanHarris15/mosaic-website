@@ -7,15 +7,11 @@
 (function () {
   "use strict";
 
-  var firebaseConfig = {
-    apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
-    authDomain: "mosaic-hymn-database.firebaseapp.com",
-    projectId: "mosaic-hymn-database",
-    storageBucket: "mosaic-hymn-database.firebasestorage.app",
-    messagingSenderId: "55153890298",
-    appId: "1:55153890298:web:4ca1f526f0169fb7920a43",
-    measurementId: "G-64N3W268V9",
-  };
+  // Same church web app as auth.js. firebase-config.js loads first.
+  var firebaseConfig = window.MosaicFirebaseProject && window.MosaicFirebaseProject.church;
+  if (!firebaseConfig || !firebaseConfig.projectId) {
+    throw new Error("firebase-config.js must load before mobile/data.js");
+  }
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   var auth = firebase.auth();
   var db = firebase.firestore();

@@ -59,6 +59,7 @@ function openPage({ containerPresent = true } = {}) {
     sandbox.window = sandbox;
     sandbox.window.addEventListener = () => {};
     vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
     vm.runInContext(AUTH, sandbox);
 
     return {

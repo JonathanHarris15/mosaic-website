@@ -270,6 +270,7 @@
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
+    <script src="firebase-config.js"></script>
     <script src="auth.js"></script>
     <!-- Before docx-importer.js, which reads ServiceDatesCore.FIRST_SUNDAY
          and DateUtils to reject an order of service dated before the

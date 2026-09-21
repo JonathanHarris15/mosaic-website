@@ -41,6 +41,9 @@ const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
 const GuideSeed = require(path.join(ROOT, 'public/guide-seed.js'));
 const GuideStore = require(path.join(ROOT, 'public/guide-store.js'));
 
+require('./firebase-project').requireProject(process.argv, {
+    hardcoded: 'mosaic-hymn-database',
+});
 admin.initializeApp({
     credential: admin.credential.cert(require(path.join(ROOT, SERVICE_ACCOUNT_FILE))),
     projectId: FIREBASE_PROJECT_ID,

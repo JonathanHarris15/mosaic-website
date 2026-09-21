@@ -74,7 +74,7 @@ test('the sign-in link is absolute too', () => {
 test('the rewrite this all depends on is still there', () => {
     const firebaseJson = JSON.parse(
         fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
-    const site = firebaseJson.hosting.find(h => h.site === 'mosaic-hymn-database');
+    const site = firebaseJson.hosting.find(h => h.target === 'church');
     const rewrite = (site.rewrites || []).find(r => r.source === '/f/**');
     assert.ok(rewrite, 'the /f/** rewrite is gone, so form links 404');
     assert.strictEqual(rewrite.destination, '/form-answer.html');

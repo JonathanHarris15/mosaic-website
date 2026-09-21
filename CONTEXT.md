@@ -1186,6 +1186,12 @@ pages use. An account that resolves to neither is **refused** rather than writte
 _Avoid_: user, caller (those are the account; the Actor is the author)
 
 
+## Environments
+
+**Ghost**:
+A non-production copy of Mosaic that agents may change freely. Its congregation is invented. The church's people, notes, and photos never go there, and nothing there is copied back.
+_Avoid_: staging, preview channel, twin
+
 ## Flagged ambiguities
 
 - **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.

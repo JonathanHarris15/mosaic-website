@@ -38,6 +38,9 @@ function resolveServiceAccount() {
     return require(path.join(root, match));
 }
 
+require('./firebase-project').requireProject(process.argv, {
+    hardcoded: 'mosaic-hymn-database',
+});
 admin.initializeApp({
     credential: admin.credential.cert(resolveServiceAccount()),
     projectId: FIREBASE_PROJECT_ID

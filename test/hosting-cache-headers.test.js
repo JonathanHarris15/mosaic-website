@@ -28,9 +28,9 @@ const config = JSON.parse(
 // These rules are about the church website, so pick that site by name rather
 // than by position — a third site added above it must not quietly point this
 // whole file at the wrong config and pass.
-const site = config.hosting.find(h => h.site === 'mosaic-hymn-database');
-assert.ok(site, 'the church website is no longer in firebase.json under the ' +
-    'site id these cache rules were written for');
+const site = config.hosting.find(h => h.target === 'church');
+assert.ok(site, 'the church website is no longer the "church" hosting target ' +
+    'these cache rules were written for');
 const headers = site.headers;
 
 const cacheControlOf = block =>
