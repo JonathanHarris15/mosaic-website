@@ -39,17 +39,13 @@ document.addEventListener('alpine:init', () => {
         showStatusFilter: true,
 
         showAddPersonModal: false,
-        newPerson: {
-            firstName: '',
-            lastName: '',
-            suffix: '',
-            noLastName: false,
+        newPerson: Object.assign(PersonName.emptyBlanks(), {
             email: '',
             phone: '',
             address: '',
             birthday: '',
             sex: ''
-        },
+        }),
         nameFault: '',
         isSubmitting: false,
 
@@ -397,10 +393,9 @@ document.addEventListener('alpine:init', () => {
                 });
                 
                 const newId = docRef.id;
-                this.newPerson = {
-                    firstName: '', lastName: '', suffix: '', noLastName: false,
+                this.newPerson = Object.assign(PersonName.emptyBlanks(), {
                     email: '', phone: '', address: '', birthday: '', sex: '',
-                };
+                });
                 await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');

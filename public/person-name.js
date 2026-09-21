@@ -49,13 +49,29 @@
     // A draft row carries the blanks (firstName is always present, even when
     // blank). A person already in the directory, or a household member, does
     // not — they have a full name, and maybe a last name remembered beside it.
-    function isEntry(person) {
+    function isNameEntry(person) {
         return !!person && Object.prototype.hasOwnProperty.call(person, 'firstName');
     }
 
-    function surnameOf(person) {
+    function emptyBlanks() {
+        return { firstName: '', lastName: '', suffix: '', noLastName: false };
+    }
+
+    // The last name remembered beside a full name, for a person who is not
+    // being typed into the blanks right now.
+    function rememberedLastName(person) {
+        const parts = person && person.nameParts;
+        if (!parts) return { lastName: '', noLastName: false };
+        const noLastName = parts.noLastName === true;
+        return {
+            lastName: noLastName ? '' : text(parts.lastName),
+            noLastName: noLastName,
+        };
+    }
+
+    function lastNameOf(person) {
         if (!person) return '';
-        if (isEntry(person)) {
+        if (isNameEntry(person)) {
             const entered = enteredName(person);
             if (entered.empty || entered.fault || !entered.parts || entered.parts.noLastName) return '';
             return entered.parts.lastName;
@@ -66,17 +82,17 @@
         return lastWord(person.name);
     }
 
-    function householdTitle(surname) {
-        return surname ? ('The ' + surname + ' Household') : 'A Household';
+    function householdTitle(lastName) {
+        return lastName ? ('The ' + lastName + ' Household') : 'A Household';
     }
 
     // On create: the first adult who has a last name, else the first person
     // who has one, else the last word of a full name, else "A Household".
     function householdName(people) {
         const list = people || [];
-        const adult = list.find(function (p) { return p && !p.kid && surnameOf(p); });
-        const any = list.find(function (p) { return p && surnameOf(p); });
-        return householdTitle(surnameOf(adult || any));
+        const adult = list.find(function (p) { return p && !p.kid && lastNameOf(p); });
+        const any = list.find(function (p) { return p && lastNameOf(p); });
+        return householdTitle(lastNameOf(adult || any));
     }
 
     // The household name field on create. While it still equals the previous
@@ -127,7 +143,7 @@
 
     function blanksFor(person) {
         const parts = person && person.nameParts;
-        if (!parts) return { firstName: '', lastName: '', suffix: '', noLastName: false };
+        if (!parts) return emptyBlanks();
         return {
             firstName: text(parts.firstName),
             lastName: parts.noLastName ? '' : text(parts.lastName),
@@ -153,7 +169,10 @@
 
     const PersonName = {
         enteredName,
-        surnameOf,
+        isNameEntry,
+        emptyBlanks,
+        rememberedLastName,
+        lastNameOf,
         householdName,
         householdNameForDraft,
         suggestedHouseholdName,

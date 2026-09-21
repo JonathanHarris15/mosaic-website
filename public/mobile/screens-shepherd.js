@@ -430,7 +430,10 @@
     var tagFiltersS = useState([]), tagModeS = useState("any"), statusZonesS = useState([]);
     var showSaveS = useState(false), saveNameS = useState("");
     var tagModalS = useState(null), addModalS = useState(false);
-    var newPersonS = useState({ firstName: "", lastName: "", suffix: "", noLastName: false, email: "", phone: "", address: "", birthday: "", sex: "" });
+    var blankPerson = function () {
+      return Object.assign(window.PersonName.emptyBlanks(), { email: "", phone: "", address: "", birthday: "", sex: "" });
+    };
+    var newPersonS = useState(blankPerson());
     var toastS = useState(null);
 
     var people = peopleS[0], tags = tagsS[0], views = viewsS[0];
@@ -487,7 +490,7 @@
       var fields = window.PersonName.fieldsForNewPerson(np);
       if (fields.fault) { showToast(fields.fault, "error"); return; }
       data.addShepherdingPerson(np).then(function (newId) {
-        newPersonS[1]({ firstName: "", lastName: "", suffix: "", noLastName: false, email: "", phone: "", address: "", birthday: "", sex: "" });
+        newPersonS[1](blankPerson());
         addModalS[1](false); props.nav("shepherdProfile", { id: newId, from: "people" });
       }).catch(function (e) { showToast((e && e.message) || "Error adding person", "error"); });
     }

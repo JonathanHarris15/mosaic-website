@@ -435,7 +435,7 @@
   function addShepherdingPerson(np) {
     var now = firebase.firestore.FieldValue.serverTimestamp();
     var Name = window.PersonName;
-    var entered = Name && Object.prototype.hasOwnProperty.call(np || {}, "firstName");
+    var entered = Name && Name.isNameEntry(np);
     var fields = entered ? Name.fieldsForNewPerson(np) : null;
     if (fields && fields.fault) return Promise.reject(new Error(fields.fault));
     var name = fields ? fields.name : ((np.name || "").trim());

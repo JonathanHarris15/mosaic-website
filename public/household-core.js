@@ -33,14 +33,12 @@
     function memberOf(byId, personId, kid) {
         const p = byId[personId];
         if (!p) return null;
-        const parts = p.nameParts || null;
-        const noLastName = !!(parts && parts.noLastName);
-        const lastName = (!noLastName && parts && String(parts.lastName || '').trim()) || '';
+        const remembered = PersonName.rememberedLastName(p);
         return {
             personId: personId,
             name: p.name || '',
-            lastName: lastName,
-            noLastName: noLastName,
+            lastName: remembered.lastName,
+            noLastName: remembered.noLastName,
             kid: kid == null ? !!p.kid : !!kid,
         };
     }
@@ -148,15 +146,11 @@
         return PersonName.householdNameForDraft(people, currentName, previousSuggestion, options);
     }
 
-    function isNameEntry(person) {
-        return !!person && Object.prototype.hasOwnProperty.call(person, 'firstName');
-    }
-
     function createFault(people) {
         const rows = [];
         (people || []).forEach(function (p) {
             if (!p) return;
-            if (isNameEntry(p)) {
+            if (PersonName.isNameEntry(p)) {
                 const entered = PersonName.enteredName(p);
                 if (entered.empty) return;
                 if (entered.fault) {

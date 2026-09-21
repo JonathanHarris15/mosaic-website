@@ -56,7 +56,7 @@ test('a new person with no last name is refused unless they have no last name', 
     assert.strictEqual(passed.parts.lastName, '');
 });
 
-test('a person marked no last name keeps a suffix and does not gain a surname', () => {
+test('a person marked no last name keeps a suffix and does not gain a last name', () => {
     const entered = Name.enteredName({
         firstName: 'Ada',
         lastName: 'Harris',
@@ -102,7 +102,7 @@ test('an adult with no last name does not block a later last name', () => {
     assert.strictEqual(name, 'The Harris Household');
 });
 
-test('nobody with a last name suggests A Household, and a mononym is not a surname', () => {
+test('nobody with a last name suggests A Household, and a mononym is not a last name', () => {
     const name = Name.householdName([
         { firstName: 'Ada', noLastName: true, kid: false },
     ]);

@@ -26,20 +26,16 @@ document.addEventListener('alpine:init', () => {
         sortDirection: 'desc',
         
         // Form data for adding a person
-        newPerson: {
-            firstName: '',
-            lastName: '',
-            suffix: '',
-            noLastName: false,
+        newPerson: Object.assign(PersonName.emptyBlanks(), {
             email: '',
             phone: '',
             address: '',
             birthday: '',
             sex: '' // '' or 'male' or 'female'
-        },
+        }),
         // The three blanks on an existing person. Kept off the Person so a
         // first name never becomes a field the rest of the app reads.
-        nameEntry: { firstName: '', lastName: '', suffix: '', noLastName: false },
+        nameEntry: PersonName.emptyBlanks(),
         nameFault: '',
         
         // Involvement tracking
@@ -947,10 +943,9 @@ document.addEventListener('alpine:init', () => {
                     createdAt: now,
                     updatedAt: now
                 });
-                this.newPerson = {
-                    firstName: '', lastName: '', suffix: '', noLastName: false,
+                this.newPerson = Object.assign(PersonName.emptyBlanks(), {
                     email: '', phone: '', address: '', birthday: '', sex: '',
-                };
+                });
                 await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');

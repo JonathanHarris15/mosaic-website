@@ -28,8 +28,10 @@ without guessing which word was which.
 
 They are not a top-level `firstName` / `lastName` pair. The app already
 treats `name` as the only name, and a parallel pair has made a screen show
-the wrong name while its tests stayed green. Existing people are not parsed
-apart. A record that has only `name` stays valid.
+the wrong name while its tests stayed green. The parts sit beside `name`
+as `nameParts`. Existing people are not parsed apart. A record that has
+only `name` stays valid, and a Household suggested from that person still
+uses the last word of the full name until the parts are entered.
 
 On create, the suggested Household name comes from the first adult's last
 name ("The Harris Household"). A suffix never does. The greeter can still
@@ -44,7 +46,7 @@ in.
 ## Consequences
 
 - Booklets that still take the last word of `name` can still read a suffix
-  as a surname. Teaching them the entered last name is a later change.
+  as a last name. Teaching them the entered last name is a later change.
 - A Name Fix (the member's own Directory Request) is still one string.
   That request is a different door and is not this decision.
 - Kiosk create may already write a Person, and an editor may already update
