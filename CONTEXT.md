@@ -174,7 +174,7 @@ A first-class entity (its own `families` collection) that groups a household for
 _Avoid_: Household (that is a [[Household]] — the kiosk grouping, not this kinship tree), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
 
 **Person name**:
-A Person's name is one full name. It is entered as a first name, a last name, and an optional suffix. When a last name was entered, that is what a [[Household]] is called after. A suffix is part of the name and is never the household's name. A person who only has a full name is not taken apart; a Household suggested from them still uses the last word of that name until the parts are entered. A person who has no last name is still a person — nothing refuses them for lacking one ([ADR 0067](docs/adr/0067-a-persons-name-is-entered-in-parts.md)).
+A Person's name is one full name. It is entered as a first name, a last name, and an optional suffix. When a last name was entered, that is what a [[Household]] is called after. A suffix is part of the name and is never the household's name. A person who only has a full name is not taken apart; a Household suggested from them still uses the last word of that name until the parts are entered. A person who has no last name is still a person — nothing refuses them for lacking one ([ADR 0069](docs/adr/0069-a-persons-name-is-entered-in-parts.md)).
 _Avoid_: given name, surname (say first name and last name)
 
 **Household**:
@@ -473,7 +473,7 @@ _Avoid_: OOS Editor, Service Guide Editor, guide builder
 ### Person
 An individual whose involvement with the church is tracked. This is the primary container for all data related to a church member or affiliate.
 - **Fields**:
-  - `name`: Full name — the one name every screen reads. When it was entered as a first name, a last name, and an optional suffix, this is those parts in that order, skipping a blank. A person entered before that, or a person with no last name, still has this field and is not refused for the missing part ([ADR 0067](docs/adr/0067-a-persons-name-is-entered-in-parts.md)).
+  - `name`: Full name — the one name every screen reads. When it was entered as a first name, a last name, and an optional suffix, this is those parts in that order, skipping a blank. A person entered before that, or a person with no last name, still has this field and is not refused for the missing part ([ADR 0069](docs/adr/0069-a-persons-name-is-entered-in-parts.md)).
   - `nameParts`: Present only when the name was entered in parts. Holds the first name, the last name, the suffix, and whether the person has no last name, so the blanks can be reopened and a Household can be told the last name. Not a second name. Absent when the name was never split.
   - `totalInvolvements`: Total count of involvement records.
   - `contact`: (Nested Object) Contact information.

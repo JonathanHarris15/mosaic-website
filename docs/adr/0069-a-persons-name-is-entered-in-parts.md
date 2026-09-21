@@ -1,4 +1,4 @@
-# ADR 0067 — A person's name is entered in parts
+# ADR 0069 — A person's name is entered in parts
 
 **Status:** Accepted
 **Date:** 2026-09-21
