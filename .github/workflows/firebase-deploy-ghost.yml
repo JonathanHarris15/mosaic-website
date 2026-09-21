@@ -148,8 +148,13 @@ jobs:
             EXTRA+=(--dry-run)
             echo "dry_run=true"
           fi
+          # --force accepts the Artifact Registry cleanup policy. A first
+          # functions deploy in a new project asks for that policy, and
+          # --non-interactive has no prompt to answer, so the job exits
+          # after the functions are created.
           npx firebase deploy \
             --only hosting,functions,firestore:rules,firestore:indexes,storage \
             --project "${PROJECT_ID}" \
             --non-interactive \
+            --force \
             "${EXTRA[@]}"

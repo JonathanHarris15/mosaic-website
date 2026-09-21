@@ -236,6 +236,7 @@ test('the ghost deploy workflow pins mosaic-manager-ghost and never the church k
         wf,
         /--only hosting,functions,firestore:rules,firestore:indexes,storage/);
     assert.match(wf, /--dry-run/);
+    assert.match(wf, /--force/);
     const secrets = [...wf.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(m => m[1]);
     assert.deepStrictEqual([...new Set(secrets)], ['FIREBASE_SERVICE_ACCOUNT_GHOST']);
     assert.match(wf, /mosaic-hymn-database/);
