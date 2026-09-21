@@ -6,26 +6,6 @@
 // web, where reads were always live.
 var FRESH_READ = { source: 'server' };
 
-// The two pastoral-prayer subjects stored on a Service, including a slot that
-// was saved under the old dotted field name. The person picker writes the same
-// ids the history decision is given.
-function pastoralSubjectsFromService(svc, date) {
-    const liturgy = (svc && svc.liturgy && typeof svc.liturgy === 'object') ? svc.liturgy : {};
-    const idOf = (field) => {
-        let id = liturgy[field] && liturgy[field].id;
-        if (!id) {
-            const dotted = svc && svc['liturgy.' + field];
-            id = dotted && dotted.id;
-        }
-        return (typeof id === 'string' && id) ? id : null;
-    };
-    return {
-        date: date,
-        prayerMaleId: idOf('prayerMale'),
-        prayerFemaleId: idOf('prayerFemale'),
-    };
-}
-
 // Re-derive a Person's `lastPastoralPrayerDate` from their stored history. Only
 // safe once the history change it is meant to reflect has been committed — a
 // batch is invisible to a read until it lands. The person picker does not use
@@ -290,15 +270,20 @@ function calendarPage() {
                 }
 
                 if (isPastoralPrayer) {
-                    const loaded = pastoralSubjectsFromService(svc, this.selectorDateKey);
+                    const storedSubjects = PastoralPrayerCore.subjectsFromStoredService(
+                        this.selectorDateKey, svc);
+                    const loaded = {
+                        date: storedSubjects.date,
+                        prayerMaleId: storedSubjects.prayerMaleId,
+                        prayerFemaleId: storedSubjects.prayerFemaleId,
+                    };
                     const saved = {
                         date: loaded.date,
                         prayerMaleId: loaded.prayerMaleId,
                         prayerFemaleId: loaded.prayerFemaleId,
                     };
                     saved[this.selectorField === 'prayerMale' ? 'prayerMaleId' : 'prayerFemaleId'] = chosenId;
-                    const personIds = [loaded.prayerMaleId, loaded.prayerFemaleId, saved.prayerMaleId, saved.prayerFemaleId]
-                        .filter((id, index, all) => id && all.indexOf(id) === index);
+                    const personIds = PastoralPrayerCore.pastoralSubjectIds(loaded, saved);
                     const historyByPerson = {};
                     await Promise.all(personIds.map(async (personId) => {
                         const snap = await db.collection('people').doc(personId)

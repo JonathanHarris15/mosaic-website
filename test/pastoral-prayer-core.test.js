@@ -282,7 +282,7 @@ test('a subject who already has that Sunday is not a repair create', () => {
     assert.deepStrictEqual(plan.caches, []);
 });
 
-test('a Sunday still ahead is a repair row, and it is the cached date', () => {
+test('a Sunday still ahead is a missing history doc, and it is the cached date', () => {
     const ahead = '2099-01-03';
     const plan = Core.planPastoralPrayerRepair([
         { date: SUNDAY, prayerFemaleId: AVA, prayerFemaleName: 'Ava Vance' },

@@ -81,7 +81,8 @@ test('the script refuses the church project up front and writes only with --appl
     const src = fs.readFileSync(
         path.join(ROOT, 'scripts', 'repair-pastoral-prayer-history.js'), 'utf8');
     assert.match(src, /requireProject\(process\.argv\)/);
-    const applyCall = src.indexOf('await applyPlan(');
-    const guard = src.lastIndexOf('if (!apply)', applyCall);
-    assert.ok(guard > -1 && guard < applyCall, 'apply is behind the dry-run guard');
+    assert.match(src, /repairFromSnapshots\(services, historyDocs/);
+    const guard = src.indexOf('if (!apply) return { wrote: false');
+    const write = src.indexOf('await options.write(plan)');
+    assert.ok(guard > -1 && write > guard, 'apply is behind the dry-run guard');
 });

@@ -4,9 +4,9 @@
  * The history doc is the record. A subject named on a Service with no history
  * doc for that Sunday is the hole the picker shows as "Never prayed for."
  * This walks Services, plans those missing docs (the doc id is the Sunday),
- * and rebuilds each Person's cached last-prayed date from the history those
- * docs complete. A Sunday still ahead is included: being booked is already a
- * commitment.
+ * and rebuilds each Person's cached `lastPastoralPrayerDate` from the history
+ * those docs complete. A Sunday still ahead is included: being booked is
+ * already a commitment.
  *
  * Dry-run is the default and writes nothing. `--apply` writes. The church
  * project also needs `--i-mean-prod`, the same refusal as the other scripts.
@@ -17,30 +17,9 @@
 
 const Core = require('../public/pastoral-prayer-core.js');
 
-function slot(value) {
-    if (!value || typeof value !== 'object') return { id: null, name: '' };
-    const id = (typeof value.id === 'string' && value.id) ? value.id : null;
-    return { id: id, name: value.name || '' };
-}
-
-// A Service document as the repair reads it. The doc id is the Sunday. A slot
-// saved under the old dotted field name still counts.
+// A Service document as the repair reads it. The doc id is the Sunday.
 function serviceFromDoc(id, data) {
-    const raw = data || {};
-    const liturgy = (raw.liturgy && typeof raw.liturgy === 'object')
-        ? Object.assign({}, raw.liturgy) : {};
-    ['prayerMale', 'prayerFemale'].forEach(field => {
-        if (!liturgy[field] && raw['liturgy.' + field]) liturgy[field] = raw['liturgy.' + field];
-    });
-    const male = slot(liturgy.prayerMale);
-    const female = slot(liturgy.prayerFemale);
-    return {
-        date: id,
-        prayerMaleId: male.id,
-        prayerMaleName: male.name,
-        prayerFemaleId: female.id,
-        prayerFemaleName: female.name,
-    };
+    return Core.subjectsFromStoredService(id, data);
 }
 
 function historyByPersonFromDocs(docs) {
@@ -145,17 +124,19 @@ if (require.main === module) {
             });
         });
 
-        const plan = Core.planPastoralPrayerRepair(
-            services, historyByPersonFromDocs(historyDocs));
-        console.log(`${plan.adds.length} missing pastoral-prayer history row(s) on ${projectId}.`);
-        formatPlan(plan).forEach(line => console.log('  ' + line));
+        const result = await repairFromSnapshots(services, historyDocs, {
+            apply: apply,
+            write: (plan) => applyPlan(
+                db, plan, () => admin.firestore.FieldValue.serverTimestamp()),
+        });
+        console.log(`${result.plan.adds.length} missing pastoral-prayer history doc(s) on ${projectId}.`);
+        formatPlan(result.plan).forEach(line => console.log('  ' + line));
 
-        if (!apply) {
+        if (!result.wrote) {
             console.log('Dry run — nothing written. Pass --apply to write.');
             process.exit(0);
         }
 
-        await applyPlan(db, plan, () => admin.firestore.FieldValue.serverTimestamp());
         console.log('Applied.');
         process.exit(0);
     })().catch(err => {

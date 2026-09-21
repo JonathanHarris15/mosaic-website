@@ -42,7 +42,11 @@ That ID is how a save addresses the exact record it means to remove without a qu
 
 The editor cannot read its own pending write, so it does not try. It reads the stored dates, applies the pending add or remove in memory (`PastoralPrayerCore.decidePastoralPrayerSave`), and writes the result into the same batch as the history change. The record and its cache land together or not at all.
 
-The Order of Service save and the Services calendar's person picker both call that decision on the Sunday they are about to write, after the history read, so a subject chosen while the read was in flight is in the Service update and the history batch together. A subject who is still on the Sunday but has no history doc gets one; an existing doc is not rewritten, so it keeps the time it was first written.
+The Order of Service save calls that decision on the Sunday it is about to write, after the history read, so a subject chosen while the read was in flight is in the Service update and the history batch together.
+
+The Services calendar's person picker captures the chosen Person once, before it reads history, and that same id is what the Service slot and the history doc receive. The cached date is in that batch, not a follow-up write. It does not look at the picker again after the read.
+
+A subject who is still on the Sunday but has no history doc gets one; an existing doc is not rewritten, so it keeps the time it was first written.
 
 The schedule shift has already committed its history moves before it touches the cache, so it re-derives from the stored history (`latestDate`). That route and the pending-write route both live in `public/pastoral-prayer-core.js`, so neither can drift.
 

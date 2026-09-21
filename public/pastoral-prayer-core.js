@@ -111,6 +111,37 @@
         return ids;
     }
 
+    // Every subject on either Sunday, once. The calendar and the decision both
+    // need this list before they read history.
+    function pastoralSubjectIds(loadedSunday, savedSunday) {
+        return subjectIds(loadedSunday).concat(subjectIds(savedSunday))
+            .filter((id, index, all) => all.indexOf(id) === index);
+    }
+
+    // A stored Service document: nested liturgy, or a slot left under the old
+    // dotted field name. Names are for the repair log; the ids are what the
+    // decision uses.
+    function subjectsFromStoredService(date, data) {
+        const raw = data || {};
+        const liturgy = (raw.liturgy && typeof raw.liturgy === 'object') ? raw.liturgy : {};
+        const slot = (field) => {
+            let value = liturgy[field];
+            if (!value && raw['liturgy.' + field]) value = raw['liturgy.' + field];
+            if (!value || typeof value !== 'object') return { id: null, name: '' };
+            const id = (typeof value.id === 'string' && value.id) ? value.id : null;
+            return { id: id, name: value.name || '' };
+        };
+        const male = slot('prayerMale');
+        const female = slot('prayerFemale');
+        return {
+            date: date,
+            prayerMaleId: male.id,
+            prayerMaleName: male.name,
+            prayerFemaleId: female.id,
+            prayerFemaleName: female.name,
+        };
+    }
+
     function storedDates(historyByPerson, personId) {
         const raw = historyByPerson && historyByPerson[personId];
         if (!Array.isArray(raw)) return [];
@@ -136,7 +167,7 @@
 
         const loaded = subjectIds(loadedSunday);
         const saved = subjectIds(savedSunday);
-        const people = loaded.concat(saved).filter((id, index, all) => all.indexOf(id) === index);
+        const people = pastoralSubjectIds(loadedSunday, savedSunday);
         people.sort();
 
         const records = [];
@@ -161,8 +192,7 @@
 
     // Person ids the history read still has to cover before the save can decide.
     function unreadSubjectIds(loadedSunday, savedSunday, historyByPerson) {
-        return subjectIds(loadedSunday).concat(subjectIds(savedSunday))
-            .filter((id, index, all) => all.indexOf(id) === index)
+        return pastoralSubjectIds(loadedSunday, savedSunday)
             .filter(id => !historyByPerson || !Object.prototype.hasOwnProperty.call(historyByPerson, id));
     }
 
@@ -276,6 +306,8 @@
         nextLastPrayerDate,
         lastPrayedLabel,
         decidePastoralPrayerSave,
+        pastoralSubjectIds,
+        subjectsFromStoredService,
         takeSundayAfterHistoryRead,
         writePastoralPrayerDecision,
         planPastoralPrayerRepair,
