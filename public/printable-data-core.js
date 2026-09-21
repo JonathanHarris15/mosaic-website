@@ -43,6 +43,12 @@
         return null;
     }
 
+    function linesCore() {
+        if (typeof PrintedAnnouncementLines !== 'undefined') return PrintedAnnouncementLines;
+        if (typeof require === 'function') return require('./printed-announcement-lines.js');
+        return null;
+    }
+
     function levelRank(level) {
         const i = LEVELS.indexOf(level);
         return i < 0 ? -1 : i;
@@ -676,7 +682,13 @@
         const s = serviceAt(data, date);
         const warnings = [];
         if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
-        const content = Typed ? Typed.fromService(s) : {};
+        const stored = Typed ? Typed.fromService(s) : {};
+        const Lines = linesCore();
+        const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
+        const lines = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
+        const content = lines.length
+            ? Object.assign({}, stored, { announcements: Lines.bookletAnnouncements(stored.announcements, lines) })
+            : stored;
         const row = Typed ? Typed.toRow(content, date) : { _id: date, date: date };
         row.date = formatDate(date);
         if (s && Typed && Typed.isBlank(content)) {
@@ -856,7 +868,8 @@
         switch (sourceKey) {
             case 'people': return { people: true, families: true, households: true };
             case 'households': return { people: true, families: true, households: true };
-            case 'sunday': case 'sunday_rows': case 'sunday_typed': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday_typed': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
             case 'sundays': return { serviceRange: resolveRange(p.range, t) };
             case 'event_dates': return { series: true, occurrenceRange: resolveRange(p.range, t) };

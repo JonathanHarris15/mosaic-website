@@ -294,11 +294,22 @@ test('series announcement words follow the series read, and do not widen it', ()
     assert.doesNotMatch(block, /allow read: if true/);
 });
 
-test('how a series announcement goes out is editor-only, read and write', () => {
+test('a printed week count on a series is readable on the same terms as the words', () => {
     const block = seriesPlans();
-    assert.match(block, /allow read: if isEditor\(\)/);
+    const printedAt = block.indexOf("way == 'printed'");
+    assert.ok(printedAt !== -1, 'a printed record is the one read that widens');
+    assert.ok(printedAt < block.indexOf('rankCanSee'), 'the week count is not a told record');
+    assert.ok(printedAt < block.indexOf("eventId == 'sunday_service'"));
+    assert.match(block, /isKiosk\(\)/);
+    assert.doesNotMatch(block, /participantIds/);
+    assert.doesNotMatch(block, /readsAsEditor/);
+    assert.doesNotMatch(block, /tagIds/);
+});
+
+test('a told series announcement stays editor-only, and nobody else may write how it goes out', () => {
+    const block = seriesPlans();
+    assert.match(block, /\|\| isEditor\(\);/);
     assert.match(block, /allow create, update, delete: if isEditor\(\)/);
-    assert.doesNotMatch(block, /rankCanSee/);
     assert.doesNotMatch(block, /readsAsEditor/);
 });
 
@@ -315,10 +326,21 @@ test('occurrence announcement words are the one-off, and a date of a series is c
     assert.doesNotMatch(block, /readsAsEditor/);
 });
 
-test('how an occurrence announcement goes out is editor-only, and only on a one-off', () => {
+test('a printed week count on a one-off is readable on the same terms as the words', () => {
     const block = occurrencePlans();
-    assert.match(block, /allow read: if isEditor\(\) && oneOffOccurrence\(\)/);
+    const printedAt = block.indexOf("way == 'printed'");
+    assert.ok(printedAt !== -1, 'a printed record is the one read that widens');
+    assert.match(block, /oneOffOccurrence\(\)/);
+    assert.ok(printedAt < block.indexOf('rankCanSee'), 'the week count is not a told record');
+    assert.ok(printedAt < block.indexOf('participantIds'));
+    assert.match(block, /isKiosk\(\)/);
+    assert.doesNotMatch(block, /readsAsEditor/);
+    assert.doesNotMatch(block, /tagIds/);
+});
+
+test('a told occurrence announcement stays editor-only, and only a one-off may store it', () => {
+    const block = occurrencePlans();
+    assert.match(block, /isEditor\(\)/);
     assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);
-    assert.doesNotMatch(block, /rankCanSee/);
     assert.doesNotMatch(block, /readsAsEditor/);
 });

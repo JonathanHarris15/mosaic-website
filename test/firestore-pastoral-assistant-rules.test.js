@@ -120,10 +120,12 @@ test('every editor-read an elder has names readsAsEditor', () => {
     // still says isEditor() and not readsAsEditor() is a gap a Pastoral
     // Assistant would fall through.
     //
-    // How an announcement goes out (MS-621) is the exception, and it is named
-    // in the PRD against ADR 0065: who would be told is not an editor-rung
-    // event read. A pastoral assistant who is not an editor does not read it.
-    // The gate stays isEditor(), on the series and on a one-off.
+    // How an announcement goes out (MS-621, MS-622) is the exception, and it
+    // is named in the PRD against ADR 0065: who would be told is not an
+    // editor-rung event read. A pastoral assistant who is not an editor does
+    // not read a told record. That half of the read stays isEditor(), on the
+    // series and on a one-off. A printed week count is the other half, and it
+    // follows the words.
     const ANNOUNCEMENT_PLAN_READS = [
         'allow read: if isEditor();',
         'allow read: if isEditor() && oneOffOccurrence();',

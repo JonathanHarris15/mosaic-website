@@ -79,7 +79,16 @@
                 const r = data.valueFor ? data.valueFor(bind, row, node) : { ok: false, why: 'No data loaded.' };
                 if (r && r.ok && r.value !== '' && r.value != null) {
                     if (prop === 'src') { node.attrs = Object.assign({}, node.attrs, { src: String(r.value) }); }
-                    else if (prop === 'text') { node.text = String(r.value); delete node.children; node.children = []; }
+                    else if (prop === 'text') {
+                        node.text = String(r.value);
+                        delete node.children;
+                        node.children = [];
+                        // Announcement prose keeps its line breaks. The field
+                        // is plain text, and a line break is not markup.
+                        if (bind.field === 'announcements' && node.text.indexOf('\n') !== -1) {
+                            node.style = Object.assign({}, node.style, { 'white-space': 'pre-line' });
+                        }
+                    }
                     else { node.attrs = Object.assign({}, node.attrs, { [prop]: String(r.value) }); }
                 } else if (r && r.why && (index === 0 || index == null || o.warnEveryRow)) {
                     warn(originalId(node.id), r.why);

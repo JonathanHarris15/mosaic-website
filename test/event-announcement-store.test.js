@@ -27,7 +27,12 @@ function memoryDb() {
     }
 
     function coll(path) {
-        return {
+        const filters = [];
+        const api = {
+            where(field, op, value) {
+                filters.push({ field, op, value });
+                return api;
+            },
             doc(id) {
                 const minted = id || ('ann_' + (++n));
                 return ref(path + '/' + minted);
@@ -35,9 +40,13 @@ function memoryDb() {
             async get() {
                 reads.push(path);
                 const prefix = path + '/';
-                const found = Object.keys(docs).filter(key =>
-                    key.startsWith(prefix) && key.slice(prefix.length).indexOf('/') === -1
-                );
+                const found = Object.keys(docs).filter(key => {
+                    if (!key.startsWith(prefix) || key.slice(prefix.length).indexOf('/') !== -1) return false;
+                    return filters.every(filter => {
+                        if (filter.op !== '==') return false;
+                        return docs[key][filter.field] === filter.value;
+                    });
+                });
                 return {
                     docs: found.map(key => ({
                         id: key.slice(prefix.length),
@@ -47,6 +56,7 @@ function memoryDb() {
                 };
             },
         };
+        return api;
     }
 
     return {
@@ -168,6 +178,34 @@ test('someone who is not an editor is not handed how it goes out', async () => {
     assert.equal(
         db._reads.some(path => path.indexOf('announcement_going_out') !== -1),
         false
+    );
+});
+
+test('someone who can read the words can read a printed week count, and not a tell', async () => {
+    const db = memoryDb();
+    const printedSaved = await Store.saveAnnouncement(db, oneOff, printed, { existing: [] });
+    const toldSaved = await Store.saveAnnouncement(db, oneOff, {
+        title: 'Choir',
+        prose: 'Rehearsal is moved.',
+        way: 'told',
+        dates: [{ date: '2026-05-03', time: '18:00' }],
+        tagIds: ['choir'],
+        savedTagIds: ['choir'],
+        visibleTagIds: ['choir'],
+    }, { existing: [{ id: printedSaved.id, order: 0 }] });
+    assert.equal(toldSaved.ok, true, toldSaved.refusal);
+
+    const lines = await Store.loadPrintedAnnouncements(db, oneOff);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].id, printedSaved.id);
+    assert.equal(lines[0].weeks, 2);
+    assert.equal(lines[0].way, 'printed');
+    assert.equal(lines[0].tagIds, undefined);
+    assert.equal(lines[0].dates, undefined);
+    assert.equal(lines[0].time, undefined);
+    assert.equal(
+        db._docs['event_occurrences/supper/announcement_going_out/' + printedSaved.id].tagIds,
+        undefined
     );
 });
 

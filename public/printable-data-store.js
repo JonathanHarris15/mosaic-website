@@ -30,7 +30,9 @@
         const out = Object.assign({}, a);
         Object.keys(b || {}).forEach(k => {
             const v = b[k];
-            if (k === 'services') out.services = Array.from(new Set((out.services || []).concat(v)));
+            if (k === 'services' || k === 'printedAnnouncements') {
+                out[k] = Array.from(new Set((out[k] || []).concat(v)));
+            }
             else if (k === 'serviceRange' || k === 'occurrenceRange') {
                 const cur = out[k];
                 out[k] = cur ? { from: cur.from < v.from ? cur.from : v.from, to: cur.to > v.to ? cur.to : v.to } : v;
@@ -53,7 +55,7 @@
         const n = needs || {};
         const v = viewer || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin'].includes(v.level);
-        const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [] };
+        const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [], printedEventsBySunday: {} };
         const jobs = [];
 
         if (n.people) jobs.push(safely(db.collection('people').get().then(docsOf), []).then(r => { bundle.people = r; }));
@@ -88,6 +90,16 @@
                 }));
             }
         })());
+
+        if (n.printedAnnouncements && n.printedAnnouncements.length) {
+            jobs.push((async () => {
+                const Guide = global.PrintedAnnouncementGuide;
+                if (!Guide) return;
+                const dates = n.printedAnnouncements;
+                const lists = await Promise.all(dates.map(date => safely(Guide.eventsForSunday(db, date, v), [])));
+                dates.forEach((date, i) => { bundle.printedEventsBySunday[date] = lists[i]; });
+            })());
+        }
 
         if (n.series || n.occurrenceRange) {
             jobs.push((async () => {

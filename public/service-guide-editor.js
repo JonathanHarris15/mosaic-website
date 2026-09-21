@@ -22,6 +22,8 @@ function guideEditorV2() {
     return {
         date: '',
         permissionLevel: 'viewer',
+        personId: null,
+        printedAnnouncementLines: [],
         loading: true,
         saving: false,
         legacy: false,
@@ -70,6 +72,7 @@ function guideEditorV2() {
                 const userData = await getUserData(user.uid);
                 if (!userData) { window.location.href = 'service-calendar.html'; return; }
                 self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
+                self.personId = userData.personId || null;
 
                 const params = new URLSearchParams(window.location.search);
                 self.date = params.get('date');
@@ -117,6 +120,7 @@ function guideEditorV2() {
             }
 
             this.primeRequiredLists();
+            await this.loadPrintedAnnouncements();
             this.applyPreviewStyles();
             this.resolve();
             // A saved week starts clean; a new week is dirty until first save.
@@ -235,7 +239,25 @@ function guideEditorV2() {
         // ── rendering ────────────────────────────────────────────────────────────
         resolve() {
             if (!this.snapshot) return;
-            this.resolved = GuideEngine.resolveGuide(this.snapshot, this.values, this.context, this.catalog);
+            const Lines = window.PrintedAnnouncementLines;
+            const values = Lines
+                ? Lines.renderedGuideValues(this.values, this.printedAnnouncementLines)
+                : this.values;
+            this.resolved = GuideEngine.resolveGuide(this.snapshot, values, this.context, this.catalog);
+        },
+
+        async loadPrintedAnnouncements() {
+            const Guide = window.PrintedAnnouncementGuide;
+            if (!Guide || !this.date) return;
+            try {
+                this.printedAnnouncementLines = await Guide.loadLinesForSunday(db, this.date, {
+                    level: this.permissionLevel,
+                    personId: this.personId,
+                });
+            } catch (e) {
+                console.error('Printed announcements could not be read:', e);
+                this.printedAnnouncementLines = [];
+            }
         },
 
         // Inject the snapshot's Style Preset + page CSS so the preview matches what
