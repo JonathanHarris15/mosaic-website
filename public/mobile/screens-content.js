@@ -710,6 +710,7 @@
       </div>
       <input type="file" id="phone-directory-photo-input" accept=${Plan.ACCEPT} onChange=${props.onFile} style=${{ display: "none" }} />` : null}
     </${M.Fragment}>`;
+  }
 
   // Directory merge. The person on this page is the one who will be retired.
   // Merge opens a search for the record to keep. Choosing a name asks for
@@ -723,7 +724,7 @@
     var pickedS = useState(null);
     var runningS = useState(false);
     var lockS = useState({ current: false });
-    var hits = Merge.survivorSearch(props.people || [], person && person.id, queryS[0], props.user, props.visibility);
+    var hits = Merge.keptSearch(props.people || [], person && person.id, queryS[0], props.user, props.visibility);
     var picked = pickedS[0];
     var words = picked ? Merge.confirmation(person, picked) : null;
     var running = !!runningS[0];

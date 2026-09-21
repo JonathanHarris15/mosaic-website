@@ -397,9 +397,9 @@ test('the search offers nobody until a name is typed, stops at fifteen, and leav
         name: 'Ann Self',
         tags: ['Visitor'],
     }));
-    assert.deepStrictEqual(Merge.survivorSearch(people, 'self', '', editor, {}), []);
-    assert.deepStrictEqual(Merge.survivorSearch(people, 'self', '   ', editor, {}), []);
-    const found = Merge.survivorSearch(people, 'self', 'ann', editor, {});
+    assert.deepStrictEqual(Merge.keptSearch(people, 'self', '', editor, {}), []);
+    assert.deepStrictEqual(Merge.keptSearch(people, 'self', '   ', editor, {}), []);
+    const found = Merge.keptSearch(people, 'self', 'ann', editor, {});
     assert.equal(found.length, 15);
     assert.deepStrictEqual(found.map((p) => p.id), [
         'ann0', 'ann1', 'ann2', 'ann3', 'ann4', 'ann5', 'ann6', 'ann7',
@@ -438,16 +438,16 @@ test('the search looks on both tabs, including Inactive, and hides people the di
     const people = [mia, ivy, hidden, tagged, self];
     const visibility = { hidden: {}, hidePeople: { secret: true } };
 
-    const forEditor = Merge.survivorSearch(people, 'self', 'ivy', editor, visibility);
+    const forEditor = Merge.keptSearch(people, 'self', 'ivy', editor, visibility);
     assert.deepStrictEqual(forEditor.map((p) => p.id), ['ivy']);
 
-    const members = Merge.survivorSearch(people, 'self', 'mia', editor, visibility);
+    const members = Merge.keptSearch(people, 'self', 'mia', editor, visibility);
     assert.deepStrictEqual(members.map((p) => p.id), ['mia']);
 
-    const forElder = Merge.survivorSearch(people, 'self', 'ivy', elder, visibility);
+    const forElder = Merge.keptSearch(people, 'self', 'ivy', elder, visibility);
     assert.deepStrictEqual(forElder.map((p) => p.id), ['ivy', 'hid', 'tag']);
 
-    const forMember = Merge.survivorSearch(people, 'self', 'ivy', member, visibility);
+    const forMember = Merge.keptSearch(people, 'self', 'ivy', member, visibility);
     assert.deepStrictEqual(forMember.map((p) => p.id), []);
 });
 
@@ -670,17 +670,17 @@ test('Merge is on the person page in Edit Mode, and absent from the list and fro
     assert.ok(editAt !== -1 && editAt < mergeAt);
     assert.ok(mergeAt < page.indexOf('title="Edit Details"'));
     assert.equal(list.includes('<${DirectoryMerge}'), false);
-    assert.equal(list.includes('survivorSearch'), false);
+    assert.equal(list.includes('keptSearch'), false);
     assert.equal(list.includes('mergeDirectoryPeople'), false);
     assert.match(list, /consumeServerList/);
     assert.match(list, /getPeopleFromServer/);
 
     const sheet = page.slice(page.indexOf('title="Edit Details"'), page.indexOf('title="Involvement"'));
     assert.equal(sheet.includes('DirectoryMerge'), false);
-    assert.equal(sheet.includes('survivorSearch'), false);
+    assert.equal(sheet.includes('keptSearch'), false);
 
     assert.match(mergeUi, /offerMerge/);
-    assert.match(mergeUi, /survivorSearch/);
+    assert.match(mergeUi, /keptSearch/);
     assert.match(mergeUi, /confirmation\(/);
     assert.match(mergeUi, />Merge</);
     assert.match(mergeUi, /Search for the record to keep/);

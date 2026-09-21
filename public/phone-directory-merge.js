@@ -3,12 +3,12 @@
 //
 // A directory merge retires one Person into another who remains. This plan
 // says what the computer's directory merge would write: which blanks to fill,
-// which tags the survivor ends with, which serves and which Sundays to copy,
-// which of the retired record's history rows to delete, the serve count, and
-// the last pastoral-prayer date. It does not talk to the server. The page
+// which tags the one who is kept ends with, which serves and which Sundays to
+// copy, which of the retired record's history rows to delete, the serve count,
+// and the last pastoral-prayer date. It does not talk to the server. The page
 // reads both people and both histories from the server, asks this plan, and
-// performs those writes. It does not move a Family, a Household, a login, a
-// Directory Photo, a name, a Kid mark, or a relationship.
+// performs those writes. It does not move a Family, a Household, a Linked User,
+// a Directory Photo, a name, a Kid mark, or a relationship.
 //
 // Loaded as a classic script (window.PhoneDirectoryMerge) and exported for Node.
 
@@ -57,7 +57,7 @@
     }
 
     // The computer treats a missing or empty value as a blank, and anything
-    // already stored — including a space — as the survivor's answer.
+    // already stored — including a space — as the kept Person's answer.
     function present(value) {
         return !!value;
     }
@@ -72,7 +72,7 @@
         return Array.isArray(tags) ? tags.slice() : [];
     }
 
-    // Source first, then whatever the survivor has that the source did not.
+    // Source first, then whatever the kept Person has that the retired record did not.
     // The same order the computer's union writes. A tag the system sets is
     // included. Nothing here re-projects the Membership Track.
     function unionTags(sourceTags, keptTags) {
@@ -126,6 +126,8 @@
         };
     }
 
+    // The sentences are the computer's, including "Survivor" and "duplicate".
+    // They name the retired record and the one who is kept.
     function confirmation(retired, kept) {
         const retiredName = displayName(retired);
         const keptName = displayName(kept);
@@ -241,7 +243,7 @@
     // Nobody until a name is typed. At most fifteen. Both directory tabs,
     // including someone marked Inactive, and only people this editor can
     // already see. The person being retired is not offered.
-    function survivorSearch(people, retiredId, query, user, visibility) {
+    function keptSearch(people, retiredId, query, user, visibility) {
         const needle = String(query || '').trim().toLowerCase();
         if (!needle) return [];
         const directory = track();
@@ -284,14 +286,14 @@
             load.loadInvolvement(keptId),
             load.loadPrayers(retiredId),
             load.loadPrayers(keptId),
-        ]).then((parts) => {
+        ]).then((loaded) => {
             const planned = planDirectoryMerge({
-                retired: parts[0],
-                kept: parts[1],
-                retiredInvolvement: parts[2],
-                keptInvolvement: parts[3],
-                retiredPrayers: parts[4],
-                keptPrayers: parts[5],
+                retired: loaded[0],
+                kept: loaded[1],
+                retiredInvolvement: loaded[2],
+                keptInvolvement: loaded[3],
+                retiredPrayers: loaded[4],
+                keptPrayers: loaded[5],
             });
             if (!planned.write) {
                 return { ok: false, message: MERGE_FAILED, wrote: false };
@@ -322,7 +324,7 @@
         planDirectoryMerge: planDirectoryMerge,
         confirmation: confirmation,
         successMessage: successMessage,
-        survivorSearch: survivorSearch,
+        keptSearch: keptSearch,
         offerMerge: offerMerge,
         runDirectoryMerge: runDirectoryMerge,
         markListFromServer: markListFromServer,
