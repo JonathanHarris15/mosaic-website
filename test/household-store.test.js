@@ -52,6 +52,46 @@ test('creating a Household writes the people and the household in one batch', as
     assert.strictEqual(pip.data.membership.stage, 'visitor');
 });
 
+test('a person entered in parts is stored as the full name, with the parts beside it', async () => {
+    const db = fakeDb();
+    const created = await Store.createHousehold(db, {
+        name: 'The Harris Household',
+        now: 't',
+        people: [{
+            firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.',
+            phone: '', sex: 'male', kid: false,
+        }],
+    });
+    assert.strictEqual(created.name, 'The Harris Household');
+    const person = db._writes.find(w => w.path.startsWith('people/'));
+    assert.strictEqual(person.data.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(person.data.nameParts.lastName, 'Harris');
+    assert.strictEqual(person.data.firstName, undefined);
+    assert.strictEqual(person.data.lastName, undefined);
+});
+
+test('adding a person does not rename the household', async () => {
+    const db = fakeDb();
+    const stored = {
+        id: 'hh1',
+        name: 'The Harris Household',
+        stored: true,
+        members: [{ personId: 'bob', name: 'Bob Harris', kid: false }],
+    };
+    const saved = await Store.addPeopleToHousehold(db, stored, {
+        now: 't',
+        people: [{
+            firstName: 'Ruth', lastName: 'Nguyen', suffix: '',
+            phone: '', sex: 'female', kid: false,
+        }],
+    });
+    assert.strictEqual(saved.name, 'The Harris Household');
+    const house = db._writes.find(w => w.path === 'households/hh1');
+    assert.strictEqual(house.data.name, 'The Harris Household');
+    const person = db._writes.find(w => w.path.startsWith('people/'));
+    assert.strictEqual(person.data.name, 'Ruth Nguyen');
+});
+
 test('the kiosk refuses to create a Household with nobody in it', async () => {
     const db = fakeDb();
     await assert.rejects(() => Store.createHousehold(db, { people: [] }), /at least one person/);

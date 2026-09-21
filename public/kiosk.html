@@ -138,7 +138,7 @@
         <!-- Create a household, or add people to one -->
         <section x-show="view === 'create'">
             <h2 class="font-headline-md text-primary mb-sm" x-text="draftTitle"></h2>
-            <p class="text-sm text-on-surface-variant mb-md">Name, phone, adult or kid, male or female. Nothing else — they fill the rest in later.</p>
+            <p class="text-sm text-on-surface-variant mb-md">First name, last name, phone, adult or kid, male or female. Nothing else — they fill the rest in later.</p>
 
             <label class="block mb-md" x-show="!addingToHousehold">
                 <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Household name</span>
@@ -165,12 +165,23 @@
             <div class="flex flex-col gap-sm">
                 <template x-for="(p, i) in draft.people" :key="i">
                     <div class="m-card grid grid-cols-1 md:grid-cols-12 gap-sm items-end">
-                        <label class="md:col-span-4">
-                            <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Name</span>
-                            <input type="text" x-model="p.name" autocomplete="off"
+                        <label class="md:col-span-3">
+                            <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">First name</span>
+                            <input type="text" x-model="p.firstName" autocomplete="off" @input="refreshHouseholdName()"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
                         </label>
                         <label class="md:col-span-3">
+                            <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Last name</span>
+                            <input type="text" x-model="p.lastName" autocomplete="off" @input="refreshHouseholdName()"
+                                   :disabled="p.noLastName"
+                                   class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none disabled:opacity-50">
+                        </label>
+                        <label class="md:col-span-2">
+                            <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Suffix</span>
+                            <input type="text" x-model="p.suffix" autocomplete="off" placeholder="Jr." @input="refreshHouseholdName()"
+                                   class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
+                        </label>
+                        <label class="md:col-span-2">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Phone</span>
                             <input type="tel" x-model="p.phone" autocomplete="off"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
@@ -184,8 +195,14 @@
                                 <option value="female">Female</option>
                             </select>
                         </label>
+                        <label class="md:col-span-3 flex items-center gap-sm py-2">
+                            <input type="checkbox" x-model="p.noLastName" @change="refreshHouseholdName()"
+                                   class="rounded border-outline-variant text-primary">
+                            <span class="text-sm">No last name</span>
+                        </label>
                         <label class="md:col-span-2 flex items-center gap-sm py-2">
-                            <input type="checkbox" x-model="p.kid" class="rounded border-outline-variant text-primary">
+                            <input type="checkbox" x-model="p.kid" @change="refreshHouseholdName()"
+                                   class="rounded border-outline-variant text-primary">
                             <span class="text-sm">Kid</span>
                         </label>
                         <!-- An icon, not the word. "Remove" never fit one column of
