@@ -34,6 +34,14 @@
     return query.get({ source: "server" });
   }
 
+  // A read whose result decides a directory merge. The on-device copy is not
+  // that input: passing source steps the cache aside (local-cache.js).
+  function freshRead(ref) {
+    var Cache = window.MosaicLocalCache;
+    if (Cache && typeof Cache.fresh === "function") return Cache.fresh(ref);
+    return ref.get({ source: "server" });
+  }
+
   // The drawer's destination list, its role labels and its initials rule live in
   // mobile/destinations.js, because the SHELL's drawer (mobile-shell-header.js,
   // on a desktop page opened with ?shell=mobile) builds the same drawer and
@@ -276,6 +284,11 @@
       return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
     });
     return familiesAfterAnswer;
+  }
+  // After a directory merge the list is read from the server, so the
+  // retired person is gone. The copy already on the phone is not that list.
+  function getPeopleFromServer() {
+    return freshRead(db.collection("people")).then(peopleFromSnap);
   }
   function peopleFromSnap(snap) {
     var out = [];
@@ -811,6 +824,62 @@
       .then(function (snap) {
         return snap.docs.map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); });
       });
+  }
+
+  // A directory merge reads the two people and both histories from the
+  // server, asks the plan, and writes what the plan describes. The copy
+  // already on the phone is not that input. No callable: an editor can
+  // already update and delete a Person.
+  function directoryPersonFromServer(id) {
+    return freshRead(db.collection("people").doc(id)).then(function (doc) {
+      if (!doc || !doc.exists) return null;
+      return Object.assign({ id: doc.id }, doc.data() || {});
+    });
+  }
+  function directoryHistoryFromServer(personId, collectionName) {
+    return freshRead(db.collection("people").doc(personId).collection(collectionName)).then(function (snap) {
+      return (snap.docs || []).map(function (doc) {
+        return Object.assign({ id: doc.id }, doc.data() || {});
+      });
+    });
+  }
+  function applyDirectoryMerge(plan) {
+    if (!plan || plan.write !== true) return Promise.resolve();
+    var keptRef = db.collection("people").doc(plan.keptId);
+    var retiredRef = db.collection("people").doc(plan.retiredId);
+    var prayerName = window.PastoralPrayerCore.HISTORY_COLLECTION;
+    function historyBatch(copies, deletes, collectionName) {
+      if ((!copies || !copies.length) && (!deletes || !deletes.length)) return Promise.resolve();
+      var batch = db.batch();
+      (copies || []).forEach(function (row) {
+        var col = keptRef.collection(collectionName);
+        batch.set(row.id ? col.doc(row.id) : col.doc(), row.data);
+      });
+      (deletes || []).forEach(function (id) {
+        batch.delete(retiredRef.collection(collectionName).doc(id));
+      });
+      return batch.commit();
+    }
+    return historyBatch(plan.copyInvolvement, plan.deleteInvolvement, "involvement").then(function () {
+      return historyBatch(plan.copyPrayers, plan.deletePrayers, prayerName);
+    }).then(function () {
+      var updates = Object.assign({}, plan.personUpdate);
+      updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+      return keptRef.update(updates);
+    }).then(function () {
+      return retiredRef.delete();
+    });
+  }
+  function mergeDirectoryPeople(retiredId, keptId) {
+    var Merge = window.PhoneDirectoryMerge;
+    return Merge.runDirectoryMerge({
+      loadPerson: directoryPersonFromServer,
+      loadInvolvement: function (id) { return directoryHistoryFromServer(id, "involvement"); },
+      loadPrayers: function (id) {
+        return directoryHistoryFromServer(id, window.PastoralPrayerCore.HISTORY_COLLECTION);
+      },
+      apply: applyDirectoryMerge,
+    }, retiredId, keptId);
   }
 
   // ── Pastoral Record dual-writes (ADR-0005 via ShepherdingCore) ──
@@ -1356,7 +1425,7 @@
     signIn: signIn, signUp: signUp, signOut: signOut,
     sendPasswordReset: sendPasswordReset,
     DESTINATIONS: DESTINATIONS, canSee: canSee,
-    getHymns: getHymns, getPeople: getPeople, getPeopleFresh: getPeopleFresh,
+    getHymns: getHymns, getPeople: getPeople, getPeopleFresh: getPeopleFresh, getPeopleFromServer: getPeopleFromServer,
     getPendingDirectoryRequests: getPendingDirectoryRequests,
     resolveDirectoryRequest: resolveDirectoryRequest,
     disconnectDirectoryAccount: disconnectDirectoryAccount,
@@ -1414,6 +1483,7 @@
     saveDirectoryMembership: saveDirectoryMembership,
     saveDirectoryTags: saveDirectoryTags,
     getPersonInvolvement: getPersonInvolvement,
+    mergeDirectoryPeople: mergeDirectoryPeople,
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,

@@ -398,7 +398,14 @@
     var reloadS = useState(0);
     var freshPeopleS = useState(null);
     var queueOverrideS = useState(null);
-    var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen, reloadS[0]]);
+    // After a directory merge this one load comes from the server, so the
+    // list does not keep showing the person who was just retired.
+    var st = useAsync(function () {
+      if (!mayOpen) return noPeople();
+      var Merge = window.PhoneDirectoryMerge;
+      if (Merge && Merge.consumeServerList && Merge.consumeServerList()) return data.getPeopleFromServer();
+      return data.getPeople();
+    }, [mayOpen, reloadS[0]]);
     var requestsSt = useAsync(seeQueue ? data.getPendingDirectoryRequests : noPeople, [seeQueue]);
     var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
@@ -705,6 +712,81 @@
     </${M.Fragment}>`;
   }
 
+  // Directory merge. The person on this page is the one who will be retired.
+  // Merge opens a search for the record to keep. Choosing a name asks for
+  // the computer's confirmation and writes nothing until Execute Merge.
+  function DirectoryMerge(props) {
+    var Merge = window.PhoneDirectoryMerge;
+    if (!Merge.offerMerge(props.user, props.editMode)) return null;
+    var person = props.person;
+    var openS = useState(false);
+    var queryS = useState("");
+    var pickedS = useState(null);
+    var runningS = useState(false);
+    var lockS = useState({ current: false });
+    var hits = Merge.keptSearch(props.people || [], person && person.id, queryS[0], props.user, props.visibility);
+    var picked = pickedS[0];
+    var words = picked ? Merge.confirmation(person, picked) : null;
+    var running = !!runningS[0];
+    function choose(candidate) {
+      if (lockS[0].current) return;
+      pickedS[1](candidate);
+    }
+    function cancel() {
+      if (lockS[0].current) return;
+      pickedS[1](null);
+    }
+    function execute() {
+      if (lockS[0].current || !picked) return;
+      lockS[0].current = true;
+      runningS[1](true);
+      props.onMerge(person, picked).then(function (result) {
+        lockS[0].current = false;
+        runningS[1](false);
+        if (!result || !result.ok) {
+          window.alert(Merge.MERGE_FAILED);
+          return;
+        }
+        window.alert(result.message);
+        if (props.onDone) props.onDone();
+      }).catch(function () {
+        lockS[0].current = false;
+        runningS[1](false);
+        window.alert(Merge.MERGE_FAILED);
+      });
+    }
+    var field = { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14 };
+    var hit = { display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, cursor: "pointer" };
+    var textBtn = { flex: 1, padding: "10px 12px", borderRadius: "var(--radius)", cursor: running ? "default" : "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600 };
+    return html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <${Button} type="button" variant="secondary" size="md" style=${{ width: "100%" }} disabled=${running} onClick=${function () { if (!lockS[0].current) openS[1](true); }}>Merge<//>
+      ${openS[0] ? html`<div>
+        <input aria-label="Search for the record to keep" placeholder="Search for the record to keep" disabled=${running} value=${queryS[0]} onInput=${function (e) { queryS[1](e.target.value); }} style=${field} />
+        ${queryS[0].trim() && hits.length ? html`<div style=${{ border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", marginTop: 6, overflow: "hidden" }}>
+          ${hits.map(function (candidate) {
+            return html`<button type="button" key=${candidate.id} disabled=${running} onClick=${function () { choose(candidate); }} style=${hit}>${candidate.name}</button>`;
+          })}
+        </div>` : null}
+      </div>` : null}
+      ${words ? html`<div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "14px 16px" }}>
+        <div style=${{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--primary)" }}>${words.title}</div>
+        <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginTop: 4 }}>${words.warning}</div>
+        <p style=${{ margin: "12px 0 0", fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${words.mergingLabel}</p>
+        <p style=${{ margin: "2px 0 0", fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--error)" }}>${words.mergingName}</p>
+        <p style=${{ margin: "10px 0 0", fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${words.survivorLabel}</p>
+        <p style=${{ margin: "2px 0 0", fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--primary)" }}>${words.survivorName}</p>
+        ${words.lines.map(function (line) {
+          return html`<p key=${line} style=${{ margin: "8px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>${line}</p>`;
+        })}
+        <p style=${{ margin: "10px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 700, color: "var(--error)" }}>${words.deleted}</p>
+        <div style=${{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button type="button" disabled=${running} onClick=${cancel} style=${Object.assign({}, textBtn, { border: "1px solid var(--outline-variant)", background: "transparent", color: "var(--on-surface)" })}>${words.cancel}</button>
+          <button type="button" disabled=${running} onClick=${execute} style=${Object.assign({}, textBtn, { border: "none", background: "var(--primary)", color: "var(--on-primary)" })}>${words.confirm}</button>
+        </div>
+      </div>` : null}
+    </div>`;
+  }
+
   // ── Person Detail ────────────────────────────────────────
   // Member-facing person page: contact + membership, no shepherding surface.
   // Editors (editor/elder/admin/super_admin) get an inline Edit Details modal
@@ -844,6 +926,13 @@
       });
     }
     function setField(k, v) { var o = Object.assign({}, editS[0]); o[k] = v; editS[1](o); }
+    function onDirectoryMerge(retired, kept) {
+      return data.mergeDirectoryPeople(retired.id, kept.id);
+    }
+    function afterDirectoryMerge() {
+      window.PhoneDirectoryMerge.markListFromServer();
+      if (props.back) props.back();
+    }
     function deleteThisPerson() {
       if (!window.confirm(Edit.DELETE_PERSON_CONFIRM)) return;
       data.deleteDirectoryPerson(p.id).then(function () {
@@ -962,6 +1051,7 @@
           ${mayEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
           ${editOn ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             <${Button} variant="secondary" size="md" style=${{ width: "100%" }} onClick=${openInvolvement}>Involvement<//>
+            <${DirectoryMerge} person=${p} user=${props.user} editMode=${editOn} people=${directoryPeople} visibility=${vis} onMerge=${onDirectoryMerge} onDone=${afterDirectoryMerge} />
             <${Button} type="button" variant="danger-outline" style=${{ width: "100%" }} onClick=${deleteThisPerson}>Delete person<//>
           </div>` : null}
         </${Body}>
