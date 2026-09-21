@@ -114,7 +114,7 @@
 
     function saveExisting(existing, entry) {
         const entered = enteredName(entry);
-        const current = text(existing && existing.name);
+        const current = existing && existing.name != null ? String(existing.name) : '';
         if (entered.empty) return { name: current, fault: '', writeParts: false };
         if (entered.fault) return { name: current, fault: entered.fault, writeParts: false };
         return {

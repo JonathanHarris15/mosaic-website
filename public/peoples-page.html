@@ -488,14 +488,33 @@
             
             <div class="p-6">
                 <form @submit.prevent="addPerson" class="space-y-4">
+                    <p class="text-sm text-error" x-show="nameFault" x-text="nameFault"></p>
                     <div class="flex flex-col gap-xs">
-                        <label class="m-label">Full Name</label>
-                        <input type="text" 
-                               x-model="newPerson.name" 
-                               placeholder="Enter full name" 
-                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm"
-                               required>
+                        <label class="m-label">First name</label>
+                        <input type="text"
+                               x-model="newPerson.firstName"
+                               placeholder="First name"
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
                     </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="m-label">Last name</label>
+                        <input type="text"
+                               x-model="newPerson.lastName"
+                               placeholder="Last name"
+                               :disabled="newPerson.noLastName"
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm disabled:opacity-50">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="m-label">Suffix</label>
+                        <input type="text"
+                               x-model="newPerson.suffix"
+                               placeholder="Jr."
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
+                    </div>
+                    <label class="flex items-center gap-sm text-sm text-on-surface">
+                        <input type="checkbox" x-model="newPerson.noLastName" class="rounded border-outline-variant text-primary">
+                        <span>No last name</span>
+                    </label>
                     <div class="flex flex-col gap-xs">
                         <label class="m-label">Email</label>
                         <input type="email" 
@@ -632,10 +651,23 @@
                             </h3>
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <p class="text-sm text-error md:col-span-2" x-show="nameFault" x-text="nameFault"></p>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="m-label">Full Name</label>
-                                    <input type="text" x-model="selectedPerson.name" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                    <label class="m-label">First name</label>
+                                    <input type="text" x-model="nameEntry.firstName" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Last name</label>
+                                    <input type="text" x-model="nameEntry.lastName" :disabled="nameEntry.noLastName" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3 disabled:opacity-50">
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Suffix</label>
+                                    <input type="text" x-model="nameEntry.suffix" placeholder="Jr." class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                </div>
+                                <label class="flex items-center gap-sm text-sm text-on-surface md:col-span-2">
+                                    <input type="checkbox" x-model="nameEntry.noLastName" class="rounded border-outline-variant text-primary">
+                                    <span>No last name</span>
+                                </label>
                                 <div class="flex flex-col gap-xs">
                                     <label class="m-label">Email</label>
                                     <input type="email" x-model="selectedPerson.contact.email" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
@@ -878,6 +910,7 @@
     <script src="events-core.js"></script>
     <script src="person-photo-core.js"></script>
     <script src="directory-request-core.js"></script>
+    <script src="person-name.js"></script>
     <script src="peoples-page.js"></script>
 </body>
 </html>

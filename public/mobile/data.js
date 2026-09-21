@@ -434,13 +434,20 @@
   // People only — it does not collection-group shepherding_notes.
   function addShepherdingPerson(np) {
     var now = firebase.firestore.FieldValue.serverTimestamp();
-    return db.collection("people").add({
-      name: (np.name || "").trim(), totalInvolvements: 0,
+    var Name = window.PersonName;
+    var entered = Name && Object.prototype.hasOwnProperty.call(np || {}, "firstName");
+    var fields = entered ? Name.fieldsForNewPerson(np) : null;
+    if (fields && fields.fault) return Promise.reject(new Error(fields.fault));
+    var name = fields ? fields.name : ((np.name || "").trim());
+    var doc = {
+      name: name, totalInvolvements: 0,
       contact: { email: (np.email || "").trim(), phone: (np.phone || "").trim(), address: (np.address || "").trim() },
       birthday: np.birthday || null, sex: np.sex || null, lastPastoralPrayerDate: null,
       lastNoteAt: null,
       tags: [], createdAt: now, updatedAt: now,
-    }).then(function (ref) { return ref.id; });
+    };
+    if (fields && fields.nameParts) doc.nameParts = fields.nameParts;
+    return db.collection("people").add(doc).then(function (ref) { return ref.id; });
   }
 
   // ── Shepherding Profile (person file) ────────────────────────
