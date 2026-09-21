@@ -22,7 +22,7 @@ is further along than `To Do`, not to one side of it. So the columns read straig
 through: everything specced waits in `To Do`, the next one or two move to `On Deck`, and
 one at a time they go `In Progress`.
 
-⚠ The shared `BOARD.md` in the skills config (`skills/plan-ticket/BOARD.md`)
+⚠ The shared `BOARD.md` in the skills config (`.cursor/skills/plan-ticket/BOARD.md`)
 defines `On Deck` the other way — "ready, but the next step in it needs you."
 **This project does not use it that way**, and where the two disagree, this file
 wins. A ticket here is never parked in `On Deck` because it needs a decision; a
