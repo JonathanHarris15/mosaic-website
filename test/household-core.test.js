@@ -91,6 +91,49 @@ test('a new Person from the kiosk starts as a Visitor', () => {
     assert.deepStrictEqual(doc.tags, ['Visitor']);
     assert.strictEqual(doc.kid, true);
     assert.strictEqual(doc.contact.phone, '555');
+    assert.strictEqual(doc.nameParts, undefined);
+});
+
+test('a new person entered in parts stores the full name and remembers the parts beside it', () => {
+    const doc = Household.personWrite({
+        firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.',
+        phone: '', sex: 'male', kid: false,
+    }, 't');
+    assert.strictEqual(doc.name, 'Jonathan Harris Jr.');
+    assert.deepStrictEqual(doc.nameParts, {
+        firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false,
+    });
+    assert.strictEqual(doc.firstName, undefined);
+    assert.strictEqual(doc.lastName, undefined);
+});
+
+test('a spare person row is ignored, and a last name without a first name is refused', () => {
+    assert.strictEqual(Household.createFault([
+        { firstName: '', lastName: '', suffix: '', sex: '' },
+    ]), 'Add at least one person.');
+    assert.strictEqual(Household.createFault([
+        { firstName: '', lastName: 'Harris', suffix: '', sex: 'male' },
+    ]), 'A new person needs a first name.');
+    assert.strictEqual(Household.createFault([
+        { firstName: 'Ada', lastName: '', noLastName: false, sex: 'female' },
+    ]), 'A new person needs a last name, or mark that they have none.');
+    assert.strictEqual(Household.createFault([
+        { firstName: '', lastName: '', suffix: '', sex: '' },
+        { firstName: 'Ada', lastName: 'Cole', suffix: '', noLastName: false, sex: 'female' },
+    ]), '');
+});
+
+test('a remembered last name names the projected Household, not the suffix', () => {
+    const households = Household.householdsFromDirectory(
+        [{
+            id: 'jon',
+            name: 'Jonathan Harris Jr.',
+            nameParts: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+        }],
+        []
+    );
+    const solo = households.find(h => h.id === 'person:jon');
+    assert.strictEqual(solo.name, 'The Harris Household');
 });
 
 // ── Minting, and the duplicates it exists to stop (ADR-0044) ────────────────

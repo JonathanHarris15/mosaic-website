@@ -36,14 +36,17 @@
     function draftRows(people) {
         const fault = Core.createFault(people);
         if (fault) throw new Error(fault);
-        return (people || []).filter(p => p && String(p.name || '').trim());
+        return (people || []).filter(function (p) {
+            return p && Core.personWrite(p, 'x').name;
+        });
     }
 
     function personRefs(db, batch, rows, now) {
         return rows.map(function (row) {
             const ref = db.collection(PEOPLE).doc();
-            batch.set(ref, Core.personWrite(row, now));
-            return { personId: ref.id, kid: !!row.kid, name: String(row.name).trim() };
+            const written = Core.personWrite(row, now);
+            batch.set(ref, written);
+            return { personId: ref.id, kid: !!row.kid, name: written.name };
         });
     }
 
