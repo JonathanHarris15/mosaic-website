@@ -1,6 +1,6 @@
 # mosaic-website — agent notes
 
-Firebase-hosted church app. Static frontend in `public/`, Cloud Functions in `functions/`, domain language in `CONTEXT.md`, Jira board rules in `CLAUDE.md`. Product tickets are **MS-***.
+Firebase-hosted church app. Static frontend in `public/`, Cloud Functions in `functions/`, domain language in `CONTEXT.md`, Jira board rules in `CLAUDE.md`. Product tickets are **MS-***. Cursor Cloud board skills live in `.cursor/skills/` (upstream `claude-config` `skills/` tree: `plan-ticket`, `create-epic`, `implement`, `to-prd`, `to-issues`, and the rest). Jira calls go through Atlassian MCP, not Claude `ToolSearch` or `~/.claude`.
 
 Do not edit `firestore.rules` or `storage.rules` unless the ticket is explicitly about those rules. Do not deploy from this box (`firebase deploy` / `npm run deploy --prefix functions`). Hosting + `publicForm` + `onAttendanceCreated` + `syncAccountRankToPerson` + `sendPrayerRequestNow` + `mcp` + `firestore:rules` ship via GitHub Actions `.github/workflows/firebase-deploy.yml` (`workflow_dispatch` or push to `main`). Standing `--only` set: `docs/ops/ms-545-functions-deploy-set.md`. Do not commit secrets. Do not set App Check to enforce in that workflow.
 
@@ -93,6 +93,7 @@ One authored copy of the pure domain modules lives in `public/`. `node scripts/s
 
 - `CONTEXT.md` — domain language. Use those words.
 - `CLAUDE.md` — Jira board (`MS`, To Plan → Done). A ticket right of To Plan needs a PRD.
+- `.cursor/skills/` — Cursor Cloud board skills (`plan-ticket`, `implement`, …).
 - `GEMINI.md` — stack sketch (Firebase, Node 20 functions, emulator ports).
 - `docs/adr/` — decisions already made. Do not re-litigate them in a feature PR.
 
