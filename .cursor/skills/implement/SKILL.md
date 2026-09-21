@@ -5,7 +5,7 @@ description: Build a Mosaic Services Jira ticket that already has a PRD. Use whe
 
 # Implement a ticket
 
-Read `CLAUDE.md`, `AGENTS.md`, `.cursor/skills/_shared/atlassian-mcp.md`, and the ticket PRD first.
+Read `CLAUDE.md`, `AGENTS.md`, `.cursor/skills/_shared/atlassian-mcp.md`, and the ticket PRD first. Jira is **Atlassian MCP** only.
 
 ## Integrity door
 

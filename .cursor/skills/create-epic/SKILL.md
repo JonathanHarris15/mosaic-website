@@ -7,7 +7,7 @@ description: Create a Jira Epic and child Feature, Task, or Bug tickets for Mosa
 
 # Create an epic
 
-Read `CLAUDE.md`, `.cursor/skills/plan-ticket/BOARD.md`, `.cursor/skills/_shared/operator.md`, and `.cursor/skills/_shared/atlassian-mcp.md` first.
+Read `CLAUDE.md`, `.cursor/skills/plan-ticket/BOARD.md`, `.cursor/skills/_shared/operator.md`, and `.cursor/skills/_shared/atlassian-mcp.md` first. Jira is **Atlassian MCP** only.
 
 An **Epic is never a board card.** It groups level-0 tickets. Children start in **To Plan** as thin ideas unless the user already has a PRD for a child — then that child still needs `/plan-ticket` before it leaves To Plan.
 

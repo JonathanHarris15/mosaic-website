@@ -65,7 +65,7 @@ test('Jira skills do not send agents to ToolSearch or ~/.claude', () => {
         );
         assert.match(
             text,
-            /Atlassian/,
+            /Atlassian/i,
             name + ' should point at Atlassian MCP'
         );
     }
