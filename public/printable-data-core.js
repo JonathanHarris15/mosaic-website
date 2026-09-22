@@ -11,10 +11,13 @@
 // the lowest Permission Level that may read it.
 //
 // ⚠ THE CATALOG IS THE PERMISSION BOUNDARY'S FIRST HALF. Nothing elder-only
-// is in it at all — not a Shepherding Note, not a Prayer Request, not a
-// relationship — so the drawer cannot offer what the rules would refuse. The
-// second half is `firestore.rules`, which still refuses a read this module
-// merely omits. `sourcesFor(level)` is what the drawer draws from.
+// is a *source* in it at all — not a Shepherding Note, not a Prayer Request,
+// not a relationship — so the drawer cannot offer a list the rules would
+// refuse. A *filter* on a source may sit higher (the Membership Track, inactive
+// people): the query builder hides it from anyone who may not query it, and a
+// stored query still runs for them. The second half is `firestore.rules`,
+// which still refuses a read this module merely omits. `sourcesFor(level)` is
+// what the drawer draws from.
 //
 // The **resolvers** turn what the store fetched (plain records) into rows of
 // field values. They are pure: they take today's date as an argument, never
@@ -191,7 +194,16 @@
                     { value: 'members', label: 'Members' }, { value: 'non_members', label: 'Non-members' }, { value: 'everyone', label: 'Everyone' },
                 ] },
                 { key: 'tag', label: 'With the tag', kind: 'text', default: '' },
-                { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false },
+                { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
+                { key: 'stage', label: 'Membership stage', kind: 'choice', default: '', minLevel: 'elder', options: [
+                    { value: '', label: 'Any stage' },
+                    { value: 'visitor', label: 'Visitor' },
+                    { value: 'regular_attender', label: 'Regular attender' },
+                    { value: 'prospective_member', label: 'Prospective member' },
+                    { value: 'member', label: 'Member' },
+                    { value: 'moving_membership', label: 'Moving membership' },
+                    { value: 'previous_member', label: 'Previous member' },
+                ] },
                 { key: 'sort', label: 'Sort by', kind: 'choice', default: 'last', options: [
                     { value: 'last', label: 'Last name' }, { value: 'first', label: 'First name' },
                 ] },
@@ -212,7 +224,7 @@
                 { key: 'membership', label: 'Who', kind: 'choice', default: 'members', options: [
                     { value: 'members', label: 'Households with a member' }, { value: 'everyone', label: 'Everyone' },
                 ] },
-                { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false },
+                { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
             ],
         },
         {
@@ -333,13 +345,35 @@
         return SOURCES.find(s => s.key === key) || null;
     }
 
+    function visibleSpecs(list, level) {
+        return (list || []).filter(s => !s.minLevel || mayRead(level, s.minLevel));
+    }
+
     // What one Permission Level may see: the sources at or below their rank,
-    // each with only the fields at or below it. A member's drawer is a strict
-    // subset of an editor's, by construction.
+    // each with only the fields and query filters at or below it. A member's
+    // drawer is a strict subset of an editor's, by construction. An elder's
+    // query controls are not listed to anyone else.
     function sourcesFor(level) {
         return SOURCES
             .filter(s => mayRead(level, s.minLevel))
-            .map(s => Object.assign({}, s, { fields: s.fields.filter(f => !f.minLevel || mayRead(level, f.minLevel)) }));
+            .map(s => Object.assign({}, s, {
+                fields: s.fields.filter(f => !f.minLevel || mayRead(level, f.minLevel)),
+                params: visibleSpecs(s.params, level),
+                filters: visibleSpecs(s.filters, level),
+            }));
+    }
+
+    function mayQuery(level, sourceKey) {
+        const s = sourceByKey(sourceKey);
+        return !!(s && mayRead(level, s.minLevel));
+    }
+
+    // Params and filters this level may put on a query. A stored query may
+    // still carry keys that are not in this list.
+    function querySpecsFor(source, level) {
+        const s = typeof source === 'string' ? sourceByKey(source) : source;
+        if (!s || !mayRead(level, s.minLevel)) return [];
+        return visibleSpecs((s.params || []).concat(s.filters || []), level);
     }
 
     // The fields a source offers for a given choice of params — most are
@@ -501,6 +535,7 @@
             .filter(person => p.includeInactive || !isInactive(person))
             .filter(person => passesMembership(person, p.membership))
             .filter(person => hasTag(person, p.tag))
+            .filter(person => !p.stage || ((person.membership || {}).stage === p.stage))
             .sort(comparePeople(p.sort))
             .map(person => personRow(person, ctx, householdByPerson));
         const warnings = [];
@@ -900,7 +935,7 @@
         });
         (s.filters || []).forEach(f => {
             const v = p[f.key];
-            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default) bits.push(o.label.toLowerCase()); }
+            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(o.label.toLowerCase()); }
             else if (f.kind === 'text' && v) bits.push(f.label.toLowerCase() + ' "' + v + '"');
             else if (f.kind === 'bool' && v) bits.push(f.label.toLowerCase());
         });
@@ -925,6 +960,8 @@
         describeRange,
         sourceByKey,
         sourcesFor,
+        mayQuery,
+        querySpecsFor,
         fieldsFor,
         defaultParams,
         accepts,

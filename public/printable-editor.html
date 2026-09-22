@@ -359,55 +359,10 @@
                                         <span class="pe-iter__title">Iterated element</span>
                                         <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="stopIterating()"><span class="m-btn__label">Stop iterating</span></button>
                                     </div>
-                                    <p class="pe-hint" x-show="!selectedNode.repeat.source">Pick a list in the drawer on the right. This element will be drawn once per row.</p>
+                                    <p class="pe-hint" x-show="!selectedNode.repeat.source">Build the query in the data drawer on the right. This element will be drawn once per row.</p>
                                     <div x-show="selectedNode.repeat.source">
-                                        <p class="pe-iter__source">Stands for one row of <strong x-text="repeatSource ? repeatSource.label : ''"></strong><span x-show="repeatRowCount !== null" x-text="' — ' + repeatRowCount + ' row' + (repeatRowCount === 1 ? '' : 's') + ' today'"></span>.
-                                            <button type="button" class="pe-linkbtn" @click="data.picking = true">Change list</button></p>
-
-                                        <template x-for="spec in repeatParamSpecs" :key="spec.key">
-                                            <div>
-                                                <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key); }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                                        <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
-                                                    </select></label>
-                                                <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
-                                                    <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" placeholder="any" /></label>
-                                                <label class="pe-f pe-f--check" x-show="spec.kind === 'bool'"><span x-text="spec.label"></span>
-                                                    <input type="checkbox" :checked="!!repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.checked)" /></label>
-                                                <div class="pe-f" x-show="spec.kind === 'when'"><span x-text="spec.label"></span>
-                                                    <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'last'" @click="setRepeatParam(spec.key, { mode: 'last' })">Last</button>
-                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'this'" @click="setRepeatParam(spec.key, { mode: 'this' })">This</button>
-                                                        <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'next'" @click="setRepeatParam(spec.key, { mode: 'next' })">Next</button>
-                                                        <input type="date" class="pe-in pe-in--date" :value="(repeatParam(spec.key) || {}).date || ''" @change="setRepeatParam(spec.key, { mode: 'date', date: $event.target.value })" />
-                                                    </span></div>
-                                                <div x-show="spec.kind === 'range'">
-                                                    <div class="pe-f"><span x-text="spec.label"></span>
-                                                        <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                            <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRepeatParam(spec.key, { mode: 'relative', fromDays: 0, toDays: 14 })">From today</button>
-                                                            <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRepeatParam(spec.key, { mode: 'static', from: '', to: '' })">Fixed dates</button>
-                                                        </span></div>
-                                                    <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">
-                                                        <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).fromDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { fromDays: Number($event.target.value) }))" /></label>
-                                                        <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).toDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { toDays: Number($event.target.value) }))" /></label>
-                                                    </div>
-                                                    <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'static'">
-                                                        <label class="pe-f"><span>From</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).from || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { from: $event.target.value }))" /></label>
-                                                        <label class="pe-f"><span>To</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).to || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { to: $event.target.value }))" /></label>
-                                                    </div>
-                                                </div>
-                                                <label class="pe-f" x-show="spec.kind === 'series'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                                        <option value="">Every event</option>
-                                                        <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
-                                                    </select></label>
-                                                <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
-                                                    <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                                        <option value="">Choose a form</option>
-                                                        <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" x-text="f.title"></option></template>
-                                                    </select></label>
-                                            </div>
-                                        </template>
+                                        <p class="pe-iter__source">Stands for one row of <strong x-text="repeatSource ? repeatSource.label : (queryLocked ? 'a list you may not query' : '')"></strong><span x-show="repeatRowCount !== null" x-text="' — ' + repeatRowCount + ' row' + (repeatRowCount === 1 ? '' : 's') + ' today'"></span>.</p>
+                                        <p class="pe-hint">Who is in the list is the query in the drawer. Layout of the copies stays here.</p>
 
                                         <h3 class="pe-h pe-h--sub">Layout of the copies</h3>
                                         <div class="pe-f"><span>Direction</span>
@@ -544,36 +499,83 @@
             <div class="pe-drawer__body">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
 
-                <!-- Picking a list for an iterated element -->
-                <div class="pe-drawer__pick" x-show="data.picking">
-                    <p class="pe-hint"><strong>Choose what the element iterates over.</strong> It will be drawn once per row.</p>
-                    <template x-for="region in regions" :key="'pick-' + region.name">
-                        <div>
-                            <template x-for="src in region.sources.filter(x => x.shape === 'list')" :key="'pick-' + src.key">
-                                <button type="button" class="pe-src pe-src--pick" @click="chooseList(src)">
-                                    <span class="material-symbols-outlined">list</span>
-                                    <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-text="src.blurb"></span></span>
-                                </button>
-                            </template>
+                <section class="pe-drawer__section pe-query" x-show="showQueryBuilder">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">filter_alt</span>Query</h3>
+                    <template x-if="queryLocked">
+                        <div class="pe-query__locked">
+                            <p class="pe-hint"><strong>This list is not yours to query.</strong> The page still draws the rows you may read. You cannot change or recreate this query.</p>
                         </div>
                     </template>
-                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="data.picking = false">Cancel</button>
-                </div>
-
-                <div x-show="!data.picking">
-                    <!-- The row the selection stands for -->
-                    <section class="pe-drawer__section pe-drawer__section--item" x-show="repeatContext && repeatSource">
-                        <h3 class="pe-drawer__title"><span class="material-symbols-outlined">repeat</span>Each row of <span x-text="repeatSource ? repeatSource.label.toLowerCase() : ''"></span></h3>
-                        <p class="pe-hint">Drag a field onto an element inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
-                        <div class="pe-chips">
-                            <template x-for="f in itemFields" :key="'item-' + f.key">
-                                <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
-                                      @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
-                                    <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
-                                </span>
+                    <template x-if="!queryLocked">
+                        <div>
+                            <label class="pe-f"><span>List</span>
+                                <select class="pe-in" :value="repeatContext && repeatContext.repeat.source || ''" @change="setQuerySource($event.target.value)">
+                                    <option value="" disabled>Choose a list</option>
+                                    <template x-for="src in listSources" :key="'q-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
+                                </select></label>
+                            <p class="pe-hint" x-show="!repeatContext || !repeatContext.repeat.source">Select a box, then a list. Only lists you may query are here.</p>
+                            <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
+                                <div>
+                                    <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
+                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key); }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
+                                            <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
+                                        </select></label>
+                                    <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
+                                        <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" placeholder="any" /></label>
+                                    <label class="pe-f pe-f--check" x-show="spec.kind === 'bool'"><span x-text="spec.label"></span>
+                                        <input type="checkbox" :checked="!!repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.checked)" /></label>
+                                    <div class="pe-f" x-show="spec.kind === 'when'"><span x-text="spec.label"></span>
+                                        <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'last'" @click="setRepeatParam(spec.key, { mode: 'last' })">Last</button>
+                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'this'" @click="setRepeatParam(spec.key, { mode: 'this' })">This</button>
+                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'next'" @click="setRepeatParam(spec.key, { mode: 'next' })">Next</button>
+                                            <input type="date" class="pe-in pe-in--date" :value="(repeatParam(spec.key) || {}).date || ''" @change="setRepeatParam(spec.key, { mode: 'date', date: $event.target.value })" />
+                                        </span></div>
+                                    <div x-show="spec.kind === 'range'">
+                                        <div class="pe-f"><span x-text="spec.label"></span>
+                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRepeatParam(spec.key, { mode: 'relative', fromDays: 0, toDays: 14 })">From today</button>
+                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRepeatParam(spec.key, { mode: 'static', from: '', to: '' })">Fixed dates</button>
+                                            </span></div>
+                                        <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">
+                                            <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).fromDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { fromDays: Number($event.target.value) }))" /></label>
+                                            <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).toDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { toDays: Number($event.target.value) }))" /></label>
+                                        </div>
+                                        <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'static'">
+                                            <label class="pe-f"><span>From</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).from || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { from: $event.target.value }))" /></label>
+                                            <label class="pe-f"><span>To</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).to || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { to: $event.target.value }))" /></label>
+                                        </div>
+                                    </div>
+                                    <label class="pe-f" x-show="spec.kind === 'series'"><span x-text="spec.label"></span>
+                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
+                                            <option value="">Every event</option>
+                                            <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
+                                        </select></label>
+                                    <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
+                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
+                                            <option value="">Choose a form</option>
+                                            <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" x-text="f.title"></option></template>
+                                        </select></label>
+                                </div>
                             </template>
+                            <p class="pe-query__count" x-show="repeatPreview.count !== null" x-text="repeatPreview.count + ' row' + (repeatPreview.count === 1 ? '' : 's') + ' today'"></p>
+                            <ul class="pe-query__preview" x-show="repeatPreview.names.length">
+                                <template x-for="(name, i) in repeatPreview.names" :key="'prev-' + i"><li x-text="name"></li></template>
+                            </ul>
+                            <p class="pe-hint" x-show="repeatContext && repeatSource">Drag a field onto an element inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
+                            <div class="pe-chips" x-show="itemFields.length">
+                                <template x-for="f in itemFields" :key="'item-' + f.key">
+                                    <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
+                                          @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
+                                    </span>
+                                </template>
+                            </div>
                         </div>
-                    </section>
+                    </template>
+                </section>
+
+                <div>
 
                     <template x-for="region in regions" :key="region.name">
                         <section class="pe-drawer__section">
@@ -962,6 +964,11 @@
         .pe-drawer__error { color: var(--error); font-size: 12px; margin: 4px 0 8px; }
         .pe-drawer__section { margin-bottom: 14px; }
         .pe-drawer__section--item { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
+        .pe-query { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
+        .pe-query__locked { padding: 4px 0 2px; }
+        .pe-query__count { margin: 8px 0 4px; font: 600 12px var(--font-sans); color: var(--on-surface); }
+        .pe-query__preview { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 12px; line-height: 1.4; }
+        .pe-query__preview li { margin: 0; }
         .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
         .pe-drawer__ok { color: var(--success); }

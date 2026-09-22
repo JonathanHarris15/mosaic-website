@@ -146,6 +146,29 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+test('the query a level may build is only the sources and filters they may read', () => {
+    const member = Data.querySpecsFor('people', 'member').map(s => s.key);
+    const editor = Data.querySpecsFor('people', 'editor').map(s => s.key);
+    const elder = Data.querySpecsFor('people', 'elder').map(s => s.key);
+    assert.ok(member.includes('membership') && member.includes('sort'));
+    assert.ok(!member.includes('stage') && !member.includes('includeInactive'));
+    assert.ok(!editor.includes('stage') && !editor.includes('includeInactive'), 'inactive people and the Track are not an editor\'s to query');
+    assert.ok(elder.includes('stage') && elder.includes('includeInactive'));
+    assert.equal(Data.mayQuery('member', 'form_answers'), false);
+    assert.equal(Data.mayQuery('editor', 'form_answers'), true);
+    assert.equal(Data.mayQuery('member', 'people'), true);
+    const editorPeople = Data.sourcesFor('editor').find(s => s.key === 'people');
+    assert.ok(!editorPeople.filters.some(f => f.key === 'stage'), 'the drawer never lists a filter above the viewer');
+});
+
+test('a stored query still runs when the viewer could not have built it', () => {
+    const visitors = Data.resolve('people', { membership: 'everyone', stage: 'visitor' }, PEOPLE(), { today: TODAY, level: 'member' });
+    assert.deepEqual(visitors.rows.map(x => x.name), ['Ben Carter']);
+    assert.equal('stage' in visitors.rows[0], false, 'the Track field is still stripped from the row');
+    const inactive = Data.resolve('people', { membership: 'everyone', includeInactive: true }, PEOPLE(), { today: TODAY, level: 'member' });
+    assert.ok(inactive.rows.some(x => x.name === 'Cara Abbott'));
+});
+
 test('a field above the viewer never leaves the resolver, whoever wired it', () => {
     const asEditor = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
     const asMember = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'member' });

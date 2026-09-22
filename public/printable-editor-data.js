@@ -12,6 +12,8 @@
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
     //     list that overflows keeps real pages, each editable, with live rows;
+//     the query for a list lives in the drawer and only offers what this
+//     viewer may query;
 //   • LIVE DATA — one fetch of everything the project reads, resolved through
 //     PrintableLive, redrawn on demand, with a Warnings list of every gap.
 //
@@ -188,7 +190,32 @@
 
             get repeatSource() {
                 const r = this.repeatContext;
-                return r && r.repeat.source ? Data.sourceByKey(r.repeat.source) : null;
+                if (!r || !r.repeat.source) return null;
+                return Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || null;
+            },
+
+            get listSources() {
+                return Data.sourcesFor(this.permissionLevel).filter(s => s.shape === 'list');
+            },
+
+            get queryLocked() {
+                const r = this.repeatContext;
+                return !!(r && r.repeat.source && !Data.mayQuery(this.permissionLevel, r.repeat.source));
+            },
+
+            get showQueryBuilder() {
+                return !!(this.repeatContext || this.data.picking || this.selectedKind === 'box');
+            },
+
+            get repeatPreview() {
+                const r = this.repeatContext;
+                const res = this.resolver;
+                if (!r || !res || !r.repeat.source) return { count: null, names: [] };
+                const rows = res.rowsFor(r) || [];
+                return {
+                    count: rows.length,
+                    names: rows.slice(0, 8).map(row => row.name || row.label || row._id || 'A row'),
+                };
             },
 
             // The fields a row of the selection's list carries, as chips.
@@ -436,19 +463,36 @@
 
             chooseList(source) {
                 const page = this.currentPage;
-                const node = this.selectedNode;
+                const node = (this.selectedNode && this.selectedNode.repeat) ? this.selectedNode : this.repeatContext || this.selectedNode;
                 if (!page || !node) return;
-                // Only a box stands for a row; makeIterated has already said so.
                 if (Core.kindOf(node) !== 'box') return;
+                const same = node.repeat && node.repeat.source === source.key;
+                const params = same
+                    ? Object.assign({}, Data.defaultParams(source.key), node.repeat.params || {})
+                    : Data.defaultParams(source.key);
                 const repeat = Object.assign({}, node.repeat || { layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' }, {
                     source: source.key,
-                    params: Data.defaultParams(source),
+                    params: params,
                 });
                 this.replacePage(Core.updateNode(page, node.id, { repeat: repeat }));
                 this.data.picking = false;
                 this.commit();
                 this.readProps();
                 this.refreshData();
+            },
+
+            setQuerySource(key) {
+                if (!key) return;
+                const src = this.listSources.find(s => s.key === key);
+                if (!src) return;
+                if (!this.repeatContext) {
+                    if (this.selectedKind !== 'box') {
+                        this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
+                        return;
+                    }
+                    this.makeIterated();
+                }
+                this.chooseList(src);
             },
 
             stopIterating() {
@@ -470,11 +514,11 @@
                 this.readProps();
             },
 
-            // The params a list carries, editable on the element panel.
+            // The params a list carries, only those this viewer may query.
             get repeatParamSpecs() {
-                const src = this.repeatSource;
-                if (!src) return [];
-                return (src.params || []).concat(src.filters || []);
+                const r = this.repeatContext;
+                if (!r || !r.repeat.source || this.queryLocked) return [];
+                return Data.querySpecsFor(r.repeat.source, this.permissionLevel);
             },
 
             repeatParam(key) {
@@ -488,7 +532,8 @@
             setRepeatParam(key, value) {
                 const r = this.repeatContext;
                 const page = this.pageOfNode(r && r.id);
-                if (!r || !page) return;
+                if (!r || !page || this.queryLocked) return;
+                if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel).some(s => s.key === key)) return;
                 const params = Object.assign({}, r.repeat.params || {}, { [key]: value });
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { params: params }) }));
                 this.commit();
