@@ -49,7 +49,8 @@ per child needs rows, not a sentence.
 ## Consequences
 
 - A household → children booklet is two queries: households with children,
-  then children of this household on a box inside the card.
+  then children of this household on a box inside the card. The children
+  list has its own Who filter (members / non-members / every child).
 - Related lists are not top-level chips in the drawer. They appear when
   the selected box sits inside their parent.
 - Other related lists can follow the same `of` seam later.

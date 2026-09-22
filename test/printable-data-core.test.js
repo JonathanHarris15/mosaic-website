@@ -201,6 +201,29 @@ test('a related children list is of one household, and without a parent it flatt
     assert.deepEqual(flat.rows.map(r => r.name), ['Eve Baker', 'Finn Baker']);
 });
 
+test('children of a household can be kept to members or to non-members', () => {
+    const data = {
+        people: [
+            { id: 'a', name: 'Anna Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'd', name: 'Dan Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'e', name: 'Eve Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'g', name: 'Gia Baker', tags: ['Visitor'], membership: { stage: 'visitor' } },
+        ],
+        families: [{ id: 'fam1', husbandId: 'd', wifeId: 'a', childIds: ['e', 'g'] }],
+    };
+    const baker = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' })
+        .rows.find(r => r.name === 'The Baker household');
+    const spec = Data.querySpecsFor('household_children', 'member').find(s => s.key === 'membership');
+    assert.ok(spec, 'the query builder offers who the children are');
+    assert.deepEqual(spec.options.map(o => o.value), ['members', 'non_members', 'everyone']);
+    const kids = Data.resolve('household_children', {}, data, { today: TODAY, level: 'member', parent: baker });
+    assert.deepEqual(kids.rows.map(r => r.name), ['Eve Baker', 'Gia Baker'], 'the default is every child');
+    const members = Data.resolve('household_children', { membership: 'members' }, data, { today: TODAY, level: 'member', parent: baker });
+    assert.deepEqual(members.rows.map(r => r.name), ['Eve Baker']);
+    const notMembers = Data.resolve('household_children', { membership: 'non_members' }, data, { today: TODAY, level: 'member', parent: baker });
+    assert.deepEqual(notMembers.rows.map(r => r.name), ['Gia Baker']);
+});
+
 test('the query a level may build is only the sources and filters they may read', () => {
     const member = Data.querySpecsFor('people', 'member').map(s => s.key);
     const editor = Data.querySpecsFor('people', 'editor').map(s => s.key);
