@@ -131,10 +131,16 @@ export function analyticsPage() {
                 const now = new Date();
                 const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+                // Date filter: exclude dates in the future or today if not yet passed.
+                // ADR-0018 / ServiceInvolvementCore: an involvement represents
+                // having served, so involvements that have not happened yet must
+                // not be counted on Analytics.
+                const isPassed = (d) => ServiceInvolvementCore.hasPassed(d, todayStr);
+
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     const date = doc.id;
-                    if (date > todayStr) { processed++; return; }
+                    if (!isPassed(date)) { processed++; return; }
                     
                     this.processHymns(data, date, hymnsMap);
                     this.processBibleReferences(data, date, bibleChapters);
@@ -289,6 +295,9 @@ export function analyticsPage() {
                         .slice(0, 3)
                         .map(r => r[0]);
 
+                    const pastInvolvementsCount = Object.values(analytics.roles)
+                        .reduce((sum, count) => sum + count, 0);
+
                     const pStats = this.prayerStats?.[pId] || { count: 0, lastDate: null, avgInterval: null };
                     // The cache stands in only where there is no history behind
                     // it — a person whose dates came in from an import. It is
@@ -301,7 +310,7 @@ export function analyticsPage() {
                         id: pId,
                         name: name,
                         sex: data.sex || null,
-                        totalInvolvements: data.totalInvolvements || 0,
+                        totalInvolvements: pastInvolvementsCount,
                         topRoles: topRoles,
                         tags: data.tags || [],
                         prayerCount: pStats.count,
@@ -429,18 +438,21 @@ export function analyticsPage() {
             this.personInvolvement = [];
             
             try {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const isPassed = (d) => ServiceInvolvementCore.hasPassed(d, todayStr);
+
                 const snap = await db.collection('people').doc(person.id)
                     .collection('involvement')
                     .orderBy('serviceDate', 'desc')
                     .limit(50)
                     .get();
                 
-                this.personInvolvement = snap.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                this.personInvolvement = snap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(inv => isPassed(inv.serviceDate));
 
-                // Update top roles for this person in the main list
+                // Update top roles and total involvements for this person in the main list
                 const roleCounts = {};
                 this.personInvolvement.forEach(inv => {
                     roleCounts[inv.type] = (roleCounts[inv.type] || 0) + 1;
@@ -453,6 +465,9 @@ export function analyticsPage() {
                 const pIndex = this.people.findIndex(p => p.id === person.id);
                 if (pIndex !== -1) {
                     this.people[pIndex].topRoles = topRoles;
+                    if (this.people[pIndex].totalInvolvements === 0 && this.personInvolvement.length > 0) {
+                        this.people[pIndex].totalInvolvements = this.personInvolvement.length;
+                    }
                 }
 
             } catch (error) {
