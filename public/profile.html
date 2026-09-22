@@ -301,8 +301,24 @@
                             </div>
 
                             <div id="my-name-form" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3">
-                                <label class="m-label">The correct spelling</label>
-                                <input id="my-name-input" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div class="flex flex-col gap-1">
+                                        <label class="m-label" for="my-name-first">First name</label>
+                                        <input id="my-name-first" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <label class="m-label" for="my-name-last">Last name</label>
+                                        <input id="my-name-last" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none disabled:opacity-50" />
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <label class="m-label" for="my-name-suffix">Suffix</label>
+                                        <input id="my-name-suffix" type="text" placeholder="Jr." class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    </div>
+                                    <label class="flex items-center gap-2 text-sm text-on-surface sm:mt-5">
+                                        <input id="my-name-no-last" type="checkbox" class="rounded border-outline-variant text-primary" />
+                                        <span>No last name</span>
+                                    </label>
+                                </div>
                                 <div class="flex items-center gap-2">
                                     <button type="button" id="my-name-send" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Ask the church</button>
                                     <button type="button" id="my-name-cancel" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Cancel</button>
@@ -539,6 +555,7 @@
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
     <script src="person-photo-core.js"></script>
+    <script src="person-name.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="account-recovery-core.js"></script>
     <script src="profile.js"></script>

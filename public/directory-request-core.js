@@ -12,7 +12,7 @@
 //
 //   link_match — "I'm already in the directory, that record is me"
 //   link_new   — "I'm not in the directory; here are my details"
-//   name_fix   — "my name is spelt wrong; here is the spelling"
+//   name_fix   — "my name is wrong; here is the first name, last name, and suffix"
 //   family     — "add/remove this Family relation of mine"
 //
 // The first two come from someone with no Person yet; the last two only make
@@ -67,6 +67,14 @@
     function access() {
         if (typeof AccessCore !== 'undefined') return AccessCore;
         if (typeof require === 'function') return require('./access-core.js');
+        return null;
+    }
+
+    // The name rule a greeter and an editor already use (ADR 0069). A Name Fix
+    // calls it rather than composing a second way (ADR 0070).
+    function names() {
+        if (typeof PersonName !== 'undefined') return PersonName;
+        if (typeof require === 'function') return require('./person-name.js');
         return null;
     }
 
@@ -128,6 +136,64 @@
         };
     }
 
+    // A Name Fix in parts uses the greeter's rule. A Name Fix that only has a
+    // full name is left as that spelling and gains no invented parts.
+    // What the profile opens. Remembered parts fill the blanks, including the
+    // pass. A full name that was never split does not — it is not copied into
+    // the first-name blank.
+    function nameFixBlanks(person) {
+        return names().blanksFor(person);
+    }
+
+    // The ask the profile files. It is a Directory Request, not a write to
+    // the Person.
+    function nameFixDraft(base, entry) {
+        const b = base || {};
+        const e = entry || {};
+        return {
+            uid: b.uid,
+            email: trimmed(b.email),
+            kind: KIND.NAME_FIX,
+            personId: b.personId || null,
+            currentName: trimmed(b.currentName),
+            currentParts: b.currentParts || null,
+            proposed: {
+                firstName: e.firstName,
+                lastName: e.lastName,
+                suffix: e.suffix,
+                noLastName: e.noLastName === true,
+            },
+            note: '',
+        };
+    }
+
+    function nameFixProposal(draft) {
+        const d = draft || {};
+        const proposed = d.proposed || {};
+        const Names = names();
+        const currentName = trimmed(d.currentName);
+
+        if (Names.isNameEntry(proposed)) {
+            const saved = Names.fieldsForNewPerson(proposed);
+            if (saved.fault) return { ok: false, error: Names.nameFixFault(saved.fault), proposed: null };
+            if (!Names.nameWouldChange(currentName, d.currentParts, saved.name, saved.nameParts)) {
+                return { ok: false, error: 'That is the spelling we already have.', proposed: null };
+            }
+            return {
+                ok: true,
+                error: null,
+                proposed: { name: saved.name, nameParts: saved.nameParts },
+            };
+        }
+
+        const name = trimmed(proposed.name);
+        if (!name) return { ok: false, error: 'Enter the correct spelling of your name.', proposed: null };
+        if (!Names.nameWouldChange(currentName, d.currentParts, name, null)) {
+            return { ok: false, error: 'That is the spelling we already have.', proposed: null };
+        }
+        return { ok: true, error: null, proposed: { name: name, nameParts: null } };
+    }
+
     function normalizeFamily(raw) {
         const f = raw || {};
         return {
@@ -157,11 +223,8 @@
 
         if (d.kind === KIND.NAME_FIX) {
             if (!d.personId) return { ok: false, error: 'Your account is not connected to a directory record yet.' };
-            const name = normalizeProposed(d.proposed).name;
-            if (!name) return { ok: false, error: 'Enter the correct spelling of your name.' };
-            if (name === trimmed(d.currentName)) {
-                return { ok: false, error: 'That is the spelling we already have.' };
-            }
+            const fix = nameFixProposal(d);
+            if (!fix.ok) return { ok: false, error: fix.error };
             return { ok: true, error: null };
         }
 
@@ -188,7 +251,7 @@
         if (!check.ok) throw new Error(check.error);
 
         const kind = draft.kind;
-        const carriesProposal = kind === KIND.LINK_NEW || kind === KIND.NAME_FIX;
+        const carriesProposal = kind === KIND.LINK_NEW;
 
         return {
             uid: draft.uid,
@@ -199,7 +262,8 @@
             // the requester's own for a name fix or a family change. Null for
             // link_new, which is asking for a Person to be made.
             personId: kind === KIND.LINK_NEW ? null : (draft.personId || null),
-            proposed: carriesProposal ? normalizeProposed(draft.proposed) : null,
+            proposed: kind === KIND.NAME_FIX ? nameFixProposal(draft).proposed
+                : (carriesProposal ? normalizeProposed(draft.proposed) : null),
             family: kind === KIND.FAMILY ? normalizeFamily(draft.family) : null,
             note: trimmed(draft.note),
             resolvedBy: null,
@@ -214,6 +278,17 @@
 
     function isLinkKind(kind) {
         return LINK_KINDS.indexOf(kind) !== -1;
+    }
+
+    // The approver sees the composed full name, and the parts when the ask
+    // has them, so a suffix is not left looking like a last name.
+    function nameFixPartsClause(parts) {
+        if (!parts) return '';
+        const bits = ['first name ' + (parts.firstName || '')];
+        if (parts.noLastName) bits.push('no last name');
+        else bits.push('last name ' + (parts.lastName || ''));
+        if (parts.suffix) bits.push('suffix ' + parts.suffix);
+        return ' (' + bits.join(', ') + ')';
     }
 
     // Human words for a Family relation, from the requester's side.
@@ -240,7 +315,8 @@
         }
         if (request.kind === KIND.NAME_FIX) {
             const to = (request.proposed && request.proposed.name) || '';
-            return `${who} asks to be spelt “${to}”`;
+            const parts = request.proposed && request.proposed.nameParts;
+            return `${who} asks to be spelt “${to}”${nameFixPartsClause(parts)}`;
         }
         if (request.kind === KIND.FAMILY) {
             const f = request.family || {};
@@ -302,6 +378,8 @@
         requestId,
         normalizeProposed,
         normalizeFamily,
+        nameFixBlanks,
+        nameFixDraft,
         validateDraft,
         buildRequest,
         isPending,

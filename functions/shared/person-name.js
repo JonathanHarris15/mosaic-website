@@ -1,3 +1,11 @@
+// ⚠ GENERATED FILE — DO NOT EDIT.
+//
+// Copied from public/person-name.js by scripts/sync-shared-to-functions.js, because
+// functions/ deploys as its own bundle and cannot require across into
+// public/. Edit the original; run the script; commit both.
+//
+// test/functions-shared-sync.test.js fails if this copy is stale.
+
 // Person name — entered as a first name, a last name, and an optional suffix.
 //
 // The full name is those parts in that order, skipping a blank. That full

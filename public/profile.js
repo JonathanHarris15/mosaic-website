@@ -737,8 +737,8 @@ function renderMyName(person, pending) {
     askBtn.onclick = () => {
         askBtn.classList.add('hidden');
         form.classList.remove('hidden');
-        document.getElementById('my-name-input').value = person.name || '';
-        document.getElementById('my-name-input').focus();
+        fillNameFixBlanks(person);
+        document.getElementById('my-name-first').focus();
     };
     document.getElementById('my-name-cancel').onclick = () => {
         form.classList.add('hidden');
@@ -748,17 +748,35 @@ function renderMyName(person, pending) {
     document.getElementById('my-name-send').onclick = () => submitNameFix(person);
 }
 
+function fillNameFixBlanks(person) {
+    const blanks = DRC.nameFixBlanks(person);
+    document.getElementById('my-name-first').value = blanks.firstName;
+    const last = document.getElementById('my-name-last');
+    const pass = document.getElementById('my-name-no-last');
+    last.value = blanks.lastName;
+    pass.checked = blanks.noLastName === true;
+    last.disabled = pass.checked;
+    document.getElementById('my-name-suffix').value = blanks.suffix;
+    pass.onchange = () => {
+        last.disabled = pass.checked;
+        if (pass.checked) last.value = '';
+    };
+}
+
 async function submitNameFix(person) {
     const status = document.getElementById('my-name-status');
-    const draft = {
+    const draft = DRC.nameFixDraft({
         uid: drUser.uid,
         email: drUser.email || '',
-        kind: DRC.KIND.NAME_FIX,
         personId: drPersonId,
         currentName: person.name || '',
-        proposed: { name: document.getElementById('my-name-input').value },
-        note: '',
-    };
+        currentParts: person.nameParts || null,
+    }, {
+        firstName: document.getElementById('my-name-first').value,
+        lastName: document.getElementById('my-name-last').value,
+        suffix: document.getElementById('my-name-suffix').value,
+        noLastName: document.getElementById('my-name-no-last').checked,
+    });
 
     const check = DRC.validateDraft(draft);
     if (!check.ok) {

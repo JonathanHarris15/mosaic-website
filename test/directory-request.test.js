@@ -124,6 +124,199 @@ test('a name fix must change something', () => {
     }).ok);
 });
 
+test('a Name Fix entered as Jonathan, Harris, and Jr. stores that full name and those parts', () => {
+    const draft = {
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jon Harris',
+        currentParts: null,
+        proposed: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+    };
+    assert.ok(Core.validateDraft(draft).ok);
+    const req = Core.buildRequest(draft);
+    assert.strictEqual(req.proposed.name, 'Jonathan Harris Jr.');
+    assert.deepStrictEqual(req.proposed.nameParts, {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr.',
+        noLastName: false,
+    });
+});
+
+test('a Name Fix with no first name, or no last name without the pass, is refused', () => {
+    const base = { uid: 'u1', kind: 'name_fix', personId: 'p1', currentName: 'Jane Doe' };
+    const noFirst = Core.validateDraft(Object.assign({}, base, {
+        proposed: { firstName: '  ', lastName: 'Doe', suffix: '', noLastName: false },
+    }));
+    assert.ok(!noFirst.ok);
+    assert.strictEqual(noFirst.error, 'A first name is required.');
+
+    const noLast = Core.validateDraft(Object.assign({}, base, {
+        proposed: { firstName: 'Jane', lastName: ' ', suffix: '', noLastName: false },
+    }));
+    assert.ok(!noLast.ok);
+    assert.strictEqual(noLast.error, 'A last name is required, or mark that there is none.');
+
+    const suffixOnly = Core.validateDraft(Object.assign({}, base, {
+        proposed: { firstName: 'Jane', lastName: '', suffix: 'Jr.', noLastName: false },
+    }));
+    assert.ok(!suffixOnly.ok);
+
+    assert.ok(Core.validateDraft(Object.assign({}, base, {
+        proposed: { firstName: 'Jane', lastName: 'Doe', suffix: '', noLastName: false },
+    })).ok);
+});
+
+test('a first name with No last name and a suffix is a real name, and the typed last name is forgotten', () => {
+    const req = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jane Doe',
+        proposed: { firstName: 'Plato', lastName: 'Ignored', suffix: 'Jr.', noLastName: true },
+    });
+    assert.strictEqual(req.proposed.name, 'Plato Jr.');
+    assert.strictEqual(req.proposed.nameParts.lastName, '');
+    assert.strictEqual(req.proposed.nameParts.noLastName, true);
+    assert.strictEqual(req.proposed.nameParts.suffix, 'Jr.');
+});
+
+test('the same full name is refused when the parts match, and accepted when the parts are new', () => {
+    const parts = { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false };
+    const same = Core.validateDraft({
+        uid: 'u1', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jonathan Harris Jr.',
+        currentParts: parts,
+        proposed: parts,
+    });
+    assert.ok(!same.ok);
+    assert.match(same.error, /already have/);
+
+    const remembered = Core.validateDraft({
+        uid: 'u1', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jonathan Harris Jr.',
+        currentParts: null,
+        proposed: parts,
+    });
+    assert.ok(remembered.ok);
+    const req = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jonathan Harris Jr.',
+        currentParts: null,
+        proposed: parts,
+    });
+    assert.strictEqual(req.proposed.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(req.proposed.nameParts.lastName, 'Harris');
+});
+
+test('a Name Fix that only has a full name is not split into parts', () => {
+    const req = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jane Doe', proposed: { name: ' Jayne Doe ' },
+    });
+    assert.strictEqual(req.proposed.name, 'Jayne Doe');
+    assert.strictEqual(req.proposed.nameParts, null);
+});
+
+test('the inbox names the parts of a Name Fix, and a one-string ask stays one spelling', () => {
+    const parts = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jon Harris',
+        proposed: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+    });
+    assert.strictEqual(
+        Core.summarize(parts, nameOf),
+        'Jane Doe asks to be spelt “Jonathan Harris Jr.” (first name Jonathan, last name Harris, suffix Jr.)'
+    );
+
+    const mononym = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jane Doe',
+        proposed: { firstName: 'Plato', lastName: '', suffix: 'Jr.', noLastName: true },
+    });
+    assert.strictEqual(
+        Core.summarize(mononym, nameOf),
+        'Jane Doe asks to be spelt “Plato Jr.” (first name Plato, no last name, suffix Jr.)'
+    );
+
+    const noSuffix = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jane Doe',
+        proposed: { firstName: 'Ada', lastName: 'Lovelace', suffix: '', noLastName: false },
+    });
+    assert.strictEqual(
+        Core.summarize(noSuffix, nameOf),
+        'Jane Doe asks to be spelt “Ada Lovelace” (first name Ada, last name Lovelace)'
+    );
+
+    const spelling = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jane Doe', proposed: { name: 'Jayne Doe' },
+    });
+    assert.strictEqual(Core.summarize(spelling, nameOf), 'Jane Doe asks to be spelt “Jayne Doe”');
+});
+
+test('the profile opens Name Fix blanks from remembered parts, and never from a full name', () => {
+    const split = Core.nameFixBlanks({
+        name: 'Jonathan Harris Jr.',
+        nameParts: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+    });
+    assert.deepStrictEqual(split, {
+        firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false,
+    });
+
+    const mononym = Core.nameFixBlanks({
+        name: 'Plato',
+        nameParts: { firstName: 'Plato', lastName: '', suffix: '', noLastName: true },
+    });
+    assert.strictEqual(mononym.noLastName, true);
+    assert.strictEqual(mononym.lastName, '');
+
+    const unsplit = Core.nameFixBlanks({ name: 'Jonathan Harris Jr.' });
+    assert.deepStrictEqual(unsplit, {
+        firstName: '', lastName: '', suffix: '', noLastName: false,
+    });
+    assert.notStrictEqual(unsplit.firstName, 'Jonathan Harris Jr.');
+});
+
+test('the profile files a Name Fix the request already accepts, and does not write the Person', () => {
+    const person = {
+        name: 'Jon Harris',
+        nameParts: { firstName: 'Jon', lastName: 'Harris', suffix: '', noLastName: false },
+    };
+    const draft = Core.nameFixDraft({
+        uid: 'u1',
+        email: 'j@e.com',
+        personId: 'p1',
+        currentName: person.name,
+        currentParts: person.nameParts,
+    }, { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false });
+    assert.strictEqual(draft.kind, 'name_fix');
+    assert.ok(Core.validateDraft(draft).ok);
+    const req = Core.buildRequest(draft);
+    assert.strictEqual(req.proposed.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(req.proposed.nameParts.lastName, 'Harris');
+    assert.strictEqual(req.status, 'pending');
+    assert.ok(!req.name);
+});
+
+test('the waiting message names the full name that was asked for', () => {
+    const req = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'name_fix', personId: 'p1',
+        currentName: 'Jon Harris',
+        proposed: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+    });
+    assert.strictEqual(
+        Core.statusMessage(req, nameOf),
+        'Waiting on the church to change your name to “Jonathan Harris Jr.”.'
+    );
+});
+
+test('a New Record Request still proposes one name and no parts', () => {
+    const req = Core.buildRequest({
+        uid: 'u1', email: 'j@e.com', kind: 'link_new', proposed: { name: 'Jane Doe' },
+    });
+    assert.strictEqual(req.proposed.name, 'Jane Doe');
+    assert.strictEqual(req.proposed.nameParts, undefined);
+});
+
 test('a name fix from an unlinked account is refused', () => {
     const bad = Core.validateDraft({ uid: 'u1', kind: 'name_fix', proposed: { name: 'Jayne' } });
     assert.ok(!bad.ok);
@@ -277,7 +470,9 @@ test('approving a name fix renames the person', () => {
     const plan = Server.planApproval(nameFix, {
         requesterPersonId: 'p1', target: { exists: true, name: 'Jane Doe' },
     });
-    assert.deepStrictEqual(plan, { action: 'rename', personId: 'p1', name: 'Jayne Doe', reason: null });
+    assert.deepStrictEqual(plan, {
+        action: 'rename', personId: 'p1', name: 'Jayne Doe', nameParts: null, reason: null,
+    });
 });
 
 test('a name fix is refused if the link moved while it queued — it would rename a stranger', () => {
@@ -307,6 +502,87 @@ test('a name fix with an empty name cannot be approved', () => {
         Object.assign({}, nameFix, { proposed: { name: '   ' } }),
         { requesterPersonId: 'p1', target: { exists: true, name: 'Jane Doe' } });
     assert.strictEqual(plan.action, 'refuse');
+});
+
+const jonathanParts = {
+    firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false,
+};
+
+test('approving Jonathan, Harris, and Jr. stores that full name and those parts', () => {
+    const Names = require('../public/person-name.js');
+    const plan = Server.planApproval({
+        uid: 'u1', kind: 'name_fix', personId: 'p1', status: 'pending',
+        proposed: { name: 'NOT THIS', nameParts: jonathanParts },
+    }, {
+        requesterPersonId: 'p1',
+        target: { exists: true, name: 'Jon Harris', nameParts: null },
+    });
+    assert.strictEqual(plan.action, 'rename');
+    assert.strictEqual(plan.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(plan.name, Names.enteredName(jonathanParts).name);
+    assert.notStrictEqual(plan.name, 'NOT THIS');
+    assert.deepStrictEqual(plan.nameParts, jonathanParts);
+    assert.deepStrictEqual(
+        Object.keys(plan).sort(),
+        ['action', 'name', 'nameParts', 'personId', 'reason']
+    );
+});
+
+test('approving a one-string Name Fix writes that spelling and clears any remembered parts', () => {
+    const plan = Server.planApproval({
+        uid: 'u1', kind: 'name_fix', personId: 'p1', status: 'pending',
+        proposed: { name: 'Jon Harris' },
+    }, {
+        requesterPersonId: 'p1',
+        target: {
+            exists: true,
+            name: 'Jonathan Harris',
+            nameParts: jonathanParts,
+        },
+    });
+    assert.deepStrictEqual(plan, {
+        action: 'rename', personId: 'p1', name: 'Jon Harris', nameParts: null, reason: null,
+    });
+});
+
+test('approving parts that compose to the current name still writes the parts', () => {
+    const plan = Server.planApproval({
+        uid: 'u1', kind: 'name_fix', personId: 'p1', status: 'pending',
+        proposed: { name: 'Jonathan Harris Jr.', nameParts: jonathanParts },
+    }, {
+        requesterPersonId: 'p1',
+        target: { exists: true, name: 'Jonathan Harris Jr.', nameParts: null },
+    });
+    assert.strictEqual(plan.action, 'rename');
+    assert.strictEqual(plan.name, 'Jonathan Harris Jr.');
+    assert.deepStrictEqual(plan.nameParts, jonathanParts);
+});
+
+test('approving a Name Fix is refused when nothing about the name or the parts would change', () => {
+    const plan = Server.planApproval({
+        uid: 'u1', kind: 'name_fix', personId: 'p1', status: 'pending',
+        proposed: { name: 'Jonathan Harris Jr.', nameParts: jonathanParts },
+    }, {
+        requesterPersonId: 'p1',
+        target: { exists: true, name: 'Jonathan Harris Jr.', nameParts: jonathanParts },
+    });
+    assert.strictEqual(plan.action, 'refuse');
+    assert.match(plan.reason, /already has this spelling/);
+});
+
+test('approving a Name Fix is refused when the parts are not saveable', () => {
+    const plan = Server.planApproval({
+        uid: 'u1', kind: 'name_fix', personId: 'p1', status: 'pending',
+        proposed: {
+            name: 'Harris',
+            nameParts: { firstName: ' ', lastName: 'Harris', suffix: '', noLastName: false },
+        },
+    }, {
+        requesterPersonId: 'p1',
+        target: { exists: true, name: 'Jon Harris', nameParts: null },
+    });
+    assert.strictEqual(plan.action, 'refuse');
+    assert.strictEqual(plan.reason, 'A first name is required.');
 });
 
 // ── Approving a family change ────────────────────────────────────────────────
