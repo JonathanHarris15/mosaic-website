@@ -642,7 +642,8 @@
                                                         </span>
                                                     </template>
                                                 </div>
-                                                <div class="pe-typed" x-show="src.key === 'sunday_typed' && canEdit && data.typed.draft">
+                                                <template x-if="src.key === 'sunday_typed' && canEdit && data.typed.draft">
+                                                <div class="pe-typed">
                                                     <p class="pe-hint">Type these once for <strong x-text="data.typed.date ? formatTypedDate(data.typed.date) : 'this Sunday'"></strong>. Layout stays on the page; next week reads the next Sunday.</p>
                                                     <p class="pe-typed__h">Prayer country</p>
                                                     <label class="pe-f"><span>Country</span><input class="pe-in" x-model="data.typed.draft.prayerNation" /></label>
@@ -678,6 +679,7 @@
                                                     </button>
                                                     <p class="pe-hint" x-show="data.typed.status" x-text="data.typed.status"></p>
                                                 </div>
+                                                </template>
                                             </div>
                                         </template>
                                     </div>
