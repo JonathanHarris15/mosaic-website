@@ -59,6 +59,7 @@ async function open(permissionLevel) {
     global.db = fakeDb(reads);
     global.getUserData = async () => ({ permissionLevel });
     // Both ship as plain <script>s on the page, so they are globals here too.
+    global.ServiceInvolvementCore = require('../public/service-involvement-core.js');
     global.PastoralPrayerCore = { HISTORY_COLLECTION: 'pastoral_prayer_history' };
     global.BIBLE_DATA = { Genesis: 50 };
 
@@ -138,4 +139,155 @@ test('the page draws nothing but the refusal when it refuses', () => {
     assert.match(html, /x-show="!loading && !refused"/, 'the tab bar ignores a refusal');
     assert.match(html, /x-if="!loading && !refused"/, 'the panels ignore a refusal');
     assert.match(html, /x-if="refused"/, 'a refused reader is shown a blank page');
+});
+
+// ── Involvements not yet happened are excluded ─────────────────────────────────
+
+test('involvements for future dates and today are not counted in analytics', async () => {
+    global.AnalyticsUtils = require('../public/analytics-utils.js');
+    global.AccessCore = require('../public/access-core.js');
+    global.ServiceInvolvementCore = require('../public/service-involvement-core.js');
+    global.PastoralPrayerCore = { HISTORY_COLLECTION: 'pastoral_prayer_history', normalizeDate: d => d };
+    global.BIBLE_DATA = { Genesis: 50 };
+
+    const { analyticsPage } = await import('../public/analytics.js');
+
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    // Compute past date, today date, and future date
+    const pastDate = '2020-01-05';
+    const futureDate = '2099-01-04';
+
+    const mockServices = [
+        {
+            id: pastDate,
+            data: () => ({
+                serviceLeader: 'Alice Past',
+                preacher: 'Bob Past',
+                musicHelpers: [{ name: 'Charlie Helper' }],
+            }),
+        },
+        {
+            id: todayStr,
+            data: () => ({
+                serviceLeader: 'Dave Today',
+                preacher: 'Eve Today',
+            }),
+        },
+        {
+            id: futureDate,
+            data: () => ({
+                serviceLeader: 'Frank Future',
+                preacher: 'Grace Future',
+            }),
+        },
+    ];
+
+    const mockPeople = [
+        {
+            id: 'p1',
+            data: () => ({ name: 'Alice Past', totalInvolvements: 10 }), // totalInvolvements in DB may be stale/include future
+        },
+        {
+            id: 'p2',
+            data: () => ({ name: 'Frank Future', totalInvolvements: 5 }), // has not actually served in the past
+        },
+        {
+            id: 'p3',
+            data: () => ({ name: 'Dave Today', totalInvolvements: 1 }), // today's service has not passed
+        },
+    ];
+
+    const mockDb = {
+        collection(name) {
+            if (name === 'services') {
+                return {
+                    size: mockServices.length,
+                    get: async () => ({
+                        size: mockServices.length,
+                        forEach: fn => mockServices.forEach(fn),
+                    }),
+                };
+            }
+            if (name === 'people') {
+                return {
+                    get: async () => ({
+                        docs: mockPeople,
+                    }),
+                    doc(personId) {
+                        return {
+                            collection(sub) {
+                                if (sub === 'involvement') {
+                                    return {
+                                        orderBy() {
+                                            return {
+                                                limit() {
+                                                    return {
+                                                        get: async () => ({
+                                                            docs: [
+                                                                { id: 'inv_future', data: () => ({ serviceDate: futureDate, type: 'preacher' }) },
+                                                                { id: 'inv_today', data: () => ({ serviceDate: todayStr, type: 'preacher' }) },
+                                                                { id: 'inv_past', data: () => ({ serviceDate: pastDate, type: 'preacher' }) },
+                                                            ],
+                                                        }),
+                                                    };
+                                                },
+                                            };
+                                        },
+                                    };
+                                }
+                                return { get: async () => ({ docs: [] }) };
+                            },
+                        };
+                    },
+                };
+            }
+            return {
+                get: async () => ({ size: 0, docs: [], forEach() {} }),
+                doc: () => ({ get: async () => ({ exists: false }) }),
+            };
+        },
+        collectionGroup() {
+            return {
+                get: async () => ({ docs: [], forEach() {} }),
+            };
+        },
+    };
+
+    global.db = mockDb;
+    global.getUserData = async () => ({ permissionLevel: 'editor' });
+    let callback = null;
+    global.auth = { onAuthStateChanged(fn) { callback = fn; } };
+
+    const page = analyticsPage();
+    page.init();
+    await callback({ uid: 'editor1' });
+
+    // Verify roleAnalytics only counted the past service
+    assert.ok(page.roleAnalytics['Alice Past'], 'Alice Past should be in roleAnalytics');
+    assert.strictEqual(page.roleAnalytics['Alice Past'].roles.service_leader, 1);
+    assert.strictEqual(page.roleAnalytics['Frank Future'], undefined, 'Frank Future must not be in roleAnalytics');
+    assert.strictEqual(page.roleAnalytics['Dave Today'], undefined, 'Dave Today must not be in roleAnalytics');
+
+    // Verify people list has totalInvolvements based only on past services
+    const alice = page.people.find(p => p.name === 'Alice Past');
+    const frank = page.people.find(p => p.name === 'Frank Future');
+    const dave = page.people.find(p => p.name === 'Dave Today');
+
+    assert.strictEqual(alice.totalInvolvements, 1, 'Alice should have 1 past involvement');
+    assert.strictEqual(frank.totalInvolvements, 0, 'Frank should have 0 past involvements');
+    assert.strictEqual(dave.totalInvolvements, 0, 'Dave should have 0 past involvements');
+
+    // Verify filteredPeople only shows people with past involvements > 0
+    const filteredNames = page.filteredPeople.map(p => p.name);
+    assert.ok(filteredNames.includes('Alice Past'));
+    assert.ok(!filteredNames.includes('Frank Future'), 'Frank Future must not be marked as involved');
+    assert.ok(!filteredNames.includes('Dave Today'), 'Dave Today must not be marked as involved');
+
+    // Verify selectPerson filters out future/today involvement records
+    await page.selectPerson(frank);
+    assert.strictEqual(page.personInvolvement.length, 1, 'Only the past involvement record should remain');
+    assert.strictEqual(page.personInvolvement[0].serviceDate, pastDate);
 });
