@@ -28,6 +28,24 @@
     const Render = global.PrintableRenderCore;
     const Core = global.PrintableCore;
 
+    // Alpine evaluates x-model even behind x-show. A missing draft used to
+    // throw on every kids/announcements field the moment a single source
+    // rendered. Always stand a blank draft up; loadTypedDraft replaces it.
+    function emptyTypedDraft() {
+        const Typed = global.SundayTypedCore;
+        if (Typed && typeof Typed.toDraft === 'function') {
+            return Typed.toDraft(Typed.empty ? Typed.empty() : {});
+        }
+        return {
+            prayerNation: '', prayerContinent: '', prayerCapital: '',
+            prayerPopulation: '', prayerLanguage: '', prayerTotalLanguages: '',
+            prayerLiteracy: '', prayerChristian: '', prayerEvangelical: '',
+            prayerUnevangelized: '', prayerPrompts: '', prayerCountryImage: '',
+            kidsLessonTitle: '', kidsLessonVerse: '', kidsSummary: '',
+            kidsQuestions: '', announcements: [{ title: '', content: '' }],
+        };
+    }
+
     function PrintableEditorData(ui) {
         return {
             // ── State ────────────────────────────────────────────────────
@@ -42,7 +60,7 @@
                 options: { series: [], roles: [], forms: [] },
                 warnings: [],
                 picking: false,        // choosing a list for the selected element
-                typed: { date: '', draft: null, saving: false, status: '' },
+                typed: { date: '', draft: emptyTypedDraft(), saving: false, status: '' },
             },
             layout: [],                // what the canvas draws: stored pages, overflow continuations included
             dragField: null,           // the chip in the air
@@ -647,7 +665,10 @@
 
             async loadTypedDraft() {
                 const Typed = global.SundayTypedCore;
-                if (!Typed) return;
+                if (!Typed) {
+                    this.data.typed.draft = emptyTypedDraft();
+                    return;
+                }
                 const date = this.typedSundayDate();
                 let service = (ui.bundle && ui.bundle.services && ui.bundle.services[date]) || null;
                 if (!service && typeof db !== 'undefined' && db) {
