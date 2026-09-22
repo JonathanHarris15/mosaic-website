@@ -232,6 +232,11 @@
                     { value: 'yes', label: 'With children' },
                     { value: 'no', label: 'Without children' },
                 ] },
+                { key: 'childMembership', label: 'Those children', kind: 'choice', default: 'any', options: [
+                    { value: 'any', label: 'Any children' },
+                    { value: 'members', label: 'A member child' },
+                    { value: 'non_members', label: 'A non-member child' },
+                ] },
                 { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
             ],
         },
@@ -606,6 +611,9 @@
                     .filter(person => p.includeInactive || !isInactive(person));
                 if (p.hasChildren === 'yes' && !kids.length) return null;
                 if (p.hasChildren === 'no' && kids.length) return null;
+                if (p.childMembership && p.childMembership !== 'any') {
+                    if (!kids.some(person => passesMembership(person, p.childMembership))) return null;
+                }
                 const first = members[0];
                 const c = (first && first.contact) || {};
                 return {

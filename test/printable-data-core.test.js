@@ -187,6 +187,35 @@ test('households can be kept to those with children', () => {
     assert.ok(spec, 'the query builder offers the filter');
 });
 
+test('households can be kept to those with a non-member child', () => {
+    const data = {
+        people: [
+            { id: 'a', name: 'Anna Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'd', name: 'Dan Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'e', name: 'Eve Baker', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'p', name: 'Pat Cole', tags: ['Member'], membership: { stage: 'member' } },
+            { id: 'q', name: 'Quin Cole', tags: ['Visitor'], membership: { stage: 'visitor' } },
+            { id: 'b', name: 'Ben Carter', tags: ['Visitor'], membership: { stage: 'visitor' } },
+        ],
+        families: [
+            { id: 'fam1', husbandId: 'd', wifeId: 'a', childIds: ['e'] },
+            { id: 'fam2', husbandId: 'p', wifeId: null, childIds: ['q'] },
+        ],
+    };
+    const spec = Data.querySpecsFor('households', 'member').find(s => s.key === 'childMembership');
+    assert.ok(spec, 'the query builder offers whose children');
+    const withKids = Data.resolve('households', { membership: 'everyone', hasChildren: 'yes' }, data, { today: TODAY, level: 'member' });
+    assert.deepEqual(withKids.rows.map(r => r.name), ['The Baker household', 'The Cole household']);
+    const nonMemberKids = Data.resolve('households', {
+        membership: 'everyone', hasChildren: 'yes', childMembership: 'non_members',
+    }, data, { today: TODAY, level: 'member' });
+    assert.deepEqual(nonMemberKids.rows.map(r => r.name), ['The Cole household']);
+    const memberKids = Data.resolve('households', {
+        membership: 'everyone', hasChildren: 'yes', childMembership: 'members',
+    }, data, { today: TODAY, level: 'member' });
+    assert.deepEqual(memberKids.rows.map(r => r.name), ['The Baker household']);
+});
+
 test('a related children list is of one household, and without a parent it flattens every home', () => {
     const data = FAMILY_WITH_KIDS();
     const homes = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' });
