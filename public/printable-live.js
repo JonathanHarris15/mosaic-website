@@ -5,9 +5,10 @@
 //
 //   collectNeeds(project)             what every binding and list on it asks for
 //   resolver(project, bundle, ctx)    rows and values, cached per source
-//   layoutPages(project, resolver, host)
-//       the pages to draw — the project's own, plus the pages an overflowing
-//       list generates, each with its elements expanded and its warnings
+//   layoutPages(project, resolver, host, options)
+//       the pages to draw — the project's own, each overflowing list sliced
+//       across the real pages that continue it, and a new page cloned when
+//       the rows still do not fit (needsPersist so the editor can keep it)
 //
 // Pagination needs a browser to measure with: `host` is a hidden element at
 // true page size that probe pages are drawn into and measured. Without one
@@ -59,15 +60,21 @@
         const cache = {};
         const c = Object.assign({ today: Data.toDateStr(new Date()), level: 'viewer' }, ctx || {});
 
-        function resolved(source, params) {
-            const k = keyOf(source, params);
-            if (!cache[k]) cache[k] = Data.resolve(source, params, bundle || {}, c);
+        function resolved(source, params, parent) {
+            const src = Data.sourceByKey(source);
+            const pid = (src && src.of && parent && parent._id) ? String(parent._id) : '';
+            const k = keyOf(source, params) + '|' + pid;
+            if (!cache[k]) {
+                cache[k] = Data.resolve(source, params, bundle || {}, Object.assign({}, c, {
+                    parent: pid ? parent : null,
+                }));
+            }
             return cache[k];
         }
 
-        function rowsFor(node) {
+        function rowsFor(node, parentRow) {
             if (!node.repeat || !node.repeat.source) return null;
-            return resolved(node.repeat.source, node.repeat.params).rows;
+            return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
         }
 
         function valueFor(bind, row) {
@@ -109,65 +116,166 @@
         return { rowsFor, valueFor, resolved, sourceWarnings, ctx: c };
     }
 
-    // A data object for expandPage that shows only a slice of one list —
-    // what a page shows of a list that continues on the next.
-    function sliced(res, nodeId, start, end) {
+    const STAND_INS = { rowsFor: () => null, valueFor: () => ({ ok: false, why: '' }) };
+
+    function overflowingRepeatOn(page) {
+        return Render.overflowingRepeats(page)[0] || null;
+    }
+
+    // The origin page plus every stored page that immediately follows it and
+    // continues its list. Those pages are real and keep their own design.
+    function continuationChain(project, origin) {
+        const pages = project.pages || [];
+        const start = pages.findIndex(p => p.id === origin.id);
+        const chain = [origin];
+        if (start < 0) return chain;
+        for (let i = start + 1; i < pages.length; i++) {
+            const p = pages[i];
+            if (p.continues && p.continues.from === origin.id) chain.push(p);
+            else break;
+        }
+        return chain;
+    }
+
+    function templateForNew(project, origin, repeat) {
+        const chosenId = repeat.repeat && repeat.repeat.continueWith;
+        const chosen = chosenId && (project.pages || []).find(p => p.id === chosenId);
+        if (chosen && overflowingRepeatOn(chosen)) return chosen;
+        return origin;
+    }
+
+    // Slice the *origin* list onto this page's iterated element, so a
+    // continuation page that was redesigned still reads the same live rows.
+    function sliceFrom(res, originRepeat, pageRepeatId, start, end) {
         return {
-            rowsFor: node => {
-                const rows = res.rowsFor(node);
-                if (rows && node.id === nodeId) return rows.slice(start, end);
-                return rows;
+            rowsFor: (node, parentRow) => {
+                if (!node.repeat) return res.rowsFor(node, parentRow);
+                if (node.id === pageRepeatId || node.id === originRepeat.id) {
+                    const rows = res.rowsFor(originRepeat, parentRow);
+                    return rows ? rows.slice(start, end) : rows;
+                }
+                return res.rowsFor(node, parentRow);
             },
             valueFor: res.valueFor,
         };
     }
 
-    const STAND_INS = { rowsFor: () => null, valueFor: () => ({ ok: false, why: '' }) };
+    function entryOf(page, expanded, extras) {
+        const x = extras || {};
+        return {
+            key: page.id,
+            page: page,
+            nodes: expanded.nodes,
+            warnings: expanded.warnings,
+            generated: false,
+            needsPersist: !!x.needsPersist,
+            originId: x.originId || page.id,
+            pageIndex: x.pageIndex == null ? 0 : x.pageIndex,
+            continuation: x.continuation || 0,
+            rowsFrom: x.rowsFrom,
+            rowsTo: x.rowsTo,
+        };
+    }
+
+    function emptySlice(res, originRepeat, pageRepeatId) {
+        return sliceFrom(res, originRepeat, pageRepeatId, 0, 0);
+    }
 
     // The pages to draw. `res` null means stand-ins everywhere.
-    function layoutPages(project, res, host) {
+    // `options.fitsOn(pageIndex, start, n)` lets tests paginate without a DOM.
+    function layoutPages(project, res, host, options) {
+        const o = options || {};
         const template = project.template;
         const out = [];
-        (project.pages || []).forEach((page, pageIndex) => {
-            const data = res || STAND_INS;
-            const overflowing = res ? Render.overflowingRepeats(page) : [];
-            const repeat = overflowing[0] || null;
-            const rows = repeat ? res.rowsFor(repeat) : null;
+        const claimed = {};
+        const pages = project.pages || [];
+        const canPaginate = !!(res && (host || o.fitsOn));
 
-            if (!repeat || !rows || !rows.length || !host) {
+        function emitEmptyContinuations(chain, originRepeat, pageIndex, data) {
+            chain.slice(1).forEach((pg, i) => {
+                claimed[pg.id] = true;
+                const r = overflowingRepeatOn(pg);
+                const expanded = Render.expandPage(pg, (res && originRepeat && r)
+                    ? emptySlice(res, originRepeat, r.id)
+                    : data);
+                out.push(entryOf(pg, expanded, { originId: chain[0].id, pageIndex: pageIndex, continuation: i + 1, rowsFrom: 0, rowsTo: 0 }));
+            });
+        }
+
+        pages.forEach((page, pageIndex) => {
+            if (claimed[page.id]) return;
+            const data = res || STAND_INS;
+
+            if (page.continues && page.continues.from) {
                 const expanded = Render.expandPage(page, data);
-                out.push({ key: page.id, page: page, nodes: expanded.nodes, warnings: expanded.warnings, generated: false, originId: page.id, pageIndex: pageIndex });
+                out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
                 return;
             }
 
-            // The page new pages copy must carry the list, or the rows would
-            // have nowhere to go; a page chosen that lacks it falls back to
-            // the page the list started on.
-            const chosen = repeat.repeat.continueWith && (project.pages || []).find(p => p.id === repeat.repeat.continueWith);
-            const continueWith = (chosen && Core.findNode(chosen, repeat.id)) ? chosen : page;
-            const cap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
-            const fitsOn = (i, start, n) => {
-                const bg = i === 0 ? page : continueWith;
-                const probe = Render.expandPage(bg, sliced(res, repeat.id, start, start + n));
-                return fits(host, template, bg, probe.nodes, repeat.id);
+            const overflowing = (res && canPaginate) ? Render.overflowingRepeats(page) : [];
+            const repeat = overflowing[0] || null;
+            const rows = repeat ? res.rowsFor(repeat) : null;
+            const chain = continuationChain(project, page);
+
+            if (!repeat || !rows || !rows.length || !canPaginate) {
+                const expanded = Render.expandPage(page, data);
+                out.push(entryOf(page, expanded, { originId: page.id, pageIndex: pageIndex }));
+                emitEmptyContinuations(chain, repeat || overflowingRepeatOn(page), pageIndex, data);
+                return;
+            }
+
+            chain.slice(1).forEach(p => { claimed[p.id] = true; });
+            const proto = templateForNew(project, page, repeat);
+            const originCap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
+            const capAt = (i) => {
+                const bg = chain[i] || proto;
+                const r = overflowingRepeatOn(bg) || repeat;
+                return (r.repeat.layout && r.repeat.layout.maxPerPage) || originCap;
             };
-            const plan = Render.planPages(rows, cap, fitsOn);
+            const pageAt = (i) => chain[i] || proto;
+            const repeatAt = (i) => overflowingRepeatOn(pageAt(i)) || repeat;
+
+            const fitsOn = (i, start, n) => {
+                const bg = pageAt(i);
+                const r = repeatAt(i);
+                if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
+                const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n));
+                return fits(host, template, bg, probe.nodes, r.id);
+            };
+
+            const plan = Render.planPages(rows, capAt, fitsOn);
             plan.forEach((slice, i) => {
-                const bg = i === 0 ? page : continueWith;
-                const expanded = Render.expandPage(bg, sliced(res, repeat.id, slice.start, slice.end), { warnEveryRow: false });
-                out.push({
-                    key: page.id + (i === 0 ? '' : '~' + i),
-                    page: bg,
-                    nodes: expanded.nodes,
-                    warnings: expanded.warnings,
-                    generated: i > 0,
+                let bg = chain[i];
+                let needsPersist = false;
+                if (!bg) {
+                    bg = Core.clonePage(template, proto, { continues: { from: page.id, repeat: repeat.id } });
+                    needsPersist = true;
+                    chain.push(bg);
+                }
+                const r = overflowingRepeatOn(bg) || repeat;
+                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end), { warnEveryRow: false });
+                out.push(entryOf(bg, expanded, {
+                    needsPersist: needsPersist,
                     originId: page.id,
                     pageIndex: pageIndex,
                     continuation: i,
                     rowsFrom: slice.start,
                     rowsTo: slice.end,
-                });
+                }));
             });
+
+            for (let i = plan.length; i < chain.length; i++) {
+                const bg = chain[i];
+                const r = overflowingRepeatOn(bg);
+                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id) : data, { warnEveryRow: false });
+                out.push(entryOf(bg, expanded, {
+                    originId: page.id,
+                    pageIndex: pageIndex,
+                    continuation: i,
+                    rowsFrom: 0,
+                    rowsTo: 0,
+                }));
+            }
         });
         return out;
     }

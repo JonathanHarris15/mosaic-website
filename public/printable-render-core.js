@@ -13,8 +13,10 @@
 //    can be tested without a browser.
 //
 // What this module is handed is a `data` object with two functions:
-//   rowsFor(node)      → the rows an iterated element stands for, or null
-//                         when nothing has been loaded (stand-ins are shown)
+//   rowsFor(node, row) → the rows an iterated element stands for, or null
+//                         when nothing has been loaded (stand-ins are shown).
+//                         `row` is the nearest iterated ancestor's row, so a
+//                         related list (children of this household) can scope.
 //   valueFor(bind, row) → { ok, value, why } for one binding, against the row
 //                         of the nearest iterated ancestor (or none)
 // Neither Firestore nor the catalog appears here — see printable-data-core.
@@ -115,7 +117,7 @@
 
         function expandNode(node, row, index) {
             if (node.repeat) {
-                const rows = data.rowsFor ? data.rowsFor(node) : null;
+                const rows = data.rowsFor ? data.rowsFor(node, row) : null;
                 if (rows == null) {
                     // Nothing loaded: the stand-in, once, still inside its list
                     // wrapper so the layout reads the same.
@@ -172,7 +174,7 @@
     // least one row, so a row taller than the page still goes somewhere
     // rather than sending the search round for ever.
     function largestFitting(total, fits, cap) {
-        const limit = cap > 0 ? Math.min(total, cap) : total;
+        const limit = cap > 0 ? Math.min(total, Number(cap) || total) : total;
         if (limit <= 0) return 0;
         if (fits(limit)) return limit;
         let lo = 1, hi = limit;
@@ -192,7 +194,8 @@
         let start = 0, pageIndex = 0;
         while (start < rows.length) {
             const remaining = rows.length - start;
-            const n = largestFitting(remaining, count => fitsOn(pageIndex, start, count), cap);
+            const pageCap = typeof cap === 'function' ? cap(pageIndex) : cap;
+            const n = largestFitting(remaining, count => fitsOn(pageIndex, start, count), pageCap);
             const take = Math.max(1, n);
             plan.push({ pageIndex: pageIndex, start: start, end: start + take });
             start += take;

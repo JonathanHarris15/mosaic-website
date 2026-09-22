@@ -170,8 +170,9 @@
     }
 
     // What an iterated element remembers: the list it stands for and how the
-    // copies are laid out. `continueWith` is the page copied for an overflow
-    // page — null means the page the list started on.
+    // copies are laid out. `continueWith` is the page cloned when overflow
+    // needs a *new* page — null means the page the list started on. Each
+    // cloned page is stored and edited on its own.
     function buildRepeat(spec) {
         const s = spec || {};
         const layout = s.layout || {};
@@ -233,7 +234,40 @@
             style: Object.assign({ 'background-color': '#ffffff' }, s.style || {}),
             css: typeof s.css === 'string' ? s.css : '',
             nodes: (s.nodes || []).map(buildNode),
+            continues: buildContinues(s.continues),
         };
+    }
+
+    // A page a list spilled onto: it is a real page, and it remembers the
+    // page and the iterated element whose rows continue here.
+    function buildContinues(spec) {
+        if (!spec || !spec.from) return null;
+        return {
+            from: String(spec.from),
+            repeat: spec.repeat ? String(spec.repeat) : '',
+        };
+    }
+
+    function remintTree(node) {
+        const n = clone(node);
+        n.id = newId();
+        if (n.children && n.children.length) n.children = n.children.map(remintTree);
+        return n;
+    }
+
+    // A new page with the same design as `page`, every element its own, and
+    // (when asked) a mark that it continues an overflowing list.
+    function clonePage(template, page, opts) {
+        const o = opts || {};
+        const src = page || {};
+        return buildPage(template, {
+            name: src.name || '',
+            margins: src.margins,
+            style: src.style,
+            css: src.css,
+            nodes: (src.nodes || []).map(remintTree),
+            continues: o.continues !== undefined ? o.continues : src.continues,
+        });
     }
 
     function num(v, d) { const n = Number(v); return (v != null && !isNaN(n) && n >= 0) ? n : d; }
@@ -890,6 +924,8 @@
         newText,
         newImage,
         buildPage,
+        buildContinues,
+        clonePage,
         buildPrintable,
         duplicatePrintable,
         migrate,

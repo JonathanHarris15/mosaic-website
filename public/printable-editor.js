@@ -106,6 +106,8 @@ function printableEditor() {
         hover: { nodeId: null },
         selBox: null,
         hoverBox: null,
+        // Element-tree folds: id → true. Session only — not part of the record.
+        treeCollapsed: {},
 
         // ── Derived ──────────────────────────────────────────────────────
 
@@ -470,7 +472,10 @@ function printableEditor() {
             if (!page) return;
             if (this.pages.length === 1) { this.flash('A printable keeps at least one page.'); return; }
             if (page.nodes.length && !confirm('Delete this page and the ' + page.nodes.length + ' element' + (page.nodes.length === 1 ? '' : 's') + ' on it?')) return;
-            this.project.pages = this.pages.filter(p => p.id !== pageId);
+            this.project.pages = this.pages.filter(p => p.id !== pageId).map(p => {
+                if (p.continues && p.continues.from === pageId) return Object.assign({}, p, { continues: null });
+                return p;
+            });
             if (this.selection.pageId === pageId) { this.selection.pageId = this.pages[0].id; this.selection.nodeId = null; }
             this.commit();
             this.renderAll();
@@ -502,6 +507,7 @@ function printableEditor() {
         select(pageId, nodeId) {
             this.selection.pageId = pageId;
             this.selection.nodeId = nodeId;
+            this.revealInTree(pageId, nodeId);
             this.readProps();
             this.refreshOverlays();
             this.renderTree();
@@ -890,8 +896,8 @@ function printableEditor() {
         },
 
         // What the canvas draws: the project's pages with their data poured
-        // in, plus the pages an overflowing list generates. Without the data
-        // side loaded, the pages themselves with their stand-ins.
+        // in. An overflowing list keeps real pages (and adds one when the
+        // rows still do not fit). Without the data side loaded, stand-ins.
         entries() {
             if (this.computeLayout) return this.computeLayout();
             return this.pages.map((page, i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
@@ -937,8 +943,13 @@ function printableEditor() {
 
             const label = document.createElement('div');
             label.className = 'pe-page-label';
-            label.textContent = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '')
-                + (entry.generated ? ' · continued from page ' + (entry.pageIndex + 1) + ' (rows ' + (entry.rowsFrom + 1) + '–' + entry.rowsTo + ')' : '');
+            let caption = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '');
+            if (entry.continuation > 0 && entry.rowsTo > entry.rowsFrom) {
+                caption += ' · rows ' + (entry.rowsFrom + 1) + '–' + entry.rowsTo;
+            } else if (entry.generated) {
+                caption += ' · continued from page ' + (entry.pageIndex + 1);
+            }
+            label.textContent = caption;
             label.style.fontSize = Math.round(14 / Math.max(0.2, this.view.zoom)) + 'px';
             label.style.top = (-Math.round(22 / Math.max(0.2, this.view.zoom))) + 'px';
             holder.appendChild(label);
@@ -955,7 +966,7 @@ function printableEditor() {
             guide.style.left = page.margins.left + 'px';
             holder.appendChild(guide);
 
-            if (!entry.generated) ui.pageEls[page.id] = holder;
+            ui.pageEls[page.id] = holder;
             return holder;
         },
 
@@ -1331,21 +1342,73 @@ function printableEditor() {
 
         // ── The element tree ─────────────────────────────────────────────
 
+        toggleTreeFold(id, ev) {
+            if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+            if (this.treeCollapsed[id]) delete this.treeCollapsed[id];
+            else this.treeCollapsed[id] = true;
+            this.renderTree();
+        },
+
+        revealInTree(pageId, nodeId) {
+            const page = this.pages.find(p => p.id === pageId);
+            if (!page || !nodeId) return;
+            if (this.treeCollapsed[page.id]) delete this.treeCollapsed[page.id];
+            PrintableCore.ancestorsOf(page, nodeId).forEach(n => {
+                if (this.treeCollapsed[n.id]) delete this.treeCollapsed[n.id];
+            });
+        },
+
+        treeTwist(id, collapsed, childCount) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'pe-tree__twist';
+            btn.title = collapsed ? 'Show children' : 'Hide children';
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            btn.innerHTML = '<span class="material-symbols-outlined">' + (collapsed ? 'chevron_right' : 'expand_more') + '</span>';
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', (e) => this.toggleTreeFold(id, e));
+            if (childCount) btn.setAttribute('data-count', String(childCount));
+            return btn;
+        },
+
+        treeTwistSpacer() {
+            const pad = document.createElement('span');
+            pad.className = 'pe-tree__twist pe-tree__twist--empty';
+            pad.setAttribute('aria-hidden', 'true');
+            return pad;
+        },
+
         renderTree() {
             if (!ui.tree || !this.project) return;
             const frag = document.createDocumentFragment();
             this.pages.forEach((page, i) => {
+                const folded = !!this.treeCollapsed[page.id];
+                const kidCount = (page.nodes || []).length;
                 const row = document.createElement('div');
-                row.className = 'pe-tree__page' + (this.selection.pageId === page.id && !this.selection.nodeId ? ' is-selected' : '');
-                row.innerHTML = '<span class="material-symbols-outlined">description</span>'
-                    + '<span class="pe-tree__label"></span>'
-                    + '<span class="pe-tree__acts">'
-                    + '<button type="button" title="Move up" data-act="up"><span class="material-symbols-outlined">arrow_upward</span></button>'
+                row.className = 'pe-tree__page' + (this.selection.pageId === page.id && !this.selection.nodeId ? ' is-selected' : '')
+                    + (folded ? ' is-collapsed' : '');
+                row.appendChild(kidCount ? this.treeTwist(page.id, folded, kidCount) : this.treeTwistSpacer());
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined';
+                icon.textContent = 'description';
+                row.appendChild(icon);
+                const label = document.createElement('span');
+                label.className = 'pe-tree__label';
+                label.textContent = 'Page ' + (i + 1) + (page.name ? ' · ' + page.name : '');
+                row.appendChild(label);
+                if (folded && kidCount) {
+                    const hint = document.createElement('span');
+                    hint.className = 'pe-tree__hint';
+                    hint.textContent = kidCount + (kidCount === 1 ? ' element' : ' elements');
+                    row.appendChild(hint);
+                }
+                const acts = document.createElement('span');
+                acts.className = 'pe-tree__acts';
+                acts.innerHTML = '<button type="button" title="Move up" data-act="up"><span class="material-symbols-outlined">arrow_upward</span></button>'
                     + '<button type="button" title="Move down" data-act="down"><span class="material-symbols-outlined">arrow_downward</span></button>'
                     + '<button type="button" title="Duplicate page" data-act="dup"><span class="material-symbols-outlined">content_copy</span></button>'
-                    + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>'
-                    + '</span>';
-                row.querySelector('.pe-tree__label').textContent = 'Page ' + (i + 1) + (page.name ? ' · ' + page.name : '');
+                    + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>';
+                row.appendChild(acts);
                 row.addEventListener('click', (e) => {
                     const act = e.target.closest('[data-act]');
                     if (act) {
@@ -1356,6 +1419,7 @@ function printableEditor() {
                         else if (a === 'del') this.deletePage(page.id);
                         return;
                     }
+                    if (e.target.closest('.pe-tree__twist')) return;
                     this.selectPage(page.id);
                     this.scrollToPage(page.id);
                 });
@@ -1368,10 +1432,12 @@ function printableEditor() {
                     ui.treeDrag = null;
                 });
                 frag.appendChild(row);
-                const list = document.createElement('div');
-                list.className = 'pe-tree__list';
-                page.nodes.forEach(n => list.appendChild(this.treeRow(page, n, 1)));
-                frag.appendChild(list);
+                if (!folded) {
+                    const list = document.createElement('div');
+                    list.className = 'pe-tree__list';
+                    page.nodes.forEach(n => list.appendChild(this.treeRow(page, n, 1)));
+                    frag.appendChild(list);
+                }
             });
             ui.tree.innerHTML = '';
             ui.tree.appendChild(frag);
@@ -1381,7 +1447,10 @@ function printableEditor() {
 
         treeRow(page, node, depth) {
             const kind = PrintableCore.kindOf(node);
+            const kids = node.children || [];
+            const folded = !!(kids.length && this.treeCollapsed[node.id]);
             const wrap = document.createElement('div');
+            wrap.className = 'pe-tree__wrap' + (folded ? ' is-collapsed' : '');
             const row = document.createElement('div');
             row.className = 'pe-tree__row' + (this.selection.nodeId === node.id ? ' is-selected' : '');
             row.style.paddingLeft = (8 + depth * 14) + 'px';
@@ -1389,12 +1458,30 @@ function printableEditor() {
             row.setAttribute('data-node', node.id);
             const icon = kind === 'image' ? 'image' : kind === 'text' ? 'title' : node.repeat ? 'repeat' : 'crop_square';
             const preview = kind === 'text' ? (node.text || '').slice(0, 28) : '';
-            row.innerHTML = '<span class="material-symbols-outlined"></span><span class="pe-tree__label"></span><span class="pe-tree__hint"></span>'
-                + (node.bind ? '<span class="material-symbols-outlined pe-tree__bound" title="Wired to data">cable</span>' : '');
-            row.querySelector('.material-symbols-outlined').textContent = icon;
-            row.querySelector('.pe-tree__label').textContent = node.name || this.tagLabel(node);
-            row.querySelector('.pe-tree__hint').textContent = preview;
-            row.addEventListener('click', () => this.select(page.id, node.id));
+            row.appendChild(kids.length ? this.treeTwist(node.id, folded, kids.length) : this.treeTwistSpacer());
+            const ic = document.createElement('span');
+            ic.className = 'material-symbols-outlined';
+            ic.textContent = icon;
+            row.appendChild(ic);
+            const label = document.createElement('span');
+            label.className = 'pe-tree__label';
+            label.textContent = node.name || this.tagLabel(node);
+            row.appendChild(label);
+            const hint = document.createElement('span');
+            hint.className = 'pe-tree__hint';
+            hint.textContent = folded ? (kids.length + (kids.length === 1 ? ' element' : ' elements')) : preview;
+            row.appendChild(hint);
+            if (node.bind) {
+                const cable = document.createElement('span');
+                cable.className = 'material-symbols-outlined pe-tree__bound';
+                cable.title = 'Wired to data';
+                cable.textContent = 'cable';
+                row.appendChild(cable);
+            }
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('.pe-tree__twist')) return;
+                this.select(page.id, node.id);
+            });
             row.addEventListener('dblclick', () => { this.select(page.id, node.id); this.$nextTick(() => { const el = document.getElementById('pe-prop-name'); if (el) { el.focus(); el.select(); } }); });
             row.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
@@ -1428,7 +1515,7 @@ function printableEditor() {
                 ui.treeDrag = null;
             });
             wrap.appendChild(row);
-            (node.children || []).forEach(c => wrap.appendChild(this.treeRow(page, c, depth + 1)));
+            if (!folded) kids.forEach(c => wrap.appendChild(this.treeRow(page, c, depth + 1)));
             return wrap;
         },
 

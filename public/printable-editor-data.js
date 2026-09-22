@@ -1,5 +1,5 @@
 // The Printable editor's data side (MS-396, MS-397): the drawer, the wires,
-// iterated elements and the pages an overflowing list generates.
+// iterated elements and the real pages an overflowing list keeps.
 //
 // Mixed into the editor's Alpine object by printable-editor.js, so `this` is
 // the editor. It owns:
@@ -11,7 +11,9 @@
 //     whenever that element is selected;
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
-//     list that overflows makes new pages that copy the page it started on;
+    //     list that overflows keeps real pages, each editable, with live rows;
+//     the query for a list lives in the drawer and only offers what this
+//     viewer may query;
 //   • LIVE DATA — one fetch of everything the project reads, resolved through
 //     PrintableLive, redrawn on demand, with a Warnings list of every gap.
 //
@@ -42,7 +44,7 @@
                 picking: false,        // choosing a list for the selected element
                 typed: { date: '', draft: null, saving: false, status: '' },
             },
-            layout: [],                // what the canvas draws: pages, generated ones included
+            layout: [],                // what the canvas draws: stored pages, overflow continuations included
             dragField: null,           // the chip in the air
             dropTarget: null,          // the element under it, when it may take it
             wires: [],                 // [{x1,y1,x2,y2}] in main-area coordinates
@@ -106,7 +108,7 @@
 
             // ── What the canvas draws ────────────────────────────────────
 
-            computeLayout() {
+            computeLayout(opts) {
                 if (!this.project || !this.template) { this.layout = []; return []; }
                 if (ui.resolver && this.data.mode === 'live') {
                     // Bindings may have changed since the last resolve.
@@ -115,8 +117,29 @@
                 const host = document.getElementById('pe-measure');
                 const res = this.resolver;
                 this.layout = Live.layoutPages(this.project, res, res ? host : null);
+                if ((!opts || opts.persist !== false) && this.canEdit && this.persistOverflowPages(this.layout)) {
+                    this.layout = Live.layoutPages(this.project, res, res ? host : null);
+                }
                 this.data.warnings = res ? Live.warningsFor(this.layout, res, this.project) : [];
                 return this.layout;
+            },
+
+            // Overflow that still has rows and no stored page yet becomes a
+            // real page in the project, so the Elements panel can address it.
+            persistOverflowPages(entries) {
+                const extras = (entries || []).filter(e => e.needsPersist && e.page);
+                if (!extras.length || !this.project || !this.project.pages) return false;
+                extras.forEach(e => {
+                    const pages = this.project.pages;
+                    let after = pages.findIndex(p => p.id === e.originId);
+                    pages.forEach((p, i) => {
+                        if (p.id === e.originId || (p.continues && p.continues.from === e.originId)) after = i;
+                    });
+                    if (after < 0) after = pages.length - 1;
+                    pages.splice(after + 1, 0, e.page);
+                });
+                this.commit();
+                return true;
             },
 
             get wantsBookletExport() {
@@ -128,7 +151,7 @@
             // church printer's booklet mode (MS-589 / MS-592). Other
             // Printables print as laid out. Order is unchanged.
             printPages() {
-                const entries = this.computeLayout();
+                const entries = this.computeLayout({ persist: false });
                 const Ex = global.PrintableExportCore;
                 const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
                 return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
@@ -139,6 +162,7 @@
             get regions() {
                 const q = this.data.search.trim().toLowerCase();
                 const sources = Data.sourcesFor(this.permissionLevel).filter(s => {
+                    if (s.of && !q) return false;
                     if (!q) return true;
                     const hay = (s.label + ' ' + s.region + ' ' + s.fields.map(f => f.label).join(' ')).toLowerCase();
                     return hay.includes(q);
@@ -167,7 +191,60 @@
 
             get repeatSource() {
                 const r = this.repeatContext;
-                return r && r.repeat.source ? Data.sourceByKey(r.repeat.source) : null;
+                if (!r || !r.repeat.source) return null;
+                return Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || null;
+            },
+
+            get queryTarget() {
+                const node = this.selectedNode;
+                if (node && Core.kindOf(node) === 'box') return node;
+                return this.repeatContext;
+            },
+
+            get enclosingRepeat() {
+                const page = this.currentPage;
+                const target = this.queryTarget;
+                if (!page || !target) return null;
+                const chain = Core.ancestorsOf(page, target.id);
+                for (let i = chain.length - 1; i >= 0; i--) {
+                    if (chain[i].repeat && chain[i].repeat.source) return chain[i];
+                }
+                return null;
+            },
+
+            get listSources() {
+                const parent = this.enclosingRepeat;
+                return Data.listSourcesFor(this.permissionLevel, parent && parent.repeat.source);
+            },
+
+            get relatedListSources() {
+                return this.listSources.filter(s => s.of);
+            },
+
+            get topListSources() {
+                return this.listSources.filter(s => !s.of);
+            },
+
+            get queryLocked() {
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
+                return !!(r && r.repeat.source && !Data.mayQuery(this.permissionLevel, r.repeat.source));
+            },
+
+            get showQueryBuilder() {
+                return !!(this.repeatContext || this.data.picking || this.selectedKind === 'box');
+            },
+
+            get repeatPreview() {
+                const r = this.repeatContext;
+                const res = this.resolver;
+                if (!r || !res || !r.repeat.source) return { count: null, names: [] };
+                const parent = this.enclosingRepeat;
+                const parentRow = parent && (res.rowsFor(parent) || [])[0];
+                const rows = res.rowsFor(r, parentRow) || [];
+                return {
+                    count: rows.length,
+                    names: rows.slice(0, 8).map(row => row.name || row.label || row._id || 'A row'),
+                };
             },
 
             // The fields a row of the selection's list carries, as chips.
@@ -415,19 +492,35 @@
 
             chooseList(source) {
                 const page = this.currentPage;
-                const node = this.selectedNode;
+                const node = this.queryTarget || this.selectedNode;
                 if (!page || !node) return;
-                // Only a box stands for a row; makeIterated has already said so.
                 if (Core.kindOf(node) !== 'box') return;
+                const same = node.repeat && node.repeat.source === source.key;
+                const params = same
+                    ? Object.assign({}, Data.defaultParams(source.key), node.repeat.params || {})
+                    : Data.defaultParams(source.key);
                 const repeat = Object.assign({}, node.repeat || { layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' }, {
                     source: source.key,
-                    params: Data.defaultParams(source),
+                    params: params,
                 });
                 this.replacePage(Core.updateNode(page, node.id, { repeat: repeat }));
                 this.data.picking = false;
                 this.commit();
                 this.readProps();
                 this.refreshData();
+            },
+
+            setQuerySource(key) {
+                if (!key) return;
+                const src = this.listSources.find(s => s.key === key);
+                if (!src) return;
+                const target = this.queryTarget;
+                if (!target || Core.kindOf(target) !== 'box') {
+                    this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
+                    return;
+                }
+                if (!target.repeat) this.makeIterated();
+                this.chooseList(src);
             },
 
             stopIterating() {
@@ -449,25 +542,28 @@
                 this.readProps();
             },
 
-            // The params a list carries, editable on the element panel.
+            // The params a list carries, only those this viewer may query.
             get repeatParamSpecs() {
-                const src = this.repeatSource;
-                if (!src) return [];
-                return (src.params || []).concat(src.filters || []);
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
+                if (!r || !r.repeat.source || this.queryLocked) return [];
+                return Data.querySpecsFor(r.repeat.source, this.permissionLevel);
             },
 
             repeatParam(key) {
-                const r = this.repeatContext;
-                const src = this.repeatSource;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
+                const src = r && r.repeat.source
+                    ? (Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || Data.sourceByKey(r.repeat.source))
+                    : this.repeatSource;
                 if (!r || !src) return undefined;
                 const p = Object.assign(Data.defaultParams(src), r.repeat.params || {});
                 return p[key];
             },
 
             setRepeatParam(key, value) {
-                const r = this.repeatContext;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 const page = this.pageOfNode(r && r.id);
-                if (!r || !page) return;
+                if (!r || !page || this.queryLocked) return;
+                if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel).some(s => s.key === key)) return;
                 const params = Object.assign({}, r.repeat.params || {}, { [key]: value });
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { params: params }) }));
                 this.commit();
@@ -509,7 +605,11 @@
                 const r = this.repeatContext;
                 if (!r) return [];
                 return this.pages
-                    .map((pg, i) => ({ id: pg.id, label: 'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : ''), has: !!Core.findNode(pg, r.id) }))
+                    .map((pg, i) => ({
+                        id: pg.id,
+                        label: 'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : ''),
+                        has: !!(Render.overflowingRepeats(pg)[0] || Core.findNode(pg, r.id)),
+                    }))
                     .filter(x => x.has);
             },
 

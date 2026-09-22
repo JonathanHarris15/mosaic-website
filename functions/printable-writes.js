@@ -468,12 +468,18 @@ function dataCatalog(permissionLevel, args) {
       "{\"membership\":\"members\"," +
       "\"sort\":\"last\"},\"layout\":{\"direction\":\"column\",\"perLine\":1," +
       "\"gap\":12,\"maxPerPage\":0},\"overflow\":\"new-page\"}'. " +
-      "overflow is \"clip\" or \"new-page\".",
+      "overflow is \"clip\" or \"new-page\". new-page keeps real pages " +
+      "the list spills onto; those pages are stored and can be edited. " +
+      "A related list (of: households) belongs on a box INSIDE that " +
+      "parent card — household_children is the children of this household, " +
+      "not a second directory. Filter households with hasChildren:yes " +
+      "to skip homes with no children.",
     sources: chosen.map((s) => ({
       key: s.key,
       region: s.region,
       label: s.label,
       shape: s.shape,
+      of: s.of || null,
       blurb: s.blurb,
       params: s.params || [],
       filters: s.filters || [],

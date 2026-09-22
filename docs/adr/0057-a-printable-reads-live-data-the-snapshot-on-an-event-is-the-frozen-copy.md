@@ -62,8 +62,9 @@ with the event it was for, which is where somebody will look for it.
 ## Consequences
 
 - Reopening a Printable can show different rows, and a different page count,
-  than last time. That is the feature, and the canvas draws the generated
-  pages so it is visible rather than surprising.
+  than last time. That is the feature. Overflow pages are real pages now
+  ([ADR 0071](0071-overflow-pages-are-real-pages.md)), still resolved against
+  today's data.
 - A field with nothing behind it today shows the element's own stand-in text
   and is listed under **Not all data could be pulled**, so an empty slot on
   paper is never silent.

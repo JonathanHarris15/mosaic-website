@@ -146,6 +146,84 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+// A family with children — PEOPLE() stays childless so the existing
+// household tests keep reading "Dan Baker, Anna Baker".
+const FAMILY_WITH_KIDS = () => ({
+    people: [
+        { id: 'a', name: 'Anna Baker', tags: ['Member'], contact: { email: 'a@x' }, membership: { stage: 'member' } },
+        { id: 'd', name: 'Dan Baker', tags: ['Member'], membership: { stage: 'member' } },
+        { id: 'e', name: 'Eve Baker', tags: ['Member'], photoUrl: 'e.jpg', membership: { stage: 'member' } },
+        { id: 'f', name: 'Finn Baker', tags: ['Member'], membership: { stage: 'member' } },
+        { id: 'b', name: 'Ben Carter', tags: ['Visitor'], membership: { stage: 'visitor' } },
+    ],
+    families: [{ id: 'fam1', husbandId: 'd', wifeId: 'a', childIds: ['e', 'f'] }],
+});
+
+test('children of a household are a related list of that household, not a top-level list', () => {
+    const kids = Data.sourceByKey('household_children');
+    assert.ok(kids, 'the catalog names the children of a household');
+    assert.equal(kids.of, 'households');
+    assert.equal(kids.shape, 'list');
+    assert.equal(kids.minLevel, 'member');
+    const memberLists = Data.listSourcesFor('member').map(s => s.key);
+    assert.ok(memberLists.includes('households'));
+    assert.ok(!memberLists.includes('household_children'), 'without a parent household the picker does not offer the related list');
+    const ofHouse = Data.listSourcesFor('member', 'households').map(s => s.key);
+    assert.ok(ofHouse.includes('household_children'));
+    assert.ok(ofHouse.indexOf('household_children') < ofHouse.indexOf('households'), 'of this household comes first');
+    assert.deepEqual(Data.relatedSourcesFor('households', 'member').map(s => s.key), ['household_children']);
+    assert.ok(Data.needsFor('household_children', {}, TODAY).people);
+    assert.ok(Data.needsFor('household_children', {}, TODAY).families);
+});
+
+test('households can be kept to those with children', () => {
+    const any = Data.resolve('households', { membership: 'everyone' }, FAMILY_WITH_KIDS(), { today: TODAY, level: 'member' });
+    assert.ok(any.rows.some(r => r.name === 'The Carter household'));
+    const withKids = Data.resolve('households', { membership: 'everyone', hasChildren: 'yes' }, FAMILY_WITH_KIDS(), { today: TODAY, level: 'member' });
+    assert.deepEqual(withKids.rows.map(r => r.name), ['The Baker household']);
+    const none = Data.resolve('households', { membership: 'everyone', hasChildren: 'no' }, FAMILY_WITH_KIDS(), { today: TODAY, level: 'member' });
+    assert.deepEqual(none.rows.map(r => r.name), ['The Carter household']);
+    const spec = Data.querySpecsFor('households', 'member').find(s => s.key === 'hasChildren');
+    assert.ok(spec, 'the query builder offers the filter');
+});
+
+test('a related children list is of one household, and without a parent it flattens every home', () => {
+    const data = FAMILY_WITH_KIDS();
+    const homes = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' });
+    const baker = homes.rows.find(r => r.name === 'The Baker household');
+    const carter = homes.rows.find(r => r.name === 'The Carter household');
+    const ofBaker = Data.resolve('household_children', {}, data, { today: TODAY, level: 'member', parent: baker });
+    assert.deepEqual(ofBaker.rows.map(r => r.name), ['Eve Baker', 'Finn Baker']);
+    assert.equal(ofBaker.rows[0].photo, 'e.jpg');
+    const ofCarter = Data.resolve('household_children', {}, data, { today: TODAY, level: 'member', parent: carter });
+    assert.equal(ofCarter.rows.length, 0);
+    const flat = Data.resolve('household_children', {}, data, { today: TODAY, level: 'member' });
+    assert.deepEqual(flat.rows.map(r => r.name), ['Eve Baker', 'Finn Baker']);
+});
+
+test('the query a level may build is only the sources and filters they may read', () => {
+    const member = Data.querySpecsFor('people', 'member').map(s => s.key);
+    const editor = Data.querySpecsFor('people', 'editor').map(s => s.key);
+    const elder = Data.querySpecsFor('people', 'elder').map(s => s.key);
+    assert.ok(member.includes('membership') && member.includes('sort'));
+    assert.ok(!member.includes('stage') && !member.includes('includeInactive'));
+    assert.ok(!editor.includes('stage') && !editor.includes('includeInactive'), 'inactive people and the Track are not an editor\'s to query');
+    assert.ok(elder.includes('stage') && elder.includes('includeInactive'));
+    assert.equal(Data.mayQuery('member', 'form_answers'), false);
+    assert.equal(Data.mayQuery('editor', 'form_answers'), true);
+    assert.equal(Data.mayQuery('member', 'people'), true);
+    const editorPeople = Data.sourcesFor('editor').find(s => s.key === 'people');
+    assert.ok(!editorPeople.filters.some(f => f.key === 'stage'), 'the drawer never lists a filter above the viewer');
+});
+
+test('a stored query still runs when the viewer could not have built it', () => {
+    const visitors = Data.resolve('people', { membership: 'everyone', stage: 'visitor' }, PEOPLE(), { today: TODAY, level: 'member' });
+    assert.deepEqual(visitors.rows.map(x => x.name), ['Ben Carter']);
+    assert.equal('stage' in visitors.rows[0], false, 'the Track field is still stripped from the row');
+    const inactive = Data.resolve('people', { membership: 'everyone', includeInactive: true }, PEOPLE(), { today: TODAY, level: 'member' });
+    assert.ok(inactive.rows.some(x => x.name === 'Cara Abbott'));
+});
+
 test('a field above the viewer never leaves the resolver, whoever wired it', () => {
     const asEditor = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
     const asMember = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'member' });
