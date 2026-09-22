@@ -29,7 +29,8 @@ flattens every matching home, so a preview still has something to show.
 
 **Hide childless homes on the outer query**, not as a general "hide if
 related list empty". Households gain a `hasChildren` filter (`any` /
-`with children` / `without children`).
+`with children` / `without children`) and `childMembership` (`any` /
+`a member child` / `a non-member child`).
 
 Expand passes the parent row into `rowsFor(node, parentRow)`. Resolve
 reads `ctx.parent`. Live caches related resolves per parent id.
