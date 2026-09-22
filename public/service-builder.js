@@ -250,6 +250,22 @@ function stampRowIds(entries, derived) {
 // current model, so `changedFieldPaths` gets two things it can compare
 // like-for-like. The parts of a save that are not a function of the model —
 // the timestamp, the guide record, involvementDeferred — are added by save().
+// The two pastoral-prayer subjects, in the shape decidePastoralPrayerSave reads.
+// A blank slot is null, not an empty string, so it is not a person id.
+function pastoralSunday(service, date) {
+    const slotId = (field) => {
+        const liturgy = service && service.liturgy;
+        const slot = liturgy && liturgy[field];
+        const id = slot && slot.id;
+        return (typeof id === 'string' && id) ? id : null;
+    };
+    return {
+        date: date,
+        prayerMaleId: slotId('prayerMale'),
+        prayerFemaleId: slotId('prayerFemale'),
+    };
+}
+
 function flattenServiceForSave(service) {
     const ref = (r) => (r && typeof r === 'object') ? r : { id: null, name: '' };
     const s = service || {};
@@ -1588,13 +1604,6 @@ function serviceForm() {
                     { field: 'other', role: 'other' }
                 ];
 
-                const liturgyRoles = [
-                    { field: 'prayerMale', role: 'pastoral_prayer' },
-                    { field: 'prayerFemale', role: 'pastoral_prayer' }
-                ];
-
-                const peopleToRecalculate = new Set();
-
                 // An Involvement is the fact that somebody served, so it is not
                 // written until the day has been (MS-160, ADR-0018 §1). Putting a
                 // preacher down for a Sunday six weeks out used to count as
@@ -1675,42 +1684,31 @@ function serviceForm() {
                     await this._clearBaptismDateIfThisService(batch, personId);
                 }
 
-                // 2. Process Pastoral Prayer Roles (Liturgy)
-                // Who is a subject *after* this edit, so the cache below is
-                // recomputed against the final state of the service rather than
-                // against whichever slot happened to be processed last. A person
-                // moved between the two slots is added and removed in the same
-                // save, and only the final answer is worth writing.
-                const subjectIds = new Set(
-                    liturgyRoles
-                        .map(({ field }) => this.service.liturgy[field] && this.service.liturgy[field].id)
-                        .filter(Boolean)
+                // Pastoral prayer is decided after the reads above, from the
+                // Sunday this save is about to write. Noting the subjects and
+                // then writing the Service from a later model is how a subject
+                // chosen during the wait landed on the Service and missed the
+                // history. The clone taken inside loadLive is that Sunday: the
+                // history decision and the Service update both use it, and it
+                // is what "already saved" means when the write lands. An edit
+                // that arrives after the last read stays on the page, so the
+                // next save writes it instead of treating it as done.
+                let frozenService = null;
+                const loadedSunday = pastoralSunday(original, this.date);
+                const taken = await PastoralPrayerCore.takeSundayAfterHistoryRead(
+                    loadedSunday,
+                    () => {
+                        frozenService = JSON.parse(JSON.stringify(this.service));
+                        return pastoralSunday(frozenService, this.date);
+                    },
+                    (personIds) => this._readPastoralHistories(personIds)
                 );
-
-                for (const { field } of liturgyRoles) {
-                    const oldId = original.liturgy[field] ? original.liturgy[field].id : null;
-                    const newId = this.service.liturgy[field].id;
-                    if (oldId !== newId) {
-                        if (oldId) peopleToRecalculate.add(oldId);
-                        if (newId) peopleToRecalculate.add(newId);
-                    }
-                }
-
-                for (const personId of peopleToRecalculate) {
-                    if (subjectIds.has(personId)) await this._addPastoralPrayer(batch, personId);
-                    else await this._removePastoralPrayer(batch, personId);
-                }
-
-                // Recalculate lastPastoralPrayerDate for affected people. Written
-                // into the same batch as the history change above, so the cache
-                // and the record it caches can never land apart.
-                for (const personId of peopleToRecalculate) {
-                    const latestDate = await this._calculateLatestPastoralPrayer(
-                        personId, subjectIds.has(personId));
-                    batch.update(db.collection('people').doc(personId), {
-                        lastPastoralPrayerDate: latestDate
-                    });
-                }
+                const prayerDecision = PastoralPrayerCore.decidePastoralPrayerSave(
+                    loadedSunday, taken.savedSunday, taken.historyByPerson);
+                PastoralPrayerCore.writePastoralPrayerDecision(
+                    batch, db.collection('people'), prayerDecision,
+                    firebase.firestore.FieldValue.serverTimestamp());
+                const pageMatchedFrozen = serviceSnapshot(this.service) === serviceSnapshot(frozenService);
 
                 // Write only what THIS editor changed.
                 //
@@ -1721,7 +1719,7 @@ function serviceForm() {
                 // the flattened model against the flattened snapshot we loaded
                 // leaves an untouched slot out of the write entirely, so it cannot
                 // lose a race it never entered. See changedFieldPaths.
-                const flatNow = flattenServiceForSave(this.service);
+                const flatNow = flattenServiceForSave(frozenService);
                 const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
 
                 // Whether this Sunday still owes its serve records. The
@@ -1750,17 +1748,17 @@ function serviceForm() {
                 // Sync Pastoral Prayer names to Guide elements if they exist.
                 // Skip re-saving if the guide is missing hymn2 when it should have it —
                 // those stale elements were generated by an old bug and must not be propagated.
-                if (this.service.guide && this.service.guide.elements) {
-                    const elements = this.service.guide.elements;
-                    const isBroken = !this.service.hasBaptism &&
-                        this.service.liturgy.hymn2?.name &&
+                if (frozenService.guide && frozenService.guide.elements) {
+                    const elements = frozenService.guide.elements;
+                    const isBroken = !frozenService.hasBaptism &&
+                        frozenService.liturgy.hymn2?.name &&
                         !elements.some(el => el.id && el.id.startsWith('hymn-h2'));
                     if (!isBroken) {
                         const prayerEl = elements.find(el => el.type === 'pastoral_prayer');
                         if (prayerEl) {
-                            prayerEl.maleMember = this.service.liturgy.prayerMale.name || '';
-                            prayerEl.femaleMember = this.service.liturgy.prayerFemale.name || '';
-                            toSave.guide = this.service.guide;
+                            prayerEl.maleMember = frozenService.liturgy.prayerMale.name || '';
+                            prayerEl.femaleMember = frozenService.liturgy.prayerFemale.name || '';
+                            toSave.guide = frozenService.guide;
                         }
                     }
                 }
@@ -1774,12 +1772,16 @@ function serviceForm() {
                 // template switch or a same-template reload after the template's own
                 // pages/style changed underneath it.
                 if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
-                    const existing = (this.service.guide && this.service.guide.format === 'v2') ? this.service.guide : null;
+                    const existing = (frozenService.guide && frozenService.guide.format === 'v2') ? frozenService.guide : null;
                     const values = GuideStore.preserveValues((existing && existing.values) || {}, this.guideSnapshot);
                     const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
                     toSave.guide = GuideStore.buildGuideRecord(gt, this.guideSnapshot, values);
-                    this.service.guide = toSave.guide;
+                    frozenService.guide = toSave.guide;
                 }
+                // The page and the Sunday we wrote still agree, so show the
+                // guide we just saved. If they diverged during the reads, leave
+                // the page alone — those edits are the next save.
+                if (pageMatchedFrozen && toSave.guide) this.service.guide = frozenService.guide;
 
                 const serviceRef = db.collection('services').doc(this.date);
                 if (this._docExists) {
@@ -1807,7 +1809,7 @@ function serviceForm() {
                 await batch.commit();
                 committed = true;
                 this._docExists = true;
-                this.originalService = serviceSnapshot(this.service);
+                this.originalService = serviceSnapshot(frozenService);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
                 // An autosave that fails stays quiet — the "Unsaved changes"
@@ -2615,32 +2617,16 @@ function serviceForm() {
                 .collection(PastoralPrayerCore.HISTORY_COLLECTION);
         },
 
-        async _addPastoralPrayer(batch, personId) {
-            const histRef = this._pastoralPrayerHistory(personId)
-                .doc(PastoralPrayerCore.historyDocId(this.date));
-            batch.set(histRef, Object.assign(
-                PastoralPrayerCore.historyRecord(this.date),
-                { createdAt: firebase.firestore.FieldValue.serverTimestamp() }
-            ));
-        },
-
-        async _removePastoralPrayer(batch, personId) {
-            const histRef = this._pastoralPrayerHistory(personId)
-                .doc(PastoralPrayerCore.historyDocId(this.date));
-            batch.delete(histRef);
-        },
-
-        // What this person's `lastPastoralPrayerDate` should be once this save
-        // lands. The history change is sitting in the same uncommitted batch, so
-        // reading the newest stored date would answer the question as it stood
-        // before the edit — the bug that left a subject you had just chosen
-        // still reading as overdue, and a subject you had just removed still
-        // reading as prayed for. Read what is stored, then apply the pending
-        // change on top of it.
-        async _calculateLatestPastoralPrayer(personId, isSubject) {
-            const histSnap = await this._pastoralPrayerHistory(personId).get(FRESH_READ);
-            const dates = histSnap.docs.map(d => d.data().serviceDate || d.id);
-            return PastoralPrayerCore.nextLastPrayerDate(dates, this.date, isSubject);
+        // Stored history dates (the doc id is the Sunday) for the people the
+        // decision is about. Read before the Sunday is frozen, so a subject
+        // chosen while this is in flight can still be taken afterwards.
+        async _readPastoralHistories(personIds) {
+            const stored = {};
+            await Promise.all((personIds || []).map(async (personId) => {
+                const snap = await this._pastoralPrayerHistory(personId).get(FRESH_READ);
+                stored[personId] = snap.docs.map(doc => doc.id);
+            }));
+            return stored;
         }
     };
 }

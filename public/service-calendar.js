@@ -8,9 +8,9 @@ var FRESH_READ = { source: 'server' };
 
 // Re-derive a Person's `lastPastoralPrayerDate` from their stored history. Only
 // safe once the history change it is meant to reflect has been committed — a
-// batch is invisible to a read until it lands. Callers that still have an open
-// batch should compute the answer with PastoralPrayerCore.nextLastPrayerDate
-// instead and write it in that same batch.
+// batch is invisible to a read until it lands. The person picker does not use
+// this; it writes the cache in the same batch as the history. The schedule
+// shift does, because those history docs are already committed when it runs.
 async function recomputeLastPrayerDate(personId) {
     const pRef = db.collection('people').doc(personId);
     const histSnap = await pRef.collection(PastoralPrayerCore.HISTORY_COLLECTION).get(FRESH_READ);
@@ -227,67 +227,78 @@ function calendarPage() {
 
                 const idField = idFieldMap[this.selectorField];
                 let oldId = idField ? svc[idField] : null;
-                const newId = this.selectedPersonRef.id;
+                // One id for the Service slot and the history. Reading the
+                // picker again after an await is how those two drift apart.
+                const chosenId = this.selectedPersonRef.id || null;
+                const chosenName = this.selectedPersonRef.name || '';
+                const newId = chosenId;
                 const role = roleMap[this.selectorField];
-
-                if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
-                    // Check proper nested structure first, then fall back to old dotted-key literal field format
-                    oldId = (svc.liturgy && svc.liturgy[this.selectorField]) ? svc.liturgy[this.selectorField].id : null;
-                    if (!oldId) {
-                        const dottedKey = `liturgy.${this.selectorField}`;
-                        oldId = svc[dottedKey] ? svc[dottedKey].id : null;
-                    }
-                }
+                const isPastoralPrayer = role === 'pastoral_prayer';
 
                 let metadata = null;
                 if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
                 if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
 
-                if (oldId !== newId) {
+                if (!isPastoralPrayer && oldId !== newId) {
                     if (oldId) {
                         const oldPersonRef = db.collection('people').doc(oldId);
-                        if (role === 'pastoral_prayer') {
-                            batch.delete(oldPersonRef
-                                .collection(PastoralPrayerCore.HISTORY_COLLECTION)
-                                .doc(PastoralPrayerCore.historyDocId(this.selectorDateKey)));
-                        } else {
-                            let query = oldPersonRef.collection('involvement')
-                                .where('serviceDate', '==', this.selectorDateKey)
-                                .where('type', '==', role);
-                            if (metadata && metadata.prayer_type) query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
-                            const invSnap = await query.get(FRESH_READ);
-                            invSnap.forEach(d => batch.delete(d.ref));
-                            if (!invSnap.empty) {
-                                batch.update(oldPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size) });
-                            }
+                        let query = oldPersonRef.collection('involvement')
+                            .where('serviceDate', '==', this.selectorDateKey)
+                            .where('type', '==', role);
+                        if (metadata && metadata.prayer_type) query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
+                        const invSnap = await query.get(FRESH_READ);
+                        invSnap.forEach(d => batch.delete(d.ref));
+                        if (!invSnap.empty) {
+                            batch.update(oldPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size) });
                         }
                     }
 
                     if (newId) {
                         const newPersonRef = db.collection('people').doc(newId);
-                        if (role === 'pastoral_prayer') {
-                            batch.set(
-                                newPersonRef
-                                    .collection(PastoralPrayerCore.HISTORY_COLLECTION)
-                                    .doc(PastoralPrayerCore.historyDocId(this.selectorDateKey)),
-                                Object.assign(
-                                    PastoralPrayerCore.historyRecord(this.selectorDateKey),
-                                    { createdAt: firebase.firestore.FieldValue.serverTimestamp() }
-                                ));
-                        } else {
-                            // The series this serve belonged to, so fairness can
-                            // be counted per Event series (ADR-0016 §5). The
-                            // calendar only ever assigns a Sunday.
-                            const invData = EventsCore.stampSeries({
-                                serviceDate: this.selectorDateKey,
-                                type: role,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            }, EventsCore.SUNDAY_SERVICE_ID);
-                            if (metadata) invData.metadata = metadata;
-                            batch.set(newPersonRef.collection('involvement').doc(), invData);
-                            batch.update(newPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(1) });
-                        }
+                        // The series this serve belonged to, so fairness can
+                        // be counted per Event series (ADR-0016 §5). The
+                        // calendar only ever assigns a Sunday.
+                        const invData = EventsCore.stampSeries({
+                            serviceDate: this.selectorDateKey,
+                            type: role,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, EventsCore.SUNDAY_SERVICE_ID);
+                        if (metadata) invData.metadata = metadata;
+                        batch.set(newPersonRef.collection('involvement').doc(), invData);
+                        batch.update(newPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(1) });
                     }
+                }
+
+                if (isPastoralPrayer) {
+                    const storedSubjects = PastoralPrayerCore.subjectsFromStoredService(
+                        this.selectorDateKey, svc);
+                    const loaded = {
+                        date: storedSubjects.date,
+                        prayerMaleId: storedSubjects.prayerMaleId,
+                        prayerFemaleId: storedSubjects.prayerFemaleId,
+                    };
+                    const saved = {
+                        date: loaded.date,
+                        prayerMaleId: loaded.prayerMaleId,
+                        prayerFemaleId: loaded.prayerFemaleId,
+                    };
+                    saved[this.selectorField === 'prayerMale' ? 'prayerMaleId' : 'prayerFemaleId'] = chosenId;
+                    const personIds = PastoralPrayerCore.pastoralSubjectIds(loaded, saved);
+                    const historyByPerson = {};
+                    await Promise.all(personIds.map(async (personId) => {
+                        const snap = await db.collection('people').doc(personId)
+                            .collection(PastoralPrayerCore.HISTORY_COLLECTION)
+                            .get(FRESH_READ);
+                        historyByPerson[personId] = snap.docs.map(doc => doc.id);
+                    }));
+                    const decision = PastoralPrayerCore.decidePastoralPrayerSave(
+                        loaded, saved, historyByPerson);
+                    // Cache in this batch, not a follow-up write. A failed
+                    // second write used to leave the history present and the
+                    // picker still saying never.
+                    PastoralPrayerCore.writePastoralPrayerDecision(
+                        batch, db.collection('people'), decision,
+                        firebase.firestore.FieldValue.serverTimestamp());
                 }
 
                 const updates = {
@@ -301,28 +312,28 @@ function calendarPage() {
                 if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
                     // Update liturgy in Firestore
                     const currentLiturgy = (svc.liturgy && typeof svc.liturgy === 'object') ? { ...svc.liturgy } : {};
-                    currentLiturgy[this.selectorField] = { id: newId || null, name: this.selectedPersonRef.name || '' };
+                    currentLiturgy[this.selectorField] = { id: chosenId, name: chosenName };
                     updates.liturgy = currentLiturgy;
 
                     // Sync names to Guide elements if they exist
                     if (svc.guide && svc.guide.elements) {
                         const prayerEl = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
                         if (prayerEl) {
-                            if (this.selectorField === 'prayerMale') prayerEl.maleMember = this.selectedPersonRef.name || '';
-                            if (this.selectorField === 'prayerFemale') prayerEl.femaleMember = this.selectedPersonRef.name || '';
+                            if (this.selectorField === 'prayerMale') prayerEl.maleMember = chosenName;
+                            if (this.selectorField === 'prayerFemale') prayerEl.femaleMember = chosenName;
                             updates.guide = svc.guide;
                         }
                     }
 
                     // Update Local State
                     if (!localSvc.liturgy) localSvc.liturgy = {};
-                    localSvc.liturgy[this.selectorField] = { id: newId || null, name: this.selectedPersonRef.name || '' };
+                    localSvc.liturgy[this.selectorField] = { id: chosenId, name: chosenName };
                 } else {
-                    updates[this.selectorField] = this.selectedPersonRef.name || '';
+                    updates[this.selectorField] = chosenName;
                     if (idField) updates[idField] = newId || null;
 
                     // Update Local State
-                    localSvc[this.selectorField] = this.selectedPersonRef.name || '';
+                    localSvc[this.selectorField] = chosenName;
                     if (idField) localSvc[idField] = newId || null;
                 }
 
@@ -331,13 +342,6 @@ function calendarPage() {
 
                 batch.set(serviceRef, updates, { merge: true });
                 await batch.commit();
-
-                if (role === 'pastoral_prayer') {
-                    const idsToFix = [oldId, newId].filter(id => id);
-                    for (const pid of idsToFix) {
-                        await recomputeLastPrayerDate(pid);
-                    }
-                }
 
                 this.closePersonSelector();
                 // Redraw from the map the live listener maintains. The write

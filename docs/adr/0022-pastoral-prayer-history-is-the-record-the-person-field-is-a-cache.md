@@ -40,9 +40,15 @@ That ID is how a save addresses the exact record it means to remove without a qu
 
 ### 4. The cache is written in the same batch as the history change
 
-The editor cannot read its own pending write, so it does not try. It reads the stored dates, applies the pending add or remove in memory (`PastoralPrayerCore.nextLastPrayerDate`), and writes the result into the same batch as the history change. The record and its cache land together or not at all.
+The editor cannot read its own pending write, so it does not try. It reads the stored dates, applies the pending add or remove in memory (`PastoralPrayerCore.decidePastoralPrayerSave`), and writes the result into the same batch as the history change. The record and its cache land together or not at all.
 
-Surfaces that have already committed — the calendar's inline edit, the schedule shift — re-derive from the stored history instead, which is the same answer by a different route. Both routes live in `public/pastoral-prayer-core.js`, so neither can drift.
+The Order of Service save calls that decision on the Sunday it is about to write, after the history read, so a subject chosen while the read was in flight is in the Service update and the history batch together.
+
+The Services calendar's person picker captures the chosen Person once, before it reads history, and that same id is what the Service slot and the history doc receive. The cached date is in that batch, not a follow-up write. It does not look at the picker again after the read.
+
+A subject who is still on the Sunday but has no history doc gets one; an existing doc is not rewritten, so it keeps the time it was first written.
+
+The schedule shift has already committed its history moves before it touches the cache, so it re-derives from the stored history (`latestDate`). That route and the pending-write route both live in `public/pastoral-prayer-core.js`, so neither can drift.
 
 ### 5. A future Sunday counts as the newest date
 
@@ -50,7 +56,7 @@ A booking six weeks out is already a commitment to pray for that person, so it m
 
 ## Consequences
 
-- **The stored data was already wrong** and code alone does not fix it. `scripts/sync-pastoral-prayer-dates.js` has to run once against live data; `--dry-run` prints what it would change.
+- **The stored data was already wrong** and code alone does not fix it. `scripts/sync-pastoral-prayer-dates.js` rebuilds the cache from history that already exists. `scripts/repair-pastoral-prayer-history.js` creates a missing history doc from a Service slot, then rebuilds the cache. Dry-run is the default; `--apply` writes. A history doc that already exists is left alone, including the time it was first written.
 - **A merge no longer duplicates prayer history**, and the record it lands stays addressable by later saves.
 - **The People list now shows a row for members never prayed for.** It showed nothing before, which read as missing data rather than as the most overdue person in the church.
 - **`prayer-suggestions.js` depends on the core** for what a stored date means. It stays pure and node-testable; only the sentinel question moved.
