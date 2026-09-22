@@ -245,7 +245,7 @@
         },
         {
             key: 'household_children', region: 'People', label: 'Children', shape: 'list', of: 'households', minLevel: 'member',
-            blurb: 'One row per child of a household. Put this list on a box inside a household card — each card then lists its own children. Without a parent it is every child, flattened.',
+            blurb: 'One row per child of a household. Put this list on a box inside a household card — each card then lists its own children. Filter to members or non-members. Without a parent it is every matching child, flattened.',
             fields: [
                 { key: 'name', label: 'Full name', kind: 'text' },
                 { key: 'firstName', label: 'First name', kind: 'text' },
@@ -255,6 +255,11 @@
                 { key: 'membership', label: 'Membership', kind: 'text' },
             ],
             filters: [
+                { key: 'membership', label: 'Who', kind: 'choice', default: 'everyone', options: [
+                    { value: 'members', label: 'Members' },
+                    { value: 'non_members', label: 'Non-members' },
+                    { value: 'everyone', label: 'Every child' },
+                ] },
                 { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
             ],
         },
@@ -640,6 +645,7 @@
                 const person = byId[m.personId];
                 if (!person || !person.name) return;
                 if (!p.includeInactive && isInactive(person)) return;
+                if (!passesMembership(person, p.membership)) return;
                 rows.push(personRow(person, ctx, { [person.id]: h.name }));
             });
         });
