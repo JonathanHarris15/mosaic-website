@@ -13,8 +13,10 @@
 //    can be tested without a browser.
 //
 // What this module is handed is a `data` object with two functions:
-//   rowsFor(node)      → the rows an iterated element stands for, or null
-//                         when nothing has been loaded (stand-ins are shown)
+//   rowsFor(node, row) → the rows an iterated element stands for, or null
+//                         when nothing has been loaded (stand-ins are shown).
+//                         `row` is the nearest iterated ancestor's row, so a
+//                         related list (children of this household) can scope.
 //   valueFor(bind, row) → { ok, value, why } for one binding, against the row
 //                         of the nearest iterated ancestor (or none)
 // Neither Firestore nor the catalog appears here — see printable-data-core.
@@ -115,7 +117,7 @@
 
         function expandNode(node, row, index) {
             if (node.repeat) {
-                const rows = data.rowsFor ? data.rowsFor(node) : null;
+                const rows = data.rowsFor ? data.rowsFor(node, row) : null;
                 if (rows == null) {
                     // Nothing loaded: the stand-in, once, still inside its list
                     // wrapper so the layout reads the same.

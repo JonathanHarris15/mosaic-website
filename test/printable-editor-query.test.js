@@ -13,3 +13,10 @@ test('iteration is queried in the data drawer, and a locked query cannot be rebu
     assert.match(js, /querySpecsFor/, 'only filters this viewer may use are offered');
     assert.match(html, /Build the query in the data drawer/, 'the element panel does not carry the query');
 });
+
+test('a box inside a household card can query the children of that household', () => {
+    assert.match(html, /Of this household/, 'the query picker groups related lists');
+    assert.match(js, /relatedListSources/, 'the editor knows which lists belong to the parent row');
+    assert.match(js, /listSourcesFor/, 'related lists are offered only inside their parent');
+    assert.match(js, /queryTarget/, 'a selected inner box is what the query writes, not the household card');
+});

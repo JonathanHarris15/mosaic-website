@@ -94,6 +94,46 @@ test('an empty list draws nothing and says so', () => {
     assert.ok(r.warnings.some(w => w.nodeId === 'card' && /empty/.test(w.message)));
 });
 
+test('a nested list is resolved against the parent row it sits in', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const page = Core.buildPage(t, { id: 'pg1', nodes: [
+        { id: 'home', tag: 'div', name: 'Household', repeat: { source: 'households' }, children: [
+            { id: 'hn', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+            { id: 'kid', tag: 'div', name: 'Child', repeat: { source: 'household_children' }, children: [
+                { id: 'kn', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+        ] },
+    ] });
+    const homes = [
+        { _id: 'family:fam1', name: 'The Baker household' },
+        { _id: 'person:b', name: 'The Carter household' },
+    ];
+    const kids = {
+        'family:fam1': [{ name: 'Eve Baker' }, { name: 'Finn Baker' }],
+        'person:b': [],
+    };
+    const r = Render.expandPage(page, {
+        rowsFor: (node, parent) => {
+            if (node.repeat && node.repeat.source === 'households') return homes;
+            if (node.repeat && node.repeat.source === 'household_children') {
+                return parent ? (kids[parent._id] || []) : [];
+            }
+            return null;
+        },
+        valueFor: (bind, row) => row && row[bind.field]
+            ? { ok: true, value: row[bind.field] }
+            : { ok: false, why: 'empty' },
+    });
+    const copies = r.nodes[0].children;
+    assert.equal(copies.length, 2);
+    assert.equal(copies[0].children[0].text, 'The Baker household');
+    const bakerKids = copies[0].children[1].children;
+    assert.equal(bakerKids.length, 2);
+    assert.equal(bakerKids[0].children[0].text, 'Eve Baker');
+    assert.equal(bakerKids[1].children[0].text, 'Finn Baker');
+    assert.equal(copies[1].children[1].children.length, 0, 'a childless home draws no child cards');
+});
+
 test('the list wrapper is laid out across, down, or in columns filled top to bottom', () => {
     assert.equal(Render.layoutStyle({ layout: { direction: 'row', perLine: 3, gap: 8 } }, 10)['grid-template-columns'], 'repeat(3, minmax(0, 1fr))');
     assert.equal(Render.layoutStyle({ layout: { direction: 'column', perLine: 1, gap: 8 } }, 10)['flex-direction'], 'column');

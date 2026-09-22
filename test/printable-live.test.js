@@ -158,3 +158,39 @@ test('warnings name the element and the page it is on', () => {
     assert.ok(elementWarning, 'the title could not resolve and should be listed');
     assert.equal(elementWarning.pageId, 'pg1');
 });
+
+test('a nested children list is of the household card it sits in', () => {
+    const p = Core.buildPrintable({
+        name: 'Homes',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [{ id: 'pg1', nodes: [
+            { id: 'home', tag: 'div', repeat: { source: 'households', params: { membership: 'everyone', hasChildren: 'yes' } }, children: [
+                { id: 'hn', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                { id: 'kid', tag: 'div', repeat: { source: 'household_children', params: {} }, children: [
+                    { id: 'kn', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+            ] },
+        ] }],
+    });
+    const bundle = {
+        people: [
+            { id: 'a', name: 'Anna Baker', tags: ['Member'] },
+            { id: 'd', name: 'Dan Baker', tags: ['Member'] },
+            { id: 'e', name: 'Eve Baker', tags: ['Member'] },
+            { id: 'b', name: 'Ben Carter', tags: ['Visitor'] },
+        ],
+        families: [{ id: 'fam1', husbandId: 'd', wifeId: 'a', childIds: ['e'] }],
+    };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'member' });
+    const home = Core.findNode(p.pages[0], 'home');
+    const kid = Core.findNode(p.pages[0], 'kid');
+    assert.deepEqual(res.rowsFor(home).map(r => r.name), ['The Baker household']);
+    const baker = res.rowsFor(home)[0];
+    assert.deepEqual(res.rowsFor(kid, baker).map(r => r.name), ['Eve Baker']);
+    assert.deepEqual(res.rowsFor(kid).map(r => r.name), ['Eve Baker'], 'without a parent the related list flattens');
+    const pages = Live.layoutPages(p, res, null);
+    const homes = pages[0].nodes[0].children;
+    assert.equal(homes.length, 1);
+    assert.equal(homes[0].children[0].text, 'The Baker household');
+    assert.equal(homes[0].children[1].children[0].children[0].text, 'Eve Baker');
+});

@@ -162,6 +162,7 @@
             get regions() {
                 const q = this.data.search.trim().toLowerCase();
                 const sources = Data.sourcesFor(this.permissionLevel).filter(s => {
+                    if (s.of && !q) return false;
                     if (!q) return true;
                     const hay = (s.label + ' ' + s.region + ' ' + s.fields.map(f => f.label).join(' ')).toLowerCase();
                     return hay.includes(q);
@@ -194,12 +195,38 @@
                 return Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || null;
             },
 
+            get queryTarget() {
+                const node = this.selectedNode;
+                if (node && Core.kindOf(node) === 'box') return node;
+                return this.repeatContext;
+            },
+
+            get enclosingRepeat() {
+                const page = this.currentPage;
+                const target = this.queryTarget;
+                if (!page || !target) return null;
+                const chain = Core.ancestorsOf(page, target.id);
+                for (let i = chain.length - 1; i >= 0; i--) {
+                    if (chain[i].repeat && chain[i].repeat.source) return chain[i];
+                }
+                return null;
+            },
+
             get listSources() {
-                return Data.sourcesFor(this.permissionLevel).filter(s => s.shape === 'list');
+                const parent = this.enclosingRepeat;
+                return Data.listSourcesFor(this.permissionLevel, parent && parent.repeat.source);
+            },
+
+            get relatedListSources() {
+                return this.listSources.filter(s => s.of);
+            },
+
+            get topListSources() {
+                return this.listSources.filter(s => !s.of);
             },
 
             get queryLocked() {
-                const r = this.repeatContext;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 return !!(r && r.repeat.source && !Data.mayQuery(this.permissionLevel, r.repeat.source));
             },
 
@@ -211,7 +238,9 @@
                 const r = this.repeatContext;
                 const res = this.resolver;
                 if (!r || !res || !r.repeat.source) return { count: null, names: [] };
-                const rows = res.rowsFor(r) || [];
+                const parent = this.enclosingRepeat;
+                const parentRow = parent && (res.rowsFor(parent) || [])[0];
+                const rows = res.rowsFor(r, parentRow) || [];
                 return {
                     count: rows.length,
                     names: rows.slice(0, 8).map(row => row.name || row.label || row._id || 'A row'),
@@ -463,7 +492,7 @@
 
             chooseList(source) {
                 const page = this.currentPage;
-                const node = (this.selectedNode && this.selectedNode.repeat) ? this.selectedNode : this.repeatContext || this.selectedNode;
+                const node = this.queryTarget || this.selectedNode;
                 if (!page || !node) return;
                 if (Core.kindOf(node) !== 'box') return;
                 const same = node.repeat && node.repeat.source === source.key;
@@ -485,13 +514,12 @@
                 if (!key) return;
                 const src = this.listSources.find(s => s.key === key);
                 if (!src) return;
-                if (!this.repeatContext) {
-                    if (this.selectedKind !== 'box') {
-                        this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
-                        return;
-                    }
-                    this.makeIterated();
+                const target = this.queryTarget;
+                if (!target || Core.kindOf(target) !== 'box') {
+                    this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
+                    return;
                 }
+                if (!target.repeat) this.makeIterated();
                 this.chooseList(src);
             },
 
@@ -516,21 +544,23 @@
 
             // The params a list carries, only those this viewer may query.
             get repeatParamSpecs() {
-                const r = this.repeatContext;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 if (!r || !r.repeat.source || this.queryLocked) return [];
                 return Data.querySpecsFor(r.repeat.source, this.permissionLevel);
             },
 
             repeatParam(key) {
-                const r = this.repeatContext;
-                const src = this.repeatSource;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
+                const src = r && r.repeat.source
+                    ? (Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || Data.sourceByKey(r.repeat.source))
+                    : this.repeatSource;
                 if (!r || !src) return undefined;
                 const p = Object.assign(Data.defaultParams(src), r.repeat.params || {});
                 return p[key];
             },
 
             setRepeatParam(key, value) {
-                const r = this.repeatContext;
+                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 const page = this.pageOfNode(r && r.id);
                 if (!r || !page || this.queryLocked) return;
                 if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel).some(s => s.key === key)) return;

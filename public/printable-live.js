@@ -60,15 +60,21 @@
         const cache = {};
         const c = Object.assign({ today: Data.toDateStr(new Date()), level: 'viewer' }, ctx || {});
 
-        function resolved(source, params) {
-            const k = keyOf(source, params);
-            if (!cache[k]) cache[k] = Data.resolve(source, params, bundle || {}, c);
+        function resolved(source, params, parent) {
+            const src = Data.sourceByKey(source);
+            const pid = (src && src.of && parent && parent._id) ? String(parent._id) : '';
+            const k = keyOf(source, params) + '|' + pid;
+            if (!cache[k]) {
+                cache[k] = Data.resolve(source, params, bundle || {}, Object.assign({}, c, {
+                    parent: pid ? parent : null,
+                }));
+            }
             return cache[k];
         }
 
-        function rowsFor(node) {
+        function rowsFor(node, parentRow) {
             if (!node.repeat || !node.repeat.source) return null;
-            return resolved(node.repeat.source, node.repeat.params).rows;
+            return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
         }
 
         function valueFor(bind, row) {
@@ -142,13 +148,13 @@
     // continuation page that was redesigned still reads the same live rows.
     function sliceFrom(res, originRepeat, pageRepeatId, start, end) {
         return {
-            rowsFor: node => {
-                if (!node.repeat) return res.rowsFor(node);
+            rowsFor: (node, parentRow) => {
+                if (!node.repeat) return res.rowsFor(node, parentRow);
                 if (node.id === pageRepeatId || node.id === originRepeat.id) {
-                    const rows = res.rowsFor(originRepeat);
+                    const rows = res.rowsFor(originRepeat, parentRow);
                     return rows ? rows.slice(start, end) : rows;
                 }
-                return res.rowsFor(node);
+                return res.rowsFor(node, parentRow);
             },
             valueFor: res.valueFor,
         };

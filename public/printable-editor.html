@@ -509,11 +509,14 @@
                     <template x-if="!queryLocked">
                         <div>
                             <label class="pe-f"><span>List</span>
-                                <select class="pe-in" :value="repeatContext && repeatContext.repeat.source || ''" @change="setQuerySource($event.target.value)">
+                                <select class="pe-in" :value="queryTarget && queryTarget.repeat && queryTarget.repeat.source || ''" @change="setQuerySource($event.target.value)">
                                     <option value="" disabled>Choose a list</option>
-                                    <template x-for="src in listSources" :key="'q-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
+                                    <optgroup label="Of this household" x-show="relatedListSources.length">
+                                        <template x-for="src in relatedListSources" :key="'qrel-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
+                                    </optgroup>
+                                    <template x-for="src in topListSources" :key="'q-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
                                 </select></label>
-                            <p class="pe-hint" x-show="!repeatContext || !repeatContext.repeat.source">Select a box, then a list. Only lists you may query are here.</p>
+                            <p class="pe-hint" x-show="!queryTarget || !queryTarget.repeat || !queryTarget.repeat.source">Select a box, then a list. A box inside a household card can list the children of that household.</p>
                             <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
                                 <div>
                                     <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>

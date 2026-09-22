@@ -4,8 +4,11 @@
 // The **catalog** is the list of **sources** the data drawer offers, grouped
 // by where in the app they come from (People, Sunday, Events, Forms). A
 // source is either a **single** (one row — this Sunday, who holds a role) or
-// a **list** (many rows — the directory, the next fortnight's events). Every
-// source declares its **fields** (what a row carries, each with a kind: text,
+// a **list** (many rows — the directory, the next fortnight's events). A list
+// may be **related** (`of` a parent list): its rows are of one parent row —
+// the children of this household — and the query picker only offers it inside
+// that parent. Every source declares its **fields** (what a row carries, each
+// with a kind: text,
 // image, date, number), its **params** (what has to be chosen before it can
 // be read — which Sunday, which event, which form) and its **filters**, and
 // the lowest Permission Level that may read it.
@@ -224,6 +227,26 @@
                 { key: 'membership', label: 'Who', kind: 'choice', default: 'members', options: [
                     { value: 'members', label: 'Households with a member' }, { value: 'everyone', label: 'Everyone' },
                 ] },
+                { key: 'hasChildren', label: 'Children', kind: 'choice', default: 'any', options: [
+                    { value: 'any', label: 'Any household' },
+                    { value: 'yes', label: 'With children' },
+                    { value: 'no', label: 'Without children' },
+                ] },
+                { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
+            ],
+        },
+        {
+            key: 'household_children', region: 'People', label: 'Children', shape: 'list', of: 'households', minLevel: 'member',
+            blurb: 'One row per child of a household. Put this list on a box inside a household card — each card then lists its own children. Without a parent it is every child, flattened.',
+            fields: [
+                { key: 'name', label: 'Full name', kind: 'text' },
+                { key: 'firstName', label: 'First name', kind: 'text' },
+                { key: 'lastName', label: 'Last name', kind: 'text' },
+                { key: 'photo', label: 'Photo', kind: 'image' },
+                { key: 'birthday', label: 'Birthday', kind: 'date' },
+                { key: 'membership', label: 'Membership', kind: 'text' },
+            ],
+            filters: [
                 { key: 'includeInactive', label: 'Include inactive people', kind: 'bool', default: false, minLevel: 'elder' },
             ],
         },
@@ -376,6 +399,21 @@
         return visibleSpecs((s.params || []).concat(s.filters || []), level);
     }
 
+    // Lists this level may iterate. A related list (`of`) is only offered
+    // when the box sits inside that parent list — children of a household
+    // card, not a second directory of every child.
+    function listSourcesFor(level, parentKey) {
+        const all = sourcesFor(level).filter(s => s.shape === 'list');
+        const related = parentKey ? all.filter(s => s.of === parentKey) : [];
+        const top = all.filter(s => !s.of);
+        return related.concat(top);
+    }
+
+    function relatedSourcesFor(parentKey, level) {
+        if (!parentKey) return [];
+        return sourcesFor(level).filter(s => s.shape === 'list' && s.of === parentKey);
+    }
+
     // The fields a source offers for a given choice of params — most are
     // fixed, a form's are one per question. `options.forms` carries the forms
     // the store loaded.
@@ -488,10 +526,16 @@
         const seated = {};
         const out = [];
         (data.families || []).forEach(f => {
+            const childSet = {};
+            (f.childIds || []).forEach(id => { if (id) childSet[id] = true; });
             const ids = [f.husbandId, f.wifeId].concat(f.childIds || []).filter(id => id && byId[id] && !seated[id]);
             if (!ids.length) return;
             ids.forEach(id => { seated[id] = true; });
-            const members = ids.map(id => ({ personId: id, name: byId[id].name || '', kid: !!byId[id].kid }));
+            const members = ids.map(id => ({
+                personId: id,
+                name: byId[id].name || '',
+                kid: !!childSet[id] || !!byId[id].kid,
+            }));
             out.push({ id: 'family:' + f.id, name: householdName(members), members: members });
         });
         people.forEach(p => {
@@ -553,6 +597,10 @@
                     .filter(person => p.includeInactive || !isInactive(person));
                 if (!members.length) return null;
                 if (p.membership === 'members' && !members.some(isMember)) return null;
+                const kids = (h.members || []).filter(m => m.kid).map(m => byId[m.personId]).filter(Boolean)
+                    .filter(person => p.includeInactive || !isInactive(person));
+                if (p.hasChildren === 'yes' && !kids.length) return null;
+                if (p.hasChildren === 'no' && kids.length) return null;
                 const first = members[0];
                 const c = (first && first.contact) || {};
                 return {
@@ -568,6 +616,30 @@
             .filter(Boolean)
             .sort((a, b) => a.name.localeCompare(b.name));
         return { rows: rows, warnings: rows.length ? [] : ['No households match.'] };
+    }
+
+    function resolveHouseholdChildren(params, data, ctx) {
+        const p = Object.assign(defaultParams('household_children'), params || {});
+        const byId = {};
+        (data.people || []).forEach(x => { if (x && x.id) byId[x.id] = x; });
+        let homes = householdsOf(data);
+        if (ctx && ctx.parent && ctx.parent._id) {
+            homes = homes.filter(h => h.id === ctx.parent._id);
+        }
+        const rows = [];
+        homes.forEach(h => {
+            (h.members || []).filter(m => m.kid).forEach(m => {
+                const person = byId[m.personId];
+                if (!person || !person.name) return;
+                if (!p.includeInactive && isInactive(person)) return;
+                rows.push(personRow(person, ctx, { [person.id]: h.name }));
+            });
+        });
+        rows.sort(comparePeople('first'));
+        const why = (ctx && ctx.parent)
+            ? 'This household has no children.'
+            : 'No children in those households.';
+        return { rows: rows, warnings: rows.length ? [] : [why] };
     }
 
     // ── Sundays ──────────────────────────────────────────────────────────────
@@ -864,6 +936,7 @@
     const RESOLVERS = {
         people: resolvePeople,
         households: resolveHouseholds,
+        household_children: resolveHouseholdChildren,
         sunday: resolveSunday,
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
@@ -903,6 +976,7 @@
         switch (sourceKey) {
             case 'people': return { people: true, families: true, households: true };
             case 'households': return { people: true, families: true, households: true };
+            case 'household_children': return { people: true, families: true, households: true };
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
             case 'sunday_typed': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
@@ -962,6 +1036,8 @@
         sourcesFor,
         mayQuery,
         querySpecsFor,
+        listSourcesFor,
+        relatedSourcesFor,
         fieldsFor,
         defaultParams,
         accepts,
