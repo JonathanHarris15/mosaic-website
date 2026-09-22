@@ -205,6 +205,16 @@ test('buildSelfEditUpdate never carries membership, tags or shepherding fields',
     }
 });
 
+test('a member saving their profile cannot write their own name', () => {
+    const u = Core.buildSelfEditUpdate({}, {
+        email: 'a@b.c',
+        name: 'Someone Else',
+        nameParts: { firstName: 'Someone', lastName: 'Else', suffix: '', noLastName: false },
+    });
+    assert.ok(!('name' in u));
+    assert.ok(!('nameParts' in u));
+});
+
 // ── isInactiveMembership: the single "active people" predicate ────────────────
 
 test('isInactiveMembership reads the new flag and the legacy status, else active', () => {

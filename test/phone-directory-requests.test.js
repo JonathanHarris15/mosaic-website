@@ -108,6 +108,29 @@ test('labels are Connect, New record, Name, and Family, and the summary is the e
     );
 });
 
+test('the phone queue describes a Name Fix with the same sentence as the directory', () => {
+    const parts = {
+        id: 'u_name_parts',
+        kind: 'name_fix',
+        email: 'ada@example.com',
+        personId: 'ada',
+        proposed: {
+            name: 'Ada King Lovelace',
+            nameParts: { firstName: 'Ada', lastName: 'Lovelace', suffix: 'King', noLastName: false },
+        },
+    };
+    const sentence = Plan.summaryOf(parts, nameOf);
+    assert.equal(sentence, Directory.summarize(parts, nameOf));
+    assert.equal(
+        sentence,
+        'Ada Lovelace asks to be spelt “Ada King Lovelace” (first name Ada, last name Lovelace, suffix King)'
+    );
+    assert.equal(
+        Plan.summaryOf(nameFix, nameOf),
+        'Ada Lovelace asks to be spelt “Ada King”'
+    );
+});
+
 test('a New record offers Add & connect and Already on file; the other kinds offer Confirm and do not', () => {
     assert.equal(Plan.confirmLabel(newer), 'Add & connect');
     assert.equal(Plan.offerAlreadyOnFile(newer), true);

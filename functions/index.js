@@ -539,6 +539,8 @@ exports.resolveDirectoryRequest = onCall({
         exists: targetSnap.exists,
         userId: targetSnap.exists ? (targetSnap.data().userId || null) : null,
         name: targetSnap.exists ? (targetSnap.data().name || null) : null,
+        nameParts: targetSnap.exists ?
+          (targetSnap.data().nameParts || null) : null,
       };
     } else {
       ctx.target = null;
@@ -581,10 +583,14 @@ exports.resolveDirectoryRequest = onCall({
     batch.update(userRef, {personId: personId});
     closed.personId = personId;
   } else if (plan.action === "rename") {
-    batch.update(db.collection("people").doc(plan.personId), {
+    // The Person's name, and the parts when the ask had them. A one-string
+    // ask clears any older split. A Household is not renamed.
+    const personPatch = {
       name: plan.name,
       updatedAt: now,
-    });
+      nameParts: plan.nameParts || admin.firestore.FieldValue.delete(),
+    };
+    batch.update(db.collection("people").doc(plan.personId), personPatch);
   } else if (plan.action === "family") {
     const familyRef = plan.familyAction === "create" ?
       db.collection("families").doc() :

@@ -19,6 +19,7 @@
 
 const track = require("./membership-track");
 const familyPlan = require("./family-plan");
+const PersonName = require("./shared/person-name.js");
 
 const STATUS = {
   PENDING: "pending",
@@ -155,16 +156,39 @@ function planLinkApproval(request, ctx) {
 }
 
 /**
+ * The name an approval would write. Parts are recomposed by the same rule
+ * the form used, so a string that disagrees with them does not win. A
+ * request that only has a full name is that spelling, and it carries no
+ * parts to remember.
+ * @param {?Object} request The stored Directory Request.
+ * @return {Object} `{name, nameParts}`, or `{fault}` when the parts are
+ *   not saveable.
+ */
+function nameFixWrite(request) {
+  const proposed = (request && request.proposed) || {};
+  if (proposed.nameParts) {
+    const saved = PersonName.fieldsForNewPerson(proposed.nameParts);
+    if (saved.fault) return {fault: saved.fault};
+    return {name: saved.name, nameParts: saved.nameParts};
+  }
+  const name = (proposed.name || "").trim();
+  if (!name) return {fault: "This request carries no name."};
+  return {name: name, nameParts: null};
+}
+
+/**
  * Decide what approving a NAME FIX should do.
  *
  * The guard that matters is that the Person is STILL the requester's own. A
  * name fix is only ever a person correcting their own record; if the link moved
- * while the request was queued, approving would rename a stranger.
+ * while the request was queued, approving would rename a stranger. Parts are
+ * written with the full name. A request that was never entered in parts
+ * clears any older split instead of inventing one. A Household is not renamed.
  *
  * @param {?Object} request The stored Directory Request.
  * @param {?Object} ctx Fresh state: `requesterPersonId` and `target`
- *   ({exists, name}).
- * @return {Object} `rename` with the new name, or `refuse` with a reason.
+ *   ({exists, name, nameParts}).
+ * @return {Object} `rename` with the full name and parts, or `refuse`.
  */
 function planNameFixApproval(request, ctx) {
   const r = request || {};
@@ -174,10 +198,8 @@ function planNameFixApproval(request, ctx) {
   if (r.status !== STATUS.PENDING) {
     return refuse("This request has already been resolved.");
   }
-  const name = (r.proposed && r.proposed.name || "").trim();
-  if (!name) {
-    return refuse("This request carries no name.");
-  }
+  const write = nameFixWrite(r);
+  if (write.fault) return refuse(write.fault);
   if (!r.personId || c.requesterPersonId !== r.personId) {
     return refuse(
         "This account is no longer linked to that directory record.");
@@ -185,11 +207,21 @@ function planNameFixApproval(request, ctx) {
   if (!target.exists) {
     return refuse("That directory record no longer exists.");
   }
-  if (target.name === name) {
+  // A one-string ask has no new parts: the spelling has to differ, as it
+  // does today. A parts ask is still real when the full name stays and the
+  // parts are new. Approving either does not rename a Household.
+  if (!PersonName.nameWouldChange(
+      target.name, target.nameParts, write.name, write.nameParts)) {
     return refuse("That record already has this spelling.");
   }
 
-  return {action: "rename", personId: r.personId, name: name, reason: null};
+  return {
+    action: "rename",
+    personId: r.personId,
+    name: write.name,
+    nameParts: write.nameParts,
+    reason: null,
+  };
 }
 
 /**
