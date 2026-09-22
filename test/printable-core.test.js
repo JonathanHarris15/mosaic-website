@@ -385,6 +385,33 @@ test('the page container carries its size, margins as padding, and its backgroun
 
 // ── Linked to an event ───────────────────────────────────────────────────────
 
+test('an overflow continuation is a real page that remembers which list it continues', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const page = Core.buildPage(t, {
+        id: 'pg2',
+        name: 'Directory 2',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [{ tag: 'p', text: 'Page number' }],
+    });
+    assert.deepEqual(page.continues, { from: 'pg1', repeat: 'card' });
+    assert.equal(page.name, 'Directory 2');
+    assert.equal(Core.buildPage(t, { id: 'plain' }).continues, null);
+});
+
+test('cloning a page for overflow remints every id and keeps the design', () => {
+    const { page, template } = directoryPage();
+    const copy = Core.clonePage(template, page, { continues: { from: page.id, repeat: 'card' } });
+    assert.ok(copy.id && copy.id !== page.id);
+    assert.deepEqual(copy.continues, { from: page.id, repeat: 'card' });
+    assert.equal(copy.css, page.css);
+    assert.equal(copy.nodes.length, page.nodes.length);
+    assert.equal(copy.nodes[1].repeat.source, 'people');
+    assert.notEqual(copy.nodes[0].id, page.nodes[0].id);
+    assert.notEqual(copy.nodes[1].id, page.nodes[1].id);
+    assert.notEqual(copy.nodes[1].children[1].id, page.nodes[1].children[1].id);
+    assert.equal(copy.nodes[1].children[1].bind.text.field, 'name');
+});
+
 test('linking adds an id once and unlinking removes it, leaving the rest alone', () => {
     assert.deepEqual(Core.linkPrintable(['a'], 'b'), ['a', 'b']);
     assert.deepEqual(Core.linkPrintable(['a', 'b'], 'b'), ['a', 'b'], 'linking twice is one link');

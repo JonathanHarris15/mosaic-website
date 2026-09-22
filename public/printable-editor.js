@@ -470,7 +470,10 @@ function printableEditor() {
             if (!page) return;
             if (this.pages.length === 1) { this.flash('A printable keeps at least one page.'); return; }
             if (page.nodes.length && !confirm('Delete this page and the ' + page.nodes.length + ' element' + (page.nodes.length === 1 ? '' : 's') + ' on it?')) return;
-            this.project.pages = this.pages.filter(p => p.id !== pageId);
+            this.project.pages = this.pages.filter(p => p.id !== pageId).map(p => {
+                if (p.continues && p.continues.from === pageId) return Object.assign({}, p, { continues: null });
+                return p;
+            });
             if (this.selection.pageId === pageId) { this.selection.pageId = this.pages[0].id; this.selection.nodeId = null; }
             this.commit();
             this.renderAll();
@@ -890,8 +893,8 @@ function printableEditor() {
         },
 
         // What the canvas draws: the project's pages with their data poured
-        // in, plus the pages an overflowing list generates. Without the data
-        // side loaded, the pages themselves with their stand-ins.
+        // in. An overflowing list keeps real pages (and adds one when the
+        // rows still do not fit). Without the data side loaded, stand-ins.
         entries() {
             if (this.computeLayout) return this.computeLayout();
             return this.pages.map((page, i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
@@ -937,8 +940,13 @@ function printableEditor() {
 
             const label = document.createElement('div');
             label.className = 'pe-page-label';
-            label.textContent = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '')
-                + (entry.generated ? ' · continued from page ' + (entry.pageIndex + 1) + ' (rows ' + (entry.rowsFrom + 1) + '–' + entry.rowsTo + ')' : '');
+            let caption = 'Page ' + (index + 1) + (page.name ? ' · ' + page.name : '');
+            if (entry.continuation > 0 && entry.rowsTo > entry.rowsFrom) {
+                caption += ' · rows ' + (entry.rowsFrom + 1) + '–' + entry.rowsTo;
+            } else if (entry.generated) {
+                caption += ' · continued from page ' + (entry.pageIndex + 1);
+            }
+            label.textContent = caption;
             label.style.fontSize = Math.round(14 / Math.max(0.2, this.view.zoom)) + 'px';
             label.style.top = (-Math.round(22 / Math.max(0.2, this.view.zoom))) + 'px';
             holder.appendChild(label);
@@ -955,7 +963,7 @@ function printableEditor() {
             guide.style.left = page.margins.left + 'px';
             holder.appendChild(guide);
 
-            if (!entry.generated) ui.pageEls[page.id] = holder;
+            ui.pageEls[page.id] = holder;
             return holder;
         },
 

@@ -468,7 +468,8 @@ function dataCatalog(permissionLevel, args) {
       "{\"membership\":\"members\"," +
       "\"sort\":\"last\"},\"layout\":{\"direction\":\"column\",\"perLine\":1," +
       "\"gap\":12,\"maxPerPage\":0},\"overflow\":\"new-page\"}'. " +
-      "overflow is \"clip\" or \"new-page\".",
+      "overflow is \"clip\" or \"new-page\". new-page keeps real pages " +
+      "the list spills onto; those pages are stored and can be edited.",
     sources: chosen.map((s) => ({
       key: s.key,
       region: s.region,

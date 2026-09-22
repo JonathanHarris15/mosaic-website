@@ -124,6 +124,12 @@ test('pages are planned slice by slice until the rows run out', () => {
     assert.deepEqual(plan.map(p => [p.start, p.end]), [[0, 4], [4, 7], [7, 10]]);
 });
 
+test('each planned page may carry its own cap', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => i);
+    const plan = Render.planPages(rows, (pageIndex) => (pageIndex === 0 ? 2 : 5), () => true);
+    assert.deepEqual(plan.map(p => [p.start, p.end]), [[0, 2], [2, 7], [7, 10]]);
+});
+
 // MS-587 — a booklet hymn page is one iterated image; every sheet row lands.
 function hymnSheetPage() {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });

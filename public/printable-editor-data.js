@@ -1,5 +1,5 @@
 // The Printable editor's data side (MS-396, MS-397): the drawer, the wires,
-// iterated elements and the pages an overflowing list generates.
+// iterated elements and the real pages an overflowing list keeps.
 //
 // Mixed into the editor's Alpine object by printable-editor.js, so `this` is
 // the editor. It owns:
@@ -11,7 +11,7 @@
 //     whenever that element is selected;
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
-//     list that overflows makes new pages that copy the page it started on;
+    //     list that overflows keeps real pages, each editable, with live rows;
 //   • LIVE DATA — one fetch of everything the project reads, resolved through
 //     PrintableLive, redrawn on demand, with a Warnings list of every gap.
 //
@@ -42,7 +42,7 @@
                 picking: false,        // choosing a list for the selected element
                 typed: { date: '', draft: null, saving: false, status: '' },
             },
-            layout: [],                // what the canvas draws: pages, generated ones included
+            layout: [],                // what the canvas draws: stored pages, overflow continuations included
             dragField: null,           // the chip in the air
             dropTarget: null,          // the element under it, when it may take it
             wires: [],                 // [{x1,y1,x2,y2}] in main-area coordinates
@@ -106,7 +106,7 @@
 
             // ── What the canvas draws ────────────────────────────────────
 
-            computeLayout() {
+            computeLayout(opts) {
                 if (!this.project || !this.template) { this.layout = []; return []; }
                 if (ui.resolver && this.data.mode === 'live') {
                     // Bindings may have changed since the last resolve.
@@ -115,8 +115,29 @@
                 const host = document.getElementById('pe-measure');
                 const res = this.resolver;
                 this.layout = Live.layoutPages(this.project, res, res ? host : null);
+                if ((!opts || opts.persist !== false) && this.canEdit && this.persistOverflowPages(this.layout)) {
+                    this.layout = Live.layoutPages(this.project, res, res ? host : null);
+                }
                 this.data.warnings = res ? Live.warningsFor(this.layout, res, this.project) : [];
                 return this.layout;
+            },
+
+            // Overflow that still has rows and no stored page yet becomes a
+            // real page in the project, so the Elements panel can address it.
+            persistOverflowPages(entries) {
+                const extras = (entries || []).filter(e => e.needsPersist && e.page);
+                if (!extras.length || !this.project || !this.project.pages) return false;
+                extras.forEach(e => {
+                    const pages = this.project.pages;
+                    let after = pages.findIndex(p => p.id === e.originId);
+                    pages.forEach((p, i) => {
+                        if (p.id === e.originId || (p.continues && p.continues.from === e.originId)) after = i;
+                    });
+                    if (after < 0) after = pages.length - 1;
+                    pages.splice(after + 1, 0, e.page);
+                });
+                this.commit();
+                return true;
             },
 
             get wantsBookletExport() {
@@ -128,7 +149,7 @@
             // church printer's booklet mode (MS-589 / MS-592). Other
             // Printables print as laid out. Order is unchanged.
             printPages() {
-                const entries = this.computeLayout();
+                const entries = this.computeLayout({ persist: false });
                 const Ex = global.PrintableExportCore;
                 const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
                 return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
@@ -509,7 +530,11 @@
                 const r = this.repeatContext;
                 if (!r) return [];
                 return this.pages
-                    .map((pg, i) => ({ id: pg.id, label: 'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : ''), has: !!Core.findNode(pg, r.id) }))
+                    .map((pg, i) => ({
+                        id: pg.id,
+                        label: 'Page ' + (i + 1) + (pg.name ? ' · ' + pg.name : ''),
+                        has: !!(Render.overflowingRepeats(pg)[0] || Core.findNode(pg, r.id)),
+                    }))
                     .filter(x => x.has);
             },
 

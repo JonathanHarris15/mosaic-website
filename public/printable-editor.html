@@ -431,7 +431,7 @@
                                                 <option value="">The page the list starts on</option>
                                                 <template x-for="pg in continuationPages" :key="pg.id"><option :value="pg.id" x-text="pg.label"></option></template>
                                             </select></label>
-                                        <p class="pe-hint" x-show="selectedNode.repeat.overflow === 'new-page'">Each new page copies the chosen page, with the list continuing where it left off. Generated pages are drawn below and cannot be edited themselves.</p>
+                                        <p class="pe-hint" x-show="selectedNode.repeat.overflow === 'new-page'">Each new page is a real page you can edit — its own page number, its own elements. The list keeps going with live rows. Extra pages stay if the list shrinks; delete them if you do not want them.</p>
                                     </div>
                                 </div>
                             </template>

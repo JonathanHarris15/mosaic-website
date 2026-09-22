@@ -172,7 +172,7 @@
     // least one row, so a row taller than the page still goes somewhere
     // rather than sending the search round for ever.
     function largestFitting(total, fits, cap) {
-        const limit = cap > 0 ? Math.min(total, cap) : total;
+        const limit = cap > 0 ? Math.min(total, Number(cap) || total) : total;
         if (limit <= 0) return 0;
         if (fits(limit)) return limit;
         let lo = 1, hi = limit;
@@ -192,7 +192,8 @@
         let start = 0, pageIndex = 0;
         while (start < rows.length) {
             const remaining = rows.length - start;
-            const n = largestFitting(remaining, count => fitsOn(pageIndex, start, count), cap);
+            const pageCap = typeof cap === 'function' ? cap(pageIndex) : cap;
+            const n = largestFitting(remaining, count => fitsOn(pageIndex, start, count), pageCap);
             const take = Math.max(1, n);
             plan.push({ pageIndex: pageIndex, start: start, end: start + take });
             start += take;

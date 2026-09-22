@@ -217,10 +217,9 @@ function register(server, deps) {
   tool("printable_add_page", {
     title: "Add a page",
     description:
-      "Put a new page in, at the end or after a page you name. A page a list " +
-      "spills onto is NOT added this way — an iterated element with overflow " +
-      "'new-page' grows its own pages as the data grows, and those are " +
-      "drawn, never stored.",
+      "Put a new page in, at the end or after a page you name. A list with " +
+      "overflow 'new-page' also keeps real pages as the data grows — those " +
+      "are stored and can be edited; you do not add them here.",
     inputSchema: {
       printableId: printableId,
       html: z.string().optional().describe(HTML_HELP),
