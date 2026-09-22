@@ -47,8 +47,10 @@ in.
 
 - Booklets that still take the last word of `name` can still read a suffix
   as a last name. Teaching them the entered last name is a later change.
-- A Name Fix (the member's own Directory Request) is still one string.
-  That request is a different door and is not this decision.
+- A Name Fix (the member's own Directory Request) was left as one string.
+  That carve-out is lifted by [ADR 0070](0070-a-name-fix-is-entered-in-parts.md):
+  a Name Fix is entered in the same parts, and a request that was never
+  entered in parts is not taken apart.
 - Kiosk create may already write a Person, and an editor may already update
   one. Remembering the parts does not widen who may write a name: a member
   still cannot edit their own.
