@@ -168,7 +168,7 @@ function nameFixWrite(request) {
   const proposed = (request && request.proposed) || {};
   if (proposed.nameParts) {
     const saved = PersonName.fieldsForNewPerson(proposed.nameParts);
-    if (saved.fault) return {fault: saved.fault};
+    if (saved.fault) return {fault: PersonName.nameFixFault(saved.fault)};
     return {name: saved.name, nameParts: saved.nameParts};
   }
   const name = (proposed.name || "").trim();

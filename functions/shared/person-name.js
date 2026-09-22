@@ -21,6 +21,10 @@
 
     const NEEDS_FIRST = 'A new person needs a first name.';
     const NEEDS_LAST = 'A new person needs a last name, or mark that they have none.';
+    // A Name Fix is about a Person who already exists. The rule is the same;
+    // the sentence is not a new-person sentence.
+    const FIX_NEEDS_FIRST = 'A first name is required.';
+    const FIX_NEEDS_LAST = 'A last name is required, or mark that there is none.';
 
     function text(value) {
         return String(value == null ? '' : value).trim();
@@ -181,6 +185,12 @@
     // A full name that stays put is still a change when the parts are new.
     // A spelling with no parts is not a change when that spelling is already
     // the full name — clearing a split is not what a same-spelling ask does.
+    function nameFixFault(fault) {
+        if (fault === NEEDS_FIRST) return FIX_NEEDS_FIRST;
+        if (fault === NEEDS_LAST) return FIX_NEEDS_LAST;
+        return fault || '';
+    }
+
     function nameWouldChange(currentName, currentParts, nextName, nextParts) {
         if (text(nextName) !== text(currentName)) return true;
         if (!nextParts) return false;
@@ -215,6 +225,7 @@
         blanksFor,
         sameParts,
         nameWouldChange,
+        nameFixFault,
         fieldsForNewPerson,
         fullName,
         lastWord,

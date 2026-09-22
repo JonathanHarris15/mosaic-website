@@ -175,7 +175,7 @@
 
         if (Names.isNameEntry(proposed)) {
             const saved = Names.fieldsForNewPerson(proposed);
-            if (saved.fault) return { ok: false, error: saved.fault, proposed: null };
+            if (saved.fault) return { ok: false, error: Names.nameFixFault(saved.fault), proposed: null };
             if (!Names.nameWouldChange(currentName, d.currentParts, saved.name, saved.nameParts)) {
                 return { ok: false, error: 'That is the spelling we already have.', proposed: null };
             }

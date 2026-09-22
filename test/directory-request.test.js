@@ -148,13 +148,13 @@ test('a Name Fix with no first name, or no last name without the pass, is refuse
         proposed: { firstName: '  ', lastName: 'Doe', suffix: '', noLastName: false },
     }));
     assert.ok(!noFirst.ok);
-    assert.match(noFirst.error, /first name/);
+    assert.strictEqual(noFirst.error, 'A first name is required.');
 
     const noLast = Core.validateDraft(Object.assign({}, base, {
         proposed: { firstName: 'Jane', lastName: ' ', suffix: '', noLastName: false },
     }));
     assert.ok(!noLast.ok);
-    assert.match(noLast.error, /last name/);
+    assert.strictEqual(noLast.error, 'A last name is required, or mark that there is none.');
 
     const suffixOnly = Core.validateDraft(Object.assign({}, base, {
         proposed: { firstName: 'Jane', lastName: '', suffix: 'Jr.', noLastName: false },
@@ -582,7 +582,7 @@ test('approving a Name Fix is refused when the parts are not saveable', () => {
         target: { exists: true, name: 'Jon Harris', nameParts: null },
     });
     assert.strictEqual(plan.action, 'refuse');
-    assert.match(plan.reason, /first name/);
+    assert.strictEqual(plan.reason, 'A first name is required.');
 });
 
 // ── Approving a family change ────────────────────────────────────────────────
