@@ -20,8 +20,8 @@ const PersonName = require('../public/person-name.js');
 
 function planPerson(person) {
     if (person && person.nameParts) return { write: false, reason: 'already' };
-    const parts = PersonName.partsFromFullName(person && person.name);
-    if (!parts) return { write: false, reason: 'unreadable' };
+    const parts = PersonName.partsToRemember(person);
+    if (!parts) return { write: false, reason: 'not-taken-apart' };
     return { write: true, update: { nameParts: parts } };
 }
 
@@ -67,13 +67,13 @@ if (require.main === module) {
         const snap = await db.collection('people').get();
         let written = 0;
         let already = 0;
-        let unreadable = 0;
+        let notTakenApart = 0;
         for (const doc of snap.docs) {
             const person = doc.data() || {};
             const plan = planPerson(person);
             if (!plan.write) {
                 if (plan.reason === 'already') already += 1;
-                else unreadable += 1;
+                else notTakenApart += 1;
                 continue;
             }
             written += 1;
@@ -83,7 +83,7 @@ if (require.main === module) {
                 await doc.ref.update(plan.update);
             }
         }
-        return { written, already, unreadable };
+        return { written, already, notTakenApart };
     }
 
     (async () => {
@@ -94,7 +94,7 @@ if (require.main === module) {
         console.log(
             '\nDone. ' + (COMMIT ? 'Wrote' : 'Would write') + ' ' + counts.written +
             ', already had parts ' + counts.already +
-            ', could not read ' + counts.unreadable + '.'
+            ', not taken apart ' + counts.notTakenApart + '.'
         );
         if (!COMMIT) console.log('No changes were written. Re-run with --commit.\n');
         process.exit(0);

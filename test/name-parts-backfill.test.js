@@ -29,7 +29,7 @@ test('someone who already has parts is skipped, even when they disagree with the
 
 test('a name that cannot be read is skipped', () => {
     assert.strictEqual(Backfill.planPerson({ name: 'Madonna' }).write, false);
-    assert.strictEqual(Backfill.planPerson({ name: 'Harris, Jonathan' }).reason, 'unreadable');
+    assert.strictEqual(Backfill.planPerson({ name: 'Harris, Jonathan' }).reason, 'not-taken-apart');
     assert.strictEqual(Backfill.planPerson({ name: '   ' }).write, false);
     assert.strictEqual(Backfill.planPerson({}).write, false);
 });

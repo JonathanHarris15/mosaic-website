@@ -976,8 +976,8 @@ document.addEventListener('alpine:init', () => {
                 this.selectedPerson.contact = {};
             }
             // Remembered parts, or a reading of the full name when the parts
-            // would say that same name. An unreadable name stays empty, and
-            // the full name on the record is left alone.
+            // would say that same name. A name that is not taken apart stays
+            // empty, and the full name on the record is left alone.
             this.nameEntry = PersonName.blanksFor(person);
             this.nameFault = '';
             this.showInvolvementModal = true;

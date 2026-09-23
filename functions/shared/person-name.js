@@ -59,11 +59,11 @@
         const trimmed = text(name);
         if (!trimmed || trimmed.indexOf(',') !== -1) return null;
         const tokens = trimmed.split(/\s+/).filter(Boolean);
-        let end = tokens.length;
-        while (end > 0 && isSuffixToken(tokens[end - 1])) end -= 1;
-        const nameTokens = tokens.slice(0, end);
+        let suffixAt = tokens.length;
+        while (suffixAt > 0 && isSuffixToken(tokens[suffixAt - 1])) suffixAt -= 1;
+        const nameTokens = tokens.slice(0, suffixAt);
         if (nameTokens.length < 2) return null;
-        const suffix = tokens.slice(end).join(' ');
+        const suffix = tokens.slice(suffixAt).join(' ');
         const lastName = nameTokens[nameTokens.length - 1];
         const firstName = nameTokens.slice(0, -1).join(' ');
         const parts = {

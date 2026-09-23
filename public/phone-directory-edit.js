@@ -75,6 +75,10 @@
         return String(value == null ? '' : value).trim();
     }
 
+    function spellingChanged(previous, next) {
+        return trim(previous) !== trim(next);
+    }
+
     // The computer's Add Person document: name, contact, birthday, sex,
     // no tags, and no involvement yet. A blank name is refused.
     function addPersonDocument(fields, timestamps) {
@@ -119,7 +123,7 @@
         payload.name = nextName;
         payload.sex = (fields && fields.sex) || null;
         payload.kid = !!(fields && fields.kid);
-        if (options.currentName != null && trim(options.currentName) !== nextName) {
+        if (options.currentName != null && spellingChanged(options.currentName, nextName)) {
             payload.nameParts = CLEAR_NAME_PARTS;
         }
         return payload;
@@ -154,7 +158,7 @@
             next.name = name || DISPLAY_NAME_FALLBACK;
             next.sex = (fields && fields.sex) || null;
             next.kid = !!(fields && fields.kid);
-            if (name !== previous) delete next.nameParts;
+            if (spellingChanged(previous, name)) delete next.nameParts;
         }
         return next;
     }
