@@ -624,6 +624,17 @@
                     </template>
                 </section>
 
+                <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
+                    <template x-for="(w, i) in data.warnings" :key="i">
+                        <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
+                            <span class="pe-warn__label" x-text="w.label"></span>
+                            <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
+                        </button>
+                    </template>
+                </section>
+                <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
+
                 <div x-show="showCatalog">
 
                     <template x-for="region in regions" :key="region.name">
@@ -733,17 +744,6 @@
                             </template>
                         </section>
                     </template>
-
-                    <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
-                        <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
-                        <template x-for="(w, i) in data.warnings" :key="i">
-                            <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
-                                <span class="pe-warn__label" x-text="w.label"></span>
-                                <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
-                            </button>
-                        </template>
-                    </section>
-                    <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
                 </div>
             </div>
         </aside>

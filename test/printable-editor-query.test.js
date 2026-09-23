@@ -82,6 +82,15 @@ test('the query preview names a row in words, not by its id', () => {
     assert.match(js, /names: rows\.slice\(0, 8\)\.map\(previewName\)/, 'the builder\'s preview uses it');
 });
 
+test('what could not be pulled stays in the drawer while the catalog is hidden', () => {
+    const catalogAt = html.indexOf('<div x-show="showCatalog">');
+    const warnAt = html.indexOf('pe-drawer__section--warn');
+    const okAt = html.indexOf('Every wired field has a value today.');
+    assert.ok(catalogAt > 0 && warnAt > 0 && okAt > 0);
+    assert.ok(warnAt < catalogAt, 'Not all data could be pulled is not inside the hidden catalog');
+    assert.ok(okAt < catalogAt, 'nor is the all-clear');
+});
+
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires
         || globalThis.PrintableEditorWires;
