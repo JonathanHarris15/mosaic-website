@@ -750,8 +750,17 @@
             // the DOM, which is why it waits a drawn frame. `scrollHeight` on a
             // cell still clipped to the old height is the only honest answer to
             // "how tall would this be if you let it".
+            // ⚠ AND THE PIN IS TAKEN NOW, NOT REMEMBERED FROM PAGE LOAD. This
+            // used to measure only when it had no number at all, so whatever
+            // the first frame after loading happened to say stood for the rest
+            // of the visit — and that frame is taken before the display face
+            // has arrived, while the toolbar is still a line taller than it
+            // ends up. Every row was then pinned ten pixels under the height it
+            // was actually drawn at, so opening one week dropped all five.
+            // Nothing is open yet at this point, so the rows are still fitted
+            // and the browser's answer is the one we want.
             openWeek(month, index, date) {
-                if (!this.cellHeight) this.measureCell();
+                this.measureCell();
                 stopTimer(this.closeTimer);
                 this.expandedWeek = this.weekKey(month, index);
                 this.expandedFrom = date || null;

@@ -2989,6 +2989,36 @@ test('opening a day opens its WEEK, and the rows around it hold still', () => {
     assert.strictEqual(page.cellStyle('2026-08', 28), '', 'the rows stayed pinned after closing');
 });
 
+test('the height every row is pinned to is taken when the week opens, not remembered', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. `openWeek` used to measure only when it had no
+    // number at all, so whatever the first frame after loading happened to say
+    // stood for the rest of the visit — and that frame is taken before the
+    // display face has arrived, while the toolbar is still a line taller than
+    // it ends up. Every row was then pinned about ten pixels under the height
+    // it was actually drawn at, so opening one week dropped all five. One row
+    // was asked to move and the whole month moved.
+    //
+    // Nothing is open at the moment of the press, so the rows are still fitted
+    // and the browser's answer is the one to keep.
+    const cell = { offsetParent: {}, offsetHeight: 128, getBoundingClientRect: () => ({ height: 128.05 }) };
+    const month = { querySelector: () => cell };
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage'));
+    page.$refs.monthRailWide = {
+        offsetParent: {}, offsetWidth: 900,
+        querySelectorAll: sel => (sel === '[data-rail-month]' ? [month, month, month, month, month] : []),
+    };
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+    page.cellHeight = 118.44;   // what the page loaded with, and it is wrong
+
+    page.openWeek('2026-08', 35, '2026-08-30');
+
+    assert.strictEqual(page.cellHeight, 128.05,
+        'the week opened on a height remembered from page load');
+    assert.strictEqual(page.cellStyle('2026-08', 28), 'height:128.05px',
+        'a week nobody opened was pinned to a stale height, so it moved too');
+});
+
 test('a row height belongs to the month it was measured in', () => {
     // ⚠ THE BUG THIS EXISTS FOR. Five months are laid out at once and they do
     // not span the same number of weeks: June 2026 takes five rows, August
