@@ -38,6 +38,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         init() {
+            // The phone shell hides this page's header and draws its own.
+            // The hymn's name lives in that header, so the shell has to hear it
+            // or the open hymn has no title.
+            const publishTitle = () => {
+                if (window.MOSAIC_SHELL !== 'mobile') return;
+                if (typeof window.setMobileHeaderTitle !== 'function') return;
+                window.setMobileHeaderTitle(this.headerTitle);
+            };
+            this.$watch('headerTitle', publishTitle);
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', publishTitle);
+            } else {
+                publishTitle();
+            }
             const start = (user) => {
                 const ready = user
                     ? getUserData(user.uid).then((userData) => {

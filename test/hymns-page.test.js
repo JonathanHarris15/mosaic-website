@@ -172,6 +172,30 @@ test('the computer has one Hymns page and the old doors open it', () => {
     assert.doesNotMatch(read('service-builder.html'), /manager\.html\?name=/);
 });
 
+test('opening a hymn from the list keeps that hymn, including an older sheet page', () => {
+    const page = read('hymns.html');
+    // The open hymn is `hymn`. A row of the same name makes Alpine write
+    // the click onto the row, and the detail is blank on the phone and the desktop.
+    assert.doesNotMatch(page, /x-for="hymn in filteredHymns"/);
+    assert.match(page, /x-for="listedHymn in filteredHymns"/);
+    assert.match(page, /showHymn\(listedHymn\)/);
+    assert.match(page, /x-text="listedHymn\.hymn_name"/);
+    assert.match(page, /x-text="headerTitle"/);
+    assert.deepEqual(HymnsPage.sheetPages({
+        name: 'SATB',
+        pages: [{ url: 'sheet.png' }, 'plain.png', { src: 'legacy.png' }, ''],
+    }), ['sheet.png', 'plain.png', 'legacy.png']);
+});
+
+test('the phone shell names the open hymn and can return to the list', () => {
+    const page = read('hymns.html');
+    const js = read('hymns.js');
+    assert.match(js, /setMobileHeaderTitle/);
+    assert.match(page, /class="hymn-shell-back/);
+    assert.match(page, /@click="leaveView\(\)"/);
+    assert.match(page, /html\.shell-mobile \.hymn-shell-back/);
+});
+
 test('the phone opens the Hymns page and keeps the stored home key', () => {
     const destinations = require('../public/mobile/destinations.js');
     const hymn = destinations.DESTINATIONS.find((item) => item.key === 'hymn-directory');

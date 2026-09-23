@@ -61,14 +61,18 @@
         return '';
     }
 
-    // Sheet pages of the version that prints, in that version's order.
-    // Blank slots are dropped here so a guide and a printable cannot disagree
-    // about whether an empty string is a page.
-    function defaultPages(hymn) {
-        const version = defaultVersion(hymn);
+    // Sheet pages of one version, in that version's order. A stored page is a
+    // url or an older object that carried one. Blank slots are dropped so a
+    // guide, a printable, and the hymn itself cannot disagree.
+    function pagesOf(version) {
         const pages = version && version.pages;
         if (!Array.isArray(pages)) return [];
         return pages.map(pageUrl).filter(function (url) { return !!url; });
+    }
+
+    // Sheet pages of the version that prints.
+    function defaultPages(hymn) {
+        return pagesOf(defaultVersion(hymn));
     }
 
     // Star one version. The list stays in the order it was given.
@@ -115,6 +119,7 @@
     const HymnVersions = {
         isDefault: isDefault,
         defaultVersion: defaultVersion,
+        pagesOf: pagesOf,
         defaultPages: defaultPages,
         star: star,
         addVersion: addVersion,

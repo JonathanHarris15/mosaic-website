@@ -27,6 +27,9 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
+        /* The shell hides the page header, and with it the way back to the list. */
+        .hymn-shell-back { display: none; }
+        html.shell-mobile .hymn-shell-back { display: inline-flex; }
     </style>
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
@@ -78,12 +81,14 @@
             <p class="font-label-md text-label-md text-on-surface-variant"
                x-text="filteredHymns.length + (filteredHymns.length === 1 ? ' hymn' : ' hymns')"></p>
             <div class="flex flex-col gap-sm">
-                <template x-for="hymn in filteredHymns" :key="hymn.id">
-                    <button type="button" @click="showHymn(hymn)"
+                <!-- listedHymn, not hymn: Alpine writes this.hymn onto a loop
+                     variable of that name, and the detail then renders blank. -->
+                <template x-for="listedHymn in filteredHymns" :key="listedHymn.id">
+                    <button type="button" @click="showHymn(listedHymn)"
                             class="text-left bg-surface-container-lowest border border-outline-variant rounded-xl p-md hover:border-primary transition-colors">
-                        <span class="block font-headline-md text-headline-md text-on-surface" x-text="hymn.hymn_name"></span>
+                        <span class="block font-headline-md text-headline-md text-on-surface" x-text="listedHymn.hymn_name"></span>
                         <span class="block font-body-md text-body-md text-on-surface-variant mt-1"
-                              x-text="[hymn.lyrics_writer, hymn.music_writer].filter(Boolean).join(' · ')"></span>
+                              x-text="[listedHymn.lyrics_writer, listedHymn.music_writer].filter(Boolean).join(' · ')"></span>
                     </button>
                 </template>
                 <p x-show="filteredHymns.length === 0" class="font-body-md text-on-surface-variant">No hymns match.</p>
@@ -94,6 +99,10 @@
             <p x-show="missing" class="font-body-md">That hymn is not in the book.</p>
             <template x-if="hymn">
                 <div class="flex flex-col gap-md">
+                    <button type="button" class="hymn-shell-back m-back self-start" @click="leaveView()" aria-label="Hymns">
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                        <span class="m-back__label">Hymns</span>
+                    </button>
                     <div class="flex flex-wrap gap-2">
                         <button type="button" @click="copyAttribution()" class="m-btn m-btn--secondary m-btn--sm">
                             <span class="m-btn__label">Copy attribution</span>

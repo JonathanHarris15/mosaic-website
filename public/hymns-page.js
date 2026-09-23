@@ -186,7 +186,7 @@
     }
 
     function sheetPages(version) {
-        return ((version && version.pages) || []).filter(function (url) { return !!url; });
+        return HymnVersions.pagesOf(version);
     }
 
     function sheetFileName(hymnName, versionName, pageNumber) {
