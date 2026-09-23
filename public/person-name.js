@@ -2,9 +2,10 @@
 //
 // The full name is those parts in that order, skipping a blank. That full
 // name is the only name every screen reads. The parts are remembered beside
-// it (nameParts), never as a top-level firstName/lastName pair. A person who
-// only has a full name is not parsed apart. A person with no last name is
-// still a person. (ADR 0069, MS-602)
+// it (nameParts), never as a top-level firstName/lastName pair. A full name
+// that was never entered in parts is taken apart only when the parts say
+// that same name (ADR 0074). A person with no last name is still a person.
+// (ADR 0069, MS-602)
 //
 // Loaded as a classic <script> (window.PersonName) and exported for Node tests.
 
@@ -25,6 +26,54 @@
     function lastWord(name) {
         const parts = text(name).split(/\s+/).filter(Boolean);
         return parts.length ? parts[parts.length - 1] : '';
+    }
+
+    // Trailing tokens that are a suffix, never a last name. Compared without
+    // regard to case; the token is stored as written so the full name can be
+    // joined back to itself. (ADR 0074)
+    const SUFFIXES = {
+        'jr': true, 'jr.': true, 'sr': true, 'sr.': true,
+        'ii': true, 'iii': true, 'iv': true, 'v': true,
+        'vi': true, 'vii': true, 'viii': true, 'ix': true, 'x': true,
+        '2nd': true, '3rd': true, '4th': true,
+        'esq': true, 'esq.': true,
+        'md': true, 'm.d.': true, 'phd': true, 'ph.d.': true,
+    };
+
+    function isSuffixToken(token) {
+        return SUFFIXES[String(token).toLowerCase()] === true;
+    }
+
+    // An existing full name, taken apart only when the parts say that same
+    // name. One word, a comma, or a join that would not match: nothing.
+    // The no-last-name pass is never set here. (ADR 0074)
+    function partsFromFullName(name) {
+        const trimmed = text(name);
+        if (!trimmed || trimmed.indexOf(',') !== -1) return null;
+        const tokens = trimmed.split(/\s+/).filter(Boolean);
+        let end = tokens.length;
+        while (end > 0 && isSuffixToken(tokens[end - 1])) end -= 1;
+        const nameTokens = tokens.slice(0, end);
+        if (nameTokens.length < 2) return null;
+        const suffix = tokens.slice(end).join(' ');
+        const lastName = nameTokens[nameTokens.length - 1];
+        const firstName = nameTokens.slice(0, -1).join(' ');
+        const parts = {
+            firstName: firstName,
+            lastName: lastName,
+            suffix: suffix,
+            noLastName: false,
+        };
+        const composed = [firstName, lastName, suffix].filter(Boolean).join(' ');
+        if (composed !== trimmed) return null;
+        return parts;
+    }
+
+    // Remembered parts win. A person who has none is read from the full name.
+    // A reading that refuses leaves nothing to remember.
+    function partsToRemember(person) {
+        if (person && person.nameParts) return person.nameParts;
+        return partsFromFullName(person && person.name);
     }
 
     // What a greeter or an editor typed into the three blanks. A row with
@@ -221,6 +270,8 @@
         fieldsForNewPerson,
         fullName,
         lastWord,
+        partsFromFullName,
+        partsToRemember,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
