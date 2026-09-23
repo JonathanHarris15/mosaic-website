@@ -1,10 +1,13 @@
-# ADR 0073 — An unsplit name is taken apart only when the parts say the same name
+# ADR 0074 — An unsplit name is taken apart only when the parts say the same name
 
 **Status:** Accepted
 **Date:** 2026-09-23
 **Amends:** [ADR 0069](0069-a-persons-name-is-entered-in-parts.md) (the sentence that existing people are not parsed apart)
 **Follows:** [ADR 0070](0070-a-name-fix-is-entered-in-parts.md)
 **Ticket:** MS-659
+
+Numbered 0074 so it does not share 0073 with the hymn default-version
+decision (MS-661).
 
 ## Context
 
