@@ -557,7 +557,7 @@
                                             <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
                                         </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
-                                        <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" placeholder="any" /></label>
+                                        <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" :placeholder="spec.placeholder || 'any'" /></label>
                                     <label class="pe-f pe-f--check" x-show="spec.kind === 'bool'"><span x-text="spec.label"></span>
                                         <input type="checkbox" :checked="!!repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.checked)" /></label>
                                     <div class="pe-f" x-show="spec.kind === 'when'"><span x-text="spec.label"></span>
@@ -570,9 +570,22 @@
                                     <div x-show="spec.kind === 'range'">
                                         <div class="pe-f"><span x-text="spec.label"></span>
                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRepeatParam(spec.key, { mode: 'relative', fromDays: 0, toDays: 14 })">From today</button>
-                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRepeatParam(spec.key, { mode: 'static', from: '', to: '' })">Fixed dates</button>
+                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'weeks'" @click="setRangeMode(spec, 'weeks')" x-text="rangeUnitLabel(spec)"></button>
+                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRangeMode(spec, 'relative')">From today</button>
+                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRangeMode(spec, 'static')">Fixed dates</button>
                                             </span></div>
+                                        <div x-show="rangeMode(repeatParam(spec.key)) === 'weeks'">
+                                            <label class="pe-f"><span x-text="'How many ' + (spec.unit || 'weeks')">How many</span>
+                                                <input class="pe-in" type="number" min="1" max="52" step="1" :value="(repeatParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
+                                            <div class="pe-f"><span>From which Sunday</span>
+                                                <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'last'" @click="setRangePart(spec, 'start', { mode: 'last' })">Last</button>
+                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'this'" @click="setRangePart(spec, 'start', { mode: 'this' })">This</button>
+                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'next'" @click="setRangePart(spec, 'start', { mode: 'next' })">Next</button>
+                                                    <input type="date" class="pe-in pe-in--date" :value="((repeatParam(spec.key) || {}).start || {}).date || ''" @change="setRangePart(spec, 'start', { mode: 'date', date: $event.target.value })" />
+                                                </span></div>
+                                            <p class="pe-hint" x-text="rangeWords(spec)"></p>
+                                        </div>
                                         <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">
                                             <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).fromDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { fromDays: Number($event.target.value) }))" /></label>
                                             <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).toDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { toDays: Number($event.target.value) }))" /></label>
@@ -586,6 +599,11 @@
                                         <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
                                             <option value="">Every event</option>
                                             <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
+                                        </select></label>
+                                    <label class="pe-f" x-show="spec.kind === 'role'"><span x-text="spec.label"></span>
+                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
+                                            <option value="">No role</option>
+                                            <template x-for="r in rolesFor(repeatParam('seriesId'))" :key="r.slug"><option :value="r.slug" x-text="r.name"></option></template>
                                         </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
                                         <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
@@ -610,6 +628,17 @@
                         </div>
                     </template>
                 </section>
+
+                <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
+                    <template x-for="(w, i) in data.warnings" :key="i">
+                        <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
+                            <span class="pe-warn__label" x-text="w.label"></span>
+                            <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
+                        </button>
+                    </template>
+                </section>
+                <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
 
                 <div x-show="showCatalog">
 
@@ -720,17 +749,6 @@
                             </template>
                         </section>
                     </template>
-
-                    <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
-                        <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
-                        <template x-for="(w, i) in data.warnings" :key="i">
-                            <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
-                                <span class="pe-warn__label" x-text="w.label"></span>
-                                <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
-                            </button>
-                        </template>
-                    </section>
-                    <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
                 </div>
             </div>
         </aside>
