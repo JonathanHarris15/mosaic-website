@@ -47,11 +47,6 @@ document.addEventListener('alpine:init', () => {
                 window.setMobileHeaderTitle(this.headerTitle);
             };
             this.$watch('headerTitle', publishTitle);
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', publishTitle);
-            } else {
-                publishTitle();
-            }
             const start = (user) => {
                 const ready = user
                     ? getUserData(user.uid).then((userData) => {
