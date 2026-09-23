@@ -83,7 +83,7 @@
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
                 if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
-                if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + (row.name || row.label || row.date || row._id || 'this row') + '.' };
+                if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + rowName(row) + '.' };
                 return { ok: true, value: v };
             }
             if (!bind.source) return { ok: false, why: 'Not wired.' };
@@ -93,6 +93,13 @@
             const v = one[bind.field];
             if (v === '' || v == null) return { ok: false, why: r.warnings[0] || ('No ' + fieldName(bind) + ' to show.') };
             return { ok: true, value: v };
+        }
+
+        // An event's dates share its name, so a dated row says which date.
+        function rowName(row) {
+            const what = row.name || row.label || '';
+            if (what && row.date) return what + ' on ' + row.date;
+            return what || row.date || row._id || 'this row';
         }
 
         function fieldName(bind) {

@@ -54,6 +54,15 @@ test('an empty field on a dated row is named by its date in words', () => {
     assert.doesNotMatch(miss.why, /2026-09-20/);
 });
 
+test('an empty field on an event date names the event and the date, so a rota says which week', () => {
+    const res = Live.resolver(project(), { people: [], services: {} }, { today: '2026-09-03', level: 'editor' });
+    const miss = res.valueFor({ scope: 'item', field: 'holder' }, { _id: 'mm_2026-10-22', name: 'Members\' meeting', date: 'Thursday 22 October 2026', holder: '' });
+    assert.equal(miss.ok, false);
+    assert.match(miss.why, /Members' meeting on Thursday 22 October 2026\.$/);
+    const person = res.valueFor({ scope: 'item', field: 'email' }, { _id: 'a', name: 'Anna Baker', email: '' });
+    assert.match(person.why, /for Anna Baker\.$/, 'a row with no date is named as before');
+});
+
 test('a preaching schedule is a Repeat over Sundays: five rows, TBA where nobody is down', () => {
     const p = Core.buildPrintable({
         name: 'Preaching schedule',
