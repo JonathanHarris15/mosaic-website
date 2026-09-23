@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const {assertCanDecide} = require('../functions/access-assert.js');
+const {assertCanDecide, assertWritesAsEditor} = require('../functions/access-assert.js');
 
 // MS-594 — sendPrayerRequestNow (and any other canDecide callable) must
 // admit a Pastoral Assistant the same way AccessCore does. Counted-as-elder
@@ -61,6 +61,30 @@ test('a missing account is unauthenticated', async () => {
         () => assertCanDecide(fakeDb({}), null),
         (err) => err && err.code === 'unauthenticated'
     );
+});
+
+test('reachability is a directory-editor write', async () => {
+    const editor = fakeDb({'uid-1': {permissionLevel: 'editor'}});
+    await assertWritesAsEditor(editor, {uid: 'uid-1'});
+    await assert.rejects(
+        () => assertWritesAsEditor(
+            fakeDb({'uid-1': {permissionLevel: 'member', pastoralAssistant: true}}),
+            {uid: 'uid-1'}),
+        (err) => err && err.code === 'permission-denied'
+    );
+});
+
+test('notificationReachability returns user ids and not tokens', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'index.js'),
+        'utf8'
+    );
+    const start = src.indexOf('exports.notificationReachability');
+    assert.ok(start !== -1);
+    const body = src.slice(start, start + 450);
+    assert.match(body, /assertWritesAsEditor/);
+    assert.match(body, /return \{uids\}/);
+    assert.doesNotMatch(body, /token/);
 });
 
 test('sendPrayerRequestNow asks assertCanDecide, not counted-as-elder', () => {

@@ -79,7 +79,10 @@ const mcpServer = require("./mcp-server");
 // Guidance file writes, restores, and the shape of a version (MS-262).
 const gw = require("./guidance-writes");
 const guidanceCore = require("./shared/mcp-guidance-core.js");
-const {assertCanDecide: assertCanDecideCore} = require("./access-assert");
+const {
+  assertCanDecide: assertCanDecideCore,
+  assertWritesAsEditor: assertWritesAsEditorCore,
+} = require("./access-assert");
 
 /**
  * AccessCore canDecide for a callable. The core throws a plain Error with
@@ -99,6 +102,43 @@ async function assertCanDecide(db, authCtx) {
     }
     throw err;
   }
+}
+
+/**
+ * Map a directory-editor refusal onto HttpsError.
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertWritesAsEditor(db, authCtx) {
+  try {
+    await assertWritesAsEditorCore(db, authCtx);
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * User ids that currently have a device token. The token string stays here.
+ * @param {Object} db Firestore instance.
+ * @return {Promise<Array<string>>}
+ */
+async function listTokenOwnerUids(db) {
+  const snap = await db.collectionGroup("push_tokens").get();
+  const seen = {};
+  const uids = [];
+  snap.docs.forEach((doc) => {
+    const parent = doc.ref.parent && doc.ref.parent.parent;
+    const uid = parent && parent.id;
+    if (!uid || seen[uid] || !doc.get("token")) return;
+    seen[uid] = true;
+    uids.push(uid);
+  });
+  return uids;
 }
 
 /**
@@ -2832,6 +2872,21 @@ exports.convertServiceInvolvement = onSchedule(
 
       log(`convertServiceInvolvement: wrote ${written} serve record(s) ` +
           `across ${converted} Service(s).`);
+    },
+);
+
+/**
+ * Which linked Users have a live device token. Editors use this to derive
+ * "cannot be reached" without reading another person's token. Returns ids
+ * only.
+ */
+exports.notificationReachability = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertWritesAsEditor(db, request.auth);
+      const uids = await listTokenOwnerUids(db);
+      return {uids};
     },
 );
 

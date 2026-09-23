@@ -54,7 +54,22 @@ async function assertCanDecide(db, authCtx) {
   }
 }
 
+/**
+ * Throws unless the caller writes the Membership Directory.
+ * Editor, admin, elder, super admin. A Pastoral Assistant does not.
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertWritesAsEditor(db, authCtx) {
+  const account = await loadAccount(db, authCtx);
+  if (!Access.writesAsEditor(account)) {
+    throw refuse("permission-denied", "Editors only.");
+  }
+}
+
 module.exports = {
   loadAccount,
   assertCanDecide,
+  assertWritesAsEditor,
 };
