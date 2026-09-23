@@ -109,11 +109,14 @@
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    // "Sunday 14 June 2026" — how a date reads on paper.
+    // "Sunday 14 June 2026" — how a date reads on paper. `monthDay` is
+    // "Jun 14", the designed Service Guide's preaching-schedule column.
     function formatDate(dateStr, style) {
         if (!isDateStr(dateStr)) return String(dateStr || '');
         const d = parseDate(dateStr);
         if (style === 'short') return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3);
+        if (style === 'monthDay') return MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+        if (style === 'weekday') return DAYS[d.getDay()];
         if (style === 'medium') return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
         return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     }
@@ -137,13 +140,51 @@
         return thisSunday;
     }
 
-    // A date range, static (two dates) or relative (days from today, so the
-    // same Printable shows a different fortnight when it is opened next
-    // month). Always ordered, never backwards.
+    function describeWhen(when) {
+        const w = when || {};
+        if (w.mode === 'next') return 'next Sunday';
+        if (w.mode === 'last') return 'last Sunday';
+        if (w.mode === 'date' && isDateStr(w.date)) return 'the Sunday of ' + formatDate(w.date, 'medium');
+        return 'this Sunday';
+    }
+
+    // A count of weeks is whole, at least one, and at most a year — a
+    // Printable is not a two-year calendar.
+    const WEEKS_MAX = 52;
+
+    function weeksCount(n) {
+        const v = Math.round(Number(n));
+        if (!Number.isFinite(v) || v < 1) return 1;
+        return Math.min(v, WEEKS_MAX);
+    }
+
+    // How many event dates a "next N" query takes. A monthly meeting
+    // needs a long lookahead, not N weeks.
+    function datesCount(n) {
+        const v = Math.round(Number(n));
+        if (!Number.isFinite(v) || v < 1) return 1;
+        return Math.min(v, 24);
+    }
+
+    // A date range, in one of four ways:
+    //   weeks    — a count of weeks from a Sunday ("the next five Sundays",
+    //              "the four weeks from this Sunday"), so nobody adds up days;
+    //   count    — the next N dates of something, with a long lookahead so a
+    //              monthly meeting is not missed because the window was a fortnight;
+    //   relative — days from today;
+    //   static   — two dates.
+    // Weeks, count and relative move with today, so the same Printable shows
+    // the next five Sundays whenever it is opened. Always ordered, never backwards.
     function resolveRange(range, today) {
         const r = range || {};
         let from, to;
-        if (r.mode === 'static' && isDateStr(r.from) && isDateStr(r.to)) {
+        if (r.mode === 'weeks') {
+            from = resolveWhen(r.start, today);
+            to = addDays(from, 7 * weeksCount(r.count) - 1);
+        } else if (r.mode === 'count') {
+            from = isDateStr(r.from) ? r.from : today;
+            to = addDays(from, Math.max(120, datesCount(r.count) * 45));
+        } else if (r.mode === 'static' && isDateStr(r.from) && isDateStr(r.to)) {
             from = r.from; to = r.to;
         } else {
             const a = Number.isFinite(Number(r.fromDays)) ? Number(r.fromDays) : 0;
@@ -154,18 +195,48 @@
         return { from: from, to: to };
     }
 
-    function describeRange(range) {
+    // `unit` is what a count of weeks is called on this list: the Sundays
+    // list counts Sundays, event dates count weeks.
+    function describeRange(range, unit) {
         const r = range || {};
+        if (r.mode === 'weeks') {
+            const n = weeksCount(r.count);
+            const start = describeWhen(r.start);
+            if (unit === 'Sundays') return n === 1 ? 'for ' + start : 'for the ' + n + ' Sundays from ' + start;
+            return n === 1 ? 'in the week from ' + start : 'in the ' + n + ' weeks from ' + start;
+        }
+        if (r.mode === 'count') {
+            const n = datesCount(r.count);
+            return n === 1 ? 'the next date' : 'the next ' + n + ' dates';
+        }
         if (r.mode === 'static') return 'from ' + formatDate(r.from, 'medium') + ' to ' + formatDate(r.to, 'medium');
         const a = Number(r.fromDays) || 0, b = Number.isFinite(Number(r.toDays)) ? Number(r.toDays) : 14;
         const say = n => n === 0 ? 'today' : n > 0 ? n + ' day' + (n === 1 ? '' : 's') + ' from now' : (-n) + ' day' + (n === -1 ? '' : 's') + ' ago';
         return 'from ' + say(a) + ' to ' + say(b);
     }
 
+    // What a range param holds when the query builder switches it to
+    // another way of counting: the catalog's own default when it counts
+    // that way, a plain one otherwise.
+    function rangeForMode(spec, mode) {
+        const d = spec && spec.default;
+        if (d && d.mode === mode) return clone(d);
+        if (mode === 'weeks') return { mode: 'weeks', count: 4, start: { mode: 'this' } };
+        if (mode === 'count') return { mode: 'count', count: 6 };
+        if (mode === 'static') return { mode: 'static', from: '', to: '' };
+        return { mode: 'relative', fromDays: 0, toDays: 14 };
+    }
+
     // ── The catalog ──────────────────────────────────────────────────────────
 
     const WHEN_PARAM = { key: 'when', label: 'Which Sunday', kind: 'when', default: { mode: 'this' } };
-    const RANGE_PARAM = { key: 'range', label: 'Dates', kind: 'range', default: { mode: 'relative', fromDays: 0, toDays: 14 } };
+    const RANGE_PARAM = { key: 'range', label: 'Dates', kind: 'range', unit: 'weeks', default: { mode: 'relative', fromDays: 0, toDays: 14 } };
+    const SUNDAYS_RANGE_PARAM = { key: 'range', label: 'Dates', kind: 'range', unit: 'Sundays', default: { mode: 'weeks', count: 5, start: { mode: 'this' } } };
+
+    // A roster is an editor's to read (EventsStore gives anyone else their
+    // own row only), so the rota on event dates is too — the role to ask
+    // about, who is down, and who has not confirmed yet.
+    const ROTA_LEVEL = 'editor';
 
     const LITURGY_ORDER = ['baptism', 'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'callToConfession',
         'assuranceOfPardon', 'hymnMid1', 'hymnMid2', 'scriptureReading', 'prayerMale', 'prayerFemale', 'sermon',
@@ -181,6 +252,30 @@
         preparatoryHymn: 'Preparatory hymn', hymn1: 'First hymn', hymn2: 'Second hymn', hymnMid1: 'Third hymn',
         hymnMid2: 'Fourth hymn', hymnEnd1: 'Closing hymn', hymnEnd2: 'Final hymn',
     };
+
+    // What a row of one Sunday carries — the single Sunday and each row of
+    // the Sundays list are the same shape. Who is preaching and on what come
+    // first: that is the preaching schedule.
+    const SUNDAY_FIELDS = [
+        { key: 'date', label: 'Date', kind: 'date' },
+        { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
+        { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
+        { key: 'preacher', label: 'Preacher', kind: 'text' },
+        { key: 'sermon', label: 'Sermon passage', kind: 'text' },
+        { key: 'theme', label: 'Theme', kind: 'text' },
+        { key: 'keyVerse', label: 'Key verse', kind: 'text' },
+        { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
+        { key: 'musicLeader', label: 'Music leader', kind: 'text' },
+        { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
+        { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
+        { key: 'callToWorship', label: 'Call to worship', kind: 'text' },
+        { key: 'callToConfession', label: 'Call to confession', kind: 'text' },
+        { key: 'assuranceOfPardon', label: 'Assurance of pardon', kind: 'text' },
+        { key: 'scriptureReading', label: 'Scripture reading', kind: 'text' },
+        { key: 'benediction', label: 'Benediction', kind: 'text' },
+    ].concat(HYMN_SLOTS.map(k => ({ key: k, label: HYMN_SLOT_LABELS[k], kind: 'text' })), [
+        { key: 'baptism', label: 'Baptism candidates', kind: 'text' },
+    ]);
 
     const SOURCES = [
         {
@@ -272,30 +367,7 @@
             key: 'sunday', region: 'Sunday', label: 'A Sunday', shape: 'single', minLevel: 'viewer',
             blurb: 'This Sunday, next Sunday, or a date — its theme, verse, people and every slot in the order of service.',
             params: [WHEN_PARAM],
-            fields: [
-                { key: 'date', label: 'Date', kind: 'date' },
-                { key: 'theme', label: 'Theme', kind: 'text' },
-                { key: 'keyVerse', label: 'Key verse', kind: 'text' },
-                { key: 'preacher', label: 'Preacher', kind: 'text' },
-                { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
-                { key: 'musicLeader', label: 'Music leader', kind: 'text' },
-                { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
-                { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
-                { key: 'callToWorship', label: 'Call to worship', kind: 'text' },
-                { key: 'callToConfession', label: 'Call to confession', kind: 'text' },
-                { key: 'assuranceOfPardon', label: 'Assurance of pardon', kind: 'text' },
-                { key: 'scriptureReading', label: 'Scripture reading', kind: 'text' },
-                { key: 'sermon', label: 'Sermon passage', kind: 'text' },
-                { key: 'benediction', label: 'Benediction', kind: 'text' },
-                { key: 'preparatoryHymn', label: 'Preparatory hymn', kind: 'text' },
-                { key: 'hymn1', label: 'First hymn', kind: 'text' },
-                { key: 'hymn2', label: 'Second hymn', kind: 'text' },
-                { key: 'hymnMid1', label: 'Third hymn', kind: 'text' },
-                { key: 'hymnMid2', label: 'Fourth hymn', kind: 'text' },
-                { key: 'hymnEnd1', label: 'Closing hymn', kind: 'text' },
-                { key: 'hymnEnd2', label: 'Final hymn', kind: 'text' },
-                { key: 'baptism', label: 'Baptism candidates', kind: 'text' },
-            ],
+            fields: SUNDAY_FIELDS,
         },
         {
             key: 'sunday_rows', region: 'Sunday', label: 'Order of service, as rows', shape: 'list', minLevel: 'viewer',
@@ -319,6 +391,10 @@
                 { key: 'pageCount', label: 'Pages in this hymn', kind: 'number' },
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
             ],
+            filters: [
+                { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', options: [{ value: '', label: 'Every hymn' }]
+                    .concat(HYMN_SLOTS.map(k => ({ value: k, label: HYMN_SLOT_LABELS[k] }))) },
+            ],
         },
         {
             key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', minLevel: 'viewer',
@@ -331,27 +407,49 @@
             ],
         },
         {
-            key: 'sundays', region: 'Sunday', label: 'Sundays in a range', shape: 'list', minLevel: 'viewer',
-            blurb: 'A preaching schedule: one row per Sunday between two dates.',
-            params: [RANGE_PARAM],
+            key: 'sunday_announcements', region: 'Sunday', label: 'Announcements of a Sunday', shape: 'list', minLevel: 'viewer',
+            blurb: 'One row per announcement handed out that Sunday — typed announcements first, then printed Event announcements. The booklet text still joins them into one field.',
+            params: [WHEN_PARAM],
             fields: [
-                { key: 'date', label: 'Date', kind: 'date' },
-                { key: 'theme', label: 'Theme', kind: 'text' },
-                { key: 'preacher', label: 'Preacher', kind: 'text' },
-                { key: 'sermon', label: 'Sermon passage', kind: 'text' },
+                { key: 'date', label: 'Sunday', kind: 'date' },
+                { key: 'title', label: 'Title', kind: 'text' },
+                { key: 'content', label: 'Body', kind: 'text' },
+                { key: 'text', label: 'Title and body', kind: 'text' },
+                { key: 'number', label: 'Announcement number', kind: 'number' },
+            ],
+        },
+        {
+            key: 'sundays', region: 'Sunday', label: 'Sundays', shape: 'list', minLevel: 'viewer',
+            blurb: 'One row per Sunday, planned or not — the next five for a preaching schedule, or just this Sunday for a cover. Whatever is not planned yet reads as TBA.',
+            params: [SUNDAYS_RANGE_PARAM],
+            fields: SUNDAY_FIELDS,
+            filters: [
+                { key: 'which', label: 'Which Sundays', kind: 'choice', default: 'every', options: [
+                    { value: 'every', label: 'Every Sunday' },
+                    { value: 'planned', label: 'Only Sundays already planned' },
+                ] },
+                { key: 'notPlanned', label: 'Not planned yet reads as', kind: 'text', default: 'TBA', placeholder: 'Blank: the stand-in shows' },
             ],
         },
         {
             key: 'event_dates', region: 'Events', label: 'Event dates in a range', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per date something is on, between two dates. Cancelled dates are left out.',
-            params: [RANGE_PARAM, { key: 'seriesId', label: 'Only this event', kind: 'series', default: '' }],
+            blurb: 'One row per date something is on — the weeks from a Sunday, or between two dates. Cancelled dates are left out. An editor can add who is down for a role on each date, for a rota.',
+            params: [
+                RANGE_PARAM,
+                { key: 'seriesId', label: 'Only this event', kind: 'series', default: '' },
+                { key: 'roleSlug', label: 'Who is down for', kind: 'role', default: '', minLevel: ROTA_LEVEL },
+            ],
             fields: [
                 { key: 'name', label: 'Event', kind: 'text' },
                 { key: 'date', label: 'Date', kind: 'date' },
+                { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
+                { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
+                { key: 'weekday', label: 'Day of the week', kind: 'text' },
                 { key: 'time', label: 'Time', kind: 'text' },
                 { key: 'location', label: 'Where', kind: 'text' },
                 { key: 'description', label: 'About the event', kind: 'text' },
                 { key: 'dateNote', label: 'About this date', kind: 'text' },
+                { key: 'holder', label: 'Who is down for the role', kind: 'text', minLevel: ROTA_LEVEL },
             ],
         },
         {
@@ -718,33 +816,58 @@
         return out;
     }
 
-    function resolveSunday(params, data, ctx) {
-        const p = Object.assign(defaultParams('sunday'), params || {});
-        const date = resolveWhen(p.when, ctx.today);
-        const s = serviceAt(data, date);
-        const warnings = [];
-        if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
+    // What a Sunday nobody has planned yet never "announces": its date is
+    // already known, and a baptism is not something to be announced later.
+    // TBA is only written onto text fields — a date is a date.
+    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort', 'baptism'];
+    const SUNDAY_TEXT_KEYS = SUNDAY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
+
+    // One Sunday as a row — the single Sunday, and each row of the Sundays
+    // list. A hymn the Sunday has dropped reads as nothing, as it did on the
+    // old guide. `notPlanned`, when it has words, stands in for whatever
+    // nobody has written yet ("TBA"); a dropped hymn is not coming, so it
+    // stays blank.
+    function sundayRow(date, s, notPlanned) {
         const lit = (s && s.liturgy) || {};
+        const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
         const row = {
             _id: date,
             date: formatDate(date),
-            theme: (s && s.theme) || '',
-            keyVerse: (s && s.keyVerse) || '',
-            preacher: (s && s.preacher) || '',
-            serviceLeader: (s && s.serviceLeader) || '',
-            musicLeader: (s && s.musicLeader) || '',
+            shortDate: formatDate(date, 'monthDay'),
+            dateShort: formatDate(date, 'short'),
+            theme: slotText(s && s.theme),
+            keyVerse: slotText(s && s.keyVerse),
+            preacher: slotText(s && s.preacher),
+            serviceLeader: slotText(s && s.serviceLeader),
+            musicLeader: slotText(s && s.musicLeader),
             prayerMale: slotText(lit.prayerMale),
             prayerFemale: slotText(lit.prayerFemale),
             callToWorship: slotText(lit.callToWorship),
             callToConfession: slotText(lit.callToConfession),
             assuranceOfPardon: slotText(lit.assuranceOfPardon),
             scriptureReading: slotText(lit.scriptureReading),
-            sermon: slotText(lit.sermon),
+            sermon: slotText(lit.sermon) || slotText(s && s.sermon),
             benediction: slotText(lit.benediction),
             baptism: slotText(lit.baptism),
         };
-        HYMN_SLOTS.forEach(k => { row[k] = slotText(lit[k]); });
-        return { rows: [row], warnings: warnings, date: date };
+        HYMN_SLOTS.forEach(k => { row[k] = dropped.indexOf(k) !== -1 ? '' : slotText(lit[k]); });
+        const fill = typeof notPlanned === 'string' ? notPlanned.trim() : '';
+        if (fill) {
+            SUNDAY_TEXT_KEYS.forEach(k => {
+                if (row[k] || NEVER_TO_BE_ANNOUNCED.indexOf(k) !== -1 || dropped.indexOf(k) !== -1) return;
+                row[k] = fill;
+            });
+        }
+        return row;
+    }
+
+    function resolveSunday(params, data, ctx) {
+        const p = Object.assign(defaultParams('sunday'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const s = serviceAt(data, date);
+        const warnings = [];
+        if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
+        return { rows: [sundayRow(date, s)], warnings: warnings, date: date };
     }
 
     function resolveSundayRows(params, data, ctx) {
@@ -777,6 +900,7 @@
         const rows = [];
         const warnings = [];
         HYMN_SLOTS.forEach(slot => {
+            if (p.slot && slot !== p.slot) return;
             if (removed.indexOf(slot) !== -1) return;
             const h = lit[slot];
             if (!h || !h.name) return;
@@ -801,6 +925,9 @@
                 });
             });
         });
+        if (p.slot && !rows.length) {
+            warnings.push('No ' + String(HYMN_SLOT_LABELS[p.slot] || p.slot).toLowerCase() + ' is planned for ' + formatDate(date) + '.');
+        }
         return { rows: rows, warnings: warnings, date: date };
     }
 
@@ -826,17 +953,76 @@
         return { rows: [row], warnings: warnings, date: date };
     }
 
+    // One row per announcement the handed-out guide would print that Sunday
+    // — typed first, then printed Event announcements. The booklet-text
+    // source still joins the same items into one field.
+    function resolveSundayAnnouncements(params, data, ctx) {
+        const Typed = typedCore();
+        const Lines = linesCore();
+        const p = Object.assign(defaultParams('sunday_announcements'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const service = serviceAt(data, date);
+        const typed = Typed ? Typed.fromService(service) : { announcements: [] };
+        const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
+        const printed = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
+        const announcements = Lines
+            ? Lines.bookletAnnouncements(typed.announcements, printed)
+            : (typed.announcements || []);
+        const rows = announcements.map((item, i) => {
+            const title = String((item && item.title) || '').trim();
+            const content = String((item && item.content) || '').trim();
+            return {
+                _id: date + '~' + i,
+                date: formatDate(date),
+                title: title,
+                content: content,
+                text: title && content ? title + '\n' + content : title || content,
+                number: i + 1,
+            };
+        });
+        const warnings = [];
+        if (!rows.length) {
+            warnings.push(service
+                ? 'No announcements have been entered for ' + formatDate(date, 'medium') + '.'
+                : 'Nothing is planned yet for ' + formatDate(date) + '.');
+        }
+        return { rows: rows, warnings: warnings, date: date };
+    }
+
+    // Ten years of Sundays is more than any Printable prints. A wider range
+    // is cut there, so a slip of a century neither walks nor fetches one.
+    const SUNDAYS_MAX = 520;
+
+    function sundaysWindow(range, today) {
+        const r = resolveRange(range, today);
+        const last = addDays(sundayOnOrAfter(r.from), 7 * SUNDAYS_MAX - 1);
+        return r.to > last ? { from: r.from, to: last, cut: true } : { from: r.from, to: r.to, cut: false };
+    }
+
+    // Every Sunday in the range, planned or not — a Sunday exists whether or
+    // not anybody has written one yet (ServiceDatesCore), so which Sundays
+    // there are is arithmetic, and the services only fill them in. A service
+    // planned on another day (Christmas Day) is on the list too: it is
+    // planned, and the old guide printed it.
     function resolveSundays(params, data, ctx) {
         const p = Object.assign(defaultParams('sundays'), params || {});
-        const r = resolveRange(p.range, ctx.today);
-        const rows = Object.keys(data.services || {})
-            .filter(d => d >= r.from && d <= r.to)
-            .sort()
-            .map(d => {
-                const s = normaliseService(data.services[d]);
-                return { _id: d, date: formatDate(s.date || d), theme: s.theme || '', preacher: s.preacher || '', sermon: slotText((s.liturgy || {}).sermon) };
-            });
-        return { rows: rows, warnings: rows.length ? [] : ['No Sundays are planned ' + describeRange(p.range) + '.'], range: r };
+        const w = sundaysWindow(p.range, ctx.today);
+        const dates = {};
+        for (let d = sundayOnOrAfter(w.from); d <= w.to; d = addDays(d, 7)) dates[d] = true;
+        const sundays = Object.keys(dates).length;
+        Object.keys(data.services || {}).forEach(d => { if (isDateStr(d) && d >= w.from && d <= w.to) dates[d] = true; });
+        const rows = Object.keys(dates).sort()
+            .map(d => ({ date: d, service: serviceAt(data, d) }))
+            .filter(x => x.service || p.which !== 'planned')
+            .map(x => sundayRow(x.date, x.service, p.notPlanned));
+        const warnings = [];
+        if (w.cut) warnings.push('Only the first ' + SUNDAYS_MAX + ' Sundays are listed.');
+        if (!rows.length) {
+            warnings.push(sundays
+                ? 'Nothing is planned yet ' + describeRange(p.range, 'Sundays') + '.'
+                : 'There is no Sunday ' + describeRange(p.range, 'Sundays') + '.');
+        }
+        return { rows: rows, warnings: warnings, range: { from: w.from, to: w.to } };
     }
 
     // ── Events ───────────────────────────────────────────────────────────────
@@ -863,28 +1049,74 @@
 
     function isNotHappening(o) { return o.cancelled === true || !!o.movedTo; }
 
+    // Who is down for a role on one date: whoever has confirmed, or else
+    // whoever has been asked. Somebody who declined is not down. The rota
+    // and the single role-holder both read this.
+    function heldAssignments(occ, roleSlug) {
+        return ((occ && occ.assignments) || []).filter(a => a && a.roleSlug === roleSlug && a.state !== 'declined');
+    }
+
+    function holderOn(occ, roleSlug) {
+        const held = heldAssignments(occ, roleSlug);
+        return held.find(a => a.state === 'confirmed') || held[0] || null;
+    }
+
+    function holderName(pick, data) {
+        if (!pick) return '';
+        return pick.personName || personName(pick.personId, data) || '';
+    }
+
+    function holdersOf(occ, roleSlug, data) {
+        const held = heldAssignments(occ, roleSlug);
+        const confirmed = held.filter(a => a.state === 'confirmed');
+        const pick = confirmed.length ? confirmed : held;
+        return { names: pick.map(a => holderName(a, data)).filter(Boolean), confirmed: confirmed.length > 0 };
+    }
+
     function resolveEventDates(params, data, ctx) {
         const p = Object.assign(defaultParams('event_dates'), params || {});
         const r = resolveRange(p.range, ctx.today);
         const bySeries = seriesById(data);
-        const rows = (data.occurrences || [])
+        const rota = !!p.roleSlug && mayRead(ctx.level, ROTA_LEVEL);
+        const roleName = rota ? roleLabel(p.roleSlug, data) : '';
+        const counted = p.range && p.range.mode === 'count';
+        const want = counted ? datesCount(p.range.count) : 0;
+        const warnings = [];
+        let rows = (data.occurrences || [])
             .filter(o => o && o.date >= r.from && o.date <= r.to)
             .filter(o => !isNotHappening(o))
             .filter(o => !p.seriesId || o.seriesId === p.seriesId)
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
             .map(o => {
                 const series = bySeries[o.seriesId] || null;
-                return {
+                const row = {
                     _id: o.id || (o.seriesId + '_' + o.date),
                     name: (series && series.name) || o.name || '',
                     date: formatDate(o.date),
+                    shortDate: formatDate(o.date, 'monthDay'),
+                    dateShort: formatDate(o.date, 'short'),
+                    weekday: formatDate(o.date, 'weekday'),
                     time: niceTime(occurrenceTime(o, series)),
                     location: o.location || (series && series.location) || '',
                     description: o.seriesId ? ((series && series.description) || '') : (o.description || ''),
                     dateNote: o.seriesId ? (o.description || '') : '',
+                    holder: '',
                 };
+                if (rota) {
+                    const h = holdersOf(o, p.roleSlug, data);
+                    row.holder = h.names.join(', ');
+                    if (h.names.length && !h.confirmed) {
+                        warnings.push(h.names.join(' and ') + (h.names.length === 1 ? ' has' : ' have') + ' not confirmed ' + roleName + ' on ' + formatDate(o.date, 'medium') + ' yet.');
+                    }
+                }
+                return row;
             });
-        return { rows: rows, warnings: rows.length ? [] : ['Nothing is on ' + describeRange(p.range) + '.'], range: r };
+        if (counted && rows.length > want) rows = rows.slice(0, want);
+        if (counted && rows.length && rows.length < want) {
+            warnings.push('Only ' + rows.length + ' date' + (rows.length === 1 ? '' : 's') + ' ' + (rows.length === 1 ? 'is' : 'are') + ' coming up.');
+        }
+        if (!rows.length) warnings.push('Nothing is on ' + describeRange(p.range, 'weeks') + '.');
+        return { rows: rows, warnings: warnings, range: r };
     }
 
     function roleLabel(slug, data) {
@@ -913,10 +1145,9 @@
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         if (!dates.length) return empty('', 'No date of ' + (eventName || 'that event') + ' is coming up from ' + formatDate(from, 'medium') + '.');
         const occ = dates[0];
-        const held = (occ.assignments || []).filter(a => a && a.roleSlug === p.roleSlug && a.state !== 'declined');
-        const pick = held.find(a => a.state === 'confirmed') || held[0];
+        const pick = holderOn(occ, p.roleSlug);
         if (!pick) return empty(occ.date, 'Nobody is down for ' + roleName + ' at ' + (eventName || 'that event') + ' on ' + formatDate(occ.date, 'medium') + '.');
-        const name = pick.personName || personName(pick.personId, data) || '';
+        const name = holderName(pick, data);
         if (!name) return empty(occ.date, 'The person down for ' + roleName + ' on ' + formatDate(occ.date, 'medium') + ' is not in the directory.');
         return { rows: [{ _id: occ.date, name: name, date: formatDate(occ.date), role: roleName, event: eventName }], warnings: pick.state === 'confirmed' ? [] : [name + ' has not confirmed ' + roleName + ' on ' + formatDate(occ.date, 'medium') + ' yet.'] };
     }
@@ -963,6 +1194,7 @@
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
         sunday_typed: resolveSundayTyped,
+        sunday_announcements: resolveSundayAnnouncements,
         sundays: resolveSundays,
         event_dates: resolveEventDates,
         role_holder: resolveRoleHolder,
@@ -1000,10 +1232,14 @@
             case 'households': return { people: true, families: true, households: true };
             case 'household_children': return { people: true, families: true, households: true };
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
-            case 'sunday_typed': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
+            case 'sunday_typed':
+            case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
-            case 'sundays': return { serviceRange: resolveRange(p.range, t) };
-            case 'event_dates': return { series: true, occurrenceRange: resolveRange(p.range, t) };
+            case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to } }; }
+            case 'event_dates': {
+                const n = { series: true, occurrenceRange: resolveRange(p.range, t) };
+                return p.roleSlug ? Object.assign(n, { roles: true, people: true, rosters: p.seriesId || true }) : n;
+            }
             case 'role_holder': {
                 const w = p.when || {};
                 const from = (w.mode === 'date' && isDateStr(w.date)) ? w.date : t;
@@ -1014,6 +1250,13 @@
         }
     }
 
+    // "Only Sundays already planned" → "only Sundays already planned": the
+    // label starts the phrase lower-case; a Sunday keeps its capital.
+    function lowerFirst(label) {
+        const s = String(label || '');
+        return s.charAt(0).toLowerCase() + s.slice(1);
+    }
+
     // A one-line description of a source's params, for the element panel.
     function describeParams(sourceKey, params, options) {
         const s = sourceByKey(sourceKey);
@@ -1022,18 +1265,18 @@
         const bits = [];
         (s.params || []).forEach(param => {
             const v = p[param.key];
-            if (param.kind === 'when') bits.push(v && v.mode === 'next' ? 'next Sunday' : v && v.mode === 'last' ? 'last Sunday' : v && v.mode === 'date' ? 'the Sunday of ' + formatDate(v.date, 'medium') : 'this Sunday');
+            if (param.kind === 'when') bits.push(describeWhen(v));
             else if (param.kind === 'when-event') bits.push(v && v.mode === 'date' ? 'the first date on or after ' + formatDate(v.date, 'medium') : 'the next date');
-            else if (param.kind === 'range') bits.push(describeRange(v));
+            else if (param.kind === 'range') bits.push(describeRange(v, param.unit));
             else if (param.kind === 'series') { const sr = ((options && options.series) || []).find(x => x.id === v); if (sr) bits.push(sr.name); }
             else if (param.kind === 'role') { if (v) bits.push(roleLabel(v, { roles: (options && options.roles) || [] })); }
             else if (param.kind === 'form') { const f = ((options && options.forms) || []).find(x => x.id === v); if (f) bits.push('"' + f.title + '"'); }
         });
         (s.filters || []).forEach(f => {
             const v = p[f.key];
-            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(o.label.toLowerCase()); }
-            else if (f.kind === 'text' && v) bits.push(f.label.toLowerCase() + ' "' + v + '"');
-            else if (f.kind === 'bool' && v) bits.push(f.label.toLowerCase());
+            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(lowerFirst(o.label)); }
+            else if (f.kind === 'text' && v && v !== f.default) bits.push(lowerFirst(f.label) + ' "' + v + '"');
+            else if (f.kind === 'bool' && v) bits.push(lowerFirst(f.label));
         });
         return bits.join(' · ');
     }
@@ -1052,8 +1295,10 @@
         formatDate,
         sundayOnOrAfter,
         resolveWhen,
+        describeWhen,
         resolveRange,
         describeRange,
+        rangeForMode,
         sourceByKey,
         sourcesFor,
         mayQuery,

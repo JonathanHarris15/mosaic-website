@@ -123,6 +123,6 @@ test('a Sunday booklet loads the printed lines with the typed text', () => {
         assert.match(page, /printed-announcement-guide\.js/);
     });
     const render = read('printable-render-core.js');
-    assert.match(render, /bind\.field === 'announcements'/);
+    assert.match(render, /indexOf\('\\n'\)/);
     assert.match(render, /white-space': 'pre-line'/);
 });
