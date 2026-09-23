@@ -62,6 +62,9 @@ test('a range in the query counts Sundays or weeks from a Sunday, not days', () 
     assert.match(html, /How many/, 'how many is a number of Sundays or weeks');
     assert.match(html, /setRangePart\(spec, 'start', \{ mode: 'this' \}\)/, 'starting this Sunday, next Sunday or a date');
     assert.match(js, /setRangeMode\(spec, mode\)[\s\S]*Data\.rangeForMode/, 'the editor asks the catalog what a fresh range looks like');
+    assert.match(html, /setRangeMode\(spec, 'count'\)/, 'event dates can count the next few dates');
+    assert.match(html, />Next dates</, 'that way of counting is said in church words');
+    assert.match(html, /rangeMode\(repeatParam\(spec\.key\)\) === 'count'/, 'how many dates is its own panel');
     const Data = require('../public/printable-data-core.js');
     const { PrintableEditorData } = require('../public/printable-editor-data.js');
     const ed = PrintableEditorData({});

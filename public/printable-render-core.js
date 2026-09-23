@@ -85,9 +85,9 @@
                         node.text = String(r.value);
                         delete node.children;
                         node.children = [];
-                        // Announcement prose keeps its line breaks. The field
-                        // is plain text, and a line break is not markup.
-                        if (bind.field === 'announcements' && node.text.indexOf('\n') !== -1) {
+                        // Bound prose keeps its line breaks. The field is
+                        // plain text, and a line break is not markup.
+                        if (node.text.indexOf('\n') !== -1) {
                             node.style = Object.assign({}, node.style, { 'white-space': 'pre-line' });
                         }
                     }

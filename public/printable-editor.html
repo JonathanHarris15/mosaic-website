@@ -571,6 +571,7 @@
                                         <div class="pe-f"><span x-text="spec.label"></span>
                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
                                                 <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'weeks'" @click="setRangeMode(spec, 'weeks')" x-text="rangeUnitLabel(spec)"></button>
+                                                <button type="button" x-show="spec.unit !== 'Sundays'" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'count'" @click="setRangeMode(spec, 'count')">Next dates</button>
                                                 <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRangeMode(spec, 'relative')">From today</button>
                                                 <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRangeMode(spec, 'static')">Fixed dates</button>
                                             </span></div>
@@ -584,6 +585,11 @@
                                                     <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'next'" @click="setRangePart(spec, 'start', { mode: 'next' })">Next</button>
                                                     <input type="date" class="pe-in pe-in--date" :value="((repeatParam(spec.key) || {}).start || {}).date || ''" @change="setRangePart(spec, 'start', { mode: 'date', date: $event.target.value })" />
                                                 </span></div>
+                                            <p class="pe-hint" x-text="rangeWords(spec)"></p>
+                                        </div>
+                                        <div x-show="rangeMode(repeatParam(spec.key)) === 'count'">
+                                            <label class="pe-f"><span>How many dates</span>
+                                                <input class="pe-in" type="number" min="1" max="24" step="1" :value="(repeatParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
                                             <p class="pe-hint" x-text="rangeWords(spec)"></p>
                                         </div>
                                         <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">

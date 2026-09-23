@@ -87,6 +87,7 @@ test('a date reads on paper as words', () => {
     assert.equal(Data.formatDate('2026-09-06'), 'Sunday 6 September 2026');
     assert.equal(Data.formatDate('2026-09-06', 'medium'), '6 September 2026');
     assert.equal(Data.formatDate('2026-09-06', 'monthDay'), 'Sep 6', 'the designed schedule\'s date');
+    assert.equal(Data.formatDate('2026-09-06', 'short'), '6 Sep', 'day then month, as some schedules print it');
     assert.equal(Data.formatDate('2026-09-06', 'weekday'), 'Sunday');
     assert.equal(Data.formatDate('not a date'), 'not a date');
 });
@@ -107,6 +108,8 @@ test('a count of Sundays or weeks reads back in words', () => {
     assert.equal(Data.describeRange({ mode: 'weeks', count: 1, start: { mode: 'next' } }, 'Sundays'), 'for next Sunday');
     assert.equal(Data.describeRange({ mode: 'weeks', count: 4, start: { mode: 'this' } }), 'in the 4 weeks from this Sunday');
     assert.equal(Data.describeRange({ mode: 'weeks', count: 1, start: { mode: 'date', date: '2026-10-01' } }), 'in the week from the Sunday of 1 October 2026');
+    assert.equal(Data.describeRange({ mode: 'count', count: 6 }), 'the next 6 dates');
+    assert.equal(Data.describeRange({ mode: 'count', count: 1 }), 'the next date');
 });
 
 test('switching a range to another way of counting starts from something sensible', () => {
@@ -117,6 +120,7 @@ test('switching a range to another way of counting starts from something sensibl
     assert.deepEqual(Data.rangeForMode(sundaysRange, 'weeks'), { mode: 'weeks', count: 5, start: { mode: 'this' } });
     assert.deepEqual(Data.rangeForMode(eventsRange, 'weeks'), { mode: 'weeks', count: 4, start: { mode: 'this' } });
     assert.deepEqual(Data.rangeForMode(eventsRange, 'relative'), { mode: 'relative', fromDays: 0, toDays: 14 });
+    assert.deepEqual(Data.rangeForMode(eventsRange, 'count'), { mode: 'count', count: 6 });
     assert.deepEqual(Data.rangeForMode(sundaysRange, 'static'), { mode: 'static', from: '', to: '' });
     const a = Data.rangeForMode(sundaysRange, 'weeks');
     a.start.mode = 'next';
@@ -532,6 +536,43 @@ test('printed event announcements follow the typed ones and are not written onto
     assert.deepEqual(data.services[date].typedContent, before);
 });
 
+test('announcements of a Sunday are an iterable list — typed first, then printed event lines', () => {
+    const source = Data.sourceByKey('sunday_announcements');
+    assert.ok(source, 'the catalog has one row per announcement');
+    assert.equal(source.shape, 'list');
+    assert.equal(source.minLevel, 'viewer');
+    assert.ok(Data.listSourcesFor('viewer').some(x => x.key === 'sunday_announcements'));
+    const data = SUNDAYS();
+    const date = '2026-09-06';
+    data.services[date].typedContent = {
+        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
+    };
+    data.printedEventsBySunday = {};
+    data.printedEventsBySunday[date] = [{
+        id: 'hall',
+        name: 'Hall work day',
+        visibility: 'public',
+        occurrence: { id: 'hall', date: '2026-09-12' },
+        announcements: [{
+            id: 'work', title: 'Work day', prose: 'Bring gloves',
+            way: 'printed', weeks: 1, order: 0,
+        }],
+    }];
+    const r = Data.resolve('sunday_announcements', {}, data, { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.title), ['Picnic', 'Work day']);
+    assert.deepEqual(r.rows.map(x => x.content), ['Bring a plate', 'Bring gloves']);
+    assert.deepEqual(r.rows.map(x => x.number), [1, 2]);
+    assert.equal(r.rows[1].text, 'Work day\nBring gloves');
+    assert.deepEqual(r.warnings, []);
+    assert.deepEqual(Data.needsFor('sunday_announcements', {}, TODAY), {
+        services: [date],
+        printedAnnouncements: [date],
+    });
+    const empty = Data.resolve('sunday_announcements', {}, { services: {} }, { today: TODAY });
+    assert.equal(empty.rows.length, 0);
+    assert.match(empty.warnings[0], /Nothing is planned yet/);
+});
+
 test('a Printable bound to Sunday booklet text reads the typed fields', () => {
     const Render = require('../public/printable-render-core.js');
     const Core = require('../public/printable-core.js');
@@ -560,6 +601,25 @@ test('a Printable bound to Sunday booklet text reads the typed fields', () => {
     assert.match(r.nodes[2].text, /Picnic/);
 });
 
+test('bound text that has line breaks keeps them, as the old guide did', () => {
+    const Render = require('../public/printable-render-core.js');
+    const Core = require('../public/printable-core.js');
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const page = Core.buildPage(t, { id: 'pg', nodes: [
+        { id: 'ann', tag: 'p', text: 'News', bind: { text: { scope: 'item', field: 'text' } } },
+        { id: 'one', tag: 'p', text: 'One line', bind: { text: { scope: 'item', field: 'title' } } },
+    ] });
+    const r = Render.expandPage(page, {
+        rowsFor: () => null,
+        valueFor: (bind) => {
+            if (bind.field === 'text') return { ok: true, value: 'Work day\nBring gloves' };
+            return { ok: true, value: 'Picnic' };
+        },
+    });
+    assert.equal(r.nodes[0].style['white-space'], 'pre-line');
+    assert.equal(r.nodes[1].style && r.nodes[1].style['white-space'], undefined);
+});
+
 test('Sundays in a range make a preaching schedule', () => {
     const r = Data.resolve('sundays', { range: { mode: 'relative', fromDays: 0, toDays: 14 } }, SUNDAYS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.theme), ['Grace', 'Hope']);
@@ -577,6 +637,7 @@ test('Sundays start as a preaching schedule: five from this Sunday, planned or n
     assert.deepEqual(Data.defaultParams('sundays').range, { mode: 'weeks', count: 5, start: { mode: 'this' } });
     const r = Data.resolve('sundays', {}, SUNDAYS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13', 'Sep 20', 'Sep 27', 'Oct 4']);
+    assert.deepEqual(r.rows.map(x => x.dateShort), ['6 Sep', '13 Sep', '20 Sep', '27 Sep', '4 Oct']);
     assert.deepEqual(r.rows.map(x => x.preacher), ['Pastor Sam', 'TBA', 'TBA', 'TBA', 'TBA']);
     assert.deepEqual(r.rows.map(x => x.sermon), ['Romans 8', 'John 3', 'TBA', 'TBA', 'TBA']);
     assert.equal(r.rows[2].date, 'Sunday 20 September 2026');
@@ -608,6 +669,7 @@ test('the date, a baptism and a dropped hymn are never "to be announced"', () =>
     assert.equal(first.prayerFemale, 'TBA');
     assert.equal(r.rows[4].date, 'Sunday 4 October 2026');
     assert.equal(r.rows[4].shortDate, 'Oct 4');
+    assert.equal(r.rows[4].dateShort, '4 Oct', 'a date is never TBA — only the text fields can be');
 });
 
 test('Sundays can be kept to those already planned, as the old guide did', () => {
@@ -721,6 +783,23 @@ test('event dates can be the weeks from a Sunday, with a short date and the day 
     const later = Data.resolve('event_dates', { range: { mode: 'weeks', count: 1, start: { mode: 'next' } } }, EVENTS(), { today: TODAY });
     assert.equal(later.rows.length, 0);
     assert.deepEqual(later.warnings, ['Nothing is on in the week from next Sunday.']);
+});
+
+test('event dates can be the next few dates, without counting days', () => {
+    const fortnight = Data.resolve('event_dates', { range: { mode: 'relative', fromDays: 0, toDays: 14 }, seriesId: 'bs' }, EVENTS(), { today: TODAY });
+    assert.deepEqual(fortnight.rows.map(x => x._id), ['bs_2026-09-08'], 'fourteen days misses the second study');
+    const r = Data.resolve('event_dates', { range: { mode: 'count', count: 2 }, seriesId: 'bs' }, EVENTS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x._id), ['bs_2026-09-08', 'bs_2026-10-20']);
+    const data = EVENTS();
+    data.occurrences.push({ id: 'bs_2028-01-04', seriesId: 'bs', date: '2028-01-04' });
+    const bounded = Data.resolve('event_dates', { range: { mode: 'count', count: 3 }, seriesId: 'bs' }, data, { today: TODAY });
+    assert.deepEqual(bounded.rows.map(x => x._id), ['bs_2026-09-08', 'bs_2026-10-20'], 'a count query stays inside the window the store fetched');
+    assert.match(bounded.warnings.join(' '), /Only 2 dates/);
+    const needs = Data.needsFor('event_dates', { range: { mode: 'count', count: 2 } }, TODAY);
+    assert.equal(needs.occurrenceRange.from, TODAY);
+    assert.ok(needs.occurrenceRange.to >= '2026-10-20');
+    assert.equal(Data.describeParams('event_dates', { range: { mode: 'count', count: 2 } }), 'the next 2 dates');
+    assert.equal(Data.describeParams('event_dates', { range: { mode: 'count', count: 1 } }), 'the next date');
 });
 
 test('event dates can say who is down for a role on each date — a rota — to an editor', () => {
