@@ -493,10 +493,7 @@
                     <span class="material-symbols-outlined" :class="data.loading ? 'pe-spin' : ''">refresh</span>
                 </button>
             </div>
-            <div class="pe-drawer__search" x-show="showQueryBuilder">
-                <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a list" x-model="data.search" /></span>
-            </div>
-            <div class="pe-drawer__body">
+            <div class="pe-drawer__body" :class="data.queryMenuOpen ? 'is-menu-open' : ''">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
 
                 <section class="pe-drawer__section pe-drawer__cta" x-show="canStartIteration">
@@ -536,20 +533,35 @@
                     <template x-if="!queryLocked">
                         <div>
                             <p class="pe-hint" x-show="!querySourceKey">Pick the list this box stands for. Everything iterable the site can tell a Printable is here.</p>
-                            <template x-for="region in queryCatalogRegions" :key="'qreg-' + region.name">
-                                <div class="pe-query__region">
-                                    <h4 class="pe-drawer__title" x-text="region.name"></h4>
-                                    <template x-for="src in region.sources" :key="'qsrc-' + src.key">
-                                        <button type="button" class="pe-src pe-src--pick" :class="querySourceKey === src.key ? 'is-open is-picked' : ''"
-                                                :aria-pressed="querySourceKey === src.key" @click="setQuerySource(src.key)">
-                                            <span class="pe-src__row">
-                                                <span class="material-symbols-outlined">list</span>
-                                                <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-text="src.blurb"></span></span>
-                                            </span>
-                                        </button>
+                            <div class="m-dropdown pe-query__pick"
+                                 @click.outside="data.queryMenuOpen = false"
+                                 @keydown.escape.window="data.queryMenuOpen = false">
+                                <button type="button" class="m-dropdown__button"
+                                        :aria-expanded="data.queryMenuOpen" aria-haspopup="listbox"
+                                        @click="data.queryMenuOpen = !data.queryMenuOpen">
+                                    <span x-text="querySourceLabel"></span>
+                                    <span class="material-symbols-outlined" x-text="data.queryMenuOpen ? 'expand_less' : 'expand_more'"></span>
+                                </button>
+                                <div class="m-dropdown__panel" role="listbox" x-show="data.queryMenuOpen" x-cloak x-transition.opacity.duration.120ms>
+                                    <span class="m-search pe-query__find"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a list" x-model="data.search" /></span>
+                                    <template x-for="region in queryCatalogRegions" :key="'qreg-' + region.name">
+                                        <div>
+                                            <div class="m-dropdown__group" x-text="region.name"></div>
+                                            <template x-for="src in region.sources" :key="'qsrc-' + src.key">
+                                                <button type="button" class="m-dropdown__opt"
+                                                        role="option" :aria-selected="querySourceKey === src.key"
+                                                        :class="querySourceKey === src.key ? 'm-dropdown__opt--picked' : ''"
+                                                        :title="src.blurb"
+                                                        @click="setQuerySource(src.key); data.queryMenuOpen = false; data.search = ''">
+                                                    <span x-text="src.label"></span>
+                                                </button>
+                                            </template>
+                                        </div>
                                     </template>
+                                    <p class="pe-hint pe-query__empty" x-show="!queryCatalogRegions.length">No list matches that search.</p>
                                 </div>
-                            </template>
+                            </div>
+                            <p class="pe-hint" x-show="repeatSource" x-text="repeatSource.blurb"></p>
                             <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
                                 <div>
                                     <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
@@ -636,13 +648,22 @@
                 </section>
 
                 <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
-                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">warning</span>Not all data could be pulled</h3>
-                    <template x-for="(w, i) in data.warnings" :key="i">
-                        <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
-                            <span class="pe-warn__label" x-text="w.label"></span>
-                            <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
-                        </button>
-                    </template>
+                    <button type="button" class="pe-drawer__title pe-drawer__title--toggle"
+                            :aria-expanded="data.warningsOpen"
+                            @click="data.warningsOpen = !data.warningsOpen">
+                        <span class="material-symbols-outlined">warning</span>
+                        <span>Not all data could be pulled</span>
+                        <span class="pe-warn__n" x-text="data.warnings.length"></span>
+                        <span class="material-symbols-outlined pe-src__chev" :class="data.warningsOpen ? 'is-open' : ''">expand_more</span>
+                    </button>
+                    <div x-show="data.warningsOpen">
+                        <template x-for="(w, i) in data.warnings" :key="i">
+                            <button type="button" class="pe-warn" :class="w.kind === 'element' ? 'pe-warn--element' : ''" @click="goToWarning(w)">
+                                <span class="pe-warn__label" x-text="w.label"></span>
+                                <span class="pe-warn__msg" x-text="w.message + (w.count > 1 ? ' (×' + w.count + ')' : '')"></span>
+                            </button>
+                        </template>
+                    </div>
                 </section>
                 <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
 
@@ -1023,10 +1044,18 @@
         .pe-drawer__search { padding: 0 12px 8px; border-bottom: 1px solid var(--outline-variant); }
         .pe-drawer__search .m-search { width: 100%; }
         .pe-drawer__body { flex: 1; overflow: auto; padding: 8px 12px 16px; }
+        .pe-drawer__body.is-menu-open { overflow: visible; }
         .pe-drawer__error { color: var(--error); font-size: 12px; margin: 4px 0 8px; }
         .pe-drawer__section { margin-bottom: 14px; }
         .pe-drawer__section--item { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
-        .pe-query { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
+        .pe-query { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); overflow: visible; position: relative; z-index: 8; }
+        .pe-query__pick { margin: 4px 0 8px; }
+        .pe-query__find { width: 100%; margin-bottom: 4px; }
+        .pe-query__empty { padding: 6px 8px; }
+        .pe-drawer__title--toggle { width: 100%; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; }
+        .pe-drawer__title--toggle .pe-src__chev { margin-left: auto; }
+        .pe-drawer__title--toggle .pe-src__chev.is-open { transform: rotate(180deg); }
+        .pe-warn__n { margin-left: 4px; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--warning-container, var(--surface-container)); color: var(--on-surface); font: 700 11px var(--font-sans); letter-spacing: 0; text-transform: none; }
         .pe-query__locked { padding: 4px 0 2px; }
         .pe-query__count { margin: 8px 0 4px; font: 600 12px var(--font-sans); color: var(--on-surface); }
         .pe-query__preview { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 12px; line-height: 1.4; }

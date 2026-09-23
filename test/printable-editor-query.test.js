@@ -52,7 +52,19 @@ test('the query builder is the catalog of every iterable list', () => {
         Data.SOURCES.filter(s => s.shape === 'list' && (!s.of || s.of === 'households')), '');
     assert.ok(inside.some(r => r.name === 'Of this household' && r.sources.some(s => s.key === 'household_children')));
     assert.match(html, /queryCatalogRegions/, 'the builder draws those lists, not a hidden catalog');
-    assert.match(html, /x-show="showQueryBuilder"/, 'search is on the query, not the old catalog');
+    assert.match(html, /class="m-dropdown pe-query__pick"/, 'the lists are a dropdown, not a stack of cards');
+    assert.match(html, /m-dropdown__group/, 'regions stay as groups inside the menu');
+    assert.match(html, /Find a list/, 'search is inside the menu, not a second drawer strip');
+    assert.match(js, /querySourceLabel/, 'the closed button says which list is picked');
+});
+
+test('Not all data could be pulled can be folded', () => {
+    assert.match(html, /data\.warningsOpen/, 'the warnings list opens and shuts');
+    assert.match(html, /pe-drawer__title--toggle/, 'the heading is the fold');
+    assert.match(js, /warningsOpen: true/, 'they start open so a gap is seen');
+    const warnAt = html.indexOf('pe-drawer__section--warn');
+    const listAt = html.indexOf('x-show="data.warningsOpen"', warnAt);
+    assert.ok(listAt > warnAt, 'the messages sit under the fold');
 });
 
 test('a range in the query counts Sundays or weeks from a Sunday, not days', () => {

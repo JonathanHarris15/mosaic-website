@@ -105,6 +105,8 @@
                 loaded: false,
                 error: '',
                 search: '',
+                queryMenuOpen: false,  // the list picker dropdown
+                warningsOpen: true,    // "Not all data could be pulled" is open until folded
                 open: {},              // sourceKey -> expanded in the drawer
                 params: {},            // sourceKey -> the params chips carry (single sources)
                 options: { series: [], roles: [], forms: [] },
@@ -314,6 +316,14 @@
             get querySourceKey() {
                 const t = this.queryTarget;
                 return (t && t.repeat && t.repeat.source) || '';
+            },
+
+            get querySourceLabel() {
+                const key = this.querySourceKey;
+                if (!key) return 'Pick a list';
+                const src = this.listSources.find(s => s.key === key)
+                    || Data.sourceByKey(key);
+                return (src && src.label) || key;
             },
 
             get queryLocked() {
