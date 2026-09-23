@@ -740,6 +740,7 @@ test('event dates can say who is down for a role on each date — a rota — to 
     const member = Data.resolve('event_dates', q, data, { today: TODAY, level: 'member' });
     assert.equal(member.rows.length, 3, 'a member still reads the dates');
     assert.equal(member.rows[0].holder, undefined, 'but never a roster, even through a wire an editor made');
+    assert.deepEqual(member.warnings, [], 'nor a roster in words: who has not confirmed is an editor\'s to know');
     assert.deepEqual(Data.querySpecsFor('event_dates', 'member').map(s => s.key), ['range', 'seriesId']);
     assert.deepEqual(Data.querySpecsFor('event_dates', 'editor').map(s => s.key), ['range', 'seriesId', 'roleSlug']);
     assert.equal(Data.sourcesFor('member').find(s => s.key === 'event_dates').fields.some(f => f.key === 'holder'), false);

@@ -207,6 +207,11 @@
     const RANGE_PARAM = { key: 'range', label: 'Dates', kind: 'range', unit: 'weeks', default: { mode: 'relative', fromDays: 0, toDays: 14 } };
     const SUNDAYS_RANGE_PARAM = { key: 'range', label: 'Dates', kind: 'range', unit: 'Sundays', default: { mode: 'weeks', count: 5, start: { mode: 'this' } } };
 
+    // A roster is an editor's to read (EventsStore gives anyone else their
+    // own row only), so the rota on event dates is too — the role to ask
+    // about, who is down, and who has not confirmed yet.
+    const ROTA_LEVEL = 'editor';
+
     const LITURGY_ORDER = ['baptism', 'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'callToConfession',
         'assuranceOfPardon', 'hymnMid1', 'hymnMid2', 'scriptureReading', 'prayerMale', 'prayerFemale', 'sermon',
         'hymnEnd1', 'hymnEnd2', 'benediction'];
@@ -393,9 +398,7 @@
             params: [
                 RANGE_PARAM,
                 { key: 'seriesId', label: 'Only this event', kind: 'series', default: '' },
-                // A roster is an editor's to read (EventsStore gives anyone
-                // else their own row only), so the rota is too.
-                { key: 'roleSlug', label: 'Who is down for', kind: 'role', default: '', minLevel: 'editor' },
+                { key: 'roleSlug', label: 'Who is down for', kind: 'role', default: '', minLevel: ROTA_LEVEL },
             ],
             fields: [
                 { key: 'name', label: 'Event', kind: 'text' },
@@ -406,7 +409,7 @@
                 { key: 'location', label: 'Where', kind: 'text' },
                 { key: 'description', label: 'About the event', kind: 'text' },
                 { key: 'dateNote', label: 'About this date', kind: 'text' },
-                { key: 'holder', label: 'Who is down for the role', kind: 'text', minLevel: 'editor' },
+                { key: 'holder', label: 'Who is down for the role', kind: 'text', minLevel: ROTA_LEVEL },
             ],
         },
         {
@@ -980,7 +983,8 @@
         const p = Object.assign(defaultParams('event_dates'), params || {});
         const r = resolveRange(p.range, ctx.today);
         const bySeries = seriesById(data);
-        const roleName = p.roleSlug ? roleLabel(p.roleSlug, data) : '';
+        const rota = !!p.roleSlug && mayRead(ctx.level, ROTA_LEVEL);
+        const roleName = rota ? roleLabel(p.roleSlug, data) : '';
         const warnings = [];
         const rows = (data.occurrences || [])
             .filter(o => o && o.date >= r.from && o.date <= r.to)
@@ -1001,7 +1005,7 @@
                     dateNote: o.seriesId ? (o.description || '') : '',
                     holder: '',
                 };
-                if (p.roleSlug) {
+                if (rota) {
                     const h = holdersOf(o, p.roleSlug, data);
                     row.holder = h.names.join(', ');
                     if (h.names.length && !h.confirmed) {
