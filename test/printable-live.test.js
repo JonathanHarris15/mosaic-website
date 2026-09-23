@@ -159,6 +159,9 @@ test('overflow continuation pages keep their own design and take the next rows o
     assert.equal(pages[1].nodes.find(n => n.tag === 'h1').text, 'More members');
     assert.equal(pages[1].nodes.find(n => n.tag === 'p').text, '2');
     assert.deepEqual(pages[1].nodes[1].children.map(c => c.children[0].text), ['Person 2', 'Person 3']);
+    assert.equal(pages[1].nodes[1].children[0].id, 'card2~2', 'the first card on a continuation is not the seed');
+    assert.equal(pages[1].nodes[1].children[0].children[0].id, 'nm2~2');
+    assert.equal(pages[0].nodes[1].children[0].id, 'card', 'the first page still keeps the seed');
 
     assert.equal(pages[2].needsPersist, true, 'a further page is a real page waiting to be kept');
     assert.ok(pages[2].page.id && pages[2].page.id !== 'pg1' && pages[2].page.id !== 'pg2');

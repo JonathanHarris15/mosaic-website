@@ -65,6 +65,53 @@
         return r.name || r.personName || r.label || r.date || r._id || 'A row';
     }
 
+    // Draw a wire on: dash the path's own length, then run it to zero.
+    // Rebuilding the svg from scratch would cancel this, so syncWirePaths
+    // keeps the path node while the line is still showing.
+    function drawWireIn(path) {
+        let len = 0;
+        try { len = path.getTotalLength(); } catch (e) { return; }
+        if (!len) return;
+        path.style.strokeDasharray = String(len);
+        path.style.strokeDashoffset = String(len);
+        path.getBoundingClientRect();
+        path.style.transition = 'stroke-dashoffset .45s ease-out';
+        requestAnimationFrame(function () { path.style.strokeDashoffset = '0'; });
+        path.addEventListener('transitionend', function () {
+            path.classList.remove('is-enter');
+            path.style.strokeDasharray = '';
+            path.style.strokeDashoffset = '';
+            path.style.transition = '';
+        }, { once: true });
+    }
+
+    function syncWirePaths(svg, wires, dFor) {
+        if (!svg) return;
+        const keep = {};
+        (wires || []).forEach((w, i) => {
+            const id = w.key || (w.live ? 'live' : 'w' + i);
+            keep[id] = true;
+            let path = svg.querySelector('path[data-wire="' + id + '"]');
+            const fresh = !path;
+            if (!path) {
+                path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('data-wire', id);
+                svg.appendChild(path);
+            }
+            path.setAttribute('d', dFor(w));
+            const cls = [];
+            if (w.live) cls.push('is-live');
+            if ((fresh && w.enter && !w.live) || (!fresh && path.classList.contains('is-enter') && !w.live)) {
+                cls.push('is-enter');
+            }
+            path.setAttribute('class', cls.join(' '));
+            if (fresh && w.enter && !w.live) drawWireIn(path);
+        });
+        Array.from(svg.querySelectorAll('path[data-wire]')).forEach(p => {
+            if (!keep[p.getAttribute('data-wire')]) p.remove();
+        });
+    }
+
     const PrintableEditorWires = {
         elementOnCanvas(elRect, viewRect) {
             if (!elRect || !viewRect) return false;
@@ -75,6 +122,7 @@
         },
         groupQueryLists: groupQueryLists,
         previewName: previewName,
+        syncWirePaths: syncWirePaths,
     };
     global.PrintableEditorWires = PrintableEditorWires;
 
@@ -600,19 +648,9 @@
                 this.wires = wires;
                 this._wireKeys = nextKeys;
                 // Drawn by hand: Alpine's <template> does not exist inside an
-                // <svg>, so the paths are built here.
-                const svg = document.getElementById('pe-wires');
-                if (!svg) return;
-                svg.innerHTML = '';
-                wires.forEach(w => {
-                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    path.setAttribute('d', this.wirePath(w));
-                    const cls = [];
-                    if (w.live) cls.push('is-live');
-                    if (w.enter) cls.push('is-enter');
-                    if (cls.length) path.setAttribute('class', cls.join(' '));
-                    svg.appendChild(path);
-                });
+                // <svg>. Paths are kept in place so a draw-on is not killed
+                // by the next overlay refresh.
+                PrintableEditorWires.syncWirePaths(document.getElementById('pe-wires'), wires, w => this.wirePath(w));
             },
 
             wirePath(w) {
