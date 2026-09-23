@@ -30,9 +30,9 @@
         .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
 
         /* Motion: background, opacity and filter only. No bounces, no loops. */
-        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
-                                  opacity 150ms cubic-bezier(0.2,0,0,1),
-                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .cal-motion { transition: background-color var(--duration-fast) var(--ease-standard),
+                                  opacity var(--duration-fast) var(--ease-standard),
+                                  border-color var(--duration-fast) var(--ease-standard); }
         .cal-press:active { transform: scale(0.98); }
 
         /* Row actions reveal on hover on a desktop. On touch there is no hover,
