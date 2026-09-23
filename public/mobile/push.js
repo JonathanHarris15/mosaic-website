@@ -125,10 +125,17 @@
     }
 
     function openSystemSettings() {
-        var App = plugins().App;
-        if (!App || !App.openUrl) return Promise.resolve();
-        // iOS opens Settings. Android's confirmation is MS-260.
-        return App.openUrl({url: 'app-settings:'}).catch(function () {});
+        // Capacitor App 8 cannot open a settings URL. iOS uses this scheme.
+        // Android uses the application-details intent. Both are confirmed
+        // on a device in MS-260; a WebView may still refuse the intent.
+        var platform = (global.Capacitor && Capacitor.getPlatform &&
+            Capacitor.getPlatform()) || '';
+        if (platform === 'android') {
+            global.location.href = 'intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;data=package:com.mosaicmanagercstx.app;end';
+            return Promise.resolve();
+        }
+        global.location.href = 'app-settings:';
+        return Promise.resolve();
     }
 
     global.MosaicPush = {

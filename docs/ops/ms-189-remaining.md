@@ -57,9 +57,10 @@ does not run from an agent and does not delete `sms_messages`.
   launch and not while signed out. Allow once. Confirm a token document
   appears at `users/{uid}/push_tokens/{id}`.
 - Sign out. That document is deleted.
-- Deny permission. Home and Profile offer Open Settings. `app-settings:`
-  is what iOS opens. Confirm Android opens the app's notification settings;
-  if it does not, that is the remaining platform fix.
+- Deny permission. Home and Profile offer Open Settings. Capacitor App 8
+  has no `openUrl`, so iOS is sent to `app-settings:` and Android to the
+  application-details intent. Confirm both actually open Settings. If the
+  WebView refuses the intent, that is the remaining platform fix.
 - Send a pastoral-prayer ask to a person with a live token. It should be a
   push, and a tap should open the URL on the payload. With no token and a
   phone, the same ask is a text. With neither, nothing is sent and the

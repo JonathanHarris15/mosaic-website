@@ -64,4 +64,6 @@ test('the phone glue asks the OS only from the explainer Allow button', () => {
     assert.match(app, /registerIfGranted/);
     const data = fs.readFileSync(path.join(__dirname, '../public/mobile/data.js'), 'utf8');
     assert.match(data, /MosaicPush[\s\S]{0,160}clearToken/);
+    assert.doesNotMatch(push, /\.openUrl/);
+    assert.match(push, /app-settings:/);
 });
