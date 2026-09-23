@@ -7,8 +7,18 @@
 
    The block below is GENERATED from tailwind.config.js by
    `npm run build:tokens`. Do not hand-edit it. Everything after
-   the closing marker is the design system's own — the app has no
-   opinion on layout width, hairline composition, or motion.
+   the closing marker is the design system's own.
+
+   ⚠ MOTION USED TO BE DOWN THERE, AND THAT WAS THE BUG. The note
+   said the app had no opinion on motion; the app had seventy-five
+   of them, every one written as var(--duration) or
+   var(--ease-standard). Only the block inside the marker is
+   spliced into mosaic.css, so none of those names resolved — and
+   a var() that resolves to nothing does not fall back, it deletes
+   the whole declaration. Seventy-five transitions that had never
+   run once. Anything the app draws with belongs in
+   tailwind.config.js, above, where the generator can carry it to
+   both sides.
    ============================================================ */
 
 :root {
@@ -41,14 +51,14 @@
   --shadow-sm:     0 2px 6px rgba(14,28,54,.08);
   --shadow-md:     0 8px 24px rgba(14,28,54,.10);
   --shadow-lg:     0 18px 48px rgba(14,28,54,.14);
-/* @generated:end */
-
-  /* ---- Borders — warm sand hairlines ---- */
-  --border-hairline: 1px solid var(--outline-variant);
 
   /* ---- Motion ---- */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);   /* @kind other */
   --duration-fast: 150ms;   /* @kind other */
-  --duration:      200ms;   /* @kind other */
+  --duration:      200ms;   /* @kind other — the default */
   --duration-slow: 300ms;   /* @kind other */
+/* @generated:end */
+
+  /* ---- Borders — warm sand hairlines ---- */
+  --border-hairline: 1px solid var(--outline-variant);
 }

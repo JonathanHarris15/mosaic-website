@@ -84,6 +84,8 @@ const COLOR_GROUPS = [
 const SPACE_ORDER = ["xs", "base", "sm", "md", "lg", "xl", "gutter", "margin"];
 const RADIUS_ORDER = ["none", "sm", "DEFAULT", "md", "lg", "xl", "2xl", "full"];
 const SHADOW_ORDER = ["xs", "sm", "md", "lg"];
+const EASE_ORDER = ["standard", "DEFAULT"];
+const DURATION_ORDER = ["fast", "DEFAULT", "slow"];
 
 /* ---- Emitting ---------------------------------------------- */
 
@@ -153,6 +155,8 @@ function spacing() {
   const widths = theme.maxWidth ?? {};
   const radius = theme.borderRadius ?? {};
   const shadow = theme.boxShadow ?? {};
+  const duration = theme.transitionDuration ?? {};
+  const easing = theme.transitionTimingFunction ?? {};
   return css([
     {
       heading: "Spacing (8px rhythm)",
@@ -176,6 +180,26 @@ function spacing() {
     {
       heading: "Shadows — ambient navy glow, never harsh",
       rows: ordered(shadow, SHADOW_ORDER).map((k) => ({ name: `shadow-${k}`, value: shadow[k] })),
+    },
+    // ⚠ MOTION IS GENERATED NOW, AND THE POINT IS THAT IT REACHES THE APP.
+    // It was hand-written below the closing marker, where only the design
+    // system could see it — so every var(--duration) and var(--ease-standard)
+    // in mosaic.css resolved to nothing and deleted the declaration it sat
+    // in. Inside the block, the same values are spliced into both.
+    {
+      heading: "Motion",
+      rows: [
+        ...ordered(easing, EASE_ORDER).map((k) => ({
+          name: k === "DEFAULT" ? "ease" : `ease-${k}`,
+          value: easing[k],
+          note: "@kind other",
+        })),
+        ...ordered(duration, DURATION_ORDER).map((k) => ({
+          name: k === "DEFAULT" ? "duration" : `duration-${k}`,
+          value: duration[k],
+          note: k === "DEFAULT" ? "@kind other — the default" : "@kind other",
+        })),
+      ],
     },
   ]);
 }
