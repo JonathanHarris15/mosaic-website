@@ -30,6 +30,13 @@
         /* The shell hides the page header, and with it the way back to the list. */
         .hymn-shell-back { display: none; }
         html.shell-mobile .hymn-shell-back { display: inline-flex; }
+        .hymn-tag-filter { display: none; }
+        @media (max-width: 767px) {
+            .hymn-tag-cloud { display: none !important; }
+            .hymn-tag-filter { display: flex; flex-direction: column; gap: 0.5rem; }
+        }
+        html.shell-mobile .hymn-tag-cloud { display: none !important; }
+        html.shell-mobile .hymn-tag-filter { display: flex; flex-direction: column; gap: 0.5rem; }
     </style>
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
@@ -70,7 +77,27 @@
                 <span class="material-symbols-outlined">search</span>
                 <input type="text" x-model="searchQuery" placeholder="Search by title, writer, attribution, or tag">
             </label>
-            <div class="flex flex-wrap gap-2" x-show="allTags.length">
+            <div class="hymn-tag-filter" x-show="allTags.length">
+                <div class="m-select-wrap">
+                    <select class="m-select" aria-label="Filter by tag" @change="chooseTag($event)">
+                        <option value="">Filter by tag</option>
+                        <template x-for="tag in tagChoices" :key="tag">
+                            <option :value="tag" x-text="tag"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="flex flex-wrap gap-2" x-show="selectedTags.length">
+                    <template x-for="tag in selectedTags" :key="tag">
+                        <button type="button" @click="toggleTag(tag)"
+                                class="px-3 py-1.5 rounded-full border font-label-md text-label-md bg-primary text-on-primary border-primary"
+                                :aria-label="'Remove tag ' + tag">
+                            <span x-text="tag"></span>
+                            <span aria-hidden="true"> ×</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+            <div class="hymn-tag-cloud flex flex-wrap gap-2" x-show="allTags.length">
                 <template x-for="tag in allTags" :key="tag">
                     <button type="button" @click="toggleTag(tag)"
                             class="px-3 py-1.5 rounded-full border font-label-md text-label-md"

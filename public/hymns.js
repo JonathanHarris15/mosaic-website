@@ -31,6 +31,10 @@ document.addEventListener('alpine:init', () => {
             return this.hymns.filter((hymn) => HymnsPage.hymnMatches(hymn, this.searchQuery, this.selectedTags));
         },
 
+        get tagChoices() {
+            return HymnsPage.tagChoices(this.allTags, this.selectedTags);
+        },
+
         get headerTitle() {
             if (this.view === 'form') return this.creating ? 'New hymn' : 'Edit hymn';
             if (this.view === 'hymn' && this.hymn) return this.hymn.hymn_name;
@@ -117,6 +121,13 @@ document.addEventListener('alpine:init', () => {
             } else {
                 this.selectedTags = this.selectedTags.concat([tag]);
             }
+        },
+
+        chooseTag(event) {
+            const tag = event && event.target ? event.target.value : '';
+            if (event && event.target) event.target.value = '';
+            if (!tag) return;
+            this.selectedTags = HymnsPage.chooseTag(this.selectedTags, tag);
         },
 
         showHymn(hymn) {
