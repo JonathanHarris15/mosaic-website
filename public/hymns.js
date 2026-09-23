@@ -39,7 +39,7 @@ document.addEventListener('alpine:init', () => {
 
         init() {
             const start = (user) => {
-                const ready = user && typeof getUserData === 'function'
+                const ready = user
                     ? getUserData(user.uid).then((userData) => {
                         this.canEdit = HymnsPage.canEditHymnBook(userData);
                     }).catch(() => { this.canEdit = false; })
@@ -52,11 +52,10 @@ document.addEventListener('alpine:init', () => {
                         this.notice = 'Could not open the hymn book.';
                     });
             };
-            if (typeof auth !== 'undefined' && auth.onAuthStateChanged) {
-                const unsub = auth.onAuthStateChanged((user) => { unsub(); start(user); });
-            } else {
-                start(null);
-            }
+            const unsub = auth.onAuthStateChanged((user) => {
+                unsub();
+                start(user);
+            });
         },
 
         applyOpenState() {

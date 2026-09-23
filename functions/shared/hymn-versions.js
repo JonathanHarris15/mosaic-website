@@ -52,12 +52,23 @@
         return versions[0];
     }
 
-    // Sheet pages of the version that prints, still in that version's order.
-    // Empty slots are left for the caller to skip — this does not invent pages.
+    // A stored page is a url, or an older object that carried one. A blank
+    // slot is not a page.
+    function pageUrl(page) {
+        if (page == null) return '';
+        if (typeof page === 'string') return page.trim();
+        if (typeof page === 'object') return String(page.url || page.src || '').trim();
+        return '';
+    }
+
+    // Sheet pages of the version that prints, in that version's order.
+    // Blank slots are dropped here so a guide and a printable cannot disagree
+    // about whether an empty string is a page.
     function defaultPages(hymn) {
         const version = defaultVersion(hymn);
         const pages = version && version.pages;
-        return Array.isArray(pages) ? pages : [];
+        if (!Array.isArray(pages)) return [];
+        return pages.map(pageUrl).filter(function (url) { return !!url; });
     }
 
     // Star one version. The list stays in the order it was given.

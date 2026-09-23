@@ -99,15 +99,24 @@ test('saving a hymn that was never starred marks its first version and does not 
     assert.equal(already[0].default, undefined);
 });
 
+test('a blank page slot is not a page that prints', () => {
+    const pages = HymnVersions.defaultPages({
+        versions: [{ name: 'Only', default: true, pages: ['a.png', '', '  ', null, { url: 'b.png' }] }],
+    });
+    assert.deepEqual(pages, ['a.png', 'b.png']);
+    assert.deepEqual(HymnVersions.defaultPages({ versions: [{ pages: ['', null] }] }), []);
+});
+
 test('every reader that prints a hymn asks this rule and not the first version', () => {
     const readers = [
-        'printable-data-core.js',
-        'guide-store.js',
-        'service-guide.js',
-        'service-builder.js',
+        'public/printable-data-core.js',
+        'public/guide-store.js',
+        'public/service-guide.js',
+        'public/service-builder.js',
+        'scripts/export-service-guide.js',
     ];
     readers.forEach(file => {
-        const src = fs.readFileSync(path.join(__dirname, '..', 'public', file), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
         assert.match(src, /HymnVersions\.defaultPages/, file + ' still chooses a version on its own');
         assert.doesNotMatch(src, /versions(?:\?\.|\.)\[0\]/, file + ' still prints the first version');
     });
