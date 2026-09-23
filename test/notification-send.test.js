@@ -150,6 +150,13 @@ test('escalate uses the other route, and falls back when that route is missing',
     const fellBack = await tellPerson(noPhone.deps, Object.assign({}, base, {escalate: true}));
     assert.strictEqual(fellBack.channel, 'push');
     assert.strictEqual(noPhone.calls.text.length, 0);
+
+    const afterText = harness();
+    const otherWay = await tellPerson(afterText.deps, Object.assign({}, base, {
+        escalate: true, previousChannel: 'text',
+    }));
+    assert.strictEqual(otherWay.channel, 'push');
+    assert.strictEqual(afterText.calls.text.length, 0);
 });
 
 test('nobody reachable writes one row and sends nothing', async () => {

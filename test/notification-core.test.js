@@ -34,6 +34,18 @@ for (const row of routes) {
     });
 }
 
+test('escalate uses the route the first ask did not, when that route still exists', () => {
+    assert.strictEqual(nc.chooseRoute({
+        hasLiveToken: true, hasPhone: true, escalate: true, previousChannel: 'text',
+    }), 'push');
+    assert.strictEqual(nc.chooseRoute({
+        hasLiveToken: true, hasPhone: true, escalate: true, previousChannel: 'push',
+    }), 'text');
+    assert.strictEqual(nc.chooseRoute({
+        hasLiveToken: false, hasPhone: true, escalate: true, previousChannel: 'push',
+    }), 'text');
+});
+
 test('a token the provider accepted ends the send', () => {
     assert.strictEqual(nc.afterPushAttempt({
         anyAccepted: true, anyRetryable: false, hasPhone: true,

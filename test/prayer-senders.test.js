@@ -32,6 +32,8 @@ test('scheduler and manual ask go through dispatchPrayerAsk', () => {
         'exports.notifyEldersOnPrayerComplete');
     assert.match(subject, /dispatchPrayerAsk/);
     assert.match(subject, /hasDeviceToken: tokens\.length > 0/);
+    assert.match(subject, /previousChannel: req\.sentChannel/);
+    assert.match(index, /sentChannel/);
     assert.doesNotMatch(subject, /sendViaTextbelt/);
     assert.match(manual, /dispatchPrayerAsk/);
     assert.match(manual, /manual:\s*true/);

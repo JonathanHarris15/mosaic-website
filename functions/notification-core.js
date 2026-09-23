@@ -83,21 +83,38 @@ function shouldSendNow(state) {
 }
 
 /**
+ * A route only when that route can still be taken.
+ * @param {string} channel push or text
+ * @param {boolean} hasLiveToken
+ * @param {boolean} hasPhone
+ * @return {string} the route, or null when it cannot
+ */
+function routeIfPossible(channel, hasLiveToken, hasPhone) {
+  if (channel === "push" && hasLiveToken) return "push";
+  if (channel === "text" && hasPhone) return "text";
+  return null;
+}
+
+/**
  * The route a Notification takes before any provider is asked.
- * Escalate means "the last one may not have landed — use the other route",
- * and falls back to the route that still exists when the other one cannot.
- * @param {Object} state hasLiveToken, hasPhone, escalate
- * @return {'push'|'text'|'none'}
+ * Escalate means the last one may not have landed, so use the other route.
+ * previousChannel is the route that already went. Without it, the other
+ * route is the one that is not natural today.
+ * @param {Object} state hasLiveToken, hasPhone, escalate, previousChannel
+ * @return {string} push, text, or none
  */
 function chooseRoute(state) {
   const hasLiveToken = !!(state && state.hasLiveToken);
   const hasPhone = !!(state && state.hasPhone);
   const natural = hasLiveToken ? "push" : (hasPhone ? "text" : "none");
   if (!state || !state.escalate || natural === "none") return natural;
-  const other = natural === "push" ? "text" : "push";
-  if (other === "push" && hasLiveToken) return "push";
-  if (other === "text" && hasPhone) return "text";
-  return natural;
+  // The other route from the one that already went, when the path remembers
+  // it. Otherwise the other route from what would be natural today.
+  const remembered = state.previousChannel;
+  const from = (remembered === "push" || remembered === "text") ?
+    remembered : natural;
+  const other = from === "push" ? "text" : "push";
+  return routeIfPossible(other, hasLiveToken, hasPhone) || natural;
 }
 
 /**

@@ -2588,6 +2588,7 @@ async function dispatchPrayerAsk(db, args) {
     escalate: intent.escalate,
     manual: !!args.manual,
     serviceDate,
+    previousChannel: args.previousChannel || null,
     // MS-247 passes the Answer link. Null until that mint exists.
     url: pr.prayerAskUrl(args.url),
     values: {name: pr.firstNameOf(personSnap.data().name)},
@@ -2604,9 +2605,11 @@ async function dispatchPrayerAsk(db, args) {
   }
 
   const today = pr.churchDateParts(new Date()).date;
+  const sentChannel = result.channel === "push" || result.channel === "text" ?
+    result.channel : null;
   const update = kind === "initial" ?
-    {serviceDate, initialSentDate: today} :
-    {serviceDate, reminderSent: true, reminderSentDate: today};
+    {serviceDate, initialSentDate: today, sentChannel} :
+    {serviceDate, reminderSent: true, reminderSentDate: today, sentChannel};
   await reqRef.set(update, {merge: true});
   return {
     success: true,
@@ -2649,6 +2652,7 @@ async function processPrayerSubject(db, args) {
 
   const result = await dispatchPrayerAsk(db, {
     serviceDate, personId, kind: action, personSnap, reqRef,
+    previousChannel: req.sentChannel || null,
   });
   if (!result.success) {
     log(`Prayer-request ${action} send failed for ${personId}: ` +
@@ -2944,6 +2948,7 @@ exports.sendPrayerRequestNow = onCall(
         reqRef,
         manual: true,
         url: request.data && request.data.url,
+        previousChannel: req.sentChannel || null,
       });
       if (!result.success) {
         throw new HttpsError(

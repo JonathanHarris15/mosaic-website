@@ -160,6 +160,7 @@ async function tellPerson(deps, request) {
     hasLiveToken: live.length > 0,
     hasPhone: hasPhone,
     escalate: !!(request && request.escalate),
+    previousChannel: request && request.previousChannel,
   });
   const templates = await deps.loadTemplates();
   const words = wordings(templates, request, person || {});
