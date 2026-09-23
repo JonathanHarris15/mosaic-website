@@ -3019,7 +3019,7 @@ test('a row height belongs to the month it was measured in', () => {
     const html = readPage('calendar.html');
     assert.ok(html.indexOf("expandedWeek && m.month === month ? 'm-cal__grid--open' : ''") !== -1,
         'every month on the rail stops dividing its space, not just the open one');
-    assert.ok(readPage('mosaic.css').indexOf('.m-cal--fit .m-cal__grid--open{grid-auto-rows:auto}') !== -1,
+    assert.ok(/\.m-cal--fit \.m-cal__grid--open\{[^}]*grid-auto-rows:auto/.test(readPage('mosaic.css')),
         'the open grid still divides its space equally, so no row can grow');
 });
 
@@ -3224,7 +3224,15 @@ test('a row that grows does it visibly, unless somebody asked for less movement'
     // `.m-cal--open.m-cal__cell` — a different rule about a different element.
     const css = readPage('mosaic.css');
 
-    assert.ok(css.indexOf('.m-cal--open .m-cal__cell{transition:height var(--duration-slow)') !== -1,
+    // ⚠ AND NOT WRITTEN IN TOKENS THAT DO NOT REACH THIS FILE. This assertion
+    // used to require `var(--duration-slow)` here by name, which is how a
+    // transition that never ran once stayed green for months: neither
+    // --duration-slow nor --ease-standard is declared in mosaic.css, so the
+    // whole declaration was dropped and the row snapped open and snapped shut.
+    // The 300ms is --duration-slow's value; the curve is --ease-standard's.
+    // test/calendar-week-open.test.js is the one that checks the rule cannot
+    // go back to naming something the sheet never declares.
+    assert.ok(/\.m-cal--open \.m-cal__cell\{transition:height \.3s cubic-bezier/.test(css),
         'an opening week snaps rather than grows');
     assert.ok(/@media \(prefers-reduced-motion:reduce\)\{\.m-cal--open \.m-cal__cell\{transition:none\}\}/.test(css),
         'asking for less movement does not stop the row animating');
