@@ -124,8 +124,12 @@ const SMS_REPLY_WEBHOOK_URL = firebaseProject.smsReplyWebhookUrl;
 /** Firestore collection holding inbound replies to test texts. */
 const SMS_REPLIES_COLLECTION = "sms_test_replies";
 
-/** Outbound message log — maps a sent text's textId to who/what it was for. */
-const SMS_MESSAGES_COLLECTION = "sms_messages";
+/**
+ * One log for every Notification, whichever channel carried it (ADR-0036).
+ * A text row still carries textId so an inbound reply can find what it
+ * answers; that correlation is a field, not a separate collection.
+ */
+const NOTIFICATIONS_COLLECTION = "notifications";
 
 /** Config doc holding the editable templates and the automation kill switch. */
 const PRAYER_CONFIG_DOC = "app_config/prayer_request_sms";
@@ -2171,8 +2175,10 @@ async function sendViaTextbelt({to, body, withReplyWebhook = true}) {
  */
 async function recordOutbound(db, entry) {
   if (!entry.textId) return;
-  await db.collection(SMS_MESSAGES_COLLECTION).add({
+  await db.collection(NOTIFICATIONS_COLLECTION).add({
     direction: "outbound",
+    channel: "text",
+    accepted: true,
     to: entry.to,
     body: entry.body,
     textId: String(entry.textId),
@@ -2309,7 +2315,7 @@ exports.smsInbound = onRequest(
       const db = admin.firestore();
       try {
         // Resolve what this reply was a reply to.
-        const originSnap = await db.collection(SMS_MESSAGES_COLLECTION)
+        const originSnap = await db.collection(NOTIFICATIONS_COLLECTION)
             .where("textId", "==", reply.textId)
             .where("direction", "==", "outbound")
             .limit(1)
@@ -2843,11 +2849,12 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
 
       // Idempotency lock: a deterministic marker doc, created atomically. If it
       // already exists, another invocation has the digest.
-      const markerRef = db.collection(SMS_MESSAGES_COLLECTION)
+      const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
           .doc(`elder_digest_${serviceDate}`);
       try {
         await markerRef.create({
           direction: "outbound",
+          channel: "text",
           purpose: "elder_digest",
           serviceDate,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),

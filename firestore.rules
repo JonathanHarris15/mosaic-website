@@ -142,6 +142,26 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update: if isAdmin() && noStoredPassword();
       allow delete: if isAdmin();
+
+      // Device tokens (MS-189, ADR-0036). One document per signed-in device,
+      // under the User the device signed in as — never under the Person.
+      //
+      // The owner writes and deletes their own. Nobody else may read them:
+      // a token is a handle for messaging somebody's phone, and an admin
+      // reading the user document is not a reason to hand them that handle.
+      // The send path uses the Admin SDK, which these rules do not apply to.
+      //
+      // Anonymous sign-in is not a user (isSignedIn). Several documents may
+      // exist at once; deleting one names that document and leaves the rest.
+      match /push_tokens/{tokenId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.token is string
+          && request.resource.data.token.size() > 0
+          && request.resource.data.token.size() < 4096;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // Directory Requests (ADR-0025, ADR-0027): anything a person asks the church
@@ -860,9 +880,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Outbound SMS log — written only by the server (admin SDK) and read by
-    // admins for the audit/status readout. No client writes.
-    match /sms_messages/{messageId} {
+    // Notification log (ADR-0009, renamed by ADR-0036). Written only by the
+    // server (admin SDK). Admins may read. No client writes. A text row's
+    // textId is how an inbound reply finds what it answers; that is a field,
+    // and the collection itself answers "did we tell them?".
+    match /notifications/{messageId} {
       allow read: if isAdmin();
     }
 
