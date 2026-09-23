@@ -29,9 +29,10 @@ without guessing which word was which.
 They are not a top-level `firstName` / `lastName` pair. The app already
 treats `name` as the only name, and a parallel pair has made a screen show
 the wrong name while its tests stayed green. The parts sit beside `name`
-as `nameParts`. Existing people are not parsed apart. A record that has
-only `name` stays valid, and a Household suggested from that person still
-uses the last word of the full name until the parts are entered.
+as `nameParts`. A record that has only `name` stays valid. Taking that
+name apart is [ADR 0074](0074-an-unsplit-name-is-taken-apart-only-when-the-parts-say-the-same-name.md):
+only when the parts say the same full name. Until then, a Household
+suggested from that person still uses the last word of the full name.
 
 On create, the suggested Household name comes from the first adult's last
 name ("The Harris Household"). A suffix never does. The greeter can still

@@ -187,13 +187,118 @@ test('filling Jonathan / Harris / Jr. replaces the full name and remembers the p
     });
 });
 
-test('reopening a person whose name was never split shows the three blanks empty', () => {
-    assert.deepStrictEqual(Name.blanksFor({ name: 'Jonathan Harris Jr.' }), {
-        firstName: '',
-        lastName: '',
+test('Jonathan Harris is taken apart into a first name and a last name', () => {
+    assert.deepStrictEqual(Name.partsFromFullName('Jonathan Harris'), {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
         suffix: '',
         noLastName: false,
     });
+});
+
+test('Mary Anne Harris keeps Mary Anne as the first name', () => {
+    assert.deepStrictEqual(Name.partsFromFullName('Mary Anne Harris'), {
+        firstName: 'Mary Anne',
+        lastName: 'Harris',
+        suffix: '',
+        noLastName: false,
+    });
+});
+
+test('Jonathan Harris Jr. is taken apart with Harris as the last name', () => {
+    assert.deepStrictEqual(Name.partsFromFullName('Jonathan Harris Jr.'), {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr.',
+        noLastName: false,
+    });
+    assert.deepStrictEqual(Name.partsFromFullName('Jonathan Harris jr'), {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'jr',
+        noLastName: false,
+    });
+});
+
+test('Jonathan Harris Jr. III keeps both trailing suffixes', () => {
+    assert.deepStrictEqual(Name.partsFromFullName('Jonathan Harris Jr. III'), {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr. III',
+        noLastName: false,
+    });
+});
+
+test('a single word is not taken apart, and the no-last-name pass is not set', () => {
+    assert.strictEqual(Name.partsFromFullName('Madonna'), null);
+    assert.strictEqual(Name.partsFromFullName('  '), null);
+});
+
+test('a name with a comma is not taken apart', () => {
+    assert.strictEqual(Name.partsFromFullName('Harris, Jonathan'), null);
+});
+
+test('a name that would not join back to itself is not taken apart', () => {
+    assert.strictEqual(Name.partsFromFullName('Jonathan  Harris'), null);
+});
+
+test('a name that is only a suffix is not taken apart', () => {
+    assert.strictEqual(Name.partsFromFullName('Jr.'), null);
+    assert.strictEqual(Name.partsFromFullName('Harris Jr.'), null);
+});
+
+test('a person who already has parts is not taken apart again', () => {
+    const parts = { firstName: 'Jon', lastName: 'H', suffix: '', noLastName: false };
+    assert.strictEqual(Name.partsToRemember({
+        name: 'Jonathan Harris',
+        nameParts: parts,
+    }), parts);
+});
+
+test('a person with only a full name is remembered from that reading', () => {
+    assert.deepStrictEqual(Name.partsToRemember({ name: 'Jonathan Harris Jr.' }), {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr.',
+        noLastName: false,
+    });
+    assert.strictEqual(Name.partsToRemember({ name: 'Madonna' }), null);
+});
+
+test('reopening Jonathan Harris Jr. shows that reading, and saving remembers it without renaming', () => {
+    const person = { name: 'Jonathan Harris Jr.' };
+    const blanks = Name.blanksFor(person);
+    assert.deepStrictEqual(blanks, {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr.',
+        noLastName: false,
+    });
+    const saved = Name.saveExisting(person, blanks);
+    assert.strictEqual(saved.fault, '');
+    assert.strictEqual(saved.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(saved.writeParts, true);
+    assert.deepStrictEqual(saved.nameParts, blanks);
+    assert.deepStrictEqual(Name.blanksFor({ name: saved.name, nameParts: saved.nameParts }), blanks);
+});
+
+test('Mary Anne Harris reopens with Mary Anne as the first name', () => {
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Mary Anne Harris' }), {
+        firstName: 'Mary Anne',
+        lastName: 'Harris',
+        suffix: '',
+        noLastName: false,
+    });
+});
+
+test('a one-word name and a comma name still open empty, and saving does not rename', () => {
+    const empty = { firstName: '', lastName: '', suffix: '', noLastName: false };
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Madonna' }), empty);
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Harris, Jonathan' }), empty);
+    const saved = Name.saveExisting({ name: 'Madonna' }, Name.blanksFor({ name: 'Madonna' }));
+    assert.strictEqual(saved.fault, '');
+    assert.strictEqual(saved.name, 'Madonna');
+    assert.strictEqual(saved.writeParts, false);
 });
 
 test('reopening a person entered in parts shows those three blanks', () => {

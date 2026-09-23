@@ -154,6 +154,83 @@ test('a blank name on an existing person is saved trimmed, even when empty', () 
     assert.equal(payload.birthday, null);
 });
 
+test('saving the same name leaves remembered parts alone', () => {
+    const payload = Edit.savePayload({
+        name: 'Jonathan Harris Jr.',
+        email: '',
+        phone: '',
+        address: '',
+        birthday: '',
+        sex: '',
+        kid: false,
+    }, {
+        editMode: true,
+        currentName: 'Jonathan Harris Jr.',
+        updatedByName: '',
+        now: 1,
+    });
+    assert.equal(payload.name, 'Jonathan Harris Jr.');
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, 'nameParts'), false);
+});
+
+test('changing the name clears remembered parts and does not invent a split', () => {
+    const payload = Edit.savePayload({
+        name: 'Jon Harris',
+        email: '',
+        phone: '',
+        address: '',
+        birthday: '',
+        sex: 'male',
+        kid: false,
+    }, {
+        editMode: true,
+        currentName: 'Jonathan Harris Jr.',
+        updatedByName: '',
+        now: 1,
+    });
+    assert.equal(payload.name, 'Jon Harris');
+    assert.equal(payload.nameParts, Edit.CLEAR_NAME_PARTS);
+    assert.equal(payload.nameParts.firstName, undefined);
+});
+
+test('Edit Mode off does not clear parts even when the name field differs', () => {
+    const payload = Edit.savePayload({
+        name: 'Someone Else',
+        email: 'a@b.c',
+        phone: '',
+        address: '',
+        birthday: '',
+    }, {
+        editMode: false,
+        currentName: 'Jonathan Harris Jr.',
+        updatedByName: '',
+        now: 1,
+    });
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, 'name'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, 'nameParts'), false);
+});
+
+test('the saved view keeps parts when the name is unchanged and drops them when it changes', () => {
+    const person = {
+        name: 'Jonathan Harris Jr.',
+        nameParts: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
+        email: '', phone: '', address: '', birthday: '',
+    };
+    const fields = { name: 'Jonathan Harris Jr.', email: '', phone: '', address: '', birthday: '' };
+    const same = Edit.savedPersonView(person, fields, true);
+    assert.deepStrictEqual(same.nameParts, person.nameParts);
+    const changed = Edit.savedPersonView(person, Object.assign({}, fields, { name: 'Jon Harris' }), true);
+    assert.equal(changed.name, 'Jon Harris');
+    assert.equal(Object.prototype.hasOwnProperty.call(changed, 'nameParts'), false);
+});
+
+test('adding a person on the phone still asks for one name and writes no parts', () => {
+    const built = Edit.addPersonDocument({ name: 'Ada Lovelace' }, { now: 1 });
+    assert.equal(built.ok, true);
+    assert.equal(built.doc.name, 'Ada Lovelace');
+    assert.equal(Object.prototype.hasOwnProperty.call(built.doc, 'nameParts'), false);
+});
+
 test('saving while Edit Mode is off keeps the contact fields and leaves name, sex, and the Kid mark alone', () => {
     const payload = Edit.savePayload({
         name: 'Changed',

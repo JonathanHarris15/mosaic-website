@@ -253,7 +253,7 @@ test('the inbox names the parts of a Name Fix, and a one-string ask stays one sp
     assert.strictEqual(Core.summarize(spelling, nameOf), 'Jane Doe asks to be spelt “Jayne Doe”');
 });
 
-test('the profile opens Name Fix blanks from remembered parts, and never from a full name', () => {
+test('the profile opens Name Fix blanks from remembered parts, or from a faithful reading', () => {
     const split = Core.nameFixBlanks({
         name: 'Jonathan Harris Jr.',
         nameParts: { firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false },
@@ -271,9 +271,12 @@ test('the profile opens Name Fix blanks from remembered parts, and never from a 
 
     const unsplit = Core.nameFixBlanks({ name: 'Jonathan Harris Jr.' });
     assert.deepStrictEqual(unsplit, {
+        firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.', noLastName: false,
+    });
+    const mononymBlank = Core.nameFixBlanks({ name: 'Plato' });
+    assert.deepStrictEqual(mononymBlank, {
         firstName: '', lastName: '', suffix: '', noLastName: false,
     });
-    assert.notStrictEqual(unsplit.firstName, 'Jonathan Harris Jr.');
 });
 
 test('the profile files a Name Fix the request already accepts, and does not write the Person', () => {
