@@ -126,17 +126,18 @@
             <!-- Left Column -->
             <div class="md:col-span-8 flex flex-col gap-margin md:min-h-0 md:overflow-hidden">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md content-start md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1 md:pb-1" id="nav-cards-grid">
-                    <!-- Hymn Directory Button -->
-                    <a href="hymn-directory.html" data-card-key="hymn-directory"
+                    <!-- Hymns. data-card-key stays hymn-directory: that is the
+                         stored arrangement key, and renaming it would scramble
+                         every saved home screen (same rule as Services). -->
+                    <a href="hymns.html" data-card-key="hymn-directory"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
                             class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary"
                                 style='font-variation-settings: "FILL" 1;'>menu_book</span>
                         </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymn Directory</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse &amp; download musical
-                            selections.</p>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymns</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the book, and the sheets that print.</p>
                     </a>
 
                     <!-- Calendar — every Event the viewer is allowed to see (MS-99).
@@ -346,27 +347,8 @@
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Membership Directory</h2>
                         <p class="font-body-md text-body-md text-on-surface-variant">Browse the church directory.</p>
                     `;
-                    // Place it right after the Hymn Directory card
+                    // Place it right after the Hymns card
                     grid.insertBefore(dirCard, grid.children[1] || null);
-                }
-
-                // Hymn Manager — editors and above (manage the hymn catalog)
-                if (grid && !document.getElementById('hymn-manager-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'hymn-manager-card';
-                    card.dataset.cardKey = 'hymn-manager';
-                    card.href = 'manager.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>library_music</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymn Manager</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Add &amp; edit the hymn catalog.</p>
-                    `;
-                    // Place it right after the Hymn Directory card
-                    grid.insertBefore(card, grid.children[1] || null);
                 }
 
                 // Service Analytics — editors and above. It reads the whole

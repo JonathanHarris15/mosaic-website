@@ -143,6 +143,15 @@ const NO_BAR_ON_PURPOSE = {
         'welcome, so the seal and Welcome! take the top and the app chrome ' +
         'is not on it. The way back and Log Out are faint buttons in the ' +
         'bottom corner, for the volunteer rather than the visitor',
+    'hymn-directory.html':
+        'MS-661. A bookmark, not a page. It opens hymns.html before anything ' +
+        'paints, so a bar here would be chrome for a document that is already gone',
+    'hymn-details.html':
+        'MS-661. A bookmark, not a page. It opens the hymn on hymns.html ' +
+        'before anything paints',
+    'manager.html':
+        'MS-661. A bookmark, not a page. It opens the hymn form on hymns.html ' +
+        'before anything paints',
 };
 
 test('every page of the app carries the shared bar', () => {
