@@ -162,6 +162,24 @@
         return (hymns || []).some(function (hymn) { return hymn.hymn_name === wanted; });
     }
 
+    // Tags still offered in the phone menu: the book's list, minus any tag
+    // already narrowing the list. Order stays the book's order.
+    function tagChoices(allTags, selectedTags) {
+        var chosen = Array.isArray(selectedTags) ? selectedTags : [];
+        return (Array.isArray(allTags) ? allTags : []).filter(function (tag) {
+            return chosen.indexOf(tag) === -1;
+        });
+    }
+
+    // Choosing a tag from that menu adds it. A blank row and a tag already
+    // chosen leave the filter as it was.
+    function chooseTag(selectedTags, tag) {
+        var chosen = Array.isArray(selectedTags) ? selectedTags.slice() : [];
+        if (!tag || chosen.indexOf(tag) !== -1) return chosen;
+        chosen.push(tag);
+        return chosen;
+    }
+
     function newTags(known, tags) {
         var have = known || [];
         return (tags || []).filter(function (tag) { return have.indexOf(tag) === -1; });
@@ -219,6 +237,8 @@
         draftFromHymn: draftFromHymn,
         catalogVersions: catalogVersions,
         duplicateTitle: duplicateTitle,
+        tagChoices: tagChoices,
+        chooseTag: chooseTag,
         newTags: newTags,
         addFormVersion: addFormVersion,
         removeFormVersion: removeFormVersion,

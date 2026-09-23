@@ -22,6 +22,18 @@ test('a member may read the hymn book and may not change it', () => {
     });
 });
 
+test('a tag menu offers the tags that are not already filtering the book', () => {
+    assert.deepEqual(
+        HymnsPage.tagChoices(['Advent', 'Grace', 'Salvation'], ['Grace']),
+        ['Advent', 'Salvation']);
+    assert.deepEqual(HymnsPage.tagChoices(['Grace', 'Advent'], []), ['Grace', 'Advent']);
+    assert.deepEqual(HymnsPage.tagChoices(null, ['Grace']), []);
+    assert.deepEqual(HymnsPage.chooseTag(['Grace'], 'Salvation'), ['Grace', 'Salvation']);
+    assert.deepEqual(HymnsPage.chooseTag(['Grace'], 'Grace'), ['Grace']);
+    assert.deepEqual(HymnsPage.chooseTag(['Grace'], ''), ['Grace']);
+    assert.deepEqual(HymnsPage.chooseTag(null, 'Grace'), ['Grace']);
+});
+
 test('search matches the title, both writers, the attribution, and the tags', () => {
     const hymn = {
         hymn_name: 'Amazing Grace',
@@ -143,6 +155,28 @@ test('the version that prints is the starred one, or the first when nobody has s
     assert.equal(HymnsPage.versionPrints(plain, 0), true);
     assert.deepEqual(HymnsPage.sheetPages(plain.versions[0]), ['a.png', 'b.png']);
     assert.equal(HymnsPage.sheetFileName('Amazing Grace', 'SATB', 2), 'amazing_grace_satb_page_2.png');
+});
+
+test('on a phone the hymn list filters by a tag menu instead of a pill cloud', () => {
+    const page = read('hymns.html');
+    const filterAt = page.indexOf('<div class="hymn-tag-filter"');
+    const cloudAt = page.indexOf('<div class="hymn-tag-cloud');
+    assert.ok(filterAt !== -1, 'phone tag menu');
+    assert.ok(cloudAt !== -1, 'desktop tag cloud');
+    const filter = page.slice(filterAt, cloudAt);
+    const cloud = page.slice(cloudAt, page.indexOf('filteredHymns.length', cloudAt));
+    assert.match(filter, /aria-label="Filter by tag"/);
+    assert.match(filter, /<select/);
+    assert.match(filter, /tagChoices/);
+    assert.match(filter, /chooseTag/);
+    assert.match(filter, /x-for="tag in selectedTags"/);
+    assert.match(cloud, /x-for="tag in allTags"/);
+    assert.match(cloud, /toggleTag\(tag\)/);
+    assert.match(page, /Search by title, writer, attribution, or tag/);
+    assert.match(page, /html\.shell-mobile \.hymn-tag-cloud/);
+    assert.match(page, /max-width:\s*767px/);
+    assert.match(page, /\.hymn-tag-cloud\s*\{[^}]*display:\s*none\s*!important/);
+    assert.match(page, /\.hymn-tag-filter\s*\{[^}]*display:\s*flex/);
 });
 
 test('the computer has one Hymns page and the old doors open it', () => {
