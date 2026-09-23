@@ -5,6 +5,7 @@
 // minute old silently drops whoever was added in that minute. Ignored on the
 // web, where reads were always live.
 var FRESH_READ = { source: 'server' };
+// Which version of a hymn prints (ADR 0073). The page loads hymn-versions.js.
 
 // ── Stepping Sunday to Sunday (MS-303) ──────────────────────────────────────
 //
@@ -2386,10 +2387,10 @@ function serviceForm() {
                     if (!doc.exists) continue;
 
                     const hymn = doc.data();
-                    const version = hymn.versions && hymn.versions.length > 0 ? hymn.versions[0] : null;
-                    if (!version || !version.pages || version.pages.length === 0) continue;
+                    const pages = HymnVersions.defaultPages(hymn);
+                    if (!pages.length) continue;
 
-                    for (const pageUrl of version.pages) {
+                    for (const pageUrl of pages) {
                         try {
                             const imgData = await this._getImageDataUrl(pageUrl);
                             if (!imgData) continue;

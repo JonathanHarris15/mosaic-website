@@ -14,10 +14,8 @@ A Firebase-based platform for managing liturgical resources, including a hymn di
 ## Project Structure
 
 - `public/`: Static frontend assets.
-  - `main.js`: Core logic for hymn lookup and search using Alpine.js.
   - `auth.js`: Firebase Authentication integration and user session management.
-  - `hymn-directory.html`: Main interface for searching and browsing hymns.
-  - `manager.html`: Administrative interface for hymn management.
+  - `hymns.html`: The hymn book. Anyone who can open the app may browse; editors star the version that prints and add or edit hymns. `hymn-directory.html`, `hymn-details.html`, and `manager.html` open this page.
 - `functions/`: Firebase Cloud Functions source code.
   - `index.js`: Contains callable functions like `getHymnIndex` and user management helpers.
 - `scripts/`: Utility and maintenance scripts.
@@ -63,7 +61,7 @@ In the `functions/` directory:
 
 - **Frontend**:
   - Prefer Tailwind CSS classes for styling.
-  - Use Alpine.js for lightweight reactivity (defined in `main.js`).
+  - Use Alpine.js for lightweight reactivity. The hymn book is `hymns.js`.
   - Access Firestore and Functions via the Firebase Compat SDK (v9).
 - **Backend**:
   - Use `onCall` (v2) for all client-invoked functions.

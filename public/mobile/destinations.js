@@ -28,7 +28,7 @@
     // these two the other way round is the mistake this comment exists to stop.
     const DESTINATIONS = [
         { key: 'home', label: 'Home', icon: 'house', symbol: 'home', route: 'home' },
-        { key: 'hymn-directory', label: 'Hymn Directory', icon: 'book-open', symbol: 'menu_book', route: 'hymnDirectory' },
+        { key: 'hymn-directory', label: 'Hymns', icon: 'book-open', symbol: 'menu_book', route: 'hymnDirectory' },
         { key: 'calendar', label: 'Services', icon: 'church', symbol: 'church', route: 'calendar' },
         { key: 'events', label: 'Calendar', icon: 'calendar-days', symbol: 'calendar_month', route: 'events' },
         // ⚠ GATED SINCE MS-197, AND THE MISSING GATE WAS THE BUG. This entry
@@ -117,6 +117,10 @@
         // with one editor, and a native port would be a second place every
         // rule about overdue and repeats had to be applied.
         shepherdTasks: 'shepherding-tasks.html',
+        // The hymn book is the desktop page (MS-668). The route name stays
+        // hymnDirectory so an old link still arrives, and the stored home-card
+        // key stays hymn-directory for the same reason Services kept its key.
+        hymnDirectory: 'hymns.html',
     };
 
     // True when a destination is visible to this user. No gate means everyone.

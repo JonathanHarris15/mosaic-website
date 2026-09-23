@@ -31,86 +31,8 @@
     return html`<button onClick=${props.onClick} style=${{ flexShrink: 0, padding: "7px 14px", borderRadius: "var(--radius-full)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", border: on ? "1px solid var(--primary)" : "1px solid var(--outline-variant)", background: on ? "var(--primary)" : "var(--surface-container-lowest)", color: on ? "var(--on-primary)" : "var(--on-surface-variant)" }}>${props.children}</button>`;
   }
 
-  // ── Hymn Directory ───────────────────────────────────────
-  function HymnDirectoryScreen(props) {
-    var st = useAsync(data.getHymns, []);
-    var qS = useState(""), tagsS = useState([]);
-    var hymns = st.data || [];
-    var allTags = [];
-    hymns.forEach(function (h) { h.tags.forEach(function (t) { if (allTags.indexOf(t) < 0) allTags.push(t); }); });
-    allTags.sort();
-    var q = qS[0], tags = tagsS[0];
-    function toggle(t) { tagsS[1](tags.indexOf(t) < 0 ? tags.concat([t]) : tags.filter(function (x) { return x !== t; })); }
-    var results = hymns.filter(function (h) {
-      var mq = !q || data.lc(h.name).indexOf(data.lc(q)) >= 0 || data.lc(h.author).indexOf(data.lc(q)) >= 0;
-      var mt = tags.length === 0 || tags.every(function (t) { return h.tags.indexOf(t) >= 0; });
-      return mq && mt;
-    });
-    return html`
-      <${Screen}>
-        <${TopBar} title="Hymn Directory" onMenu=${props.openMenu} />
-        <${Body} style=${{ paddingTop: 14 }}>
-          <div style=${{ padding: "0 16px 12px" }}>
-            <${SearchBar} placeholder="Search hymns & authors" value=${q} onChange=${function (e) { qS[1](e.target.value); }} />
-          </div>
-          ${allTags.length ? html`<div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 16px 12px" }}>
-            ${allTags.map(function (t) { return html`<${Chip} key=${t} active=${tags.indexOf(t) >= 0} onClick=${function () { toggle(t); }}>${t}<//>`; })}
-          </div>` : null}
-          ${st.loading ? html`<${Loading} label="Loading hymns…" />` : st.error ? html`<${ErrorNote}>Couldn't load hymns.<//>` : html`
-            <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} Hymns<//></div>
-            <div style=${{ padding: "8px 16px calc(40px + env(safe-area-inset-bottom,0px))", display: "flex", flexDirection: "column", gap: 12 }}>
-              ${results.map(function (h) {
-                return html`<button key=${h.id} onClick=${function () { props.nav("hymnDetails", { hymn: h }); }} style=${{ display: "block", width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
-                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--on-surface)", lineHeight: 1.25 }}>${h.name}</div>
-                  ${h.author ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 14, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 3 }}>${h.author}</div>` : null}
-                  ${(h.tags.length || h.keys.length || h.hasSheet) ? html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, alignItems: "center" }}>
-                    ${h.tags.map(function (t) { return html`<${Badge} key=${t} tone="secondary">${t}<//>`; })}
-                    <span style=${{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                      ${h.keys.length ? html`<span>${h.keys.join(", ")}</span>` : null}
-                      ${h.hasSheet ? html`<span style=${{ display: "flex", alignItems: "center", gap: 3 }}>${Ic("music", 13)} ${h.pages.length}</span>` : null}
-                    </span>
-                  </div>` : null}
-                </button>`;
-              })}
-              ${results.length === 0 ? html`<${Empty}>No hymns match your search.<//>` : null}
-            </div>`}
-        </${Body}>
-        <${FAB} icon="plus" label="Add hymn" onClick=${function () { props.nav("hymnManager", { new: true }); }} />
-      </${Screen}>`;
-  }
-
-  // ── Hymn Details ─────────────────────────────────────────
-  function HymnDetailsScreen(props) {
-    var h = (props.params && props.params.hymn) || { name: "Hymn", lyricsWriter: "", musicWriter: "", tags: [], keys: [], pages: [], lastPlayed: "" };
-    var writers = [h.lyricsWriter ? "Words: " + h.lyricsWriter : "", h.musicWriter ? "Music: " + h.musicWriter : ""].filter(Boolean).join("  ·  ");
-    var stats = [["Sheets", String(h.pages.length)], ["Tags", String(h.tags.length)], ["Last sung", h.lastPlayed ? String(h.lastPlayed).slice(0, 10) : "—"]];
-    return html`
-      <${Screen}>
-        <${TopBar} title="Hymn" onBack=${props.back} serif=${false} />
-        <${Body} style=${{ padding: "20px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
-          ${h.tags.length ? html`<${Overline}>${h.tags.join(" · ")}<//>` : null}
-          <div style=${{ fontFamily: "var(--font-serif)", fontSize: 28, fontWeight: 600, color: "var(--primary)", lineHeight: 1.2, marginTop: 8 }}>${h.name}</div>
-          ${writers ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 4 }}>${writers}</div>` : null}
-          <div style=${{ display: "flex", gap: 10, marginTop: 18 }}>
-            ${stats.map(function (kv) { return html`<div key=${kv[0]} style=${{ flex: 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", padding: "12px 10px", textAlign: "center" }}>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-surface)" }}>${kv[1]}</div>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginTop: 4 }}>${kv[0]}</div>
-            </div>`; })}
-          </div>
-          <${Overline} style=${{ margin: "22px 0 10px" }}>Sheet Music<//>
-          ${h.pages.length ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-            ${h.pages.map(function (url, i) { return html`<img key=${i} src=${url} alt=${"Sheet page " + (i + 1)} loading="lazy" style=${{ width: "100%", display: "block", borderRadius: "var(--radius-xl)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)" }} />`; })}
-          </div>` : html`<div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", height: 140, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--on-surface-variant)" }}>
-            <span>${Ic("music", 28)}</span>
-            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>No sheet music uploaded yet</span>
-          </div>`}
-          <div style=${{ display: "flex", gap: 10, marginTop: 20 }}>
-            <div style=${{ flex: 1 }}><${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("settings-2", 17)} onClick=${function () { props.nav("hymnManager", { edit: h.id }); }}>Manage Hymn<//></div>
-            <div style=${{ flex: 1 }}><${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("file-down", 17)}>Download<//></div>
-          </div>
-        </${Body}>
-      </${Screen}>`;
-  }
+  // The hymn book is hymns.html, opened in the shell (MS-668). There is no
+  // phone-only directory and no in-phone manager.
 
   // ── Membership Directory (ADR-0012) ──────────────────────
   // Two tabs — Members (carries the Member tag) and Non-members (everyone else
@@ -1356,8 +1278,6 @@
   }
 
   M.SCREENS = Object.assign(M.SCREENS || {}, {
-    hymnDirectory: HymnDirectoryScreen,
-    hymnDetails: HymnDetailsScreen,
     people: PeopleScreen,
     personDetail: PersonDetailScreen,
     calendar: CalendarScreen,

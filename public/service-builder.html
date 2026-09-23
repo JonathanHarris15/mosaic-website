@@ -773,7 +773,7 @@
                                                                                 <div class="flex items-center gap-1">
                                                                                     <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
                                                                                     <template x-if="canEdit">
-                                                                                        <a :href="'manager.html?name=' + encodeURIComponent(hymnRef.name)" class="text-[10px] font-label-md text-amber-700 hover:text-primary transition-colors flex items-center gap-0.5 bg-amber-100 px-1.5 py-0.5 rounded" title="Add this hymn to the database">
+                                                                                        <a :href="'hymns.html?new=1&name=' + encodeURIComponent(hymnRef.name)" class="text-[10px] font-label-md text-amber-700 hover:text-primary transition-colors flex items-center gap-0.5 bg-amber-100 px-1.5 py-0.5 rounded" title="Add this hymn to the database">
                                                                                             <span class="material-symbols-outlined text-[14px]">add_circle</span>Add
                                                                                         </a>
                                                                                     </template>
@@ -1509,6 +1509,7 @@
     <script src="guide-engine.js"></script>
     <script src="guide-components.js"></script>
     <script src="guide-seed.js"></script>
+    <script src="hymn-versions.js"></script>
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <script src="service-builder.js"></script>

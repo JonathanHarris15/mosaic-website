@@ -410,6 +410,19 @@ test('the hymns of a Sunday can be kept to one hymn, so its pages can sit on a p
     assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · closing hymn');
 });
 
+test('a starred later version is what a Sunday prints, and an unstarred hymn still prints its first', () => {
+    const data = SUNDAYS();
+    data.hymns.h1.versions = [
+        { name: 'Old', pages: ['old.png'] },
+        { name: 'New', pages: ['new.png'], default: true },
+    ];
+    const r = Data.resolve('sunday_hymns', {}, data, { today: TODAY });
+    const grace = r.rows.filter(x => x.name === 'Amazing Grace');
+    assert.deepEqual(grace.map(x => x.image), ['new.png']);
+    assert.deepEqual(Data.hymnSheetPages({ versions: [{ pages: ['first.png'] }, { pages: ['second.png'] }] }), ['first.png']);
+    assert.deepEqual(Data.hymnSheetPages({ versions: [] }), []);
+});
+
 test('a hymn with empty or missing page assets skips them and does not invent images', () => {
     const data = SUNDAYS();
     data.hymns.h1.versions[0].pages = ['ag1.png', '', { url: '  ' }, { src: 'ag3.png' }, null];

@@ -37,6 +37,7 @@ const DateUtils = require(path.join(PUBLIC, 'date-utils.js'));
 const GuideEngine = require(path.join(PUBLIC, 'guide-engine.js'));
 const GuideComponents = require(path.join(PUBLIC, 'guide-components.js'));
 const GuideStore = require(path.join(PUBLIC, 'guide-store.js'));
+const HymnVersions = require(path.join(PUBLIC, 'hymn-versions.js'));
 
 // Components read the resolved context through these globals in the browser.
 globalThis.DateUtils = DateUtils;
@@ -91,7 +92,7 @@ async function resolveServiceContext(date) {
             const hd = await db.collection('hymns').doc(h.id).get();
             if (hd.exists) {
                 const d = hd.data();
-                entry.pages = (d.versions && d.versions[0] && d.versions[0].pages) || [];
+                entry.pages = HymnVersions.defaultPages(d);
                 entry.attribution = d.attribution || '';
                 entry.name = d.hymn_name || h.name;
             }

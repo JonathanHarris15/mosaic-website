@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Hymns | Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css"/>
+    <link rel="stylesheet" href="fonts.css"/>
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css"/>
+    <script src="access-core.js"></script>
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Hymns', menu: true, route: 'hymnDirectory' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script src="hymn-versions.js"></script>
+    <script src="hymns-page.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
+      x-data="hymnsPage()" x-cloak>
+    <header class="m-header m-header--sticky">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a x-show="view === 'list'" :href="homeHref" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <button type="button" x-show="view !== 'list'" @click="leaveView()" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Hymns</span>
+                </button>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title" x-text="headerTitle"></h1>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <button type="button" x-show="canEdit && view === 'list'" @click="startCreate()"
+                        class="m-btn m-btn--primary m-btn--sm">
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">Add hymn</span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <main class="flex-grow w-full max-w-5xl mx-auto px-margin py-md flex flex-col gap-md">
+        <p x-show="notice" x-text="notice" role="status"
+           class="font-body-md text-body-md text-on-surface-variant"></p>
+
+        <section x-show="view === 'list'" class="flex flex-col gap-md">
+            <label class="m-search w-full">
+                <span class="material-symbols-outlined">search</span>
+                <input type="text" x-model="searchQuery" placeholder="Search by title, writer, attribution, or tag">
+            </label>
+            <div class="flex flex-wrap gap-2" x-show="allTags.length">
+                <template x-for="tag in allTags" :key="tag">
+                    <button type="button" @click="toggleTag(tag)"
+                            class="px-3 py-1.5 rounded-full border font-label-md text-label-md"
+                            :class="selectedTags.includes(tag) ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest text-on-surface border-outline-variant'"
+                            x-text="tag"></button>
+                </template>
+            </div>
+            <p class="font-label-md text-label-md text-on-surface-variant"
+               x-text="filteredHymns.length + (filteredHymns.length === 1 ? ' hymn' : ' hymns')"></p>
+            <div class="flex flex-col gap-sm">
+                <template x-for="hymn in filteredHymns" :key="hymn.id">
+                    <button type="button" @click="showHymn(hymn)"
+                            class="text-left bg-surface-container-lowest border border-outline-variant rounded-xl p-md hover:border-primary transition-colors">
+                        <span class="block font-headline-md text-headline-md text-on-surface" x-text="hymn.hymn_name"></span>
+                        <span class="block font-body-md text-body-md text-on-surface-variant mt-1"
+                              x-text="[hymn.lyrics_writer, hymn.music_writer].filter(Boolean).join(' · ')"></span>
+                    </button>
+                </template>
+                <p x-show="filteredHymns.length === 0" class="font-body-md text-on-surface-variant">No hymns match.</p>
+            </div>
+        </section>
+
+        <section x-show="view === 'hymn'" class="flex flex-col gap-md">
+            <p x-show="missing" class="font-body-md">That hymn is not in the book.</p>
+            <template x-if="hymn">
+                <div class="flex flex-col gap-md">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" @click="copyAttribution()" class="m-btn m-btn--secondary m-btn--sm">
+                            <span class="m-btn__label">Copy attribution</span>
+                        </button>
+                        <button type="button" x-show="canEdit" @click="startEdit(hymn)" class="m-btn m-btn--secondary m-btn--sm">
+                            <span class="m-btn__label">Edit</span>
+                        </button>
+                        <button type="button" x-show="canEdit" @click="deleteHymn()" class="m-btn m-btn--secondary m-btn--sm">
+                            <span class="m-btn__label">Delete</span>
+                        </button>
+                    </div>
+                    <p class="font-body-md text-on-surface-variant"
+                       x-text="[hymn.lyrics_writer ? 'Words: ' + hymn.lyrics_writer : '', hymn.music_writer ? 'Music: ' + hymn.music_writer : ''].filter(Boolean).join(' · ')"></p>
+                    <p class="font-body-md" x-show="hymn.attribution" x-text="hymn.attribution"></p>
+                    <template x-for="(version, vIndex) in (hymn.versions || [])" :key="vIndex">
+                        <article class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <h2 class="font-headline-md text-headline-md text-primary" x-text="version.name || 'Version'"></h2>
+                                <span x-show="prints(vIndex)" class="font-label-md text-label-md text-primary">This version prints</span>
+                                <button type="button" x-show="canEdit && !prints(vIndex)" @click="starVersion(vIndex)"
+                                        class="m-btn m-btn--secondary m-btn--sm">
+                                    <span class="m-btn__label">Print this version</span>
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+                                <template x-for="(pageUrl, pIndex) in pagesOf(version)" :key="pageUrl + pIndex">
+                                    <div class="flex flex-col gap-sm border border-outline-variant rounded-lg p-sm">
+                                        <img :src="pageUrl" :alt="(version.name || 'Version') + ' page ' + (pIndex + 1)"
+                                             class="w-full object-contain bg-white border border-surface-variant" style="max-height: 70vh;">
+                                        <button type="button" class="m-btn m-btn--secondary m-btn--sm"
+                                                @click="downloadPage(pageUrl, version.name, pIndex + 1)">
+                                            <span class="m-btn__label">Download</span>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </article>
+                    </template>
+                    <p x-show="!(hymn.versions || []).length" class="font-body-md text-on-surface-variant">This hymn has no versions yet.</p>
+                </div>
+            </template>
+        </section>
+
+        <template x-if="view === 'form' && form">
+            <form @submit.prevent="handleSubmit" class="flex flex-col gap-md">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+                    <label class="flex flex-col gap-xs">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Hymn name</span>
+                        <input type="text" x-model="form.hymn_name" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
+                    </label>
+                    <label class="flex flex-col gap-xs">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Music writer</span>
+                        <input type="text" x-model="form.music_writer" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
+                    </label>
+                    <label class="flex flex-col gap-xs">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Lyrics writer</span>
+                        <input type="text" x-model="form.lyrics_writer" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
+                    </label>
+                    <label class="flex flex-col gap-xs">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Attribution</span>
+                        <input type="text" x-model="form.attribution" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
+                    </label>
+                </div>
+                <div class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Tags</span>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="tag in form.tags" :key="tag">
+                            <button type="button" @click="removeTag(tag)" class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md">
+                                <span x-text="tag"></span> ×
+                            </button>
+                        </template>
+                    </div>
+                    <input type="text" x-model="tagInput" @input="updateSuggestions" @keydown.enter.prevent="addTag" @keydown.backspace="handleBackspace"
+                           placeholder="Type a tag and press enter" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
+                    <div x-show="suggestions.length" class="border border-outline-variant rounded-lg bg-surface-container-lowest">
+                        <template x-for="suggestion in suggestions" :key="suggestion">
+                            <button type="button" @click="addTagFromSuggestion(suggestion)" class="block w-full text-left px-4 py-2 hover:bg-surface-container-low" x-text="suggestion"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-md">
+                    <h2 class="font-headline-md text-headline-md text-primary">Versions</h2>
+                    <button type="button" @click="addVersion()" class="m-btn m-btn--secondary m-btn--sm">
+                        <span class="m-btn__label">Add version</span>
+                    </button>
+                </div>
+                <template x-for="(version, vIndex) in form.versions" :key="version.id">
+                    <div class="border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="text" x-model="version.name" required placeholder="Version name"
+                                   class="flex-1 py-2 px-3 bg-surface-container-low border border-outline-variant rounded-lg">
+                            <span x-show="draftPrints(vIndex)" class="font-label-md text-primary">This version prints</span>
+                            <button type="button" x-show="!draftPrints(vIndex)" @click="starDraft(vIndex)" class="m-btn m-btn--secondary m-btn--sm">
+                                <span class="m-btn__label">Print this version</span>
+                            </button>
+                            <button type="button" @click="removeVersion(vIndex)" class="m-btn m-btn--secondary m-btn--sm">
+                                <span class="m-btn__label">Remove version</span>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+                            <template x-for="(page, pIndex) in version.pages" :key="page.id">
+                                <div class="border border-outline-variant rounded-lg p-sm flex flex-col gap-sm">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-label-md" x-text="'Page ' + (pIndex + 1)"></span>
+                                        <button type="button" @click="removePage(vIndex, pIndex)" class="m-btn m-btn--secondary m-btn--sm">
+                                            <span class="m-btn__label">Remove page</span>
+                                        </button>
+                                    </div>
+                                    <img x-show="page.url" :src="page.url" alt="" class="w-full object-contain bg-white max-h-80">
+                                    <button type="button" x-show="page.url" @click="openCropper(vIndex, pIndex)" class="m-btn m-btn--secondary m-btn--sm">
+                                        <span class="m-btn__label">Crop</span>
+                                    </button>
+                                    <input type="file" accept="image/*" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
+                                </div>
+                            </template>
+                            <button type="button" @click="addPage(vIndex)" class="border border-dashed border-outline-variant rounded-lg p-md font-label-md">
+                                Add page
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <div class="flex justify-end gap-md">
+                    <button type="button" @click="cancelForm()" class="m-btn m-btn--secondary" :disabled="isSubmitting">Cancel</button>
+                    <button type="submit" class="m-btn m-btn--primary" :disabled="isSubmitting">
+                        <span class="m-btn__label" x-text="isSubmitting ? 'Saving…' : 'Save'"></span>
+                    </button>
+                </div>
+            </form>
+        </template>
+    </main>
+
+    <div x-show="cropModal.open" x-cloak @click.stop
+         class="fixed inset-0 bg-primary/20 z-[110] flex items-center justify-center p-md">
+        <div class="bg-surface-container-lowest rounded-xl shadow-2xl p-md flex flex-col gap-md max-w-[90vw]">
+            <div class="flex justify-between items-center">
+                <h3 class="font-headline-md text-primary">Crop sheet page</h3>
+                <button type="button" @click="cancelCrop()">Cancel</button>
+            </div>
+            <p class="font-body-md text-on-surface-variant">Drag a handle to trim an edge, or drag inside the box to move it. Cancel leaves the page as it was.</p>
+            <div class="relative inline-block select-none" @mousemove.window="cropDragMove($event)" @mouseup.window="cropDragEnd()">
+                <img id="crop-target-img" :src="cropModal.imgSrc" @load="cropImageLoaded($event)" draggable="false" class="block max-w-[80vw] max-h-[65vh]">
+                <template x-if="cropModal.rect">
+                    <div class="absolute inset-0">
+                        <div class="absolute bg-black/60 pointer-events-none"
+                             :style="`left:0; top:0; right:0; height:${cropModal.rect.y}px;`"></div>
+                        <div class="absolute bg-black/60 pointer-events-none"
+                             :style="`left:0; right:0; bottom:0; top:${cropModal.rect.y + cropModal.rect.h}px;`"></div>
+                        <div class="absolute bg-black/60 pointer-events-none"
+                             :style="`left:0; top:${cropModal.rect.y}px; width:${cropModal.rect.x}px; height:${cropModal.rect.h}px;`"></div>
+                        <div class="absolute bg-black/60 pointer-events-none"
+                             :style="`left:${cropModal.rect.x + cropModal.rect.w}px; top:${cropModal.rect.y}px; right:0; height:${cropModal.rect.h}px;`"></div>
+                        <div class="absolute border-2 border-white cursor-move"
+                             :style="`left:${cropModal.rect.x}px; top:${cropModal.rect.y}px; width:${cropModal.rect.w}px; height:${cropModal.rect.h}px;`"
+                             @mousedown="cropDragStart('move', $event)"></div>
+                        <template x-for="corner in ['nw', 'ne', 'sw', 'se']" :key="corner">
+                            <div class="absolute w-3 h-3 rounded-full bg-white border-2 border-primary"
+                                 :class="(corner === 'nw' || corner === 'se') ? 'cursor-nwse-resize' : 'cursor-nesw-resize'"
+                                 :style="`left:${cropModal.rect.x + (corner.indexOf('e') !== -1 ? cropModal.rect.w : 0) - 6}px; top:${cropModal.rect.y + (corner.indexOf('s') !== -1 ? cropModal.rect.h : 0) - 6}px;`"
+                                 @mousedown.stop="cropDragStart(corner, $event)"></div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="flex justify-end gap-md">
+                <button type="button" @click="cancelCrop()" class="m-btn m-btn--secondary">Cancel</button>
+                <button type="button" @click="applyCrop()" class="m-btn m-btn--primary">Apply crop</button>
+            </div>
+        </div>
+    </div>
+    <script src="hymns.js"></script>
+</body>
+</html>
