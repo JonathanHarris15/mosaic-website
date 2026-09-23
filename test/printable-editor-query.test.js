@@ -55,6 +55,33 @@ test('the query builder is the catalog of every iterable list', () => {
     assert.match(html, /x-show="showQueryBuilder"/, 'search is on the query, not the old catalog');
 });
 
+test('a range in the query counts Sundays or weeks from a Sunday, not days', () => {
+    assert.match(html, /rangeMode\(repeatParam\(spec\.key\)\) === 'weeks'/, 'the builder has a way to count in Sundays or weeks');
+    assert.match(html, /setRangeMode\(spec, 'weeks'\)/, 'switching to it starts from the catalog default');
+    assert.match(html, /x-text="rangeUnitLabel\(spec\)"/, 'the Sundays list says Sundays, event dates say weeks');
+    assert.match(html, /How many/, 'how many is a number of Sundays or weeks');
+    assert.match(html, /setRangePart\(spec, 'start', \{ mode: 'this' \}\)/, 'starting this Sunday, next Sunday or a date');
+    assert.match(js, /setRangeMode\(spec, mode\)[\s\S]*Data\.rangeForMode/, 'the editor asks the catalog what a fresh range looks like');
+    const Data = require('../public/printable-data-core.js');
+    const { PrintableEditorData } = require('../public/printable-editor-data.js');
+    const ed = PrintableEditorData({});
+    assert.equal(ed.rangeUnitLabel(Data.sourceByKey('sundays').params[0]), 'Sundays');
+    assert.equal(ed.rangeUnitLabel(Data.sourceByKey('event_dates').params[0]), 'Weeks');
+});
+
+test('a text option in the query says what leaving it empty means', () => {
+    assert.match(html, /:placeholder="spec\.placeholder \|\| 'any'"/, 'not planned yet reads as… is not "any"');
+});
+
+test('the query preview names a row in words, not by its id', () => {
+    const { PrintableEditorWires } = require('../public/printable-editor-data.js');
+    assert.equal(PrintableEditorWires.previewName({ _id: '2026-09-20', date: 'Sunday 20 September 2026', preacher: 'TBA' }), 'Sunday 20 September 2026');
+    assert.equal(PrintableEditorWires.previewName({ _id: 'p1', name: 'Anna Baker', date: '' }), 'Anna Baker');
+    assert.equal(PrintableEditorWires.previewName({ _id: 'preparatoryHymn', label: 'Preparatory hymn' }), 'Preparatory hymn');
+    assert.equal(PrintableEditorWires.previewName({}), 'A row');
+    assert.match(js, /names: rows\.slice\(0, 8\)\.map\(previewName\)/, 'the builder\'s preview uses it');
+});
+
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires
         || globalThis.PrintableEditorWires;

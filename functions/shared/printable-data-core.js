@@ -392,7 +392,7 @@
                     { value: 'every', label: 'Every Sunday' },
                     { value: 'planned', label: 'Only Sundays already planned' },
                 ] },
-                { key: 'notPlanned', label: 'Not planned yet reads as', kind: 'text', default: 'TBA', placeholder: 'Leave it blank' },
+                { key: 'notPlanned', label: 'Not planned yet reads as', kind: 'text', default: 'TBA', placeholder: 'Blank: the stand-in shows' },
             ],
         },
         {

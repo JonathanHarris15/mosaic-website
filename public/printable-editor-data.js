@@ -58,6 +58,13 @@
         return regions;
     }
 
+    // What the query preview calls a row: a name, a slot, a date in words —
+    // never an id like "2026-09-20".
+    function previewName(row) {
+        const r = row || {};
+        return r.name || r.personName || r.label || r.date || r._id || 'A row';
+    }
+
     const PrintableEditorWires = {
         elementOnCanvas(elRect, viewRect) {
             if (!elRect || !viewRect) return false;
@@ -67,6 +74,7 @@
                 && elRect.top < viewRect.bottom;
         },
         groupQueryLists: groupQueryLists,
+        previewName: previewName,
     };
     global.PrintableEditorWires = PrintableEditorWires;
 
@@ -366,7 +374,7 @@
                 const rows = res.rowsFor(r, parentRow) || [];
                 return {
                     count: rows.length,
-                    names: rows.slice(0, 8).map(row => row.name || row.label || row._id || 'A row'),
+                    names: rows.slice(0, 8).map(previewName),
                 };
             },
 
@@ -757,6 +765,31 @@
             // Sub-fields of a param, for the small editors: a `when`, a range.
             whenMode(v) { return (v && v.mode) || 'this'; },
             rangeMode(v) { return (v && v.mode) || 'relative'; },
+
+            // A range on the Sundays list counts Sundays; on event dates it
+            // counts weeks. The catalog says which.
+            rangeUnitLabel(spec) {
+                const unit = String((spec && spec.unit) || 'weeks');
+                return unit.charAt(0).toUpperCase() + unit.slice(1);
+            },
+
+            // Switching how a range counts starts from the catalog's default
+            // for that way of counting. Pressing the way it already counts
+            // keeps the numbers the editor chose.
+            setRangeMode(spec, mode) {
+                if (this.rangeMode(this.repeatParam(spec.key)) === mode) return;
+                this.setRepeatParam(spec.key, Data.rangeForMode(spec, mode));
+            },
+
+            setRangePart(spec, key, value) {
+                this.setRepeatParam(spec.key, Object.assign({}, this.repeatParam(spec.key), { [key]: value }));
+            },
+
+            // "For the 5 Sundays from this Sunday." — the range read back.
+            rangeWords(spec) {
+                const words = Data.describeRange(this.repeatParam(spec.key), spec.unit);
+                return words.charAt(0).toUpperCase() + words.slice(1) + '.';
+            },
 
             // How many rows the selection's list resolved to, for the panel.
             get repeatRowCount() {
