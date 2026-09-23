@@ -3254,15 +3254,14 @@ test('a row that grows does it visibly, unless somebody asked for less movement'
     // `.m-cal--open.m-cal__cell` — a different rule about a different element.
     const css = readPage('mosaic.css');
 
-    // ⚠ AND NOT WRITTEN IN TOKENS THAT DO NOT REACH THIS FILE. This assertion
-    // used to require `var(--duration-slow)` here by name, which is how a
-    // transition that never ran once stayed green for months: neither
-    // --duration-slow nor --ease-standard is declared in mosaic.css, so the
-    // whole declaration was dropped and the row snapped open and snapped shut.
-    // The 300ms is --duration-slow's value; the curve is --ease-standard's.
-    // test/calendar-week-open.test.js is the one that checks the rule cannot
-    // go back to naming something the sheet never declares.
-    assert.ok(/\.m-cal--open \.m-cal__cell\{transition:height \.3s cubic-bezier/.test(css),
+    // ⚠ NAMING THE TOKEN IS NOT THE SAME AS HAVING IT. This assertion matched
+    // the rule's text for months while the rule did nothing at all: neither
+    // --duration-slow nor --ease-standard was declared in mosaic.css, so the
+    // declaration was dropped whole and the row snapped open and snapped shut.
+    // Motion is generated into this file now. That the names still RESOLVE is
+    // checked in test/css-custom-properties.test.js and
+    // test/calendar-week-open.test.js, which is the half this one cannot see.
+    assert.ok(/\.m-cal--open \.m-cal__cell\{transition:height var\(--duration-slow\)/.test(css),
         'an opening week snaps rather than grows');
     assert.ok(/@media \(prefers-reduced-motion:reduce\)\{\.m-cal--open \.m-cal__cell\{transition:none\}\}/.test(css),
         'asking for less movement does not stop the row animating');

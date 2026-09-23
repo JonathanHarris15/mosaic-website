@@ -43,13 +43,14 @@ test('the opened week is the only row that can grow', () => {
 });
 
 test('the row travels to its open height rather than jumping to it', () => {
-    // ⚠ THE TOKENS ARE NOT THERE TO REACH FOR. `--duration-slow` and
-    // `--ease-standard` are declared in the design system's spacing.css, after
-    // the @generated marker, and nothing splices them into mosaic.css. A
-    // transition written in terms of them resolves to nothing and takes the
-    // whole declaration with it — the row then snaps open and snaps shut, and
-    // the 320ms the component waits before letting the grid re-fit is 320ms of
-    // a month sitting in the in-between state rather than 320ms of animation.
+    // ⚠ WRITTEN IN TOKENS, SO THE TOKENS HAVE TO BE IN THE SHEET THAT SHIPS
+    // IT. `--duration-slow` and `--ease-standard` used to be hand-written in
+    // the design system's spacing.css, below the @generated marker, and
+    // nothing spliced them into mosaic.css. A transition written in terms of
+    // them resolves to nothing and takes the whole declaration with it — the
+    // row then snaps open and snaps shut, and the 320ms the component waits
+    // before letting the grid re-fit is 320ms of a month sitting in the
+    // in-between state rather than 320ms of animation.
     const sheet = css();
     const body = ruleBody(sheet, '.m-cal--open .m-cal__cell');
     assert.ok(body, 'the opened cell has no transition rule at all');
