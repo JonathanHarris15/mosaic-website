@@ -139,8 +139,8 @@
     // A Name Fix in parts uses the greeter's rule. A Name Fix that only has a
     // full name is left as that spelling and gains no invented parts.
     // What the profile opens. Remembered parts fill the blanks, including the
-    // pass. A full name that was never split does not — it is not copied into
-    // the first-name blank.
+    // pass. A full name with no parts opens from the same reading the
+    // directory uses, and stays empty when that reading refuses.
     function nameFixBlanks(person) {
         return names().blanksFor(person);
     }

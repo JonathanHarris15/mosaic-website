@@ -757,12 +757,16 @@
   // Directory fields from the phone. Edit Mode adds name, sex, and the Kid
   // mark; without it the write stays the four contact fields. Same documents
   // the computer page writes, plus who saved it (MS-490, MS-614).
-  function saveDirectoryPerson(personId, fields, user, editMode) {
+  function saveDirectoryPerson(personId, fields, user, editMode, currentName) {
     var payload = window.PhoneDirectoryEdit.savePayload(fields, {
       editMode: !!editMode,
       updatedByName: (user && user.name) || "",
       now: firebase.firestore.FieldValue.serverTimestamp(),
+      currentName: currentName,
     });
+    if (payload.nameParts === window.PhoneDirectoryEdit.CLEAR_NAME_PARTS) {
+      payload.nameParts = firebase.firestore.FieldValue.delete();
+    }
     return db.collection("people").doc(personId).update(payload);
   }
   function updateShepherdingPersonDetails(personId, d, user) {

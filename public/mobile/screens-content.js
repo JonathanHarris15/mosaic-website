@@ -838,7 +838,7 @@
     function saveEdit() {
       var d = editS[0]; if (!d) return;
       savingS[1](true);
-      data.saveDirectoryPerson(p.id, d, props.user, editOn).then(function () {
+      data.saveDirectoryPerson(p.id, d, props.user, editOn, Edit.storedDirectoryName(p)).then(function () {
         pS[1](Edit.savedPersonView(p, d, editOn));
         savingS[1](false);
         editS[1](null);
