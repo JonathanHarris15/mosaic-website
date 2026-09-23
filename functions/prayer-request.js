@@ -6,20 +6,22 @@
  * directly.
  */
 
-/** The church's local timezone — drives the send window and day countdown. */
-const CHURCH_TIMEZONE = "America/Chicago";
+const nc = require("./notification-core");
+
+/**
+ * The church's local timezone, and the send window, live on the notification
+ * core so a text and a push share one clock. Re-exported so existing callers
+ * (`pr.WINDOW_OPEN_HOUR`, `pr.churchDateParts`) keep their names.
+ */
+const CHURCH_TIMEZONE = nc.CHURCH_TIMEZONE;
+const WINDOW_OPEN_HOUR = nc.WINDOW_OPEN_HOUR;
+const WINDOW_CLOSE_HOUR = nc.WINDOW_CLOSE_HOUR;
 
 /** First send happens when the service is this many days away (or fewer). */
 const INITIAL_DAYS_OUT = 5;
 
 /** Reminder send happens when the service is this many days away (or fewer). */
 const REMINDER_DAYS_OUT = 3;
-
-/** Earliest hour (inclusive, 24h church-local) a text may be sent. */
-const WINDOW_OPEN_HOUR = 8;
-
-/** Hour (exclusive, 24h church-local) after which no text may be sent. */
-const WINDOW_CLOSE_HOUR = 20;
 
 /**
  * Canonical default Prayer Request message templates. {name} is replaced with
@@ -93,24 +95,12 @@ function renderPrayerRequestMessage(kind, firstName, templates) {
 
 /**
  * The church-local date (YYYY-MM-DD) and hour (0-23) for an instant.
+ * Defined on the notification core; this name stays for existing callers.
  * @param {Date} now
  * @return {{date: string, hour: number}}
  */
 function churchDateParts(now) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CHURCH_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-
-  const get = (type) => parts.find((p) => p.type === type).value;
-  const date = `${get("year")}-${get("month")}-${get("day")}`;
-  let hour = parseInt(get("hour"), 10);
-  if (hour === 24) hour = 0; // Some ICU builds render midnight as "24".
-  return {date, hour};
+  return nc.churchDateParts(now);
 }
 
 /**
@@ -155,9 +145,7 @@ function prayerRequestAction(state) {
   if (!hasPhone) return "none";
   if (requestFilled) return "none";
   if (daysUntilService < 0) return "none";
-  if (localHour < WINDOW_OPEN_HOUR || localHour >= WINDOW_CLOSE_HOUR) {
-    return "none";
-  }
+  if (!nc.isInsideSendWindow(localHour)) return "none";
 
   const initialSent = !!initialSentDate;
   if (!initialSent) {
