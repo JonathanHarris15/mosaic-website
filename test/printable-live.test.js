@@ -46,6 +46,42 @@ test('the resolver answers rows for a list and values for both kinds of binding'
     assert.equal(res.sourceWarnings().length, 0);
 });
 
+test('an empty field on a dated row is named by its date in words', () => {
+    const res = Live.resolver(project(), { people: [], services: {} }, { today: '2026-09-03', level: 'editor' });
+    const miss = res.valueFor({ scope: 'item', field: 'theme' }, { _id: '2026-09-20', date: 'Sunday 20 September 2026', theme: '' });
+    assert.equal(miss.ok, false);
+    assert.match(miss.why, /Sunday 20 September 2026/);
+    assert.doesNotMatch(miss.why, /2026-09-20/);
+});
+
+test('a preaching schedule is a Repeat over Sundays: five rows, TBA where nobody is down', () => {
+    const p = Core.buildPrintable({
+        name: 'Preaching schedule',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [{ id: 'pg1', nodes: [
+            { id: 'row', tag: 'div', repeat: { source: 'sundays', params: {} }, children: [
+                { id: 'when', tag: 'span', text: 'Jul 27', bind: { text: { scope: 'item', field: 'shortDate' } } },
+                { id: 'who', tag: 'span', text: 'Preacher', bind: { text: { scope: 'item', field: 'preacher' } } },
+                { id: 'what', tag: 'span', text: 'Text', bind: { text: { scope: 'item', field: 'sermon' } } },
+            ] },
+        ] }],
+    });
+    const bundle = { services: { '2026-09-06': { preacher: 'Pastor Sam', liturgy: { sermon: 'Romans 8' } } } };
+    assert.deepEqual(Live.collectNeeds(p, '2026-09-03').serviceRange, { from: '2026-09-06', to: '2026-10-10' });
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'member' });
+    const pages = Live.layoutPages(p, res, null);
+    const rows = pages[0].nodes[0].children.map(c => c.children.map(x => x.text));
+    assert.deepEqual(rows, [
+        ['Sep 6', 'Pastor Sam', 'Romans 8'],
+        ['Sep 13', 'TBA', 'TBA'],
+        ['Sep 20', 'TBA', 'TBA'],
+        ['Sep 27', 'TBA', 'TBA'],
+        ['Oct 4', 'TBA', 'TBA'],
+    ]);
+    assert.deepEqual(Live.warningsFor(pages, res, p), [], 'nothing to chase: an unplanned Sunday is not missing data');
+    assert.equal(JSON.stringify(p).includes('Pastor Sam'), false, 'the Printable holds the wires, never the values');
+});
+
 test('a source that has nothing warns once at source level', () => {
     const res = Live.resolver(project(), { people: [], services: {} }, { today: '2026-09-03', level: 'editor' });
     const w = res.sourceWarnings();

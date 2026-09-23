@@ -83,7 +83,7 @@
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
                 if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
-                if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + (row.name || row.label || row._id || 'this row') + '.' };
+                if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + (row.name || row.label || row.date || row._id || 'this row') + '.' };
                 return { ok: true, value: v };
             }
             if (!bind.source) return { ok: false, why: 'Not wired.' };

@@ -86,7 +86,41 @@ test('a relative range moves with today; a static one does not; a backwards one 
 test('a date reads on paper as words', () => {
     assert.equal(Data.formatDate('2026-09-06'), 'Sunday 6 September 2026');
     assert.equal(Data.formatDate('2026-09-06', 'medium'), '6 September 2026');
+    assert.equal(Data.formatDate('2026-09-06', 'monthDay'), 'Sep 6', 'the designed schedule\'s date');
+    assert.equal(Data.formatDate('2026-09-06', 'weekday'), 'Sunday');
     assert.equal(Data.formatDate('not a date'), 'not a date');
+});
+
+test('a count of Sundays is counted in Sundays, not added up in days', () => {
+    const five = { mode: 'weeks', count: 5, start: { mode: 'this' } };
+    assert.deepEqual(Data.resolveRange(five, TODAY), { from: '2026-09-06', to: '2026-10-10' });
+    assert.deepEqual(Data.resolveRange(five, '2026-09-06'), { from: '2026-09-06', to: '2026-10-10' }, 'on a Sunday, this Sunday is today');
+    assert.deepEqual(Data.resolveRange(five, '2026-10-01'), { from: '2026-10-04', to: '2026-11-07' }, 'it moves with today');
+    assert.deepEqual(Data.resolveRange({ mode: 'weeks', count: 2, start: { mode: 'next' } }, TODAY), { from: '2026-09-13', to: '2026-09-26' });
+    assert.deepEqual(Data.resolveRange({ mode: 'weeks', count: 1, start: { mode: 'date', date: '2026-10-01' } }, TODAY), { from: '2026-10-04', to: '2026-10-10' }, 'a date starts from its Sunday');
+    assert.deepEqual(Data.resolveRange({ mode: 'weeks', count: 'lots' }, TODAY), { from: '2026-09-06', to: '2026-09-12' }, 'no usable count is one week from this Sunday');
+    assert.equal(Data.resolveRange({ mode: 'weeks', count: 500 }, TODAY).to, Data.addDays('2026-09-06', 52 * 7 - 1), 'a year at most');
+});
+
+test('a count of Sundays or weeks reads back in words', () => {
+    assert.equal(Data.describeRange({ mode: 'weeks', count: 5, start: { mode: 'this' } }, 'Sundays'), 'for the 5 Sundays from this Sunday');
+    assert.equal(Data.describeRange({ mode: 'weeks', count: 1, start: { mode: 'next' } }, 'Sundays'), 'for next Sunday');
+    assert.equal(Data.describeRange({ mode: 'weeks', count: 4, start: { mode: 'this' } }), 'in the 4 weeks from this Sunday');
+    assert.equal(Data.describeRange({ mode: 'weeks', count: 1, start: { mode: 'date', date: '2026-10-01' } }), 'in the week from the Sunday of 1 October 2026');
+});
+
+test('switching a range to another way of counting starts from something sensible', () => {
+    const sundaysRange = Data.sourceByKey('sundays').params.find(p => p.key === 'range');
+    const eventsRange = Data.sourceByKey('event_dates').params.find(p => p.key === 'range');
+    assert.equal(sundaysRange.unit, 'Sundays');
+    assert.equal(eventsRange.unit, 'weeks');
+    assert.deepEqual(Data.rangeForMode(sundaysRange, 'weeks'), { mode: 'weeks', count: 5, start: { mode: 'this' } });
+    assert.deepEqual(Data.rangeForMode(eventsRange, 'weeks'), { mode: 'weeks', count: 4, start: { mode: 'this' } });
+    assert.deepEqual(Data.rangeForMode(eventsRange, 'relative'), { mode: 'relative', fromDays: 0, toDays: 14 });
+    assert.deepEqual(Data.rangeForMode(sundaysRange, 'static'), { mode: 'static', from: '', to: '' });
+    const a = Data.rangeForMode(sundaysRange, 'weeks');
+    a.start.mode = 'next';
+    assert.equal(sundaysRange.default.start.mode, 'this', 'the catalog default is not shared out by reference');
 });
 
 // ── People ───────────────────────────────────────────────────────────────────
@@ -322,6 +356,7 @@ test('a Sunday resolves its people, theme and every slot for this Sunday', () =>
     assert.equal(row.hymn1, 'A Literal Hymn');
     assert.equal(row.sermon, 'Romans 8');
     assert.equal(row.prayerMale, 'Tom');
+    assert.equal(row.hymnEnd2, '', 'a hymn the Sunday has dropped does not print');
     assert.equal(r.warnings.length, 0);
 });
 
@@ -354,6 +389,21 @@ test('the hymns of a Sunday return every sheet-music page, in slot then page ord
     assert.equal(r.rows[0]._id, 'preparatoryHymn~0');
     assert.equal(r.rows[1]._id, 'preparatoryHymn~1');
     assert.match(r.warnings[0], /A Literal Hymn.*no sheet music/);
+});
+
+test('the hymns of a Sunday can be kept to one hymn, so its pages can sit on a page of their own', () => {
+    const spec = Data.querySpecsFor('sunday_hymns', 'viewer').find(s => s.key === 'slot');
+    assert.ok(spec, 'the query builder offers which hymn');
+    assert.equal(spec.default, '', 'every hymn unless asked');
+    assert.deepEqual(spec.options.map(o => o.value), [''].concat(Data.HYMN_SLOTS));
+    const prep = Data.resolve('sunday_hymns', { slot: 'preparatoryHymn' }, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(prep.rows.map(x => x.image), ['ag1.png', 'ag2.png']);
+    assert.deepEqual(prep.rows.map(x => x.number), [1, 2]);
+    assert.deepEqual(prep.warnings, [], 'another hymn\'s missing music is not this list\'s warning');
+    const dropped = Data.resolve('sunday_hymns', { slot: 'hymnEnd2' }, SUNDAYS(), { today: TODAY });
+    assert.equal(dropped.rows.length, 0, 'a hymn the Sunday has dropped has no pages');
+    assert.match(dropped.warnings[0], /final hymn/i);
+    assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · closing hymn');
 });
 
 test('a hymn with empty or missing page assets skips them and does not invent images', () => {
@@ -516,6 +566,114 @@ test('Sundays in a range make a preaching schedule', () => {
     assert.equal(r.rows[1].sermon, 'John 3');
 });
 
+// ── Sundays, counted ─────────────────────────────────────────────────────────
+//
+// The old Service Guide printed the next five Sundays — date, preacher,
+// sermon text, TBA where nobody was down yet. A Sunday exists whether or not
+// anybody has written it (ServiceDatesCore), so the list walks the calendar
+// and fills each Sunday from whatever is planned.
+
+test('Sundays start as a preaching schedule: five from this Sunday, planned or not, TBA where nobody is down', () => {
+    assert.deepEqual(Data.defaultParams('sundays').range, { mode: 'weeks', count: 5, start: { mode: 'this' } });
+    const r = Data.resolve('sundays', {}, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13', 'Sep 20', 'Sep 27', 'Oct 4']);
+    assert.deepEqual(r.rows.map(x => x.preacher), ['Pastor Sam', 'TBA', 'TBA', 'TBA', 'TBA']);
+    assert.deepEqual(r.rows.map(x => x.sermon), ['Romans 8', 'John 3', 'TBA', 'TBA', 'TBA']);
+    assert.equal(r.rows[2].date, 'Sunday 20 September 2026');
+    assert.equal(r.rows[2]._id, '2026-09-20');
+    assert.deepEqual(r.warnings, [], 'a Sunday nobody has planned yet is not a failure');
+    assert.deepEqual(Data.needsFor('sundays', {}, TODAY), { serviceRange: { from: '2026-09-06', to: '2026-10-10' } });
+});
+
+test('what is not planned yet reads as whatever the query says, or stays blank', () => {
+    const said = Data.resolve('sundays', { notPlanned: 'To be announced' }, SUNDAYS(), { today: TODAY });
+    assert.equal(said.rows[1].preacher, 'To be announced');
+    assert.equal(said.rows[1].theme, 'Hope', 'what is planned is never covered over');
+    const blank = Data.resolve('sundays', { notPlanned: '' }, SUNDAYS(), { today: TODAY });
+    assert.equal(blank.rows[1].preacher, '', 'blank leaves the stand-in to show, as before');
+    assert.equal(blank.rows[2].sermon, '');
+});
+
+test('the date, a baptism and a dropped hymn are never "to be announced"', () => {
+    const data = SUNDAYS();
+    data.services['2026-09-06'].removedHymns = ['hymnEnd2', 'hymnMid2'];
+    const r = Data.resolve('sundays', {}, data, { today: TODAY });
+    const first = r.rows[0];
+    assert.equal(first.baptism, '', 'a Sunday without a baptism has no baptism to announce');
+    assert.equal(first.hymnMid2, '', 'a hymn the Sunday has dropped is not coming later');
+    assert.equal(first.hymnEnd2, '', 'nor does it print the name it had before it was dropped, as the old guide did not');
+    assert.equal(first.hymnMid1, 'TBA', 'a hymn still to be chosen is');
+    assert.equal(first.serviceLeader, 'Lee');
+    assert.equal(first.prayerMale, 'Tom');
+    assert.equal(first.prayerFemale, 'TBA');
+    assert.equal(r.rows[4].date, 'Sunday 4 October 2026');
+    assert.equal(r.rows[4].shortDate, 'Oct 4');
+});
+
+test('Sundays can be kept to those already planned, as the old guide did', () => {
+    const r = Data.resolve('sundays', { which: 'planned' }, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13']);
+    const none = Data.resolve('sundays', { which: 'planned' }, { services: {} }, { today: TODAY });
+    assert.equal(none.rows.length, 0);
+    assert.deepEqual(none.warnings, ['Nothing is planned yet for the 5 Sundays from this Sunday.']);
+});
+
+test('a service planned on another day is on the schedule too, as it was on the old guide', () => {
+    const data = SUNDAYS();
+    data.services['2026-09-25'] = { preacher: 'Guest Gil', liturgy: { sermon: 'Luke 2' } };
+    const r = Data.resolve('sundays', {}, data, { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13', 'Sep 20', 'Sep 25', 'Sep 27', 'Oct 4']);
+    assert.equal(r.rows[3].date, 'Friday 25 September 2026');
+    assert.equal(r.rows[3].preacher, 'Guest Gil');
+    const planned = Data.resolve('sundays', { which: 'planned' }, data, { today: TODAY });
+    assert.deepEqual(planned.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13', 'Sep 25']);
+});
+
+test('a range with no Sunday in it says so', () => {
+    const r = Data.resolve('sundays', { range: { mode: 'static', from: '2026-09-07', to: '2026-09-12' } }, SUNDAYS(), { today: TODAY });
+    assert.equal(r.rows.length, 0);
+    assert.deepEqual(r.warnings, ['There is no Sunday from 7 September 2026 to 12 September 2026.']);
+});
+
+test('an older service with its sermon kept outside the liturgy still reads it', () => {
+    const r = Data.resolve('sundays', {}, { services: { '2026-09-06': { preacher: { id: 'p9', name: 'Pastor Sam' }, sermon: 'Psalm 23' } } }, { today: TODAY });
+    assert.equal(r.rows[0].sermon, 'Psalm 23', 'the old guide read it there as well');
+    assert.equal(r.rows[0].preacher, 'Pastor Sam', 'a preacher stored as a person reads as their name');
+});
+
+test('one Sunday from this Sunday reads the same as the single Sunday', () => {
+    const one = Data.resolve('sundays', { range: { mode: 'weeks', count: 1, start: { mode: 'this' } }, notPlanned: '' }, SUNDAYS(), { today: TODAY });
+    const single = Data.resolve('sunday', { when: { mode: 'this' } }, SUNDAYS(), { today: TODAY });
+    assert.equal(one.rows.length, 1);
+    assert.deepEqual(Data.sourceByKey('sundays').fields.map(f => f.key), Data.sourceByKey('sunday').fields.map(f => f.key), 'a Sunday row is one shape');
+    Data.sourceByKey('sunday').fields.forEach(f => assert.equal(one.rows[0][f.key], single.rows[0][f.key], f.key));
+    assert.equal(single.rows[0].shortDate, 'Sep 6');
+});
+
+test('the query builder offers how many Sundays, which ones, and what an unplanned one reads as', () => {
+    const specs = Data.querySpecsFor('sundays', 'editor');
+    assert.deepEqual(specs.map(s => s.key), ['range', 'which', 'notPlanned']);
+    assert.equal(specs.find(s => s.key === 'notPlanned').default, 'TBA');
+    assert.ok(specs.find(s => s.key === 'notPlanned').placeholder, 'an empty box says what empty means');
+    assert.deepEqual(Data.querySpecsFor('sundays', 'viewer').map(s => s.key), ['range', 'which', 'notPlanned'], 'nothing here sits above a viewer');
+    assert.equal(Data.describeParams('sundays', {}), 'for the 5 Sundays from this Sunday');
+    assert.equal(Data.describeParams('sundays', { which: 'planned', notPlanned: 'TBC' }),
+        'for the 5 Sundays from this Sunday · only Sundays already planned · not planned yet reads as "TBC"');
+});
+
+test('a stored Sundays query from before still reads its own dates', () => {
+    const r = Data.resolve('sundays', { range: { mode: 'relative', fromDays: 0, toDays: 21 } }, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 6', 'Sep 13', 'Sep 20'], 'every Sunday in the window gets its row');
+    const fixed = Data.resolve('sundays', { range: { mode: 'static', from: '2026-09-01', to: '2026-09-14' } }, SUNDAYS(), { today: '2027-01-01' });
+    assert.deepEqual(fixed.rows.map(x => x.theme), ['Grace', 'Hope']);
+});
+
+test('a range of years does not become a runaway list', () => {
+    const r = Data.resolve('sundays', { range: { mode: 'static', from: '2000-01-01', to: '2099-12-31' } }, { services: {} }, { today: TODAY });
+    assert.ok(r.rows.length <= 520);
+    assert.match(r.warnings[0], /Only the first 520 Sundays/);
+});
+
 // ── Events ───────────────────────────────────────────────────────────────────
 
 const EVENTS = () => ({
@@ -550,6 +708,19 @@ test('event dates in a range list what is on, skip cancelled dates, and read tim
 test('event dates can be narrowed to one event', () => {
     const r = Data.resolve('event_dates', { range: { mode: 'relative', fromDays: 0, toDays: 60 }, seriesId: 'bs' }, EVENTS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.date), ['Tuesday 8 September 2026', 'Tuesday 20 October 2026']);
+});
+
+test('event dates can be the weeks from a Sunday, with a short date and the day to print', () => {
+    const range = { mode: 'weeks', count: 2, start: { mode: 'this' } };
+    const r = Data.resolve('event_dates', { range: range }, EVENTS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.name), ['Bible study', 'Members\' meeting']);
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 8', 'Sep 10']);
+    assert.deepEqual(r.rows.map(x => x.weekday), ['Tuesday', 'Thursday']);
+    assert.deepEqual(Data.needsFor('event_dates', { range: range }, TODAY).occurrenceRange, { from: '2026-09-06', to: '2026-09-19' });
+    assert.equal(Data.describeParams('event_dates', { range: range }), 'in the 2 weeks from this Sunday');
+    const later = Data.resolve('event_dates', { range: { mode: 'weeks', count: 1, start: { mode: 'next' } } }, EVENTS(), { today: TODAY });
+    assert.equal(later.rows.length, 0);
+    assert.deepEqual(later.warnings, ['Nothing is on in the week from next Sunday.']);
 });
 
 test('the role holder is the confirmed person on the next date, falling back to a pending one', () => {
