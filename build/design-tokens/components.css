@@ -719,12 +719,30 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 
    The page is allowed to scroll while one is open, and only then:
    what the fit is for is a month that arrives whole, not a page that
-   may never scroll. */
-.m-cal--fit .m-cal__grid--open { grid-auto-rows: auto; }
+   may never scroll.
+
+   ⚠ align-content: start IS LOAD-BEARING, NOT TIDINESS. Auto rows
+   SHARE OUT any height the grid box has beyond what its rows need,
+   and the box is not the one deciding how tall it is — open, the
+   page stops fitting the window and the taller of the two columns
+   sizes the row, which is the right rail as often as not. Left to
+   stretch, every one of the five rows took a share of the surplus
+   while the cells stayed pinned to their pixel height, so all seven
+   days of all five weeks grew a gap under their chips at once. One
+   row was asked to move and the whole month moved. */
+.m-cal--fit .m-cal__grid--open { grid-auto-rows: auto; align-content: start; }
 /* Pixels, because a height has to be a number at both ends for the
    growing to be something you can watch rather than something that
-   has already happened. */
-.m-cal--open .m-cal__cell { transition: height var(--duration-slow) var(--ease-standard); }
+   has already happened.
+
+   ⚠ LITERALS, NOT var(--duration-slow) / var(--ease-standard). Those
+   two are the design system's own, declared after the @generated
+   marker in spacing.css, and nothing splices them into mosaic.css —
+   so they resolve to nothing, the whole declaration goes with them,
+   and the row jumps to its open height instead of travelling there.
+   Same trap as the note on .rm-add in roles-manager.html. The
+   300ms is --duration-slow; the curve is --ease-standard. */
+.m-cal--open .m-cal__cell { transition: height 300ms cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) {
   .m-cal--open .m-cal__cell { transition: none; }
 }
