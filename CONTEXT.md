@@ -534,8 +534,20 @@ A sub-element of an Irregular Service's liturgy. (Distinct from a **Component**,
   - `type`: 'person', 'text', or 'hymn' (to determine the editor UI).
 - **Syncing**: If `key` matches a **Canonical Role** or **Liturgy Field**, it syncs with the standard `Service` fields.
 
+### Hymn
+A hymn in the church's book: the catalog entry people open on the Hymns page. Distinct from a [[Hymn Entry]], which is one Sunday's choice of a hymn. A Hymn has a title, who wrote the words, who wrote the music, an attribution, tags, and one or more [[Version]]s.
+_Avoid_: song, tune (a tune is one [[Version]])
+
+### Version
+One named way of singing a [[Hymn]], with its own sheet-music pages in order. A Hymn may have several. The order they are kept in is the order an editor arranged, and that order is not what decides which one prints.
+_Avoid_: arrangement, variation
+
+### Default version
+The one [[Version]] of a [[Hymn]] that prints. Exactly one. An editor marks it with a star. A Hymn that has never been starred still prints its first Version — that is what the book already did. A Sunday does not pick a version of its own; it names a Hymn, and the default is the sheets. ([ADR 0073](docs/adr/0073-a-hymn-has-one-default-version.md))
+_Avoid_: primary version, preferred sheet
+
 ### Hymn Entry
-A hymn selection within a Service's liturgy.
+A hymn selection within a Service's liturgy — not the [[Hymn]] in the book, but this Sunday's choice of one.
 - **States**:
   - **Canonical**: Linked to a document in the `hymns` collection (has a valid `id`). This is the preferred state as it enables music sheet generation.
   - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
