@@ -20,6 +20,11 @@
     // What the list shows when a Person has no name. It is a label, never a name
     // to write back.
     const DISPLAY_NAME_FALLBACK = '(no name)';
+    // A spelling that was not entered in parts must not sit beside an older
+    // split. The phone still edits one string, so a changed string clears
+    // the parts and does not invent a new split. The screen turns this into
+    // a field delete. (ADR 0070, ADR 0074)
+    const CLEAR_NAME_PARTS = Object.freeze({ clearNameParts: true });
 
     // What Add person asks for. The Kid mark is not one of them.
     const ADD_PERSON_FIELDS = Object.freeze([
@@ -110,9 +115,13 @@
             updatedByName: options.updatedByName || '',
         };
         if (!options.editMode) return payload;
-        payload.name = trim(fields && fields.name);
+        const nextName = trim(fields && fields.name);
+        payload.name = nextName;
         payload.sex = (fields && fields.sex) || null;
         payload.kid = !!(fields && fields.kid);
+        if (options.currentName != null && trim(options.currentName) !== nextName) {
+            payload.nameParts = CLEAR_NAME_PARTS;
+        }
         return payload;
     }
 
@@ -140,10 +149,12 @@
         });
         if (editModeOn) {
             const name = trim(fields && fields.name);
+            const previous = storedDirectoryName(person);
             next.directoryName = name;
             next.name = name || DISPLAY_NAME_FALLBACK;
             next.sex = (fields && fields.sex) || null;
             next.kid = !!(fields && fields.kid);
+            if (name !== previous) delete next.nameParts;
         }
         return next;
     }
@@ -206,6 +217,7 @@
         DELETE_PERSON_FAILED,
         DELETE_INVOLVEMENT_FAILED,
         DISPLAY_NAME_FALLBACK,
+        CLEAR_NAME_PARTS,
         ADD_PERSON_FIELDS,
         subscribe,
         isOn,
