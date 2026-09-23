@@ -45,6 +45,43 @@ const DEFAULT_PRAYER_MESSAGES = {
 };
 
 /**
+ * Lock-screen wording per purpose. A text runs long; a title does not.
+ * KEEP IN SYNC with DEFAULT_PUSH_WORDING in public/admin-dashboard.js and
+ * public/mobile/data.js. {name} is the subject's first name.
+ * @type {Object}
+ */
+const DEFAULT_PUSH_WORDING = {
+  initial: {
+    title: "Sunday's prayer",
+    body: "{name}, you're in this Sunday's pastoral prayer. " +
+      "What can we pray about?",
+  },
+  reminder: {
+    title: "Prayer reminder",
+    body: "{name}, we'd still love to know what to pray about this Sunday.",
+  },
+  thankyou: {
+    title: "Thank you",
+    body: "Thank you, {name}. We'll be praying this Sunday.",
+  },
+};
+
+/** Purposes that have a lock-screen title and body. */
+const PUSH_WORDING_KINDS = ["initial", "reminder", "thankyou"];
+
+/**
+ * Config field for one half of a push template, e.g. pushInitialTitle.
+ * @param {string} kind initial | reminder | thankyou
+ * @param {string} part title | body
+ * @return {string}
+ */
+function pushConfigKey(kind, part) {
+  const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+  const which = part === "title" ? "Title" : "Body";
+  return `push${cap}${which}`;
+}
+
+/**
  * The first whitespace-delimited token of a full name.
  * @param {string} name
  * @return {string}
@@ -75,6 +112,28 @@ function resolveTemplates(config) {
     thankyou: pick("thankyou"),
     elderDigest: pick("elderDigest"),
   };
+}
+
+/**
+ * Push title and body per purpose. A blank field uses that field's default,
+ * so a half-filled config still renders a complete lock screen.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {Object} initial, reminder, thankyou — each {title, body}
+ */
+function resolvePushWording(config) {
+  const data = config || {};
+  const out = {};
+  for (const kind of PUSH_WORDING_KINDS) {
+    const titleRaw = data[pushConfigKey(kind, "title")];
+    const bodyRaw = data[pushConfigKey(kind, "body")];
+    const title = typeof titleRaw === "string" ? titleRaw.trim() : "";
+    const body = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
+    out[kind] = {
+      title: title || DEFAULT_PUSH_WORDING[kind].title,
+      body: body || DEFAULT_PUSH_WORDING[kind].body,
+    };
+  }
+  return out;
 }
 
 /**
@@ -285,8 +344,12 @@ if (typeof module !== "undefined" && module.exports) {
     WINDOW_OPEN_HOUR,
     WINDOW_CLOSE_HOUR,
     DEFAULT_PRAYER_MESSAGES,
+    DEFAULT_PUSH_WORDING,
+    PUSH_WORDING_KINDS,
+    pushConfigKey,
     firstNameOf,
     resolveTemplates,
+    resolvePushWording,
     renderPrayerRequestMessage,
     churchDateParts,
     daysUntil,

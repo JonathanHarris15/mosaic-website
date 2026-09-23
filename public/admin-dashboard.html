@@ -297,6 +297,33 @@
                     </label>
                 </template>
 
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    The same asks, on a lock screen. A title past
+                    <span x-text="pushTitleLimit"></span>
+                    characters is cut off on the phone — the count is there so that is visible before it is saved.
+                    Use <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{name}</code> in the title and the body.
+                    The elder digest stays a text; it is not a lock screen.
+                </p>
+
+                <template x-for="kind in pushKinds" :key="kind.key">
+                    <div class="flex flex-col gap-xs border border-outline-variant/40 rounded-lg p-md">
+                        <span class="font-label-md text-label-md text-on-surface" x-text="kind.label + ' — lock screen'"></span>
+                        <label class="flex flex-col gap-xs">
+                            <span class="font-label-md text-label-md text-on-surface-variant">Title</span>
+                            <input type="text" x-model="pushWording[kind.key].title"
+                                class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <span class="font-body-md text-xs"
+                                  :class="(pushWording[kind.key].title || '').length > pushTitleLimit ? 'text-error' : 'text-on-surface-variant'"
+                                  x-text="(pushWording[kind.key].title || '').length + ' / ' + pushTitleLimit + ((pushWording[kind.key].title || '').length > pushTitleLimit ? ' — a lock screen will cut this' : '')"></span>
+                        </label>
+                        <label class="flex flex-col gap-xs">
+                            <span class="font-label-md text-label-md text-on-surface-variant">Body</span>
+                            <textarea x-model="pushWording[kind.key].body" rows="2"
+                                class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
+                        </label>
+                    </div>
+                </template>
+
                 <div class="flex items-center justify-end gap-sm">
                     <button @click="resetPrayerMessages()"
                         class="m-btn m-btn--quiet m-btn--sm">

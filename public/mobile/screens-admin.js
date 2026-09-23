@@ -28,6 +28,21 @@
     { key: "elderDigest", label: "Elder digest", help: "Texted to Elder-tagged people once all of a service's requests are in by reply. Uses {date} and {requests}." },
   ];
 
+  var PUSH_KINDS = [
+    { key: "initial", label: "Initial request" },
+    { key: "reminder", label: "Reminder" },
+    { key: "thankyou", label: "Thank-you" },
+  ];
+
+  function clonePush(src) {
+    var out = {};
+    PUSH_KINDS.forEach(function (k) {
+      var piece = (src && src[k]) || (data.DEFAULT_PUSH_WORDING && data.DEFAULT_PUSH_WORDING[k]) || { title: "", body: "" };
+      out[k.key] = { title: piece.title || "", body: piece.body || "" };
+    });
+    return out;
+  }
+
   function Toast(props) {
     if (!props.toast) return null;
     return html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: props.toast.type === "error" ? "var(--error)" : "var(--primary)", color: props.toast.type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${props.toast.message}</div>`;
@@ -51,6 +66,7 @@
     var testPhoneS = useState(""), testMsgS = useState(""), sendingS = useState(false), lastResultS = useState(null);
     var repliesS = useState([]), repliesLoadingS = useState(false);
     var msgsS = useState(Object.assign({}, data.PRAYER_MESSAGE_DEFAULTS)), prayerSavingS = useState(false);
+    var pushS = useState(clonePush(data.DEFAULT_PUSH_WORDING));
     var autoSendS = useState(false), autoSavingS = useState(false);
     var toastS = useState(null);
 
@@ -69,7 +85,11 @@
       data.getSmsReplies().then(function (r) { repliesS[1](r); }).catch(function () { showToast("Could not load replies", "error"); }).then(function () { repliesLoadingS[1](false); });
     }
     function loadPrayer() {
-      data.getPrayerMessages().then(function (r) { msgsS[1](r.messages); autoSendS[1](r.autoSendEnabled); }).catch(function () { showToast("Could not load prayer messages", "error"); });
+      data.getPrayerMessages().then(function (r) {
+        msgsS[1](r.messages);
+        pushS[1](clonePush(r.pushWording));
+        autoSendS[1](r.autoSendEnabled);
+      }).catch(function () { showToast("Could not load prayer messages", "error"); });
     }
 
     useEffect(function () {
@@ -109,9 +129,13 @@
     }
     function savePrayer() {
       prayerSavingS[1](true);
-      data.savePrayerMessages(msgsS[0], props.user).then(function () { showToast("Prayer messages saved"); }).catch(function () { showToast("Error saving messages", "error"); }).then(function () { prayerSavingS[1](false); });
+      data.savePrayerMessages(msgsS[0], props.user, pushS[0]).then(function () { showToast("Prayer messages saved"); }).catch(function () { showToast("Error saving messages", "error"); }).then(function () { prayerSavingS[1](false); });
     }
-    function resetPrayer() { msgsS[1](Object.assign({}, data.PRAYER_MESSAGE_DEFAULTS)); showToast("Reset to defaults — Save to apply"); }
+    function resetPrayer() {
+      msgsS[1](Object.assign({}, data.PRAYER_MESSAGE_DEFAULTS));
+      pushS[1](clonePush(data.DEFAULT_PUSH_WORDING));
+      showToast("Reset to defaults — Save to apply");
+    }
     function toggleAuto() {
       var next = !autoSendS[0];
       autoSavingS[1](true);
@@ -222,6 +246,28 @@
                   <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)", lineHeight: 1.35 }}>${f.help}</span>
                   <textarea rows=${3} value=${msgsS[0][f.key]} onInput=${function (e) { var n = Object.assign({}, msgsS[0]); n[f.key] = e.target.value; msgsS[1](n); }} style=${Object.assign({}, inputStyle, { resize: "vertical", marginTop: 2 })}></textarea>
                 </label>`;
+              })}
+              <p style=${{ margin: "4px 0 0", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.4 }}>
+                Lock screen wording for the same asks. A title past ${data.PUSH_TITLE_LIMIT} characters is cut off on the phone. The elder digest stays a text.
+              </p>
+              ${PUSH_KINDS.map(function (k) {
+                var piece = pushS[0][k.key] || { title: "", body: "" };
+                var over = (piece.title || "").length > data.PUSH_TITLE_LIMIT;
+                function setPart(part) {
+                  return function (e) {
+                    var next = clonePush(pushS[0]);
+                    next[k.key][part] = e.target.value;
+                    pushS[1](next);
+                  };
+                }
+                return html`<div key=${k.key} style=${{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style=${LABEL}>${k.label} — lock screen</span>
+                  <input type="text" value=${piece.title} onInput=${setPart("title")} style=${inputStyle} />
+                  <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: over ? "var(--error)" : "var(--on-surface-variant)" }}>
+                    ${(piece.title || "").length} / ${data.PUSH_TITLE_LIMIT}${over ? " — a lock screen will cut this" : ""}
+                  </span>
+                  <textarea rows=${2} value=${piece.body} onInput=${setPart("body")} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea>
+                </div>`;
               })}
             </div>
             <div style=${{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
