@@ -109,6 +109,9 @@ const MODULES = [
     // MS-622. Which printed event announcements belong on a Sunday. The
     // booklet resolver calls it, so the assistant and the page agree.
     'printed-announcement-lines.js',
+    // MS-661. Which version of a hymn prints. printable-data-core.js asks it
+    // for the sunday_hymns sheets, so the assistant and the page agree.
+    'hymn-versions.js',
     'printable-data-core.js',
     // MS-489 / MS-433. The assistant is refused at a box an elder holds, and
     // "is this box held" has to be the page's answer — heartbeat expiry, the

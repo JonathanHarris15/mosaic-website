@@ -35,6 +35,10 @@
 (function (global) {
     'use strict';
 
+    const HymnVersions = (typeof require !== 'undefined')
+        ? require('./hymn-versions.js')
+        : global.HymnVersions;
+
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -798,7 +802,7 @@
     }
 
     function hymnSheetPages(hymn) {
-        const raw = (hymn && hymn.versions && hymn.versions[0] && hymn.versions[0].pages) || [];
+        const raw = HymnVersions.defaultPages(hymn);
         if (!Array.isArray(raw)) return [];
         const out = [];
         raw.forEach(p => {

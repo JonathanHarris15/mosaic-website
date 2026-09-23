@@ -1,4 +1,5 @@
 // Identifier 'db' is already declared in auth.js
+// Which version prints is HymnVersions (ADR 0073). The page loads it first.
 
 function guideEditor() {
     return {
@@ -201,7 +202,7 @@ function guideEditor() {
                 }
 
                 const details = this.hymnDetails[hymnRef.id];
-                const pages = details?.versions?.[0]?.pages || [];
+                const pages = HymnVersions.defaultPages(details);
                 const pageCount = Math.max(1, pages.length);
 
                 for (let i = 0; i < pageCount; i++) {
@@ -581,8 +582,7 @@ function guideEditor() {
         getHymnImages(hymnId) {
             if (!hymnId) return [];
             const details = this.hymnDetails[hymnId];
-            if (!details || !details.versions || details.versions.length === 0) return [];
-            return details.versions[0].pages || [];
+            return HymnVersions.defaultPages(details);
         },
 
         getShortDate(dateStr) {

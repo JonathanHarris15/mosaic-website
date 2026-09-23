@@ -20,6 +20,7 @@
 
     const Engine = (typeof require !== 'undefined') ? require('./guide-engine.js') : global.GuideEngine;
     const Seed = (typeof require !== 'undefined') ? require('./guide-seed.js') : global.GuideSeed;
+    const HymnVersions = (typeof require !== 'undefined') ? require('./hymn-versions.js') : global.HymnVersions;
 
     const COLLECTIONS = {
         stylePresets: 'style_presets',
@@ -290,7 +291,7 @@
                     const hd = await db.collection('hymns').doc(h.id).get();
                     if (hd.exists) {
                         const d = hd.data();
-                        entry.pages = (d.versions && d.versions[0] && d.versions[0].pages) || [];
+                        entry.pages = HymnVersions.defaultPages(d);
                         entry.attribution = d.attribution || '';
                         entry.name = d.hymn_name || h.name;
                     }
