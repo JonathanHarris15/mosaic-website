@@ -15,7 +15,7 @@ test('iteration is queried in the data drawer, and a locked query cannot be rebu
 });
 
 test('a box inside a household card can query the children of that household', () => {
-    assert.match(html, /Of this household/, 'the query picker groups related lists');
+    assert.match(js, /Of this household/, 'the query picker groups related lists');
     assert.match(js, /relatedListSources/, 'the editor knows which lists belong to the parent row');
     assert.match(js, /listSourcesFor/, 'related lists are offered only inside their parent');
     assert.match(js, /queryTarget/, 'a selected inner box is what the query writes, not the household card');
@@ -34,6 +34,25 @@ test('an unbound box inside an iterated household card may become a sub-iteratio
     assert.match(html, /Make this a sub-iteration/, 'an inner box is offered a related list, not a second directory');
     assert.match(js, /get canStartSubIteration\(/, 'sub-iteration is a first-class offer');
     assert.match(js, /selectedBindings\.length/, 'a child that already has a field wired is not offered a related list');
+});
+
+test('the query builder is the catalog of every iterable list', () => {
+    const Data = require('../public/printable-data-core.js');
+    const { PrintableEditorWires } = require('../public/printable-editor-data.js');
+    assert.ok(PrintableEditorWires && typeof PrintableEditorWires.groupQueryLists === 'function');
+    const lists = Data.SOURCES.filter(s => s.shape === 'list' && !s.of);
+    const regions = PrintableEditorWires.groupQueryLists(lists, '');
+    const keys = regions.flatMap(r => r.sources.map(s => s.key));
+    lists.forEach(s => assert.ok(keys.includes(s.key), s.key + ' belongs in the query builder'));
+    assert.ok(!keys.includes('sunday'), 'a single Sunday is not a list');
+    assert.ok(!keys.includes('sunday_typed'), 'booklet text is not a list');
+    assert.ok(!keys.includes('role_holder'), 'who holds a role is not a list');
+    assert.ok(!keys.includes('household_children'), 'Children is related — only inside a household card');
+    const inside = PrintableEditorWires.groupQueryLists(
+        Data.SOURCES.filter(s => s.shape === 'list' && (!s.of || s.of === 'households')), '');
+    assert.ok(inside.some(r => r.name === 'Of this household' && r.sources.some(s => s.key === 'household_children')));
+    assert.match(html, /queryCatalogRegions/, 'the builder draws those lists, not a hidden catalog');
+    assert.match(html, /x-show="showQueryBuilder"/, 'search is on the query, not the old catalog');
 });
 
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {

@@ -493,8 +493,8 @@
                     <span class="material-symbols-outlined" :class="data.loading ? 'pe-spin' : ''">refresh</span>
                 </button>
             </div>
-            <div class="pe-drawer__search" x-show="showCatalog">
-                <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a field" x-model="data.search" /></span>
+            <div class="pe-drawer__search" x-show="showQueryBuilder">
+                <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a list" x-model="data.search" /></span>
             </div>
             <div class="pe-drawer__body">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
@@ -535,15 +535,21 @@
                     </template>
                     <template x-if="!queryLocked">
                         <div>
-                            <label class="pe-f"><span>List</span>
-                                <select class="pe-in" :value="queryTarget && queryTarget.repeat && queryTarget.repeat.source || ''" @change="setQuerySource($event.target.value)">
-                                    <option value="" disabled>Choose a list</option>
-                                    <optgroup label="Of this household" x-show="relatedListSources.length">
-                                        <template x-for="src in relatedListSources" :key="'qrel-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
-                                    </optgroup>
-                                    <template x-for="src in topListSources" :key="'q-' + src.key"><option :value="src.key" x-text="src.label"></option></template>
-                                </select></label>
-                            <p class="pe-hint" x-show="!queryTarget || !queryTarget.repeat || !queryTarget.repeat.source">Select a box, then a list. A box inside a household card can list the children of that household.</p>
+                            <p class="pe-hint" x-show="!querySourceKey">Pick the list this box stands for. Everything iterable the site can tell a Printable is here.</p>
+                            <template x-for="region in queryCatalogRegions" :key="'qreg-' + region.name">
+                                <div class="pe-query__region">
+                                    <h4 class="pe-drawer__title" x-text="region.name"></h4>
+                                    <template x-for="src in region.sources" :key="'qsrc-' + src.key">
+                                        <button type="button" class="pe-src pe-src--pick" :class="querySourceKey === src.key ? 'is-open is-picked' : ''"
+                                                :aria-pressed="querySourceKey === src.key" @click="setQuerySource(src.key)">
+                                            <span class="pe-src__row">
+                                                <span class="material-symbols-outlined">list</span>
+                                                <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-text="src.blurb"></span></span>
+                                            </span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
                             <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
                                 <div>
                                     <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
@@ -1004,6 +1010,9 @@
         .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
         .pe-drawer__ok { color: var(--success); }
+        .pe-query__region { margin: 8px 0 10px; }
+        .pe-src--pick { display: block; width: 100%; text-align: left; cursor: pointer; padding: 0; font: inherit; color: inherit; }
+        .pe-src--pick.is-picked { border-color: var(--tertiary); box-shadow: 0 0 0 1px var(--tertiary); }
         .pe-src { border: 1px solid var(--outline-variant); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface-container-lowest); overflow: hidden; }
         .pe-src__row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
         .pe-src__row:hover { background: var(--surface-container); }

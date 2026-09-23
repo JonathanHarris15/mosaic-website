@@ -31,6 +31,33 @@
     // A wire is drawn only while the bound element still overlaps the
     // canvas. Off-screen copies leave a stray curve; coming back on
     // screen is a fresh show, animated by the drawer.
+    // Every iterable list the catalog used to list, grouped the way the
+    // query builder shows them. Related lists (`of`) sit first, as
+    // "Of this household", and only if the caller passed them in.
+    function groupQueryLists(lists, search) {
+        const q = String(search || '').trim().toLowerCase();
+        const filtered = (lists || []).filter(s => {
+            if (!s || s.shape === 'single') return false;
+            if (!q) return true;
+            const hay = [s.label, s.region, s.blurb]
+                .concat((s.fields || []).map(f => f.label))
+                .join(' ')
+                .toLowerCase();
+            return hay.includes(q);
+        });
+        const related = filtered.filter(s => s.of);
+        const top = filtered.filter(s => !s.of);
+        const byRegion = {};
+        const order = [];
+        top.forEach(s => {
+            if (!byRegion[s.region]) { byRegion[s.region] = []; order.push(s.region); }
+            byRegion[s.region].push(s);
+        });
+        const regions = order.map(r => ({ name: r, sources: byRegion[r] }));
+        if (related.length) regions.unshift({ name: 'Of this household', sources: related });
+        return regions;
+    }
+
     const PrintableEditorWires = {
         elementOnCanvas(elRect, viewRect) {
             if (!elRect || !viewRect) return false;
@@ -39,6 +66,7 @@
                 && elRect.bottom > viewRect.top
                 && elRect.top < viewRect.bottom;
         },
+        groupQueryLists: groupQueryLists,
     };
     global.PrintableEditorWires = PrintableEditorWires;
 
@@ -267,6 +295,17 @@
 
             get topListSources() {
                 return this.listSources.filter(s => !s.of);
+            },
+
+            // The catalog of iterable lists, shown inside the query
+            // builder — that is how you pick what the box stands for.
+            get queryCatalogRegions() {
+                return groupQueryLists(this.listSources, this.data.search);
+            },
+
+            get querySourceKey() {
+                const t = this.queryTarget;
+                return (t && t.repeat && t.repeat.source) || '';
             },
 
             get queryLocked() {
