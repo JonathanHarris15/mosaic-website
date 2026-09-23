@@ -35,10 +35,10 @@
     const SWIPE_MIN = 45;
     const SWIPE_BIAS = 1.4;
 
-    // How long a week takes to open, and it must match `--duration-slow` on
-    // `.m-cal--open .m-cal__cell`. Closing waits for it before letting the grid
-    // go back to dividing the window equally — do that on the same frame and
-    // the row snaps shut instead of closing.
+    // How long a week takes to open, and it must be at least the 300ms the
+    // transition on `.m-cal--open .m-cal__cell` runs for. Closing waits for it
+    // before letting the grid go back to dividing the window equally — do that
+    // on the same frame and the row snaps shut instead of closing.
     const OPEN_MS = 320;
 
     // Timers, where there may not be any. The component is loaded into a bare
@@ -750,8 +750,17 @@
             // the DOM, which is why it waits a drawn frame. `scrollHeight` on a
             // cell still clipped to the old height is the only honest answer to
             // "how tall would this be if you let it".
+            // ⚠ AND THE PIN IS TAKEN NOW, NOT REMEMBERED FROM PAGE LOAD. This
+            // used to measure only when it had no number at all, so whatever
+            // the first frame after loading happened to say stood for the rest
+            // of the visit — and that frame is taken before the display face
+            // has arrived, while the toolbar is still a line taller than it
+            // ends up. Every row was then pinned ten pixels under the height it
+            // was actually drawn at, so opening one week dropped all five.
+            // Nothing is open yet at this point, so the rows are still fitted
+            // and the browser's answer is the one we want.
             openWeek(month, index, date) {
-                if (!this.cellHeight) this.measureCell();
+                this.measureCell();
                 stopTimer(this.closeTimer);
                 this.expandedWeek = this.weekKey(month, index);
                 this.expandedFrom = date || null;

@@ -170,6 +170,12 @@
   --shadow-md:     0 8px 24px rgba(14,28,54,.10);
   --shadow-lg:     0 18px 48px rgba(14,28,54,.14);
 
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);   /* @kind other */
+  --duration-fast: 150ms;   /* @kind other */
+  --duration:      200ms;   /* @kind other — the default */
+  --duration-slow: 300ms;   /* @kind other */
+
   /* ---- Families ---- */
   --font-display:       "Cinzel", "Georgia", serif;
   --font-serif:         "EB Garamond", "Georgia", serif;
@@ -921,11 +927,30 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 
    The page is allowed to scroll while one is open, and only then:
    what the fit is for is a month that arrives whole, not a page that
-   may never scroll. */
-.m-cal--fit .m-cal__grid--open { grid-auto-rows: auto; }
+   may never scroll.
+
+   ⚠ align-content: start IS LOAD-BEARING, NOT TIDINESS. Auto rows
+   SHARE OUT any height the grid box has beyond what its rows need,
+   and the box is not the one deciding how tall it is — open, the
+   page stops fitting the window and the taller of the two columns
+   sizes the row, which is the right rail as often as not. Left to
+   stretch, every one of the five rows took a share of the surplus
+   while the cells stayed pinned to their pixel height, so all seven
+   days of all five weeks grew a gap under their chips at once. One
+   row was asked to move and the whole month moved. */
+.m-cal--fit .m-cal__grid--open { grid-auto-rows: auto; align-content: start; }
 /* Pixels, because a height has to be a number at both ends for the
    growing to be something you can watch rather than something that
-   has already happened. */
+   has already happened.
+
+   ⚠ THIS RULE ONLY WORKS BECAUSE --duration-slow IS DECLARED IN THE
+   SHEET THAT SHIPS IT. Motion used to be written by hand in the
+   design system's spacing.css, below the generated marker, where
+   nothing carried it into mosaic.css — and a var() that resolves to
+   nothing does not fall back, it deletes the declaration it sits in.
+   This transition never ran once. Motion is generated from
+   tailwind.config.js now; test/calendar-week-open.test.js is what
+   stops it drifting back out of reach. */
 .m-cal--open .m-cal__cell { transition: height var(--duration-slow) var(--ease-standard); }
 @media (prefers-reduced-motion: reduce) {
   .m-cal--open .m-cal__cell { transition: none; }

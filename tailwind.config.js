@@ -251,6 +251,25 @@ module.exports = {
         "md": "0 8px 24px rgba(14,28,54,.10)",
         "lg": "0 18px 48px rgba(14,28,54,.14)",
       },
+
+      /* ⚠ MOTION LIVES HERE BECAUSE THE APP DRAWS WITH IT. It used to be
+         hand-written in build/design-tokens/spacing.css, after the generated
+         marker, on the stated grounds that "the app has no opinion on motion"
+         — and the app had seventy-five of them. Every one resolved to nothing,
+         because only the block INSIDE the marker is spliced into mosaic.css,
+         and a var() that resolves to nothing does not fall back: it deletes
+         the declaration it sits in. Seventy-five transitions that had never
+         once run, on every hover, every disclosure, every opening row.
+         Declared here, the generator carries them to the app and to the
+         design system from one place, the same as every other token. */
+      transitionDuration: {
+        "DEFAULT": "200ms",
+        "fast": "150ms",
+        "slow": "300ms",
+      },
+      transitionTimingFunction: {
+        "standard": "cubic-bezier(0.2, 0, 0, 1)",
+      },
     },
   },
   plugins: [

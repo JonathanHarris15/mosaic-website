@@ -156,13 +156,7 @@
             border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary);
             font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600;
             letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
-            /* ⚠ NOT var(--duration) / var(--ease-standard). Those two are the
-               design system's own, declared after the @generated marker in
-               spacing.css, and nothing splices them into mosaic.css — so they
-               resolve to nothing here and take the whole declaration with them.
-               Every component in the library reaches for them and loses its
-               transition the same way; see the note in the export file. */
-            transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+            transition: background-color var(--duration) var(--ease-standard);
         }
         .rm-add:hover { background: var(--surface-container-low); }
 

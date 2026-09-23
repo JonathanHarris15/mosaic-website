@@ -1228,15 +1228,25 @@ test('a desktop page in the shell never reaches for a token it does not have', (
         ...Object.keys(theme.maxWidth || {}).map(k => (k === 'container' ? 'container-max' : 'width-' + k)),
         ...Object.keys(theme.borderRadius || {}).map(k => (k === 'DEFAULT' ? 'radius' : 'radius-' + k)),
         ...Object.keys(sizes).flatMap(k => [k + '-size', k + '-line', k + '-spacing']),
+        // Motion. It used to be the trap this test warned about — hand-written
+        // AFTER the @generated marker in spacing.css, so a page naming
+        // --duration lost the whole declaration. It is in the config now and
+        // the build splices it into mosaic.css with everything else, which is
+        // why this page is allowed to say var(--duration) again.
+        ...Object.keys(theme.transitionDuration || {}).map(k => (k === 'DEFAULT' ? 'duration' : 'duration-' + k)),
+        ...Object.keys(theme.transitionTimingFunction || {}).map(k => (k === 'DEFAULT' ? 'ease' : 'ease-' + k)),
     ].map(k => '--' + k));
 
-    // Not generated, and this is the trap. --duration, --ease-standard and the
-    // rest of the motion set live AFTER the @generated marker in spacing.css —
-    // they are the design system's own, and nothing splices them into
-    // mosaic.css. A page that names one loses the whole declaration.
-    ['--duration', '--duration-fast', '--duration-slow', '--ease-standard', '--border-hairline']
-        .forEach(t => assert.equal(generated.has(t), false,
-            t + ' is generated now — this guard is stale, and the page may use it'));
+    // Still not generated, and still the trap. --border-hairline is the design
+    // system's own, below the marker, and nothing splices it into mosaic.css.
+    ['--border-hairline'].forEach(t => assert.equal(generated.has(t), false,
+        t + ' is generated now — this guard is stale, and the page may use it'));
+
+    // And the motion set has to be on the other side of that line, or the
+    // allowance above is letting the page name something it cannot resolve.
+    ['--duration', '--duration-fast', '--duration-slow', '--ease-standard']
+        .forEach(t => assert.equal(generated.has(t), true,
+            t + ' has dropped out of the generated set, so every rule naming it is dropped whole'));
 
     // Comments are stripped first, the same way the next test does it. A note
     // saying "⚠ NOT var(--duration), it resolves to nothing here" is the most

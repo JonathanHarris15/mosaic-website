@@ -30,9 +30,9 @@
         .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
 
         /* Motion: background, opacity and filter only. No bounces, no loops. */
-        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
-                                  opacity 150ms cubic-bezier(0.2,0,0,1),
-                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .cal-motion { transition: background-color var(--duration-fast) var(--ease-standard),
+                                  opacity var(--duration-fast) var(--ease-standard),
+                                  border-color var(--duration-fast) var(--ease-standard); }
         .cal-press:active { transform: scale(0.98); }
 
         /* Row actions reveal on hover on a desktop. On touch there is no hover,
@@ -112,6 +112,19 @@
            everything beside it was still travelling. */
         html:not(.shell-mobile) body.cal-open > main { flex: 0 0 auto; }
         html:not(.shell-mobile) body.cal-open .cal-layout--fit { flex: 0 0 auto; min-height: 0; }
+        /* ⚠ AND THE MONTH STOPS BEING STRETCHED BY WHAT IS BESIDE IT. Closed,
+           both columns are exactly the window tall and neither sizes the other.
+           Open, the row is as tall as the TALLER of the two — and "Needs
+           sorting" is routinely taller than five weeks of grid. The month card
+           was then handed a height nothing in it had asked for, which the grid
+           inside it shared out across all five rows while the cells stayed
+           pinned: a gap under every day in the month, for as long as the row
+           took to travel. So while a week is open the month is as tall as its
+           own weeks and no taller. The rail still stretches — that is the
+           column this note's neighbour above is about. */
+        @media (min-width: 900px) {
+            html:not(.shell-mobile) body.cal-open .cal-layout--fit > .m-cal--fit { align-self: start; }
+        }
         /* ⚠ THE FLEX CHAIN HAS TO PASS THROUGH THE RAIL. The grid is two boxes
            down from the section — the rail's clipping box and its sliding track
            — and a row can only divide a height its parent actually has. Miss
@@ -129,6 +142,17 @@
            and it is why the page never has to move. */
         html:not(.shell-mobile) .m-cal--fit.m-cal--open .cal-rail-track,
         html:not(.shell-mobile) .m-cal--fit.m-cal--open [data-rail-month] { height: auto; min-height: 100%; }
+        /* ⚠ AND ONLY THE MONTH ON SCREEN GETS A SAY IN HOW TALL THE RAIL IS.
+           The track lays its five months out in one grid ROW, so that row is
+           as tall as the tallest of them. Fitted they are all 100% and all
+           agree; open, `height: auto` let the four nobody is looking at grow
+           to their own contents — a different number, from a different month,
+           with a different count of weeks — and whichever came out tallest
+           held the month on screen open at a height its own weeks had not
+           asked for. `height: 0` takes them out of the measuring; the
+           `min-height` puts them back at whatever the on-screen month settles
+           on, which is the height they should have had all along. */
+        html:not(.shell-mobile) .m-cal--fit.m-cal--open [data-rail-month]:not(.m-cal__grid--open) { height: 0; }
 
         /* minmax(0,1fr) is REQUIRED. With a plain 1fr the event chips give the
            track a min-content floor and the grid overflows its container by
