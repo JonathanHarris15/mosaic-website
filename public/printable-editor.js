@@ -512,6 +512,7 @@ function printableEditor() {
             this.refreshOverlays();
             this.renderTree();
             this.syncCode();
+            if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
         clearSelection() {
@@ -519,6 +520,7 @@ function printableEditor() {
             this.readProps();
             this.refreshOverlays();
             this.renderTree();
+            if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
         // Where a new element goes: inside the selected box, beside a selected

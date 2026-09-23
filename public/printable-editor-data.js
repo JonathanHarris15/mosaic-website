@@ -28,6 +28,20 @@
     const Render = global.PrintableRenderCore;
     const Core = global.PrintableCore;
 
+    // A wire is drawn only while the bound element still overlaps the
+    // canvas. Off-screen copies leave a stray curve; coming back on
+    // screen is a fresh show, animated by the drawer.
+    const PrintableEditorWires = {
+        elementOnCanvas(elRect, viewRect) {
+            if (!elRect || !viewRect) return false;
+            return elRect.right > viewRect.left
+                && elRect.left < viewRect.right
+                && elRect.bottom > viewRect.top
+                && elRect.top < viewRect.bottom;
+        },
+    };
+    global.PrintableEditorWires = PrintableEditorWires;
+
     // Alpine evaluates x-model even behind x-show. A missing draft used to
     // throw on every kids/announcements field the moment a single source
     // rendered. Always stand a blank draft up; loadTypedDraft replaces it.
@@ -67,6 +81,8 @@
             dropTarget: null,          // the element under it, when it may take it
             wires: [],                 // [{x1,y1,x2,y2}] in main-area coordinates
             dragWire: null,
+            _wireKeys: {},             // last-drawn wire keys, so a return can animate
+            _wiresBound: false,
 
             // ── Boot ─────────────────────────────────────────────────────
 
@@ -78,7 +94,17 @@
                 } catch (e) {
                     this.data.options = { series: [], roles: [], forms: [] };
                 }
+                this.bindWireTracking();
                 await this.refreshData();
+            },
+
+            // The chip end of a wire lives in the drawer; without a scroll
+            // listener the curve sits still while the chip moves.
+            bindWireTracking() {
+                if (this._wiresBound) return;
+                this._wiresBound = true;
+                const body = document.querySelector('.pe-drawer__body');
+                if (body) body.addEventListener('scroll', () => this.refreshWires(), { passive: true });
             },
 
             viewer() {
@@ -248,8 +274,48 @@
                 return !!(r && r.repeat.source && !Data.mayQuery(this.permissionLevel, r.repeat.source));
             },
 
+            // The catalog of every list is not how you start. Pick an
+            // element, make it iterated, then the query builder opens.
+            get showCatalog() {
+                return false;
+            },
+
+            get hasOwnRepeat() {
+                const n = this.selectedNode;
+                return !!(n && n.repeat);
+            },
+
+            // A box with no Repeat of its own: the drawer offers one
+            // button, not the old list of sources.
+            get canStartIteration() {
+                const n = this.selectedNode;
+                if (!n || Core.kindOf(n) !== 'box' || n.repeat || this.data.picking) return false;
+                if (this.repeatContext && this.relatedListSources.length) return false;
+                return true;
+            },
+
+            // A related list (children of this household) is only for an
+            // unbound box sitting inside an iterated card. A child that
+            // already has a field wired is a field of the parent row, not
+            // a nested list; a text or image cannot stand for a row.
+            get canStartSubIteration() {
+                const n = this.selectedNode;
+                if (!n || Core.kindOf(n) !== 'box' || n.repeat || this.data.picking) return false;
+                if (!this.repeatContext || n.id === this.repeatContext.id) return false;
+                if (this.selectedBindings.length) return false;
+                return this.relatedListSources.length > 0;
+            },
+
             get showQueryBuilder() {
-                return !!(this.repeatContext || this.data.picking || this.selectedKind === 'box');
+                const n = this.selectedNode;
+                if (n && n.repeat) return true;
+                return !!(this.data.picking && n && Core.kindOf(n) === 'box');
+            },
+
+            // Row-field chips stay available on a child of an iterated
+            // card even when that child's query builder is not open.
+            get showParentRowFields() {
+                return !!(this.repeatContext && this.itemFields.length && !this.hasOwnRepeat);
             },
 
             get repeatPreview() {
@@ -454,7 +520,10 @@
             refreshWires() {
                 const wires = [];
                 const main = document.querySelector('.pe-main');
+                const viewport = document.getElementById('pe-viewport');
                 const node = this.selectedNode;
+                const prev = this._wireKeys || {};
+                const nextKeys = {};
                 if (main && node && node.bind && !this.dragWire) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
@@ -462,13 +531,17 @@
                         const chip = document.querySelector('[data-chip="' + key + '"]');
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!chip || !el) return;
+                        if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
                         const a = this.pointOf(el);
                         const c = this.pointOf(chip);
-                        wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y });
+                        const enter = !prev[key];
+                        nextKeys[key] = true;
+                        wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });
                     });
                 }
                 if (this.dragWire) wires.push({ x1: this.dragWire.to.x, y1: this.dragWire.to.y, x2: this.dragWire.from.x, y2: this.dragWire.from.y, live: true });
                 this.wires = wires;
+                this._wireKeys = nextKeys;
                 // Drawn by hand: Alpine's <template> does not exist inside an
                 // <svg>, so the paths are built here.
                 const svg = document.getElementById('pe-wires');
@@ -477,7 +550,10 @@
                 wires.forEach(w => {
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', this.wirePath(w));
-                    if (w.live) path.setAttribute('class', 'is-live');
+                    const cls = [];
+                    if (w.live) cls.push('is-live');
+                    if (w.enter) cls.push('is-enter');
+                    if (cls.length) path.setAttribute('class', cls.join(' '));
                     svg.appendChild(path);
                 });
             },
@@ -489,8 +565,16 @@
 
             // ── Iteration ────────────────────────────────────────────────
 
-            // From the context menu: the element becomes iterated, and the
-            // drawer shows the lists it may stand for.
+            startIteration() {
+                this.makeIterated();
+            },
+
+            startSubIteration() {
+                this.makeIterated();
+            },
+
+            // From the context menu or the drawer: the element becomes
+            // iterated, and the query builder opens — not the catalog.
             makeIterated() {
                 const node = this.selectedNode;
                 if (!node) return;
@@ -763,4 +847,7 @@
     }
 
     global.PrintableEditorData = PrintableEditorData;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { PrintableEditorData: PrintableEditorData, PrintableEditorWires: PrintableEditorWires };
+    }
 })(typeof window !== 'undefined' ? window : globalThis);

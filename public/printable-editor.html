@@ -493,11 +493,38 @@
                     <span class="material-symbols-outlined" :class="data.loading ? 'pe-spin' : ''">refresh</span>
                 </button>
             </div>
-            <div class="pe-drawer__search">
+            <div class="pe-drawer__search" x-show="showCatalog">
                 <span class="m-search"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a field" x-model="data.search" /></span>
             </div>
             <div class="pe-drawer__body">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
+
+                <section class="pe-drawer__section pe-drawer__cta" x-show="canStartIteration">
+                    <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startIteration()">
+                        <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Make this element iterated</span>
+                    </button>
+                    <p class="pe-hint">This box will be drawn once per row of a list. The query builder opens next — who is in the list, and which filters you may use.</p>
+                </section>
+
+                <section class="pe-drawer__section pe-drawer__cta" x-show="canStartSubIteration">
+                    <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startSubIteration()">
+                        <span class="material-symbols-outlined">account_tree</span><span class="m-btn__label">Make this a sub-iteration</span>
+                    </button>
+                    <p class="pe-hint">This box lists a related row of the card it sits in — the children of this household, not a second directory. A child that already has a field wired stays a field of the parent row.</p>
+                </section>
+
+                <section class="pe-drawer__section pe-drawer__section--item" x-show="showParentRowFields">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">drag_pan</span>This row</h3>
+                    <p class="pe-hint">Drag a field onto the selected element to fill it from each row of <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
+                    <div class="pe-chips">
+                        <template x-for="f in itemFields" :key="'parent-item-' + f.key">
+                            <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
+                                  @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
+                                <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
+                            </span>
+                        </template>
+                    </div>
+                </section>
 
                 <section class="pe-drawer__section pe-query" x-show="showQueryBuilder">
                     <h3 class="pe-drawer__title"><span class="material-symbols-outlined">filter_alt</span>Query</h3>
@@ -578,7 +605,7 @@
                     </template>
                 </section>
 
-                <div>
+                <div x-show="showCatalog">
 
                     <template x-for="region in regions" :key="region.name">
                         <section class="pe-drawer__section">
@@ -697,7 +724,7 @@
                             </button>
                         </template>
                     </section>
-                    <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading">Every wired field has a value today.</p>
+                    <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
                 </div>
             </div>
         </aside>
@@ -1025,9 +1052,13 @@
         .pe-in--date { flex: 1 1 92px; width: auto; min-width: 92px; height: 24px; font-size: 11px; padding: 0 4px; }
         .pe-bound-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--tertiary); border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--tertiary); pointer-events: none; z-index: 4; }
         .pe-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 70; overflow: visible; }
+        .pe-drawer__cta { padding: 10px; border: 1px dashed var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); }
+        .pe-drawer__iter { width: 100%; justify-content: flex-start; }
         .pe-wires path { fill: none; stroke: var(--tertiary); stroke-width: 2; stroke-linecap: round; }
         .pe-wires path.is-live { stroke-dasharray: 6 5; animation: pe-dash .6s linear infinite; }
+        .pe-wires path.is-enter { animation: pe-wire-in .45s ease-out; }
         @keyframes pe-dash { to { stroke-dashoffset: -11; } }
+        @keyframes pe-wire-in { from { opacity: 0; stroke-dasharray: 12 280; } to { opacity: 1; stroke-dasharray: 0 0; } }
         .pe-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
         .pe-page-holder--generated > .pr-page { box-shadow: 0 18px 48px rgba(14,28,54,.12), 0 0 0 1px rgba(14,28,54,.08); outline: 2px dashed var(--outline-variant); outline-offset: 6px; }
         .pe-page-holder--generated .pe-margin-guide { display: none; }
