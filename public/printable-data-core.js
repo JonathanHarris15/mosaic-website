@@ -389,8 +389,14 @@
         },
         {
             key: 'event_dates', region: 'Events', label: 'Event dates in a range', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per date something is on, between two dates. Cancelled dates are left out.',
-            params: [RANGE_PARAM, { key: 'seriesId', label: 'Only this event', kind: 'series', default: '' }],
+            blurb: 'One row per date something is on — the weeks from a Sunday, or between two dates. Cancelled dates are left out. An editor can add who is down for a role on each date, for a rota.',
+            params: [
+                RANGE_PARAM,
+                { key: 'seriesId', label: 'Only this event', kind: 'series', default: '' },
+                // A roster is an editor's to read (EventsStore gives anyone
+                // else their own row only), so the rota is too.
+                { key: 'roleSlug', label: 'Who is down for', kind: 'role', default: '', minLevel: 'editor' },
+            ],
             fields: [
                 { key: 'name', label: 'Event', kind: 'text' },
                 { key: 'date', label: 'Date', kind: 'date' },
@@ -400,6 +406,7 @@
                 { key: 'location', label: 'Where', kind: 'text' },
                 { key: 'description', label: 'About the event', kind: 'text' },
                 { key: 'dateNote', label: 'About this date', kind: 'text' },
+                { key: 'holder', label: 'Who is down for the role', kind: 'text', minLevel: 'editor' },
             ],
         },
         {
@@ -960,10 +967,21 @@
 
     function isNotHappening(o) { return o.cancelled === true || !!o.movedTo; }
 
+    // Who is down for a role on one date: whoever has confirmed, or else
+    // whoever has been asked. Somebody who declined is not down.
+    function holdersOf(occ, roleSlug, data) {
+        const held = (occ.assignments || []).filter(a => a && a.roleSlug === roleSlug && a.state !== 'declined');
+        const confirmed = held.filter(a => a.state === 'confirmed');
+        const pick = confirmed.length ? confirmed : held;
+        return { names: pick.map(a => a.personName || personName(a.personId, data)).filter(Boolean), confirmed: confirmed.length > 0 };
+    }
+
     function resolveEventDates(params, data, ctx) {
         const p = Object.assign(defaultParams('event_dates'), params || {});
         const r = resolveRange(p.range, ctx.today);
         const bySeries = seriesById(data);
+        const roleName = p.roleSlug ? roleLabel(p.roleSlug, data) : '';
+        const warnings = [];
         const rows = (data.occurrences || [])
             .filter(o => o && o.date >= r.from && o.date <= r.to)
             .filter(o => !isNotHappening(o))
@@ -971,7 +989,7 @@
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
             .map(o => {
                 const series = bySeries[o.seriesId] || null;
-                return {
+                const row = {
                     _id: o.id || (o.seriesId + '_' + o.date),
                     name: (series && series.name) || o.name || '',
                     date: formatDate(o.date),
@@ -981,9 +999,19 @@
                     location: o.location || (series && series.location) || '',
                     description: o.seriesId ? ((series && series.description) || '') : (o.description || ''),
                     dateNote: o.seriesId ? (o.description || '') : '',
+                    holder: '',
                 };
+                if (p.roleSlug) {
+                    const h = holdersOf(o, p.roleSlug, data);
+                    row.holder = h.names.join(', ');
+                    if (h.names.length && !h.confirmed) {
+                        warnings.push(h.names.join(' and ') + (h.names.length === 1 ? ' has' : ' have') + ' not confirmed ' + roleName + ' on ' + formatDate(o.date, 'medium') + ' yet.');
+                    }
+                }
+                return row;
             });
-        return { rows: rows, warnings: rows.length ? [] : ['Nothing is on ' + describeRange(p.range, 'weeks') + '.'], range: r };
+        if (!rows.length) warnings.push('Nothing is on ' + describeRange(p.range, 'weeks') + '.');
+        return { rows: rows, warnings: warnings, range: r };
     }
 
     function roleLabel(slug, data) {
@@ -1102,7 +1130,10 @@
             case 'sunday_typed': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
             case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to } }; }
-            case 'event_dates': return { series: true, occurrenceRange: resolveRange(p.range, t) };
+            case 'event_dates': {
+                const n = { series: true, occurrenceRange: resolveRange(p.range, t) };
+                return p.roleSlug ? Object.assign(n, { roles: true, people: true, rosters: p.seriesId || true }) : n;
+            }
             case 'role_holder': {
                 const w = p.when || {};
                 const from = (w.mode === 'date' && isDateStr(w.date)) ? w.date : t;

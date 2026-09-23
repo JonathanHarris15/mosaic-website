@@ -69,6 +69,10 @@ test('a range in the query counts Sundays or weeks from a Sunday, not days', () 
     assert.equal(ed.rangeUnitLabel(Data.sourceByKey('event_dates').params[0]), 'Weeks');
 });
 
+test('a rota: the query offers the roles of the event it is kept to', () => {
+    assert.match(html, /x-show="spec\.kind === 'role'"[\s\S]*?rolesFor\(repeatParam\('seriesId'\)\)/, 'the role picker lists the roles that event carries');
+});
+
 test('a text option in the query says what leaving it empty means', () => {
     assert.match(html, /:placeholder="spec\.placeholder \|\| 'any'"/, 'not planned yet reads as… is not "any"');
 });

@@ -600,6 +600,11 @@
                                             <option value="">Every event</option>
                                             <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
                                         </select></label>
+                                    <label class="pe-f" x-show="spec.kind === 'role'"><span x-text="spec.label"></span>
+                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
+                                            <option value="">No role</option>
+                                            <template x-for="r in rolesFor(repeatParam('seriesId'))" :key="r.slug"><option :value="r.slug" x-text="r.name"></option></template>
+                                        </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
                                         <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
                                             <option value="">Choose a form</option>

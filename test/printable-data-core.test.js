@@ -723,6 +723,34 @@ test('event dates can be the weeks from a Sunday, with a short date and the day 
     assert.deepEqual(later.warnings, ['Nothing is on in the week from next Sunday.']);
 });
 
+test('event dates can say who is down for a role on each date — a rota — to an editor', () => {
+    const data = EVENTS();
+    data.occurrences.push(
+        { id: 'mm_2026-10-08', seriesId: 'mm', date: '2026-10-08', assignments: [{ personId: 'p1', roleSlug: 'sermonette', state: 'pending' }] },
+        { id: 'mm_2026-10-22', seriesId: 'mm', date: '2026-10-22', assignments: [{ personId: 'p2', roleSlug: 'sermonette', state: 'declined' }] },
+    );
+    const q = { range: { mode: 'weeks', count: 8, start: { mode: 'this' } }, seriesId: 'mm', roleSlug: 'sermonette' };
+    const r = Data.resolve('event_dates', q, data, { today: TODAY, level: 'editor' });
+    assert.deepEqual(r.rows.map(x => x.shortDate), ['Sep 10', 'Oct 8', 'Oct 22']);
+    assert.deepEqual(r.rows.map(x => x.holder), ['Confirmed Connie', 'Pending Pete', ''],
+        'whoever has confirmed, else whoever was asked; somebody who declined is not down');
+    assert.deepEqual(r.warnings, ['Pending Pete has not confirmed Sermonette on 8 October 2026 yet.']);
+    assert.equal(Data.resolve('event_dates', { range: q.range, seriesId: 'mm' }, data, { today: TODAY, level: 'editor' }).rows[0].holder, '', 'no role chosen, nobody named');
+
+    const member = Data.resolve('event_dates', q, data, { today: TODAY, level: 'member' });
+    assert.equal(member.rows.length, 3, 'a member still reads the dates');
+    assert.equal(member.rows[0].holder, undefined, 'but never a roster, even through a wire an editor made');
+    assert.deepEqual(Data.querySpecsFor('event_dates', 'member').map(s => s.key), ['range', 'seriesId']);
+    assert.deepEqual(Data.querySpecsFor('event_dates', 'editor').map(s => s.key), ['range', 'seriesId', 'roleSlug']);
+    assert.equal(Data.sourcesFor('member').find(s => s.key === 'event_dates').fields.some(f => f.key === 'holder'), false);
+
+    const needs = Data.needsFor('event_dates', q, TODAY);
+    assert.equal(needs.rosters, 'mm');
+    assert.equal(needs.roles, true);
+    assert.equal(needs.people, true);
+    assert.equal(Data.needsFor('event_dates', { range: q.range }, TODAY).rosters, undefined, 'no role, no roster read');
+});
+
 test('the role holder is the confirmed person on the next date, falling back to a pending one', () => {
     const r = Data.resolve('role_holder', { seriesId: 'mm', roleSlug: 'sermonette' }, EVENTS(), { today: TODAY, level: 'editor' });
     assert.equal(r.rows[0].name, 'Confirmed Connie');
