@@ -260,7 +260,7 @@
                     chain.push(bg);
                 }
                 const r = overflowingRepeatOn(bg) || repeat;
-                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end), { warnEveryRow: false });
+                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end), { warnEveryRow: false, copyStart: slice.start });
                 out.push(entryOf(bg, expanded, {
                     needsPersist: needsPersist,
                     originId: page.id,

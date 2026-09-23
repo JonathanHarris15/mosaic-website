@@ -63,6 +63,7 @@
 
     function expandPage(page, data, options) {
         const o = options || {};
+        const copyStart = Number(o.copyStart) > 0 ? Math.round(Number(o.copyStart)) : 0;
         const warnings = [];
         const seen = {};
 
@@ -129,7 +130,12 @@
                     warn(node.id, 'The list is empty, so nothing is drawn here.');
                     return wrap(node, [], 0);
                 }
-                const copies = rows.map((r, i) => copyFor(node, r, i));
+                // A continuation page is handed a slice that starts at 0.
+                // The real row number is copyStart, so the first card there
+                // is another copy, not the seed (the seed is only row 0 of
+                // the whole list, on the first page).
+                const base = row == null ? copyStart : 0;
+                const copies = rows.map((r, i) => copyFor(node, r, i + base));
                 return wrap(node, copies, rows.length);
             }
             const out = clone(node);

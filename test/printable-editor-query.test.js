@@ -120,4 +120,6 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.match(js, /pe-drawer__body/, 'the drawer body is watched');
     assert.match(js, /addEventListener\('scroll'/, 'scrolling the drawer moves the wire now');
     assert.match(html, /is-enter/, 'a returning wire is animated');
+    assert.match(js, /syncWirePaths/, 'redrawing does not throw the path away');
+    assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });

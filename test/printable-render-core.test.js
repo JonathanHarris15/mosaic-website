@@ -80,6 +80,15 @@ test('a global binding that cannot resolve keeps its stand-in and warns', () => 
     assert.ok(r.warnings.some(w => w.nodeId === 'ttl' && w.message === 'Nothing planned.'));
 });
 
+test('a continuation page\'s first card is another copy, not the seed', () => {
+    const r = Render.expandPage(directoryPage(), data(ROWS, {}), { copyStart: 8 });
+    const list = r.nodes[1];
+    assert.equal(list.children[0].id, 'card~8', 'the seed stays on the first page');
+    assert.equal(list.children[1].id, 'card~9');
+    assert.equal(list.children[0].children[1].id, 'nm~8');
+    assert.equal(list.children[0].attrs['data-copy'], '8');
+});
+
 test('with no data loaded the stand-in is drawn once, still inside its list', () => {
     const r = Render.expandPage(directoryPage(), { rowsFor: () => null, valueFor: () => ({ ok: false, why: 'No data loaded.' }) });
     const list = r.nodes[1];
