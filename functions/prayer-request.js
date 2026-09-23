@@ -178,12 +178,23 @@ function daysUntil(serviceDate, todayDate) {
 }
 
 /**
- * The automatic (scheduler) decision: what text, if any, to send a pastoral-
+ * Whether this subject can be told at all: a live device token or a phone.
+ * A token with no phone is still reachable. Neither is not.
+ * @param {Object} state hasPhone, hasDeviceToken
+ * @return {boolean}
+ */
+function canBeTold(state) {
+  return !!(state && (state.hasPhone || state.hasDeviceToken));
+}
+
+/**
+ * The automatic (scheduler) decision: what ask, if any, to send a pastoral-
  * prayer subject right now.
  * @param {Object} state
  * @param {number} state.daysUntilService
  * @param {number} state.localHour church-local hour (0-23)
  * @param {boolean} state.hasPhone
+ * @param {boolean} [state.hasDeviceToken]
  * @param {boolean} state.requestFilled request already provided
  * @param {?string} state.initialSentDate church-local date the initial went out
  * @param {boolean} state.reminderSent
@@ -194,14 +205,13 @@ function prayerRequestAction(state) {
   const {
     daysUntilService,
     localHour,
-    hasPhone,
     requestFilled,
     initialSentDate,
     reminderSent,
     today,
   } = state;
 
-  if (!hasPhone) return "none";
+  if (!canBeTold(state)) return "none";
   if (requestFilled) return "none";
   if (daysUntilService < 0) return "none";
   if (!nc.isInsideSendWindow(localHour)) return "none";
@@ -222,23 +232,50 @@ function prayerRequestAction(state) {
 }
 
 /**
- * The manual ("Send now") decision: a human is choosing to text now, so the
+ * The manual ("Send now") decision: a human is choosing to send now, so the
  * timing/quiet-hours guards are bypassed, but the hard guards remain — refuse
- * with no phone or an already-filled request. Initial if none sent yet,
- * reminder once it has (a repeat click re-sends the reminder as a
- * deliberate nudge).
+ * when nobody can be reached, or the request is already filled. Initial if
+ * none sent yet, reminder once it has (a repeat click re-sends the reminder
+ * as a deliberate nudge).
  * @param {Object} state
  * @param {boolean} state.hasPhone
+ * @param {boolean} [state.hasDeviceToken]
  * @param {boolean} state.requestFilled
  * @param {?string} state.initialSentDate
  * @param {boolean} state.reminderSent
  * @return {'initial'|'reminder'|'none'}
  */
 function manualPrayerRequestKind(state) {
-  const {hasPhone, requestFilled, initialSentDate} = state;
-  if (!hasPhone) return "none";
+  const {requestFilled, initialSentDate} = state;
+  if (!canBeTold(state)) return "none";
   if (requestFilled) return "none";
   return initialSentDate ? "reminder" : "initial";
+}
+
+/**
+ * What the send path should be asked for this ask. The reminder escalates:
+ * the first ask may not have landed, so this one takes the other route.
+ * @param {'initial'|'reminder'|'none'} action
+ * @return {?{purpose: string, wording: string, escalate: boolean}}
+ */
+function prayerNotifyRequest(action) {
+  if (action !== "initial" && action !== "reminder") return null;
+  return {
+    purpose: "prayer_request",
+    wording: action,
+    escalate: action === "reminder",
+  };
+}
+
+/**
+ * The URL a prayer ask leads to. MS-247 mints the Answer link and passes it
+ * in. Until then this returns null rather than inventing /a/<token>.
+ * @param {?string} url
+ * @return {?string}
+ */
+function prayerAskUrl(url) {
+  if (typeof url === "string" && url.trim()) return url.trim();
+  return null;
 }
 
 /**
@@ -355,6 +392,8 @@ if (typeof module !== "undefined" && module.exports) {
     daysUntil,
     prayerRequestAction,
     manualPrayerRequestKind,
+    prayerNotifyRequest,
+    prayerAskUrl,
     tiptapFromText,
     buildPrayerRequestNote,
     elderDigestDecision,
