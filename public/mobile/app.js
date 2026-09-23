@@ -227,6 +227,68 @@
   // us straight back here, so the link is a button that does nothing.
   function inNativeApp() { return !!window.Capacitor; }
 
+  // The explainer is the only door to the OS prompt. A denied permission
+  // is a settings row instead. Both stay off until the person is linked.
+  function NotificationAsk(props) {
+    var user = props.user;
+    var showS = useState(false);
+    var deniedS = useState(false);
+    useEffect(function () {
+      var Perm = window.MosaicNotificationPermission;
+      var Push = window.MosaicPush;
+      if (!Perm || !Push || !user || !user.personId || !Push.inNativeApp()) {
+        showS[1](false);
+        deniedS[1](false);
+        return;
+      }
+      var alive = true;
+      Push.permission().then(function (permission) {
+        if (!alive) return;
+        var stored = Perm.readDismissals(window.localStorage);
+        deniedS[1](Perm.shouldOfferSettings(permission));
+        showS[1](Perm.shouldShowExplainer({
+          signedIn: true,
+          linked: true,
+          permission: permission,
+          dismissals: stored.dismissals,
+          lastDismissedAt: stored.lastDismissedAt,
+          now: Date.now(),
+        }));
+      });
+      return function () { alive = false; };
+    }, [user && user.uid, user && user.personId]);
+
+    var card = {
+      marginTop: 16,
+      background: "var(--surface-container-lowest)",
+      border: "1px solid var(--outline-variant)",
+      borderRadius: "var(--radius-xl)",
+      padding: 16,
+    };
+    var copy = { fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)", lineHeight: 1.4, margin: 0 };
+    if (deniedS[0]) {
+      return html`
+        <button type="button" onClick=${function () { window.MosaicPush.openSystemSettings(); }} style=${Object.assign({}, card, { width: "100%", textAlign: "left", cursor: "pointer" })}>
+          <p style=${copy}>Notifications are off for this phone. Open Settings to allow them.</p>
+        </button>`;
+    }
+    if (!showS[0]) return null;
+    return html`
+      <div style=${card}>
+        <p style=${copy}>Mosaic can tell you about Sunday's prayer on this phone. Allow notifications, or we'll text you instead.</p>
+        <div style=${{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button type="button" onClick=${function () {
+            showS[1](false);
+            window.MosaicPush.allowFromExplainer();
+          }} style=${{ flex: 1, padding: "10px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Allow</button>
+          <button type="button" onClick=${function () {
+            window.MosaicNotificationPermission.recordDismissal(window.localStorage, Date.now());
+            showS[1](false);
+          }} style=${{ flex: 1, padding: "10px 12px", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", background: "transparent", color: "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Not now</button>
+        </div>
+      </div>`;
+  }
+
   function HomeScreen(props) {
     var user = props.user;
     var svcState = M.useAsync(data.getNextService, []);
@@ -285,6 +347,8 @@
                   <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)}>Open Services<//>
                 </div>`}
           </div>
+
+          <${NotificationAsk} user=${user} />
 
           ${inNativeApp() ? null : html`
             <a href="index.html?shell=web" style=${{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 20, padding: "8px 0", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
@@ -469,6 +533,7 @@
         userState[1](u);
         if (u) setGuest(false);
         if (u && data.warmCache) data.warmCache(u);
+        if (u && u.uid && window.MosaicPush) window.MosaicPush.registerIfGranted();
       });
     }, []);
 
@@ -518,6 +583,7 @@
   M.App = App;
   M.screens = SCREENS;
   M.Drawer = Drawer;
+  M.nav = nav;
 
   function mount() {
     var root = typeof document !== "undefined" && document.getElementById("app");

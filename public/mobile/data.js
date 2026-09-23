@@ -134,8 +134,16 @@
   // Signing out forgets who you were, or the next person to use this phone
   // starts their first page holding your rank.
   function signOut() {
-    if (Cache) Cache.clearIdentity();
-    return auth.signOut();
+    // Drop this phone's device token before the session goes, so the next
+    // person on the device is not still a destination.
+    var uid = auth.currentUser && auth.currentUser.uid;
+    var drop = (window.MosaicPush && uid)
+      ? window.MosaicPush.clearToken(uid)
+      : Promise.resolve();
+    return Promise.resolve(drop).catch(function () {}).then(function () {
+      if (Cache) Cache.clearIdentity();
+      return auth.signOut();
+    });
   }
 
   var DESTINATIONS = Destinations.DESTINATIONS;

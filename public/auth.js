@@ -85,21 +85,27 @@ function logout() {
         ? rememberedUserDoc(lastKnownUser.uid)
         : null;
     const wasKiosk = isKioskAccount(known);
+    const uid = lastKnownUser && lastKnownUser.uid;
     forgetUserDoc();
-    if (window.MosaicLocalCache) window.MosaicLocalCache.clearIdentity();
-    auth.signOut().then(() => {
-        const go = () => {
-            window.location.href = (window.MOSAIC_SHELL === 'mobile') ? 'mobile.html#/login' : 'index.html';
-        };
-        // A kiosk machine must not leave directory data in the browser for the
-        // next person. terminate + clearPersistence is a no-op when persistence
-        // was never on (the desktop default); it is the whole of the hygiene
-        // when it was.
-        if (!wasKiosk) { go(); return; }
-        const cleared = (db && typeof db.terminate === 'function')
-            ? db.terminate().then(() => db.clearPersistence && db.clearPersistence()).catch(() => {})
-            : Promise.resolve();
-        cleared.then(go, go);
+    const dropToken = (window.MosaicPush && uid)
+        ? window.MosaicPush.clearToken(uid)
+        : Promise.resolve();
+    Promise.resolve(dropToken).catch(() => {}).then(() => {
+        if (window.MosaicLocalCache) window.MosaicLocalCache.clearIdentity();
+        auth.signOut().then(() => {
+            const go = () => {
+                window.location.href = (window.MOSAIC_SHELL === 'mobile') ? 'mobile.html#/login' : 'index.html';
+            };
+            // A kiosk machine must not leave directory data in the browser for the
+            // next person. terminate + clearPersistence is a no-op when persistence
+            // was never on (the desktop default); it is the whole of the hygiene
+            // when it was.
+            if (!wasKiosk) { go(); return; }
+            const cleared = (db && typeof db.terminate === 'function')
+                ? db.terminate().then(() => db.clearPersistence && db.clearPersistence()).catch(() => {})
+                : Promise.resolve();
+            cleared.then(go, go);
+        });
     });
 }
 
