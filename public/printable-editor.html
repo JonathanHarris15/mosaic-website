@@ -561,7 +561,7 @@
                                     <p class="pe-hint pe-query__empty" x-show="!queryCatalogRegions.length">No list matches that search.</p>
                                 </div>
                             </div>
-                            <p class="pe-hint" x-show="repeatSource" x-text="repeatSource.blurb"></p>
+                            <p class="pe-hint" x-show="repeatSource" x-text="repeatSource ? repeatSource.blurb : ''"></p>
                             <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
                                 <div>
                                     <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
