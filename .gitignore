@@ -13,6 +13,13 @@ android/local.properties
 *.p8
 mobile-release.local.json
 
+# Firebase client configs for native push (MS-189). Download these from the
+# Firebase console for com.mosaicmanagercstx.app — do not invent them. They are
+# not in git until a real download exists; the Android build already skips the
+# Google Services plugin when google-services.json is absent.
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+
 # In-project secrets folder (keystore + ASC key — never commit)
 Secrets/
 
