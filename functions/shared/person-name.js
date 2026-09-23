@@ -203,7 +203,7 @@
     }
 
     function blanksFor(person) {
-        const parts = person && person.nameParts;
+        const parts = partsToRemember(person);
         if (!parts) return emptyBlanks();
         return {
             firstName: text(parts.firstName),

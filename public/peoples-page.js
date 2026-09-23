@@ -975,8 +975,9 @@ document.addEventListener('alpine:init', () => {
             if (!this.selectedPerson.contact) {
                 this.selectedPerson.contact = {};
             }
-            // An unsplit name opens with the blanks empty. The full name stays
-            // on the record until the blanks are filled.
+            // Remembered parts, or a reading of the full name when the parts
+            // would say that same name. An unreadable name stays empty, and
+            // the full name on the record is left alone.
             this.nameEntry = PersonName.blanksFor(person);
             this.nameFault = '';
             this.showInvolvementModal = true;

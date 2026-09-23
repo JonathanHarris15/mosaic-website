@@ -265,13 +265,40 @@ test('a person with only a full name is remembered from that reading', () => {
     assert.strictEqual(Name.partsToRemember({ name: 'Madonna' }), null);
 });
 
-test('reopening a person whose name was never split shows the three blanks empty', () => {
-    assert.deepStrictEqual(Name.blanksFor({ name: 'Jonathan Harris Jr.' }), {
-        firstName: '',
-        lastName: '',
+test('reopening Jonathan Harris Jr. shows that reading, and saving remembers it without renaming', () => {
+    const person = { name: 'Jonathan Harris Jr.' };
+    const blanks = Name.blanksFor(person);
+    assert.deepStrictEqual(blanks, {
+        firstName: 'Jonathan',
+        lastName: 'Harris',
+        suffix: 'Jr.',
+        noLastName: false,
+    });
+    const saved = Name.saveExisting(person, blanks);
+    assert.strictEqual(saved.fault, '');
+    assert.strictEqual(saved.name, 'Jonathan Harris Jr.');
+    assert.strictEqual(saved.writeParts, true);
+    assert.deepStrictEqual(saved.nameParts, blanks);
+    assert.deepStrictEqual(Name.blanksFor({ name: saved.name, nameParts: saved.nameParts }), blanks);
+});
+
+test('Mary Anne Harris reopens with Mary Anne as the first name', () => {
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Mary Anne Harris' }), {
+        firstName: 'Mary Anne',
+        lastName: 'Harris',
         suffix: '',
         noLastName: false,
     });
+});
+
+test('a one-word name and a comma name still open empty, and saving does not rename', () => {
+    const empty = { firstName: '', lastName: '', suffix: '', noLastName: false };
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Madonna' }), empty);
+    assert.deepStrictEqual(Name.blanksFor({ name: 'Harris, Jonathan' }), empty);
+    const saved = Name.saveExisting({ name: 'Madonna' }, Name.blanksFor({ name: 'Madonna' }));
+    assert.strictEqual(saved.fault, '');
+    assert.strictEqual(saved.name, 'Madonna');
+    assert.strictEqual(saved.writeParts, false);
 });
 
 test('reopening a person entered in parts shows those three blanks', () => {
