@@ -233,7 +233,7 @@
     var svc = svcState.data;
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
     var tiles = [
-      { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
+      { icon: "book-open", label: "Hymns", route: "hymnDirectory" },
       { icon: "church", label: "Services", route: "calendar" },
       // Route "events", not "calendar" — see data.js. "calendar" is Services.
       { icon: "calendar-days", label: "Calendar", route: "events" },
@@ -309,12 +309,10 @@
   // mobile app gets every feature + the proven save logic — no reimplementation.
   // Shared with the shell's own drawer — see mobile/destinations.js.
   //
-  // Native screens cover the drawer pages (home, hymnDirectory, calendar,
-  // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
-  // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
-  // remaining shell pages are subpages opened in-place with ?shell=mobile and a
-  // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
-  // service builder / service guide / profile (routed elsewhere in nav()).
+  // Native screens cover the drawer pages that are still native (home,
+  // calendar, people, shepherd, admin) plus the shepherding cluster. Hymns is
+  // the desktop page opened in the shell, same as Calendar and Roles. Old
+  // hashes (#/hymnDirectory, #/hymnDetails, #/hymnManager) open that page too.
   var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
   // Going somewhere usually means "and I can come back" — a pushed history entry,
@@ -354,14 +352,13 @@
       window.location.href = "service-builder.html?date=" + encodeURIComponent(d) + "&shell=mobile";
       return;
     }
+    if (route === "hymnDetails") {
+      window.location.href = HymnsPage.phoneShellHref(route, params);
+      return;
+    }
     if (route === "hymnManager") {
       if (data.forget) data.forget("hymns");
-      // The hymn manager is the real desktop page (manager.html) opened in-shell:
-      // ?edit=<id> from a hymn's "Manage Hymn" button, ?new=1 from the directory's
-      // add-a-hymn FAB. No separate mobile "manager" list — the directory is the list.
-      window.location.href = (params && params.edit)
-        ? "manager.html?edit=" + encodeURIComponent(params.edit) + "&shell=mobile"
-        : "manager.html?new=1&shell=mobile";
+      window.location.href = HymnsPage.phoneShellHref(route, params);
       return;
     }
     if (SHELL_PAGES[route]) { window.location.href = SHELL_PAGES[route] + "?shell=mobile"; return; }
@@ -481,7 +478,11 @@
       nav("login", null, { replace: true });
     });
     useEffect(function () {
-      function onHash() { routeState[1](currentRoute()); menuState[1](false); }
+      function onHash() {
+        if (redirectOldHymnRoute()) return;
+        routeState[1](currentRoute());
+        menuState[1](false);
+      }
       window.addEventListener("hashchange", onHash);
       return function () { window.removeEventListener("hashchange", onHash); };
     }, []);
@@ -519,7 +520,24 @@
   M.screens = SCREENS;
   M.Drawer = Drawer;
 
+  // #/hymnDirectory, #/hymnDetails and #/hymnManager are old screens. The
+  // drawer goes through nav(), which already opens hymns.html. A pasted hash
+  // does not, so the shell sends it on before the missing screen can paint.
+  function oldHymnHref() {
+    var route = currentRoute();
+    if (route !== "hymnDirectory" && route !== "hymnDetails" && route !== "hymnManager") return "";
+    var fromHash = currentHashParams();
+    return HymnsPage.phoneShellHref(route, Object.assign({}, M.navParams || {}, fromHash));
+  }
+  function redirectOldHymnRoute() {
+    var href = oldHymnHref();
+    if (!href) return false;
+    window.location.replace(href);
+    return true;
+  }
+
   function mount() {
+    if (redirectOldHymnRoute()) return;
     var root = typeof document !== "undefined" && document.getElementById("app");
     if (!root) return;
     if (!location.hash && history.replaceState) history.replaceState(null, "", location.pathname + location.search + "#/home");

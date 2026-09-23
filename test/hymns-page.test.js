@@ -171,3 +171,26 @@ test('the computer has one Hymns page and the old doors open it', () => {
     assert.match(read('service-builder.html'), /hymns\.html\?new=1&name=/);
     assert.doesNotMatch(read('service-builder.html'), /manager\.html\?name=/);
 });
+
+test('the phone opens the Hymns page and keeps the stored home key', () => {
+    const destinations = require('../public/mobile/destinations.js');
+    const hymn = destinations.DESTINATIONS.find((item) => item.key === 'hymn-directory');
+    assert.equal(hymn.label, 'Hymns');
+    assert.equal(hymn.route, 'hymnDirectory');
+    assert.equal(destinations.SHELL_PAGES.hymnDirectory, 'hymns.html');
+    assert.equal(destinations.routeHref('hymnDirectory'), 'hymns.html?shell=mobile');
+
+    const app = read('mobile/app.js');
+    const screens = read('mobile/screens-content.js');
+    assert.match(app, /label: "Hymns", route: "hymnDirectory"/);
+    assert.doesNotMatch(app, /Hymn Directory/);
+    assert.match(app, /if \(route === "hymnManager"\) \{\s*\n\s*if \(data\.forget\) data\.forget\("hymns"\);/);
+    assert.match(app, /HymnsPage\.phoneShellHref/);
+    assert.doesNotMatch(app, /manager\.html/);
+    assert.match(app, /redirectOldHymnRoute/);
+    assert.doesNotMatch(screens, /HymnDirectoryScreen/);
+    assert.doesNotMatch(screens, /HymnDetailsScreen/);
+    assert.doesNotMatch(screens, /Hymn Directory/);
+    assert.match(read('mobile.html'), /hymns-page\.js/);
+    assert.match(read('index.html'), /data-card-key="hymn-directory"/);
+});

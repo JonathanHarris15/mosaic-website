@@ -151,9 +151,9 @@
   // WebView). It is a plain object in this document plus a copy in
   // sessionStorage, so it involves no Firestore machinery at all and cannot
   // bring that problem back. Two levels because there are two ways back to
-  // Home: a native screen (Hymn Directory, Shepherd…) keeps this document
-  // alive and hits the object; a shell page (Calendar, Roles Manager) is a
-  // whole new document, and only sessionStorage survives that.
+  // Home: a native screen (Shepherd…) keeps this document alive and hits the
+  // object; a shell page (Hymns, Calendar, Roles Manager) is a whole new
+  // document, and only sessionStorage survives that.
   //
   // Deliberately SHORT. This exists to make "I was just there" instant, not
   // to hold data — anything older than a minute is fetched again.
