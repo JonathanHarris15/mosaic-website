@@ -1,8 +1,6 @@
 # ADR 0067 — An Answer link is a personal, expiring door
 
-**Status:** Proposed — awaiting Jonathan review (MS-509).
-Recommended: **approve as written** in the MS-247 PRD. Do not invent
-product past that PRD.
+**Status:** Accepted (Jonathan approved 2026-09-24).
 **Date:** 2026-09-19
 **Follows:** [ADR 0007](0007-prayer-request-one-time-generation.md),
 [ADR 0031](0031-the-directory-asks-for-an-account.md),
@@ -148,9 +146,9 @@ the thing the link points at. A second switch is a second place for
 
 ## Consequences
 
-**Jonathan reviews this ADR before MS-510–517 are built.** The
-mechanism above is the MS-247 PRD as written. Recommended: approve
-as is. Product past that PRD is out of scope for this decision.
+**Jonathan approved this ADR on 2026-09-24; MS-510–517 may proceed.**
+The mechanism above is the MS-247 PRD as written. Product past that
+PRD is out of scope for this decision.
 
 **`firestore.rules` gains a closed collection, not an open one.**
 `answer_links` is denied to every client. Reviewers looking for
