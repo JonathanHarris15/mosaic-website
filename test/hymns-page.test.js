@@ -210,7 +210,7 @@ test('the version that prints is the starred one, or the first when nobody has s
 test('on a phone the hymn list filters by a tag menu instead of a pill cloud', () => {
     const page = read('hymns.html');
     const filterAt = page.indexOf('<div class="hymn-tag-filter"');
-    const cloudAt = page.indexOf('<div class="hymn-tag-cloud');
+    const cloudAt = page.indexOf('class="hymn-tag-cloud"');
     assert.ok(filterAt !== -1, 'phone tag menu');
     assert.ok(cloudAt !== -1, 'desktop tag cloud');
     const filter = page.slice(filterAt, cloudAt);
@@ -227,6 +227,20 @@ test('on a phone the hymn list filters by a tag menu instead of a pill cloud', (
     assert.match(page, /max-width:\s*767px/);
     assert.match(page, /\.hymn-tag-cloud\s*\{[^}]*display:\s*none\s*!important/);
     assert.match(page, /\.hymn-tag-filter\s*\{[^}]*display:\s*flex/);
+});
+
+test('on a computer the tags sit in a card to the left of the hymn list', () => {
+    const page = read('hymns.html');
+    const splitAt = page.indexOf('class="hymn-list-layout"');
+    const cloudAt = page.indexOf('class="hymn-tag-cloud"');
+    const listAt = page.indexOf('class="hymn-list-main"');
+    assert.ok(splitAt !== -1, 'two-column list layout');
+    assert.ok(cloudAt !== -1 && cloudAt > splitAt, 'tag card is inside the split');
+    assert.ok(listAt !== -1 && listAt > cloudAt, 'hymn list sits to the right of the tags');
+    assert.match(page, /class="hymn-tag-card"/);
+    assert.match(page, /class="hymn-tag-chip"/);
+    assert.match(page, /@media \(min-width: 768px\)[\s\S]*\.hymn-list-layout[\s\S]*flex-direction:\s*row/);
+    assert.doesNotMatch(page, /hymn-tag-cloud flex flex-wrap/);
 });
 
 test('the computer has one Hymns page and the old doors open it', () => {
