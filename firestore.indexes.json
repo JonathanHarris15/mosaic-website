@@ -187,6 +187,16 @@
       ]
     },
     {
+      "collectionGroup": "announcement_going_out",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "way",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "away",
       "fieldPath": "end",
       "indexes": [
