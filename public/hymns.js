@@ -163,8 +163,13 @@ document.addEventListener('alpine:init', () => {
             this.say(message, true);
         },
 
+        // ⚠ hush() CALLS say(), NEVER ITSELF. Written as `this.hush()` it recursed
+        // until the stack blew, and because startEdit()/startCreate() hush the
+        // toast on the line BEFORE `this.view = 'form'`, the throw landed between
+        // the draft being built and the view being switched: Edit and Add hymn
+        // did nothing at all, on the phone and on the desktop alike (MS-675).
         hush() {
-            this.hush();
+            this.say('');
         },
 
         showHymn(hymn) {
