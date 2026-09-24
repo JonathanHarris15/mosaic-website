@@ -40,6 +40,7 @@ function sandboxFor(extra) {
     sandbox.ServiceInvolvementCore = require('../public/service-involvement-core.js');
     sandbox.AccessCore = require('../public/access-core.js');
     sandbox.EventAnnouncementCore = require('../public/event-announcement-core.js');
+    sandbox.EventTellCore = require('../public/event-tell-core.js');
     sandbox.EventAnnouncementStore = require('../public/event-announcement-store.js');
     sandbox.EventAnnouncementPanel = require('../public/event-announcement-panel.js');
 
