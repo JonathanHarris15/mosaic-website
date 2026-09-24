@@ -28,10 +28,18 @@
     <style>
         [x-cloak] { display: none !important; }
         .hymn-tag-filter { display: none; }
-        .hymn-list-layout {
+        .hymn-list-shell {
             display: flex;
             flex-direction: column;
             gap: var(--space-md);
+            width: 100%;
+        }
+        .hymn-list-column {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            width: 100%;
+            min-width: 0;
         }
         .hymn-tag-card {
             display: flex;
@@ -100,13 +108,23 @@
             border-color: var(--primary);
         }
         @media (min-width: 768px) {
-            .hymn-list-layout {
-                flex-direction: row;
-                align-items: flex-start;
+            /* The hymn list keeps the page's centered column. Tags live
+               in the left gutter, offset to the right so they rest
+               against that column instead of sitting in the list. */
+            .hymn-list-shell--with-tags {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 64rem) minmax(0, 1fr);
+                align-items: start;
+                column-gap: var(--space-md);
+            }
+            .hymn-list-shell--with-tags .hymn-tag-cloud {
+                justify-self: end;
+                width: min(15rem, 100%);
+            }
+            .hymn-list-shell--with-tags .hymn-list-column {
+                grid-column: 2;
             }
             .hymn-tag-cloud {
-                flex: 0 0 15rem;
-                width: 15rem;
                 position: sticky;
                 top: calc(64px + var(--space-md));
                 max-height: calc(100vh - 64px - var(--space-lg));
@@ -116,9 +134,11 @@
                 overflow-y: auto;
                 padding-right: 2px;
             }
+            .hymn-list-column {
+                max-width: 64rem;
+                margin-inline: auto;
+            }
             .hymn-list-main {
-                flex: 1 1 auto;
-                min-width: 0;
                 display: flex;
                 flex-direction: column;
                 gap: var(--space-sm);
@@ -181,51 +201,52 @@
         </div>
     </header>
 
-    <main class="flex-grow w-full max-w-6xl mx-auto px-4 md:px-margin py-md flex flex-col gap-md">
-        <section x-show="view === 'list'" class="flex flex-col gap-md">
-            <label class="m-search w-full">
-                <span class="material-symbols-outlined">search</span>
-                <input type="text" x-model="searchQuery" placeholder="Search by title, writer, attribution, or tag">
-            </label>
-            <div class="hymn-tag-filter" x-show="allTags.length">
-                <div class="m-select-wrap">
-                    <select class="m-select" aria-label="Filter by tag" @change="chooseTag($event)">
-                        <option value="">Filter by tag</option>
-                        <template x-for="tag in tagChoices" :key="tag">
-                            <option :value="tag" x-text="tag"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="flex flex-wrap gap-2" x-show="selectedTags.length">
-                    <template x-for="tag in selectedTags" :key="tag">
-                        <button type="button" @click="toggleTag(tag)"
-                                class="px-3 py-1.5 rounded-full border font-label-md text-label-md bg-primary text-on-primary border-primary"
-                                :aria-label="'Remove tag ' + tag">
-                            <span x-text="tag"></span>
-                            <span aria-hidden="true"> ×</span>
-                        </button>
-                    </template>
-                </div>
-            </div>
-            <div class="hymn-list-layout">
-                <aside class="hymn-tag-cloud" x-show="allTags.length" aria-label="Filter by tag">
-                    <div class="hymn-tag-card">
-                        <div class="hymn-tag-card__head">
-                            <h2 class="hymn-tag-card__title">Tags</h2>
-                            <button type="button" class="hymn-tag-card__clear" x-show="selectedTags.length"
-                                    @click="selectedTags = []">Clear</button>
-                        </div>
-                        <div class="hymn-tag-card__list">
-                            <template x-for="tag in allTags" :key="tag">
-                                <button type="button" @click="toggleTag(tag)"
-                                        class="hymn-tag-chip"
-                                        :class="selectedTags.includes(tag) ? 'is-on' : ''"
-                                        :aria-pressed="selectedTags.includes(tag)"
-                                        x-text="tag"></button>
-                            </template>
-                        </div>
+    <main class="flex-grow w-full px-4 md:px-margin py-md flex flex-col gap-md">
+        <section x-show="view === 'list'" class="hymn-list-shell"
+                 :class="allTags.length ? 'hymn-list-shell--with-tags' : ''">
+            <aside class="hymn-tag-cloud" x-show="allTags.length" aria-label="Filter by tag">
+                <div class="hymn-tag-card">
+                    <div class="hymn-tag-card__head">
+                        <h2 class="hymn-tag-card__title">Tags</h2>
+                        <button type="button" class="hymn-tag-card__clear" x-show="selectedTags.length"
+                                @click="selectedTags = []">Clear</button>
                     </div>
-                </aside>
+                    <div class="hymn-tag-card__list">
+                        <template x-for="tag in allTags" :key="tag">
+                            <button type="button" @click="toggleTag(tag)"
+                                    class="hymn-tag-chip"
+                                    :class="selectedTags.includes(tag) ? 'is-on' : ''"
+                                    :aria-pressed="selectedTags.includes(tag)"
+                                    x-text="tag"></button>
+                        </template>
+                    </div>
+                </div>
+            </aside>
+            <div class="hymn-list-column">
+                <label class="m-search w-full">
+                    <span class="material-symbols-outlined">search</span>
+                    <input type="text" x-model="searchQuery" placeholder="Search by title, writer, attribution, or tag">
+                </label>
+                <div class="hymn-tag-filter" x-show="allTags.length">
+                    <div class="m-select-wrap">
+                        <select class="m-select" aria-label="Filter by tag" @change="chooseTag($event)">
+                            <option value="">Filter by tag</option>
+                            <template x-for="tag in tagChoices" :key="tag">
+                                <option :value="tag" x-text="tag"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="flex flex-wrap gap-2" x-show="selectedTags.length">
+                        <template x-for="tag in selectedTags" :key="tag">
+                            <button type="button" @click="toggleTag(tag)"
+                                    class="px-3 py-1.5 rounded-full border font-label-md text-label-md bg-primary text-on-primary border-primary"
+                                    :aria-label="'Remove tag ' + tag">
+                                <span x-text="tag"></span>
+                                <span aria-hidden="true"> ×</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
                 <div class="hymn-list-main">
                     <p class="font-label-md text-label-md text-on-surface-variant"
                        x-text="filteredHymns.length + (filteredHymns.length === 1 ? ' hymn' : ' hymns')"></p>
@@ -246,7 +267,7 @@
             </div>
         </section>
 
-        <section x-show="view === 'hymn'" class="flex flex-col gap-md">
+        <section x-show="view === 'hymn'" class="flex flex-col gap-md max-w-5xl mx-auto w-full">
             <p x-show="missing" class="font-body-md">That hymn is not in the book.</p>
             <template x-if="hymn">
                 <div class="flex flex-col gap-md">
@@ -294,7 +315,7 @@
         </section>
 
         <template x-if="view === 'form' && form">
-            <form @submit.prevent="handleSubmit" class="flex flex-col gap-md">
+            <form @submit.prevent="handleSubmit" class="flex flex-col gap-md max-w-5xl mx-auto w-full">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
                     <label class="flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant">Hymn name</span>
