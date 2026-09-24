@@ -59,7 +59,11 @@
   }
 
   function Body(props) {
-    return html`<div style=${Object.assign({ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }, props.style || {})}>${props.children}</div>`;
+    // Trailing scroll clearance: .m-bottom-buffer (height + safe-area in public/mobile.html).
+    return html`<div style=${Object.assign({ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }, props.style || {})}>
+      ${props.children}
+      ${props.noBuffer ? null : html`<div class="m-bottom-buffer" aria-hidden="true"></div>`}
+    </div>`;
   }
 
   // ── Typography ────────────────────────────────────────────

@@ -101,7 +101,7 @@
           </div>
           <button onClick=${props.onClose} aria-label="Close" style=${iconBtn}>${Ic("x", 20)}</button>
         </div>
-        <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}>${props.children}</div>
+        <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>${props.children}</div>
       </div>
     </${Fragment}>`;
   }
@@ -342,7 +342,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Document Library" onBack=${props.back} serif=${false} />
-        <${Body} style=${{ paddingBottom: "calc(96px + env(safe-area-inset-bottom, 0px))" }}>
+        <${Body} style=${{ paddingBottom: 72 }}>
           ${!userKnown || loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
           : errS[0] ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15 }}>Couldn't load the document library.</p></div>`

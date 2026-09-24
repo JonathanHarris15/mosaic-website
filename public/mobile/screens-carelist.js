@@ -668,6 +668,7 @@
                 </div>
               </div>`;
             })}
+          <div class="m-bottom-buffer" aria-hidden="true"></div>
         </div>
 
         ${colPickerS[0] ? html`<${Fragment}>
@@ -680,7 +681,7 @@
               </div>
               <button onClick=${function () { colPickerS[1](false); editingColS[1](null); }} aria-label="Close" style=${{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", flexShrink: 0 }}>${Ic("x", 20)}</button>
             </div>
-            <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}>
               ${columnsS[0].map(function (col) {
                 var on = activeCol && col.id === activeCol.id;
                 return html`<div key=${col.id} style=${{ display: "flex", alignItems: "center", gap: 8, padding: "12px 18px", borderBottom: "1px solid var(--outline-variant)", background: on ? "var(--primary-fixed)" : "transparent" }}>

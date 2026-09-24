@@ -36,6 +36,11 @@
     button { font-family: inherit; }
     ::-webkit-scrollbar { width: 0; height: 0; }
     @keyframes mspin { to { transform: rotate(360deg); } }
+    .m-bottom-buffer {
+      height: calc(24px + env(safe-area-inset-bottom, 0px));
+      flex-shrink: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>

@@ -178,7 +178,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Manage Tags & Relationships" onBack=${props.back} serif=${false} />
-        <${Body} style=${{ padding: "16px 16px 40px" }}>
+        <${Body} style=${{ padding: "16px 16px 20px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
           : html`
