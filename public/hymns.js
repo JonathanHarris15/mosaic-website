@@ -18,6 +18,8 @@ document.addEventListener('alpine:init', () => {
         originalPageUrls: [],
         isSubmitting: false,
         notice: '',
+        noticeIsBad: false,
+        noticeTimer: null,
         cropModal: {
             open: false, vIndex: null, pIndex: null, imgSrc: null,
             naturalW: 0, naturalH: 0, rect: null, drag: null,
@@ -74,7 +76,7 @@ document.addEventListener('alpine:init', () => {
                     .then(() => this.applyOpenState())
                     .catch((err) => {
                         console.error(err);
-                        this.notice = 'Could not open the hymn book.';
+                        this.warn('Could not open the hymn book.');
                     });
             };
             const unsub = auth.onAuthStateChanged((user) => {
@@ -98,7 +100,7 @@ document.addEventListener('alpine:init', () => {
                 if (hymn) this.startEdit(hymn);
                 else {
                     this.view = 'list';
-                    this.notice = 'That hymn is not in the book.';
+                    this.warn('That hymn is not in the book.');
                 }
                 return;
             }
@@ -142,6 +144,29 @@ document.addEventListener('alpine:init', () => {
             this.selectedTags = HymnsPage.chooseTag(this.selectedTags, tag);
         },
 
+        // ⚠ A CONFIRMATION IS NOT CONTENT. This used to be a bare grey line at
+        // the top of `main`, above everything, and it never went away — so on
+        // a phone "Attribution copied." sat under the shell's title looking
+        // like the page's own subtitle for the rest of the visit, and pushed
+        // the hymn down to make room for itself (MS-674). It is the Toast the
+        // rest of the app uses now: at the foot, out of the reading, gone in
+        // a moment.
+        say(message, bad) {
+            this.notice = message;
+            this.noticeIsBad = bad === true;
+            if (this.noticeTimer) clearTimeout(this.noticeTimer);
+            if (!message) return;
+            this.noticeTimer = setTimeout(() => { this.notice = ''; }, 3600);
+        },
+
+        warn(message) {
+            this.say(message, true);
+        },
+
+        hush() {
+            this.hush();
+        },
+
         showHymn(hymn) {
             this.hymn = hymn;
             this.missing = false;
@@ -167,7 +192,7 @@ document.addEventListener('alpine:init', () => {
             this.form = HymnsPage.blankDraft(name || '');
             this.tagInput = '';
             this.suggestions = [];
-            this.notice = '';
+            this.hush();
             this.view = 'form';
         },
 
@@ -188,7 +213,7 @@ document.addEventListener('alpine:init', () => {
             });
             this.tagInput = '';
             this.suggestions = [];
-            this.notice = '';
+            this.hush();
             this.view = 'form';
         },
 
@@ -224,7 +249,7 @@ document.addEventListener('alpine:init', () => {
                 if (row) row.versions = versions;
             } catch (err) {
                 console.error(err);
-                this.notice = 'Could not change which version prints.';
+                this.warn('Could not change which version prints.');
             }
         },
 
@@ -374,13 +399,13 @@ document.addEventListener('alpine:init', () => {
             const version = this.form && this.form.versions[modal.vIndex];
             const target = version && version.pages[modal.pIndex];
             if (!target) {
-                this.notice = 'That sheet page is no longer open for editing.';
+                this.warn('That sheet page is no longer open for editing.');
                 this.cancelCrop();
                 return;
             }
             const displayedEl = document.getElementById('crop-target-img');
             if (!displayedEl || !displayedEl.clientWidth || !displayedEl.clientHeight) {
-                this.notice = 'Could not read the crop area. Reopen the cropper and try again.';
+                this.warn('Could not read the crop area. Reopen the cropper and try again.');
                 this.cancelCrop();
                 return;
             }
@@ -403,7 +428,7 @@ document.addEventListener('alpine:init', () => {
                     'image/jpeg', 0.92));
             } catch (err) {
                 console.error(err);
-                this.notice = 'Could not crop that image.';
+                this.warn('Could not crop that image.');
                 return;
             }
             if (target.url && String(target.url).indexOf('blob:') === 0) URL.revokeObjectURL(target.url);
@@ -415,15 +440,15 @@ document.addEventListener('alpine:init', () => {
         async copyAttribution() {
             const text = this.hymn && this.hymn.attribution;
             if (!text) {
-                this.notice = 'This hymn has no attribution.';
+                this.warn('This hymn has no attribution.');
                 return;
             }
             try {
                 await navigator.clipboard.writeText(text);
-                this.notice = 'Attribution copied.';
+                this.say('Attribution copied.');
             } catch (err) {
                 console.error(err);
-                this.notice = 'Could not copy the attribution.';
+                this.warn('Could not copy the attribution.');
             }
         },
 
@@ -442,7 +467,7 @@ document.addEventListener('alpine:init', () => {
                 URL.revokeObjectURL(blobUrl);
             } catch (err) {
                 console.error(err);
-                this.notice = 'Could not download that page.';
+                this.warn('Could not download that page.');
             }
         },
 
@@ -460,21 +485,21 @@ document.addEventListener('alpine:init', () => {
                 this.hymns = this.hymns.filter((item) => item.id !== this.hymn.id);
                 this.hymn = null;
                 this.view = 'list';
-                this.notice = 'Hymn deleted.';
+                this.say('Hymn deleted.');
             } catch (err) {
                 console.error(err);
-                this.notice = 'Could not delete that hymn.';
+                this.warn('Could not delete that hymn.');
             }
         },
 
         async handleSubmit() {
             if (!this.canEdit || !this.form) return;
             if (HymnsPage.duplicateTitle(this.hymns, this.form.hymn_name, this.creating)) {
-                this.notice = 'A hymn with this name already exists.';
+                this.warn('A hymn with this name already exists.');
                 return;
             }
             this.isSubmitting = true;
-            this.notice = '';
+            this.hush();
             try {
                 const db = firebase.firestore();
                 const storage = firebase.storage();
@@ -529,10 +554,10 @@ document.addEventListener('alpine:init', () => {
                 this.creating = false;
                 if (saved) this.showHymn(saved);
                 else this.view = 'list';
-                this.notice = 'Saved.';
+                this.say('Saved.');
             } catch (err) {
                 console.error(err);
-                this.notice = (err && err.message) ? err.message : 'Could not save that hymn.';
+                this.warn((err && err.message) ? err.message : 'Could not save that hymn.');
             } finally {
                 this.isSubmitting = false;
             }

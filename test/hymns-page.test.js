@@ -260,6 +260,32 @@ test('a phone hymn gets the width of the phone', () => {
     assert.match(page, /\.hymn-sheet \{ border: 0; padding: 0; \}/);
 });
 
+test('a confirmation is said at the foot and goes away', () => {
+    const page = read('hymns.html');
+    const js = read('hymns.js');
+
+    // ⚠ "Attribution copied." used to be a bare grey line at the TOP of `main`,
+    // and nothing ever cleared it. On the phone it sat under the shell's title
+    // reading like the hymn's own subtitle for the rest of the visit, and shoved
+    // the hymn down to make room (MS-674). It is the app's Toast now, which is
+    // what every other page already says this sort of thing with.
+    assert.doesNotMatch(page, /x-show="notice" x-text="notice"/);
+    assert.match(page, /class="m-toast/);
+    assert.match(page, /noticeIsBad \? 'm-toast--error' : ''/);
+    assert.match(page, /role="status"/);
+
+    // Said, not written down: every one of them goes through say/warn, which
+    // starts the timer that takes it away again.
+    assert.doesNotMatch(js, /this\.notice = '[^']/);
+    assert.match(js, /this\.say\('Attribution copied\.'\)/);
+    assert.match(js, /this\.warn\('Could not copy the attribution\.'\)/);
+    assert.match(js, /setTimeout\(\(\) => \{ this\.notice = ''; \}/);
+
+    // A Toast is fixed to the viewport, so the shell's body padding cannot lift
+    // it off the home indicator.
+    assert.match(read('mobile-shell.css'), /html\.shell-mobile \.m-toast \{/);
+});
+
 test('a button under 640px still says what it does', () => {
     // ⚠ WHAT THIS EXISTS TO STOP COMING BACK (MS-674). `.m-btn__label` and
     // `.m-back__label` are slots any Button or BackLink carries, anywhere on

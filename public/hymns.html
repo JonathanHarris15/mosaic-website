@@ -86,9 +86,6 @@
     </header>
 
     <main class="flex-grow w-full max-w-5xl mx-auto px-4 md:px-margin py-md flex flex-col gap-md">
-        <p x-show="notice" x-text="notice" role="status"
-           class="font-body-md text-body-md text-on-surface-variant"></p>
-
         <section x-show="view === 'list'" class="flex flex-col gap-md">
             <label class="m-search w-full">
                 <span class="material-symbols-outlined">search</span>
@@ -274,6 +271,13 @@
             </form>
         </template>
     </main>
+
+    <!-- Said at the foot and gone in a moment, not written into the top of the
+         page. role="status" so a screen reader still hears it. -->
+    <div x-show="notice" x-transition x-cloak role="status"
+         class="m-toast whitespace-normal text-center"
+         :class="noticeIsBad ? 'm-toast--error' : ''"
+         x-text="notice"></div>
 
     <div x-show="cropModal.open" x-cloak @click.stop
          class="fixed inset-0 bg-primary/20 z-[110] flex items-center justify-center p-md">
