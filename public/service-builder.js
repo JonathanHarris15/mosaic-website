@@ -1356,24 +1356,23 @@ function serviceForm() {
             }
         },
 
-        // Whether the manual "Send Now" button can fire: a subject with a phone
-        // whose request isn't filled yet (mirrors the server's hard guards).
+        // Whether the manual "Send Now" button can fire. The server picks the
+        // route, so a missing phone is not a reason to hide the button: the
+        // person may have the app. A filled request still has nothing to ask.
         canSendPrayerText(which) {
             if (!this.canDecide) return false;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return false;
             if ((this.prayerRequests[which].text || '').trim()) return false;
-            const person = this.peopleRegistry.find(p => p.id === subject.id);
-            const phone = person && person.contact ? (person.contact.phone || '') : '';
-            return phone.replace(/\D/g, '').length >= 10;
+            return true;
         },
 
         prayerSendTitle(which) {
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return 'Select this person and save first';
             if ((this.prayerRequests[which].text || '').trim()) return 'Already filled — nothing to send';
-            if (!this.canSendPrayerText(which)) return 'No phone number on file';
-            return 'Text this person to ask for their prayer request';
+            if (!this.canSendPrayerText(which)) return 'Nothing to send';
+            return 'Tell this person — Mosaic picks how';
         },
 
         async sendPrayerRequestNow(which) {
@@ -1391,10 +1390,10 @@ function serviceForm() {
                 } else if (data.kind === 'reminder') {
                     this.prayerRequests[which].reminderSent = true;
                 }
-                alert(`${data.kind === 'reminder' ? 'Reminder' : 'Initial request'} text sent to ${subject.name}.`);
+                alert(`${data.kind === 'reminder' ? 'Reminder' : 'Initial request'} sent to ${subject.name}.`);
             } catch (e) {
-                console.error('Error sending prayer request text:', e);
-                alert(e.message || 'Could not send the text.');
+                console.error('Error sending prayer request:', e);
+                alert(e.message || 'Could not send.');
             } finally {
                 this.prayerSending[which] = false;
             }

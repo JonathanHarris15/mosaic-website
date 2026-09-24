@@ -23,6 +23,7 @@ const {
 const pr = require("./prayer-request");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
+const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
@@ -81,7 +82,10 @@ const mcpServer = require("./mcp-server");
 // Guidance file writes, restores, and the shape of a version (MS-262).
 const gw = require("./guidance-writes");
 const guidanceCore = require("./shared/mcp-guidance-core.js");
-const {assertCanDecide: assertCanDecideCore} = require("./access-assert");
+const {
+  assertCanDecide: assertCanDecideCore,
+  assertWritesAsEditor: assertWritesAsEditorCore,
+} = require("./access-assert");
 
 /**
  * AccessCore canDecide for a callable. The core throws a plain Error with
@@ -101,6 +105,43 @@ async function assertCanDecide(db, authCtx) {
     }
     throw err;
   }
+}
+
+/**
+ * Map a directory-editor refusal onto HttpsError.
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertWritesAsEditor(db, authCtx) {
+  try {
+    await assertWritesAsEditorCore(db, authCtx);
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * User ids that currently have a device token. The token string stays here.
+ * @param {Object} db Firestore instance.
+ * @return {Promise<Array<string>>}
+ */
+async function listTokenOwnerUids(db) {
+  const snap = await db.collectionGroup("push_tokens").get();
+  const seen = {};
+  const uids = [];
+  snap.docs.forEach((doc) => {
+    const parent = doc.ref.parent && doc.ref.parent.parent;
+    const uid = parent && parent.id;
+    if (!uid || seen[uid] || !doc.get("token")) return;
+    seen[uid] = true;
+    uids.push(uid);
+  });
+  return uids;
 }
 
 /**
@@ -127,8 +168,12 @@ const SMS_REPLY_WEBHOOK_URL = firebaseProject.smsReplyWebhookUrl;
 /** Firestore collection holding inbound replies to test texts. */
 const SMS_REPLIES_COLLECTION = "sms_test_replies";
 
-/** Outbound message log — maps a sent text's textId to who/what it was for. */
-const SMS_MESSAGES_COLLECTION = "sms_messages";
+/**
+ * One log for every Notification, whichever channel carried it (ADR-0036).
+ * A text row still carries textId so an inbound reply can find what it
+ * answers; that correlation is a field, not a separate collection.
+ */
+const NOTIFICATIONS_COLLECTION = "notifications";
 
 /** Config doc holding the editable templates and the automation kill switch. */
 const PRAYER_CONFIG_DOC = "app_config/prayer_request_sms";
@@ -2174,8 +2219,10 @@ async function sendViaTextbelt({to, body, withReplyWebhook = true}) {
  */
 async function recordOutbound(db, entry) {
   if (!entry.textId) return;
-  await db.collection(SMS_MESSAGES_COLLECTION).add({
+  await db.collection(NOTIFICATIONS_COLLECTION).add({
     direction: "outbound",
+    channel: "text",
+    accepted: true,
     to: entry.to,
     body: entry.body,
     textId: String(entry.textId),
@@ -2198,8 +2245,98 @@ async function loadPrayerConfig(db) {
   const data = snap.exists ? snap.data() : {};
   return {
     templates: pr.resolveTemplates(data),
+    push: pr.resolvePushWording(data),
     autoSendEnabled: !!data.autoSendEnabled,
   };
+}
+
+/**
+ * Device tokens for a linked User. Empty when there is no account.
+ * @param {Object} db Firestore instance.
+ * @param {?string} uid
+ * @return {Promise<Array<{id: string, token: string}>>}
+ */
+async function loadDeviceTokens(db, uid) {
+  if (!uid) return [];
+  const snap = await db.collection("users").doc(uid)
+      .collection("push_tokens").get();
+  return snap.docs
+      .map((doc) => ({id: doc.id, token: doc.data().token}))
+      .filter((row) => row.token);
+}
+
+/**
+ * Dependencies the send path needs. The path decides the route; this only
+ * fetches and delivers.
+ * @param {Object} db Firestore instance.
+ * @return {Object}
+ */
+function notifierDeps(db) {
+  return {
+    now: () => new Date(),
+    loadPerson: async (personId) => {
+      const snap = await db.collection("people").doc(personId).get();
+      if (!snap.exists) return {uid: null, phone: "", firstName: ""};
+      const data = snap.data();
+      return {
+        uid: data.userId || null,
+        phone: toE164US(data.contact && data.contact.phone),
+        firstName: pr.firstNameOf(data.name),
+      };
+    },
+    loadTokens: (uid) => loadDeviceTokens(db, uid),
+    loadTemplates: async () => {
+      const loaded = await loadPrayerConfig(db);
+      return {
+        text: loaded.templates,
+        textFallback: pr.DEFAULT_PRAYER_MESSAGES,
+        push: loaded.push,
+        pushFallback: pr.DEFAULT_PUSH_WORDING,
+      };
+    },
+    sendPush: async ({token, title, body, url}) => {
+      const message = {token, notification: {title, body}};
+      if (url) message.data = {url: String(url)};
+      try {
+        await admin.messaging().send(message);
+        return {accepted: true};
+      } catch (err) {
+        return {accepted: false, error: err};
+      }
+    },
+    sendText: async ({to, body, expectReply}) => {
+      const result = await sendViaTextbelt({
+        to, body, withReplyWebhook: expectReply !== false,
+      });
+      return {
+        accepted: !!result.success,
+        textId: result.textId,
+        quotaRemaining: result.quotaRemaining,
+        error: result.error,
+      };
+    },
+    deleteToken: async (uid, tokenId) => {
+      if (!uid || !tokenId) return;
+      await db.collection("users").doc(uid)
+          .collection("push_tokens").doc(tokenId).delete();
+    },
+    writeLog: async (row) => {
+      await db.collection(NOTIFICATIONS_COLLECTION).add(Object.assign({}, row, {
+        direction: "outbound",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }));
+    },
+  };
+}
+
+/**
+ * Tell one Person something. Callers pass who, what, and where it leads.
+ * @param {Object} db Firestore instance.
+ * @param {Object} request the send path's request
+ * @return {Promise<Object>}
+ */
+function tell(db, request) {
+  return notify.tellPerson(notifierDeps(db), request);
 }
 
 /**
@@ -2312,7 +2449,7 @@ exports.smsInbound = onRequest(
       const db = admin.firestore();
       try {
         // Resolve what this reply was a reply to.
-        const originSnap = await db.collection(SMS_MESSAGES_COLLECTION)
+        const originSnap = await db.collection(NOTIFICATIONS_COLLECTION)
             .where("textId", "==", reply.textId)
             .where("direction", "==", "outbound")
             .limit(1)
@@ -2435,33 +2572,55 @@ async function loadSubjectState(db, personId, serviceDate) {
 }
 
 /**
- * Sends a resolved prayer-request text (initial or reminder) to a subject,
- * records the send-state on the request and the linkage in the outbound
- * log. Shared by the scheduler and the manual button.
+ * Sends a resolved prayer-request ask (initial or reminder) through the
+ * send path, and records the send-state on the request when it was accepted.
+ * The path picks the route. A reminder escalates to the other one.
  * @param {Object} db Firestore instance.
- * @param {Object} args serviceDate, personId, kind, templates, snaps.
- * @return {Promise<Object>} the Textbelt send result.
+ * @param {Object} args serviceDate, personId, kind, snaps, manual, url.
+ * @return {Promise<Object>} success, kind, and any text id.
  */
-async function dispatchPrayerText(db, args) {
-  const {serviceDate, personId, kind, templates, personSnap, reqRef} = args;
-  const person = personSnap.data();
-  const to = toE164US(person.contact && person.contact.phone);
-  const body = pr.renderPrayerRequestMessage(
-      kind, pr.firstNameOf(person.name), templates);
+async function dispatchPrayerAsk(db, args) {
+  const {serviceDate, personId, kind, personSnap, reqRef} = args;
+  const intent = pr.prayerNotifyRequest(kind);
+  if (!intent) return {success: false, error: "Nothing to send."};
 
-  const result = await sendViaTextbelt({to, body, withReplyWebhook: true});
-  if (!result.success) return result;
+  const result = await tell(db, {
+    personId,
+    purpose: intent.purpose,
+    wording: intent.wording,
+    escalate: intent.escalate,
+    manual: !!args.manual,
+    serviceDate,
+    previousChannel: args.previousChannel || null,
+    // MS-247 passes the Answer link. Null until that mint exists.
+    url: pr.prayerAskUrl(args.url),
+    values: {name: pr.firstNameOf(personSnap.data().name)},
+    expectReply: true,
+  });
+  if (!result.accepted) {
+    return {
+      success: false,
+      unreachable: !!result.unreachable,
+      error: result.unreachable ?
+        "This person cannot be reached — no phone number and no app." :
+        "Send failed.",
+    };
+  }
 
   const today = pr.churchDateParts(new Date()).date;
+  const sentChannel = result.channel === "push" || result.channel === "text" ?
+    result.channel : null;
   const update = kind === "initial" ?
-    {serviceDate, initialSentDate: today} :
-    {serviceDate, reminderSent: true, reminderSentDate: today};
+    {serviceDate, initialSentDate: today, sentChannel} :
+    {serviceDate, reminderSent: true, reminderSentDate: today, sentChannel};
   await reqRef.set(update, {merge: true});
-  await recordOutbound(db, {
-    to, body, textId: result.textId,
-    purpose: "prayer_request", personId, serviceDate, kind,
-  });
-  return result;
+  return {
+    success: true,
+    kind,
+    textId: result.textId || null,
+    quotaRemaining: result.quotaRemaining == null ?
+      null : result.quotaRemaining,
+  };
 }
 
 /**
@@ -2472,7 +2631,7 @@ async function dispatchPrayerText(db, args) {
  * @return {Promise<void>}
  */
 async function processPrayerSubject(db, args) {
-  const {serviceDate, personId, today, localHour, templates} = args;
+  const {serviceDate, personId, today, localHour} = args;
   const {personSnap, reqSnap, reqRef} =
       await loadSubjectState(db, personId, serviceDate);
   if (!personSnap.exists) return;
@@ -2480,11 +2639,13 @@ async function processPrayerSubject(db, args) {
   const person = personSnap.data();
   const req = reqSnap.exists ? reqSnap.data() : {};
   const to = toE164US(person.contact && person.contact.phone);
+  const tokens = await loadDeviceTokens(db, person.userId);
 
   const action = pr.prayerRequestAction({
     daysUntilService: pr.daysUntil(serviceDate, today),
     localHour,
     hasPhone: !!to,
+    hasDeviceToken: tokens.length > 0,
     requestFilled: !!(req.prayerRequest || "").trim(),
     initialSentDate: req.initialSentDate || null,
     reminderSent: !!req.reminderSent,
@@ -2492,8 +2653,9 @@ async function processPrayerSubject(db, args) {
   });
   if (action === "none") return;
 
-  const result = await dispatchPrayerText(db, {
-    serviceDate, personId, kind: action, templates, personSnap, reqRef,
+  const result = await dispatchPrayerAsk(db, {
+    serviceDate, personId, kind: action, personSnap, reqRef,
+    previousChannel: req.sentChannel || null,
   });
   if (!result.success) {
     log(`Prayer-request ${action} send failed for ${personId}: ` +
@@ -2749,11 +2911,28 @@ exports.convertServiceInvolvement = onSchedule(
 );
 
 /**
- * Manual "Send Prayer Request Text Now" — the Service Builder button.
+ * Which linked Users have a live device token. Editors use this to derive
+ * "cannot be reached" without reading another person's token. Returns ids
+ * only.
+ */
+exports.notificationReachability = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertWritesAsEditor(db, request.auth);
+      const uids = await listTokenOwnerUids(db);
+      return {uids};
+    },
+);
+
+/**
+ * Manual "Send Prayer Request Now" — the Service Builder button.
  * canDecide-gated (MS-594): elders, super admins, and a Pastoral
  * Assistant. Bypasses the timing/quiet-hours guards (a human is choosing
- * to send now) but keeps the phone/already-filled guards. Sends initial
- * then reminder, re-sending the reminder on repeat calls.
+ * to send now) but keeps the reachability and already-filled guards.
+ * Sends initial then reminder, re-sending the reminder on repeat calls.
+ * The send path picks push or text. An optional url is the Answer link
+ * (MS-247); this function does not mint one.
  */
 exports.sendPrayerRequestNow = onCall(
     {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
@@ -2767,10 +2946,6 @@ exports.sendPrayerRequestNow = onCall(
         throw new HttpsError("invalid-argument",
             "serviceDate and personId are required.");
       }
-      if (!TEXTBELT_KEY.value()) {
-        throw new HttpsError("failed-precondition",
-            "No Textbelt key is configured.");
-      }
 
       const {personSnap, reqSnap, reqRef} =
           await loadSubjectState(db, personId, serviceDate);
@@ -2780,25 +2955,36 @@ exports.sendPrayerRequestNow = onCall(
       const person = personSnap.data();
       const req = reqSnap.exists ? reqSnap.data() : {};
       const to = toE164US(person.contact && person.contact.phone);
+      const tokens = await loadDeviceTokens(db, person.userId);
+      const filled = !!(req.prayerRequest || "").trim();
 
       const kind = pr.manualPrayerRequestKind({
         hasPhone: !!to,
-        requestFilled: !!(req.prayerRequest || "").trim(),
+        hasDeviceToken: tokens.length > 0,
+        requestFilled: filled,
         initialSentDate: req.initialSentDate || null,
         reminderSent: !!req.reminderSent,
       });
       if (kind === "none") {
-        throw new HttpsError("failed-precondition", to ?
+        throw new HttpsError("failed-precondition", filled ?
           "This prayer request is already filled." :
-          "This person has no phone number on file.");
+          "This person cannot be reached — no phone number and no app.");
       }
 
-      const {templates} = await loadPrayerConfig(db);
-      const result = await dispatchPrayerText(db, {
-        serviceDate, personId, kind, templates, personSnap, reqRef,
+      const result = await dispatchPrayerAsk(db, {
+        serviceDate,
+        personId,
+        kind,
+        personSnap,
+        reqRef,
+        manual: true,
+        url: request.data && request.data.url,
+        previousChannel: req.sentChannel || null,
       });
       if (!result.success) {
-        throw new HttpsError("unavailable", result.error || "Send failed.");
+        throw new HttpsError(
+            result.unreachable ? "failed-precondition" : "unavailable",
+            result.error || "Send failed.");
       }
       log(`Manual prayer-request ${kind} sent to ${personId} ` +
           `(${serviceDate}).`);
@@ -2874,11 +3060,12 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
 
       // Idempotency lock: a deterministic marker doc, created atomically. If it
       // already exists, another invocation has the digest.
-      const markerRef = db.collection(SMS_MESSAGES_COLLECTION)
+      const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
           .doc(`elder_digest_${serviceDate}`);
       try {
         await markerRef.create({
           direction: "outbound",
+          channel: "text",
           purpose: "elder_digest",
           serviceDate,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),

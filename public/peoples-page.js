@@ -22,6 +22,11 @@ document.addEventListener('alpine:init', () => {
         // this on, which reveals the inline People-management affordances. Off by
         // default; a plain member never sees the toggle (gated by canEdit).
         editMode: false,
+        // User ids that have a live device token. Null until Edit Mode asks.
+        // Never the token itself. A phone on the record hides the sentence
+        // before this returns.
+        tokenOwnerUids: null,
+        unreachableSentence: (window.NotificationReach && NotificationReach.SENTENCE) || '',
         sortKey: 'totalInvolvements', // 'name' or 'totalInvolvements'
         sortDirection: 'desc',
         
@@ -142,6 +147,32 @@ document.addEventListener('alpine:init', () => {
         // records and see the Tags Manager. The grant adds nothing here.
         get canEdit() {
             return AccessCore.writesAsEditor(this.effectivePermissionLevel);
+        },
+
+        toggleEditMode() {
+            this.editMode = !this.editMode;
+            if (!this.editMode) {
+                this.selectedTags = [];
+                return;
+            }
+            this.loadTokenOwners();
+        },
+
+        showUnreachable(person) {
+            if (!window.NotificationReach) return false;
+            return NotificationReach.showUnreachable(person, this.tokenOwnerUids);
+        },
+
+        async loadTokenOwners() {
+            if (!this.canEdit) return;
+            try {
+                const fn = firebase.app().functions('us-central1')
+                    .httpsCallable('notificationReachability');
+                const res = await fn({});
+                this.tokenOwnerUids = (res.data && res.data.uids) || [];
+            } catch (e) {
+                this.tokenOwnerUids = null;
+            }
         },
 
         // Super-admin only: flip the page between the real super-admin view and a
@@ -1019,6 +1050,7 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 this.showToast('Person updated successfully');
+                if (this.editMode) this.loadTokenOwners();
             } catch (e) {
                 console.error("Error updating person:", e);
                 this.showToast('Error updating person', 'error');

@@ -165,6 +165,42 @@ test('manual: no phone → none (refuse)', () => {
     assert.strictEqual(pr.manualPrayerRequestKind({ ...baseManual, hasPhone: false }), 'none');
 });
 
+test('automatic: a device token and no phone → initial', () => {
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, hasPhone: false, hasDeviceToken: true,
+    }), 'initial');
+});
+
+test('automatic: no phone and no token → none', () => {
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, hasPhone: false, hasDeviceToken: false,
+    }), 'none');
+});
+
+test('manual: a device token and no phone → initial', () => {
+    assert.strictEqual(pr.manualPrayerRequestKind({
+        ...baseManual, hasPhone: false, hasDeviceToken: true,
+    }), 'initial');
+});
+
+test('reminder escalates; the first ask does not', () => {
+    assert.deepStrictEqual(pr.prayerNotifyRequest('initial'), {
+        purpose: 'prayer_request', wording: 'initial', escalate: false,
+    });
+    assert.deepStrictEqual(pr.prayerNotifyRequest('reminder'), {
+        purpose: 'prayer_request', wording: 'reminder', escalate: true,
+    });
+    assert.strictEqual(pr.prayerNotifyRequest('none'), null);
+});
+
+test('prayerAskUrl keeps a passed link and mints nothing', () => {
+    assert.strictEqual(
+        pr.prayerAskUrl(' https://example.com/a/tok '),
+        'https://example.com/a/tok');
+    assert.strictEqual(pr.prayerAskUrl(''), null);
+    assert.strictEqual(pr.prayerAskUrl(null), null);
+});
+
 test('manual: already filled → none (refuse)', () => {
     assert.strictEqual(pr.manualPrayerRequestKind({ ...baseManual, requestFilled: true }), 'none');
 });

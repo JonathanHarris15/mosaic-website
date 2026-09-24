@@ -13,7 +13,8 @@ android/local.properties
 *.p8
 mobile-release.local.json
 
-# Firebase native app configs (downloaded from the console; not invented in git)
+# Firebase client configs for native push (MS-189). Download these from the
+# Firebase console for com.mosaicmanagercstx.app — do not invent them.
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
 

@@ -140,6 +140,13 @@
                         </form>
                         <div id="change-password-status" class="text-[10px] font-body-md"></div>
                     </div>
+
+                    <div id="notification-settings" hidden class="pt-sm border-t border-surface-container flex flex-col gap-2">
+                        <span class="m-label">Notifications</span>
+                        <button type="button" id="notification-settings-open" class="w-full py-2 text-left text-[12px] font-body-md text-on-surface-variant leading-relaxed">
+                            Notifications are off for this phone. Open Settings to allow them.
+                        </button>
+                    </div>
                     
                     <div class="pt-sm flex flex-col gap-3">
                         <button onclick="logout()" class="w-full py-3 font-label-md text-xs uppercase tracking-widest text-error hover:bg-error-container/20 rounded-lg transition-all border border-transparent hover:border-error/10">
@@ -558,6 +565,22 @@
     <script src="person-name.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="account-recovery-core.js"></script>
+    <script src="notification-open.js"></script>
+    <script src="notification-permission.js"></script>
+    <script src="mobile/push.js"></script>
     <script src="profile.js"></script>
+    <script>
+        (function () {
+            var row = document.getElementById('notification-settings');
+            var Perm = window.MosaicNotificationPermission;
+            var Push = window.MosaicPush;
+            if (!row || !Perm || !Push || !Push.inNativeApp()) return;
+            Push.permission().then(function (permission) {
+                if (Perm.shouldOfferSettings(permission)) row.hidden = false;
+            });
+            var open = document.getElementById('notification-settings-open');
+            if (open) open.addEventListener('click', function () { Push.openSystemSettings(); });
+        })();
+    </script>
 </body>
 </html>

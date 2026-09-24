@@ -722,6 +722,15 @@
     var editFlagS = useState(Edit.isOn());
     useEffect(function () { return Edit.subscribe(function (on) { editFlagS[1](on); }); }, []);
     var editOn = Track.offerEdits(props.user, editFlagS[0]);
+    var tokenUidsS = useState(null);
+    function loadReach() {
+      if (!editOn || !window.NotificationReach || !window.firebase) return;
+      var fn = firebase.app().functions("us-central1").httpsCallable("notificationReachability");
+      fn({}).then(function (res) {
+        tokenUidsS[1]((res.data && res.data.uids) || []);
+      }).catch(function () { tokenUidsS[1](null); });
+    }
+    useEffect(function () { loadReach(); }, [editOn]);
     var pS = useState((props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 });
     var p = pS[0];
     var tagsSt = useAsync(data.getShepherdingTags, []);
@@ -842,6 +851,7 @@
         pS[1](Edit.savedPersonView(p, d, editOn));
         savingS[1](false);
         editS[1](null);
+        loadReach();
       }).catch(function () {
         savingS[1](false);
         window.alert(Edit.SAVE_FAILED);
@@ -967,6 +977,8 @@
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r[1]}</span>
               </div>`; })}
             </div>` : null}
+          ${editOn && window.NotificationReach && NotificationReach.showUnreachable(p, tokenUidsS[0]) ? html`
+            <p style=${{ margin: "0 0 18px 4px", fontFamily: "var(--font-sans)", fontSize: 14, lineHeight: 1.4, color: "var(--on-surface-variant)" }}>${NotificationReach.SENTENCE}</p>` : null}
           ${familyFailed ? html`<p style=${{ margin: "0 0 18px 4px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>Couldn't load this Family. It did not work.</p>`
             : (familiesSt.loading || peopleSt.loading) ? null
             : html`<${DirectoryFamily} person=${p} user=${props.user} editMode=${editOn} families=${families} people=${directoryPeople} busy=${familyBusyS[0]} onWrite=${onFamily} />`}

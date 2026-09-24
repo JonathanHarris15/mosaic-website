@@ -134,8 +134,16 @@
   // Signing out forgets who you were, or the next person to use this phone
   // starts their first page holding your rank.
   function signOut() {
-    if (Cache) Cache.clearIdentity();
-    return auth.signOut();
+    // Drop this phone's device token before the session goes, so the next
+    // person on the device is not still a destination.
+    var uid = auth.currentUser && auth.currentUser.uid;
+    var drop = (window.MosaicPush && uid)
+      ? window.MosaicPush.clearToken(uid)
+      : Promise.resolve();
+    return Promise.resolve(drop).catch(function () {}).then(function () {
+      if (Cache) Cache.clearIdentity();
+      return auth.signOut();
+    });
   }
 
   var DESTINATIONS = Destinations.DESTINATIONS;
@@ -1319,6 +1327,45 @@
       "Sunday. — Mosaic Church",
     elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
   };
+  var PUSH_TITLE_LIMIT = 40;
+  var DEFAULT_PUSH_WORDING = {
+    initial: {
+      title: "Sunday's prayer",
+      body: "{name}, you're in this Sunday's pastoral prayer. What can we pray about?",
+    },
+    reminder: {
+      title: "Prayer reminder",
+      body: "{name}, we'd still love to know what to pray about this Sunday.",
+    },
+    thankyou: {
+      title: "Thank you",
+      body: "Thank you, {name}. We'll be praying this Sunday.",
+    },
+  };
+  var PUSH_WORDING_KINDS = ["initial", "reminder", "thankyou"];
+  function emptyPushWording() {
+    var out = {};
+    PUSH_WORDING_KINDS.forEach(function (kind) {
+      out[kind] = {
+        title: DEFAULT_PUSH_WORDING[kind].title,
+        body: DEFAULT_PUSH_WORDING[kind].body,
+      };
+    });
+    return out;
+  }
+  function readPushWording(saved) {
+    var out = {};
+    PUSH_WORDING_KINDS.forEach(function (kind) {
+      var cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+      var title = ((saved["push" + cap + "Title"]) || "").trim();
+      var body = ((saved["push" + cap + "Body"]) || "").trim();
+      out[kind] = {
+        title: title || DEFAULT_PUSH_WORDING[kind].title,
+        body: body || DEFAULT_PUSH_WORDING[kind].body,
+      };
+    });
+    return out;
+  }
   function smsFns() { return firebase.app().functions("us-central1"); }
   function getSmsStatus() {
     return smsFns().httpsCallable("smsCheckQuota")().then(function (res) {
@@ -1348,17 +1395,26 @@
           thankyou: s.thankyou || PRAYER_MESSAGE_DEFAULTS.thankyou,
           elderDigest: s.elderDigest || PRAYER_MESSAGE_DEFAULTS.elderDigest,
         },
+        pushWording: readPushWording(s),
         autoSendEnabled: !!s.autoSendEnabled,
       };
     });
   }
-  function savePrayerMessages(msgs, user) {
-    return db.collection("app_config").doc("prayer_request_sms").set({
+  function savePrayerMessages(msgs, user, pushWording) {
+    var payload = {
       initial: (msgs.initial || "").trim(), reminder: (msgs.reminder || "").trim(),
       thankyou: (msgs.thankyou || "").trim(), elderDigest: (msgs.elderDigest || "").trim(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
-    }, { merge: true });
+    };
+    var push = pushWording || {};
+    PUSH_WORDING_KINDS.forEach(function (kind) {
+      var cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+      var piece = push[kind] || {};
+      payload["push" + cap + "Title"] = (piece.title || "").trim();
+      payload["push" + cap + "Body"] = (piece.body || "").trim();
+    });
+    return db.collection("app_config").doc("prayer_request_sms").set(payload, { merge: true });
   }
   function setAutoSend(enabled, user) {
     return db.collection("app_config").doc("prayer_request_sms").set({
@@ -1526,6 +1582,8 @@
     deletePanelNote: deletePanelNote,
     unlinkPanelNote: unlinkPanelNote,
     PRAYER_MESSAGE_DEFAULTS: PRAYER_MESSAGE_DEFAULTS,
+    DEFAULT_PUSH_WORDING: DEFAULT_PUSH_WORDING,
+    PUSH_TITLE_LIMIT: PUSH_TITLE_LIMIT,
     getSmsStatus: getSmsStatus,
     sendTestSms: sendTestSms,
     getSmsReplies: getSmsReplies,

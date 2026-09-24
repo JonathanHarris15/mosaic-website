@@ -29,6 +29,26 @@ const EVENT_ANNOUNCEMENT_DEFAULTS = {
     pushBody: "{prose}",
 };
 
+// Lock-screen wording. Mirrors DEFAULT_PUSH_WORDING in functions/prayer-request.js.
+// A blank saved field falls back to these. PUSH_TITLE_LIMIT is what a lock
+// screen can still show; the editor sees the count and is not blocked.
+const PUSH_TITLE_LIMIT = 40;
+const DEFAULT_PUSH_WORDING = {
+    initial: {
+        title: "Sunday's prayer",
+        body: "{name}, you're in this Sunday's pastoral prayer. What can we pray about?",
+    },
+    reminder: {
+        title: "Prayer reminder",
+        body: "{name}, we'd still love to know what to pray about this Sunday.",
+    },
+    thankyou: {
+        title: "Thank you",
+        body: "Thank you, {name}. We'll be praying this Sunday.",
+    },
+};
+const PUSH_WORDING_KINDS = ['initial', 'reminder', 'thankyou'];
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('adminDashboard', () => ({
         currentUser: null,
@@ -53,6 +73,17 @@ document.addEventListener('alpine:init', () => {
 
         // Prayer-request message templates
         prayerMessages: { ...PRAYER_MESSAGE_DEFAULTS },
+        pushWording: {
+            initial: { ...DEFAULT_PUSH_WORDING.initial },
+            reminder: { ...DEFAULT_PUSH_WORDING.reminder },
+            thankyou: { ...DEFAULT_PUSH_WORDING.thankyou },
+        },
+        pushTitleLimit: PUSH_TITLE_LIMIT,
+        pushKinds: [
+            { key: 'initial', label: 'Initial request' },
+            { key: 'reminder', label: 'Reminder' },
+            { key: 'thankyou', label: 'Thank-you reply' },
+        ],
         prayerFields: [
             { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service. Uses {name}.' },
             { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet. Uses {name}.' },
@@ -196,6 +227,17 @@ document.addEventListener('alpine:init', () => {
                     thankyou: saved.thankyou || PRAYER_MESSAGE_DEFAULTS.thankyou,
                     elderDigest: saved.elderDigest || PRAYER_MESSAGE_DEFAULTS.elderDigest,
                 };
+                const push = {};
+                for (const kind of PUSH_WORDING_KINDS) {
+                    const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+                    const title = (saved['push' + cap + 'Title'] || '').trim();
+                    const body = (saved['push' + cap + 'Body'] || '').trim();
+                    push[kind] = {
+                        title: title || DEFAULT_PUSH_WORDING[kind].title,
+                        body: body || DEFAULT_PUSH_WORDING[kind].body,
+                    };
+                }
+                this.pushWording = push;
                 this.autoSendEnabled = !!saved.autoSendEnabled;
             } catch (e) {
                 console.error('Error loading prayer messages:', e);
@@ -206,14 +248,20 @@ document.addEventListener('alpine:init', () => {
         async savePrayerMessages() {
             this.prayerSaving = true;
             try {
-                await db.collection('app_config').doc('prayer_request_sms').set({
+                const payload = {
                     initial: this.prayerMessages.initial.trim(),
                     reminder: this.prayerMessages.reminder.trim(),
                     thankyou: this.prayerMessages.thankyou.trim(),
                     elderDigest: this.prayerMessages.elderDigest.trim(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedBy: this.currentUser.uid,
-                }, { merge: true });
+                };
+                for (const kind of PUSH_WORDING_KINDS) {
+                    const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+                    payload['push' + cap + 'Title'] = (this.pushWording[kind].title || '').trim();
+                    payload['push' + cap + 'Body'] = (this.pushWording[kind].body || '').trim();
+                }
+                await db.collection('app_config').doc('prayer_request_sms').set(payload, { merge: true });
                 this.showToast('Prayer messages saved');
             } catch (e) {
                 console.error('Error saving prayer messages:', e);
@@ -225,6 +273,11 @@ document.addEventListener('alpine:init', () => {
 
         resetPrayerMessages() {
             this.prayerMessages = { ...PRAYER_MESSAGE_DEFAULTS };
+            this.pushWording = {
+                initial: { ...DEFAULT_PUSH_WORDING.initial },
+                reminder: { ...DEFAULT_PUSH_WORDING.reminder },
+                thankyou: { ...DEFAULT_PUSH_WORDING.thankyou },
+            };
             this.showToast('Reset to defaults — Save to apply');
         },
 

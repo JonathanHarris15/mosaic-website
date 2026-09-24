@@ -132,7 +132,7 @@ test('People list Track stays on canEdit (writesAsEditor); hide chrome stays can
 
     const card = between(html, '<!-- Membership Track (ADR-0012) — the same stage slider', '<!-- Tag Management');
     assert.match(card, /x-show="editMode"/);
-    assert.match(html, /x-show="canEdit" @click="editMode = !editMode/);
+    assert.match(html, /x-show="canEdit" @click="toggleEditMode\(\)"/);
 
     const commit = js.slice(js.indexOf('async commitMembership'), js.indexOf('async commitMembership') + 160);
     assert.doesNotMatch(commit, /canDecide/, 'People list Track was collapsed to canDecide');

@@ -133,7 +133,7 @@
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">group</span> Membership Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
                     </h2>
-                    <button x-show="canEdit" @click="editMode = !editMode; if (!editMode) selectedTags = []"
+                    <button x-show="canEdit" @click="toggleEditMode()"
                             :class="editMode ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'"
                             class="text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 font-label-md shadow-sm">
                         <span class="material-symbols-outlined text-sm" x-text="editMode ? 'edit_off' : 'edit'"></span>
@@ -335,6 +335,10 @@
                                         <div x-show="person.contact?.phone" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
                                             <span class="material-symbols-outlined text-[14px]">call</span>
                                             <span x-text="person.contact.phone"></span>
+                                        </div>
+                                        <div x-show="editMode && showUnreachable(person)" class="flex items-start gap-1.5 text-on-surface-variant text-xs">
+                                            <span class="material-symbols-outlined text-[14px]">person_off</span>
+                                            <span x-text="unreachableSentence"></span>
                                         </div>
                                         <div x-show="person.contact?.address" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
                                             <span class="material-symbols-outlined text-[14px]">home</span>
@@ -907,6 +911,7 @@
     <script src="person-photo-core.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="person-name.js"></script>
+    <script src="notification-reach.js"></script>
     <script src="peoples-page.js"></script>
 </body>
 </html>

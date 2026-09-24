@@ -6,20 +6,22 @@
  * directly.
  */
 
-/** The church's local timezone — drives the send window and day countdown. */
-const CHURCH_TIMEZONE = "America/Chicago";
+const nc = require("./notification-core");
+
+/**
+ * The church's local timezone, and the send window, live on the notification
+ * core so a text and a push share one clock. Re-exported so existing callers
+ * (`pr.WINDOW_OPEN_HOUR`, `pr.churchDateParts`) keep their names.
+ */
+const CHURCH_TIMEZONE = nc.CHURCH_TIMEZONE;
+const WINDOW_OPEN_HOUR = nc.WINDOW_OPEN_HOUR;
+const WINDOW_CLOSE_HOUR = nc.WINDOW_CLOSE_HOUR;
 
 /** First send happens when the service is this many days away (or fewer). */
 const INITIAL_DAYS_OUT = 5;
 
 /** Reminder send happens when the service is this many days away (or fewer). */
 const REMINDER_DAYS_OUT = 3;
-
-/** Earliest hour (inclusive, 24h church-local) a text may be sent. */
-const WINDOW_OPEN_HOUR = 8;
-
-/** Hour (exclusive, 24h church-local) after which no text may be sent. */
-const WINDOW_CLOSE_HOUR = 20;
 
 /**
  * Canonical default Prayer Request message templates. {name} is replaced with
@@ -41,6 +43,43 @@ const DEFAULT_PRAYER_MESSAGES = {
     "Sunday. — Mosaic Church",
   elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
 };
+
+/**
+ * Lock-screen wording per purpose. A text runs long; a title does not.
+ * KEEP IN SYNC with DEFAULT_PUSH_WORDING in public/admin-dashboard.js and
+ * public/mobile/data.js. {name} is the subject's first name.
+ * @type {Object}
+ */
+const DEFAULT_PUSH_WORDING = {
+  initial: {
+    title: "Sunday's prayer",
+    body: "{name}, you're in this Sunday's pastoral prayer. " +
+      "What can we pray about?",
+  },
+  reminder: {
+    title: "Prayer reminder",
+    body: "{name}, we'd still love to know what to pray about this Sunday.",
+  },
+  thankyou: {
+    title: "Thank you",
+    body: "Thank you, {name}. We'll be praying this Sunday.",
+  },
+};
+
+/** Purposes that have a lock-screen title and body. */
+const PUSH_WORDING_KINDS = ["initial", "reminder", "thankyou"];
+
+/**
+ * Config field for one half of a push template, e.g. pushInitialTitle.
+ * @param {string} kind initial | reminder | thankyou
+ * @param {string} part title | body
+ * @return {string}
+ */
+function pushConfigKey(kind, part) {
+  const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
+  const which = part === "title" ? "Title" : "Body";
+  return `push${cap}${which}`;
+}
 
 /**
  * The first whitespace-delimited token of a full name.
@@ -76,6 +115,28 @@ function resolveTemplates(config) {
 }
 
 /**
+ * Push title and body per purpose. A blank field uses that field's default,
+ * so a half-filled config still renders a complete lock screen.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {Object} initial, reminder, thankyou — each {title, body}
+ */
+function resolvePushWording(config) {
+  const data = config || {};
+  const out = {};
+  for (const kind of PUSH_WORDING_KINDS) {
+    const titleRaw = data[pushConfigKey(kind, "title")];
+    const bodyRaw = data[pushConfigKey(kind, "body")];
+    const title = typeof titleRaw === "string" ? titleRaw.trim() : "";
+    const body = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
+    out[kind] = {
+      title: title || DEFAULT_PUSH_WORDING[kind].title,
+      body: body || DEFAULT_PUSH_WORDING[kind].body,
+    };
+  }
+  return out;
+}
+
+/**
  * Renders one Prayer Request message, substituting the subject's first name for
  * every {name} placeholder (falling back to "there" when unknown).
  * @param {'initial'|'reminder'|'thankyou'} kind
@@ -93,24 +154,12 @@ function renderPrayerRequestMessage(kind, firstName, templates) {
 
 /**
  * The church-local date (YYYY-MM-DD) and hour (0-23) for an instant.
+ * Defined on the notification core; this name stays for existing callers.
  * @param {Date} now
  * @return {{date: string, hour: number}}
  */
 function churchDateParts(now) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CHURCH_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-
-  const get = (type) => parts.find((p) => p.type === type).value;
-  const date = `${get("year")}-${get("month")}-${get("day")}`;
-  let hour = parseInt(get("hour"), 10);
-  if (hour === 24) hour = 0; // Some ICU builds render midnight as "24".
-  return {date, hour};
+  return nc.churchDateParts(now);
 }
 
 /**
@@ -129,12 +178,23 @@ function daysUntil(serviceDate, todayDate) {
 }
 
 /**
- * The automatic (scheduler) decision: what text, if any, to send a pastoral-
+ * Whether this subject can be told at all: a live device token or a phone.
+ * A token with no phone is still reachable. Neither is not.
+ * @param {Object} state hasPhone, hasDeviceToken
+ * @return {boolean}
+ */
+function canBeTold(state) {
+  return !!(state && (state.hasPhone || state.hasDeviceToken));
+}
+
+/**
+ * The automatic (scheduler) decision: what ask, if any, to send a pastoral-
  * prayer subject right now.
  * @param {Object} state
  * @param {number} state.daysUntilService
  * @param {number} state.localHour church-local hour (0-23)
  * @param {boolean} state.hasPhone
+ * @param {boolean} [state.hasDeviceToken]
  * @param {boolean} state.requestFilled request already provided
  * @param {?string} state.initialSentDate church-local date the initial went out
  * @param {boolean} state.reminderSent
@@ -145,19 +205,16 @@ function prayerRequestAction(state) {
   const {
     daysUntilService,
     localHour,
-    hasPhone,
     requestFilled,
     initialSentDate,
     reminderSent,
     today,
   } = state;
 
-  if (!hasPhone) return "none";
+  if (!canBeTold(state)) return "none";
   if (requestFilled) return "none";
   if (daysUntilService < 0) return "none";
-  if (localHour < WINDOW_OPEN_HOUR || localHour >= WINDOW_CLOSE_HOUR) {
-    return "none";
-  }
+  if (!nc.isInsideSendWindow(localHour)) return "none";
 
   const initialSent = !!initialSentDate;
   if (!initialSent) {
@@ -175,23 +232,50 @@ function prayerRequestAction(state) {
 }
 
 /**
- * The manual ("Send now") decision: a human is choosing to text now, so the
+ * The manual ("Send now") decision: a human is choosing to send now, so the
  * timing/quiet-hours guards are bypassed, but the hard guards remain — refuse
- * with no phone or an already-filled request. Initial if none sent yet,
- * reminder once it has (a repeat click re-sends the reminder as a
- * deliberate nudge).
+ * when nobody can be reached, or the request is already filled. Initial if
+ * none sent yet, reminder once it has (a repeat click re-sends the reminder
+ * as a deliberate nudge).
  * @param {Object} state
  * @param {boolean} state.hasPhone
+ * @param {boolean} [state.hasDeviceToken]
  * @param {boolean} state.requestFilled
  * @param {?string} state.initialSentDate
  * @param {boolean} state.reminderSent
  * @return {'initial'|'reminder'|'none'}
  */
 function manualPrayerRequestKind(state) {
-  const {hasPhone, requestFilled, initialSentDate} = state;
-  if (!hasPhone) return "none";
+  const {requestFilled, initialSentDate} = state;
+  if (!canBeTold(state)) return "none";
   if (requestFilled) return "none";
   return initialSentDate ? "reminder" : "initial";
+}
+
+/**
+ * What the send path should be asked for this ask. The reminder escalates:
+ * the first ask may not have landed, so this one takes the other route.
+ * @param {'initial'|'reminder'|'none'} action
+ * @return {?{purpose: string, wording: string, escalate: boolean}}
+ */
+function prayerNotifyRequest(action) {
+  if (action !== "initial" && action !== "reminder") return null;
+  return {
+    purpose: "prayer_request",
+    wording: action,
+    escalate: action === "reminder",
+  };
+}
+
+/**
+ * The URL a prayer ask leads to. MS-247 mints the Answer link and passes it
+ * in. Until then this returns null rather than inventing /a/<token>.
+ * @param {?string} url
+ * @return {?string}
+ */
+function prayerAskUrl(url) {
+  if (typeof url === "string" && url.trim()) return url.trim();
+  return null;
 }
 
 /**
@@ -297,13 +381,19 @@ if (typeof module !== "undefined" && module.exports) {
     WINDOW_OPEN_HOUR,
     WINDOW_CLOSE_HOUR,
     DEFAULT_PRAYER_MESSAGES,
+    DEFAULT_PUSH_WORDING,
+    PUSH_WORDING_KINDS,
+    pushConfigKey,
     firstNameOf,
     resolveTemplates,
+    resolvePushWording,
     renderPrayerRequestMessage,
     churchDateParts,
     daysUntil,
     prayerRequestAction,
     manualPrayerRequestKind,
+    prayerNotifyRequest,
+    prayerAskUrl,
     tiptapFromText,
     buildPrayerRequestNote,
     elderDigestDecision,
