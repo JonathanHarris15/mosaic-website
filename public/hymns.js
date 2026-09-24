@@ -45,12 +45,24 @@ document.addEventListener('alpine:init', () => {
             // The phone shell hides this page's header and draws its own.
             // The hymn's name lives in that header, so the shell has to hear it
             // or the open hymn has no title.
-            const publishTitle = () => {
+            //
+            // The way back belongs in that bar too. This page is three screens
+            // — the list, the hymn, the form — and the bar's own button is a
+            // hamburger for the list. While a hymn or the form is open the page
+            // borrows it, so there is ONE way back and it is where a phone
+            // keeps one, rather than a second chevron drawn into the content.
+            const publishChrome = () => {
                 if (window.MOSAIC_SHELL !== 'mobile') return;
-                if (typeof window.setMobileHeaderTitle !== 'function') return;
-                window.setMobileHeaderTitle(this.headerTitle);
+                if (typeof window.setMobileHeaderTitle === 'function') {
+                    window.setMobileHeaderTitle(this.headerTitle);
+                }
+                if (typeof window.setMobileHeaderBack === 'function') {
+                    window.setMobileHeaderBack(
+                        this.view === 'list' ? null : () => this.leaveView(), 'Hymns');
+                }
             };
-            this.$watch('headerTitle', publishTitle);
+            this.$watch('headerTitle', publishChrome);
+            this.$watch('view', publishChrome);
             const start = (user) => {
                 const ready = user
                     ? getUserData(user.uid).then((userData) => {

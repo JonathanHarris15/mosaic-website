@@ -221,13 +221,65 @@ test('opening a hymn from the list keeps that hymn, including an older sheet pag
     }), ['sheet.png', 'plain.png', 'legacy.png']);
 });
 
-test('the phone shell names the open hymn and can return to the list', () => {
+test('the phone shell names the open hymn and carries the one way back', () => {
     const page = read('hymns.html');
     const js = read('hymns.js');
+    const shell = read('mobile-shell-header.js');
+
     assert.match(js, /setMobileHeaderTitle/);
-    assert.match(page, /class="hymn-shell-back/);
-    assert.match(page, /@click="leaveView\(\)"/);
-    assert.match(page, /html\.shell-mobile \.hymn-shell-back/);
+
+    // The bar's own button, handed to the page while a hymn or the form is
+    // open and handed back on the list — not a second chevron in the content.
+    assert.match(shell, /window\.setMobileHeaderBack = function/);
+    assert.match(js, /setMobileHeaderBack\(/);
+    assert.match(js, /this\.view === 'list' \? null : \(\) => this\.leaveView\(\)/);
+    assert.match(js, /\$watch\('view'/);
+
+    // ⚠ The content's own back went WITH that. Two controls saying the same
+    // thing is what MS-674 found on the phone, and the one in the content is
+    // the one nobody looks for.
+    assert.doesNotMatch(page, /hymn-shell-back/);
+});
+
+test('a phone hymn gets the width of the phone', () => {
+    const page = read('hymns.html');
+
+    // 16 on a phone, the page margin from `md` up — the same responsive gutter
+    // the other shell pages use. A flat 32 spent a sixth of a 390px screen on
+    // empty parchment.
+    assert.match(page, /<main class="[^"]*\bpx-4 md:px-margin\b/);
+    assert.doesNotMatch(page, /<main class="[^"]* px-margin /);
+    assert.match(page, /html\.shell-mobile main \{ padding-left: 1rem; padding-right: 1rem; \}/);
+
+    // The boxes between the gutter and the staves. The version card keeps a
+    // smaller padding; the frame around the sheet page goes, because the sheet
+    // already has a border of its own.
+    assert.match(page, /class="hymn-version /);
+    assert.match(page, /class="hymn-sheet /);
+    assert.match(page, /\.hymn-version \{ padding: var\(--space-sm\); \}/);
+    assert.match(page, /\.hymn-sheet \{ border: 0; padding: 0; \}/);
+});
+
+test('a button under 640px still says what it does', () => {
+    // ⚠ WHAT THIS EXISTS TO STOP COMING BACK (MS-674). `.m-btn__label` and
+    // `.m-back__label` are slots any Button or BackLink carries, anywhere on
+    // the page. The header's phone metrics hid them bare inside
+    // `@media (max-width: 640px)`, so every button in the document under that
+    // width lost its word — the hymn's Copy attribution, Edit, Delete and
+    // Download all drew as blank tan pills with nothing in them at all.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'mosaic.css'), 'utf8');
+    const phone = css.match(/@media \(max-width:640px\)\{\.m-header\{.*?\}\}/s);
+    assert.ok(phone, 'the phone header block is gone from mosaic.css');
+
+    const block = phone[0];
+    assert.ok(/\.m-header \.m-btn__label/.test(block),
+        'the phone header no longer hides its own button labels');
+    assert.ok(!/(^|[,{])\s*\.m-btn__label/.test(block),
+        'the phone header hides EVERY button label on the page again');
+    assert.ok(!/(^|[,{])\s*\.m-back__label/.test(block),
+        'the phone header hides EVERY back label on the page again');
+    assert.ok(!/(^|[,{])\s*\.m-back[,{ ]/.test(block),
+        'the phone header squares up every BackLink on the page again');
 });
 
 test('the phone opens the Hymns page and keeps the stored home key', () => {
