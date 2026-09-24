@@ -2,11 +2,61 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const HymnsPage = require('../public/hymns-page.js');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (name) => fs.readFileSync(path.join(PUBLIC, name), 'utf8');
+
+// ── The page's own component, run for real ───────────────────────────────────
+//
+// ⚠ READING hymns.js IS NOT ENOUGH. Every other test in this file matches the
+// source text, and MS-675 walked straight through all of them: a helper that
+// called itself, spelled perfectly. Only running it says whether a tap works.
+//
+// So load hymns.js the way the browser does — it listens for `alpine:init` and
+// registers a factory — and build the component. Firestore and Storage are not
+// reached by the view-switching methods, so the sandbox stops at the edges.
+function hymnsComponent(search) {
+    const sandbox = {
+        console, Promise, Date, Object, Array, Math, String, Number, JSON,
+        Set, Map, setTimeout, clearTimeout, encodeURIComponent, URLSearchParams,
+    };
+    sandbox.window = sandbox;
+    sandbox.globalThis = sandbox;
+    sandbox.HymnsPage = HymnsPage;
+    sandbox.location = { search: search || '' };
+    sandbox.auth = { onAuthStateChanged() { return () => {}; } };
+    sandbox.getUserData = async () => ({});
+    sandbox.firebase = { firestore: { FieldValue: {} } };
+    sandbox.navigator = { userAgent: '' };
+
+    let onInit = null;
+    sandbox.document = {
+        addEventListener(name, fn) { if (name === 'alpine:init') onInit = fn; },
+    };
+
+    let factory = null;
+    sandbox.Alpine = { data(name, fn) { if (name === 'hymnsPage') factory = fn; } };
+
+    vm.createContext(sandbox);
+    vm.runInContext(read('hymns.js'), sandbox, { filename: 'hymns.js' });
+    assert.ok(onInit, 'hymns.js never registered an alpine:init listener');
+    onInit();
+    assert.strictEqual(typeof factory, 'function', 'hymns.js never defined the hymnsPage component');
+    return factory();
+}
+
+const A_HYMN = {
+    id: 'tis-so-sweet',
+    hymn_name: "'Tis So Sweet to Trust in Jesus",
+    lyrics_writer: 'Louisa M. R. Stead',
+    music_writer: 'William J. Kirkpatrick',
+    attribution: "'Tis So Sweet to Trust in Jesus, words by Louisa M. R. Stead, Public Domain",
+    tags: ['Trust'],
+    versions: [{ name: 'Default', default: true, pages: ['sheet.png'] }],
+};
 
 test('a member may read the hymn book and may not change it', () => {
     ['member', 'viewer', 'guest'].forEach(function (level) {
@@ -284,6 +334,112 @@ test('a confirmation is said at the foot and goes away', () => {
     // A Toast is fixed to the viewport, so the shell's body padding cannot lift
     // it off the home indicator.
     assert.match(read('mobile-shell.css'), /html\.shell-mobile \.m-toast \{/);
+});
+
+test('hushing the toast takes the words away instead of calling itself', () => {
+    // ⚠ THE BUG MS-675 WAS. `hush()` was written `this.hush()`, so it recursed
+    // until the stack blew. It looks like nothing on its own — nobody taps
+    // "hush" — but startEdit() and startCreate() hush the toast on their way to
+    // the form, and the throw took the whole journey with it.
+    const page = hymnsComponent();
+    page.say('Attribution copied.');
+    assert.equal(page.notice, 'Attribution copied.');
+
+    page.hush();
+    assert.equal(page.notice, '');
+    assert.equal(page.noticeIsBad, false);
+
+    // Said badly, then hushed: the error styling goes with the words.
+    page.warn('Could not copy the attribution.');
+    assert.equal(page.noticeIsBad, true);
+    page.hush();
+    assert.equal(page.noticeIsBad, false);
+});
+
+test('Edit on an open hymn opens the editor for that hymn', () => {
+    // ⚠ The whole of MS-675: tapping Edit on the hymn did NOTHING. No editor,
+    // no navigation, no error — the draft was built and then `view` was never
+    // set, so the detail just sat there. Phone and desktop both; there is one
+    // control path and this is it.
+    const page = hymnsComponent();
+    page.canEdit = true;
+
+    page.showHymn(A_HYMN);
+    assert.equal(page.view, 'hymn');
+    assert.equal(page.headerTitle, A_HYMN.hymn_name);
+
+    // A toast can be on screen when Edit is tapped — that is the state the bug
+    // needed, because Edit hushes it on the way out.
+    page.say('Attribution copied.');
+    page.startEdit(page.hymn);
+
+    assert.equal(page.view, 'form', 'Edit left the hymn detail on screen');
+    assert.equal(page.creating, false);
+    assert.ok(page.form, 'Edit switched the view with no draft to show');
+    assert.equal(page.form.hymn_name, A_HYMN.hymn_name, 'the editor opened on the wrong hymn');
+    assert.equal(page.form.lyrics_writer, A_HYMN.lyrics_writer);
+    assert.equal(page.form.versions.length, 1);
+    assert.equal(page.headerTitle, 'Edit hymn');
+    assert.equal(page.notice, '');
+
+    // Cancel goes back to the hymn it was editing, not out to the list.
+    page.cancelForm();
+    assert.equal(page.view, 'hymn');
+    assert.equal(page.hymn.id, A_HYMN.id);
+});
+
+test('Add hymn opens an empty editor, and a reader is offered neither', () => {
+    // startCreate() hushed the toast on the same line as startEdit(), so it went
+    // down with it.
+    const page = hymnsComponent();
+    page.canEdit = true;
+    page.startCreate('Thine Be the Glory');
+    assert.equal(page.view, 'form');
+    assert.equal(page.creating, true);
+    assert.equal(page.form.hymn_name, 'Thine Be the Glory');
+    assert.equal(page.headerTitle, 'New hymn');
+
+    // The role gate is the one MS-674 and MS-675 must not have loosened: a
+    // reader never reaches the form, whichever door is knocked on.
+    const reader = hymnsComponent();
+    reader.canEdit = false;
+    reader.showHymn(A_HYMN);
+    reader.startEdit(reader.hymn);
+    assert.equal(reader.view, 'hymn', 'a reader was let into the editor');
+    assert.equal(reader.form, null);
+    reader.startCreate('Anything');
+    assert.equal(reader.view, 'hymn');
+    assert.equal(reader.form, null);
+});
+
+test('a link straight to the editor opens it rather than apologising', () => {
+    // hymns.html?edit=<id> reaches startEdit() through applyOpenState(), which
+    // init() runs inside a promise chain — so the same throw came back out as
+    // "Could not open the hymn book." on a link that was perfectly good.
+    const page = hymnsComponent('?edit=' + A_HYMN.id);
+    page.canEdit = true;
+    page.hymns = [A_HYMN];
+    page.applyOpenState();
+    assert.equal(page.view, 'form');
+    assert.equal(page.creating, false);
+    assert.equal(page.form.hymn_name, A_HYMN.hymn_name);
+
+    // ?new=1 is the other door into the same form.
+    const fresh = hymnsComponent('?new=1&name=Thine+Be+the+Glory');
+    fresh.canEdit = true;
+    fresh.hymns = [];
+    fresh.applyOpenState();
+    assert.equal(fresh.view, 'form');
+    assert.equal(fresh.creating, true);
+    assert.equal(fresh.form.hymn_name, 'Thine Be the Glory');
+
+    // And a reader following an edit link lands on the list, as before.
+    const reader = hymnsComponent('?edit=' + A_HYMN.id);
+    reader.canEdit = false;
+    reader.hymns = [A_HYMN];
+    reader.applyOpenState();
+    assert.equal(reader.view, 'list');
+    assert.equal(reader.form, null);
 });
 
 test('a button under 640px still says what it does', () => {
