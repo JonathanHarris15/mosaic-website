@@ -16,6 +16,9 @@
     const Store = (typeof require !== 'undefined')
         ? require('./event-announcement-store.js')
         : global.EventAnnouncementStore;
+    const Tell = (typeof require !== 'undefined')
+        ? require('./event-tell-core.js')
+        : global.EventTellCore;
 
     // `db` is the page's Firestore (a top-level const in auth.js, visible to
     // later classic scripts). Node tests hand one in on the global object.
@@ -97,6 +100,7 @@
             announcementForm: null,
             announcementRefusal: '',
             announcementNames: [],
+            announcementUnreachable: [],
             announcementTagCatalogue: [],
             announcementSaving: false,
             announcementEditingId: null,
@@ -162,6 +166,7 @@
                 this.announcementEditingId = null;
                 this.announcementRefusal = '';
                 this.announcementNames = [];
+                this.announcementUnreachable = [];
                 this.announcementForm = blankForm();
             },
 
@@ -193,6 +198,7 @@
                 this.announcementEditingId = null;
                 this.announcementRefusal = '';
                 this.announcementNames = [];
+                this.announcementUnreachable = [];
             },
 
             setAnnouncementWay(way) {
@@ -225,6 +231,7 @@
                 const form = this.announcementForm;
                 if (!form || form.way !== Ann.TOLD) {
                     this.announcementNames = [];
+                    this.announcementUnreachable = [];
                     return;
                 }
                 const tagIds = Ann.tagsKept({
@@ -242,14 +249,21 @@
                     name: person.name,
                     tags: person.tags || [],
                     membership: person.membership || {},
+                    contact: person.contact || {},
+                    userId: person.userId || null,
                     hidden: !!(person.shepherdingHidden
                         || (person.tags || []).some(id => hiding.has(id))),
                 }));
-                this.announcementNames = Ann.whoWouldBeTold({
+                const preview = Tell.previewTellAudience({
                     tagIds,
+                    savedTagIds: form.savedTagIds,
+                    visibleTagIds: this.offeredAnnouncementTags().map(tag => tag.id),
+                    hidePeopleTagIds: Array.from(hiding),
                     people,
                     viewerMaySeeHidden: viewerMaySeeHidden(this),
-                }).names;
+                });
+                this.announcementNames = preview.reachable;
+                this.announcementUnreachable = preview.unreachable;
             },
 
             async saveAnnouncement() {

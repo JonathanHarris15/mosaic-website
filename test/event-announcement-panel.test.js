@@ -64,7 +64,7 @@ function host(over) {
         rank: 'editor',
         account: { permissionLevel: 'editor', pastoralAssistant: false },
         people: [
-            { id: 'ada', name: 'Ada', tags: ['choir'], membership: { inactive: false } },
+            { id: 'ada', name: 'Ada', tags: ['choir'], membership: { inactive: false }, userId: 'uid-ada' },
             { id: 'hope', name: 'Hidden Hope', tags: ['choir'], membership: {}, hidden: false, shepherdingHidden: true },
         ],
         announcementTagCatalogue: [
@@ -235,7 +235,16 @@ test('the event pages offer the Announcements tab and load the model first', () 
         const core = html.indexOf('src="event-announcement-core.js"');
         const store = html.indexOf('src="event-announcement-store.js"');
         const panel = html.indexOf('src="event-announcement-panel.js"');
-        assert.ok(core !== -1 && core < store && store < panel);
+        const printed = html.indexOf('src="printed-announcement-lines.js"');
+        const tell = html.indexOf('src="event-tell-core.js"');
+        assert.ok(core !== -1 && core < store);
+        if (printed !== -1 && tell !== -1) {
+            assert.ok(printed < tell && tell < panel);
+        } else if (tell !== -1) {
+            assert.ok(tell < panel);
+        } else {
+            assert.ok(store < panel);
+        }
     }
     assert.ok(event.indexOf('src="event-announcement-panel.js"') < event.indexOf('src="calendar-event.js"'));
     assert.ok(series.indexOf('src="event-announcement-panel.js"') < series.indexOf('src="recurring-events.js"'));

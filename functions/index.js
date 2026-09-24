@@ -21,6 +21,9 @@ const {
   verifyTextbeltSignature,
 } = require("./sms");
 const pr = require("./prayer-request");
+const eventTell = require("./event-tell");
+const eventTellFs = require("./event-tell-firestore");
+const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
@@ -2508,6 +2511,34 @@ async function processPrayerSubject(db, args) {
  * (prayerMale/prayerFemale) with an empty request is texted per the
  * 5-day/3-day, 8am-8pm-Central rules.
  */
+/**
+ * Hourly sender for told event announcements (MS-623). Uses the MS-189
+ * Notification path when notification-send.js is on the branch; otherwise
+ * the tick runs but records no sends.
+ */
+exports.sendEventAnnouncementTells = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: pr.CHURCH_TIMEZONE,
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async () => {
+      const db = admin.firestore();
+      const tellPerson = notifyBridge.loadTellPerson();
+      const deps = eventTellFs.buildDeps(db, tellPerson);
+      // When MS-189 lands, wire notifierDeps here and merge
+      // eventAnnWording.templatesForSendPath into loadTemplates.
+      if (tellPerson) {
+        deps.notifierDeps = {};
+      }
+      const result = await eventTell.runEventTellTick(deps);
+      if (result.ran && result.sent) {
+        log(`sendEventAnnouncementTells: sent ${result.sent} notification(s).`);
+      }
+    },
+);
+
 exports.sendPrayerRequestTexts = onSchedule(
     {
       schedule: "every 60 minutes",

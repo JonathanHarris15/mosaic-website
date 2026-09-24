@@ -23,6 +23,12 @@ const PRAYER_MESSAGE_DEFAULTS = {
     elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
 };
 
+const EVENT_ANNOUNCEMENT_DEFAULTS = {
+    text: "{title}\n\n{prose}\n{link}",
+    pushTitle: "{title}",
+    pushBody: "{prose}",
+};
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('adminDashboard', () => ({
         currentUser: null,
@@ -57,6 +63,9 @@ document.addEventListener('alpine:init', () => {
         autoSendEnabled: false,
         autoSendSaving: false,
 
+        eventAnnouncementWording: { ...EVENT_ANNOUNCEMENT_DEFAULTS },
+        eventAnnouncementSaving: false,
+
         toast: { show: false, message: '', type: 'success' },
 
         async init() {
@@ -76,6 +85,7 @@ document.addEventListener('alpine:init', () => {
                 this.refreshStatus();
                 this.loadReplies();
                 this.loadPrayerMessages();
+                this.loadEventAnnouncementWording();
             });
         },
 
@@ -220,6 +230,45 @@ document.addEventListener('alpine:init', () => {
 
         // Kill switch — writes immediately so turning automation off takes effect
         // without waiting for a Save.
+        async loadEventAnnouncementWording() {
+            try {
+                const doc = await db.collection('app_config').doc('prayer_request_sms').get();
+                const saved = doc.exists ? doc.data() : {};
+                this.eventAnnouncementWording = {
+                    text: saved.eventAnnouncementText || EVENT_ANNOUNCEMENT_DEFAULTS.text,
+                    pushTitle: saved.pushEventAnnouncementTitle || EVENT_ANNOUNCEMENT_DEFAULTS.pushTitle,
+                    pushBody: saved.pushEventAnnouncementBody || EVENT_ANNOUNCEMENT_DEFAULTS.pushBody,
+                };
+            } catch (e) {
+                console.error('Error loading event announcement wording:', e);
+                this.showToast('Could not load event announcement wording', 'error');
+            }
+        },
+
+        async saveEventAnnouncementWording() {
+            this.eventAnnouncementSaving = true;
+            try {
+                await db.collection('app_config').doc('prayer_request_sms').set({
+                    eventAnnouncementText: this.eventAnnouncementWording.text.trim(),
+                    pushEventAnnouncementTitle: this.eventAnnouncementWording.pushTitle.trim(),
+                    pushEventAnnouncementBody: this.eventAnnouncementWording.pushBody.trim(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: this.currentUser.uid,
+                }, { merge: true });
+                this.showToast('Event announcement wording saved');
+            } catch (e) {
+                console.error('Error saving event announcement wording:', e);
+                this.showToast('Error saving event announcement wording', 'error');
+            } finally {
+                this.eventAnnouncementSaving = false;
+            }
+        },
+
+        resetEventAnnouncementWording() {
+            this.eventAnnouncementWording = { ...EVENT_ANNOUNCEMENT_DEFAULTS };
+            this.showToast('Reset to defaults — Save to apply');
+        },
+
         async toggleAutoSend() {
             const next = !this.autoSendEnabled;
             this.autoSendSaving = true;
