@@ -55,7 +55,6 @@
     <script src="events-store.js"></script>
     <script src="event-announcement-core.js"></script>
     <script src="event-announcement-store.js"></script>
-    <script src="event-announcement-panel.js"></script>
     <script src="event-attachments-core.js"></script>
     <!-- Printables linked to this event (MS-400): the model, the store, the
          live data and the PDF snapshot. -->
@@ -67,6 +66,8 @@
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="printed-announcement-lines.js"></script>
+    <script src="event-tell-core.js"></script>
+    <script src="event-announcement-panel.js"></script>
     <script src="printed-announcement-guide.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
@@ -530,6 +531,16 @@
                                     <li x-text="name"></li>
                                 </template>
                             </ul>
+                            <template x-if="announcementUnreachable.length">
+                                <div>
+                                    <p class="m-label mt-sm">Cannot be reached</p>
+                                    <ul>
+                                        <template x-for="name in announcementUnreachable" :key="'unreachable-' + name">
+                                            <li x-text="name"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
                         </div>
                         <p class="text-[13px] text-error mt-sm" x-show="announcementRefusal" x-text="announcementRefusal"></p>
                         <div class="flex gap-sm mt-sm">

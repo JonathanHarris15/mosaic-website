@@ -109,6 +109,9 @@ const MODULES = [
     // MS-622. Which printed event announcements belong on a Sunday. The
     // booklet resolver calls it, so the assistant and the page agree.
     'printed-announcement-lines.js',
+    // MS-621 / MS-623. What may be written on an event, and when a tell fires.
+    'event-announcement-core.js',
+    'event-tell-core.js',
     // MS-661. Which version of a hymn prints. printable-data-core.js asks it
     // for the sunday_hymns sheets, so the assistant and the page agree.
     'hymn-versions.js',

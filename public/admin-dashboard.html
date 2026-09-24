@@ -310,6 +310,46 @@
                 </div>
             </div>
         </section>
+
+        <section class="flex flex-col gap-md">
+            <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined text-[24px] text-primary">campaign</span>
+                <h2 class="font-headline-md text-headline-md text-primary">Event announcement tells</h2>
+            </div>
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Wording for told event announcements (push and text). Use
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{title}</code>,
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{prose}</code>, and
+                    <code class="bg-surface-container rounded px-1 py-[1px] text-xs">{link}</code>
+                    for the event page URL.
+                </p>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Text message</span>
+                    <textarea x-model="eventAnnouncementWording.text" rows="4"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
+                </label>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Push title</span>
+                    <input type="text" x-model="eventAnnouncementWording.pushTitle"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </label>
+                <label class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface-variant">Push body</span>
+                    <textarea x-model="eventAnnouncementWording.pushBody" rows="3"
+                        class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
+                </label>
+                <div class="flex items-center justify-end gap-sm">
+                    <button @click="resetEventAnnouncementWording()" class="m-btn m-btn--quiet m-btn--sm">
+                        Reset to defaults
+                    </button>
+                    <button @click="saveEventAnnouncementWording()" :disabled="eventAnnouncementSaving"
+                        class="px-lg py-sm font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <span x-text="eventAnnouncementSaving ? 'Saving…' : 'Save wording'"></span>
+                    </button>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- Toast -->
