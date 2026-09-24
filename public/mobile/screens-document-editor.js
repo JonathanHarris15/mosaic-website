@@ -707,7 +707,7 @@
           <button onMouseDown=${function (e) { e.preventDefault(); openInsertPanel(); }} style=${toolBtn(false)} title="Insert Person Note">${Ic("user-round-plus", 17)}</button>
         </div>
 
-        <${Body} style=${{ padding: 0 }}>
+        <${Body} noBuffer=${true} style=${{ padding: 0 }}>
           <div class="doc-pm" style=${{ padding: "16px 18px calc(48px + env(safe-area-inset-bottom, 0px))" }}>
             <div id="tiptap-doc-editor" style=${{ minHeight: 240 }}></div>
           </div>

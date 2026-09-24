@@ -158,7 +158,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Admin" onMenu=${props.openMenu} serif=${false} />
-        <${Body} style=${{ padding: "16px 16px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
+        <${Body} style=${{ padding: "16px 16px 20px" }}>
           <div style=${{ marginBottom: 18 }}>
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 24, fontWeight: 600, color: "var(--primary)" }}>Admin Dashboard</div>
             <p style=${{ margin: "4px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Admin-only system tools.</p>

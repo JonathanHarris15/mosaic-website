@@ -257,7 +257,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Shepherd" onMenu=${props.openMenu} serif=${false} />
-        <${Body} style=${{ padding: "16px 16px 40px" }}>
+        <${Body} style=${{ padding: "16px 16px 20px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 20px", color: "var(--on-surface-variant)" }}>
               <span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span>
             </div>`
@@ -508,7 +508,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="People" onBack=${props.back} serif=${false} right=${canWriteEditor ? addBtn : null} />
-        <${Body} style=${{ padding: "14px 16px 40px" }}>
+        <${Body} style=${{ padding: "14px 16px 20px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !canReadElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
           : html`
@@ -1341,7 +1341,7 @@
     return html`
       <${Screen}>
         <${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} right=${html`<button onClick=${function () { drawerS[1](true); }} aria-label="Details" style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>${Ic("menu", 22)}</button>`} />
-        <${Body} style=${{ padding: "16px 16px 44px" }}>
+        <${Body} style=${{ padding: "16px 16px 20px" }}>
           <div style=${{ marginBottom: 16 }}>
             <h1 style=${{ margin: 0, fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em" }}>${person.name}</h1>
             <div style=${{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>

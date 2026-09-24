@@ -185,7 +185,7 @@
     var linkStyle = { background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", padding: 4 };
     return html`
       <div style=${{ height: "100%", background: "var(--background)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
-        <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px 40px", position: "relative" }}>
+        <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px calc(40px + env(safe-area-inset-bottom, 0px))", position: "relative" }}>
           <div style=${{ position: "absolute", right: -50, top: 60, width: 180, height: 180, border: "1px solid var(--outline-variant)", borderRadius: "50%", opacity: 0.5 }}></div>
           <div style=${{ position: "absolute", left: -60, bottom: 90, width: 150, height: 150, border: "1px solid var(--outline-variant)", borderRadius: "50%", opacity: 0.4 }}></div>
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32, position: "relative" }}>
@@ -313,7 +313,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
-        <${Body} style=${{ padding: "12px 16px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
+        <${Body} style=${{ padding: "12px 16px 16px" }}>
           <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
             ${tiles.map(function (t) {
               return html`
@@ -351,9 +351,11 @@
           <${NotificationAsk} user=${user} />
 
           ${inNativeApp() ? null : html`
-            <a href="index.html?shell=web" style=${{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 20, padding: "8px 0", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
-              ${Ic("monitor", 15)}View desktop site
-            </a>`}
+            <div style=${{ paddingTop: 12 }}>
+              <a href="index.html?shell=web" style=${{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
+                ${Ic("monitor", 15)}View desktop site
+              </a>
+            </div>`}
         </${Body}>
       </${Screen}>`;
   }
@@ -505,7 +507,7 @@
                 </button>`;
             })}
           </div>
-          <div style=${{ padding: "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid var(--outline-variant)" }}>
+          <div style=${{ padding: "12px 12px calc(16px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid var(--outline-variant)" }}>
             <button onClick=${function () { setGuest(false); data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
               ${Ic("log-out", 20)}Sign Out
             </button>

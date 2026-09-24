@@ -952,7 +952,7 @@
     return html`
       <${Screen}>
         <${TopBar} title="Directory" onBack=${props.back} serif=${false} />
-        <${Body} style=${{ padding: "22px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
+        <${Body} style=${{ padding: "22px 16px 20px" }}>
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
             <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
@@ -1088,7 +1088,7 @@
           </div>
           <button onClick=${props.onClose} aria-label="Close" style=${{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", flexShrink: 0 }}>${Ic("x", 20)}</button>
         </div>
-        <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}>${props.children}</div>
+        <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>${props.children}</div>
       </div>
     </${M.Fragment}>`;
   }
@@ -1280,7 +1280,7 @@
     return html`
       <${Screen}>
         <${TopBar} title=${title} onMenu=${props.openMenu} />
-        <${Body} style=${{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        <${Body} noBuffer=${true} style=${{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
           <span style=${{ color: "var(--primary)" }}>${Ic("hammer", 34)}</span>
           <div style=${{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--on-surface)", marginTop: 14, textAlign: "center" }}>${title}</div>
           <div style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface-variant)", marginTop: 6, textAlign: "center", lineHeight: 1.5 }}>This screen is being built for mobile. You can open the full desktop version in the meantime.</div>

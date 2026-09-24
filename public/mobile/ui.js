@@ -59,7 +59,10 @@
   }
 
   function Body(props) {
-    return html`<div style=${Object.assign({ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }, props.style || {})}>${props.children}</div>`;
+    return html`<div style=${Object.assign({ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }, props.style || {})}>
+      ${props.children}
+      ${props.noBuffer ? null : html`<div class="m-bottom-buffer" style=${{ height: "calc(24px + env(safe-area-inset-bottom, 0px))", flexShrink: 0, pointerEvents: "none" }} aria-hidden="true"></div>`}
+    </div>`;
   }
 
   // ── Typography ────────────────────────────────────────────
