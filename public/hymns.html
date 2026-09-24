@@ -27,9 +27,6 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        /* The shell hides the page header, and with it the way back to the list. */
-        .hymn-shell-back { display: none; }
-        html.shell-mobile .hymn-shell-back { display: inline-flex; }
         .hymn-tag-filter { display: none; }
         @media (max-width: 767px) {
             .hymn-tag-cloud { display: none !important; }
@@ -37,6 +34,26 @@
         }
         html.shell-mobile .hymn-tag-cloud { display: none !important; }
         html.shell-mobile .hymn-tag-filter { display: flex; flex-direction: column; gap: 0.5rem; }
+
+        /* ---- The sheet, on a phone ------------------------------------------
+           A hymn IS its sheet music, and on a phone every box it sits inside is
+           charged to the width of the staves. The page gutter, the version
+           card's padding and the frame around the page were 32 + 24 + 12 a side
+           — 140px of the 390 a phone has, so the sheet drew at 250 and the
+           words under the notes could not be read (MS-674).
+
+           The card keeps its padding, because a card with none stops reading as
+           one. The frame around the page does not: the sheet is already a white
+           rectangle with its own hairline, so that frame was drawing a second
+           border a hair outside the first. It goes, and the sheet gets the
+           width back. */
+        @media (max-width: 767px) {
+            .hymn-version { padding: var(--space-sm); }
+            .hymn-sheet { border: 0; padding: 0; }
+        }
+        html.shell-mobile main { padding-left: 1rem; padding-right: 1rem; }
+        html.shell-mobile .hymn-version { padding: var(--space-sm); }
+        html.shell-mobile .hymn-sheet { border: 0; padding: 0; }
     </style>
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
@@ -68,10 +85,7 @@
         </div>
     </header>
 
-    <main class="flex-grow w-full max-w-5xl mx-auto px-margin py-md flex flex-col gap-md">
-        <p x-show="notice" x-text="notice" role="status"
-           class="font-body-md text-body-md text-on-surface-variant"></p>
-
+    <main class="flex-grow w-full max-w-5xl mx-auto px-4 md:px-margin py-md flex flex-col gap-md">
         <section x-show="view === 'list'" class="flex flex-col gap-md">
             <label class="m-search w-full">
                 <span class="material-symbols-outlined">search</span>
@@ -126,10 +140,6 @@
             <p x-show="missing" class="font-body-md">That hymn is not in the book.</p>
             <template x-if="hymn">
                 <div class="flex flex-col gap-md">
-                    <button type="button" class="hymn-shell-back m-back self-start" @click="leaveView()" aria-label="Hymns">
-                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-                        <span class="m-back__label">Hymns</span>
-                    </button>
                     <div class="flex flex-wrap gap-2">
                         <button type="button" @click="copyAttribution()" class="m-btn m-btn--secondary m-btn--sm">
                             <span class="m-btn__label">Copy attribution</span>
@@ -145,7 +155,7 @@
                        x-text="[hymn.lyrics_writer ? 'Words: ' + hymn.lyrics_writer : '', hymn.music_writer ? 'Music: ' + hymn.music_writer : ''].filter(Boolean).join(' · ')"></p>
                     <p class="font-body-md" x-show="hymn.attribution" x-text="hymn.attribution"></p>
                     <template x-for="(version, vIndex) in (hymn.versions || [])" :key="vIndex">
-                        <article class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                        <article class="hymn-version bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <h2 class="font-headline-md text-headline-md text-primary" x-text="version.name || 'Version'"></h2>
                                 <span x-show="prints(vIndex)" class="font-label-md text-label-md text-primary">This version prints</span>
@@ -156,7 +166,7 @@
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
                                 <template x-for="(pageUrl, pIndex) in pagesOf(version)" :key="pageUrl + pIndex">
-                                    <div class="flex flex-col gap-sm border border-outline-variant rounded-lg p-sm">
+                                    <div class="hymn-sheet flex flex-col gap-sm border border-outline-variant rounded-lg p-sm">
                                         <img :src="pageUrl" :alt="(version.name || 'Version') + ' page ' + (pIndex + 1)"
                                              class="w-full object-contain bg-white border border-surface-variant" style="max-height: 70vh;">
                                         <button type="button" class="m-btn m-btn--secondary m-btn--sm"
@@ -261,6 +271,13 @@
             </form>
         </template>
     </main>
+
+    <!-- Said at the foot and gone in a moment, not written into the top of the
+         page. role="status" so a screen reader still hears it. -->
+    <div x-show="notice" x-transition x-cloak role="status"
+         class="m-toast whitespace-normal text-center"
+         :class="noticeIsBad ? 'm-toast--error' : ''"
+         x-text="notice"></div>
 
     <div x-show="cropModal.open" x-cloak @click.stop
          class="fixed inset-0 bg-primary/20 z-[110] flex items-center justify-center p-md">

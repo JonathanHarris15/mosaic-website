@@ -302,10 +302,14 @@
 
     var btn = document.createElement("button");
     btn.type = "button";
+    btn.id = "mobile-shell-header-lead";
     btn.setAttribute("aria-label", isMenu ? "Menu" : "Back");
     btn.style.cssText = "width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--on-surface);cursor:pointer;border-radius:10px;padding:0;";
     btn.innerHTML = isMenu ? MENU : CHEVRON;
     btn.addEventListener("click", function () {
+      // A page that has moved into a sub-view owns this button while it is
+      // there — see setMobileHeaderBack below.
+      if (leaveSubView) { leaveSubView(); return; }
       if (cfg.onBack) { document.dispatchEvent(new CustomEvent("mobile-header:back")); return; }
       // A hamburger opens a drawer OVER THE PAGE YOU ARE ON. Navigating to the
       // app's home screen to borrow its drawer moved the ground under you —
@@ -348,6 +352,43 @@
   window.setMobileHeaderTitle = function (t) {
     var el = document.getElementById("mobile-shell-header-title");
     if (el) el.textContent = t || "";
+  };
+
+  // ── One page, several screens ───────────────────────────────────────────────
+  //
+  // Hymns is a list, then the hymn you opened, then the form — one document
+  // wearing three faces. The bar's left button is drawn once, from MOBILE_HEADER,
+  // so on the list it is rightly a hamburger and it stays a hamburger after you
+  // open a hymn, leaving the page to draw its own way back somewhere in the
+  // content. That is two pieces of chrome saying different things about where
+  // you are, and the one in the content is the one nobody looks for.
+  //
+  // So a page hands the button over while it is inside a sub-view:
+  //
+  //   setMobileHeaderBack(() => this.backToList());   // ‹  while inside
+  //   setMobileHeaderBack(null);                      // hamburger again
+  //
+  // `label` names WHERE IT GOES, the way a BackLink's does, and becomes the
+  // button's accessible name. Nothing changes for a page that never calls this.
+  var leaveSubView = null;
+  var restoreGlyph = null;
+  var restoreLabel = null;
+
+  window.setMobileHeaderBack = function (handler, label) {
+    var el = document.getElementById("mobile-shell-header-lead");
+    if (!el) return;
+    if (restoreGlyph === null) {
+      restoreGlyph = el.innerHTML;
+      restoreLabel = el.getAttribute("aria-label");
+    }
+    leaveSubView = typeof handler === "function" ? handler : null;
+    if (leaveSubView) {
+      el.innerHTML = CHEVRON;
+      el.setAttribute("aria-label", label || "Back");
+    } else {
+      el.innerHTML = restoreGlyph;
+      el.setAttribute("aria-label", restoreLabel || "Back");
+    }
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", build);

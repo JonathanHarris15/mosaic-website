@@ -20,3 +20,9 @@ html.shell-mobile #auth-container {
 html.shell-mobile body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* A Toast is fixed to the viewport, so the padding above cannot reach it — on a
+   phone with a home indicator its bottom: 24px puts it half under the bar. */
+html.shell-mobile .m-toast {
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
