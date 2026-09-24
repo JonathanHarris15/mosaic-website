@@ -41,7 +41,7 @@ test('M.ui.Body renders m-bottom-buffer with safe-area bottom calculation by def
     const out = render(h(Body, null, h('p', null, 'Hello World')));
 
     assert.match(out, /class="m-bottom-buffer"/, 'Body must render m-bottom-buffer spacer');
-    assert.match(out, /calc\(24px \+ env\(safe-area-inset-bottom, 0px\)\)/, 'm-bottom-buffer must calculate safe area bottom inset');
+    assert.doesNotMatch(out, /m-bottom-buffer[^>]*style=/, 'm-bottom-buffer height lives in mobile.html CSS, not inline on Body');
     assert.match(out, /aria-hidden="true"/, 'm-bottom-buffer should be aria-hidden');
 });
 
@@ -80,8 +80,10 @@ test('HomeScreen provides a bottom buffer in both web and native app modes', () 
     assert.match(nativeOut, /m-bottom-buffer/, 'Native app must have m-bottom-buffer');
 });
 
-test('CareList list container includes bottom safe-area buffer spacer', () => {
+test('CareList scroll area ends with the shared m-bottom-buffer spacer', () => {
     const careListSrc = fs.readFileSync(path.join(PUBLIC, 'mobile/screens-carelist.js'), 'utf8');
-    assert.match(careListSrc, /calc\(24px \+ env\(safe-area-inset-bottom, 0px\)\)/,
-        'CareList list must include bottom buffer with safe area inset');
+    const scrollClose = careListSrc.indexOf('class="m-bottom-buffer"');
+    assert.ok(scrollClose !== -1, 'CareList must render m-bottom-buffer in its scroll container');
+    const beforeOverlay = careListSrc.indexOf('colPickerS[0]', scrollClose);
+    assert.ok(beforeOverlay > scrollClose, 'm-bottom-buffer must sit inside the list scroll area before overlays');
 });

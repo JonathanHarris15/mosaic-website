@@ -668,7 +668,7 @@
                 </div>
               </div>`;
             })}
-          <div style=${{ height: "calc(24px + env(safe-area-inset-bottom, 0px))", flexShrink: 0, pointerEvents: "none" }} aria-hidden="true"></div>
+          <div class="m-bottom-buffer" aria-hidden="true"></div>
         </div>
 
         ${colPickerS[0] ? html`<${Fragment}>

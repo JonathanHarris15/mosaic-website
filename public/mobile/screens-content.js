@@ -461,7 +461,7 @@
             : !mayOpen ? html`<${ErrorNote}>The directory isn't available on your account yet. Ask an admin to connect you.<//>`
             : st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
             <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} People<//></div>
-            <div style=${{ padding: "8px 16px 90px" }}>
+            <div style=${{ padding: "8px 16px 66px" }}>
               <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
                 ${results.map(function (p, i) {
                   var s = statusTone(p.shepherding);
@@ -1239,7 +1239,7 @@
 
         <${Body}>
           ${st.loading ? html`<${Loading} label="Loading services…" />` : st.error ? html`<${ErrorNote}>Couldn't load services.<//>` : html`
-            <div style=${{ padding: view === "List" ? "8px 16px 96px" : "8px 0 96px" }}>
+            <div style=${{ padding: view === "List" ? "8px 16px 72px" : "8px 0 72px" }}>
               ${grouped.map(function (yg) { return html`
                 <div key=${yg.year} id=${"cal-y-" + yg.year}>
                   <h2 style=${{ margin: view === "List" ? "14px 0 8px" : "14px 16px 8px", paddingBottom: 6, borderBottom: "1px solid var(--outline-variant)", fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--primary)" }}>${yg.year}</h2>
