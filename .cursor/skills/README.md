@@ -32,5 +32,6 @@ Jira calls use **Atlassian MCP** on Cursor Cloud Agents. Mosaic board override: 
 | `wizard` | Guided script |
 | `writing-for-agents` | Writing style |
 | `sync-config` | Sync the claude-config git remote |
+| `jev-smoke-test` | Pre-PR UI smoke via local fastbrowse + Jev |
 
 Grok Bot’s skill library is out of scope.
