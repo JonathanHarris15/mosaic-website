@@ -1027,6 +1027,14 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
 }
 
+/* ⚠ EVERY SELECTOR BELOW IS SCOPED TO .m-header, AND TWO OF THEM ONCE WERE
+   NOT. .m-back__label and .m-btn__label are slots, not header parts — a
+   Button anywhere on the page carries one. Written bare inside this query they
+   hid the word out of EVERY button in the document under 640px, so on a phone
+   the app drew rows of blank tan pills with no label and no icon in them: the
+   page still worked and simply stopped saying what any of its buttons did.
+   Collapsing a control to a square glyph is a thing a HEADER does to make room
+   for the title; it is never a thing to do to the page (MS-674). */
 @media (max-width: 640px) {
   .m-header {
     --m-header-h: 46px; --m-header-pad: var(--space-xs);
@@ -1034,8 +1042,9 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     --m-header-title-track: .06em; --m-header-title-transform: uppercase;
   }
   .m-header__inner { gap: var(--space-xs); }
-  .m-header__sub, .m-header__crumbs, .m-back__label, .m-btn__label, .m-header__rule { display: none; }
-  .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
+  .m-header__sub, .m-header__crumbs, .m-header__rule { display: none; }
+  .m-header .m-back__label, .m-header .m-btn__label { display: none; }
+  .m-header .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
   .m-header__actions { gap: 2px; }
   .m-header__title--serif { letter-spacing: .01em; }
   .m-header__actions .m-btn {
