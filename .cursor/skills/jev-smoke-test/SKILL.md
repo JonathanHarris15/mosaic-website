@@ -9,24 +9,38 @@ description: Smoke-test UI changes with fastbrowse (local Jev + headless Chrome)
 
 **Never** smoke-test production with a real login. Use the Firebase Hosting emulator (`http://localhost:5005`, see `.cursor/environment.json`) or a **preview** URL only.
 
+If this file is missing in your checkout, the environment snapshot is stale — run `git fetch origin main` and read `.cursor/skills/jev-smoke-test/SKILL.md` from `origin/main` before proceeding.
+
 ## Install
 
 Python **3.13+** is pulled by `uv` when needed.
 
-```bash
-# Preferred: install the CLI as a uv tool
-uv tool install fastbrowse
+Install `uv` in this order (stop at the first method that yields a working `uv` on `PATH`):
 
-# One-off without installing
-uvx fastbrowse --help
+1. Use an existing `uv` if `command -v uv` succeeds.
+2. `pip install --user uv`
+3. `pipx install uv`
+
+After (2) or (3), ensure user-local tools are on `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-If `uv` is missing:
+If none of the above works, **skip** the smoke test, do not fail the task, and note in the PR body: `jev smoke test skipped: uv unavailable`.
+
+Then install fastbrowse:
 
 ```bash
-pip install --user uv
-# or: pipx install uv
-export PATH="$HOME/.local/bin:${PATH:-}"
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install fastbrowse
+```
+
+One-off without installing:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+uvx fastbrowse --help
 ```
 
 Chrome or Chromium must be on `PATH`, or set:
@@ -49,7 +63,7 @@ Cloud Agent bootstrap may install `fastbrowse` opportunistically via `.cursor/in
 - **Do not** use `BROWSER_USE_API_KEY` or any cloud browser integration.
 - **Always** pass `--local` on every `fastbrowse` invocation.
 
-## Skip when keys are absent
+## Skip when keys or tooling are absent
 
 If `OPENROUTER_API_KEY` is unset, **or** neither `AI_GATEWAY_API_KEY` nor `TYPESAFE_API_KEY` is set:
 
@@ -59,17 +73,27 @@ If `OPENROUTER_API_KEY` is unset, **or** neither `AI_GATEWAY_API_KEY` nor `TYPES
 
    `jev smoke test skipped: key(s) absent`
 
+If `uv` cannot be installed (see Install) or `fastbrowse` is not available after install attempts, skip and add:
+
+`jev smoke test skipped: uv unavailable`
+
 Shell guard (use before running fastbrowse):
 
 ```bash
-jev_smoke_ready() {
-  if [ -z "${OPENROUTER_API_KEY:-}" ]; then return 1; fi
-  if [ -z "${AI_GATEWAY_API_KEY:-}" ] && [ -z "${TYPESAFE_API_KEY:-}" ]; then return 1; fi
-  return 0
+export PATH="$HOME/.local/bin:$PATH"
+
+jev_keys_ready() {
+  [ -n "${OPENROUTER_API_KEY:-}" ] && { [ -n "${AI_GATEWAY_API_KEY:-}" ] || [ -n "${TYPESAFE_API_KEY:-}" ]; }
 }
 
-if ! jev_smoke_ready; then
+jev_tooling_ready() {
+  command -v fastbrowse >/dev/null 2>&1 || command -v uv >/dev/null 2>&1
+}
+
+if ! jev_keys_ready; then
   echo "jev smoke test skipped: key(s) absent"
+elif ! jev_tooling_ready; then
+  echo "jev smoke test skipped: uv unavailable"
 else
   # run fastbrowse (see below)
 fi
@@ -81,12 +105,27 @@ fi
 - **Before** creating or updating the PR.
 - Write **1–3 targeted natural-language tasks** per changed screen (happy path + one edge case if useful). Do not run a single vague “check the app” task.
 
+## Local hosting emulator
+
+For hosting-only smoke tests, do **not** use a `demo-*` project id — `.firebaserc` only defines hosting targets for `mosaic-hymn-database` and `mosaic-manager-ghost`, so a demo project fails to start Hosting.
+
+From the repo root (after `npm ci` in root and `functions/`):
+
+```bash
+npx firebase emulators:start --only hosting --project mosaic-hymn-database
+```
+
+Hosting listens on port **5005** (see `.cursor/environment.json`). This mode serves **static files from `public/` only**; it does not write production Firestore or other live backend data. Keep checks **read-only** with **no login**.
+
+If the emulator is impractical, use a Firebase Hosting **preview** URL for the branch as the fallback `--start` URL.
+
 ## Running the smoke test
 
-1. Serve the page locally (`firebase emulators:start` → Hosting on port **5005**) **or** use a Firebase Hosting **preview** URL for the branch.
+1. Start local Hosting (command above) **or** use a preview URL.
 2. Run headless, local, with a tight budget:
 
 ```bash
+export PATH="$HOME/.local/bin:$PATH"
 fastbrowse "Confirm the page loads and shows <expected text or element>" \
   --start "http://localhost:5005/<path>" \
   --local \
@@ -104,6 +143,10 @@ Replace `--start` with a preview URL when the emulator is not running.
 
 On failure, fix the UI or tighten the task; do not open the PR claiming the smoke passed.
 
+### Verified reference (sanity check)
+
+A Cloud Agent trial on **fastbrowse 0.5.3** against the local Hosting emulator reported: **exit 0**, JSON **`status`: `complete`**, cost **~$0.005**, wall time **~10s**. Use that as a ballpark for a single read-only page check; your run may differ slightly.
+
 ### PR body evidence
 
 When smoke runs, add to the PR **test evidence** section:
@@ -112,7 +155,7 @@ When smoke runs, add to the PR **test evidence** section:
 - Final `status` from JSON.
 - **Quoted** excerpts from the result that cite what was seen on the page (headings, labels, visible copy).
 
-When skipped, use the single line: `jev smoke test skipped: key(s) absent`.
+When skipped, use the exact skip line from the sections above (`key(s) absent` or `uv unavailable`).
 
 ## Safety rules (mandatory)
 
@@ -122,7 +165,9 @@ When skipped, use the single line: `jev smoke test skipped: key(s) absent`.
 - Keep `--max-dollars` small (e.g. `0.10`).
 - **Always** `--local`.
 
-## Emulator reminder
+## Emulator ports (full suite)
+
+When you need more than static Hosting, the full emulator set uses:
 
 | Service | Port |
 | --- | --- |
@@ -132,4 +177,4 @@ When skipped, use the single line: `jev smoke test skipped: key(s) absent`.
 | Auth | 9099 |
 | Emulator UI | 4000 |
 
-Start emulators from the repo root after `npm ci` in root and `functions/`; use a demo Firebase project id so a mistake cannot touch production data.
+For jev smoke tests, prefer `--only hosting` with `--project mosaic-hymn-database` unless the changed UI truly requires Functions or emulated Auth.
