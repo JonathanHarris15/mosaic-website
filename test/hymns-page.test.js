@@ -213,7 +213,8 @@ test('on a phone the hymn list filters by a tag menu instead of a pill cloud', (
     const cloudAt = page.indexOf('class="hymn-tag-cloud"');
     assert.ok(filterAt !== -1, 'phone tag menu');
     assert.ok(cloudAt !== -1, 'desktop tag cloud');
-    const filter = page.slice(filterAt, cloudAt);
+    const filterEnd = page.indexOf('</div>', page.indexOf('x-for="tag in selectedTags"', filterAt)) + 6;
+    const filter = page.slice(filterAt, filterEnd);
     const cloud = page.slice(cloudAt, page.indexOf('filteredHymns.length', cloudAt));
     assert.match(filter, /aria-label="Filter by tag"/);
     assert.match(filter, /<select/);
@@ -229,17 +230,22 @@ test('on a phone the hymn list filters by a tag menu instead of a pill cloud', (
     assert.match(page, /\.hymn-tag-filter\s*\{[^}]*display:\s*flex/);
 });
 
-test('on a computer the tags sit in a card to the left of the hymn list', () => {
+test('on a computer the tags sit outside the central column, left of the hymn list', () => {
     const page = read('hymns.html');
-    const splitAt = page.indexOf('class="hymn-list-layout"');
+    const shellAt = page.indexOf('class="hymn-list-shell"');
     const cloudAt = page.indexOf('class="hymn-tag-cloud"');
-    const listAt = page.indexOf('class="hymn-list-main"');
-    assert.ok(splitAt !== -1, 'two-column list layout');
-    assert.ok(cloudAt !== -1 && cloudAt > splitAt, 'tag card is inside the split');
-    assert.ok(listAt !== -1 && listAt > cloudAt, 'hymn list sits to the right of the tags');
+    const columnAt = page.indexOf('class="hymn-list-column"');
+    const searchAt = page.indexOf('class="m-search w-full"');
+    assert.ok(shellAt !== -1, 'list shell');
+    assert.ok(cloudAt !== -1 && cloudAt > shellAt, 'tag card is in the shell');
+    assert.ok(columnAt !== -1 && columnAt > cloudAt, 'search and hymns sit in the central column');
+    assert.ok(searchAt !== -1 && searchAt > columnAt, 'search is inside the central column, not beside the tags');
     assert.match(page, /class="hymn-tag-card"/);
     assert.match(page, /class="hymn-tag-chip"/);
-    assert.match(page, /@media \(min-width: 768px\)[\s\S]*\.hymn-list-layout[\s\S]*flex-direction:\s*row/);
+    assert.match(page, /hymn-list-shell--with-tags/);
+    assert.match(page, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*64rem\)\s+minmax\(0,\s*1fr\)/);
+    assert.match(page, /justify-self:\s*end/);
+    assert.doesNotMatch(page, /hymn-list-layout/);
     assert.doesNotMatch(page, /hymn-tag-cloud flex flex-wrap/);
 });
 
