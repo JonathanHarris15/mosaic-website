@@ -62,9 +62,10 @@ test('what we say about a reset is account-recovery-core\'s to decide', () => {
 
 test('signing in does not leave the sign-in screen in the back stack', () => {
     // Pushed rather than replaced, one back gesture after signing in put you in
-    // front of the sign-in screen again, signed in.
-    assert.match(APP, /nav\("login", null, \{ replace: true \}\)/,
-        'the signed-out redirect pushes a history entry');
-    assert.match(LOGIN, /props\.nav\("home", null, \{ replace: true \}\)/,
-        'signing in pushes home on top of login instead of replacing it');
+    // front of the sign-in screen again, signed in. Both moves — signed out
+    // onto login, and the profile arriving off it — go through the same
+    // replace. See phone-session-route.test.js for why signing in itself
+    // does not walk to home.
+    assert.match(APP, /nav\(next, null, \{ replace: true \}\)/,
+        'the session redirect pushes a history entry');
 });

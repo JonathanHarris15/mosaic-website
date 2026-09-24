@@ -13,6 +13,10 @@ android/local.properties
 *.p8
 mobile-release.local.json
 
+# Firebase native app configs (downloaded from the console; not invented in git)
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+
 # In-project secrets folder (keystore + ASC key — never commit)
 Secrets/
 

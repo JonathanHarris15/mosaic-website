@@ -69,6 +69,9 @@
   <!-- What we say to somebody signing up or resetting a forgotten password —
        the same wording, and the same no-enumeration rule, as the web login page. -->
   <script src="account-recovery-core.js"></script>
+  <!-- Signed out → login, signed in → leave login. One decision so signing
+       in cannot race the signed-out redirect. -->
+  <script src="phone-session-route.js"></script>
   <!-- Shepherding Status value model + Tag-Hold logic (single source of truth,
        shared with the desktop pages). Used by the native Shepherd Dashboard. -->
   <script src="shepherding-core.js"></script>

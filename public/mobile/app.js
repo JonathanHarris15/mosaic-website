@@ -143,7 +143,7 @@
       busyS[1](true);
       var run = signup ? data.signUp : data.signIn;
       run(emailS[0].trim(), pwS[0])
-        .then(function () { busyS[1](false); props.nav("home", null, { replace: true }); })
+        .then(function () { /* stay busy; App leaves login when the profile lands */ })
         .catch(function (err) { busyS[1](false); errS[1]((signup ? signUpMessage : signInMessage)(err)); });
     }
 
@@ -469,13 +469,14 @@
       });
     }, []);
 
-    // `undefined` is still loading; only `null` is a decision. Redirecting on
-    // the loading value would bounce a signed-in person off their own home
-    // screen for the half-second before Firebase restores the session.
+    // `undefined` is still loading; only `null` is a decision. Signing in
+    // used to go to home while the profile was still null, and this effect
+    // sent you straight back to login. The rule lives in phone-session-route.js
+    // so that cannot happen: login is left *because* the profile arrived.
     useEffect(function () {
-      if (userState[0] !== null) return;
-      if (isGuest() || routeState[0] === "login") return;
-      nav("login", null, { replace: true });
+      var next = window.PhoneSessionRoute.next(
+        userState[0], routeState[0], isGuest());
+      if (next && next !== routeState[0]) nav(next, null, { replace: true });
     });
     useEffect(function () {
       function onHash() {

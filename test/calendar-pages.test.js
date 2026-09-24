@@ -3475,11 +3475,14 @@ test('the phone app sends a signed-out person to sign in', () => {
     // It REPLACES the entry rather than pushing one — otherwise the sign-in
     // screen stays in the back stack and one back gesture after signing in puts
     // you in front of it again. See mobile-login-doors.test.js.
-    assert.ok(/nav\("login"/.test(app), 'nothing ever routes to the login screen');
+    assert.ok(/nav\(next, null, \{ replace: true \}\)/.test(app),
+        'the signed-out redirect pushes a history entry');
     // `undefined` is still loading. Redirecting on it bounces a signed-in person
-    // off their own home screen while Firebase restores the session.
-    assert.ok(/userState\[0\] !== null\) return/.test(app),
-        'the redirect fires on the loading value, not on a decision');
+    // off their own home screen while Firebase restores the session. The
+    // decision is phone-session-route.js — one place, so signing in cannot
+    // race this redirect.
+    assert.ok(/PhoneSessionRoute\.next/.test(app),
+        'the redirect decides for itself again, instead of asking the session rule');
 });
 
 test('"continue as guest" is a choice, not a bounce', () => {
@@ -3488,7 +3491,7 @@ test('"continue as guest" is a choice, not a bounce', () => {
     const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
     assert.ok(/setGuest\(true\); props\.nav\("home"\)/.test(app),
         'choosing guest is not remembered, so the redirect undoes it');
-    assert.ok(/if \(isGuest\(\) \|\| routeState\[0\] === "login"\) return/.test(app),
+    assert.ok(/PhoneSessionRoute\.next\(\s*userState\[0\], routeState\[0\], isGuest\(\)/.test(app),
         'the redirect ignores a guest who already chose');
     // And signing in, or out, must not leave the flag behind.
     assert.ok(/if \(u\) setGuest\(false\)/.test(app), 'signing in leaves the guest flag set');
