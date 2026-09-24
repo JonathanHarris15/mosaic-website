@@ -33,7 +33,7 @@ Then install fastbrowse:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install fastbrowse
+uv tool install fastbrowse==0.5.3
 ```
 
 One-off without installing:
@@ -58,6 +58,12 @@ Cloud Agent bootstrap may install `fastbrowse` opportunistically via `.cursor/in
 | Jev (browser agent) | `AI_GATEWAY_API_KEY` | Vercel AI Gateway |
 | Jev (alternate) | `TYPESAFE_API_KEY` | [TypeSafe console](https://console.typesafe.ai) |
 | Planner / reader LLM | `OPENROUTER_API_KEY` | Required for fastbrowse’s planner |
+
+### Optional: cheaper OpenRouter model (smoke runs)
+
+fastbrowse **0.5.3** defaults (via OpenRouter): `google/gemini-3.8-flash` with `low` reasoning for RECOVER, READ, VERIFY, and COMPOSE (~$0.75/M input, $3.75/M output); `google/gemini-3.5-flash-lite` for PLAN, FIELD_TEXT, and SHORTCUT. Override with `FASTBROWSE_LLM_MODEL` (all purposes) or per-purpose `FASTBROWSE_LLM_MODEL_RECOVER`, `_READ`, `_VERIFY`, `_COMPOSE`, `_PLAN`, `_FIELD_TEXT`, `_SHORTCUT`.
+
+Measured on the standard hymn task against `https://mosaic-hymn-database.web.app` (3 runs each, read-only): default median ~$0.014/run and ~16s wall time; **`openai/gpt-6-luna`** via `FASTBROWSE_LLM_MODEL` was **3/3** correct at median ~**$0.006** (~57% cheaper) and ~18s (not meaningfully slower). All-purpose `google/gemini-3.5-flash-lite` was also 3/3 (~$0.009, ~12s). `qwen/qwen3.8-flash`, `deepseek/deepseek-v4.1-flash`, and `z-ai/glm-5.3-flash` were not reliable enough for this task.
 
 - Read keys from the environment only. **Never** put keys in git, skills, PRs, or shell history in commits.
 - **Do not** use `BROWSER_USE_API_KEY` or any cloud browser integration.
@@ -126,6 +132,9 @@ If the emulator is impractical, use a Firebase Hosting **preview** URL for the b
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+# Optional: cheaper all-purpose OpenRouter model (see API keys section)
+export FASTBROWSE_LLM_MODEL=openai/gpt-6-luna
+
 fastbrowse "Confirm the page loads and shows <expected text or element>" \
   --start "http://localhost:5005/<path>" \
   --local \
