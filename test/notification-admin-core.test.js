@@ -189,17 +189,16 @@ test('a page cursor survives the round trip, and junk reads as no cursor', () =>
 
 test('every purpose the functions write has a row in the registry', () => {
     const written = new Set();
-    const files = fs.readdirSync(path.join(ROOT, 'functions'))
-        .filter((name) => name.endsWith('.js'));
-    files.concat(['../public/event-tell-core.js']).forEach((name) => {
-        const at = name.startsWith('..') ?
-            path.join(ROOT, 'functions', name) : path.join(ROOT, 'functions', name);
-        const src = fs.readFileSync(at, 'utf8');
-        const re = /purpose:\s*["'`]([a-z_]+)["'`]/g;
-        let match;
-        while ((match = re.exec(src)) !== null) written.add(match[1]);
-    });
-    // event-tell-core.js names its purpose through a constant.
+    fs.readdirSync(path.join(ROOT, 'functions'))
+        .filter((name) => name.endsWith('.js'))
+        .forEach((name) => {
+            const src = fs.readFileSync(path.join(ROOT, 'functions', name), 'utf8');
+            const re = /purpose:\s*["'`]([a-z_]+)["'`]/g;
+            let match;
+            while ((match = re.exec(src)) !== null) written.add(match[1]);
+        });
+    // event-tell-core.js names its purpose through a constant, so the scan
+    // above cannot see it. Ask the module.
     written.add(require('../public/event-tell-core.js').PURPOSE);
 
     const known = new Set(core.NOTIFICATION_TYPES.map((type) => type.purpose));
