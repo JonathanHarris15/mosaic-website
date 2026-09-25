@@ -14,7 +14,6 @@ const admin = require("firebase-admin");
 const firebaseProject = require("./firebase-project.json");
 const {
   toE164US,
-  isAdminPermissionLevel,
   interpretQuota,
   interpretSend,
   parseInboundReply,
@@ -85,7 +84,13 @@ const guidanceCore = require("./shared/mcp-guidance-core.js");
 const {
   assertCanDecide: assertCanDecideCore,
   assertWritesAsEditor: assertWritesAsEditorCore,
+  assertIsAdmin: assertIsAdminCore,
 } = require("./access-assert");
+// The Admin Dashboard's Push notifications tab (MS-682). Reads the Device
+// tokens the rules keep from every client and the notifications log, and
+// hands back shapes that carry no whole token. Pure but for the deps built
+// below, the same split as notifierDeps.
+const na = require("./notification-admin");
 
 /**
  * AccessCore canDecide for a callable. The core throws a plain Error with
@@ -2173,21 +2178,27 @@ exports.syncAccountRankToPerson = onDocumentWritten(
 /**
  * Throws unless the authenticated caller is an admin/super_admin. The
  * Admin Dashboard is admin-only, but callable functions are reachable
- * directly, so the SMS tools re-check the role server-side rather than
+ * directly, so its tools re-check the role server-side rather than
  * trusting the UI gate.
+ *
+ * The question itself lives in access-assert.js, where the root unit suite
+ * can ask it without firebase-functions; this maps its refusal onto
+ * HttpsError so the browser still sees the Firebase code.
+ *
  * @param {Object} db Firestore instance.
  * @param {Object} authCtx request.auth
+ * @param {string} [what] what the caller was reaching for
  * @return {Promise<void>}
  */
-async function assertAdmin(db, authCtx) {
-  if (!authCtx) {
-    throw new HttpsError("unauthenticated", "Sign in to use the SMS tools.");
-  }
-  const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  if (!callerDoc.exists ||
-      !isAdminPermissionLevel(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
-    throw new HttpsError("permission-denied", "Admins only.");
+async function assertAdmin(db, authCtx, what) {
+  try {
+    await assertIsAdminCore(db, authCtx, what);
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
   }
 }
 
@@ -2338,6 +2349,285 @@ function notifierDeps(db) {
 function tell(db, request) {
   return notify.tellPerson(notifierDeps(db), request);
 }
+
+/* ------------------------------------------------------------------ *
+ * Push notifications tab (MS-682) — the Admin Dashboard's view of the
+ * send path. The decisions live in notification-admin.js; this is the
+ * Firestore half, built the same way notifierDeps is, and it borrows
+ * that one's provider call and log writer so a self-test push goes out
+ * by exactly the code a real send goes out by.
+ * ------------------------------------------------------------------ */
+
+/**
+ * One log row as notification-admin.js wants it: the data, a Date, and a
+ * cursor the browser can hold. A Firestore Timestamp does not survive the
+ * callable boundary; seconds-and-nanos does.
+ * @param {Object} doc a QueryDocumentSnapshot
+ * @return {Object}
+ */
+function shapeNotificationRow(doc) {
+  const data = doc.data() || {};
+  const stamp = data.createdAt;
+  const at = stamp && typeof stamp.toDate === "function" ?
+    stamp.toDate() : null;
+  return Object.assign({}, data, {
+    id: doc.id,
+    createdAt: at,
+    cursor: stamp && typeof stamp.seconds === "number" ? {
+      seconds: stamp.seconds,
+      nanoseconds: typeof stamp.nanoseconds === "number" ?
+        stamp.nanoseconds : 0,
+    } : null,
+  });
+}
+
+/**
+ * Every Device token in the church, with the uid that holds it. The token
+ * string exists only inside this process; notification-admin.js masks it
+ * before anything is returned.
+ * @param {Object} db Firestore instance.
+ * @return {Promise<Array<Object>>}
+ */
+async function listAllDeviceTokens(db) {
+  const snap = await db.collectionGroup("push_tokens").get();
+  return snap.docs.map((doc) => {
+    const parent = doc.ref.parent && doc.ref.parent.parent;
+    const data = doc.data() || {};
+    const seen = data.updatedAt;
+    return {
+      uid: parent ? parent.id : "",
+      id: doc.id,
+      token: data.token || "",
+      platform: data.platform || "unknown",
+      updatedAt: seen && typeof seen.toDate === "function" ?
+        seen.toDate() : null,
+    };
+  });
+}
+
+/**
+ * Who each uid is, in the words an admin reads: the linked Person's name
+ * when there is one, and the account's email either way.
+ * @param {Object} db Firestore instance.
+ * @param {Array<string>} uids
+ * @return {Promise<Array<Object>>}
+ */
+async function loadTokenOwners(db, uids) {
+  const wanted = (uids || []).filter((uid) => !!uid);
+  if (!wanted.length) return [];
+
+  const owners = new Map();
+  wanted.forEach((uid) => owners.set(uid, {uid, personId: null, name: "",
+    email: ""}));
+
+  // `in` takes thirty at a time, and a church of any size fits in a
+  // handful of round trips.
+  for (let i = 0; i < wanted.length; i += 30) {
+    const chunk = wanted.slice(i, i + 30);
+    const snap = await db.collection("people")
+        .where("userId", "in", chunk).get();
+    snap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      const owner = owners.get(data.userId);
+      if (!owner || owner.personId) return;
+      owner.personId = doc.id;
+      owner.name = data.name || "";
+    });
+  }
+
+  const userSnaps = await db.getAll(
+      ...wanted.map((uid) => db.collection("users").doc(uid)));
+  userSnaps.forEach((snap) => {
+    const owner = owners.get(snap.id);
+    if (owner && snap.exists) owner.email = (snap.data() || {}).email || "";
+  });
+
+  return wanted.map((uid) => owners.get(uid));
+}
+
+/**
+ * Firestore for the Push notifications tab.
+ * @param {Object} db Firestore instance.
+ * @return {Object}
+ */
+function notificationAdminDeps(db) {
+  const notifier = notifierDeps(db);
+  const logRef = () => db.collection(NOTIFICATIONS_COLLECTION);
+
+  return {
+    now: () => new Date(),
+
+    readLogSince: async (since, limit) => {
+      const snap = await logRef()
+          .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(since))
+          .orderBy("createdAt", "desc")
+          .limit(limit)
+          .get();
+      return snap.docs.map(shapeNotificationRow);
+    },
+
+    readLogPage: async ({limit, before}) => {
+      let query = logRef().orderBy("createdAt", "desc");
+      if (before) {
+        query = query.startAfter(new admin.firestore.Timestamp(
+            before.seconds, before.nanoseconds));
+      }
+      const snap = await query.limit(limit).get();
+      return snap.docs.map(shapeNotificationRow);
+    },
+
+    namesFor: async (ids) => {
+      const out = {};
+      if (!ids || !ids.length) return out;
+      const snaps = await db.getAll(
+          ...ids.map((id) => db.collection("people").doc(id)));
+      snaps.forEach((snap) => {
+        if (snap.exists) out[snap.id] = (snap.data() || {}).name || "";
+      });
+      return out;
+    },
+
+    listTokens: () => listAllDeviceTokens(db),
+
+    loadOwners: (uids) => loadTokenOwners(db, uids),
+
+    ownerOf: async (uid) => {
+      const owners = await loadTokenOwners(db, [uid]);
+      return owners[0] || null;
+    },
+
+    tokensFor: (uid) => loadDeviceTokens(db, uid),
+
+    getToken: async (uid, tokenId) => {
+      const snap = await db.collection("users").doc(uid)
+          .collection("push_tokens").doc(tokenId).get();
+      if (!snap.exists) return null;
+      return Object.assign({id: snap.id}, snap.data());
+    },
+
+    deleteToken: notifier.deleteToken,
+    sendPush: notifier.sendPush,
+    writeLog: notifier.writeLog,
+  };
+}
+
+/**
+ * notification-admin.js throws plain Errors carrying an HttpsError code, so
+ * the root unit suite can load it without firebase-functions. Map them.
+ * @param {Error} err
+ * @return {Error} an HttpsError when the code is one
+ */
+function asHttpsError(err) {
+  const known = [
+    "unauthenticated", "permission-denied", "invalid-argument",
+    "failed-precondition", "not-found",
+  ];
+  if (err && known.indexOf(err.code) !== -1) {
+    return new HttpsError(err.code, err.message);
+  }
+  return err;
+}
+
+/**
+ * Everything the Push notifications tab needs before an admin touches a
+ * control: the picture of the send path drawn from notification-core's own
+ * constants, the registry of what the church sends with its recent counts,
+ * and the device list itself. Admin-gated.
+ *
+ * The devices are in here rather than behind a second callable because both
+ * halves want the same two reads — every Device token, and thirty days of
+ * the log. This is also the ONLY way a masked Device token reaches a
+ * browser: `users/{uid}/push_tokens` stays owner-only in the rules
+ * (ADR-0036), and this reads it with the Admin SDK.
+ */
+exports.notificationOverview = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertAdmin(db, request.auth, "the Push notifications tab");
+      try {
+        return await na.overview(notificationAdminDeps(db));
+      } catch (err) {
+        throw asHttpsError(err);
+      }
+    },
+);
+
+/**
+ * One page of the outbound log, newest first, filtered and paged. Admin-
+ * gated. The rules already let an admin read `notifications`; this exists so
+ * the page reads one shape — status, church-local time, recipient name —
+ * rather than re-deriving it in the browser.
+ */
+exports.notificationHistory = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertAdmin(db, request.auth, "the Notification log");
+      try {
+        return await na.history(notificationAdminDeps(db), request.data || {});
+      } catch (err) {
+        throw asHttpsError(err);
+      }
+    },
+);
+
+/**
+ * Take one device off a User. Admin-gated, and the same delete signing out
+ * performs — the next launch with permission writes a fresh token. Refused
+ * unless the call carries `confirm: true`: the page's second press has to be
+ * a fact on the wire, because a callable is reachable without the page.
+ */
+exports.notificationRevokeToken = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertAdmin(db, request.auth, "revoking a device");
+      const data = request.data || {};
+      try {
+        const result = await na.revokeToken(notificationAdminDeps(db), {
+          confirm: data.confirm,
+          uid: data.uid,
+          tokenId: data.tokenId,
+        });
+        log(`notificationRevokeToken: ${request.auth.uid} revoked ` +
+          `${result.tokenId} on ${result.uid} (${result.masked}).`);
+        return result;
+      } catch (err) {
+        throw asHttpsError(err);
+      }
+    },
+);
+
+/**
+ * Push to the signed-in admin's own devices, and nobody else's.
+ *
+ * ⚠ THE PAYLOAD NAMES NOBODY. The address is `request.auth.uid` and nothing
+ * else; the one thing taken off `request.data` is the confirmation, which
+ * cannot aim anything. A uid, a personId, a token or a wording on the
+ * payload is ignored rather than honoured. There is no bulk send on this
+ * page and this is not one — the worst it can do is buzz the phone of the
+ * person who pressed it.
+ */
+exports.notificationTestPush = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      await assertAdmin(db, request.auth, "the test push");
+      try {
+        const result = await na.testPushToSelf(notificationAdminDeps(db), {
+          callerUid: request.auth.uid,
+          confirm: (request.data || {}).confirm,
+        });
+        log(`notificationTestPush: ${request.auth.uid} tried ` +
+          `${result.attempted} device(s), ${result.accepted} accepted, ` +
+          `${result.removed.length} dead token(s) removed.`);
+        return result;
+      } catch (err) {
+        throw asHttpsError(err);
+      }
+    },
+);
 
 /**
  * Reports whether a Textbelt key is configured and how many texts remain.

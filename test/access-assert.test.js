@@ -3,7 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const {assertCanDecide, assertWritesAsEditor} = require('../functions/access-assert.js');
+const {
+    assertCanDecide,
+    assertWritesAsEditor,
+    assertIsAdmin,
+} = require('../functions/access-assert.js');
 
 // MS-594 — sendPrayerRequestNow (and any other canDecide callable) must
 // admit a Pastoral Assistant the same way AccessCore does. Counted-as-elder
@@ -98,6 +102,110 @@ test('sendPrayerRequestNow asks assertCanDecide, not counted-as-elder', () => {
     assert.match(head, /await assertCanDecide\(db, request\.auth\)/);
     assert.doesNotMatch(head, /assertElder/);
     assert.doesNotMatch(src, /async function assertElder/);
+});
+
+// MS-682 — the Push notifications tab reaches other people's Device tokens,
+// which the rules keep from every client. The callables are the only door.
+
+test('an admin and a super admin run the dashboard; nobody else does', async () => {
+    await assertIsAdmin(fakeDb({'uid-1': {permissionLevel: 'admin'}}), {uid: 'uid-1'});
+    await assertIsAdmin(fakeDb({'uid-1': {permissionLevel: 'super_admin'}}), {uid: 'uid-1'});
+    // The legacy `role` field, still written beside permissionLevel (MS-119).
+    await assertIsAdmin(fakeDb({'uid-1': {role: 'admin'}}), {uid: 'uid-1'});
+});
+
+test('an elder, an editor and a Pastoral Assistant are not admins', async () => {
+    const refused = async (account) => {
+        await assert.rejects(
+            () => assertIsAdmin(fakeDb({'uid-1': account}), {uid: 'uid-1'}),
+            (err) => err && err.code === 'permission-denied'
+        );
+    };
+    await refused({permissionLevel: 'elder'});
+    await refused({permissionLevel: 'editor'});
+    await refused({permissionLevel: 'member', pastoralAssistant: true});
+    await refused({permissionLevel: 'viewer'});
+    await refused({});
+});
+
+test('an account that does not exist, and no sign-in at all, are both refused', async () => {
+    await assert.rejects(
+        () => assertIsAdmin(fakeDb({}), {uid: 'ghost'}),
+        (err) => err && err.code === 'permission-denied'
+    );
+    await assert.rejects(
+        () => assertIsAdmin(fakeDb({}), null),
+        (err) => err && err.code === 'unauthenticated'
+    );
+});
+
+test('every Push notifications callable asks assertAdmin before it reads anything', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'index.js'),
+        'utf8'
+    );
+    const gated = [
+        'notificationOverview',
+        'notificationHistory',
+        'notificationRevokeToken',
+        'notificationTestPush',
+    ];
+    gated.forEach((name) => {
+        const start = src.indexOf('exports.' + name + ' = onCall');
+        assert.ok(start !== -1, name + ' is not exported');
+        const head = src.slice(start, start + 400);
+        assert.match(head, /await assertAdmin\(db, request\.auth/,
+            name + ' does not gate on assertAdmin');
+        const gateAt = head.indexOf('assertAdmin');
+        const workAt = head.indexOf('notificationAdminDeps');
+        assert.ok(workAt === -1 || gateAt < workAt,
+            name + ' touches Firestore before it checks the caller');
+    });
+});
+
+test('the test push addresses the caller and nothing the browser sent', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'index.js'),
+        'utf8'
+    );
+    const start = src.indexOf('exports.notificationTestPush = onCall');
+    const body = src.slice(start, src.indexOf(');', src.indexOf('log(', start)));
+    assert.match(body, /callerUid: request\.auth\.uid/);
+
+    // The payload carries exactly one thing, and it cannot aim anything: the
+    // second press. Everything the browser could say about a RECIPIENT — a
+    // uid, a person, a token, a number — must be unread here.
+    const fields = (body.match(/request\.data(?:\s*\|\|\s*\{\})?\)?\.(\w+)/g) || [])
+        .map((hit) => hit.split('.').pop());
+    assert.deepEqual(fields, ['confirm'],
+        'notificationTestPush reads ' + fields.join(', ') + ' off the payload; ' +
+        'only confirm may be read there');
+});
+
+test('revoking and test-pushing both carry the confirmation to the server', () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const admin = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'notification-admin.js'), 'utf8');
+    const page = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'admin-dashboard.js'), 'utf8');
+
+    ['notificationRevokeToken', 'notificationTestPush'].forEach((name) => {
+        const start = index.indexOf('exports.' + name + ' = onCall');
+        const head = index.slice(start, start + 700);
+        assert.match(head, /confirm:/,
+            name + ' does not pass the confirmation through to the gate');
+    });
+    ['revokeToken', 'testPushToSelf'].forEach((fn) => {
+        const start = admin.indexOf('async function ' + fn + '(');
+        assert.ok(start !== -1, fn + ' is gone');
+        assert.match(admin.slice(start, start + 400), /requireConfirm\(/,
+            fn + ' no longer demands a confirmation');
+    });
+    assert.match(page, /PUSH_TAB_CALLABLES\.revoke\)\(\{\s*\n\s*confirm: true,/,
+        'the page revokes without saying the user confirmed');
+    assert.match(page, /PUSH_TAB_CALLABLES\.testPush\)\(\{\s*\n\s*confirm: true,/,
+        'the page test-pushes without saying the user confirmed');
 });
 
 test('access-assert does not load firebase-functions (root npm test)', () => {

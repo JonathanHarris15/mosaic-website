@@ -13,6 +13,7 @@
  */
 
 const Access = require("./shared/access-core.js");
+const {isAdminPermissionLevel} = require("./sms.js");
 
 /**
  * A gate refusal the callable maps onto HttpsError.
@@ -68,8 +69,31 @@ async function assertWritesAsEditor(db, authCtx) {
   }
 }
 
+/**
+ * Throws unless the caller runs the Admin Dashboard: admin or super_admin.
+ *
+ * An elder is not an admin here. The dashboard's tools reach the Textbelt
+ * credit, the send path and, since MS-682, other people's Device tokens —
+ * which the rules keep from every client, admin included. The callable is
+ * the only door, so the door asks.
+ *
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @param {string} [what] what the caller was reaching for
+ * @return {Promise<void>}
+ */
+async function assertIsAdmin(db, authCtx, what) {
+  const account = await loadAccount(db, authCtx);
+  const level = account.permissionLevel || account.role;
+  if (!isAdminPermissionLevel(level)) {
+    throw refuse("permission-denied", what ?
+      `Admins only — ${what}.` : "Admins only.");
+  }
+}
+
 module.exports = {
   loadAccount,
   assertCanDecide,
   assertWritesAsEditor,
+  assertIsAdmin,
 };

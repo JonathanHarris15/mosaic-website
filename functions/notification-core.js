@@ -226,6 +226,9 @@ module.exports = {
   CHURCH_TIMEZONE,
   WINDOW_OPEN_HOUR,
   WINDOW_CLOSE_HOUR,
+  // Exported so the admin picture of the send path can name the codes this
+  // module actually acts on rather than a second list that drifts (MS-682).
+  DEAD_TOKEN_CODES,
   PUSH_TITLE_LIMIT,
   NEUTRAL_NAME,
   churchDateParts,

@@ -49,11 +49,30 @@ const DEFAULT_PUSH_WORDING = {
 };
 const PUSH_WORDING_KINDS = ['initial', 'reminder', 'thankyou'];
 
+// The Push notifications tab (MS-682). Everything it shows arrives from
+// admin-gated callables: the device-token subcollection under a user stays
+// owner-only in the rules (ADR-0036), so the browser never reads a token —
+// masked or otherwise — from Firestore. NotificationAdminCore is the module
+// the callables shape
+// their payloads with, loaded here for the labels and the church clock.
+const PUSH_TAB_CALLABLES = {
+    overview: 'notificationOverview',
+    history: 'notificationHistory',
+    revoke: 'notificationRevokeToken',
+    testPush: 'notificationTestPush',
+};
+
+const HISTORY_PAGE = 25;
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('adminDashboard', () => ({
         currentUser: null,
         currentPermissionLevel: null,
         loading: true,
+
+        // Which tab is on screen. Deep-linkable, so "look at the push log"
+        // is a URL rather than a click.
+        tab: 'tools',
 
         // SMS key + quota status
         statusLoading: false,
@@ -97,6 +116,31 @@ document.addEventListener('alpine:init', () => {
         eventAnnouncementWording: { ...EVENT_ANNOUNCEMENT_DEFAULTS },
         eventAnnouncementSaving: false,
 
+        // ── Push notifications tab ──────────────────────────────────────
+        pushOverview: null,        // the overview callable's whole payload
+        pushFlow: null,            // …its flow diagram, pulled out for x-for
+        pushLoading: false,
+        pushLoaded: false,
+        pushError: '',
+        pushOffline: false,        // the registry, rendered without a server
+
+        history: [],
+        historyCursor: null,
+        historyScanned: 0,
+        historyLoading: false,
+        historyIsFiltered: false,
+        historyFilters: { status: '', channel: '', typeId: '', search: '' },
+
+        devices: [],
+        deviceSummary: null,
+        deviceThresholds: '',
+        revokeConfirming: null,    // 'uid/tokenId' while the row asks
+        revoking: false,
+
+        testPushConfirming: false,
+        testPushSending: false,
+        testPushResult: null,
+
         toast: { show: false, message: '', type: 'success' },
 
         async init() {
@@ -117,7 +161,33 @@ document.addEventListener('alpine:init', () => {
                 this.loadReplies();
                 this.loadPrayerMessages();
                 this.loadEventAnnouncementWording();
+                if (window.location.hash === '#push') this.selectTab('push');
             });
+        },
+
+        // The push tab is four round trips, so it loads on first sight
+        // rather than on every page open.
+        selectTab(tab) {
+            this.tab = tab;
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', tab === 'tools' ? '#' : '#' + tab);
+            }
+            if (tab === 'push' && !this.pushLoaded) this.loadPush();
+        },
+
+        // Null while loading, and null when the registry is being shown
+        // without a server. Alpine evaluates a binding inside a hidden
+        // element, so every count on this tab reads through here.
+        get pushRecent() {
+            return (this.pushOverview && this.pushOverview.recent) || null;
+        },
+
+        get pushTrouble() {
+            return this.pushRecent ? this.pushRecent.week.problems : 0;
+        },
+
+        callable(name) {
+            return firebase.app().functions('us-central1').httpsCallable(name);
         },
 
         // Reads key-configured state and remaining credits in one round trip.
@@ -339,6 +409,197 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.autoSendSaving = false;
             }
+        },
+
+        // ── Push notifications tab ──────────────────────────────────────
+
+        // One call brings the flow, the registry, the counts and the devices,
+        // because on the server they are the same two reads.
+        //
+        // When it fails, the tab does NOT go on to ask for the log as well:
+        // one broken connection should say so once, not three times. What is
+        // still worth showing is the registry — what this site can send, and
+        // what fires it — which is knowledge the page already carries. The
+        // counts and the send window are not: they are read off the server,
+        // so they come back blank rather than invented.
+        async loadPush() {
+            if (this.pushLoading) return;
+            this.pushLoading = true;
+            this.pushError = '';
+            this.pushOffline = false;
+            try {
+                const { data } = await this.callable(PUSH_TAB_CALLABLES.overview)();
+                this.pushOverview = data;
+                this.pushFlow = data.flow;
+                this.devices = data.devices.people;
+                this.deviceSummary = data.devices.summary;
+                this.deviceThresholds =
+                    `Aging after ${data.agingAfterDays} days, stale after ${data.staleAfterDays}.`;
+                this.pushLoaded = true;
+            } catch (e) {
+                console.error('notificationOverview failed:', e);
+                this.showRegistryOffline(e);
+                this.pushLoading = false;
+                return;
+            }
+            this.pushLoading = false;
+            await this.loadHistory();
+        },
+
+        showRegistryOffline(error) {
+            this.pushOffline = true;
+            this.pushError = (error && error.message) ||
+                'Could not reach the notification functions.';
+            this.pushFlow = null;
+            this.devices = [];
+            this.deviceSummary = null;
+            this.deviceThresholds = '';
+            this.history = [];
+            this.historyCursor = null;
+            this.historyScanned = 0;
+            this.pushOverview = {
+                constants: { timezone: '' },
+                types: NotificationAdminCore.offlineTypes(),
+                unmatched: [],
+                recent: null,
+                devices: null,
+            };
+        },
+
+        // `more` keeps what is on screen and asks for the next page; anything
+        // else starts the list again from the top.
+        async loadHistory(more) {
+            if (this.historyLoading) return;
+            this.historyLoading = true;
+            try {
+                const { data } = await this.callable(PUSH_TAB_CALLABLES.history)({
+                    limit: HISTORY_PAGE,
+                    cursor: more ? this.historyCursor : null,
+                    status: this.historyFilters.status,
+                    channel: this.historyFilters.channel,
+                    typeId: this.historyFilters.typeId,
+                    search: this.historyFilters.search,
+                });
+                this.history = more ? this.history.concat(data.rows) : data.rows;
+                this.historyScanned = more ? this.historyScanned + data.scanned : data.scanned;
+                this.historyCursor = data.nextCursor;
+                this.historyIsFiltered = data.filtered;
+            } catch (e) {
+                console.error('notificationHistory failed:', e);
+                this.showToast('Could not read the sent history', 'error');
+            } finally {
+                this.historyLoading = false;
+            }
+        },
+
+        clearHistoryFilters() {
+            this.historyFilters = { status: '', channel: '', typeId: '', search: '' };
+            this.loadHistory();
+        },
+
+        // Two presses, always. The first asks; this one is the answer, and it
+        // says so to the server — which refuses a call that does not carry it.
+        async revokeDevice(person, device) {
+            if (this.revoking) return;
+            this.revoking = true;
+            try {
+                await this.callable(PUSH_TAB_CALLABLES.revoke)({
+                    confirm: true,
+                    uid: person.uid,
+                    tokenId: device.id,
+                });
+                person.devices = person.devices.filter(d => d.id !== device.id);
+                this.devices = this.devices.filter(p => p.devices.length > 0);
+                this.deviceSummary = NotificationAdminCore.summariseDevices(this.devices);
+                this.showToast(`Revoked ${device.masked}`);
+            } catch (e) {
+                console.error('notificationRevokeToken failed:', e);
+                this.showToast(e.message || 'Could not revoke that device', 'error');
+            } finally {
+                this.revoking = false;
+                this.revokeConfirming = null;
+            }
+        },
+
+        // The payload names nobody. `confirm` is the second press travelling
+        // with the call; it cannot aim anything, and the server refuses
+        // without it. The recipient is the signed-in uid, server-side.
+        async sendTestPush() {
+            if (this.testPushSending) return;
+            this.testPushSending = true;
+            this.testPushResult = null;
+            try {
+                const { data } = await this.callable(PUSH_TAB_CALLABLES.testPush)({
+                    confirm: true,
+                });
+                const removed = data.removed.length
+                    ? ` ${data.removed.length} dead token(s) removed.` : '';
+                this.testPushResult = data.accepted > 0
+                    ? { ok: true, message: `Accepted by the provider for ${data.accepted} of your ${data.attempted} device(s).${removed}` }
+                    : { ok: false, message: `No device accepted it (${data.attempted} tried).${removed}` };
+                if (data.removed.length) this.loadPush();
+                this.showToast(data.accepted > 0 ? 'Test push sent' : 'Test push not accepted',
+                    data.accepted > 0 ? 'success' : 'error');
+            } catch (e) {
+                console.error('notificationTestPush failed:', e);
+                this.testPushResult = { ok: false, message: e.message || 'Could not send the test push.' };
+                this.showToast('Test push failed', 'error');
+            } finally {
+                this.testPushSending = false;
+                this.testPushConfirming = false;
+            }
+        },
+
+        churchTime(iso) {
+            const zone = this.pushOverview ? this.pushOverview.constants.timezone : '';
+            return NotificationAdminCore.churchLocalLabel(iso, zone);
+        },
+
+        branchTone(tone) {
+            if (tone === 'go') return 'border-success/40 bg-success-container text-on-success-container';
+            if (tone === 'warn') return 'border-warning/40 bg-warning-container text-on-warning-container';
+            return 'border-error/40 bg-error-container text-on-error-container';
+        },
+
+        branchIcon(tone) {
+            if (tone === 'go') return 'arrow_forward';
+            if (tone === 'warn') return 'alt_route';
+            return 'block';
+        },
+
+        statusTone(status) {
+            if (status === 'delivered') return 'bg-success-container text-on-success-container';
+            if (status === 'failed') return 'bg-error-container text-on-error-container';
+            if (status === 'unreachable') return 'bg-warning-container text-on-warning-container';
+            return 'bg-surface-container text-on-surface-variant';
+        },
+
+        statusIcon(status) {
+            if (status === 'delivered') return 'check_circle';
+            if (status === 'failed') return 'error';
+            if (status === 'unreachable') return 'person_off';
+            return 'description';
+        },
+
+        deviceTone(state) {
+            if (state === 'stale') return 'bg-error-container text-on-error-container';
+            if (state === 'aging') return 'bg-warning-container text-on-warning-container';
+            if (state === 'fresh') return 'bg-success-container text-on-success-container';
+            return 'bg-surface-container text-on-surface-variant';
+        },
+
+        platformIcon(platform) {
+            if (platform === 'ios') return 'phone_iphone';
+            if (platform === 'android') return 'phone_android';
+            if (platform === 'web') return 'computer';
+            return 'devices_other';
+        },
+
+        triggerIcon(kind) {
+            if (kind === 'schedule') return 'schedule';
+            if (kind === 'trigger') return 'bolt';
+            if (kind === 'webhook') return 'cloud_download';
+            return 'touch_app';
         },
 
         formatDatetime(timestamp) {
