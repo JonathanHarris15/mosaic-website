@@ -97,6 +97,23 @@ document.addEventListener('alpine:init', () => {
         eventAnnouncementWording: { ...EVENT_ANNOUNCEMENT_DEFAULTS },
         eventAnnouncementSaving: false,
 
+        adminTab: 'messaging',
+
+        pushOverviewLoading: false,
+        pushOverview: { flow: [], triggers: [], smsMigrationNote: '', autoSendEnabled: false },
+        pushPurposeStats: {},
+
+        pushLogRows: [],
+        pushLogLoading: false,
+        pushLogHasMore: false,
+        pushLogCursor: null,
+        pushLogFilter: { channel: '', purpose: '', failuresOnly: false },
+        pushPersonNames: {},
+
+        pushDevices: [],
+        pushDevicesLoading: false,
+        pushTestSending: false,
+
         toast: { show: false, message: '', type: 'success' },
 
         async init() {
@@ -353,6 +370,241 @@ document.addEventListener('alpine:init', () => {
         showToast(message, type = 'success') {
             this.toast = { show: true, message, type };
             setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+
+        nac() {
+            return window.NotificationAdminCore;
+        },
+
+        openPushTab() {
+            this.adminTab = 'push';
+            if (!this.pushOverview.flow.length) {
+                this.loadPushOverview();
+            }
+            if (!this.pushLogRows.length) {
+                this.resetPushLog();
+            }
+            if (!this.pushDevices.length) {
+                this.loadPushDevices();
+            }
+        },
+
+        async loadPushOverview() {
+            this.pushOverviewLoading = true;
+            try {
+                const fn = firebase.app().functions('us-central1')
+                    .httpsCallable('adminNotificationOverview');
+                const { data } = await fn();
+                this.pushOverview = data;
+                await this.loadPushPurposeStats();
+            } catch (e) {
+                console.error('adminNotificationOverview failed:', e);
+                const core = this.nac();
+                if (core) {
+                    this.pushOverview = {
+                        flow: core.buildSendFlow({}),
+                        triggers: core.notificationTriggers(),
+                        smsMigrationNote: 'Could not reach overview callable — showing static registry.',
+                        autoSendEnabled: this.autoSendEnabled,
+                    };
+                }
+                this.showToast('Overview loaded from cache only', 'error');
+            } finally {
+                this.pushOverviewLoading = false;
+            }
+        },
+
+        async loadPushPurposeStats() {
+            try {
+                const snap = await db.collection('notifications')
+                    .where('direction', '==', 'outbound')
+                    .orderBy('createdAt', 'desc')
+                    .limit(400)
+                    .get();
+                const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+                const core = this.nac();
+                this.pushPurposeStats = core ?
+                    core.aggregatePurposeStats(rows) : {};
+            } catch (e) {
+                console.error('push stats query failed:', e);
+                this.pushPurposeStats = {};
+            }
+        },
+
+        pushPurposeOptions() {
+            const core = this.nac();
+            const triggers = (this.pushOverview.triggers && this.pushOverview.triggers.length) ?
+                this.pushOverview.triggers :
+                (core ? core.notificationTriggers() : []);
+            const set = new Set(triggers.map((t) => t.purpose).filter(Boolean));
+            return [...set].sort();
+        },
+
+        pushTriggerRows() {
+            const core = this.nac();
+            const triggers = this.pushOverview.triggers || (core ? core.notificationTriggers() : []);
+            const stats = this.pushPurposeStats || {};
+            return triggers.map((t) => {
+                const s = stats[t.purpose] || { lastSentMs: null, count30d: 0 };
+                const lastSentLabel = s.lastSentMs && core ?
+                    core.formatChurchLocal(s.lastSentMs) : '—';
+                let killSwitch = t.killSwitch;
+                if (t.killSwitch === 'app_config/prayer_request_sms.autoSendEnabled') {
+                    killSwitch = this.pushOverview.autoSendEnabled ?
+                        'Automatic sending ON' : 'Automatic sending OFF';
+                }
+                return Object.assign({}, t, {
+                    lastSentLabel,
+                    count30d: s.count30d || 0,
+                    killSwitch,
+                });
+            });
+        },
+
+        resetPushLog() {
+            this.pushLogRows = [];
+            this.pushLogCursor = null;
+            this.pushLogHasMore = false;
+            this.loadPushLog(false);
+        },
+
+        async loadPushLog(append) {
+            if (this.pushLogLoading) return;
+            this.pushLogLoading = true;
+            try {
+                let q = db.collection('notifications')
+                    .where('direction', '==', 'outbound')
+                    .orderBy('createdAt', 'desc')
+                    .limit(30);
+                if (append && this.pushLogCursor) {
+                    q = q.startAfter(this.pushLogCursor);
+                }
+                const snap = await q.get();
+                const core = this.nac();
+                const docs = snap.docs;
+                if (docs.length) {
+                    this.pushLogCursor = docs[docs.length - 1];
+                }
+                this.pushLogHasMore = docs.length === 30;
+
+                const personIds = [...new Set(docs.map((d) => d.data().personId).filter(Boolean))];
+                await this.ensurePersonNames(personIds);
+
+                const mapped = docs.map((doc) => {
+                    const data = doc.data();
+                    if (this.pushLogFilter.channel && data.channel !== this.pushLogFilter.channel) {
+                        return null;
+                    }
+                    if (this.pushLogFilter.purpose && data.purpose !== this.pushLogFilter.purpose) {
+                        return null;
+                    }
+                    const failed = core ? core.isFailedNotification(data) : !data.accepted;
+                    if (this.pushLogFilter.failuresOnly && !failed) return null;
+                    const whenLabel = core ? core.formatChurchLocal(data.createdAt) :
+                        this.formatDatetime(data.createdAt);
+                    const pid = data.personId;
+                    const recipientLabel = pid ?
+                        (this.pushPersonNames[pid] || pid) :
+                        (data.adminUid ? 'Admin test' : '—');
+                    let statusLabel = data.accepted ? 'accepted' : 'not accepted';
+                    if (data.unreachable) statusLabel = 'unreachable';
+                    if (data.channel === 'none') statusLabel = 'unreachable';
+                    const purposeLabel = data.purpose +
+                        (data.wording ? ' · ' + data.wording : '');
+                    return {
+                        id: doc.id,
+                        whenLabel,
+                        recipientLabel,
+                        purposeLabel,
+                        channel: data.channel || '—',
+                        statusLabel,
+                        failed,
+                    };
+                }).filter(Boolean);
+
+                this.pushLogRows = append ? this.pushLogRows.concat(mapped) : mapped;
+            } catch (e) {
+                console.error('push log load failed:', e);
+                this.showToast('Could not load sent history', 'error');
+            } finally {
+                this.pushLogLoading = false;
+            }
+        },
+
+        async ensurePersonNames(personIds) {
+            const missing = personIds.filter((id) => !this.pushPersonNames[id]);
+            if (!missing.length) return;
+            await Promise.all(missing.map(async (id) => {
+                try {
+                    const snap = await db.collection('people').doc(id).get();
+                    if (!snap.exists) {
+                        this.pushPersonNames[id] = id;
+                        return;
+                    }
+                    const name = snap.data().name;
+                    this.pushPersonNames[id] = (name && name.full) ||
+                        (name && name.first) || id;
+                } catch (err) {
+                    this.pushPersonNames[id] = id;
+                }
+            }));
+        },
+
+        async loadPushDevices() {
+            this.pushDevicesLoading = true;
+            try {
+                const fn = firebase.app().functions('us-central1')
+                    .httpsCallable('adminPushDevices');
+                const { data } = await fn();
+                const core = this.nac();
+                this.pushDevices = (data.devices || []).map((dev) => ({
+                    ...dev,
+                    lastSeenLabel: core && dev.updatedAtMs ?
+                        core.formatChurchLocal(dev.updatedAtMs) : '—',
+                }));
+            } catch (e) {
+                console.error('adminPushDevices failed:', e);
+                this.showToast('Could not load devices', 'error');
+            } finally {
+                this.pushDevicesLoading = false;
+            }
+        },
+
+        async revokePushToken(dev) {
+            if (!dev || !dev.uid || !dev.tokenId) return;
+            const label = dev.personName || dev.accountEmail || 'this device';
+            if (!confirm('Revoke the push token for ' + label + '? They will not get pushes until they sign in on the app again.')) {
+                return;
+            }
+            try {
+                const fn = firebase.app().functions('us-central1')
+                    .httpsCallable('adminRevokePushToken');
+                await fn({ uid: dev.uid, tokenId: dev.tokenId });
+                this.pushDevices = this.pushDevices.filter(
+                    (d) => !(d.uid === dev.uid && d.tokenId === dev.tokenId));
+                this.showToast('Token revoked');
+            } catch (e) {
+                console.error('adminRevokePushToken failed:', e);
+                this.showToast(e.message || 'Revoke failed', 'error');
+            }
+        },
+
+        async sendSelfPushTest() {
+            if (this.pushTestSending) return;
+            if (!confirm('Send a test push to every device token on your account?')) return;
+            this.pushTestSending = true;
+            try {
+                const fn = firebase.app().functions('us-central1')
+                    .httpsCallable('adminSendSelfPushTest');
+                const { data } = await fn({});
+                this.showToast('Test push sent to ' + data.accepted + ' of ' + data.sent + ' device(s)');
+                this.resetPushLog();
+            } catch (e) {
+                console.error('adminSendSelfPushTest failed:', e);
+                this.showToast(e.message || 'Test send failed', 'error');
+            } finally {
+                this.pushTestSending = false;
+            }
         },
     }));
 });

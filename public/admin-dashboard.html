@@ -48,6 +48,7 @@
     <script src="local-cache.js"></script>
     <script src="firebase-config.js"></script>
     <script src="auth.js"></script>
+    <script src="notification-admin-core.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
@@ -79,6 +80,30 @@
 
     <!-- Main content -->
     <main x-show="!loading" class="flex-grow max-w-5xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+
+        <nav class="flex flex-wrap gap-1 border-b border-outline-variant pb-0" role="tablist" aria-label="Admin sections">
+            <button type="button" role="tab"
+                class="px-md py-sm font-label-md text-label-md rounded-t-lg border border-b-0 transition-colors -mb-px"
+                :class="adminTab === 'messaging'
+                    ? 'bg-surface-container-lowest border-outline-variant text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-on-surface'"
+                :aria-selected="adminTab === 'messaging'"
+                @click="adminTab = 'messaging'">
+                SMS &amp; messaging
+            </button>
+            <button type="button" role="tab"
+                class="px-md py-sm font-label-md text-label-md rounded-t-lg border border-b-0 transition-colors -mb-px flex items-center gap-1"
+                :class="adminTab === 'push'
+                    ? 'bg-surface-container-lowest border-outline-variant text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-on-surface'"
+                :aria-selected="adminTab === 'push'"
+                @click="openPushTab()">
+                <span class="material-symbols-outlined text-[18px]">notifications</span>
+                Push notifications
+            </button>
+        </nav>
+
+        <div x-show="adminTab === 'messaging'" class="flex flex-col gap-margin">
 
         <!-- Service Guide section -->
         <section class="flex flex-col gap-md">
@@ -377,6 +402,206 @@
                 </div>
             </div>
         </section>
+
+        </div><!-- /messaging tab -->
+
+        <!-- Push notifications tab (MS-682) -->
+        <div x-show="adminTab === 'push'" x-cloak class="flex flex-col gap-margin">
+
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center gap-sm">
+                    <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>route</span>
+                    <h2 class="font-headline-md text-headline-md text-primary">How pushes are handled</h2>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant" x-text="pushOverview.smsMigrationNote"></p>
+                <ol class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-sm">
+                    <template x-for="(step, idx) in pushOverview.flow" :key="step.id">
+                        <li class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex gap-sm">
+                            <span class="flex-shrink-0 w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md flex items-center justify-center" x-text="idx + 1"></span>
+                            <div class="min-w-0">
+                                <h3 class="font-headline-md text-headline-md text-on-surface" x-text="step.title"></h3>
+                                <p class="font-body-md text-sm text-on-surface-variant mt-xs" x-text="step.detail"></p>
+                            </div>
+                        </li>
+                    </template>
+                </ol>
+            </section>
+
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary">playlist_add_check</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">Notification types</h2>
+                    </div>
+                    <button @click="loadPushOverview()" :disabled="pushOverviewLoading"
+                        class="m-btn m-btn--quiet m-btn--sm">
+                        <span class="material-symbols-outlined text-[18px]" :class="pushOverviewLoading ? 'animate-spin' : ''">refresh</span>
+                        Refresh
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-outline-variant">
+                    <table class="w-full text-left text-sm min-w-[720px]">
+                        <thead class="bg-surface-container font-label-md text-label-md text-on-surface-variant">
+                            <tr>
+                                <th class="px-md py-sm">Type</th>
+                                <th class="px-md py-sm">Trigger</th>
+                                <th class="px-md py-sm">Channel</th>
+                                <th class="px-md py-sm">Kill switch / window</th>
+                                <th class="px-md py-sm">Last sent</th>
+                                <th class="px-md py-sm text-right">30d</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in pushTriggerRows()" :key="row.id">
+                                <tr class="border-t border-outline-variant/60 align-top">
+                                    <td class="px-md py-sm">
+                                        <div class="font-label-md text-on-surface" x-text="row.label"></div>
+                                        <div class="text-xs text-on-surface-variant" x-text="row.purpose + (row.wording ? ' · ' + row.wording : '')"></div>
+                                    </td>
+                                    <td class="px-md py-sm text-on-surface-variant" x-text="row.trigger"></td>
+                                    <td class="px-md py-sm text-on-surface-variant" x-text="row.channels"></td>
+                                    <td class="px-md py-sm text-on-surface-variant">
+                                        <span x-text="row.killSwitch"></span>
+                                        <span class="block text-xs mt-xs" x-text="row.window"></span>
+                                    </td>
+                                    <td class="px-md py-sm text-on-surface-variant" x-text="row.lastSentLabel"></td>
+                                    <td class="px-md py-sm text-right tabular-nums" x-text="row.count30d"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary">history</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">Sent history</h2>
+                    </div>
+                    <div class="flex flex-wrap gap-sm items-center">
+                        <select x-model="pushLogFilter.channel" @change="resetPushLog()"
+                            class="border border-outline-variant rounded-lg px-sm py-xs bg-surface text-sm">
+                            <option value="">All channels</option>
+                            <option value="push">Push</option>
+                            <option value="text">Text</option>
+                            <option value="none">None / unreachable</option>
+                        </select>
+                        <select x-model="pushLogFilter.purpose" @change="resetPushLog()"
+                            class="border border-outline-variant rounded-lg px-sm py-xs bg-surface text-sm">
+                            <option value="">All purposes</option>
+                            <template x-for="p in pushPurposeOptions()" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <label class="flex items-center gap-1 text-sm text-on-surface-variant">
+                            <input type="checkbox" x-model="pushLogFilter.failuresOnly" @change="resetPushLog()">
+                            Failures only
+                        </label>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-outline-variant">
+                    <table class="w-full text-left text-sm min-w-[640px]">
+                        <thead class="bg-surface-container font-label-md text-label-md text-on-surface-variant">
+                            <tr>
+                                <th class="px-md py-sm">When (Central)</th>
+                                <th class="px-md py-sm">Recipient</th>
+                                <th class="px-md py-sm">Purpose</th>
+                                <th class="px-md py-sm">Channel</th>
+                                <th class="px-md py-sm">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-if="pushLogLoading && !pushLogRows.length">
+                                <tr><td colspan="5" class="px-md py-lg text-center text-on-surface-variant">Loading…</td></tr>
+                            </template>
+                            <template x-for="row in pushLogRows" :key="row.id">
+                                <tr class="border-t border-outline-variant/60"
+                                    :class="row.failed ? 'bg-error-container/30' : ''">
+                                    <td class="px-md py-sm text-on-surface-variant whitespace-nowrap" x-text="row.whenLabel"></td>
+                                    <td class="px-md py-sm" x-text="row.recipientLabel"></td>
+                                    <td class="px-md py-sm text-on-surface-variant" x-text="row.purposeLabel"></td>
+                                    <td class="px-md py-sm">
+                                        <span class="px-sm py-[2px] rounded-full text-xs font-label-md"
+                                              :class="row.channel === 'push' ? 'bg-primary-container text-on-primary-container' : (row.channel === 'text' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-on-surface-variant')"
+                                              x-text="row.channel"></span>
+                                    </td>
+                                    <td class="px-md py-sm" :class="row.failed ? 'text-error font-label-md' : 'text-on-surface-variant'" x-text="row.statusLabel"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-center gap-sm">
+                    <button @click="loadPushLog(true)" :disabled="pushLogLoading || !pushLogHasMore"
+                        class="m-btn m-btn--quiet m-btn--sm" x-show="pushLogHasMore">
+                        Load more
+                    </button>
+                </div>
+            </section>
+
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary">phonelink</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">Devices &amp; tokens</h2>
+                    </div>
+                    <div class="flex gap-sm flex-wrap">
+                        <button @click="sendSelfPushTest()" :disabled="pushTestSending"
+                            class="px-md py-sm font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40">
+                            <span x-text="pushTestSending ? 'Sending…' : 'Send test push to myself'"></span>
+                        </button>
+                        <button @click="loadPushDevices()" :disabled="pushDevicesLoading"
+                            class="m-btn m-btn--quiet m-btn--sm">
+                            <span class="material-symbols-outlined text-[18px]" :class="pushDevicesLoading ? 'animate-spin' : ''">refresh</span>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Tokens are masked server-side. Revoke removes one install's token; test send only targets your signed-in account.
+                </p>
+                <div class="overflow-x-auto rounded-xl border border-outline-variant">
+                    <table class="w-full text-left text-sm min-w-[640px]">
+                        <thead class="bg-surface-container font-label-md text-label-md text-on-surface-variant">
+                            <tr>
+                                <th class="px-md py-sm">Person / account</th>
+                                <th class="px-md py-sm">Platform</th>
+                                <th class="px-md py-sm">Last seen</th>
+                                <th class="px-md py-sm">Token</th>
+                                <th class="px-md py-sm">Flags</th>
+                                <th class="px-md py-sm"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-if="pushDevicesLoading && !pushDevices.length">
+                                <tr><td colspan="6" class="px-md py-lg text-center text-on-surface-variant">Loading…</td></tr>
+                            </template>
+                            <template x-if="!pushDevicesLoading && !pushDevices.length">
+                                <tr><td colspan="6" class="px-md py-lg text-center text-on-surface-variant">No device tokens registered.</td></tr>
+                            </template>
+                            <template x-for="dev in pushDevices" :key="dev.uid + ':' + dev.tokenId">
+                                <tr class="border-t border-outline-variant/60 align-top">
+                                    <td class="px-md py-sm">
+                                        <div x-text="dev.personName || dev.accountEmail || dev.uid"></div>
+                                        <div class="text-xs text-on-surface-variant" x-show="dev.personName && dev.accountEmail" x-text="dev.accountEmail"></div>
+                                    </td>
+                                    <td class="px-md py-sm capitalize" x-text="dev.platform"></td>
+                                    <td class="px-md py-sm text-on-surface-variant whitespace-nowrap" x-text="dev.lastSeenLabel"></td>
+                                    <td class="px-md py-sm font-mono text-xs" x-text="dev.maskedToken"></td>
+                                    <td class="px-md py-sm">
+                                        <span x-show="dev.stale" class="inline-flex px-sm py-[2px] rounded-full bg-warning-container text-on-warning-container text-xs mr-1">stale</span>
+                                    </td>
+                                    <td class="px-md py-sm text-right">
+                                        <button @click="revokePushToken(dev)" class="text-error font-label-md text-xs hover:underline">Revoke</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
     </main>
 
     <!-- Toast -->

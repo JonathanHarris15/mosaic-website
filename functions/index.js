@@ -25,6 +25,7 @@ const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
 const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
+const notificationAdmin = require("./notification-admin");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
@@ -2409,6 +2410,68 @@ exports.smsSendTest = onCall(
         throw new HttpsError(
             "unavailable", "Could not reach Textbelt to send the test.");
       }
+    },
+);
+
+/**
+ * Push notifications admin — overview (flow + trigger registry).
+ */
+exports.adminNotificationOverview = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      return notificationAdmin.notificationOverview({
+        db: db,
+        assertAdmin: assertAdmin,
+      }, request.auth);
+    },
+);
+
+/**
+ * Masked device token inventory for admins (push_tokens are owner-only).
+ */
+exports.adminPushDevices = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      return notificationAdmin.listPushDevices({
+        db: db,
+        assertAdmin: assertAdmin,
+        now: () => new Date(),
+      }, request.auth);
+    },
+);
+
+/**
+ * Revoke one device token. Admin-gated; confirm in the UI before calling.
+ */
+exports.adminRevokePushToken = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      return notificationAdmin.revokePushToken({
+        db: db,
+        assertAdmin: assertAdmin,
+      }, request.auth, request.data || {});
+    },
+);
+
+/**
+ * Send a test push to the signed-in admin's own devices only.
+ */
+exports.adminSendSelfPushTest = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const db = admin.firestore();
+      const deps = notifierDeps(db);
+      return notificationAdmin.sendSelfPushTest({
+        db: db,
+        assertAdmin: assertAdmin,
+        sendPush: deps.sendPush,
+        writeLog: deps.writeLog,
+        deleteToken: deps.deleteToken,
+        now: () => new Date(),
+      }, request.auth);
     },
 );
 

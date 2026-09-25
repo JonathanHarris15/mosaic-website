@@ -126,6 +126,9 @@ const MODULES = [
     // writing a cell has to follow exactly the page's rules, or its write lands
     // somewhere the page does not read — or wipes what the page wrote.
     'care-list-core.js',
+    // MS-682. Masking, stale detection, and the push admin registry — shared
+    // between the dashboard and admin callables.
+    'notification-admin-core.js',
 ];
 
 const BANNER = [
