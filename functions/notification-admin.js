@@ -1,14 +1,24 @@
 /**
  * @fileoverview Admin-only push notification tools for the dashboard.
  * Handlers are exported for unit tests; index.js wires them to onCall.
+ * Throws plain Errors with `.code` so root npm test avoids firebase-functions.
  */
 
-const {HttpsError} = require("firebase-functions/v2/https");
 const nc = require("./notification-core");
 const nac = require("./shared/notification-admin-core.js");
 const pr = require("./prayer-request.js");
 
 const ADMIN_PUSH_TEST_PURPOSE = "admin_push_test";
+
+/**
+ * @param {string} code
+ * @param {string} message
+ */
+function reject(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  throw err;
+}
 
 /**
  * @param {Object} db
@@ -104,13 +114,13 @@ async function revokePushToken(deps, authCtx, data) {
   const uid = data && data.uid;
   const tokenId = data && data.tokenId;
   if (!uid || !tokenId) {
-    throw new HttpsError("invalid-argument", "uid and tokenId are required.");
+    reject("invalid-argument", "uid and tokenId are required.");
   }
   const ref = deps.db.collection("users").doc(String(uid))
       .collection("push_tokens").doc(String(tokenId));
   const snap = await ref.get();
   if (!snap.exists) {
-    throw new HttpsError("not-found", "That device token is already gone.");
+    reject("not-found", "That device token is already gone.");
   }
   await ref.delete();
   return {revoked: true};
@@ -126,7 +136,7 @@ async function revokePushToken(deps, authCtx, data) {
 async function sendSelfPushTest(deps, authCtx) {
   await guardAdmin(deps.db, authCtx, deps.assertAdmin);
   if (!authCtx || !authCtx.uid) {
-    throw new HttpsError("unauthenticated", "Sign in first.");
+    reject("unauthenticated", "Sign in first.");
   }
   const uid = authCtx.uid;
   const snap = await deps.db.collection("users").doc(uid)
@@ -136,7 +146,7 @@ async function sendSelfPushTest(deps, authCtx) {
       .filter((row) => row.token);
 
   if (!tokens.length) {
-    throw new HttpsError(
+    reject(
         "failed-precondition",
         "No device tokens on your account. Sign in on the phone app first.");
   }

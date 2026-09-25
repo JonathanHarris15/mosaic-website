@@ -2414,16 +2414,36 @@ exports.smsSendTest = onCall(
 );
 
 /**
+ * Map notification-admin handler errors onto HttpsError for clients.
+ * @param {function(): Promise<*>} fn
+ * @return {Promise<*>}
+ */
+async function mapAdminCallable(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err && (err.code === "unauthenticated" ||
+        err.code === "permission-denied" ||
+        err.code === "invalid-argument" ||
+        err.code === "not-found" ||
+        err.code === "failed-precondition")) {
+      throw new HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
+
+/**
  * Push notifications admin — overview (flow + trigger registry).
  */
 exports.adminNotificationOverview = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
       const db = admin.firestore();
-      return notificationAdmin.notificationOverview({
+      return mapAdminCallable(() => notificationAdmin.notificationOverview({
         db: db,
         assertAdmin: assertAdmin,
-      }, request.auth);
+      }, request.auth));
     },
 );
 
@@ -2434,11 +2454,11 @@ exports.adminPushDevices = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
       const db = admin.firestore();
-      return notificationAdmin.listPushDevices({
+      return mapAdminCallable(() => notificationAdmin.listPushDevices({
         db: db,
         assertAdmin: assertAdmin,
         now: () => new Date(),
-      }, request.auth);
+      }, request.auth));
     },
 );
 
@@ -2449,10 +2469,10 @@ exports.adminRevokePushToken = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
       const db = admin.firestore();
-      return notificationAdmin.revokePushToken({
+      return mapAdminCallable(() => notificationAdmin.revokePushToken({
         db: db,
         assertAdmin: assertAdmin,
-      }, request.auth, request.data || {});
+      }, request.auth, request.data || {}));
     },
 );
 
@@ -2464,14 +2484,14 @@ exports.adminSendSelfPushTest = onCall(
     async (request) => {
       const db = admin.firestore();
       const deps = notifierDeps(db);
-      return notificationAdmin.sendSelfPushTest({
+      return mapAdminCallable(() => notificationAdmin.sendSelfPushTest({
         db: db,
         assertAdmin: assertAdmin,
         sendPush: deps.sendPush,
         writeLog: deps.writeLog,
         deleteToken: deps.deleteToken,
         now: () => new Date(),
-      }, request.auth);
+      }, request.auth));
     },
 );
 
