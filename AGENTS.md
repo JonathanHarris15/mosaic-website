@@ -99,8 +99,14 @@ One authored copy of the pure domain modules lives in `public/`. `node scripts/s
 - `GEMINI.md` — stack sketch (Firebase, Node 20 functions, emulator ports).
 - `docs/adr/` — decisions already made. Do not re-litigate them in a feature PR.
 
+### Jev smoke test (hosted UI)
+
+Always-applied rule: `.cursor/rules/smoke-test.mdc`. Procedure: `.cursor/skills/jev-smoke-test/SKILL.md`.
+
+Any PR that changes user-visible surfaces **must** run fastbrowse/Jev smoke tests (emulator or preview) before ready-for-review and again after the last fix commit. Document results in the PR **Smoke test** section.
+
 ### PRs
 
-Use `.github/PULL_REQUEST_TEMPLATE.md`. Fill **Jira (`MS-*`)**, **AC**, **test evidence**, **risk**, **preview URL** (or `n/a`), then tick **Ready for Maintain**. Maintain is the Cursor review pass; do not tick it on an empty template.
+Use `.github/PULL_REQUEST_TEMPLATE.md`. Fill **Jira (`MS-*`)**, **AC**, **test evidence**, **Smoke test**, **risk**, **preview URL** (or `n/a`), then tick **Ready for Maintain**. Maintain is the Cursor review pass; do not tick it on an empty template.
 
 Preview, when the PR changes a hosted surface, is a Firebase Hosting preview channel on `mosaic-hymn-database`. Infra-only PRs: `n/a`.

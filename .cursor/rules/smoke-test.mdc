@@ -1,0 +1,31 @@
+---
+description: Mandatory jev/fastbrowse smoke test for user-visible UI changes before PR.
+alwaysApply: true
+---
+
+# Jev smoke test (required for hosted UI)
+
+Follow `.cursor/skills/jev-smoke-test/SKILL.md` for install, keys, commands, and pass/fail rules.
+
+## When it is required
+
+Any change touching **user-visible surfaces** — anything under `public/`, hosted pages, mobile screens, admin dashboard, or CSS/JS served by Firebase Hosting — **must** run the jev smoke test against the **Hosting emulator** (`http://localhost:5005`) or a **preview URL** before opening or marking a PR ready, and **again** after the final fix commit.
+
+- **Bug fixes:** smoke-test the repro path **before** (confirm the bug) and **after** (confirm the fix) when feasible.
+- **Backend-only** changes (`functions/`, rules) that change what a page shows: smoke-test the **affected page** too.
+
+Pure tests, docs, or infra with **no UI effect** may skip with a one-line concrete reason in the PR.
+
+## How to run
+
+- Use fastbrowse with **`--local`**, read-only checks only.
+- Prefer `export FASTBROWSE_LLM_MODEL=openai/gpt-6-luna` (see skill).
+- **Never** log in to prod, **never** submit forms on prod. Logged-in flows only against the emulator (or preview when appropriate).
+
+## PR body — Smoke test section
+
+Every PR must include a **Smoke test** section (add to `.github/PULL_REQUEST_TEMPLATE.md` if missing):
+
+- Task(s) run, status, answer/observations, and cost; **or**
+- Exactly `jev smoke test skipped: key(s) absent` if API keys are missing; **or**
+- A one-line concrete reason if truly not applicable (pure tests/docs/infra with no UI effect).

@@ -1,11 +1,11 @@
 ---
 name: jev-smoke-test
-description: Smoke-test UI changes with fastbrowse (local Jev + headless Chrome) against the Firebase Hosting emulator or a preview URL before opening a PR. Use after editing hosted surfaces in public/ when keys are present; skip gracefully when API keys are absent.
+description: Required before PR for any user-visible/hosted UI change (public/, Hosting, mobile). Run fastbrowse + local Jev against the Hosting emulator or a preview URL; repeat after the final fix commit. Skip only when keys or uv are absent (exact PR line) or the change has no UI effect. See .cursor/rules/smoke-test.mdc.
 ---
 
 # Jev smoke test (fastbrowse)
 
-[fastbrowse](https://github.com/agent-labs-dev/fastbrowse) (MIT, PyPI `fastbrowse`, v0.5.3+) drives a **local** headless browser with **Jev** for quick, read-only UI checks. Run this **after** UI changes and **before** opening or updating a PR.
+[fastbrowse](https://github.com/agent-labs-dev/fastbrowse) (MIT, PyPI `fastbrowse`, v0.5.3+) drives a **local** headless browser with **Jev** for quick, read-only UI checks. **Required** for hosted UI changes: run before opening or marking a PR ready, and again after the final fix commit (see `.cursor/rules/smoke-test.mdc`).
 
 **Never** smoke-test production with a real login. Use the Firebase Hosting emulator (`http://localhost:5005`, see `.cursor/environment.json`) or a **preview** URL only.
 
@@ -105,10 +105,11 @@ else
 fi
 ```
 
-## When to use
+## When to use (mandatory)
 
-- After changing any **hosted UI** under `public/` (or other surfaces served by Firebase Hosting).
-- **Before** creating or updating the PR.
+- Any change to **hosted UI** under `public/` or other Firebase Hosting surfaces (including CSS/JS the emulator serves).
+- Functions or rules changes that alter what a page shows — smoke-test that page.
+- Bug fixes: repro path before the fix and after, when feasible.
 - Write **1–3 targeted natural-language tasks** per changed screen (happy path + one edge case if useful). Do not run a single vague “check the app” task.
 
 ## Local hosting emulator
@@ -158,7 +159,7 @@ A Cloud Agent trial on **fastbrowse 0.5.3** against the local Hosting emulator r
 
 ### PR body evidence
 
-When smoke runs, add to the PR **test evidence** section:
+When smoke runs, add to the PR **Smoke test** section:
 
 - Command(s) run (omit secrets).
 - Final `status` from JSON.
