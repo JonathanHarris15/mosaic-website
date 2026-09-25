@@ -289,9 +289,12 @@ async function devices(deps) {
     };
   });
 
+  // Named people first, in name order, then the accounts with no linked
+  // Person — a foyer kiosk is not who an admin came to this list to find.
+  const label = (person) => person.name || person.email || person.uid;
   people.sort((a, b) => {
-    const byName = String(a.name || "~").localeCompare(String(b.name || "~"));
-    return byName !== 0 ? byName : a.uid.localeCompare(b.uid);
+    if (!!a.name !== !!b.name) return a.name ? -1 : 1;
+    return label(a).localeCompare(label(b)) || a.uid.localeCompare(b.uid);
   });
 
   return {

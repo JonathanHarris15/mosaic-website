@@ -287,6 +287,20 @@ test('devices come back grouped by person, masked, and newest device first', asy
     assert.ok(!wire.includes('APA91'), 'the provider prefix came back');
 });
 
+test('an account with no linked Person sorts after everybody who has one', async () => {
+    const {deps} = harness({
+        listTokens: async () => [
+            {uid: 'u-kiosk', id: 'd1', token: TOKEN_A, updatedAt: daysAgo(1)},
+            {uid: 'u-zoe', id: 'd2', token: TOKEN_B, updatedAt: daysAgo(1)},
+        ],
+        loadOwners: async (uids) => uids.map((uid) => (uid === 'u-kiosk' ?
+            {uid, personId: null, name: '', email: 'foyer@example.org'} :
+            {uid, personId: 'p-zoe', name: 'Zoe Adams', email: 'zoe@example.org'})),
+    });
+    const view = await na.devices(deps);
+    assert.deepEqual(view.people.map((person) => person.uid), ['u-zoe', 'u-kiosk']);
+});
+
 test('a token with no uid or no token string is not a device', async () => {
     const {deps} = harness({
         listTokens: async () => [
