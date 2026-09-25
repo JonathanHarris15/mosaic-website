@@ -121,6 +121,13 @@ const MODULES = [
     // Shepherding idle rule, your own claim never blocking you — or the server
     // and the screen will disagree about who has a note open.
     'presence-core.js',
+    // MS-682. What the Admin Dashboard shows about Notifications — the
+    // mask on a Device token, when one counts as stale, the registry of
+    // everything the church sends, and the picture of the send path. The
+    // callables shape their payloads with it and the page renders them with
+    // it, so a token cannot be masked one way on the wire and another on
+    // screen.
+    'notification-admin-core.js',
     // MS-435 / MS-437. Where a Care List cell lives, the old shape's
     // normaliser, and one column change against the latest list. The assistant
     // writing a cell has to follow exactly the page's rules, or its write lands
