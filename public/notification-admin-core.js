@@ -295,6 +295,9 @@
             typeId: typeId,
             typeName: type ? type.name : (r.purpose || 'Unrecognised'),
             personId: r.personId || null,
+            // The self-test push is the one send addressed to a User rather
+            // than a Person, so it is the one row that can name nobody.
+            toUid: r.toUid || null,
             personName: (r.personId && names[r.personId]) || '',
             serviceDate: r.serviceDate || null,
             title: r.title || '',

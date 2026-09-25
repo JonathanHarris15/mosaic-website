@@ -246,6 +246,27 @@ async function history(deps, args) {
     row.personName = names[row.personId] || "";
   });
 
+  // A self-test push names a User, not a Person, so an admin with no linked
+  // record would otherwise read as "Unnamed recipient" in their own log.
+  // Only asked for when such a row is actually on the page.
+  const orphans = [];
+  kept.forEach((row) => {
+    if (!row.personName && row.toUid && orphans.indexOf(row.toUid) === -1) {
+      orphans.push(row.toUid);
+    }
+  });
+  if (orphans.length) {
+    const owners = await deps.loadOwners(orphans);
+    const byUid = {};
+    (owners || []).forEach((owner) => {
+      if (!owner || !owner.uid) return;
+      byUid[owner.uid] = owner.name || owner.email || "";
+    });
+    kept.forEach((row) => {
+      if (!row.personName && row.toUid) row.personName = byUid[row.toUid] || "";
+    });
+  }
+
   return {
     rows: kept,
     nextCursor: exhausted ? null : cursor,

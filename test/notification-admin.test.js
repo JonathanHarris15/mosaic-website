@@ -294,6 +294,50 @@ test('names are fetched once, for the rows that survived the filter', async () =
     assert.equal(page.rows[2].personName, 'Sam Reed');
 });
 
+test('a self-test by an admin with no linked Person is still named in the log', async () => {
+    const rows = [
+        row({personId: null, toUid: 'u-office', purpose: 'admin_test_push', wording: null}),
+        row({personId: 'p1'}),
+    ].map((r, i) => Object.assign(r, {
+        createdAt: new Date(NOW.getTime() - i * 60000),
+        cursor: {seconds: Math.floor((NOW.getTime() - i * 60000) / 1000), nanoseconds: 0},
+    }));
+    const askedOwners = [];
+    const reader = pagedReader(rows);
+    const {deps} = harness({
+        readLogPage: reader.read,
+        namesFor: async () => ({p1: 'Jane Whitfield'}),
+        loadOwners: async (uids) => {
+            askedOwners.push(uids.slice());
+            return uids.map((uid) => ({uid, personId: null, name: '', email: 'office@example.org'}));
+        },
+    });
+
+    const page = await na.history(deps, {limit: 10});
+    assert.deepEqual(askedOwners, [['u-office']],
+        'the uid behind an unlinked self-test was not looked up, or a named row was');
+    assert.equal(page.rows[0].personName, 'office@example.org');
+    assert.equal(page.rows[1].personName, 'Jane Whitfield');
+});
+
+test('a page of ordinary rows never asks who a uid belongs to', async () => {
+    const rows = [row({personId: 'p1'})].map((r) => Object.assign(r, {
+        createdAt: NOW,
+        cursor: {seconds: Math.floor(NOW.getTime() / 1000), nanoseconds: 0},
+    }));
+    const askedOwners = [];
+    const {deps} = harness({
+        readLogPage: pagedReader(rows).read,
+        namesFor: async () => ({p1: 'Jane Whitfield'}),
+        loadOwners: async (uids) => {
+            askedOwners.push(uids.slice());
+            return [];
+        },
+    });
+    await na.history(deps, {limit: 10});
+    assert.deepEqual(askedOwners, []);
+});
+
 /* ── devices ───────────────────────────────────────────────────────────── */
 
 const TOKEN_A = 'fMEp9xQ1TzS:APA91bHq0Kd7yvnRlZaaa111';
