@@ -15,6 +15,12 @@ Name the commands you ran and what they proved. Prefer `npm test` and `npm run l
 
 -
 
+## Smoke test
+
+Required for user-visible / hosted UI changes (`.cursor/rules/smoke-test.mdc`, `.cursor/skills/jev-smoke-test/SKILL.md`). List fastbrowse task(s), status, observations, and cost — or exactly `jev smoke test skipped: key(s) absent`, or one line why N/A (pure tests/docs/infra, no UI effect).
+
+-
+
 ## Risk
 
 What this can break, who would feel it, and how you checked it did not. Infra-only PRs still name risk (CI, agent setup, review process).
@@ -29,6 +35,6 @@ Firebase Hosting preview channel for `mosaic-hymn-database`, or `n/a` if this PR
 
 ## Ready for Maintain
 
-Tick this only when Jira, AC, test evidence, and risk are filled. Maintain is the Cursor review pass before merge — an empty template is not ready.
+Tick this only when Jira, AC, test evidence, Smoke test, and risk are filled. Maintain is the Cursor review pass before merge — an empty template is not ready.
 
 - [ ] Ready for Maintain
