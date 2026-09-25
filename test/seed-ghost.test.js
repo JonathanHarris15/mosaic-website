@@ -29,6 +29,7 @@ test('the invented congregation uses fake phones, fake emails, and a household',
     const plan = congregation('2026-09-21T00:00:00.000Z', {
         'ghost-ada-cole': 'uid-ada',
         'ghost-ben-cole': 'uid-ben',
+        'ghost-sam-reed': 'uid-sam',
     });
     assert.ok(plan.people.length >= 3);
     for (const person of plan.people) {
@@ -44,6 +45,10 @@ test('the invented congregation uses fake phones, fake emails, and a household',
     assert.strictEqual(byId['ghost-cora-cole'].doc.kid, true);
     assert.strictEqual(byId['ghost-ada-cole'].account.permissionLevel, 'elder');
     assert.strictEqual(byId['ghost-ben-cole'].account.permissionLevel, 'member');
+    assert.strictEqual(byId['ghost-sam-reed'].account.permissionLevel, 'super_admin');
+    assert.strictEqual(byId['ghost-sam-reed'].account.email, 'sam.reed@example.test');
+    assert.strictEqual(byId['ghost-sam-reed'].doc.userId, 'uid-sam');
+    assert.strictEqual(byId['ghost-sam-reed'].doc.accountRank, 'super_admin');
     assert.strictEqual(byId['ghost-cora-cole'].account, null);
     assert.strictEqual(byId['ghost-drew-lane'].doc.membership.stage, 'visitor');
     assert.strictEqual(byId['ghost-ada-cole'].doc.userId, 'uid-ada');
