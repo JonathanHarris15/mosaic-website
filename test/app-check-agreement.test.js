@@ -116,7 +116,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     // sendPrayerRequestNow, mcp, AND firestore:rules. The old prefix
     // without the two new functions still matches a shorter string, so
     // pin the full list (and fail if either export is dropped).
-    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules/,
+    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:adminNotificationOverview,functions:adminListNotifications,functions:adminListPushDevices,functions:adminRevokePushToken,functions:adminSendTestPush,firestore:rules/,
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -127,7 +127,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules/,
+    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:adminNotificationOverview,functions:adminListNotifications,functions:adminListPushDevices,functions:adminRevokePushToken,functions:adminSendTestPush,firestore:rules/,
         'the ops note no longer lists the standing --only targets');
     assert.match(ops, /functions:sendPrayerRequestNow/,
         'the ops note dropped functions:sendPrayerRequestNow');
@@ -147,4 +147,14 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'sendPrayerRequestNow is not exported; the standing --only target would deploy nothing');
     assert.match(index, /exports\.mcp\s*=\s*onRequest/,
         'mcp is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.adminNotificationOverview\s*=\s*onCall/,
+        'adminNotificationOverview is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.adminListNotifications\s*=\s*onCall/,
+        'adminListNotifications is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.adminListPushDevices\s*=\s*onCall/,
+        'adminListPushDevices is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.adminRevokePushToken\s*=\s*onCall/,
+        'adminRevokePushToken is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.adminSendTestPush\s*=\s*onCall/,
+        'adminSendTestPush is not exported; the standing --only target would deploy nothing');
 });

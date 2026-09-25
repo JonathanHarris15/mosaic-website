@@ -884,6 +884,7 @@ One message to one Person, sent by whichever channel can actually reach them. **
 - **Logged once per send, in `notifications`** — Person, channel, purpose, and whether the provider took it. This is what ADR-0009's `sms_messages` becomes now that a text is one channel rather than the only one. Correlating an inbound reply to the message that prompted it stays a *field* on the row and an SMS-only concern: a push has no reply.
 - **It obeys the church's hours** — 8am–8pm church-local, the same window and the same code the prayer texts already use. A push at 6am is worse than a text at 6am, because a text waits quietly.
 - **A Person with no Device token *and* no phone number cannot be told anything by anybody**, and an editor is shown so. Nothing else about delivery is surfaced: the Prayer Request already reads as filled or unfilled, and that is the honest signal.
+- **An admin reads the log and the devices from the Admin Dashboard** (MS-682). Token strings stay on the server — the tab sees a mask — because the owner-only rule on `push_tokens` still holds (ADR-0036). A test push from that tab goes only to the signed-in admin's own devices.
 _Avoid_: alert, reminder, message (unqualified), and **push** / **SMS** for the thing itself — each is one channel of a Notification
 
 ### Device token

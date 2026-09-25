@@ -38,6 +38,50 @@
         html.shell-mobile main .p-lg { padding: 18px; }
         /* Credits figure: display-lg (48px) → 40px as in the design */
         html.shell-mobile main .text-display-lg { font-size: 40px; }
+
+        /* Push notifications tab — flow picture and status chrome. Tokens
+           and type scale stay on the design system; this only draws the
+           pipeline the page does not otherwise have a component for. */
+        .push-flow {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .push-flow__step {
+            position: relative;
+            border: 1px solid var(--md-sys-color-outline-variant, #c6c6c0);
+            border-radius: 12px;
+            padding: 14px 14px 14px 16px;
+            background: var(--md-sys-color-surface-container-lowest, #fff);
+            min-height: 100%;
+        }
+        .push-flow__step--accepted { border-color: color-mix(in srgb, var(--md-sys-color-primary, #4a5d3a) 45%, transparent); }
+        .push-flow__step--dead,
+        .push-flow__step--fallback { border-color: color-mix(in srgb, var(--md-sys-color-error, #ba1a1a) 35%, transparent); }
+        .push-flow__index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: var(--md-sys-color-primary, #4a5d3a);
+            color: var(--md-sys-color-on-primary, #fff);
+            font-size: 11px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .push-log__row { border-left-width: 4px; }
+        .push-log__row--accepted { border-left-color: var(--md-sys-color-primary, #4a5d3a); }
+        .push-log__row--failed { border-left-color: var(--md-sys-color-error, #ba1a1a); }
+        .push-log__row--unreachable { border-left-color: #b8860b; }
+        @media (max-width: 767px) {
+            .push-flow { grid-template-columns: 1fr; }
+        }
+        html.shell-mobile .push-flow { grid-template-columns: 1fr; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -79,6 +123,25 @@
 
     <!-- Main content -->
     <main x-show="!loading" class="flex-grow max-w-5xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+
+        <div class="inline-flex self-start gap-[3px] p-[4px] bg-surface-container border border-outline-variant rounded-xl" role="tablist" aria-label="Admin dashboard">
+            <button type="button" role="tab"
+                @click="activeTab = 'tools'"
+                :aria-selected="activeTab === 'tools'"
+                :class="activeTab === 'tools' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
+                class="inline-flex items-center gap-[5px] px-sm py-[7px] rounded-[9px] font-sans text-[11.5px] font-semibold uppercase tracking-[.1em] transition-colors">
+                <span class="material-symbols-outlined text-[18px]">build</span>Tools
+            </button>
+            <button type="button" role="tab"
+                @click="openPushTab()"
+                :aria-selected="activeTab === 'push'"
+                :class="activeTab === 'push' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
+                class="inline-flex items-center gap-[5px] px-sm py-[7px] rounded-[9px] font-sans text-[11.5px] font-semibold uppercase tracking-[.1em] transition-colors">
+                <span class="material-symbols-outlined text-[18px]">notifications</span>Push notifications
+            </button>
+        </div>
+
+        <div x-show="activeTab === 'tools'" class="flex flex-col gap-margin">
 
         <!-- Service Guide section -->
         <section class="flex flex-col gap-md">
@@ -377,6 +440,230 @@
                 </div>
             </div>
         </section>
+        </div>
+
+        <div x-show="activeTab === 'push'" class="flex flex-col gap-margin" x-cloak>
+
+            <!-- How pushes are handled -->
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>account_tree</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">How pushes are handled</h2>
+                    </div>
+                    <p class="font-body-md text-xs text-on-surface-variant" x-show="pushFlow.timezone"
+                       x-text="'Window ' + pushFlow.windowOpenHour + ':00–' + pushFlow.windowCloseHour + ':00 · ' + pushFlow.timezone"></p>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    One send path. The caller names a Person and a purpose; the path picks push or text.
+                    Hours and dead-token codes come from the same module that decides the send, so this picture cannot invent a second rule.
+                </p>
+                <ol class="push-flow">
+                    <template x-for="(step, index) in pushFlow.steps" :key="step.id">
+                        <li class="push-flow__step" :class="'push-flow__step--' + step.id">
+                            <span class="push-flow__index" x-text="index + 1"></span>
+                            <h3 class="font-headline-md text-sm text-on-surface" x-text="step.title"></h3>
+                            <p class="font-body-md text-xs text-on-surface-variant mt-xs" x-text="step.body"></p>
+                        </li>
+                    </template>
+                </ol>
+                <p x-show="pushLoading && !pushFlow.steps.length" class="font-body-md text-sm text-on-surface-variant italic">
+                    Loading the send path…
+                </p>
+            </section>
+
+            <!-- Types / triggers -->
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center gap-sm">
+                    <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>category</span>
+                    <h2 class="font-headline-md text-headline-md text-primary">Notification types</h2>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Every type the site can send — programmatic and manual. Counts are from <code class="bg-surface-container rounded px-1 py-[1px] text-xs">notifications</code>.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+                    <template x-for="kind in pushTypes" :key="kind.id">
+                        <article class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
+                            <div class="flex items-start justify-between gap-sm">
+                                <h3 class="font-headline-md text-headline-md text-on-surface" x-text="kind.label"></h3>
+                                <span x-show="kind.wiredToNotifier === false"
+                                      class="px-sm py-[2px] rounded-full bg-error-container text-on-error-container font-label-md text-xs whitespace-nowrap">
+                                    Not on tellPerson
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-1">
+                                <template x-for="ch in kind.channels" :key="ch">
+                                    <span class="px-sm py-[2px] rounded-full bg-secondary-container text-on-secondary-container font-label-md text-xs capitalize" x-text="ch"></span>
+                                </template>
+                                <span x-show="kind.programmatic" class="px-sm py-[2px] rounded-full bg-surface-container text-on-surface-variant font-label-md text-xs">Programmatic</span>
+                                <span x-show="kind.manual" class="px-sm py-[2px] rounded-full bg-surface-container text-on-surface-variant font-label-md text-xs">Manual</span>
+                            </div>
+                            <dl class="grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs font-body-md text-xs">
+                                <dt class="text-on-surface-variant">Fires</dt>
+                                <dd class="text-on-surface" x-text="(kind.triggers || []).map(t => t.name + ' (' + t.kind + ')').join(' · ')"></dd>
+                                <dt class="text-on-surface-variant">Who</dt>
+                                <dd class="text-on-surface" x-text="kind.recipients"></dd>
+                                <dt class="text-on-surface-variant">Switch</dt>
+                                <dd class="text-on-surface" x-text="kind.killSwitch"></dd>
+                                <dt class="text-on-surface-variant">Window</dt>
+                                <dd class="text-on-surface" x-text="kind.window"></dd>
+                                <dt class="text-on-surface-variant">Wording</dt>
+                                <dd class="text-on-surface" x-text="kind.wordingSource"></dd>
+                            </dl>
+                            <div class="flex items-baseline justify-between gap-sm pt-xs border-t border-outline-variant/40">
+                                <span class="font-body-md text-xs text-on-surface-variant"
+                                      x-text="kind.lastSentChurchLocal ? ('Last sent ' + kind.lastSentChurchLocal) : 'Never sent in the loaded log'"></span>
+                                <span class="font-label-md text-xs text-on-surface"
+                                      x-text="(kind.counts && kind.counts.d7) + ' / 7d · ' + (kind.counts && kind.counts.d30) + ' / 30d'"></span>
+                            </div>
+                            <p x-show="kind.triggers && kind.triggers[0] && kind.triggers[0].detail"
+                               class="font-body-md text-xs text-on-surface-variant" x-text="kind.triggers.map(t => t.detail).join(' ')"></p>
+                        </article>
+                    </template>
+                </div>
+            </section>
+
+            <!-- Sent log -->
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>history</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">Sent log</h2>
+                    </div>
+                    <button type="button" @click="loadPushHistory({reset: true})" :disabled="pushHistoryLoading"
+                        class="flex items-center gap-1 px-sm py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors disabled:opacity-40">
+                        <span class="material-symbols-outlined text-[18px]" :class="pushHistoryLoading ? 'animate-spin' : ''">refresh</span>
+                        Refresh
+                    </button>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant" x-text="pushHistoryNote || 'Newest first, church-local time.'"></p>
+                <div class="flex flex-col md:flex-row gap-sm">
+                    <label class="flex flex-col gap-xs flex-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Channel</span>
+                        <select x-model="pushHistoryFilter.channel" @change="loadPushHistory({reset: true})"
+                            class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">All channels</option>
+                            <option value="push">Push</option>
+                            <option value="text">Text</option>
+                            <option value="none">None</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-xs flex-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Purpose</span>
+                        <select x-model="pushHistoryFilter.purpose" @change="loadPushHistory({reset: true})"
+                            class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">All purposes</option>
+                            <option value="prayer_request">prayer_request</option>
+                            <option value="prayer_request_thankyou">prayer_request_thankyou</option>
+                            <option value="elder_digest">elder_digest</option>
+                            <option value="event_announcement">event_announcement</option>
+                            <option value="test">test (SMS)</option>
+                            <option value="admin_test_push">admin_test_push</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-xs flex-1">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Status</span>
+                        <select x-model="pushHistoryFilter.status" @change="loadPushHistory({reset: true})"
+                            class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">All statuses</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="failed">Failed</option>
+                            <option value="unreachable">Unreachable</option>
+                        </select>
+                    </label>
+                </div>
+                <div x-show="!pushHistoryLoading && pushHistory.length === 0" class="text-on-surface-variant italic text-sm">
+                    No notifications match these filters.
+                </div>
+                <ul class="flex flex-col gap-sm">
+                    <template x-for="row in pushHistory" :key="row.id">
+                        <li class="push-log__row bg-surface-container-lowest border border-outline-variant rounded-xl px-md py-sm flex flex-col gap-xs"
+                            :class="'push-log__row--' + row.status">
+                            <div class="flex items-center justify-between gap-sm flex-wrap">
+                                <div class="flex items-center gap-xs flex-wrap">
+                                    <span class="inline-flex items-center gap-1 px-sm py-[2px] rounded-full font-label-md text-xs"
+                                          :class="row.status === 'accepted' ? 'bg-secondary-container text-on-secondary-container' : (row.status === 'unreachable' ? 'bg-surface-container text-on-surface-variant' : 'bg-error-container text-on-error-container')"
+                                          x-text="row.status"></span>
+                                    <span class="px-sm py-[2px] rounded-full bg-surface-container text-on-surface-variant font-label-md text-xs capitalize" x-text="row.channel"></span>
+                                    <span class="font-label-md text-xs text-on-surface" x-text="row.purpose"></span>
+                                </div>
+                                <span class="font-body-md text-xs text-on-surface-variant" x-text="row.churchLocalTime"></span>
+                            </div>
+                            <div class="flex items-baseline justify-between gap-sm">
+                                <span class="font-headline-md text-sm text-on-surface" x-text="row.personName || (row.personId ? row.personId : 'No person')"></span>
+                                <span class="font-body-md text-xs text-on-surface-variant" x-show="row.serviceDate" x-text="row.serviceDate"></span>
+                            </div>
+                            <p class="font-body-md text-sm text-on-surface" x-show="row.title" x-text="row.title"></p>
+                            <p class="font-body-md text-sm text-on-surface-variant" x-show="row.body" x-text="row.body"></p>
+                        </li>
+                    </template>
+                </ul>
+                <button type="button" x-show="pushHistoryCursor" @click="loadPushHistory()" :disabled="pushHistoryLoading"
+                    class="self-center px-lg py-sm font-label-md text-label-md border border-outline-variant rounded-lg hover:bg-surface-container transition-colors disabled:opacity-40">
+                    Load older
+                </button>
+            </section>
+
+            <!-- Devices -->
+            <section class="flex flex-col gap-md">
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>smartphone</span>
+                        <h2 class="font-headline-md text-headline-md text-primary">Devices &amp; tokens</h2>
+                    </div>
+                    <div class="flex items-center gap-xs">
+                        <button type="button" @click="loadPushDevices()" :disabled="pushDevicesLoading"
+                            class="flex items-center gap-1 px-sm py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors disabled:opacity-40">
+                            <span class="material-symbols-outlined text-[18px]" :class="pushDevicesLoading ? 'animate-spin' : ''">refresh</span>
+                            Refresh
+                        </button>
+                        <button type="button" @click="sendTestPushToMyself()" :disabled="pushTestSending"
+                            class="px-md py-sm font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[18px]" x-text="pushTestSending ? 'progress_activity' : 'send'"></span>
+                            Send test push to myself
+                        </button>
+                    </div>
+                </div>
+                <p class="font-body-md text-sm text-on-surface-variant">
+                    Tokens stay on the server. What you see is the last six characters.
+                    Revoke removes that device. The test push goes only to the devices on <em>your</em> signed-in account — there is no send-to-everyone.
+                </p>
+                <div x-show="!pushDevicesLoading && pushDeviceGroups().length === 0" class="text-on-surface-variant italic text-sm">
+                    No device tokens are registered.
+                </div>
+                <template x-for="group in pushDeviceGroups()" :key="group.uid">
+                    <article class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
+                        <div class="flex items-baseline justify-between gap-sm">
+                            <h3 class="font-headline-md text-headline-md text-on-surface" x-text="group.personName || 'Unlinked account'"></h3>
+                            <span class="font-body-md text-xs text-on-surface-variant" x-text="group.devices.length + (group.devices.length === 1 ? ' device' : ' devices')"></span>
+                        </div>
+                        <ul class="flex flex-col gap-sm">
+                            <template x-for="device in group.devices" :key="device.id">
+                                <li class="flex items-center justify-between gap-sm bg-surface-container rounded-lg px-md py-sm flex-wrap">
+                                    <div class="flex flex-col gap-xs min-w-0">
+                                        <div class="flex items-center gap-xs flex-wrap">
+                                            <span class="material-symbols-outlined text-[18px] text-primary"
+                                                  x-text="device.platform === 'ios' ? 'phone_iphone' : (device.platform === 'android' ? 'android' : 'devices')"></span>
+                                            <span class="font-label-md text-label-md text-on-surface capitalize" x-text="device.platform || 'unknown'"></span>
+                                            <span x-show="device.stale" class="px-sm py-[2px] rounded-full bg-error-container text-on-error-container font-label-md text-xs">Stale</span>
+                                            <span x-show="device.failed" class="px-sm py-[2px] rounded-full bg-error-container text-on-error-container font-label-md text-xs">Recent push failed</span>
+                                        </div>
+                                        <span class="font-body-md text-xs text-on-surface-variant"
+                                              x-text="device.lastSeenChurchLocal ? ('Last seen ' + device.lastSeenChurchLocal) : 'Last seen unknown'"></span>
+                                        <code class="font-mono text-xs text-on-surface" x-text="device.maskedToken"></code>
+                                    </div>
+                                    <button type="button" @click="revokePushToken(device)" :disabled="pushRevokingId === device.id"
+                                        class="flex items-center gap-1 px-sm py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors disabled:opacity-40">
+                                        <span class="material-symbols-outlined text-[18px]">link_off</span>
+                                        Revoke token
+                                    </button>
+                                </li>
+                            </template>
+                        </ul>
+                    </article>
+                </template>
+            </section>
+        </div>
     </main>
 
     <!-- Toast -->

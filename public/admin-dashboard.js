@@ -54,6 +54,7 @@ document.addEventListener('alpine:init', () => {
         currentUser: null,
         currentPermissionLevel: null,
         loading: true,
+        activeTab: 'tools',
 
         // SMS key + quota status
         statusLoading: false,
@@ -98,6 +99,21 @@ document.addEventListener('alpine:init', () => {
         eventAnnouncementSaving: false,
 
         toast: { show: false, message: '', type: 'success' },
+
+        // Push notifications tab (MS-682). Token strings never land here.
+        pushLoaded: false,
+        pushLoading: false,
+        pushFlow: { steps: [], windowOpenHour: null, windowCloseHour: null, timezone: '' },
+        pushTypes: [],
+        pushHistory: [],
+        pushHistoryCursor: null,
+        pushHistoryLoading: false,
+        pushHistoryNote: '',
+        pushHistoryFilter: { channel: '', purpose: '', status: '' },
+        pushDevices: [],
+        pushDevicesLoading: false,
+        pushTestSending: false,
+        pushRevokingId: '',
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
@@ -338,6 +354,151 @@ document.addEventListener('alpine:init', () => {
                 this.showToast('Could not change automation', 'error');
             } finally {
                 this.autoSendSaving = false;
+            }
+        },
+
+        callable(name) {
+            return firebase.app().functions('us-central1').httpsCallable(name);
+        },
+
+        openPushTab() {
+            this.activeTab = 'push';
+            this.ensurePushLoaded();
+        },
+
+        async ensurePushLoaded() {
+            if (this.pushLoaded || this.pushLoading) return;
+            this.pushLoading = true;
+            try {
+                await Promise.all([
+                    this.loadPushOverview(),
+                    this.loadPushHistory({ reset: true }),
+                    this.loadPushDevices(),
+                ]);
+                this.pushLoaded = true;
+            } finally {
+                this.pushLoading = false;
+            }
+        },
+
+        async loadPushOverview() {
+            try {
+                const { data } = await this.callable('adminNotificationOverview')();
+                this.pushFlow = data.flow || { steps: [] };
+                this.pushTypes = data.types || [];
+                if (data.olderHistoryNote) this.pushHistoryNote = data.olderHistoryNote;
+            } catch (e) {
+                console.error('adminNotificationOverview failed:', e);
+                this.showToast(e.message || 'Could not load notification types', 'error');
+            }
+        },
+
+        async loadPushHistory(opts = {}) {
+            if (this.pushHistoryLoading) return;
+            this.pushHistoryLoading = true;
+            try {
+                const reset = !!opts.reset;
+                const payload = {
+                    channel: this.pushHistoryFilter.channel || null,
+                    purpose: this.pushHistoryFilter.purpose || null,
+                    status: this.pushHistoryFilter.status || null,
+                    pageSize: 25,
+                };
+                if (!reset && this.pushHistoryCursor) payload.cursor = this.pushHistoryCursor;
+                const { data } = await this.callable('adminListNotifications')(payload);
+                const rows = data.rows || [];
+                this.pushHistory = reset ? rows : this.pushHistory.concat(rows);
+                this.pushHistoryCursor = data.nextCursor || null;
+                if (data.olderHistoryNote) this.pushHistoryNote = data.olderHistoryNote;
+            } catch (e) {
+                console.error('adminListNotifications failed:', e);
+                this.showToast(e.message || 'Could not load the sent log', 'error');
+            } finally {
+                this.pushHistoryLoading = false;
+            }
+        },
+
+        async loadPushDevices() {
+            this.pushDevicesLoading = true;
+            try {
+                const { data } = await this.callable('adminListPushDevices')();
+                this.pushDevices = data.devices || [];
+            } catch (e) {
+                console.error('adminListPushDevices failed:', e);
+                this.showToast(e.message || 'Could not load devices', 'error');
+            } finally {
+                this.pushDevicesLoading = false;
+            }
+        },
+
+        pushDeviceGroups() {
+            const groups = {};
+            this.pushDevices.forEach((device) => {
+                const key = device.uid || device.personId || device.id;
+                if (!groups[key]) {
+                    groups[key] = {
+                        uid: device.uid,
+                        personId: device.personId,
+                        personName: device.personName || '',
+                        devices: [],
+                    };
+                }
+                groups[key].devices.push(device);
+            });
+            return Object.values(groups).sort((a, b) =>
+                (a.personName || '').localeCompare(b.personName || ''));
+        },
+
+        async revokePushToken(device) {
+            if (!device || !device.uid || !device.id) return;
+            const who = device.personName || 'this account';
+            if (!confirm('Revoke this device token for ' + who +
+                '? That phone will stop receiving Mosaic pushes until they open the app and sign in again.')) {
+                return;
+            }
+            this.pushRevokingId = device.id;
+            try {
+                await this.callable('adminRevokePushToken')({
+                    uid: device.uid,
+                    tokenId: device.id,
+                    confirm: true,
+                });
+                this.pushDevices = this.pushDevices.filter((d) =>
+                    !(d.uid === device.uid && d.id === device.id));
+                this.showToast('Token revoked');
+            } catch (e) {
+                console.error('adminRevokePushToken failed:', e);
+                this.showToast(e.message || 'Could not revoke that token', 'error');
+            } finally {
+                this.pushRevokingId = '';
+            }
+        },
+
+        async sendTestPushToMyself() {
+            if (!confirm('Send a test push to your own signed-in devices only? No one else will be notified.')) {
+                return;
+            }
+            this.pushTestSending = true;
+            try {
+                // Do not pass uid or token — the callable ignores them anyway
+                // and only reads request.auth.uid.
+                const { data } = await this.callable('adminSendTestPush')({ confirm: true });
+                if (data && data.sent) {
+                    this.showToast('Test push sent to your devices');
+                } else {
+                    this.showToast(data && data.reason === 'no_tokens'
+                        ? 'You have no device tokens on this account'
+                        : 'Test push was not accepted', 'error');
+                }
+                this.pushLoaded = false;
+                await this.loadPushHistory({ reset: true });
+                await this.loadPushDevices();
+                this.pushLoaded = true;
+            } catch (e) {
+                console.error('adminSendTestPush failed:', e);
+                this.showToast(e.message || 'Test push failed', 'error');
+            } finally {
+                this.pushTestSending = false;
             }
         },
 

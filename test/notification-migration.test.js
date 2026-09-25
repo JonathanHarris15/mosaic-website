@@ -62,6 +62,10 @@ test('code, rules, and tests no longer name the old collection except the migrat
             if (full.endsWith('functions/notification-migration.js')) continue;
             if (full.endsWith('scripts/migrate-sms-messages-to-notifications.js')) continue;
             if (full.endsWith('test/notification-migration.test.js')) continue;
+            // MS-682: a read-only admin note that older history may still
+            // live there. Neither file reads or writes the old collection.
+            if (full.endsWith('functions/notification-admin.js')) continue;
+            if (full.endsWith('test/notification-admin.test.js')) continue;
             const text = fs.readFileSync(full, 'utf8');
             if (text.includes('sms_messages')) offenders.push(path.relative(root, full));
         }

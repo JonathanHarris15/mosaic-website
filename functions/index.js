@@ -24,6 +24,7 @@ const pr = require("./prayer-request");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
 const notify = require("./notification-send");
+const notifyAdmin = require("./notification-admin");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
@@ -2922,6 +2923,284 @@ exports.notificationReachability = onCall(
       await assertWritesAsEditor(db, request.auth);
       const uids = await listTokenOwnerUids(db);
       return {uids};
+    },
+);
+
+/**
+ * Map a notification-admin refusal onto HttpsError. The admin module
+ * throws a plain Error with `.code` so the root unit suite can load it
+ * without firebase-functions.
+ * @param {*} err
+ * @return {void}
+ */
+function throwAdminHttps(err) {
+  const codes = [
+    "unauthenticated", "permission-denied", "invalid-argument",
+    "failed-precondition", "not-found", "unavailable",
+  ];
+  if (err && codes.includes(err.code)) {
+    throw new HttpsError(err.code, err.message);
+  }
+  throw err;
+}
+
+/**
+ * Permission level on users/{uid}, including the legacy role field.
+ * @param {Object} db Firestore
+ * @param {string} uid
+ * @return {Promise<string>}
+ */
+async function loadPermissionLevel(db, uid) {
+  const snap = await db.collection("users").doc(uid).get();
+  const data = snap.exists ? snap.data() : {};
+  return data.permissionLevel || data.role || "";
+}
+
+/**
+ * Person display names for a list of ids.
+ * @param {Object} db Firestore
+ * @param {Array<string>} ids
+ * @return {Promise<Object>}
+ */
+async function loadPeopleNames(db, ids) {
+  const unique = Array.from(new Set((ids || []).filter(Boolean)));
+  const names = {};
+  for (let i = 0; i < unique.length; i += 10) {
+    const chunk = unique.slice(i, i + 10);
+    const refs = chunk.map((id) => db.collection("people").doc(id));
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((snap, idx) => {
+      names[chunk[idx]] = snap.exists ? (snap.data().name || "") : "";
+    });
+  }
+  return names;
+}
+
+/**
+ * The Person linked to a User, if any.
+ * @param {Object} db Firestore
+ * @param {string} uid
+ * @return {Promise<?string>}
+ */
+async function personIdForUid(db, uid) {
+  const userSnap = await db.collection("users").doc(uid).get();
+  const linked = userSnap.exists && userSnap.data().personId;
+  if (linked) return linked;
+  const people = await db.collection("people")
+      .where("userId", "==", uid).limit(1).get();
+  return people.empty ? null : people.docs[0].id;
+}
+
+/**
+ * Recent notification rows, newest first. Church-scale: one bounded
+ * read, then the admin module pages and filters in memory.
+ * @param {Object} db Firestore
+ * @return {Promise<Array<Object>>}
+ */
+async function loadRecentNotificationRows(db) {
+  const snap = await db.collection(NOTIFICATIONS_COLLECTION)
+      .orderBy("createdAt", "desc")
+      .limit(400)
+      .get();
+  return snap.docs.map((doc) => Object.assign({id: doc.id}, doc.data()));
+}
+
+/**
+ * Every live device token, with the Person name when there is a link.
+ * @param {Object} db Firestore
+ * @return {Promise<Array<Object>>}
+ */
+async function loadAllPushTokenDocs(db) {
+  const snap = await db.collectionGroup("push_tokens").get();
+  const byUid = {};
+  snap.docs.forEach((doc) => {
+    const parent = doc.ref.parent && doc.ref.parent.parent;
+    const uid = parent && parent.id;
+    if (!uid || !doc.get("token")) return;
+    if (!byUid[uid]) byUid[uid] = [];
+    const data = doc.data();
+    byUid[uid].push({
+      id: doc.id,
+      uid: uid,
+      token: data.token,
+      platform: data.platform || "unknown",
+      updatedAt: data.updatedAt || null,
+    });
+  });
+  const uids = Object.keys(byUid);
+  const uidToPerson = {};
+  const uidToEmail = {};
+  for (let i = 0; i < uids.length; i += 10) {
+    const chunk = uids.slice(i, i + 10);
+    const refs = chunk.map((uid) => db.collection("users").doc(uid));
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((userSnap, idx) => {
+      const uid = chunk[idx];
+      if (!userSnap.exists) return;
+      const data = userSnap.data();
+      if (data.personId) uidToPerson[uid] = data.personId;
+      if (data.email) uidToEmail[uid] = data.email;
+    });
+  }
+  for (const uid of uids) {
+    if (uidToPerson[uid]) continue;
+    const people = await db.collection("people")
+        .where("userId", "==", uid).limit(1).get();
+    if (!people.empty) uidToPerson[uid] = people.docs[0].id;
+  }
+  const names = await loadPeopleNames(db, Object.values(uidToPerson));
+  const out = [];
+  uids.forEach((uid) => {
+    const personId = uidToPerson[uid] || null;
+    const personName = (personId && names[personId]) ||
+        uidToEmail[uid] || "";
+    byUid[uid].forEach((doc) => {
+      out.push(Object.assign({}, doc, {personId, personName}));
+    });
+  });
+  return out;
+}
+
+/**
+ * personIds whose last month included a rejected push.
+ * @param {Array<Object>} rows
+ * @return {Set<string>}
+ */
+function recentFailedPushPersonIds(rows) {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const failed = new Set();
+  (rows || []).forEach((row) => {
+    if (row.channel !== "push" || row.accepted || !row.personId) return;
+    const ms = notifyAdmin.createdAtMs(row.createdAt);
+    if (ms && ms >= cutoff) failed.add(row.personId);
+  });
+  return failed;
+}
+
+/**
+ * I/O the admin handlers need. The decisions stay in notification-admin.
+ * @param {Object} db Firestore
+ * @return {Object}
+ */
+function notificationAdminDeps(db) {
+  return {
+    loadPermission: (uid) => loadPermissionLevel(db, uid),
+    now: () => new Date(),
+    loadNotificationRows: () => loadRecentNotificationRows(db),
+    loadRecentNotifications: () => loadRecentNotificationRows(db),
+    loadPeopleNames: (ids) => loadPeopleNames(db, ids),
+    loadAllTokens: () => loadAllPushTokenDocs(db),
+    loadRecentPushFailures: async () => {
+      const rows = await loadRecentNotificationRows(db);
+      return recentFailedPushPersonIds(rows);
+    },
+    loadTokens: (uid) => loadDeviceTokens(db, uid),
+    loadPersonIdForUid: (uid) => personIdForUid(db, uid),
+    tokenExists: async (uid, tokenId) => {
+      const snap = await db.collection("users").doc(uid)
+          .collection("push_tokens").doc(tokenId).get();
+      return snap.exists;
+    },
+    deleteToken: async (uid, tokenId) => {
+      if (!uid || !tokenId) return;
+      await db.collection("users").doc(uid)
+          .collection("push_tokens").doc(tokenId).delete();
+    },
+    sendPush: async ({token, title, body}) => {
+      try {
+        await admin.messaging().send({
+          token: token,
+          notification: {title: title, body: body},
+        });
+        return {accepted: true};
+      } catch (err) {
+        return {accepted: false, error: err};
+      }
+    },
+    writeLog: async (row) => {
+      await db.collection(NOTIFICATIONS_COLLECTION).add(Object.assign({}, row, {
+        direction: "outbound",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }));
+    },
+  };
+}
+
+/**
+ * Flow picture, type registry, last-sent and recent counts.
+ * Admin-gated. Tokens never leave the server.
+ */
+exports.adminNotificationOverview = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      try {
+        return await notifyAdmin.handleOverview(
+            notificationAdminDeps(admin.firestore()), request);
+      } catch (err) {
+        throwAdminHttps(err);
+      }
+    },
+);
+
+/**
+ * Paged sent log from `notifications`. Admin-gated.
+ */
+exports.adminListNotifications = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      try {
+        return await notifyAdmin.handleListNotifications(
+            notificationAdminDeps(admin.firestore()), request);
+      } catch (err) {
+        throwAdminHttps(err);
+      }
+    },
+);
+
+/**
+ * Masked device tokens for every User who has one. Admin-gated.
+ * ADR-0036 still forbids a client read of another person's token doc.
+ */
+exports.adminListPushDevices = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      try {
+        return await notifyAdmin.handleListDevices(
+            notificationAdminDeps(admin.firestore()), request);
+      } catch (err) {
+        throwAdminHttps(err);
+      }
+    },
+);
+
+/**
+ * Delete one device token. Admin-gated. Requires confirm: true.
+ */
+exports.adminRevokePushToken = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      try {
+        return await notifyAdmin.handleRevokeToken(
+            notificationAdminDeps(admin.firestore()), request);
+      } catch (err) {
+        throwAdminHttps(err);
+      }
+    },
+);
+
+/**
+ * Test push to the signed-in admin's own tokens only. Client uid/token
+ * are ignored. Logged as purpose admin_test_push. No text fallback.
+ */
+exports.adminSendTestPush = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      try {
+        return await notifyAdmin.handleSendTestPush(
+            notificationAdminDeps(admin.firestore()), request);
+      } catch (err) {
+        throwAdminHttps(err);
+      }
     },
 );
 

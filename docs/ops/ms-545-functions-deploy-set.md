@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules
+hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:adminNotificationOverview,functions:adminListNotifications,functions:adminListPushDevices,functions:adminRevokePushToken,functions:adminSendTestPush,firestore:rules
 ```
 
 | Target | Why it is in the set |
@@ -19,10 +19,17 @@ hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccount
 | `functions:syncAccountRankToPerson` | Account Rank projection (MS-539 / MS-557). Export name in `functions/index.js`. Write on `users/{uid}` (link, unlink, permission change, delete). Without this target `people.accountRank` never updates; merging the Trade picker before it is live fail-closes existing Linked Users on non-public Trades. |
 | `functions:sendPrayerRequestNow` | Service Builder "Send Prayer Request Text Now" (MS-598). Export name in `functions/index.js` (`onCall`). Without this target a Hosting merge that admits Pastoral Assistants on that button (MS-594 / #82) would show PA chrome against an elder-only deployed function. |
 | `functions:mcp` | MCP HTTP surface (MS-598). Export name in `functions/index.js` (`onRequest`). Without this target a Hosting merge that admits PAs on `shep_` DECIDE tools (MS-594 / #82) would show PA chrome against a stale deployed MCP. |
+| `functions:adminNotificationOverview` | Admin Dashboard Push notifications tab (MS-682). Flow + type registry + last-sent counts. Hosting that tab against a missing export 500s the overview. |
+| `functions:adminListNotifications` | Admin sent log from `notifications` (MS-682). |
+| `functions:adminListPushDevices` | Masked device tokens via Admin SDK (MS-682). ADR-0036 still forbids a client read of another person's `push_tokens`. |
+| `functions:adminRevokePushToken` | Admin revoke of one device token (MS-682). `assertAdmin` + `confirm`. |
+| `functions:adminSendTestPush` | Admin test push to the signed-in admin's own tokens only (MS-682). Ignores client uid/token. |
 | `firestore:rules` | Live `firestore.rules` (MS-565). Without this target a Hosting merge that needs a rules hole (MS-530 / #69 Pastoral Assistant `lastNoteAt`) ships writers against the old rules. `firestore:indexes` stays out of this set. |
 
 The CLI filter uses the **export name** (`onAttendanceCreated`,
-`syncAccountRankToPerson`, `sendPrayerRequestNow`, `mcp`), not a
+`syncAccountRankToPerson`, `sendPrayerRequestNow`, `mcp`,
+`adminNotificationOverview`, `adminListNotifications`,
+`adminListPushDevices`, `adminRevokePushToken`, `adminSendTestPush`), not a
 renamed Cloud Console label. The functions codebase is `default`;
 `functions:<export>` is enough. `firestore:rules` is the Firebase CLI
 rules target (`firebase.json` → `firestore.rules`), not a function
@@ -54,7 +61,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,firestore:rules`
+`targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:adminNotificationOverview,functions:adminListNotifications,functions:adminListPushDevices,functions:adminRevokePushToken,functions:adminSendTestPush,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
