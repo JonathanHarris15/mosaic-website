@@ -58,7 +58,6 @@ const PUSH_WORDING_KINDS = ['initial', 'reminder', 'thankyou'];
 const PUSH_TAB_CALLABLES = {
     overview: 'notificationOverview',
     history: 'notificationHistory',
-    devices: 'notificationDevices',
     revoke: 'notificationRevokeToken',
     testPush: 'notificationTestPush',
 };
@@ -123,6 +122,7 @@ document.addEventListener('alpine:init', () => {
         pushLoading: false,
         pushLoaded: false,
         pushError: '',
+        pushOffline: false,        // the registry, rendered without a server
 
         history: [],
         historyCursor: null,
@@ -134,7 +134,6 @@ document.addEventListener('alpine:init', () => {
         devices: [],
         deviceSummary: null,
         deviceThresholds: '',
-        devicesLoading: false,
         revokeConfirming: null,    // 'uid/tokenId' while the row asks
         revoking: false,
 
@@ -176,8 +175,15 @@ document.addEventListener('alpine:init', () => {
             if (tab === 'push' && !this.pushLoaded) this.loadPush();
         },
 
+        // Null while loading, and null when the registry is being shown
+        // without a server. Alpine evaluates a binding inside a hidden
+        // element, so every count on this tab reads through here.
+        get pushRecent() {
+            return (this.pushOverview && this.pushOverview.recent) || null;
+        },
+
         get pushTrouble() {
-            return this.pushOverview ? this.pushOverview.recent.week.problems : 0;
+            return this.pushRecent ? this.pushRecent.week.problems : 0;
         },
 
         callable(name) {
@@ -407,24 +413,57 @@ document.addEventListener('alpine:init', () => {
 
         // ── Push notifications tab ──────────────────────────────────────
 
+        // One call brings the flow, the registry, the counts and the devices,
+        // because on the server they are the same two reads.
+        //
+        // When it fails, the tab does NOT go on to ask for the log as well:
+        // one broken connection should say so once, not three times. What is
+        // still worth showing is the registry — what this site can send, and
+        // what fires it — which is knowledge the page already carries. The
+        // counts and the send window are not: they are read off the server,
+        // so they come back blank rather than invented.
         async loadPush() {
             if (this.pushLoading) return;
             this.pushLoading = true;
             this.pushError = '';
+            this.pushOffline = false;
             try {
                 const { data } = await this.callable(PUSH_TAB_CALLABLES.overview)();
                 this.pushOverview = data;
                 this.pushFlow = data.flow;
+                this.devices = data.devices.people;
+                this.deviceSummary = data.devices.summary;
                 this.deviceThresholds =
                     `Aging after ${data.agingAfterDays} days, stale after ${data.staleAfterDays}.`;
                 this.pushLoaded = true;
             } catch (e) {
                 console.error('notificationOverview failed:', e);
-                this.pushError = e.message || 'Could not read the notification settings.';
-            } finally {
+                this.showRegistryOffline(e);
                 this.pushLoading = false;
+                return;
             }
-            await Promise.all([this.loadHistory(), this.loadDevices()]);
+            this.pushLoading = false;
+            await this.loadHistory();
+        },
+
+        showRegistryOffline(error) {
+            this.pushOffline = true;
+            this.pushError = (error && error.message) ||
+                'Could not reach the notification functions.';
+            this.pushFlow = null;
+            this.devices = [];
+            this.deviceSummary = null;
+            this.deviceThresholds = '';
+            this.history = [];
+            this.historyCursor = null;
+            this.historyScanned = 0;
+            this.pushOverview = {
+                constants: { timezone: '' },
+                types: NotificationAdminCore.offlineTypes(),
+                unmatched: [],
+                recent: null,
+                devices: null,
+            };
         },
 
         // `more` keeps what is on screen and asks for the next page; anything
@@ -458,27 +497,14 @@ document.addEventListener('alpine:init', () => {
             this.loadHistory();
         },
 
-        async loadDevices() {
-            if (this.devicesLoading) return;
-            this.devicesLoading = true;
-            try {
-                const { data } = await this.callable(PUSH_TAB_CALLABLES.devices)();
-                this.devices = data.people;
-                this.deviceSummary = data.summary;
-            } catch (e) {
-                console.error('notificationDevices failed:', e);
-                this.showToast('Could not read the device list', 'error');
-            } finally {
-                this.devicesLoading = false;
-            }
-        },
-
-        // Two presses, always. The first asks; this one is the answer.
+        // Two presses, always. The first asks; this one is the answer, and it
+        // says so to the server — which refuses a call that does not carry it.
         async revokeDevice(person, device) {
             if (this.revoking) return;
             this.revoking = true;
             try {
                 await this.callable(PUSH_TAB_CALLABLES.revoke)({
+                    confirm: true,
                     uid: person.uid,
                     tokenId: device.id,
                 });
@@ -495,20 +521,23 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // The payload names nobody. The server reads the signed-in uid and
-        // ignores anything this page could say about a recipient.
+        // The payload names nobody. `confirm` is the second press travelling
+        // with the call; it cannot aim anything, and the server refuses
+        // without it. The recipient is the signed-in uid, server-side.
         async sendTestPush() {
             if (this.testPushSending) return;
             this.testPushSending = true;
             this.testPushResult = null;
             try {
-                const { data } = await this.callable(PUSH_TAB_CALLABLES.testPush)();
+                const { data } = await this.callable(PUSH_TAB_CALLABLES.testPush)({
+                    confirm: true,
+                });
                 const removed = data.removed.length
                     ? ` ${data.removed.length} dead token(s) removed.` : '';
                 this.testPushResult = data.accepted > 0
                     ? { ok: true, message: `Accepted by the provider for ${data.accepted} of your ${data.attempted} device(s).${removed}` }
                     : { ok: false, message: `No device accepted it (${data.attempted} tried).${removed}` };
-                if (data.removed.length) this.loadDevices();
+                if (data.removed.length) this.loadPush();
                 this.showToast(data.accepted > 0 ? 'Test push sent' : 'Test push not accepted',
                     data.accepted > 0 ? 'success' : 'error');
             } catch (e) {

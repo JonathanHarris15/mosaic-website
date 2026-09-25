@@ -641,6 +641,30 @@
     }
 
     /**
+     * The registry with nothing filled in — what the page falls back to when
+     * the overview callable cannot be reached.
+     *
+     * ⚠ NOTHING IS GUESSED. The counts and the send window are read off the
+     * server, so offline they come back null rather than plausible: a "7 / 30
+     * days" of zero would read as "nothing has been sent", which is a
+     * different and worse answer than "we could not look". The page renders
+     * a dash and says why.
+     *
+     * @return {Array<Object>}
+     */
+    function offlineTypes() {
+        return NOTIFICATION_TYPES.map(function (type) {
+            var copy = {};
+            Object.keys(type).forEach(function (key) {
+                copy[key] = type[key];
+            });
+            copy.windowLabel = null;
+            copy.stats = null;
+            return copy;
+        });
+    }
+
+    /**
      * The send window in words, for one registry row.
      * @param {string} token the row's window field
      * @param {Object} constants openHour, closeHour, timezone
@@ -814,6 +838,7 @@
         typeById: typeById,
         typeIdFor: typeIdFor,
         summariseTypes: summariseTypes,
+        offlineTypes: offlineTypes,
         windowLabel: windowLabel,
         buildPushFlow: buildPushFlow,
     };

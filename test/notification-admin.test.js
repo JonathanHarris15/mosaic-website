@@ -49,7 +49,6 @@ function harness(overrides) {
         readLogPage: async () => [],
         namesFor: async () => ({}),
         listTokens: async () => [],
-        countDevices: async () => ({people: 0, devices: 0, stale: 0, failing: 0, byPlatform: {}}),
         loadOwners: async (uids) => {
             calls.owners.push(uids);
             return uids.map((uid) => ({uid, personId: 'person-' + uid, name: 'Person ' + uid}));
@@ -80,7 +79,12 @@ test('the overview hands over the send path\u2019s own constants', async () => {
             row({createdAt: daysAgo(2), channel: 'text', accepted: false}),
             row({createdAt: daysAgo(20), channel: 'none', accepted: false, unreachable: true}),
         ],
-        countDevices: async () => ({people: 3, devices: 4, stale: 1, failing: 0, byPlatform: {ios: 3, android: 1}}),
+        listTokens: async () => [
+            {uid: 'u1', id: 'd1', token: TOKEN_A, platform: 'ios', updatedAt: daysAgo(1)},
+            {uid: 'u1', id: 'd2', token: TOKEN_B, platform: 'ios', updatedAt: daysAgo(1)},
+            {uid: 'u2', id: 'd3', token: TOKEN_A, platform: 'ios', updatedAt: daysAgo(1)},
+            {uid: 'u3', id: 'd4', token: TOKEN_B, platform: 'android', updatedAt: daysAgo(90)},
+        ],
     });
 
     const view = await na.overview(deps);
@@ -91,7 +95,9 @@ test('the overview hands over the send path\u2019s own constants', async () => {
     assert.deepEqual(view.constants.deadCodes, Array.from(nc.DEAD_TOKEN_CODES).sort());
     assert.equal(view.flow.window.openHour, nc.WINDOW_OPEN_HOUR);
     assert.equal(view.staleAfterDays, core.TOKEN_STALE_DAYS);
-    assert.equal(view.devices.devices, 4);
+    assert.equal(view.devices.summary.devices, 4);
+    assert.equal(view.devices.summary.people, 3);
+    assert.equal(view.devices.summary.stale, 1);
 
     assert.equal(view.recent.week.total, 2);
     assert.equal(view.recent.week.push, 1);
@@ -122,6 +128,47 @@ test('a purpose the registry has never heard of is reported, not swallowed', asy
     });
     const view = await na.overview(deps);
     assert.deepEqual(view.unmatched, [{purpose: 'brand_new_sender', count: 1}]);
+});
+
+test('opening the tab reads the tokens once and the log once', async () => {
+    const reads = [];
+    const {deps} = harness({
+        listTokens: async () => {
+            reads.push('tokens');
+            return [{uid: 'u1', id: 'd1', token: TOKEN_A, updatedAt: daysAgo(1)}];
+        },
+        readLogSince: async () => {
+            reads.push('log');
+            return [row({createdAt: daysAgo(1)})];
+        },
+    });
+
+    const view = await na.overview(deps);
+
+    // The device list used to live behind its own callable, and both halves
+    // wanted these two reads — so opening the tab did each of them twice.
+    assert.deepEqual(reads.sort(), ['log', 'tokens']);
+    assert.ok(view.devices.people.length, 'the devices did not come back with the overview');
+    assert.ok(view.types.length, 'the registry did not come back with the devices');
+});
+
+test('the owners are asked for once, for the uids that actually hold a token', async () => {
+    const asked = [];
+    const {deps} = harness({
+        listTokens: async () => [
+            {uid: 'u1', id: 'd1', token: TOKEN_A, updatedAt: daysAgo(1)},
+            {uid: 'u1', id: 'd2', token: TOKEN_B, updatedAt: daysAgo(1)},
+            {uid: 'u2', id: 'd3', token: TOKEN_A, updatedAt: daysAgo(1)},
+            {uid: 'u3', id: 'd4', token: ''},
+        ],
+        loadOwners: async (uids) => {
+            asked.push(uids.slice());
+            return uids.map((uid) => ({uid, personId: null, name: uid}));
+        },
+    });
+    await na.overview(deps);
+    assert.deepEqual(asked, [['u1', 'u2']],
+        'a uid with no live token was looked up, or a uid was looked up twice');
 });
 
 /* ── the log ───────────────────────────────────────────────────────────── */
@@ -266,7 +313,7 @@ test('devices come back grouped by person, masked, and newest device first', asy
         })),
     });
 
-    const view = await na.devices(deps);
+    const view = (await na.overview(deps)).devices;
 
     assert.equal(view.people.length, 2);
     assert.equal(view.people[0].name, 'Alan Boyd', 'people are not in name order');
@@ -297,7 +344,7 @@ test('an account with no linked Person sorts after everybody who has one', async
             {uid, personId: null, name: '', email: 'foyer@example.org'} :
             {uid, personId: 'p-zoe', name: 'Zoe Adams', email: 'zoe@example.org'})),
     });
-    const view = await na.devices(deps);
+    const view = (await na.overview(deps)).devices;
     assert.deepEqual(view.people.map((person) => person.uid), ['u-zoe', 'u-kiosk']);
 });
 
@@ -309,7 +356,7 @@ test('a token with no uid or no token string is not a device', async () => {
             {uid: 'u1', id: 'd3', token: TOKEN_A, updatedAt: daysAgo(1)},
         ],
     });
-    const view = await na.devices(deps);
+    const view = (await na.overview(deps)).devices;
     assert.equal(view.summary.devices, 1);
     assert.equal(view.people.length, 1);
 });
@@ -331,13 +378,124 @@ test('failing is read off the log, never stamped on the token', async () => {
         ],
     });
 
-    const view = await na.devices(deps);
+    const view = (await na.overview(deps)).devices;
     const one = view.people.find((person) => person.uid === 'u1');
     const two = view.people.find((person) => person.uid === 'u2');
     assert.equal(one.failing, true, 'the latest push to u1 was refused and it does not show');
     assert.equal(one.lastPushAccepted, false);
     assert.equal(two.failing, false, 'a failed TEXT is not a failing device');
     assert.equal(view.summary.failing, 1);
+});
+
+test('a refused self-test shows on the device list even with no linked Person', async () => {
+    // The kiosk account holds a token and has no Person. A send-path push
+    // could never reach it — tellPerson resolves a uid through people.userId
+    // — but the self-test push addresses a uid directly, so its row is the
+    // one thing that can say this device refused.
+    const {deps} = harness({
+        listTokens: async () => [
+            {uid: 'u-kiosk', id: 'd1', token: TOKEN_A, updatedAt: daysAgo(1)},
+            {uid: 'u-quiet', id: 'd2', token: TOKEN_B, updatedAt: daysAgo(1)},
+        ],
+        loadOwners: async (uids) => uids.map((uid) => ({
+            uid, personId: null, name: '', email: uid + '@example.org',
+        })),
+        readLogSince: async () => [
+            row({personId: null, toUid: 'u-kiosk', channel: 'push', accepted: false, createdAt: daysAgo(1)}),
+            row({personId: null, toUid: 'u-quiet', channel: 'push', accepted: true, createdAt: daysAgo(1)}),
+        ],
+    });
+
+    const view = (await na.overview(deps)).devices;
+    const kiosk = view.people.find((person) => person.uid === 'u-kiosk');
+    const quiet = view.people.find((person) => person.uid === 'u-quiet');
+    assert.equal(kiosk.failing, true,
+        'a User with no linked Person can never show as failing');
+    assert.equal(quiet.failing, false);
+    assert.equal(view.summary.failing, 1);
+});
+
+test('a Person\u2019s own row still wins over a uid row for the same holder', async () => {
+    const {deps} = harness({
+        listTokens: async () => [
+            {uid: 'u1', id: 'd1', token: TOKEN_A, updatedAt: daysAgo(1)},
+        ],
+        loadOwners: async (uids) => uids.map((uid) => ({
+            uid, personId: 'p1', name: 'Jane Whitfield',
+        })),
+        readLogSince: async () => [
+            row({personId: 'p1', channel: 'push', accepted: false, createdAt: daysAgo(1)}),
+            row({personId: null, toUid: 'u1', channel: 'push', accepted: true, createdAt: daysAgo(4)}),
+        ],
+    });
+    const view = (await na.overview(deps)).devices;
+    assert.equal(view.people[0].failing, true);
+    assert.equal(view.people[0].lastPushAccepted, false);
+});
+
+test('the self-test push records the uid it reached, so it can be seen later', async () => {
+    const {deps, calls} = harness({
+        tokensFor: async () => [{id: 'd1', token: TOKEN_A}],
+        ownerOf: async () => ({uid: 'me', personId: null, name: ''}),
+    });
+    await na.testPushToSelf(deps, {callerUid: 'me', confirm: true});
+    assert.equal(calls.logs[0].toUid, 'me');
+    assert.equal(calls.logs[0].personId, null);
+});
+
+/* ── the second press is a fact on the wire ────────────────────────────── */
+
+test('revoking without a confirmation is refused, and reads nothing', async () => {
+    const looked = [];
+    const {deps, calls} = harness({
+        getToken: async (uid, id) => {
+            looked.push({uid, id});
+            return {id, token: TOKEN_A};
+        },
+    });
+
+    for (const payload of [
+        {uid: 'u1', tokenId: 'd1'},
+        {uid: 'u1', tokenId: 'd1', confirm: false},
+        {uid: 'u1', tokenId: 'd1', confirm: 'true'},
+        {uid: 'u1', tokenId: 'd1', confirm: 1},
+        null,
+    ]) {
+        await assert.rejects(
+            () => na.revokeToken(deps, payload),
+            (err) => err.code === 'failed-precondition' && /confirm/i.test(err.message),
+            'this payload was accepted: ' + JSON.stringify(payload));
+    }
+    assert.deepEqual(looked, [], 'an unconfirmed revoke still read the token');
+    assert.deepEqual(calls.deleted, [], 'an unconfirmed revoke deleted a device');
+});
+
+test('a test push without a confirmation is refused, and sends nothing', async () => {
+    const {deps, calls} = harness({
+        tokensFor: async () => [{id: 'd1', token: TOKEN_A}],
+    });
+
+    for (const payload of [
+        {callerUid: 'me'},
+        {callerUid: 'me', confirm: false},
+        {callerUid: 'me', confirm: 'yes'},
+    ]) {
+        await assert.rejects(
+            () => na.testPushToSelf(deps, payload),
+            (err) => err.code === 'failed-precondition' && /confirm/i.test(err.message),
+            'this payload was accepted: ' + JSON.stringify(payload));
+    }
+    assert.equal(calls.push.length, 0, 'an unconfirmed test push reached a device');
+    assert.equal(calls.logs.length, 0, 'an unconfirmed test push wrote a log row');
+    assert.equal(calls.deleted.length, 0);
+});
+
+test('the confirmation gate itself takes nothing but a literal true', () => {
+    assert.throws(() => na.requireConfirm(undefined), (e) => e.code === 'failed-precondition');
+    assert.throws(() => na.requireConfirm({}), (e) => e.code === 'failed-precondition');
+    assert.throws(() => na.requireConfirm({confirm: 'true'}), (e) => e.code === 'failed-precondition');
+    assert.throws(() => na.requireConfirm({confirm: 1}), (e) => e.code === 'failed-precondition');
+    assert.doesNotThrow(() => na.requireConfirm({confirm: true}));
 });
 
 /* ── revoke ────────────────────────────────────────────────────────────── */
@@ -347,7 +505,7 @@ test('revoking names the device, and says what it took away', async () => {
         getToken: async (uid, id) => (uid === 'u1' && id === 'd1' ?
             {id: 'd1', token: TOKEN_A} : null),
     });
-    const result = await na.revokeToken(deps, {uid: 'u1', tokenId: 'd1'});
+    const result = await na.revokeToken(deps, {confirm: true, uid: 'u1', tokenId: 'd1'});
     assert.deepEqual(calls.deleted, [{uid: 'u1', id: 'd1'}]);
     assert.equal(result.revoked, true);
     assert.equal(result.masked, '…aaa111');
@@ -356,11 +514,11 @@ test('revoking names the device, and says what it took away', async () => {
 
 test('revoking nothing, or something already gone, refuses rather than pretends', async () => {
     const {deps, calls} = harness();
-    await assert.rejects(() => na.revokeToken(deps, {}),
+    await assert.rejects(() => na.revokeToken(deps, {confirm: true}),
         (err) => err.code === 'invalid-argument');
-    await assert.rejects(() => na.revokeToken(deps, {uid: 'u1'}),
+    await assert.rejects(() => na.revokeToken(deps, {confirm: true, uid: 'u1'}),
         (err) => err.code === 'invalid-argument');
-    await assert.rejects(() => na.revokeToken(deps, {uid: 'u1', tokenId: 'gone'}),
+    await assert.rejects(() => na.revokeToken(deps, {confirm: true, uid: 'u1', tokenId: 'gone'}),
         (err) => err.code === 'not-found');
     assert.equal(calls.deleted.length, 0);
 });
@@ -378,6 +536,7 @@ test('the test push reads the caller\u2019s uid and ignores everything else on t
 
     const result = await na.testPushToSelf(deps, {
         callerUid: 'me',
+        confirm: true,
         // Everything below is what a hostile browser would send. None of it
         // may be honoured.
         uid: 'somebody-else',
@@ -406,7 +565,7 @@ test('the test push writes one log row, under its own purpose', async () => {
         ownerOf: async () => ({uid: 'me', personId: 'p-me', name: 'Jonathan'}),
     });
 
-    await na.testPushToSelf(deps, {callerUid: 'me'});
+    await na.testPushToSelf(deps, {callerUid: 'me', confirm: true});
 
     assert.equal(calls.logs.length, 1, 'one send, one row');
     const entry = calls.logs[0];
@@ -431,7 +590,7 @@ test('a dead token is deleted by the test push, the same way a real send deletes
         },
     });
 
-    const result = await na.testPushToSelf(deps, {callerUid: 'me'});
+    const result = await na.testPushToSelf(deps, {callerUid: 'me', confirm: true});
     assert.deepEqual(calls.deleted, [{uid: 'me', id: 'dead'}]);
     assert.deepEqual(result.removed, ['…aaa111']);
     assert.equal(result.accepted, 1);
@@ -444,7 +603,7 @@ test('a provider wobble leaves the token alone and is still logged', async () =>
         sendPush: async () => ({accepted: false, error: {code: 'messaging/server-unavailable'}}),
     });
 
-    const result = await na.testPushToSelf(deps, {callerUid: 'me'});
+    const result = await na.testPushToSelf(deps, {callerUid: 'me', confirm: true});
     assert.equal(calls.deleted.length, 0, 'a retryable failure deleted a token');
     assert.equal(result.retryable, 1);
     assert.equal(result.accepted, 0);
@@ -454,7 +613,7 @@ test('a provider wobble leaves the token alone and is still logged', async () =>
 test('an admin with no device of their own is told so, and nothing is sent', async () => {
     const {deps, calls} = harness({tokensFor: async () => []});
     await assert.rejects(
-        () => na.testPushToSelf(deps, {callerUid: 'me'}),
+        () => na.testPushToSelf(deps, {callerUid: 'me', confirm: true}),
         (err) => err.code === 'failed-precondition' && /device/i.test(err.message));
     assert.equal(calls.push.length, 0);
     assert.equal(calls.logs.length, 0);
@@ -462,8 +621,8 @@ test('an admin with no device of their own is told so, and nothing is sent', asy
 
 test('an unsigned-in caller cannot test-push at all', async () => {
     const {deps} = harness();
-    await assert.rejects(() => na.testPushToSelf(deps, {}),
+    await assert.rejects(() => na.testPushToSelf(deps, {confirm: true}),
         (err) => err.code === 'unauthenticated');
-    await assert.rejects(() => na.testPushToSelf(deps, {callerUid: '   '}),
+    await assert.rejects(() => na.testPushToSelf(deps, {callerUid: '   ', confirm: true}),
         (err) => err.code === 'unauthenticated');
 });

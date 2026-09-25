@@ -147,7 +147,6 @@ test('every Push notifications callable asks assertAdmin before it reads anythin
     const gated = [
         'notificationOverview',
         'notificationHistory',
-        'notificationDevices',
         'notificationRevokeToken',
         'notificationTestPush',
     ];
@@ -172,8 +171,41 @@ test('the test push addresses the caller and nothing the browser sent', () => {
     const start = src.indexOf('exports.notificationTestPush = onCall');
     const body = src.slice(start, src.indexOf(');', src.indexOf('log(', start)));
     assert.match(body, /callerUid: request\.auth\.uid/);
-    assert.doesNotMatch(body, /request\.data/,
-        'notificationTestPush reads the payload; it must only read auth.uid');
+
+    // The payload carries exactly one thing, and it cannot aim anything: the
+    // second press. Everything the browser could say about a RECIPIENT — a
+    // uid, a person, a token, a number — must be unread here.
+    const fields = (body.match(/request\.data(?:\s*\|\|\s*\{\})?\)?\.(\w+)/g) || [])
+        .map((hit) => hit.split('.').pop());
+    assert.deepEqual(fields, ['confirm'],
+        'notificationTestPush reads ' + fields.join(', ') + ' off the payload; ' +
+        'only confirm may be read there');
+});
+
+test('revoking and test-pushing both carry the confirmation to the server', () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const admin = fs.readFileSync(
+        path.join(__dirname, '..', 'functions', 'notification-admin.js'), 'utf8');
+    const page = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'admin-dashboard.js'), 'utf8');
+
+    ['notificationRevokeToken', 'notificationTestPush'].forEach((name) => {
+        const start = index.indexOf('exports.' + name + ' = onCall');
+        const head = index.slice(start, start + 700);
+        assert.match(head, /confirm:/,
+            name + ' does not pass the confirmation through to the gate');
+    });
+    ['revokeToken', 'testPushToSelf'].forEach((fn) => {
+        const start = admin.indexOf('async function ' + fn + '(');
+        assert.ok(start !== -1, fn + ' is gone');
+        assert.match(admin.slice(start, start + 400), /requireConfirm\(/,
+            fn + ' no longer demands a confirmation');
+    });
+    assert.match(page, /PUSH_TAB_CALLABLES\.revoke\)\(\{\s*\n\s*confirm: true,/,
+        'the page revokes without saying the user confirmed');
+    assert.match(page, /PUSH_TAB_CALLABLES\.testPush\)\(\{\s*\n\s*confirm: true,/,
+        'the page test-pushes without saying the user confirmed');
 });
 
 test('access-assert does not load firebase-functions (root npm test)', () => {

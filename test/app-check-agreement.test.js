@@ -116,7 +116,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     // sendPrayerRequestNow, mcp, AND firestore:rules. The old prefix
     // without the two new functions still matches a shorter string, so
     // pin the full list (and fail if either export is dropped).
-    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationDevices,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
+    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -127,7 +127,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationDevices,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
+    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
         'the ops note no longer lists the standing --only targets');
     assert.match(ops, /functions:sendPrayerRequestNow/,
         'the ops note dropped functions:sendPrayerRequestNow');
@@ -137,11 +137,12 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'the ops note dropped firestore:rules');
 
     // MS-682. The Push notifications tab is Hosting that cannot work until
-    // five callables are live — one of them is the ONLY way a masked Device
-    // token reaches a browser. Shipping the page without them is a tab that
-    // opens onto an error.
+    // four callables are live — notificationOverview is the ONLY way a
+    // masked Device token reaches a browser. Shipping the page without them
+    // leaves the tab on its offline registry with everything server-read
+    // blank.
     const pushTab = [
-        'notificationOverview', 'notificationHistory', 'notificationDevices',
+        'notificationOverview', 'notificationHistory',
         'notificationRevokeToken', 'notificationTestPush',
     ];
     pushTab.forEach((name) => {

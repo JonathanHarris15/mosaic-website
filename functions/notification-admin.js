@@ -72,6 +72,29 @@ function trimmed(value) {
 }
 
 /**
+ * Refuses anything that did not arrive as an answered question.
+ *
+ * ⚠ THE SECOND PRESS IS A FACT ON THE WIRE, NOT A STATE IN A BROWSER. The
+ * page asks before it revokes and before it test-pushes, but a callable is
+ * reachable without the page — so the confirmation travels with the call and
+ * the server refuses a request that does not carry it. A mistyped curl, a
+ * replayed fetch from the console, or a future caller that forgot the dialog
+ * is refused here rather than obeyed.
+ *
+ * Checked BEFORE anything is read or deleted, so a refusal costs one
+ * Firestore read for the admin gate and nothing else.
+ *
+ * @param {Object} data request.data
+ * @return {void}
+ */
+function requireConfirm(data) {
+  if (!data || data.confirm !== true) {
+    throw refuse("failed-precondition",
+        "This needs confirming. Press the button again to go ahead.");
+  }
+}
+
+/**
  * The send path's own numbers, for a picture that cannot drift from it.
  * @return {Object} openHour, closeHour, timezone, deadCodes
  */
@@ -115,18 +138,27 @@ function countRecent(rows, now, days) {
 
 /**
  * Everything the tab needs before an admin touches a control: the picture of
- * the send path, the registry with its recent counts, and the headline
- * numbers.
- * @param {Object} deps readLogSince, countDevices, now
+ * the send path, the registry with its recent counts, the headline numbers,
+ * and the device list.
+ *
+ * ⚠ THE DEVICE LIST IS IN HERE RATHER THAN BEHIND ITS OWN CALLABLE, and that
+ * is the whole point. Both halves want the same two reads — every Device
+ * token in the church, and thirty days of the log — and two callables meant
+ * opening the tab did each of them twice. One call, one pass over each.
+ *
+ * @param {Object} deps listTokens, readLogSince, loadOwners, now
  * @return {Promise<Object>}
  */
 async function overview(deps) {
   const now = nowOf(deps);
   const since = new Date(now.getTime() - OVERVIEW_DAYS * DAY_MS);
-  const rows = await deps.readLogSince(since, OVERVIEW_LIMIT);
+  const [tokens, rows] = await Promise.all([
+    deps.listTokens(),
+    deps.readLogSince(since, OVERVIEW_LIMIT),
+  ]);
+  const owners = await deps.loadOwners(holderUids(tokens));
   const constants = sendConstants();
   const summary = core.summariseTypes(rows, now);
-  const devices = await deps.countDevices();
 
   return {
     now: now.toISOString(),
@@ -141,7 +173,7 @@ async function overview(deps) {
       week: countRecent(rows, now, 7),
       month: countRecent(rows, now, 30),
     },
-    devices: devices,
+    devices: deviceHolders({tokens, owners, rows, now}),
     staleAfterDays: core.TOKEN_STALE_DAYS,
     agingAfterDays: core.TOKEN_AGING_DAYS,
   };
@@ -225,55 +257,86 @@ async function history(deps, args) {
 }
 
 /**
+ * The uids holding at least one live Device token, in first-seen order.
+ * @param {Array<Object>} tokens
+ * @return {Array<string>}
+ */
+function holderUids(tokens) {
+  const seen = [];
+  (tokens || []).forEach((token) => {
+    if (!token || !token.uid || !token.token) return;
+    if (seen.indexOf(token.uid) === -1) seen.push(token.uid);
+  });
+  return seen;
+}
+
+/**
+ * The most recent push aimed at each Person and at each User, off the log.
+ *
+ * ⚠ BOTH KEYS, DELIBERATELY. A send-path push is addressed to a Person and
+ * resolved through `people.userId`, so its row names a personId — but the
+ * self-test push is addressed to a uid, and an admin whose account has no
+ * linked Person would write a row naming nobody. Keyed on personId alone,
+ * that admin's refused test push was invisible on the very list it was
+ * pressed from.
+ *
+ * @param {Array<Object>} rows raw log rows
+ * @return {Map<string, {at: number, accepted: boolean}>}
+ */
+function lastPushByKey(rows) {
+  const last = new Map();
+  const note = (key, at, accepted) => {
+    if (!key) return;
+    const held = last.get(key);
+    if (!held || at > held.at) last.set(key, {at: at, accepted: accepted});
+  };
+  (rows || []).forEach((row) => {
+    if (!row || row.channel !== "push") return;
+    const when = core.toDate(row.createdAt);
+    if (!when) return;
+    note(row.personId, when.getTime(), row.accepted === true);
+    note(row.toUid, when.getTime(), row.accepted === true);
+  });
+  return last;
+}
+
+/**
  * Every Device token in the church, grouped by the person holding it, with
  * the token masked before it leaves this process.
  *
- * "Failing" is derived from the log rather than stamped on the token: the
- * most recent push aimed at that person was not accepted. Writing a flag
- * onto the token document would mean the send path growing a write it does
- * not have, and this page inventing state the send path does not keep.
+ * Pure: `overview` does the reading, because the same two reads answer the
+ * rest of the tab. "Failing" is derived here rather than stamped on the
+ * token — a flag on the token document would mean the send path growing a
+ * write it does not have, and this page inventing state the send path does
+ * not keep.
  *
- * @param {Object} deps listTokens, loadOwners, readLogSince, now
- * @return {Promise<Object>}
+ * @param {Object} args tokens, owners, rows, now
+ * @return {Object}
  */
-async function devices(deps) {
-  const now = nowOf(deps);
-  const tokens = await deps.listTokens();
+function deviceHolders(args) {
+  const a = args || {};
+  const now = a.now || new Date();
   const byUid = new Map();
-  (tokens || []).forEach((token) => {
+  (a.tokens || []).forEach((token) => {
     if (!token || !token.uid || !token.token) return;
     if (!byUid.has(token.uid)) byUid.set(token.uid, []);
     byUid.get(token.uid).push(core.describeDevice(token, now));
   });
 
-  const uids = Array.from(byUid.keys());
-  const owners = await deps.loadOwners(uids);
   const ownerByUid = new Map();
-  (owners || []).forEach((owner) => {
+  (a.owners || []).forEach((owner) => {
     if (owner && owner.uid) ownerByUid.set(owner.uid, owner);
   });
 
-  const since = new Date(now.getTime() - OVERVIEW_DAYS * DAY_MS);
-  const rows = await deps.readLogSince(since, OVERVIEW_LIMIT);
-  const lastPush = new Map();
-  (rows || []).forEach((row) => {
-    if (!row || row.channel !== "push" || !row.personId) return;
-    const when = core.toDate(row.createdAt);
-    if (!when) return;
-    const held = lastPush.get(row.personId);
-    if (!held || when.getTime() > held.at) {
-      lastPush.set(row.personId, {
-        at: when.getTime(),
-        accepted: row.accepted === true,
-      });
-    }
-  });
+  const lastPush = lastPushByKey(a.rows);
 
-  const people = uids.map((uid) => {
+  const people = Array.from(byUid.keys()).map((uid) => {
     const owner = ownerByUid.get(uid) || {};
-    const last = owner.personId ? lastPush.get(owner.personId) : null;
-    const list = byUid.get(uid).slice().sort((a, b) => {
-      return String(b.lastSeen || "").localeCompare(String(a.lastSeen || ""));
+    const last = (owner.personId && lastPush.get(owner.personId)) ||
+      lastPush.get(uid) || null;
+    const list = byUid.get(uid).slice().sort((one, two) => {
+      return String(two.lastSeen || "")
+          .localeCompare(String(one.lastSeen || ""));
     });
     return {
       uid: uid,
@@ -292,9 +355,10 @@ async function devices(deps) {
   // Named people first, in name order, then the accounts with no linked
   // Person — a foyer kiosk is not who an admin came to this list to find.
   const label = (person) => person.name || person.email || person.uid;
-  people.sort((a, b) => {
-    if (!!a.name !== !!b.name) return a.name ? -1 : 1;
-    return label(a).localeCompare(label(b)) || a.uid.localeCompare(b.uid);
+  people.sort((one, two) => {
+    if (!!one.name !== !!two.name) return one.name ? -1 : 1;
+    return label(one).localeCompare(label(two)) ||
+      one.uid.localeCompare(two.uid);
   });
 
   return {
@@ -310,10 +374,11 @@ async function devices(deps) {
  * deletes it with the Admin SDK, which is exactly what signing out does — so
  * the next launch with permission writes a fresh one.
  * @param {Object} deps getToken, deleteToken
- * @param {Object} args uid, tokenId
+ * @param {Object} args confirm, uid, tokenId
  * @return {Promise<Object>}
  */
 async function revokeToken(deps, args) {
+  requireConfirm(args);
   const uid = trimmed(args && args.uid);
   const tokenId = trimmed(args && args.tokenId);
   if (!uid || !tokenId) {
@@ -342,12 +407,13 @@ async function revokeToken(deps, args) {
  * phone of the person pressing it.
  *
  * @param {Object} deps tokensFor, sendPush, deleteToken, ownerOf, writeLog
- * @param {Object} args callerUid — and nothing else is honoured
+ * @param {Object} args callerUid and confirm — nothing else is honoured
  * @return {Promise<Object>}
  */
 async function testPushToSelf(deps, args) {
   const uid = trimmed(args && args.callerUid);
   if (!uid) throw refuse("unauthenticated", "Sign in first.");
+  requireConfirm(args);
 
   const held = await deps.tokensFor(uid);
   const live = (held || []).filter((token) => token && token.token);
@@ -388,6 +454,10 @@ async function testPushToSelf(deps, args) {
   const owner = await deps.ownerOf(uid);
   await deps.writeLog({
     personId: (owner && owner.personId) || null,
+    // The only send that names a User rather than a Person, so the only one
+    // whose row has to. Without it an admin with no linked Person could
+    // never see their own refused test on the device list.
+    toUid: uid,
     channel: "push",
     purpose: core.TEST_PUSH_PURPOSE,
     wording: null,
@@ -419,9 +489,12 @@ module.exports = {
   TEST_PUSH_BODY,
   sendConstants,
   countRecent,
+  requireConfirm,
+  holderUids,
+  lastPushByKey,
+  deviceHolders,
   overview,
   history,
-  devices,
   revokeToken,
   testPushToSelf,
 };

@@ -273,6 +273,26 @@ test('last-sent and recent counts come out per type, and strangers are reported'
     assert.deepEqual(summary.unmatched, [{purpose: 'something_new', count: 1}]);
 });
 
+test('the offline registry is the same list with nothing invented in it', () => {
+    const offline = core.offlineTypes();
+    assert.equal(offline.length, core.NOTIFICATION_TYPES.length);
+    offline.forEach((type, i) => {
+        const real = core.NOTIFICATION_TYPES[i];
+        assert.equal(type.id, real.id);
+        assert.equal(type.name, real.name);
+        assert.equal(type.audience, real.audience);
+        assert.deepEqual(type.firedBy, real.firedBy);
+        // The two things that are read off the server come back absent, not
+        // plausible: a zero count reads as "nothing was sent", which is a
+        // different answer from "we could not look".
+        assert.equal(type.stats, null, type.id + ' invented a count offline');
+        assert.equal(type.windowLabel, null, type.id + ' invented a window offline');
+    });
+    // …and it is a copy, so rendering it offline cannot damage the registry.
+    offline[0].name = 'scribbled on';
+    assert.notEqual(core.NOTIFICATION_TYPES[0].name, 'scribbled on');
+});
+
 /* ── the picture is the send path ──────────────────────────────────────── */
 
 test('the flow diagram is drawn from notification-core, not from a second copy', () => {

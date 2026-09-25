@@ -442,35 +442,52 @@
                     </button>
                 </div>
 
+                <!-- One broken connection says so once. When the overview
+                     cannot be reached the tab stops asking for the log and
+                     the devices too, and falls back to the one thing it can
+                     answer on its own: what this site is able to send. -->
                 <div x-show="pushError" x-transition
-                     class="rounded-xl bg-error-container text-on-error-container px-md py-sm font-body-md text-sm flex items-start gap-2">
-                    <span class="material-symbols-outlined text-[18px] mt-[1px]">error</span>
-                    <span x-text="pushError"></span>
+                     class="rounded-xl px-md py-sm font-body-md text-sm flex items-start gap-2"
+                     :class="pushOffline ? 'bg-warning-container text-on-warning-container' : 'bg-error-container text-on-error-container'">
+                    <span class="material-symbols-outlined text-[18px] mt-[1px]" x-text="pushOffline ? 'cloud_off' : 'error'"></span>
+                    <span class="flex flex-col gap-xs min-w-0">
+                        <span class="font-semibold" x-show="pushOffline">Live data is unavailable.</span>
+                        <span x-text="pushError"></span>
+                        <span x-show="pushOffline">
+                            What Mosaic sends is listed below from this page's own copy of the registry.
+                            The counts, the send window, the sent history and the device list all come from the server, so they are blank rather than guessed.
+                        </span>
+                    </span>
+                    <button @click="loadPush()" :disabled="pushLoading"
+                        class="ml-auto flex-shrink-0 flex items-center gap-1 px-sm py-xs font-label-md text-label-md rounded-lg hover:bg-surface-container-lowest/50 transition-colors disabled:opacity-40">
+                        <span class="material-symbols-outlined text-[18px]" :class="pushLoading ? 'animate-spin' : ''">refresh</span>
+                        <span x-text="pushLoading ? 'Trying…' : 'Try again'"></span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-sm">
+                <div x-show="!pushOffline" class="grid grid-cols-2 md:grid-cols-4 gap-sm">
                     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant">Sent, last 7 days</span>
-                        <span class="font-headline-md text-headline-md text-on-surface" x-text="pushOverview ? pushOverview.recent.week.total : '—'"></span>
+                        <span class="font-headline-md text-headline-md text-on-surface" x-text="pushRecent ? pushRecent.week.total : '—'"></span>
                         <span class="font-body-md text-xs text-on-surface-variant"
-                              x-text="pushOverview ? (pushOverview.recent.week.push + ' push · ' + pushOverview.recent.week.text + ' text') : 'Loading…'"></span>
+                              x-text="pushRecent ? (pushRecent.week.push + ' push · ' + pushRecent.week.text + ' text') : 'Loading…'"></span>
                     </div>
                     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant">Sent, last 30 days</span>
-                        <span class="font-headline-md text-headline-md text-on-surface" x-text="pushOverview ? pushOverview.recent.month.total : '—'"></span>
+                        <span class="font-headline-md text-headline-md text-on-surface" x-text="pushRecent ? pushRecent.month.total : '—'"></span>
                         <span class="font-body-md text-xs text-on-surface-variant">Every channel, every purpose</span>
                     </div>
                     <div class="bg-surface-container-lowest border rounded-xl p-md flex flex-col gap-xs"
                          :class="pushTrouble > 0 ? 'border-error/40 bg-error-container' : 'border-outline-variant'">
                         <span class="font-label-md text-label-md" :class="pushTrouble > 0 ? 'text-on-error-container' : 'text-on-surface-variant'">Did not land, 7 days</span>
-                        <span class="font-headline-md text-headline-md" :class="pushTrouble > 0 ? 'text-on-error-container' : 'text-on-surface'" x-text="pushOverview ? pushOverview.recent.week.problems : '—'"></span>
+                        <span class="font-headline-md text-headline-md" :class="pushTrouble > 0 ? 'text-on-error-container' : 'text-on-surface'" x-text="pushRecent ? pushRecent.week.problems : '—'"></span>
                         <span class="font-body-md text-xs" :class="pushTrouble > 0 ? 'text-on-error-container' : 'text-on-surface-variant'">Refused by a provider, or nobody to tell</span>
                     </div>
                     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant">Devices listening</span>
-                        <span class="font-headline-md text-headline-md text-on-surface" x-text="pushOverview ? pushOverview.devices.devices : '—'"></span>
+                        <span class="font-headline-md text-headline-md text-on-surface" x-text="deviceSummary ? deviceSummary.devices : '—'"></span>
                         <span class="font-body-md text-xs text-on-surface-variant"
-                              x-text="pushOverview ? (pushOverview.devices.people + ' people · ' + pushOverview.devices.stale + ' stale') : 'Loading…'"></span>
+                              x-text="deviceSummary ? (deviceSummary.people + ' people · ' + deviceSummary.stale + ' stale') : 'Loading…'"></span>
                     </div>
                 </div>
             </section>
@@ -488,7 +505,8 @@
                 </p>
 
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg">
-                    <div x-show="!pushFlow" class="text-on-surface-variant italic text-sm">Reading the send path…</div>
+                    <div x-show="!pushFlow" class="text-on-surface-variant italic text-sm"
+                         x-text="pushOffline ? 'The diagram is drawn from the send path\u2019s own constants, which are read off the server — so with the server unreachable there is nothing honest to draw.' : 'Reading the send path…'"></div>
                     <ol x-show="pushFlow" class="flex flex-col gap-md">
                         <template x-for="(step, index) in (pushFlow ? pushFlow.steps : [])" :key="step.id">
                             <li class="relative pl-12">
@@ -586,16 +604,16 @@
                                     <div class="flex flex-col">
                                         <span class="font-label-md text-label-md text-on-surface-variant">Last sent</span>
                                         <span class="font-body-md text-sm text-on-surface"
-                                              x-text="type.stats.lastSentAt ? churchTime(type.stats.lastSentAt) : 'Never'"></span>
+                                              x-text="!type.stats ? '—' : (type.stats.lastSentAt ? churchTime(type.stats.lastSentAt) : 'Never')"></span>
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="font-label-md text-label-md text-on-surface-variant">7 / 30 days</span>
                                         <span class="font-body-md text-sm text-on-surface"
-                                              x-text="type.stats.sent7 + ' / ' + type.stats.sent30"></span>
+                                              x-text="!type.stats ? '—' : (type.stats.sent7 + ' / ' + type.stats.sent30)"></span>
                                     </div>
-                                    <div class="flex flex-col" x-show="type.stats.problems30 > 0">
+                                    <div class="flex flex-col" x-show="type.stats && type.stats.problems30 > 0">
                                         <span class="font-label-md text-label-md text-error">Trouble</span>
-                                        <span class="font-body-md text-sm text-error" x-text="type.stats.problems30"></span>
+                                        <span class="font-body-md text-sm text-error" x-text="type.stats ? type.stats.problems30 : ''"></span>
                                     </div>
                                 </div>
                             </div>
@@ -624,7 +642,8 @@
                                 </div>
                                 <div class="flex flex-col gap-xs">
                                     <dt class="font-label-md text-label-md text-on-surface-variant">Send window</dt>
-                                    <dd class="font-body-md text-sm text-on-surface" x-text="type.windowLabel"></dd>
+                                    <dd class="font-body-md text-sm" :class="type.windowLabel ? 'text-on-surface' : 'text-on-surface-variant'"
+                                        x-text="type.windowLabel || '— read from the server'"></dd>
                                 </div>
                                 <div class="flex flex-col gap-xs">
                                     <dt class="font-label-md text-label-md text-on-surface-variant">What stops it</dt>
@@ -642,8 +661,11 @@
                 </div>
             </section>
 
-            <!-- ── Sent history ───────────────────────────────────────── -->
-            <section class="flex flex-col gap-md">
+            <!-- ── Sent history ─────────────────────────────────────────
+                 Hidden rather than emptied when the server is unreachable:
+                 "Nothing has been sent yet" would be a wrong answer, and a
+                 wrong answer is worse than an absent one. -->
+            <section x-show="!pushOffline" class="flex flex-col gap-md">
                 <div class="flex items-center gap-sm">
                     <span class="material-symbols-outlined text-[24px] text-primary">history</span>
                     <h2 class="font-headline-md text-headline-md text-primary">Sent history</h2>
@@ -758,8 +780,11 @@
                 </div>
             </section>
 
-            <!-- ── Devices & tokens ───────────────────────────────────── -->
-            <section class="flex flex-col gap-md">
+            <!-- ── Devices & tokens ─────────────────────────────────────
+                 Hidden when the server is unreachable, for the same reason
+                 the log is: an empty device list reads as "nobody has the
+                 app", which is not what happened. -->
+            <section x-show="!pushOffline" class="flex flex-col gap-md">
                 <div class="flex items-center gap-sm">
                     <span class="material-symbols-outlined text-[24px] text-primary">devices</span>
                     <h2 class="font-headline-md text-headline-md text-primary">Devices &amp; tokens</h2>
@@ -817,10 +842,10 @@
                                   class="font-label-md text-xs text-on-surface-variant"
                                   x-text="deviceSummary ? (deviceSummary.devices + ' devices across ' + deviceSummary.people + ' people') : ''"></span>
                         </div>
-                        <button @click="loadDevices()" :disabled="devicesLoading"
+                        <button @click="loadPush()" :disabled="pushLoading"
                             class="flex items-center gap-1 px-sm py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors disabled:opacity-40">
-                            <span class="material-symbols-outlined text-[18px]" :class="devicesLoading ? 'animate-spin' : ''">refresh</span>
-                            <span x-text="devicesLoading ? 'Loading…' : 'Refresh'"></span>
+                            <span class="material-symbols-outlined text-[18px]" :class="pushLoading ? 'animate-spin' : ''">refresh</span>
+                            <span x-text="pushLoading ? 'Loading…' : 'Refresh'"></span>
                         </button>
                     </div>
 
@@ -829,7 +854,7 @@
                         <span x-show="deviceThresholds" x-text="deviceThresholds"></span>
                     </p>
 
-                    <div x-show="!devicesLoading && devices.length === 0" class="text-on-surface-variant italic text-sm">
+                    <div x-show="!pushLoading && devices.length === 0" class="text-on-surface-variant italic text-sm">
                         Nobody has the app installed and signed in yet.
                     </div>
 

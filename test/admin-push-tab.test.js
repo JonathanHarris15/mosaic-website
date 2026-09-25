@@ -78,12 +78,26 @@ test('the tab reads the server and never Firestore for a token', () => {
         'the page reads users/{uid}/push_tokens directly; the rules forbid it ' +
         'and the callables exist so it does not have to');
     assert.ok(!/push_tokens/.test(tab));
-    ['notificationOverview', 'notificationHistory', 'notificationDevices',
+    ['notificationOverview', 'notificationHistory',
         'notificationRevokeToken', 'notificationTestPush'].forEach((name) => {
         assert.ok(JS.includes(name), 'the page never calls ' + name);
         assert.match(INDEX, new RegExp('exports\\.' + name + '\\s*=\\s*onCall'),
             name + ' is called by the page and exported by nothing');
     });
+});
+
+test('opening the tab is two calls, not four', () => {
+    // The device list rides along with the overview because on the server it
+    // is the same two reads. A second callable here meant the tab read every
+    // Device token twice and thirty days of the log twice.
+    const opening = JS.slice(JS.indexOf('async loadPush()'),
+        JS.indexOf('showRegistryOffline(error)'));
+    const called = (opening.match(/PUSH_TAB_CALLABLES\.(\w+)/g) || []);
+    assert.deepEqual(called, ['PUSH_TAB_CALLABLES.overview'],
+        'loadPush calls ' + called.join(', ') + ' directly');
+    assert.match(opening, /this\.loadHistory\(\)/);
+    assert.match(opening, /data\.devices\.people/,
+        'the devices no longer arrive with the overview');
 });
 
 test('the page only ever shows a masked token, and says so', () => {
@@ -114,11 +128,50 @@ test('the test push takes two presses, and sends nowhere but the caller', () => 
     assert.match(tab, /@click="sendTestPush\(\)"/);
     assert.match(tab, /@click="testPushConfirming = false"/, 'there is no way to back out');
 
-    // The call itself carries no recipient. A payload is the only way this
-    // page could aim at somebody else, and it does not have one.
-    const call = JS.slice(JS.indexOf('async sendTestPush()'));
-    assert.match(call, /PUSH_TAB_CALLABLES\.testPush\)\(\)/,
-        'sendTestPush passes a payload; it must call with no arguments at all');
+    // The call carries the second press and nothing else. A recipient is the
+    // only thing that would make this dangerous, and the payload has none.
+    const call = JS.slice(JS.indexOf('async sendTestPush()'),
+        JS.indexOf('churchTime(iso)'));
+    assert.match(call, /PUSH_TAB_CALLABLES\.testPush\)\(\{\s*\n\s*confirm: true,\s*\n\s*\}\)/,
+        'sendTestPush must call with { confirm: true } and nothing else');
+    ['uid', 'token', 'personId', 'phone', 'to'].forEach((field) => {
+        assert.ok(!new RegExp('\\b' + field + ':').test(call),
+            'sendTestPush puts ' + field + ' on the payload');
+    });
+});
+
+test('an unreachable server leaves the registry standing and says one thing once', () => {
+    const fallback = JS.slice(JS.indexOf('showRegistryOffline(error)'),
+        JS.indexOf('async loadHistory('));
+    assert.match(fallback, /NotificationAdminCore\.offlineTypes\(\)/,
+        'the fallback does not render the registry this page already carries');
+    assert.match(fallback, /this\.pushOffline = true/);
+    // The counts, the window, the log and the devices are all server-read.
+    // Offline they must be emptied, never guessed.
+    assert.match(fallback, /recent: null/);
+    assert.match(fallback, /this\.pushFlow = null/);
+    assert.match(fallback, /this\.devices = \[\]/);
+    assert.match(fallback, /this\.history = \[\]/);
+
+    // …and one failure must not become three. loadPush returns before it
+    // asks for the log.
+    const opening = JS.slice(JS.indexOf('async loadPush()'),
+        JS.indexOf('showRegistryOffline(error)'));
+    const rescue = opening.slice(opening.indexOf('} catch'));
+    assert.match(rescue, /this\.showRegistryOffline\(e\);[\s\S]*return;/,
+        'loadPush carries on to the other reads after the overview failed');
+
+    // One banner, and a way back.
+    const tab = HTML.slice(HTML.indexOf("x-show=\"tab === 'push'\""));
+    assert.match(tab, /x-show="pushError"/);
+    assert.match(tab, /Live data is unavailable\./);
+    assert.match(tab, /Try again/);
+    assert.match(tab, /x-show="!pushOffline" class="grid grid-cols-2/,
+        'the headline counts are still shown when there are no counts');
+    assert.equal(
+        (tab.match(/<section x-show="!pushOffline"/g) || []).length, 2,
+        'the sent history and the device list must be hidden, not emptied, ' +
+        'when the server could not be reached');
 });
 
 test('there is no bulk send anywhere on the tab', () => {

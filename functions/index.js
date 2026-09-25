@@ -91,7 +91,6 @@ const {
 // hands back shapes that carry no whole token. Pure but for the deps built
 // below, the same split as notifierDeps.
 const na = require("./notification-admin");
-const naCore = require("./shared/notification-admin-core.js");
 
 /**
  * AccessCore canDecide for a callable. The core throws a plain Error with
@@ -2490,19 +2489,6 @@ function notificationAdminDeps(db) {
 
     listTokens: () => listAllDeviceTokens(db),
 
-    countDevices: async () => {
-      const tokens = await listAllDeviceTokens(db);
-      const now = new Date();
-      const people = new Map();
-      tokens.forEach((token) => {
-        if (!token.uid || !token.token) return;
-        if (!people.has(token.uid)) people.set(token.uid, []);
-        people.get(token.uid).push(naCore.describeDevice(token, now));
-      });
-      return naCore.summariseDevices(
-          Array.from(people.values()).map((devices) => ({devices})));
-    },
-
     loadOwners: (uids) => loadTokenOwners(db, uids),
 
     ownerOf: async (uid) => {
@@ -2546,7 +2532,13 @@ function asHttpsError(err) {
  * Everything the Push notifications tab needs before an admin touches a
  * control: the picture of the send path drawn from notification-core's own
  * constants, the registry of what the church sends with its recent counts,
- * and the device totals. Admin-gated.
+ * and the device list itself. Admin-gated.
+ *
+ * The devices are in here rather than behind a second callable because both
+ * halves want the same two reads — every Device token, and thirty days of
+ * the log. This is also the ONLY way a masked Device token reaches a
+ * browser: `users/{uid}/push_tokens` stays owner-only in the rules
+ * (ADR-0036), and this reads it with the Admin SDK.
  */
 exports.notificationOverview = onCall(
     {cors: true, region: "us-central1"},
@@ -2581,27 +2573,10 @@ exports.notificationHistory = onCall(
 );
 
 /**
- * Every Device token in the church, grouped by the person holding it, each
- * masked to its last few characters. Admin-gated, and the ONLY way this
- * reaches a browser: `users/{uid}/push_tokens` stays owner-only in the rules
- * (ADR-0036), and this reads it with the Admin SDK.
- */
-exports.notificationDevices = onCall(
-    {cors: true, region: "us-central1"},
-    async (request) => {
-      const db = admin.firestore();
-      await assertAdmin(db, request.auth, "Devices & tokens");
-      try {
-        return await na.devices(notificationAdminDeps(db));
-      } catch (err) {
-        throw asHttpsError(err);
-      }
-    },
-);
-
-/**
  * Take one device off a User. Admin-gated, and the same delete signing out
- * performs — the next launch with permission writes a fresh token.
+ * performs — the next launch with permission writes a fresh token. Refused
+ * unless the call carries `confirm: true`: the page's second press has to be
+ * a fact on the wire, because a callable is reachable without the page.
  */
 exports.notificationRevokeToken = onCall(
     {cors: true, region: "us-central1"},
@@ -2611,6 +2586,7 @@ exports.notificationRevokeToken = onCall(
       const data = request.data || {};
       try {
         const result = await na.revokeToken(notificationAdminDeps(db), {
+          confirm: data.confirm,
           uid: data.uid,
           tokenId: data.tokenId,
         });
@@ -2626,10 +2602,12 @@ exports.notificationRevokeToken = onCall(
 /**
  * Push to the signed-in admin's own devices, and nobody else's.
  *
- * ⚠ THE PAYLOAD NAMES NOBODY. Only `request.auth.uid` is read; a uid, a
- * personId or a token on `request.data` is ignored rather than honoured.
- * There is no bulk send on this page and this is not one — the worst it can
- * do is buzz the phone of the person who pressed it.
+ * ⚠ THE PAYLOAD NAMES NOBODY. The address is `request.auth.uid` and nothing
+ * else; the one thing taken off `request.data` is the confirmation, which
+ * cannot aim anything. A uid, a personId, a token or a wording on the
+ * payload is ignored rather than honoured. There is no bulk send on this
+ * page and this is not one — the worst it can do is buzz the phone of the
+ * person who pressed it.
  */
 exports.notificationTestPush = onCall(
     {cors: true, region: "us-central1"},
@@ -2639,6 +2617,7 @@ exports.notificationTestPush = onCall(
       try {
         const result = await na.testPushToSelf(notificationAdminDeps(db), {
           callerUid: request.auth.uid,
+          confirm: (request.data || {}).confirm,
         });
         log(`notificationTestPush: ${request.auth.uid} tried ` +
           `${result.attempted} device(s), ${result.accepted} accepted, ` +
