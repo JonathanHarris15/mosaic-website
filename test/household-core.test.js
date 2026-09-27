@@ -178,6 +178,63 @@ test('a Household is not its own duplicate', () => {
     assert.strictEqual(Household.duplicateOf(list, 'The Harris Household', 'hh1'), null);
 });
 
+// ── MS-685: the Kid toggle is the Person's, and it is the last word ─────────
+
+test('unticking Kid on the Person turns it off inside a stored Household', () => {
+    // The Household was written down while Sam was a Kid. Unticking Kid in the
+    // Membership Directory only ever writes the Person — and that has to reach
+    // the foyer desk, or a pickup number keeps printing for somebody who is
+    // not a Kid.
+    const directory = [
+        { id: 'bob', name: 'Bob Harris', kid: false },
+        { id: 'sam', name: 'Sam Harris', kid: false },
+    ];
+    const stored = [{
+        id: 'hh1',
+        name: 'The Harris Household',
+        members: [{ personId: 'bob', kid: false }, { personId: 'sam', kid: true }],
+    }];
+    const harris = Household.householdsFromDirectory(directory, [], stored)
+        .find(h => h.id === 'hh1');
+    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, false);
+});
+
+test('ticking Kid on the Person turns it on inside a stored Household', () => {
+    const directory = [{ id: 'sam', name: 'Sam Harris', kid: true }];
+    const stored = [{
+        id: 'hh1',
+        name: 'The Harris Household',
+        members: [{ personId: 'sam', kid: false }],
+    }];
+    const harris = Household.householdsFromDirectory(directory, [], stored)
+        .find(h => h.id === 'hh1');
+    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, true);
+});
+
+test('unticking Kid on the Person outranks being a child on their Family', () => {
+    const directory = [
+        { id: 'bob', name: 'Bob Harris' },
+        { id: 'sam', name: 'Sam Harris', kid: false },
+    ];
+    const harris = Household.householdsFromDirectory(
+        directory, [{ id: 'f1', husbandId: 'bob', childIds: ['sam'] }], []
+    ).find(h => h.id === 'family:f1');
+    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, false);
+});
+
+test('a Family child nobody has answered for is still a Kid on day one', () => {
+    // The projection is the FALLBACK, not the override. A directory child whose
+    // Kid box has never been touched still gets the child tag and the stub.
+    const directory = [
+        { id: 'bob', name: 'Bob Harris' },
+        { id: 'sam', name: 'Sam Harris' },
+    ];
+    const harris = Household.householdsFromDirectory(
+        directory, [{ id: 'f1', husbandId: 'bob', childIds: ['sam'] }], []
+    ).find(h => h.id === 'family:f1');
+    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, true);
+});
+
 test('adding somebody already in the household is named, not silently allowed', () => {
     const household = { id: 'hh', name: 'The Harris Household', members: [{ personId: 'bob', name: 'Bob Harris' }] };
     assert.deepStrictEqual(Household.repeatedNames(household, [{ name: 'bob harris' }]), ['Bob Harris']);
