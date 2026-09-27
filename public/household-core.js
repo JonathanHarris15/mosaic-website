@@ -30,6 +30,24 @@
         return byId;
     }
 
+    // ⚠ THE KID TOGGLE LIVES ON THE PERSON, AND NOTHING ELSE MAY OVERRULE IT
+    // (MS-685). The two other things that have an opinion about who is a Kid —
+    // a Family's `childIds`, and the member row inside a stored Household — are
+    // both SNAPSHOTS: one of kinship, one of what was true the day the
+    // Household was written down. Neither is a place an editor can turn Kid
+    // off, and neither was ever re-read against the Person, so unticking Kid in
+    // the Membership Directory changed nothing at the foyer desk: the pickup
+    // number was still minted and the guardian stub still printed for somebody
+    // who is not a Kid.
+    //
+    // So a Person who has an answer answers for themselves, and the snapshot is
+    // the fallback only for a Person who has none — which is what still gets a
+    // directory child the right tag on day one (CONTEXT.md, Kid).
+    function kidFlagFor(p, fallback) {
+        if (p.kid != null) return !!p.kid;
+        return fallback == null ? false : !!fallback;
+    }
+
     function memberOf(byId, personId, kid) {
         const p = byId[personId];
         if (!p) return null;
@@ -39,7 +57,7 @@
             name: p.name || '',
             lastName: remembered.lastName,
             noLastName: remembered.noLastName,
-            kid: kid == null ? !!p.kid : !!kid,
+            kid: kidFlagFor(p, kid),
         };
     }
 
