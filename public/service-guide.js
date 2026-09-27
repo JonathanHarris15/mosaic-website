@@ -695,6 +695,12 @@ function guideEditor() {
             return this.elements.filter(el => el.enabled);
         },
 
+        get kidsPageEnabled() {
+            return !!this.elements.find(
+                (e) => (e.id === 'kids' || e.type === 'kids_section') && e.enabled,
+            );
+        },
+
         get tasks() {
             return {
                 prayer: this.elements.find(el => el.type === 'pastoral_prayer'),
