@@ -1,9 +1,7 @@
 name: PR CI
 
 # The two commands agents already run: `npm test` and `npm run lint --prefix functions`.
-# Both are green on main after MS-543 / PR #65. The old red baseline is recorded in
-# docs/ops/ms-543-ci-baseline-inventory.md (landed with #65). This workflow still
-# runs them so every PR has the same signal; do not weaken eslint or skip the jobs.
+# Runs on pull requests targeting `main` or `ghost-main` (design sandbox).
 #
 # node-version must be the runtime the functions actually ship on, which is
 # functions/package.json `engines.node` (MS-683 moved both to 22). Testing on a
@@ -12,6 +10,9 @@ name: PR CI
 
 on:
   pull_request:
+    branches:
+      - main
+      - ghost-main
 
 permissions:
   contents: read

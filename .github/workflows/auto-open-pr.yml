@@ -36,6 +36,14 @@ jobs:
             echo "Could not parse a base branch from '$HEAD' (expected night/<base>__<desc>); skipping."
             exit 0
           fi
+          if [ "$BASE" = "main" ] && { [ "$HEAD" = "ghost-main" ] || [[ "$HEAD" == ghost/* ]]; }; then
+            echo "Refusing to auto-open a PR from ghost sandbox work into main ($HEAD → $BASE)."
+            exit 0
+          fi
+          if [ "$HEAD" = "ghost-main" ]; then
+            echo "ghost-main is never opened as a PR head by this workflow; skipping."
+            exit 0
+          fi
           existing=$(gh pr list --head "$HEAD" --state open --json number --jq 'length')
           if [ "$existing" -gt 0 ]; then
             echo "A PR is already open for $HEAD; nothing to do."

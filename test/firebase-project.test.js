@@ -222,11 +222,13 @@ test('the ghost deploy workflow pins mosaic-manager-ghost and never the church k
     const wfPath = path.join(ROOT, '.github', 'workflows', 'firebase-deploy-ghost.yml');
     const wf = fs.readFileSync(wfPath, 'utf8');
     assert.match(wf, /workflow_dispatch/);
-    assert.doesNotMatch(wf, /^\s+push:\s*$/m);
+    assert.match(wf, /^\s+push:\s*$/m);
+    assert.match(wf, /-\s+ghost-main/);
     assert.match(wf, /concurrency:\s*\n\s+group:\s+firebase-deploy-mosaic-manager-ghost/);
     assert.match(wf, /--project mosaic-manager-ghost/);
     assert.match(wf, /apply-firebase-project\.js --project mosaic-manager-ghost/);
     assert.match(wf, /check-firebase-deploy\.js --project mosaic-manager-ghost/);
+    assert.match(wf, /Guard resolved project id against branch/);
     assert.doesNotMatch(wf, /--i-mean-prod/);
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=off/);
     assert.doesNotMatch(wf, /PUBLIC_FORM_APP_CHECK_MODE=enforce/);
@@ -240,6 +242,37 @@ test('the ghost deploy workflow pins mosaic-manager-ghost and never the church k
     const secrets = [...wf.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(m => m[1]);
     assert.deepStrictEqual([...new Set(secrets)], ['FIREBASE_SERVICE_ACCOUNT_GHOST']);
     assert.match(wf, /mosaic-hymn-database/);
+});
+
+test('the church deploy workflow stays main-only and guards the church project id', () => {
+    const wfPath = path.join(ROOT, '.github', 'workflows', 'firebase-deploy.yml');
+    const wf = fs.readFileSync(wfPath, 'utf8');
+    assert.match(wf, /^\s+push:\s*$/m);
+    assert.match(wf, /branches:\s*\n\s+-\s+main\s*$/m);
+    assert.doesNotMatch(wf, /branches:\s*\n\s+-\s+ghost-main/m);
+    assert.match(wf, /Guard resolved project id against branch/);
+    assert.match(wf, /--project mosaic-hymn-database/);
+    assert.match(wf, /check-firebase-deploy\.js --project mosaic-hymn-database --i-mean-prod/);
+    assert.match(wf, /mosaic-manager-ghost/);
+});
+
+test('reset ghost-main archives, force-resets, and dispatches the ghost deploy', () => {
+    const wfPath = path.join(ROOT, '.github', 'workflows', 'reset-ghost-main.yml');
+    const wf = fs.readFileSync(wfPath, 'utf8');
+    assert.match(wf, /workflow_dispatch/);
+    assert.doesNotMatch(wf, /^\s+push:\s*$/m);
+    assert.match(wf, /ghost-archive/);
+    assert.match(wf, /git push origin ghost-main --force/);
+    assert.match(wf, /gh workflow run "Deploy Firebase ghost"/);
+    assert.match(wf, /permissions:\s*\n\s+contents: write\s*\n\s+actions: write/s);
+});
+
+test('pr-ci runs on pull requests to main and ghost-main', () => {
+    const wf = fs.readFileSync(
+        path.join(ROOT, '.github', 'workflows', 'pr-ci.yml'), 'utf8');
+    assert.match(wf, /pull_request:/);
+    assert.match(wf, /-\s+main/);
+    assert.match(wf, /-\s+ghost-main/);
 });
 
 function writeFixture(dir, project, opts = {}) {

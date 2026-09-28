@@ -1,0 +1,68 @@
+name: Reset ghost-main
+
+# Force-updates long-lived branch ghost-main to match main, archives the old
+# tip first, then dispatches the ghost deploy (GITHUB_TOKEN pushes do not run
+# push workflows). See docs/ops/ghost-main.md.
+#
+#   gh workflow run "Reset ghost-main"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: reset-ghost-main
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Archive, reset ghost-main to main, deploy ghost
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Archive the current ghost-main tip
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify origin/ghost-main >/dev/null 2>&1; then
+            echo "ghost-main does not exist yet; skipping archive."
+            exit 0
+          fi
+          OLD="$(git rev-parse origin/ghost-main)"
+          DATE="$(date -u +%Y-%m-%d)"
+          ARCHIVE="ghost-archive/${DATE}"
+          if git rev-parse --verify "refs/remotes/origin/${ARCHIVE}" >/dev/null 2>&1; then
+            SHORT="$(git rev-parse --short "${OLD}")"
+            ARCHIVE="ghost-archive/${DATE}-${SHORT}"
+          fi
+          echo "archive_branch=${ARCHIVE}" >> "${GITHUB_ENV}"
+          echo "Archiving ghost-main tip ${OLD} as ${ARCHIVE}"
+          git branch "${ARCHIVE}" "${OLD}"
+          git push origin "${ARCHIVE}"
+
+      - name: Point ghost-main at main
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(git rev-parse origin/main)"
+          echo "Resetting ghost-main to main @ ${MAIN_SHA}"
+          git branch -f ghost-main "${MAIN_SHA}"
+          git push origin ghost-main --force
+
+      - name: Deploy Firebase ghost
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Deploy Firebase ghost" --ref ghost-main -f dry_run=false
+          echo "Dispatched Deploy Firebase ghost for ref ghost-main."

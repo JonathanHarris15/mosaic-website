@@ -3,7 +3,10 @@ name: Deploy Firebase ghost
 # The ghost (mosaic-manager-ghost) is the Firebase project agents may change.
 # This job is the only ship path. It is not push-to-main: a merge of the
 # church app must not publish the ghost, and this job must not publish the
-# church. Dispatch it:
+# church.
+#
+# Auto-ship: push to `ghost-main` (the long-lived design sandbox — see
+# docs/ops/ghost-main.md). Manual plan or ship from any ref:
 #   gh workflow run "Deploy Firebase ghost" --ref <branch> -f dry_run=true
 # Omit dry_run=true only when the plan already passed and you mean to ship.
 #
@@ -25,6 +28,9 @@ on:
         description: Plan only — do not ship (firebase deploy --dry-run)
         type: boolean
         default: false
+  push:
+    branches:
+      - ghost-main
 
 permissions:
   contents: read
@@ -56,6 +62,18 @@ jobs:
 
       - name: Install functions dependencies
         run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Refuse ghost deploy on push outside ghost-main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" != "refs/heads/ghost-main" ]; then
+            echo "::error::Ghost deploy on push is only allowed from ghost-main."
+            exit 1
+          fi
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
+            echo "::error::main must never trigger the ghost deploy workflow."
+            exit 1
+          fi
 
       - name: Load the ghost service account
         env:
@@ -103,6 +121,25 @@ jobs:
 
       - name: Refuse a deploy that is not the ghost
         run: node scripts/check-firebase-deploy.js --project mosaic-manager-ghost
+
+      - name: Guard resolved project id against branch
+        run: |
+          set -euo pipefail
+          RESOLVED="$(node -e 'process.stdout.write(require("./functions/firebase-project.json").projectId)')"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/ghost-main" ] && [ "${RESOLVED}" != "mosaic-manager-ghost" ]; then
+              echo "::error::ghost-main push resolved ${RESOLVED}; expected mosaic-manager-ghost."
+              exit 1
+            fi
+          fi
+          if [ "${RESOLVED}" = "mosaic-hymn-database" ]; then
+            echo "::error::Ghost workflow refuses the church project id."
+            exit 1
+          fi
+          if [ "${RESOLVED}" != "mosaic-manager-ghost" ]; then
+            echo "::error::Ghost workflow expected mosaic-manager-ghost, got ${RESOLVED}."
+            exit 1
+          fi
 
       - name: Placeholder secrets, only when missing
         run: |

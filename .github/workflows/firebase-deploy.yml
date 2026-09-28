@@ -69,6 +69,18 @@ jobs:
       - name: Install functions dependencies
         run: npm ci --prefix functions --no-audit --no-fund
 
+      - name: Refuse church deploy outside main or from ghost-main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Church production deploy on push is only allowed from main."
+            exit 1
+          fi
+          if [ "${{ github.ref_name }}" = "ghost-main" ]; then
+            echo "::error::ghost-main must never run the church deploy workflow."
+            exit 1
+          fi
+
       - name: Load Firebase service account
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -109,6 +121,25 @@ jobs:
 
       - name: Refuse a deploy whose config is not the church project
         run: node scripts/check-firebase-deploy.js --project mosaic-hymn-database --i-mean-prod
+
+      - name: Guard resolved project id against branch
+        run: |
+          set -euo pipefail
+          RESOLVED="$(node -e 'process.stdout.write(require("./functions/firebase-project.json").projectId)')"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "${RESOLVED}" != "mosaic-hymn-database" ]; then
+              echo "::error::main push resolved ${RESOLVED}; expected mosaic-hymn-database."
+              exit 1
+            fi
+          fi
+          if [ "${RESOLVED}" = "mosaic-manager-ghost" ]; then
+            echo "::error::Church workflow refuses the ghost project id."
+            exit 1
+          fi
+          if [ "${RESOLVED}" != "mosaic-hymn-database" ]; then
+            echo "::error::Church workflow expected mosaic-hymn-database, got ${RESOLVED}."
+            exit 1
+          fi
 
       - name: Deploy hosting + documented functions set + firestore:rules
         run: |
