@@ -274,14 +274,12 @@
     // list a continuation page belongs to; a page without one stands alone.
     function firstOverflowingRepeat(page) {
         let found = null;
-        const walk = (list) => {
-            (list || []).forEach(n => {
-                if (found) return;
-                if (n.repeat && n.repeat.overflow === 'new-page') found = n;
-                else walk(n.children);
-            });
-        };
-        walk(page && page.nodes);
+        walk(page && page.nodes, (n) => {
+            if (n.repeat && n.repeat.overflow === 'new-page') {
+                found = n;
+                return false;
+            }
+        });
         return found;
     }
 
@@ -316,13 +314,14 @@
             if (!dangling) break;
             const from = dangling.continues.from;
             const followers = rest.filter(p => p.continues && p.continues.from === from);
-            const heir = followers[0];
-            const repeatNode = firstOverflowingRepeat(heir);
-            const repeat = (repeatNode && repeatNode.id) || (heir.continues && heir.continues.repeat) || '';
+            const nextStart = followers[0];
+            const repeatNode = firstOverflowingRepeat(nextStart);
+            const repeat = (repeatNode && repeatNode.id) ||
+                (nextStart.continues && nextStart.continues.repeat) || '';
             rest = rest.map(p => {
                 if (!p.continues || p.continues.from !== from) return p;
-                if (p.id === heir.id) return Object.assign({}, p, { continues: null });
-                return Object.assign({}, p, { continues: { from: heir.id, repeat: repeat } });
+                if (p.id === nextStart.id) return Object.assign({}, p, { continues: null });
+                return Object.assign({}, p, { continues: { from: nextStart.id, repeat: repeat } });
             });
         }
         return rest;
@@ -984,7 +983,6 @@
         buildPage,
         buildContinues,
         clonePage,
-        firstOverflowingRepeat,
         continuesForCopy,
         pagesWithout,
         buildPrintable,

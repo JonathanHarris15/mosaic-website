@@ -257,6 +257,9 @@ function register(server, deps) {
     },
   }, (a, actor) => Printables.addPage(db, a, actor));
 
+  // No destructiveHint. The client's permission card does not see a chat
+  // answer, which is how a multiple-choice "delete" stopped the first call.
+  // `confirm` is the gate, the same way a folder delete names its count.
   tool("printable_delete_page", {
     title: "Delete pages",
     description:
