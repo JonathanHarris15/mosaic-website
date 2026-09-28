@@ -14,6 +14,8 @@ const Events = require('../public/events-core.js');
 const root = path.join(__dirname, '..');
 const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
 const indexes = JSON.parse(fs.readFileSync(path.join(root, 'firestore.indexes.json'), 'utf8'));
+const { FirestoreApi } = require('firebase-tools/lib/firestore/api');
+const firestoreIndexApi = new FirestoreApi(null);
 
 const involvementIndexes = indexes.indexes.filter(i => i.collectionGroup === 'involvement');
 const fieldPaths = index => index.fields.map(f => f.fieldPath);
@@ -58,6 +60,28 @@ test('the indexes file is a plain valid index spec', () => {
             ['collectionGroup', 'fields', 'queryScope']
         );
     });
+});
+
+test('the indexes file passes Firebase CLI schema validation', () => {
+    firestoreIndexApi.validateSpec(indexes);
+});
+
+test('field overrides use fieldPath, not composite index shape', () => {
+    indexes.fieldOverrides.forEach(fo => {
+        assert.deepEqual(
+            Object.keys(fo).sort(),
+            ['collectionGroup', 'fieldPath', 'indexes']
+        );
+    });
+});
+
+test('the event-tell job can query told announcements across occurrences', () => {
+    const found = indexes.fieldOverrides.find(fo =>
+        fo.collectionGroup === 'announcement_going_out' && fo.fieldPath === 'way');
+    assert.ok(found, 'missing collection-group index on announcement_going_out.way');
+    const group = found.indexes.find(i => i.queryScope === 'COLLECTION_GROUP');
+    assert.ok(group, 'needs COLLECTION_GROUP scope for collectionGroup().where(way)');
+    assert.equal(group.order, 'ASCENDING');
 });
 
 // ── Rules for the new collections ─────────────────────────────────────────────
