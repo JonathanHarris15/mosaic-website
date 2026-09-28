@@ -123,9 +123,15 @@ test('oversized country-map data URLs and uploads are refused before write', () 
     });
     const small = 'data:image/png;base64,iVBORw0KGgo=';
     assert.equal(Typed.countryImageWriteError(small), '');
-    assert.equal(Typed.fileUploadError({ type: 'image/png', size: Typed.MAX_UPLOAD_BYTES + 1 }), Typed.OVERSIZE_UPLOAD_MSG);
-    assert.equal(Typed.fileUploadError({ type: 'application/pdf', size: 12 }), 'The country map must be an image.');
-    assert.equal(Typed.fileUploadError({ type: 'image/jpeg', size: 12000 }), '');
+    const bigPng = { type: 'image/png', size: Typed.MAX_UPLOAD_BYTES + 1, name: 'map.png' };
+    assert.equal(Typed.fileUploadError(bigPng), '');
+    assert.equal(Typed.fileNeedsPrepare(bigPng), true);
+    const heic = { type: '', size: 12000, name: 'map.HEIC' };
+    assert.equal(Typed.fileUploadError(heic), '');
+    assert.equal(Typed.fileNeedsPrepare(heic), true);
+    assert.equal(Typed.fileUploadError({ type: 'application/pdf', size: 12, name: 'map.pdf' }), 'The country map must be an image.');
+    assert.equal(Typed.fileUploadError({ type: 'image/jpeg', size: 12000, name: 'map.jpg' }), '');
+    assert.equal(Typed.fileNeedsPrepare({ type: 'image/jpeg', size: 12000, name: 'map.jpg' }), false);
     assert.match(Typed.countryImageWriteError('http://example.com/map.png'), /https/);
 });
 

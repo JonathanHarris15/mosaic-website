@@ -318,24 +318,61 @@
         'image/webp': 'image/jpeg',
     };
 
+    const COMPRESSING_MESSAGE = 'Compressing the image…';
+
+    // Same recognition as image-intake.js. Restated here because this module
+    // is copied into the Cloud Function bundle and must not require the
+    // browser decoder.
+    function isHeicUpload(file) {
+        const type = String((file && file.type) || '').toLowerCase().split(';')[0].trim();
+        if (type === 'image/heic' || type === 'image/heif'
+            || type === 'image/heic-sequence' || type === 'image/heif-sequence') {
+            return true;
+        }
+        if (!/\.(heic|heif)$/i.test(String((file && file.name) || ''))) return false;
+        return type !== 'image/jpeg' && type !== 'image/png' && type !== 'image/webp' && type !== 'image/gif';
+    }
+
     // What, if anything, to do with a chosen file before it is sent.
     function shrinkPlan(file) {
         const f = file || {};
         const type = String(f.type || '').toLowerCase();
         const size = Number(f.size);
+        // A HEIC photo will not display in most browsers, so it is always
+        // converted, and redrawn as well when the file is large.
+        if (isHeicUpload(f)) {
+            return {
+                shrink: true,
+                convert: true,
+                type: 'image/jpeg',
+                maxEdge: SHRINK_MAX_EDGE,
+                quality: SHRINK_QUALITY,
+                reason: 'an iPhone photo has to become a JPEG before anyone can see it',
+            };
+        }
         if (!SHRINKABLE[type]) {
-            return { shrink: false, reason: 'not a photo that can be safely redrawn' };
+            return { shrink: false, convert: false, reason: 'not a photo that can be safely redrawn' };
         }
         if (!Number.isFinite(size) || size <= SHRINK_OVER_BYTES) {
-            return { shrink: false, reason: 'small enough to send as it is' };
+            return { shrink: false, convert: false, reason: 'small enough to send as it is' };
         }
         return {
             shrink: true,
+            convert: false,
             type: SHRINKABLE[type],
             maxEdge: SHRINK_MAX_EDGE,
             quality: SHRINK_QUALITY,
             reason: 'a photo bigger than a form should push through',
         };
+    }
+
+    // Whether the prepared file replaces the one they chose. A redraw that
+    // came back bigger is thrown away — except a HEIC conversion, which is
+    // kept even when the JPEG is heavier, because the original will not
+    // display.
+    function keepPrepared(originalSize, preparedSize, plan) {
+        if (plan && plan.convert) return Number(preparedSize) > 0;
+        return worthKeeping(originalSize, preparedSize);
     }
 
     // The size to redraw at: the longest edge comes down to `maxEdge` and the
@@ -1175,7 +1212,9 @@
         SHRINK_OVER_BYTES,
         SHRINK_MAX_EDGE,
         SHRINK_QUALITY,
+        COMPRESSING_MESSAGE,
         shrinkPlan,
+        keepPrepared,
         fittedSize,
         worthKeeping,
         renamedFor,

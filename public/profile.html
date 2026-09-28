@@ -286,13 +286,13 @@
                             <div class="flex flex-col gap-2 min-w-0">
                                 <span class="m-label">Directory photo</span>
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
+                                    <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="hidden" />
                                     <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
                                     <button type="button" id="my-photo-reframe" class="hidden px-4 py-2 border border-primary/40 text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary/10 transition-all">Reframe</button>
                                     <button type="button" id="my-photo-remove" class="hidden px-3 py-2 text-error font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all">Remove</button>
                                 </div>
-                                <span id="my-photo-status" class="text-[11px] font-body-md"></span>
-                                <p class="text-[10px] text-on-surface-variant leading-relaxed">Everyone in the church directory can see this. JPEG, PNG or WebP.</p>
+                                <span id="my-photo-status" class="text-[11px] font-body-md" role="status"></span>
+                                <p class="text-[10px] text-on-surface-variant leading-relaxed">Everyone in the church directory can see this. JPEG, PNG, WebP or HEIC.</p>
                             </div>
                         </div>
 
@@ -561,6 +561,7 @@
     <script src="access-core.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
+    <script src="image-intake.js"></script>
     <script src="person-photo-core.js"></script>
     <script src="person-name.js"></script>
     <script src="directory-request-core.js"></script>

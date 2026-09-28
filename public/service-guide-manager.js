@@ -118,7 +118,13 @@ function guideManager() {
             if (!files.length) return;
             this.uploadingAssets = true;
             try {
-                for (const file of files) {
+                const intake = window.ImageIntake;
+                for (const original of files) {
+                    let file = original;
+                    if (intake && intake.needsWork(original, null)) {
+                        this.flash(intake.COMPRESSING_MESSAGE);
+                        file = await intake.prepare(original, {});
+                    }
                     const dims = await this._imageSize(file);
                     const name = file.name.replace(/\.[^.]+$/, '');
                     await GuideStore.saveAsset(db, file, Object.assign({ name }, dims));

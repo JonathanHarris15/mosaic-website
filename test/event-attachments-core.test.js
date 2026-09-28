@@ -55,6 +55,17 @@ test('a file over the size cap is refused, and the cap is named in the message',
     assert.match(result.error, /25\s?MB/);
 });
 
+test('a photo over the cap is accepted so the page can compress it', () => {
+    const jpeg = Core.validateAttachmentFile({
+        name: 'group.jpg', type: 'image/jpeg', size: Core.MAX_ATTACHMENT_BYTES + 1,
+    });
+    assert.strictEqual(jpeg.ok, true);
+    const heic = Core.validateAttachmentFile({
+        name: 'group.HEIC', type: 'image/heic', size: 1024,
+    });
+    assert.strictEqual(heic.ok, true);
+});
+
 test('a file exactly at the cap is accepted — the cap is a ceiling, not a floor', () => {
     const result = Core.validateAttachmentFile({ name: 'right-at-it.zip', size: Core.MAX_ATTACHMENT_BYTES });
     assert.strictEqual(result.ok, true);

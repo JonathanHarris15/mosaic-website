@@ -630,6 +630,7 @@
         ${chooseLabel ? html`<${Button} type="button" variant="secondary" size="sm" disabled=${busy} onClick=${props.onChoose}>${chooseLabel}<//>` : null}
         ${buttons.remove ? html`<${Button} type="button" variant="danger-outline" size="sm" disabled=${busy} onClick=${props.onRemove}>${buttons.remove}<//>` : null}
       </div>
+      ${props.note ? html`<p role="status" style=${{ margin: "8px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--primary)", textAlign: "center" }}>${props.note}</p>` : null}
       <input type="file" id="phone-directory-photo-input" accept=${Plan.ACCEPT} onChange=${props.onFile} style=${{ display: "none" }} />` : null}
     </${M.Fragment}>`;
   }
@@ -896,6 +897,7 @@
     var PhotoPlan = window.PhoneDirectoryPhoto;
     var photoLockS = useState({ saving: false });
     var photoBusyS = useState(false);
+    var photoNoteS = useState("");
     function choosePhoto() {
       if (photoLockS[0].saving) return;
       var input = document.getElementById("phone-directory-photo-input");
@@ -915,13 +917,18 @@
         return;
       }
       photoBusyS[1](true);
-      window.PersonPhotoCore.uploadPersonPhoto(data.db, p.id, file).then(function (saved) {
+      photoNoteS[1](planned.status || "Uploading…");
+      window.PersonPhotoCore.uploadPersonPhoto(data.db, p.id, file, {
+        onStatus: function (msg) { photoNoteS[1](msg); },
+      }).then(function (saved) {
         pS[1](PhotoPlan.photoAfterUpload(p, saved));
         PhotoPlan.releaseSave(session);
         photoBusyS[1](false);
+        photoNoteS[1]("");
       }).catch(function (err) {
         PhotoPlan.releaseSave(session);
         photoBusyS[1](false);
+        photoNoteS[1]("");
         window.alert(PhotoPlan.uploadFailureMessage(err));
       });
     }
@@ -954,7 +961,7 @@
         <${TopBar} title="Directory" onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "22px 16px 20px" }}>
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
+            <${DirectoryPhoto} person=${p} user=${props.user} editMode=${editOn} busy=${photoBusyS[0]} note=${photoNoteS[0]} onChoose=${choosePhoto} onRemove=${removePhoto} onFile=${onPhotoFile} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             ${Req.offerAccount(props.user, editOn, p) ? html`<div style=${{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
               <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--primary)" }}>${Req.ACCOUNT}</span>

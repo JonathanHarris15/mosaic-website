@@ -853,13 +853,29 @@ function printableEditor() {
         },
 
         async uploadImage(event) {
-            const file = event.target.files && event.target.files[0];
+            let file = event.target.files && event.target.files[0];
             event.target.value = '';
             const node = this.selectedNode;
             if (!file || !node || node.tag !== 'img') return;
-            if (!/^image\//.test(file.type)) { this.flash('That is not an image.'); return; }
-            if (file.size > 8 * 1024 * 1024) { this.flash('Images up to 8 MB, please.'); return; }
+            const intake = window.ImageIntake;
+            const heic = intake && intake.isHeic(file);
+            if (file.type && !/^image\//.test(file.type) && !heic) { this.flash('That is not an image.'); return; }
+            const cap = 8 * 1024 * 1024 - 1;
+            if (intake && intake.needsWork(file, cap)) {
+                this.notice = intake.COMPRESSING_MESSAGE;
+                clearTimeout(this._noticeTimer);
+                try {
+                    file = await intake.prepare(file, { maxBytes: cap });
+                } catch (err) {
+                    this.flash((err && err.message) || 'Could not read that image.');
+                    return;
+                }
+            } else if (file.size > cap) {
+                this.flash('Images up to 8 MB, please.');
+                return;
+            }
             try {
+                this.notice = '';
                 const fileId = PrintableCore.newId('img') + '_' + file.name.replace(/[^\w.-]+/g, '_');
                 const ref = firebase.storage().ref('printable_assets/' + this.project.id + '/' + fileId);
                 await ref.put(file, { contentType: file.type });

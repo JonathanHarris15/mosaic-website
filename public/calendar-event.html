@@ -55,6 +55,7 @@
     <script src="events-store.js"></script>
     <script src="event-announcement-core.js"></script>
     <script src="event-announcement-store.js"></script>
+    <script src="image-intake.js"></script>
     <script src="event-attachments-core.js"></script>
     <!-- Printables linked to this event (MS-400): the model, the store, the
          live data and the PDF snapshot. -->
@@ -571,7 +572,7 @@
                             <span class="material-symbols-outlined text-[18px]"
                                   :class="uploadingAttachment ? 'm-spinner' : ''"
                                   x-text="uploadingAttachment ? 'progress_activity' : 'attach_file'"></span>
-                            <span x-text="uploadingAttachment ? 'Uploading…' : 'Attach a file'"></span>
+                            <span x-text="attachmentPhase === 'compress' ? 'Compressing the image…' : (uploadingAttachment ? 'Uploading…' : 'Attach a file')"></span>
                         </button>
                         <!-- The other half of the tab: a document written here,
                              kept here, and readable by exactly whoever can see

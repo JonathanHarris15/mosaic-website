@@ -16,6 +16,8 @@
     const REMOVE = 'Remove';
     const UPLOAD_FAILED = 'That upload did not work';
     const REMOVE_FAILED = 'Could not remove that photo';
+    const COMPRESSING_MESSAGE = (typeof globalThis !== 'undefined' && globalThis.ImageIntake
+        && globalThis.ImageIntake.COMPRESSING_MESSAGE) || 'Compressing the image…';
 
     function photo() {
         return global && global.PersonPhotoCore;
@@ -81,6 +83,8 @@
             ok: true,
             write: true,
             error: null,
+            compress: !!check.compress,
+            status: check.compress ? COMPRESSING_MESSAGE : '',
             framing: framingForNewPhoto(),
         };
     }
@@ -141,7 +145,8 @@
         REMOVE,
         UPLOAD_FAILED,
         REMOVE_FAILED,
-        ACCEPT: photo().ACCEPTED_TYPES.join(','),
+        COMPRESSING_MESSAGE,
+        ACCEPT: photo().FILE_ACCEPT,
         offerControls,
         controls,
         removalQuestion,

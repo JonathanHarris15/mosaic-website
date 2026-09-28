@@ -912,10 +912,25 @@
                 if (!Typed) return;
                 const err = Typed.fileUploadError(file);
                 if (err) { this.data.typed.status = err; return; }
+                let upload = file;
+                const intake = global.ImageIntake;
+                if (Typed.fileNeedsPrepare(file)) {
+                    this.data.typed.status = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
+                    if (!intake) {
+                        this.data.typed.status = 'Could not read that image.';
+                        return;
+                    }
+                    try {
+                        upload = await intake.prepare(file, { maxBytes: Typed.MAX_UPLOAD_BYTES - 1 });
+                    } catch (prep) {
+                        this.data.typed.status = (prep && prep.message) || 'Could not read that image.';
+                        return;
+                    }
+                }
                 this.data.typed.status = 'Uploading country map…';
                 try {
                     const date = this.typedSundayDate();
-                    const safe = (file.name || 'map').replace(/[^\w.-]+/g, '_');
+                    const safe = (upload.name || 'map').replace(/[^\w.-]+/g, '_');
                     const fileId = (global.PrintableCore && PrintableCore.newId
                         ? PrintableCore.newId('map')
                         : String(Date.now())) + '_' + safe;
@@ -925,7 +940,7 @@
                         return;
                     }
                     const ref = firebase.storage().ref(path);
-                    await ref.put(file, { contentType: file.type || 'image/jpeg' });
+                    await ref.put(upload, { contentType: upload.type || 'image/jpeg' });
                     const url = await ref.getDownloadURL();
                     this.data.typed.draft.prayerCountryImage = url;
                     this.data.typed.status = 'Country map uploaded. Save to keep it on this Sunday.';

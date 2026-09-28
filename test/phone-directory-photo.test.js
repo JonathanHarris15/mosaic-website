@@ -106,20 +106,28 @@ test('confirming a removal is a clear, and still asks the same question', () => 
 });
 
 test('a rejected file is the existing photo check\'s own error, and writes nothing', () => {
-    const gif = { type: 'image/gif', size: 1000 };
-    const huge = { type: 'image/jpeg', size: Photo.MAX_UPLOAD_BYTES + 1 };
-    for (const file of [gif, huge, null]) {
+    const gif = { type: 'image/gif', size: 1000, name: 'anim.gif' };
+    const pdf = { type: 'application/pdf', size: Photo.MAX_UPLOAD_BYTES + 1, name: 'notes.pdf' };
+    for (const file of [gif, pdf, null]) {
         const plan = Plan.planChosenFile(editor, ada, true, file);
         const check = Photo.validatePhotoFile(file);
         assert.equal(plan.write, false);
         assert.equal(plan.ok, false);
         assert.equal(plan.error, check.error);
     }
-    assert.match(Plan.planChosenFile(editor, ada, true, gif).error, /Use a JPEG, PNG or WebP image\./);
-    assert.match(
-        Plan.planChosenFile(editor, ada, true, huge).error,
-        /That image is too large\. Keep it under 15MB\./,
-    );
+    assert.match(Plan.planChosenFile(editor, ada, true, gif).error, /Use a JPEG, PNG, WebP or HEIC image\./);
+});
+
+test('a photo that is too large, or a HEIC photo, is a write that says it is compressing', () => {
+    const huge = { type: 'image/jpeg', size: Photo.MAX_UPLOAD_BYTES + 1, name: 'big.jpg' };
+    const heic = { type: 'image/heic', size: 2000, name: 'IMG.HEIC' };
+    for (const file of [huge, heic]) {
+        const plan = Plan.planChosenFile(editor, ada, true, file);
+        assert.equal(plan.write, true);
+        assert.equal(plan.compress, true);
+        assert.equal(plan.status, 'Compressing the image…');
+        assert.equal(plan.status, Plan.COMPRESSING_MESSAGE);
+    }
 });
 
 test('a file the computer accepts is a write, with the centred framing', () => {
@@ -183,9 +191,10 @@ test('an editor cannot attach a photo to a missing person', () => {
     assert.equal(Plan.planRemoval(editor, { name: 'Nobody' }, true, true).write, false);
 });
 
-test('the picker accepts the same types the computer accepts', () => {
-    assert.equal(Plan.ACCEPT, Photo.ACCEPTED_TYPES.join(','));
-    assert.equal(Plan.ACCEPT, 'image/jpeg,image/png,image/webp');
+test('the picker accepts the same types the computer accepts, including HEIC', () => {
+    assert.equal(Plan.ACCEPT, Photo.FILE_ACCEPT);
+    assert.match(Plan.ACCEPT, /image\/jpeg/);
+    assert.match(Plan.ACCEPT, /\.heic/);
 });
 
 test('the phone loads Storage, then the photo plan, before the person page', () => {

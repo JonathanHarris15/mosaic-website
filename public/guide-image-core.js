@@ -30,14 +30,29 @@
 (function (global) {
     'use strict';
 
-    // What a browser can reliably decode into a <canvas>, which is what the
-    // redraw needs. Restricting the file input to these also makes iOS hand
-    // over a JPEG rather than the HEIC it stores.
-    const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (typeof module !== 'undefined' && module.exports) {
+        require('./image-intake.js');
+    }
 
-    // A ceiling on what we will even try to read. Everything is redrawn before
-    // it is stored, so this only exists to stop a browser choking on a raw
-    // camera file.
+    function intake() {
+        return typeof globalThis !== 'undefined' ? globalThis.ImageIntake : null;
+    }
+
+    // What a canvas can redraw on its own, plus HEIC, which image-intake.js
+    // converts to JPEG before the redraw. A file input used to exclude HEIC so
+    // iOS would transcode; a file that is already HEIC still has to get in.
+    const ACCEPTED_TYPES = [
+        'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+        'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence',
+    ];
+    const FILE_ACCEPT = [
+        'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+        'image/heic', 'image/heif', '.heic', '.heif',
+    ].join(',');
+
+    // Past this size the page says it is compressing. The redraw below is what
+    // actually gets the picture under the document budget — the old refusal
+    // ("keep it under 20MB") turned away photos the ladder would have fitted.
     const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
     // What one picture may occupy in the document. The rest of the week's guide
@@ -61,14 +76,15 @@
     const MATTE = '#ffffff';
 
     function validateImageFile(file) {
-        if (!file) return { ok: false, error: 'Choose an image first.' };
-        if (ACCEPTED_TYPES.indexOf(file.type) === -1) {
-            return { ok: false, error: 'Use a JPEG, PNG, WebP or GIF image.' };
+        if (!file) return { ok: false, error: 'Choose an image first.', compress: false };
+        const lib = intake();
+        const type = String(file.type || '').toLowerCase();
+        const heic = lib ? lib.isHeic(file) : (type === 'image/heic' || type === 'image/heif');
+        if (ACCEPTED_TYPES.indexOf(type) === -1 && !heic) {
+            return { ok: false, error: 'Use a JPEG, PNG, WebP, GIF or HEIC image.', compress: false };
         }
-        if (file.size > MAX_UPLOAD_BYTES) {
-            return { ok: false, error: 'That image is too large. Keep it under 20MB.' };
-        }
-        return { ok: true, error: null };
+        const compress = heic || Number(file.size) > MAX_UPLOAD_BYTES;
+        return { ok: true, error: null, compress: compress };
     }
 
     // Fit within a square of `maxEdge` without distorting, and never enlarge a
@@ -173,11 +189,17 @@
         const check = validateImageFile(file);
         if (!check.ok) throw new Error(check.error);
 
+        const lib = intake();
+        let source = file;
+        // A HEIC data URI will not draw outside Safari, however small it is,
+        // so it is always converted before the "already fits" shortcut.
+        if (lib && lib.isHeic(file)) source = await lib.ensureCanvasFile(file);
+
         // Small enough already: keep the file's own bytes, whatever format
         // they are in.
-        if (!needsRedraw(file, budget)) return readAsDataUrl(file);
+        if (!needsRedraw(source, budget)) return readAsDataUrl(source);
 
-        const img = await decode(file);
+        const img = await decode(source);
         const tried = [];
         for (const rung of attempts()) {
             const dataUrl = drawToDataUrl(img, rung);
@@ -190,7 +212,7 @@
     }
 
     const GuideImageCore = {
-        ACCEPTED_TYPES, MAX_UPLOAD_BYTES, BUDGET_BYTES, LADDER,
+        ACCEPTED_TYPES, FILE_ACCEPT, MAX_UPLOAD_BYTES, BUDGET_BYTES, LADDER,
         validateImageFile, scaledSize, storedBytes, storedBytesFor, needsRedraw,
         fitsBudget, attempts, chooseAttempt,
         capToDataUrl,

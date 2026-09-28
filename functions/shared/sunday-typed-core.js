@@ -108,11 +108,30 @@
         return imageUrl(value);
     }
 
+    function isMapImage(file) {
+        const type = String((file && file.type) || '').toLowerCase();
+        if (type.indexOf('image/') === 0) return true;
+        const lib = typeof globalThis !== 'undefined' ? globalThis.ImageIntake : null;
+        if (lib && lib.isHeic(file)) return true;
+        return /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(String((file && file.name) || ''));
+    }
+
+    // A photo that is over the Storage cap is compressed before upload, so
+    // the size is not an error. A file that is not an image still is.
     function fileUploadError(file) {
         if (!file) return 'Choose a country map image.';
-        if (file.type && !/^image\//.test(file.type)) return NOT_IMAGE_MSG;
-        if (typeof file.size === 'number' && file.size > MAX_UPLOAD_BYTES) return OVERSIZE_UPLOAD_MSG;
+        if (!isMapImage(file)) return NOT_IMAGE_MSG;
         return '';
+    }
+
+    function fileNeedsPrepare(file) {
+        if (!file || !isMapImage(file)) return false;
+        const lib = typeof globalThis !== 'undefined' ? globalThis.ImageIntake : null;
+        if (lib) return lib.needsWork(file, MAX_UPLOAD_BYTES - 1);
+        const type = String(file.type || '').toLowerCase();
+        const heic = type === 'image/heic' || type === 'image/heif'
+            || /\.hei[cf]$/i.test(String(file.name || ''));
+        return heic || (typeof file.size === 'number' && file.size > MAX_UPLOAD_BYTES - 1);
     }
 
     function countryMapStoragePath(date, fileId) {
@@ -420,6 +439,7 @@
         countryImageWriteError,
         assertCountryImageWritable,
         fileUploadError,
+        fileNeedsPrepare,
         countryMapStoragePath,
     };
 

@@ -384,7 +384,7 @@
                                     <button type="button" x-show="page.url" @click="openCropper(vIndex, pIndex)" class="m-btn m-btn--secondary m-btn--sm">
                                         <span class="m-btn__label">Crop</span>
                                     </button>
-                                    <input type="file" accept="image/*" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
+                                    <input type="file" accept="image/*,.heic,.heif" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
                                 </div>
                             </template>
                             <button type="button" @click="addPage(vIndex)" class="border border-dashed border-outline-variant rounded-lg p-md font-label-md">
@@ -448,6 +448,7 @@
             </div>
         </div>
     </div>
+    <script src="image-intake.js"></script>
     <script src="hymns.js"></script>
 </body>
 </html>
