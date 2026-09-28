@@ -121,15 +121,17 @@ test('the dashboard card is injected for editors, not sitting in the page', asyn
 
     // Injected behind the editor gate, and keeping its stored key — renaming
     // that would drop the card to the end of every dashboard ever arranged.
-    const at = html.indexOf("href: 'analytics.html'");
-    assert.ok(at !== -1, 'nothing injects the Service Analytics card');
-    // The nearest `if (grid && …)` above the card is the one that guards it, so
-    // the gate has to appear inside that condition rather than before it.
-    const above = html.slice(0, at);
-    assert.ok(above.lastIndexOf('AccessCore.readsAsEditor') > above.lastIndexOf('if (grid &&'),
-        'the Service Analytics card is injected without an editor gate above it');
-    assert.match(html, /key: 'service-analytics'/,
+    const nav = fs.readFileSync(path.join(PUBLIC, 'dashboard-nav.js'), 'utf8');
+    const at = nav.indexOf("href: 'analytics.html'");
+    assert.ok(at !== -1, 'nothing registers the Service Analytics card');
+    const keyAt = nav.indexOf("key: 'service-analytics'");
+    const block = nav.slice(keyAt, keyAt + 450);
+    assert.match(block, /readsAsEditor/,
+        'the Service Analytics card is registered without an editor gate');
+    assert.match(nav, /key: 'service-analytics'/,
         'the card lost the key every saved dashboard order refers to');
+    assert.match(html, /DashboardNav\.injectGatedCards/,
+        'the dashboard injects gated cards from the shared registry');
 });
 
 test('the page draws nothing but the refusal when it refuses', () => {

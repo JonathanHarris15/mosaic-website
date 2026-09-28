@@ -59,10 +59,12 @@ test('phone shepherd screens ask the access core instead of permissionLevel === 
 });
 
 test('index.html cards ask reads-as-elder / reads-as-editor', () => {
-    const src = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
-    assert.match(src, /AccessCore\.readsAsElder/);
-    assert.match(src, /AccessCore\.readsAsEditor/);
-    assert.match(src, /access-core\.js/);
+    const index = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+    const nav = fs.readFileSync(path.join(PUBLIC, 'dashboard-nav.js'), 'utf8');
+    assert.match(nav, /readsAsElder/);
+    assert.match(nav, /readsAsEditor/);
+    assert.match(index, /access-core\.js/);
+    assert.match(index, /dashboard-nav\.js/);
 });
 
 test('the super-admin blur does not apply to a Pastoral Assistant', () => {

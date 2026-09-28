@@ -65,6 +65,18 @@ document.addEventListener('alpine:init', () => {
             };
             this.$watch('headerTitle', publishChrome);
             this.$watch('view', publishChrome);
+            const syncDesktopLead = () => {
+                if (window.MOSAIC_SHELL === 'mobile' || typeof DesktopHeaderLead === 'undefined') {
+                    return;
+                }
+                DesktopHeaderLead.mount({
+                    currentHref: 'hymns.html',
+                    mode: this.view === 'list' ? 'drawer' : 'back',
+                    back: { href: 'hymns.html', label: 'Hymns' },
+                });
+            };
+            this.$watch('view', syncDesktopLead);
+            syncDesktopLead();
             const start = (user) => {
                 const ready = user
                     ? getUserData(user.uid).then((userData) => {
