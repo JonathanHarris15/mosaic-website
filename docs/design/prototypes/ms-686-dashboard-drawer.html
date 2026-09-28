@@ -16,6 +16,26 @@
     <link rel="stylesheet" href="../../../public/fonts.css" />
     <link rel="stylesheet" href="../../../public/mosaic.css" />
 
+    <!-- The same font families public/fonts.css vendors, fetched from Google by
+         absolute URL. public/fonts.css is the real pages' source of truth and is
+         linked above, but its @font-face src values are relative
+         (fonts/files/*.woff2) and resolve against whatever directory the document
+         sits in. Under htmlpreview, which inlines the sheet it fetched, that is
+         docs/design/prototypes/ — so every font file 404s and Material Symbols
+         ligature names render as the literal words "church", "menu_book",
+         "warning". Declared after fonts.css so these faces win.
+
+         The Material Symbols query is the one public/fonts.css itself cites in the
+         comment above its vendored copy, so this is the same font, not a
+         substitute. Prototypes only: a page under public/ must use the vendored
+         copy, which needs no network. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
     <style>
         /* ============================================================
            PROTOTYPE-ONLY CSS. Two kinds of rule live in here, and they
