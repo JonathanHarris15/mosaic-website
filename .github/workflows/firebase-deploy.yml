@@ -53,9 +53,9 @@ jobs:
       # default 10s since MS-278 pulled in the MCP surface.
       FUNCTIONS_DISCOVERY_TIMEOUT: "120"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm

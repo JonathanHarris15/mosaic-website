@@ -1,5 +1,7 @@
 # UI Prototype
 
+> **Mosaic default:** Look or layout changes on product tickets use **standalone HTML prototypes** per [.cursor/rules/ui-prototype-first.mdc](../../rules/ui-prototype-first.mdc) (`docs/design/prototypes/`, draft `[Prototype] MS-XXX` PR, stop for approval). The `?variant=` flow below is **not** the default for Mosaic unless Jonathan explicitly wants in-app variants.
+
 Generate **several radically different UI variations** on a single route, switchable from a floating bottom bar. The user flips between variants in the browser, picks one (or steals bits from each), then throws the rest away.
 
 If the question is about logic/state rather than what something looks like — wrong branch. Use [LOGIC.md](LOGIC.md).

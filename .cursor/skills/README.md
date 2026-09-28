@@ -33,5 +33,9 @@ Jira calls use **Atlassian MCP** on Cursor Cloud Agents. Mosaic board override: 
 | `writing-for-agents` | Writing style |
 | `sync-config` | Sync the claude-config git remote |
 | `jev-smoke-test` | Required pre-PR UI smoke via local fastbrowse + Jev |
+| `frontend-design` | Layout, hierarchy, copy, critique (Mosaic design-system brief) |
+| `web-interface-guidelines` | Vercel guidelines review pass (offline `command.md`) |
+
+Always-applied rule: [ui-prototype-first](../rules/ui-prototype-first.mdc) — standalone HTML prototypes in `docs/design/prototypes/` before look/layout UI work.
 
 Grok Bot’s skill library is out of scope.

@@ -37,12 +37,12 @@ enough context to judge against, clearly marked as context, not as the subject.
   loose utilities. Note both; the loose ones are often the reason it feels off.
 - **Every state it has.** Empty, one, many, loading, error, selected, disabled,
   overflowing. A card only looks good in the state you were staring at.
-- **Real data.** Pull actual records if you can reach them, otherwise real
-  values from seeds, fixtures or tests. Real names, real hymn titles, real
-  dates in the real format. **Never Lorem, never `Item 1`.** You cannot judge a
-  card full of placeholder text — placeholder content is uniformly sized, which
-  hides the exact problem the user is trying to name.
-- **The longest real value that exists.** The one that wraps to three lines is
+- **Fictional data only.** The repo is public — never use real congregation
+  names, people, or records in snapshots. Invent plausible names, hymn titles,
+  and dates in the same formats the app uses. **Never Lorem, never `Item 1`.**
+  Vary length deliberately: include one value that wraps to three lines so
+  wrapping problems show up.
+- **The longest realistic fictional value.** The one that wraps to three lines is
   the one worth designing for.
 
 ## Step 3 — Flatten it
@@ -112,7 +112,7 @@ Then stop. The user goes and plays. `design-pull` brings it back.
 
 - **Change nothing.** Not the spacing, not a stale label, not a class you think
   is wrong. Note it separately and leave it in.
-- **Real data or don't push.** This is the rule the whole skill rests on.
+- **Fictional data or don't push.** No real congregation records in public docs.
 - **Confirm the boundary before extracting**, every time.
 - **Say what did not survive.** An unreproducible behaviour that goes unmentioned
   gets designed away by accident.
