@@ -691,7 +691,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     variants: {},
     notes: ["One descriptive line, never two. The Medallion fills on hover to say the whole tile is the target."],
     examples: [
-      '<a class="m-nav-card" href="#"><span class="m-medallion"><span class="material-symbols-outlined">groups</span></span><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">View and manage member profiles.</p></a>',
+      '<a class="m-nav-card" href="#"><span class="m-medallion"><span class="material-symbols-outlined">groups</span></span><div class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">View and manage member profiles.</p></div></a>',
     ],
     css: `
 .m-nav-card {
@@ -708,6 +708,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-size: var(--headline-md-size); font-weight: var(--headline-md-weight);
   color: var(--on-surface);
 }
+.m-nav-card__body { min-width: 0; }
 .m-nav-card__desc {
   margin: 0; font-family: var(--font-sans); font-size: 14px;
   line-height: 1.5; color: var(--on-surface-variant);
@@ -725,6 +726,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     css: `
 .m-medallion {
   display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
   width: 56px; height: 56px; margin-bottom: var(--space-sm);
   border-radius: var(--radius-full); background: var(--surface-container);
   color: var(--primary);

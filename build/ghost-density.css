@@ -1,0 +1,186 @@
+/* ============================================================
+   Ghost sandbox — desktop professional density (MS-686 variant A)
+
+   Scoped to viewports ≥1024px and off the phone shell. Token overrides
+   flow through every m-* component; component rules tighten controls
+   that hard-code px heights. Phone keeps shipped spacing and 44px targets.
+   ============================================================ */
+
+@media (min-width: 1024px) {
+  html:not(.shell-mobile) {
+    /* Spacing rhythm — tighter desktop tool scale */
+    --space-xs: 3px;
+    --space-base: 6px;
+    --space-sm: 10px;
+    --space-md: 16px;
+    --space-lg: 28px;
+    --space-gutter: 16px;
+    --space-margin: 20px;
+
+    /* Type — nothing sentence-shaped below 13px; labels unchanged */
+    --headline-lg-size: 22px;
+    --headline-md-size: 17px;
+    --body-lg-size: 15px;
+    --body-md-size: 14px;
+
+    --radius-xl: 12px;
+
+    /* Header chrome */
+    --m-header-h: 48px;
+    --m-header-pad: 16px;
+    --m-header-title: 19px;
+    --m-header-title-serif: 20px;
+
+    /* Named density controls (proposal from MS-686 prototype) */
+    --m-density-control-h: 34px;
+    --m-density-row-h: 40px;
+    --m-density-target-min: 32px;
+  }
+
+  /* ── Core controls ─────────────────────────────────────────── */
+  html:not(.shell-mobile) .m-btn {
+    height: var(--m-density-control-h);
+    padding: 0 12px;
+    font-size: 13px;
+    gap: 6px;
+  }
+  html:not(.shell-mobile) .m-btn--sm {
+    height: var(--m-density-target-min);
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  html:not(.shell-mobile) .m-btn--lg {
+    height: 40px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+
+  html:not(.shell-mobile) .m-icon-btn {
+    width: var(--m-density-control-h);
+    height: var(--m-density-control-h);
+  }
+  html:not(.shell-mobile) .m-icon-btn .material-symbols-outlined {
+    font-size: 19px;
+  }
+  html:not(.shell-mobile) .m-icon-btn--lg {
+    width: 40px;
+    height: 40px;
+  }
+  html:not(.shell-mobile) .m-icon-btn--fab {
+    width: 48px;
+    height: 48px;
+  }
+  html:not(.shell-mobile) .m-icon-btn--fab .material-symbols-outlined {
+    font-size: 22px;
+  }
+
+  html:not(.shell-mobile) .m-input,
+  html:not(.shell-mobile) .m-select-wrap .m-select-trigger {
+    height: var(--m-density-control-h);
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  html:not(.shell-mobile) .m-row {
+    min-height: var(--m-density-row-h);
+    padding: 8px 12px;
+    gap: var(--space-sm);
+  }
+
+  html:not(.shell-mobile) .m-card {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  html:not(.shell-mobile) .m-empty {
+    padding: var(--space-md);
+  }
+
+  /* ── NavCard — horizontal compact tile on desktop ──────────── */
+  html:not(.shell-mobile) .m-nav-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+  html:not(.shell-mobile) .m-nav-card .m-medallion {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0;
+    flex: 0 0 auto;
+  }
+  html:not(.shell-mobile) .m-nav-card .m-medallion .material-symbols-outlined {
+    font-size: 20px;
+  }
+  html:not(.shell-mobile) .m-nav-card__body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  html:not(.shell-mobile) .m-nav-card__title {
+    margin: 0 0 2px;
+  }
+  html:not(.shell-mobile) .m-nav-card__desc {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  /* Home dashboard — bespoke Tailwind tiles, same compact row */
+  html:not(.shell-mobile) #nav-cards-grid > a {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+  html:not(.shell-mobile) #nav-cards-grid > a > div:first-child {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0;
+    flex: 0 0 auto;
+  }
+  html:not(.shell-mobile) #nav-cards-grid > a > div:first-child .material-symbols-outlined {
+    font-size: 20px !important;
+  }
+  html:not(.shell-mobile) #nav-cards-grid > a h2 {
+    margin-bottom: var(--space-xs);
+  }
+  html:not(.shell-mobile) #nav-cards-grid > a p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  /* Dashboard layout — fixed glance column */
+  html:not(.shell-mobile) .ghost-dashboard__glance {
+    width: 300px;
+    max-width: 300px;
+    flex: 0 0 300px;
+  }
+  html:not(.shell-mobile) .ghost-dashboard__main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Tailwind gap/padding utilities that read token names at compile time
+     still emit the old px values — nudge the worst offenders on desktop. */
+  html:not(.shell-mobile) .gap-md {
+    gap: var(--space-md);
+  }
+  html:not(.shell-mobile) .gap-margin {
+    gap: var(--space-margin);
+  }
+  html:not(.shell-mobile) .p-md {
+    padding: var(--space-md);
+  }
+  html:not(.shell-mobile) .px-margin {
+    padding-left: var(--space-margin);
+    padding-right: var(--space-margin);
+  }
+  html:not(.shell-mobile) .pb-md {
+    padding-bottom: var(--space-md);
+  }
+  html:not(.shell-mobile) .pt-base {
+    padding-top: var(--space-base);
+  }
+}
