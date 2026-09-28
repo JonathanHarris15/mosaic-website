@@ -456,7 +456,12 @@ function printableEditor() {
         duplicatePage(pageId) {
             const src = this.pages.find(p => p.id === pageId);
             if (!src) return;
-            const copy = PrintableCore.buildPage(this.template, Object.assign(JSON.parse(JSON.stringify(src)), { id: null }));
+            const copy = PrintableCore.buildPage(this.template, Object.assign(JSON.parse(JSON.stringify(src)), {
+                id: null,
+                // A list page joins the list it was copied from. A second
+                // full copy is how a directory comes to print itself twice.
+                continues: PrintableCore.continuesForCopy(src),
+            }));
             // Fresh element ids so the copy is its own.
             const reid = (n) => { n.id = PrintableCore.newId(); (n.children || []).forEach(reid); };
             copy.nodes.forEach(reid);
@@ -472,10 +477,9 @@ function printableEditor() {
             if (!page) return;
             if (this.pages.length === 1) { this.flash('A printable keeps at least one page.'); return; }
             if (page.nodes.length && !confirm('Delete this page and the ' + page.nodes.length + ' element' + (page.nodes.length === 1 ? '' : 's') + ' on it?')) return;
-            this.project.pages = this.pages.filter(p => p.id !== pageId).map(p => {
-                if (p.continues && p.continues.from === pageId) return Object.assign({}, p, { continues: null });
-                return p;
-            });
+            // The next page of a list becomes its start. Clearing the mark
+            // would turn every following page into its own full copy.
+            this.project.pages = PrintableCore.pagesWithout(this.pages, [pageId]);
             if (this.selection.pageId === pageId) { this.selection.pageId = this.pages[0].id; this.selection.nodeId = null; }
             this.commit();
             this.renderAll();

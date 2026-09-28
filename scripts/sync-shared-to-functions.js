@@ -102,6 +102,10 @@ const MODULES = [
     // fields it may wire, and it is the permission boundary's first half — it
     // holds nothing elder-only, which is exactly why it is safe to hand over.
     'printable-core.js',
+    // MS-688. The standing instructions an assistant reads before it
+    // changes a Printable. Shipped with the tools, not written on the
+    // MCP Manager page, so the words and the page cannot drift.
+    'printable-guidance.js',
     // MS-588. Per-Sunday booklet text (prayer-country facts, Mosaic Kids,
     // announcements). printable-data-core.js reads it for the sunday_typed
     // source, so the copy has to travel with the catalog.

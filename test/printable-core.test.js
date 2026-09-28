@@ -398,6 +398,51 @@ test('an overflow continuation is a real page that remembers which list it conti
     assert.equal(Core.buildPage(t, { id: 'plain' }).continues, null);
 });
 
+test('copying a list page joins that list instead of starting another', () => {
+    const { page } = directoryPage();
+    assert.deepEqual(Core.continuesForCopy(page), { from: 'pg1', repeat: 'card' });
+    const next = Core.buildPage(Core.buildTemplate({ paper: 'letter', dpi: 96 }), {
+        id: 'pg2',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: page.nodes,
+    });
+    assert.deepEqual(Core.continuesForCopy(next), { from: 'pg1', repeat: 'card' });
+    const cover = Core.buildPage(Core.buildTemplate({ paper: 'letter', dpi: 96 }), {
+        id: 'cover',
+        nodes: [{ id: 't', tag: 'h1', text: 'Cover' }],
+    });
+    assert.equal(Core.continuesForCopy(cover), null);
+});
+
+test('deleting the page a list started on hands the list to the next page', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const card = { id: 'card', tag: 'div', repeat: { source: 'people', overflow: 'new-page' }, children: [] };
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'Members', nodes: [card] });
+    const two = Core.buildPage(t, {
+        id: 'pg2', name: 'Members', continues: { from: 'pg1', repeat: 'card' },
+        nodes: [{ id: 'card2', tag: 'div', repeat: { source: 'people', overflow: 'new-page' }, children: [] }],
+    });
+    const three = Core.buildPage(t, {
+        id: 'pg3', name: 'Members', continues: { from: 'pg1', repeat: 'card' },
+        nodes: [{ id: 'card3', tag: 'div', repeat: { source: 'people', overflow: 'new-page' }, children: [] }],
+    });
+    const left = Core.pagesWithout([origin, two, three], ['pg1']);
+    assert.deepEqual(left.map(p => p.id), ['pg2', 'pg3']);
+    assert.equal(left[0].continues, null);
+    assert.deepEqual(left[1].continues, { from: 'pg2', repeat: 'card2' });
+});
+
+test('deleting a middle continuation leaves the list pointing at its start', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const origin = Core.buildPage(t, { id: 'pg1', nodes: [] });
+    const two = Core.buildPage(t, { id: 'pg2', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const three = Core.buildPage(t, { id: 'pg3', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const left = Core.pagesWithout([origin, two, three], ['pg2']);
+    assert.deepEqual(left.map(p => p.id), ['pg1', 'pg3']);
+    assert.equal(left[0].continues, null);
+    assert.deepEqual(left[1].continues, { from: 'pg1', repeat: 'card' });
+});
+
 test('cloning a page for overflow remints every id and keeps the design', () => {
     const { page, template } = directoryPage();
     const copy = Core.clonePage(template, page, { continues: { from: page.id, repeat: 'card' } });

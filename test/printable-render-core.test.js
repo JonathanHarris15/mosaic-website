@@ -6,9 +6,11 @@ const assert = require('node:assert');
 // The expansion is what the canvas, the view page and the print layer all
 // draw from, so what is pinned is the shape it hands back: one copy per row
 // with the first keeping the element's own id, bindings applied where a value
-// exists and left as stand-ins where one does not, and a warning for every
-// gap. The fit arithmetic is pinned separately because a wrong binary search
-// is the kind of bug that only shows on page four of a long directory.
+// exists, and a live row with nothing in a field goes blank — the seed's
+// typed text is only a stand-in when no row is being drawn. A warning
+// names every gap. The fit arithmetic is pinned separately because a
+// wrong binary search is the kind of bug that only shows on page four of
+// a long directory.
 
 const Render = require('../public/printable-render-core.js');
 const Core = require('../public/printable-core.js');
@@ -60,14 +62,14 @@ test('an iterated element is drawn once per row, the first copy keeping its own 
     assert.equal(Render.originalId('card'), 'card');
 });
 
-test('bound values land in text and src; a missing value keeps the stand-in and warns once', () => {
+test('bound values land in text and src; a missing value on a live row is blank', () => {
     const r = Render.expandPage(directoryPage(), data(ROWS, { 'sunday.theme': 'Grace' }));
     assert.equal(r.nodes[0].text, 'Grace');
     const copies = r.nodes[1].children;
     assert.equal(copies[0].children[1].text, 'Anna Baker');
     assert.equal(copies[0].children[0].attrs.src, 'a.jpg');
     assert.equal(copies[1].children[0].attrs.src, '', 'Ben has no photo: the box stays, the src stays empty');
-    assert.equal(copies[1].children[2].text, '555 0100', 'no phone: the stand-in shows');
+    assert.equal(copies[1].children[2].text, '', 'no phone: blank, not the seed\'s number');
     const messages = r.warnings.map(w => w.message);
     assert.ok(messages.includes('No photo for Ben Carter.'));
     assert.ok(messages.includes('No phone for Ben Carter.'));

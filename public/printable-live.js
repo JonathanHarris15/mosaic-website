@@ -213,8 +213,17 @@
             if (claimed[page.id]) return;
             const data = res || STAND_INS;
 
+            // Not in the contiguous chain: a page sits between this one and
+            // the start, or the start is gone. The start's own pagination
+            // still places every row. This page must not draw them again.
             if (page.continues && page.continues.from) {
-                const expanded = Render.expandPage(page, data);
+                const origin = pages.find(p => p.id === page.continues.from);
+                const originRepeat = origin ? overflowingRepeatOn(origin) : null;
+                const mine = overflowingRepeatOn(page);
+                const sliced = (res && mine)
+                    ? emptySlice(res, originRepeat || mine, mine.id)
+                    : STAND_INS;
+                const expanded = Render.expandPage(page, sliced);
                 out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
                 return;
             }

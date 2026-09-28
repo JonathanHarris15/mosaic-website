@@ -65,9 +65,10 @@ with the event it was for, which is where somebody will look for it.
   than last time. That is the feature. Overflow pages are real pages now
   ([ADR 0071](0071-overflow-pages-are-real-pages.md)), still resolved against
   today's data.
-- A field with nothing behind it today shows the element's own stand-in text
-  and is listed under **Not all data could be pulled**, so an empty slot on
-  paper is never silent.
+- A live row with nothing in a field is **blank** on the page. The seed's
+  typed text is a stand-in only when no data is loaded (the editor's
+  Stand-ins switch). The gap is still listed under **Not all data could
+  be pulled**, so an empty slot is never silent.
 - The catalog is the first half of the permission boundary — nothing
   elder-only is in it — and `firestore.rules` is the second; a Printable
   therefore never becomes a way to print what its viewer could not read.

@@ -278,6 +278,63 @@
         });
     }
 
+    // The first iterated element whose list makes a new page. That is the
+    // list a continuation page belongs to; a page without one stands alone.
+    function firstOverflowingRepeat(page) {
+        let found = null;
+        walk(page && page.nodes, (n) => {
+            if (n.repeat && n.repeat.overflow === 'new-page') {
+                found = n;
+                return false;
+            }
+        });
+        return found;
+    }
+
+    // What a copy of this page continues. A list page joins the list it was
+    // copied from, so duplicating the directory does not start a second one.
+    // A page with no overflowing list copies as its own page.
+    function continuesForCopy(source) {
+        const repeat = firstOverflowingRepeat(source);
+        if (!repeat || !source) return null;
+        if (source.continues && source.continues.from) {
+            return {
+                from: source.continues.from,
+                repeat: source.continues.repeat || repeat.id,
+            };
+        }
+        return { from: source.id, repeat: repeat.id };
+    }
+
+    // Pages left after some are removed. A page whose list started on a
+    // removed page becomes the next start of that same list; the pages
+    // after it keep following it. Clearing the mark would make each of
+    // them its own full copy.
+    function pagesWithout(pages, removedIds) {
+        const gone = {};
+        (removedIds || []).forEach(id => { gone[id] = true; });
+        let rest = (pages || []).filter(p => p && !gone[p.id]);
+        let guard = 0;
+        while (guard++ < rest.length + 1) {
+            const ids = {};
+            rest.forEach(p => { ids[p.id] = true; });
+            const dangling = rest.find(p => p.continues && p.continues.from && !ids[p.continues.from]);
+            if (!dangling) break;
+            const from = dangling.continues.from;
+            const followers = rest.filter(p => p.continues && p.continues.from === from);
+            const nextStart = followers[0];
+            const repeatNode = firstOverflowingRepeat(nextStart);
+            const repeat = (repeatNode && repeatNode.id) ||
+                (nextStart.continues && nextStart.continues.repeat) || '';
+            rest = rest.map(p => {
+                if (!p.continues || p.continues.from !== from) return p;
+                if (p.id === nextStart.id) return Object.assign({}, p, { continues: null });
+                return Object.assign({}, p, { continues: { from: nextStart.id, repeat: repeat } });
+            });
+        }
+        return rest;
+    }
+
     function num(v, d) { const n = Number(v); return (v != null && !isNaN(n) && n >= 0) ? n : d; }
 
     // A page sized in physical units for a print stylesheet. CSS inches are
@@ -934,6 +991,8 @@
         buildPage,
         buildContinues,
         clonePage,
+        continuesForCopy,
+        pagesWithout,
         buildPrintable,
         duplicatePrintable,
         migrate,

@@ -93,10 +93,26 @@
                         }
                     }
                     else { node.attrs = Object.assign({}, node.attrs, { [prop]: String(r.value) }); }
-                } else if (r && r.why && (index === 0 || index == null || o.warnEveryRow)) {
-                    warn(originalId(node.id), r.why);
-                } else if (r && !r.ok && r.why) {
-                    warn(originalId(node.id), r.why);
+                } else {
+                    // A live row with nothing in this field must not keep the
+                    // seed's typed text. That is how one address prints on
+                    // every card that has none. Stand-ins stay only when no
+                    // row is being drawn (the editor's stand-in switch).
+                    if (bind.scope === 'item' && row) {
+                        if (prop === 'src') {
+                            node.attrs = Object.assign({}, node.attrs, { src: '' });
+                        } else if (prop === 'text') {
+                            node.text = '';
+                            node.children = [];
+                        } else {
+                            node.attrs = Object.assign({}, node.attrs, { [prop]: '' });
+                        }
+                    }
+                    if (r && r.why && (index === 0 || index == null || o.warnEveryRow)) {
+                        warn(originalId(node.id), r.why);
+                    } else if (r && !r.ok && r.why) {
+                        warn(originalId(node.id), r.why);
+                    }
                 }
             });
         }

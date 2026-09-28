@@ -1149,7 +1149,7 @@ A box that stands for one row of a list and is drawn once per row — the [[Data
 _Avoid_: loop, list element, template row
 
 **Stand-in**:
-What an element shows when no data is loaded or its field has nothing today: its own typed text, its own picture. The editor's **Live / Stand-ins** switch shows either. A field with nothing behind it keeps the stand-in and is listed under **Not all data could be pulled** in the drawer, which names the element and the reason; a source that has nothing (no Sunday planned, nobody holding the role) says so there too. The **TBA** on an unwritten Sunday is not a stand-in: it is text the editor chose for that Sunday, and blanking it hands those rows back to the stand-in and the list.
+What an element shows when no data is loaded: its own typed text, its own picture. The editor's **Live / Stand-ins** switch shows either. A **live row** whose field has nothing today is **blank** — the seed's typed text is not copied onto the next card, which is how one address used to print on every person who had none. The gap is still listed under **Not all data could be pulled**. A source that has nothing (no Sunday planned, nobody holding the role) says so there too. The **TBA** on an unwritten Sunday is not a stand-in: it is text the editor chose for that Sunday, and blanking it hands those rows back to the stand-in and the list.
 _Avoid_: placeholder (fine in prose), fallback, default value
 
 **View-only page**:
@@ -1208,6 +1208,14 @@ account: the Person behind it by name, falling back to the account name the
 pages use. An account that resolves to neither is **refused** rather than written
 — the [[Author]] rule, applied at the one place every write passes through.
 _Avoid_: user, caller (those are the account; the Actor is the author)
+
+### Printable guidance
+The standing instructions an assistant reads before it changes a [[Printable]]
+(`printable_guidance`). A directory is one list; a continuation page is not a
+second copy; a delete waits for a reply that names the pages. Shipped with the
+tools, so the words and the page stay in step. Distinct from the guidance files
+an editor writes on the MCP Manager page, which are this church's preferences.
+_Avoid_: prompt, system prompt
 
 
 ## Environments
