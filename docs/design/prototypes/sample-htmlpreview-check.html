@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sample prototype — CSS link check</title>
+  <link rel="stylesheet" href="../../../public/fonts.css" />
+  <link rel="stylesheet" href="../../../public/mosaic.css" />
+  <style>
+    .proto-section { margin: 1.5rem auto; max-width: 40rem; padding: 0 1rem; }
+    .proto-label { color: var(--on-surface-variant, #5c5c5c); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen">
+  <header class="m-header m-header--tall">
+    <div class="m-header__inner">
+      <div class="m-header__lead">
+        <div class="m-header__titles">
+          <h1 class="m-header__title">Riverside Fellowship</h1>
+          <span class="m-header__sub">Fictional congregation — prototype CSS check only</span>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="proto-section">
+    <p class="proto-label">Empty state</p>
+    <p class="font-body-md text-on-surface-variant">No tasks yet. Add one when you are ready.</p>
+    <p class="proto-label" style="margin-top: 2rem;">One / many</p>
+    <ul class="font-body-md text-on-surface">
+      <li>Prepare bulletin for Sunday</li>
+      <li>Call visitor Alex Mercer</li>
+      <li>Review care list notes</li>
+    </ul>
+  </main>
+</body>
+</html>
