@@ -40,11 +40,22 @@
     // handle" means any file type is welcome — a .docx, a .pdf, a .png, or
     // anything else — so the only thing worth refusing here is a file too big
     // to be useful.
+    // A photo over the cap is compressed by image-intake.js rather than
+    // refused. Storage still rejects anything at or over 25MB, so a PDF that
+    // large has nowhere to go — a picture does, once it has been redrawn.
+    function compressibleImage(file) {
+        const lib = typeof globalThis !== 'undefined' ? globalThis.ImageIntake : null;
+        if (lib) return lib.isCompressiblePhoto(file);
+        const type = String((file && file.type) || '').toLowerCase();
+        if (/^image\/(jpeg|jpg|png|webp|gif|bmp|heic|heif)/.test(type)) return true;
+        return /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(String((file && file.name) || ''));
+    }
+
     function validateAttachmentFile(file) {
         if (!file || !file.name) {
             return { ok: false, error: 'Choose a file to attach.' };
         }
-        if (Number(file.size) > MAX_ATTACHMENT_BYTES) {
+        if (Number(file.size) > MAX_ATTACHMENT_BYTES && !compressibleImage(file)) {
             return {
                 ok: false,
                 error: 'That file is larger than ' + formatFileSize(MAX_ATTACHMENT_BYTES) +

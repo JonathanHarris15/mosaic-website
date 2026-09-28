@@ -288,9 +288,20 @@ document.addEventListener('alpine:init', () => {
             this.form.versions[vIndex].pages.splice(pIndex, 1);
         },
 
-        handleFileChange(event, vIndex, pIndex) {
-            const file = event.target.files[0];
+        async handleFileChange(event, vIndex, pIndex) {
+            let file = event.target.files[0];
             if (!file) return;
+            const intake = window.ImageIntake;
+            if (intake && intake.isHeic(file)) {
+                this.say(intake.COMPRESSING_MESSAGE);
+                try {
+                    file = await intake.ensureCanvasFile(file);
+                } catch (err) {
+                    this.warn((err && err.message) || 'Could not convert that HEIC image.');
+                    return;
+                }
+                this.hush();
+            }
             const page = this.form.versions[vIndex].pages[pIndex];
             page.file = file;
             if (page.url && String(page.url).indexOf('blob:') === 0) URL.revokeObjectURL(page.url);

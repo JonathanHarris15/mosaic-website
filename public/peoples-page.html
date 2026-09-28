@@ -256,8 +256,9 @@
 
             <!-- One file input for the whole grid: the card that opened it is held
                  in photoTargetId, so this is not repeated per person. -->
-            <input type="file" id="directory-photo-input" accept="image/jpeg,image/png,image/webp"
+            <input type="file" id="directory-photo-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
                    class="hidden" @change="onPhotoChosen($event)" />
+            <p class="px-md pt-sm text-[12px] text-primary" role="status" x-show="photoStatus" x-text="photoStatus"></p>
 
             <div class="flex-grow p-md">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -908,6 +909,7 @@
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
     <script src="events-core.js"></script>
+    <script src="image-intake.js"></script>
     <script src="person-photo-core.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="person-name.js"></script>

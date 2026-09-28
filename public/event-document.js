@@ -326,6 +326,13 @@
                 const check = ImageCore.validateImageFile(file);
                 if (!check.ok) { this.notice = check.error; return; }
 
+                // Over the old hard cap, or a HEIC file, used to be a refusal.
+                // Compress it and say so, instead of asking first.
+                if (check.compress) {
+                    this.placeImage(file);
+                    return;
+                }
+
                 if (!ImageCore.needsRedraw(file, ImageCore.BUDGET_BYTES)) {
                     this.placeImage(file);
                     return;
@@ -352,8 +359,15 @@
             // with white behind its transparency.
             async placeImage(file) {
                 this.insertingImage = true;
+                const intake = window.ImageIntake;
+                const working = (intake && intake.isHeic(file))
+                    || ImageCore.needsRedraw(file, ImageCore.BUDGET_BYTES);
+                if (working) {
+                    this.notice = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
+                }
                 try {
                     const dataUrl = await ImageCore.capToDataUrl(file, ImageCore.BUDGET_BYTES);
+                    if (working) this.notice = '';
                     this.command(chain => chain.setImage({ src: dataUrl, alt: file.name }).run());
                     this.saveStatus = 'unsaved';
                     this.queueSave();

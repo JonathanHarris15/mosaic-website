@@ -32,6 +32,7 @@ function guideEditorV2() {
         _resolveTimer: null,
         _saveTimer: null,
         saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
+        imageNote: '',
 
         service: null,
         context: null,
@@ -329,12 +330,19 @@ function guideEditorV2() {
         async handleImage(field, event) {
             const file = event.target.files[0];
             if (!file) return;
+            const intake = window.ImageIntake;
+            const working = (intake && intake.needsWork(file, GuideImageCore.MAX_UPLOAD_BYTES))
+                || GuideImageCore.needsRedraw(file);
+            if (working) {
+                this.imageNote = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
+            }
             try {
                 this.values[field.key] = await GuideImageCore.capToDataUrl(file);
             } catch (e) {
                 console.error('image import failed:', e);
                 alert(e.message || 'Could not read that image.');
             } finally {
+                this.imageNote = '';
                 event.target.value = '';
             }
         },

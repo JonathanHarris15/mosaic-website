@@ -17,13 +17,21 @@
 (function (global) {
     'use strict';
 
-    // What a browser can reliably decode into a <canvas>, which is what the
-    // resize needs. A file input restricted to these also makes iOS hand over a
-    // JPEG rather than the HEIC it stores.
-    const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    // Node tests load the intake module for real. A browser page loads
+    // image-intake.js as its own script; `require` is not defined there.
+    if (typeof module !== 'undefined' && module.exports) {
+        require('./image-intake.js');
+    }
 
-    // A ceiling on what we will even try to read. Everything is resized before
-    // upload, so this only exists to stop a browser choking on a raw camera file.
+    // What a canvas resizes without help. HEIC is accepted too — image-intake.js
+    // turns it into a JPEG first, because a desktop file picker will hand the
+    // camera's own file over even when iOS would have transcoded it.
+    const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    const FILE_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif';
+
+    // The size past which we tell the person we are compressing. Everything is
+    // resized before upload, so this is not a refusal — a larger photo is
+    // redrawn rather than turned away.
     const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
     // The longest edge we store. The directory renders these at 56px and the
@@ -39,15 +47,29 @@
     // than no photo at all.
     const PHOTO_FIELDS = ['photoUrl', 'photoPath'];
 
+    function intake() {
+        return typeof globalThis !== 'undefined' ? globalThis.ImageIntake : null;
+    }
+
+    function isHeicPhoto(file) {
+        const lib = intake();
+        if (lib) return lib.isHeic(file);
+        const type = String((file && file.type) || '').toLowerCase();
+        return type === 'image/heic' || type === 'image/heif'
+            || /\.hei[cf]$/i.test(String((file && file.name) || ''));
+    }
+
     function validatePhotoFile(file) {
-        if (!file) return { ok: false, error: 'Choose a photo first.' };
-        if (ACCEPTED_TYPES.indexOf(file.type) === -1) {
-            return { ok: false, error: 'Use a JPEG, PNG or WebP image.' };
+        if (!file) return { ok: false, error: 'Choose a photo first.', compress: false };
+        const type = String(file.type || '').toLowerCase();
+        if (ACCEPTED_TYPES.indexOf(type) === -1 && !isHeicPhoto(file)) {
+            return { ok: false, error: 'Use a JPEG, PNG, WebP or HEIC image.', compress: false };
         }
-        if (file.size > MAX_UPLOAD_BYTES) {
-            return { ok: false, error: 'That image is too large. Keep it under 15MB.' };
-        }
-        return { ok: true, error: null };
+        const lib = intake();
+        const compress = lib
+            ? lib.needsWork(file, MAX_UPLOAD_BYTES)
+            : (isHeicPhoto(file) || Number(file.size) > MAX_UPLOAD_BYTES);
+        return { ok: true, error: null, compress: compress };
     }
 
     // Fit within a square of `maxEdge` without distorting, and never enlarge a
@@ -223,11 +245,22 @@
     // otherwise leak the old file forever, and letting clients delete from
     // Storage means letting ANY signed-in account delete ANY photo — Storage
     // rules cannot read Firestore, so they cannot tell whose photo it is.
-    async function uploadPersonPhoto(db, personId, file) {
+    async function uploadPersonPhoto(db, personId, file, hooks) {
         const check = validatePhotoFile(file);
         if (!check.ok) throw new Error(check.error);
 
-        const blob = await resizeToBlob(file, MAX_EDGE_PX);
+        const onStatus = hooks && hooks.onStatus;
+        if (check.compress && onStatus) onStatus(COMPRESSING_MESSAGE);
+
+        const lib = intake();
+        let source = file;
+        if (isHeicPhoto(file)) {
+            if (!lib) throw new Error('Could not convert that HEIC image.');
+            source = await lib.ensureCanvasFile(file);
+        }
+
+        const blob = await resizeToBlob(source, MAX_EDGE_PX);
+        if (onStatus) onStatus('Uploading…');
         const fileId = db.collection('people').doc().id;
         const path = photoStoragePath(personId, fileId);
 
@@ -251,8 +284,12 @@
         await db.collection('people').doc(personId).update(update);
     }
 
+    const COMPRESSING_MESSAGE = (intake() && intake().COMPRESSING_MESSAGE) || 'Compressing the image…';
+
     const PersonPhotoCore = {
         ACCEPTED_TYPES,
+        FILE_ACCEPT,
+        COMPRESSING_MESSAGE,
         MAX_UPLOAD_BYTES,
         MAX_EDGE_PX,
         JPEG_QUALITY,

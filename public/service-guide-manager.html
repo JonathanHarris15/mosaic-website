@@ -28,6 +28,7 @@
     <script src="guide-components.js"></script>
     <script src="guide-seed.js"></script>
     <script src="hymn-versions.js"></script>
+    <script src="image-intake.js"></script>
     <script src="guide-store.js"></script>
     <script src="service-guide-manager.js"></script>
     <script src="vendor/codemirror/codemirror.min.js"></script>
@@ -430,7 +431,7 @@
                 <label class="btn-primary cursor-pointer">
                     <span class="material-symbols-outlined text-[18px]">upload</span>
                     <span x-text="uploadingAssets ? 'Uploading…' : 'Upload assets'"></span>
-                    <input type="file" class="hidden" accept="image/*" multiple @change="uploadAssets($event)" :disabled="uploadingAssets" />
+                    <input type="file" class="hidden" accept="image/*,.heic,.heif" multiple @change="uploadAssets($event)" :disabled="uploadingAssets" />
                 </label>
             </div>
 

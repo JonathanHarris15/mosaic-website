@@ -24,6 +24,7 @@ function guideEditor() {
         hasChanges: false,
         _saveTimer: null,
         saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
+        imageNote: '',
         selectedElement: null,
         zoomLevel: 1.0,
 
@@ -628,6 +629,12 @@ function guideEditor() {
         async handleImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+            const intake = window.ImageIntake;
+            const working = (intake && intake.needsWork(file, GuideImageCore.MAX_UPLOAD_BYTES))
+                || GuideImageCore.needsRedraw(file);
+            if (working) {
+                this.imageNote = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
+            }
             try {
                 const dataUrl = await GuideImageCore.capToDataUrl(file);
                 if (this.selectedElement && this.selectedElement.type === 'pastoral_prayer') {
@@ -637,6 +644,7 @@ function guideEditor() {
                 console.error('image import failed:', e);
                 alert(e.message || 'Could not read that image.');
             } finally {
+                this.imageNote = '';
                 event.target.value = '';
             }
         },

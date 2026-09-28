@@ -35,6 +35,31 @@ test('a photo comfortably under the cap is still redrawn, because the wait is th
     assert.strictEqual(FormsCore.shrinkPlan(photo('image/jpeg', 3)).shrink, true);
 });
 
+test('a HEIC photo is converted even when it is small', () => {
+    const plan = FormsCore.shrinkPlan({ name: 'IMG_0421.HEIC', type: 'image/heic', size: 0.4 * MB });
+    assert.strictEqual(plan.shrink, true);
+    assert.strictEqual(plan.convert, true);
+    assert.strictEqual(plan.type, 'image/jpeg');
+    const unnamed = FormsCore.shrinkPlan({ name: 'photo.heif', type: '', size: 9 * MB });
+    assert.strictEqual(unnamed.convert, true);
+});
+
+test('a converted HEIC is kept even when the JPEG is heavier', () => {
+    const plan = { convert: true };
+    assert.strictEqual(FormsCore.keepPrepared(2 * MB, 3 * MB, plan), true);
+    assert.strictEqual(FormsCore.keepPrepared(2 * MB, 0, plan), false);
+});
+
+test('a redraw that is not a conversion is still thrown away when it grew', () => {
+    assert.strictEqual(FormsCore.keepPrepared(2 * MB, 3 * MB, { convert: false }), false);
+    assert.strictEqual(FormsCore.keepPrepared(9 * MB, 600 * 1024, { convert: false }), true);
+});
+
+test('the page says it is compressing while a photo is prepared', () => {
+    assert.strictEqual(FormsCore.COMPRESSING_MESSAGE, 'Compressing the image…');
+    assert.match(ANSWER_JS, /FormsCore\.COMPRESSING_MESSAGE/);
+});
+
 test('a small photo is left exactly as it was chosen', () => {
     const plan = FormsCore.shrinkPlan(photo('image/jpeg', 0.4));
     assert.strictEqual(plan.shrink, false);
@@ -156,7 +181,7 @@ test('a redraw that fails still lets the photo through', () => {
 
 test('the page asks the model whether the redraw was worth keeping', () => {
     const fn = ANSWER_JS.match(/onFileChosen\(q, ev\) \{[\s\S]*?\n            \},/);
-    assert.match(fn[0], /FormsCore\.worthKeeping\(file\.size, smaller\.size\)/,
+    assert.match(fn[0], /FormsCore\.keepPrepared\(file\.size, smaller\.size, plan\)/,
         'the page decides for itself, so a bigger redraw could be sent');
     assert.match(fn[0], /FormsCore\.shrinkPlan\(file\)/,
         'the page decides for itself what to redraw');

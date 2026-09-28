@@ -286,10 +286,12 @@ function initMyPhoto(personId, person) {
         }
 
         choose.disabled = true;
-        status.textContent = 'Uploading…';
+        status.textContent = check.compress ? PersonPhotoCore.COMPRESSING_MESSAGE : 'Uploading…';
         status.className = 'text-[11px] font-body-md text-primary animate-pulse';
         try {
-            const saved = await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
+            const saved = await PersonPhotoCore.uploadPersonPhoto(db, personId, file, {
+                onStatus: (msg) => { status.textContent = msg; },
+            });
             myPhotoCrop = PersonPhotoCore.normalizeCrop(saved.crop);
             showMyPhoto(saved.url);
             status.textContent = '';

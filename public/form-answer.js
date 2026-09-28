@@ -165,6 +165,25 @@
         });
     }
 
+    // HEIC becomes a JPEG first — a canvas cannot open it outside Safari —
+    // and a redraw that is still over the form's cap is taken down the
+    // intake ladder rather than refused.
+    function prepareFormFile(file, plan) {
+        const intake = window.ImageIntake;
+        const decoded = (plan.convert && intake)
+            ? intake.ensureCanvasFile(file)
+            : Promise.resolve(file);
+        return decoded.then(source => {
+            const stillBig = source.size > window.FormsCore.SHRINK_OVER_BYTES;
+            if (plan.convert && !stillBig) return source;
+            return shrinkImage(source, plan).then(smaller => {
+                if (smaller.size <= window.FormsCore.MAX_UPLOAD_BYTES) return smaller;
+                if (!intake) return smaller;
+                return intake.compressUnder(smaller, window.FormsCore.MAX_UPLOAD_BYTES);
+            });
+        });
+    }
+
     window.answerPage = function answerPage() {
         const page = {
             state: 'loading',
@@ -300,10 +319,10 @@
                 if (!plan.shrink) { this.takeFile(q, file); return; }
 
                 this.shrinking[q.id] = true;
-                shrinkImage(file, plan).then(smaller => {
+                prepareFormFile(file, plan).then(smaller => {
                     this.shrinking[q.id] = false;
-                    this.takeFile(q,
-                        window.FormsCore.worthKeeping(file.size, smaller.size) ? smaller : file);
+                    const keep = window.FormsCore.keepPrepared(file.size, smaller.size, plan);
+                    this.takeFile(q, keep ? smaller : file);
                 }).catch(() => {
                     // ⚠ A photo we could not redraw is still a photo they
                     // chose. Fall back to the original and let the size check
@@ -345,7 +364,7 @@
             // Redrawing a big photo takes a second or two on an old phone, and
             // a control that sat there saying nothing would look broken.
             busyWith(q) {
-                return this.shrinking[q.id] ? 'Making that photo smaller…' : '';
+                return this.shrinking[q.id] ? window.FormsCore.COMPRESSING_MESSAGE : '';
             },
 
             // Forget a chosen file. Both the bytes waiting to go and what the

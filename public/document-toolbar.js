@@ -233,7 +233,7 @@
                         :class="isActive('link') && 'bg-surface-container'" title="Link">
                     <span class="material-symbols-outlined text-[16px]">link</span>
                 </button>
-                <input type="file" x-ref="imageInput" class="hidden" accept="image/*"
+                <input type="file" x-ref="imageInput" class="hidden" accept="image/*,.heic,.heif"
                        @change="chooseImage($event)" />
                 <button type="button" @mousedown.prevent="$refs.imageInput.click()"
                         class="m-icon-btn m-icon-btn--sm cal-focus" title="Insert a picture">

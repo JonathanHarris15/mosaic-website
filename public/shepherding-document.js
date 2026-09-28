@@ -1253,6 +1253,11 @@ document.addEventListener('alpine:init', () => {
             const check = GuideImageCore.validateImageFile(file);
             if (!check.ok) { this.showToast(check.error, 'error'); return; }
 
+            if (check.compress) {
+                this.placeImage(file);
+                return;
+            }
+
             if (!GuideImageCore.needsRedraw(file, GuideImageCore.BUDGET_BYTES)) {
                 this.placeImage(file);
                 return;
@@ -1275,6 +1280,12 @@ document.addEventListener('alpine:init', () => {
 
         async placeImage(file) {
             this.insertingImage = true;
+            const intake = window.ImageIntake;
+            const working = (intake && intake.isHeic(file))
+                || GuideImageCore.needsRedraw(file, GuideImageCore.BUDGET_BYTES);
+            if (working) {
+                this.showToast((intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…');
+            }
             try {
                 const dataUrl = await GuideImageCore.capToDataUrl(file, GuideImageCore.BUDGET_BYTES);
                 this.command(chain => chain.setImage({ src: dataUrl, alt: file.name }).run());

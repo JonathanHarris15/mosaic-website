@@ -158,6 +158,7 @@
             // and nobody could tell the difference.
             filesError: '',
             uploadingAttachment: false,
+            attachmentPhase: '',
             attachmentError: '',
             // The row whose bytes are on their way down, so it can say so.
             openingAttachmentId: null,
@@ -1704,8 +1705,25 @@
                 const check = Attachments.validateAttachmentFile(file);
                 if (!check.ok) { this.attachmentError = check.error; return; }
 
+                const intake = window.ImageIntake;
+                let payload = file;
                 this.uploadingAttachment = true;
                 this.attachmentError = '';
+                if (intake && intake.needsWork(file, Attachments.MAX_ATTACHMENT_BYTES - 1)) {
+                    this.attachmentPhase = 'compress';
+                    try {
+                        payload = await intake.prepare(file, {
+                            maxBytes: Attachments.MAX_ATTACHMENT_BYTES - 1,
+                        });
+                    } catch (err) {
+                        console.error('Could not compress that image:', err);
+                        this.attachmentError = (err && err.message) || 'Could not read that image.';
+                        this.uploadingAttachment = false;
+                        this.attachmentPhase = '';
+                        return;
+                    }
+                }
+                this.attachmentPhase = 'upload';
                 try {
                     // The date may not exist as a document yet — occurrences
                     // are sparse. Until it does, the rule guarding this
@@ -1715,7 +1733,7 @@
 
                     const occurrenceId = this.occurrence.id;
                     const attachmentId = Store.newAttachmentId(db, occurrenceId);
-                    const path = Attachments.storagePath(occurrenceId, attachmentId, file.name);
+                    const path = Attachments.storagePath(occurrenceId, attachmentId, payload.name);
 
                     const ref = firebase.storage().ref().child(path);
                     // ⚠ NO getDownloadURL() HERE, AND NOWHERE ELSE ON THIS PATH.
@@ -1724,12 +1742,12 @@
                     // past the visibility rule in storage.rules. The record
                     // carries the PATH; `openAttachment` fetches the bytes as
                     // the signed-in reader, and the rule is checked every time.
-                    await ref.put(file, { contentType: file.type || 'application/octet-stream' });
+                    await ref.put(payload, { contentType: payload.type || 'application/octet-stream' });
 
                     const record = Attachments.buildAttachmentRecord({
-                        name: file.name,
-                        contentType: file.type || null,
-                        size: file.size,
+                        name: payload.name,
+                        contentType: payload.type || null,
+                        size: payload.size,
                         storagePath: path,
                         uploadedBy: this.uid,
                         uploadedByName: this.personId ? this.personName(this.personId) : null,
@@ -1742,6 +1760,7 @@
                     this.attachmentError = 'That file could not be attached. Try again.';
                 } finally {
                     this.uploadingAttachment = false;
+                    this.attachmentPhase = '';
                 }
             },
 

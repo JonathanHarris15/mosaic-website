@@ -94,13 +94,16 @@ test('a file is measured as base64, not as it sits on disk', () => {
         'data:image/jpeg;base64,'.length);
 });
 
-test('only what a canvas can decode is accepted', () => {
+test('HEIC is accepted, and a photo over the old cap is compressed rather than refused', () => {
     assert.strictEqual(Core.validateImageFile({ type: 'image/jpeg', size: 5000 }).ok, true);
-    // An iPhone's own format cannot be drawn, and a file input restricted to the
-    // accepted list makes iOS hand over a JPEG instead.
-    assert.strictEqual(Core.validateImageFile({ type: 'image/heic', size: 5000 }).ok, false);
-    assert.strictEqual(Core.validateImageFile({ type: 'image/jpeg', size: 40 * 1024 * 1024 }).ok, false);
+    const heic = Core.validateImageFile({ type: 'image/heic', size: 5000, name: 'map.heic' });
+    assert.strictEqual(heic.ok, true);
+    assert.strictEqual(heic.compress, true);
+    const huge = Core.validateImageFile({ type: 'image/jpeg', size: 40 * 1024 * 1024, name: 'beach.jpg' });
+    assert.strictEqual(huge.ok, true);
+    assert.strictEqual(huge.compress, true);
     assert.strictEqual(Core.validateImageFile(null).ok, false);
+    assert.strictEqual(Core.validateImageFile({ type: 'application/pdf', size: 5000 }).ok, false);
 });
 
 // ── The screens that store one ───────────────────────────────────────────────
@@ -117,11 +120,10 @@ test('neither guide screen stores a picked file unread', () => {
     });
 });
 
-test('the file inputs ask for what can actually be decoded', () => {
-    const accept = Core.ACCEPTED_TYPES.join(',');
+test('the file inputs accept HEIC as well as what a canvas decodes on its own', () => {
     ['service-guide-editor.html', 'service-guide.html'].forEach(f => {
         const html = read(f).replace(/\s+/g, ' ');
-        assert.ok(html.indexOf('accept="' + accept + '"') !== -1,
-            f + ' still offers the picker every file a phone holds');
+        assert.ok(html.indexOf('accept="' + Core.FILE_ACCEPT + '"') !== -1,
+            f + ' does not offer HEIC to the picker');
     });
 });

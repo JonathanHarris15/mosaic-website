@@ -16,17 +16,32 @@ test('JPEG, PNG and WebP are accepted — the formats a canvas can resize', () =
 });
 
 test('anything else is refused, in words that say what to do', () => {
-    for (const type of ['image/gif', 'image/heic', 'application/pdf', 'text/html', '']) {
-        const check = Photo.validatePhotoFile({ type, size: 1000 });
+    for (const type of ['image/gif', 'application/pdf', 'text/html', '']) {
+        const check = Photo.validatePhotoFile({ type, size: 1000, name: 'file.bin' });
         assert.ok(!check.ok, type);
-        assert.match(check.error, /JPEG, PNG or WebP/);
+        assert.match(check.error, /JPEG, PNG, WebP or HEIC/);
     }
 });
 
-test('a file too large to read is refused before the browser chokes on it', () => {
-    const check = Photo.validatePhotoFile({ type: 'image/jpeg', size: Photo.MAX_UPLOAD_BYTES + 1 });
-    assert.ok(!check.ok);
-    assert.match(check.error, /too large/);
+test('a HEIC photo is accepted — it is converted to JPEG before upload', () => {
+    for (const file of [
+        { type: 'image/heic', size: 1000, name: 'IMG_0421.HEIC' },
+        { type: '', size: 1000, name: 'photo.heif' },
+        { type: 'application/octet-stream', size: 1000, name: 'shot.heic' },
+    ]) {
+        const check = Photo.validatePhotoFile(file);
+        assert.ok(check.ok, file.name);
+        assert.equal(check.compress, true);
+    }
+});
+
+test('a photo over the old cap is compressed rather than refused', () => {
+    const check = Photo.validatePhotoFile({
+        type: 'image/jpeg', size: Photo.MAX_UPLOAD_BYTES + 1, name: 'big.jpg',
+    });
+    assert.equal(check.ok, true);
+    assert.equal(check.compress, true);
+    assert.equal(Photo.COMPRESSING_MESSAGE, 'Compressing the image…');
 });
 
 test('a file exactly at the cap is fine', () => {

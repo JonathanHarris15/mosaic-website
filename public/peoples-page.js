@@ -63,6 +63,7 @@ document.addEventListener('alpine:init', () => {
         // grid; photoTargetId remembers which card opened it.
         photoTargetId: null,
         photoBusyId: null,
+        photoStatus: '',
         overrideFor: null,       // a "new" request being redirected onto an existing Person
         overrideSearch: '',
 
@@ -914,8 +915,11 @@ document.addEventListener('alpine:init', () => {
             if (!check.ok) { this.showToast(check.error, 'error'); return; }
 
             this.photoBusyId = personId;
+            this.photoStatus = check.compress ? PersonPhotoCore.COMPRESSING_MESSAGE : 'Uploading…';
             try {
-                await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
+                await PersonPhotoCore.uploadPersonPhoto(db, personId, file, {
+                    onStatus: (msg) => { this.photoStatus = msg; },
+                });
                 await this.loadPeople();
                 this.showToast('Photo updated');
             } catch (e) {
@@ -924,6 +928,7 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.photoBusyId = null;
                 this.photoTargetId = null;
+                this.photoStatus = '';
             }
         },
 
