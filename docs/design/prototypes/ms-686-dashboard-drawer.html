@@ -1,0 +1,2663 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The review page's own background (--surface-container-highest), not the
+         app's, because the tan around the stages is what this document is. -->
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-686 + MS-691 — Dashboard restyle and desktop drawer (prototype)</title>
+
+    <!-- The real stylesheets, by relative path, per .cursor/rules/ui-prototype-first.mdc.
+         Everything with an m-* class below is drawn by the shipped design system;
+         nothing about the cream, the navy ink or the Cinzel / EB Garamond /
+         Libre Franklin stack is redrawn here. -->
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <style>
+        /* ============================================================
+           PROTOTYPE-ONLY CSS. Two kinds of rule live in here, and they
+           have different futures:
+
+           1. .m-drawer* / .m-rail*  — a PROPOSED design-system component.
+              There is no Drawer in build/design-components.mjs today (the
+              phone has two hand-written renderings of one, in
+              public/mobile/app.js and public/mobile-shell-header.js, both
+              styled inline). If MS-691 is approved, these move into the
+              generator and the phone's two copies collapse onto them.
+              Written only in tokens so that move is a copy-paste.
+
+           2. .proto-*  — the prototype's own scaffolding: the review
+              chrome, and the "stage" boxes that let one page show a page
+              twice with its drawer shut and open. This never ships.
+
+           Every value is a var(--token) from the linked sheets.
+           ============================================================ */
+
+        /* ── The review page itself ───────────────────────────────── */
+
+        .proto-body {
+            margin: 0;
+            background: var(--surface-container-highest);
+            color: var(--on-background);
+            font-family: var(--font-sans);
+            font-size: var(--body-md-size);
+            line-height: var(--body-md-line);
+            -webkit-font-smoothing: antialiased;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: color-mix(in srgb, var(--tertiary) 24%, transparent);
+        }
+
+        .proto-skip {
+            position: absolute;
+            left: var(--space-sm);
+            top: -3rem;
+            z-index: 100;
+            padding: var(--space-base) var(--space-sm);
+            border-radius: var(--radius);
+            background: var(--primary);
+            color: var(--on-primary);
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: top var(--duration) var(--ease-standard);
+        }
+
+        .proto-skip:focus-visible {
+            top: var(--space-sm);
+            outline: 2px solid var(--tertiary);
+            outline-offset: 2px;
+        }
+
+        /* Deliberately not sticky. At 390&nbsp;px this bar is 200&nbsp;px tall, and a
+           review page that permanently spends a quarter of a phone screen on
+           its own chrome cannot be trusted about how much room the app has. */
+        .proto-bar {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--primary);
+            color: var(--on-primary);
+            border-bottom: 1px solid var(--primary-container);
+        }
+
+        .proto-bar__kicker {
+            margin: 0;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--primary-fixed-dim);
+        }
+
+        .proto-bar__title {
+            margin: 2px 0 0;
+            font-family: var(--font-serif);
+            font-size: var(--headline-md-size);
+            line-height: var(--headline-md-line);
+            font-weight: var(--headline-md-weight);
+            text-wrap: balance;
+        }
+
+        .proto-jump {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-base);
+            margin-top: var(--space-sm);
+        }
+
+        .proto-jump a {
+            padding: 6px 12px;
+            border: 1px solid var(--primary-fixed-dim);
+            border-radius: var(--radius-full);
+            color: var(--on-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard),
+                        color var(--duration) var(--ease-standard);
+        }
+
+        .proto-jump a:hover {
+            background: var(--primary-fixed);
+            color: var(--primary);
+        }
+
+        .proto-jump a:focus-visible {
+            outline: 2px solid var(--primary-fixed);
+            outline-offset: 2px;
+        }
+
+        .proto-main {
+            width: 100%;
+            max-width: 1360px;
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-sm) var(--space-xl);
+        }
+
+        @media (min-width: 900px) {
+            .proto-main { padding-left: var(--space-md); padding-right: var(--space-md); }
+        }
+
+        .proto-note {
+            max-width: 68ch;
+            margin: 0 0 var(--space-sm);
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--on-surface-variant);
+            text-wrap: pretty;
+        }
+
+        .proto-note strong { color: var(--on-surface); }
+
+        /* Variant B's rail only exists at 1024 px and up, so the note that
+           explains its absence only exists below that. */
+        .proto-note--narrow { display: none; }
+
+        @media (max-width: 1023px) {
+            .proto-note--narrow { display: block; }
+
+            /* A collapsed rail is a desktop-only state. Below 1024 px there is no
+               rail at all, so the stage showing it is hidden rather than left to
+               render as something it is not. */
+            .proto-rail-only { display: none; }
+        }
+
+        .proto-section {
+            margin-top: var(--space-lg);
+            scroll-margin-top: var(--space-md);
+        }
+
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs);
+            font-family: var(--font-serif);
+            font-size: var(--headline-lg-size);
+            line-height: var(--headline-lg-line);
+            font-weight: var(--headline-lg-weight);
+            color: var(--primary);
+            text-wrap: balance;
+        }
+
+        .proto-section > h3,
+        .proto-stage-label {
+            margin: var(--space-md) 0 var(--space-base);
+            scroll-margin-top: var(--space-md);
+            font-family: var(--font-sans);
+            font-size: var(--label-sm-size);
+            font-weight: var(--label-sm-weight);
+            letter-spacing: var(--label-sm-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        /* ── Two findings against the shipped components ───────────
+           Both are real, both are reproducible, and both belong in
+           build/design-components.mjs rather than in a page. They are
+           patched here only so this prototype shows what it means to
+           show; the implementation ticket should fix them at source.
+
+           1. Row's two lines only stack when its parts are block. The
+              canonical markup in build/design-components.mjs uses
+              <div>s, so it works there — but forms.html,
+              printables.html and calendar-event.html all use <span>s,
+              where the title and the sub run together on one line and
+              .m-row__sub's margin-top does nothing at all. The
+              component should not depend on which element you reach
+              for.
+
+           2. Notice does not wrap. .m-notice__body is flex:1 1 auto
+              beside a no-wrap .m-notice__acts, so at phone width a
+              Notice carrying an action squeezes its own sentence to
+              one word per line. .m-actionbar already solves this with
+              flex-wrap and a flex-basis in ch. */
+        .m-row__main,
+        .m-row__title,
+        .m-row__sub { display: block; }
+
+        .m-notice { flex-wrap: wrap; }
+        .m-notice__body { flex: 1 1 24ch; }
+
+        .proto-verdict {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-base);
+            margin: 0 0 var(--space-sm);
+        }
+
+        /* The frame a whole page is drawn inside, so this one document can
+           show the dashboard twice — shut and open — without two windows.
+           PRODUCTION DIFFERENCE: the drawer here is position:absolute inside
+           this box; in the app it is position:fixed to the viewport, exactly
+           as the phone's is. Nothing else about it changes. */
+        .proto-stage {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 560px;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            background: var(--background);
+            box-shadow: var(--shadow-sm);
+        }
+
+        @media (min-width: 900px) {
+            .proto-stage { min-height: 680px; }
+        }
+
+        /* Tall enough that a twelve-entry drawer is judged on the list rather
+           than on where it happened to be cut off. */
+        .proto-stage--tall { min-height: 780px; }
+
+        /* The page column inside a stage — .m-page__body's metrics, without
+           .m-page's min-height:100vh, which would blow the frame out. */
+        .proto-app-body {
+            flex: 1 1 auto;
+            width: 100%;
+            max-width: var(--container-max);
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-sm) var(--space-md);
+        }
+
+        @media (min-width: 641px) {
+            .proto-app-body { padding: var(--space-md) var(--space-margin) var(--space-lg); }
+        }
+
+        .proto-stack {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .proto-row {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .proto-spacer { flex: 1 1 auto; }
+
+        /* ── Proposed component: Drawer ────────────────────────────
+           The phone's navigation drawer (public/mobile/app.js Drawer,
+           public/mobile-shell-header.js buildDrawer) as one class set the
+           desktop header can open too. Same 296px panel, same navy head
+           carrying avatar / name / role, same scrim, same slide. */
+
+        .m-drawer {
+            position: absolute;
+            inset: 0;
+            z-index: 60;
+            visibility: hidden;
+        }
+
+        .m-drawer__scrim {
+            position: absolute;
+            inset: 0;
+            background: color-mix(in srgb, var(--navy-900) 42%, transparent);
+            opacity: 0;
+            border: 0;
+            padding: 0;
+            transition: opacity var(--duration-slow) var(--ease-standard);
+        }
+
+        .m-drawer__panel {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            width: 296px;
+            max-width: 86%;
+            background: var(--surface);
+            border-right: 1px solid var(--outline-variant);
+            box-shadow: var(--shadow-lg);
+            overscroll-behavior: contain;
+            transform: translateX(-100%);
+            transition: transform var(--duration-slow) var(--ease-standard);
+        }
+
+        [data-drawer="open"] .m-drawer { visibility: visible; }
+        [data-drawer="open"] .m-drawer__scrim { opacity: 1; }
+        [data-drawer="open"] .m-drawer__panel { transform: translateX(0); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .m-drawer__scrim,
+            .m-drawer__panel { transition: none; }
+        }
+
+        /* The safe-area padding is carried over from the phone's head and foot
+           deliberately. On a desktop window both insets are 0, so it costs
+           nothing here — and if this becomes the one Drawer both surfaces use,
+           dropping it is how the panel ends up under an iPhone's status bar. */
+        .m-drawer__head {
+            flex: 0 0 auto;
+            padding: calc(env(safe-area-inset-top, 0px) + var(--space-base))
+                     var(--space-sm) var(--space-sm);
+            background: var(--primary);
+            color: var(--on-primary);
+        }
+
+        .m-drawer__who {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: var(--space-xs);
+            padding: 6px;
+            border-radius: var(--radius);
+            color: inherit;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard);
+        }
+
+        .m-drawer__who:hover { background: color-mix(in srgb, var(--on-primary) 12%, transparent); }
+        .m-drawer__who:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+
+        .m-drawer__who-main {
+            display: block;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .m-drawer__name {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .m-drawer__role {
+            display: block;
+            font-size: 11.5px;
+            color: var(--primary-fixed-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .m-drawer__list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: var(--space-base) var(--space-sm);
+        }
+
+        .m-drawer__group {
+            display: block;
+            padding: var(--space-sm) 14px var(--space-xs);
+        }
+
+        .m-drawer__item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-height: 44px;
+            padding: 10px 14px;
+            margin-bottom: 2px;
+            border-radius: var(--radius);
+            color: var(--on-surface);
+            font-family: var(--font-sans);
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard),
+                        color var(--duration) var(--ease-standard);
+        }
+
+        .m-drawer__item:hover { background: var(--surface-container); color: var(--primary); }
+        .m-drawer__item:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+
+        .m-drawer__item[aria-current="page"] {
+            background: var(--primary-fixed);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .m-drawer__item .material-symbols-outlined {
+            flex: 0 0 auto;
+            font-size: 20px;
+        }
+
+        .m-drawer__label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .m-drawer__foot {
+            flex: 0 0 auto;
+            padding: var(--space-base) var(--space-sm)
+                     calc(env(safe-area-inset-bottom, 0px) + var(--space-base));
+            border-top: 1px solid var(--outline-variant);
+        }
+
+        /* ── Proposed component: Rail (variant B only) ──────────────
+           The same list, docked instead of overlaid, and able to shrink to
+           its glyphs. Below 1024px it is not a rail at all — the Drawer
+           above takes over, which is the phone's behaviour arriving at the
+           bottom of the desktop range rather than at a device boundary. */
+
+        .m-rail {
+            flex: 0 0 auto;
+            align-self: stretch;
+            width: 248px;
+            padding: var(--space-base) 0;
+            background: var(--surface-container-low);
+            border-right: 1px solid var(--outline-variant);
+            transition: width var(--duration-slow) var(--ease-standard);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .m-rail { transition: none; }
+        }
+
+        .m-rail .m-drawer__list { padding: 0 var(--space-base); }
+
+        [data-rail="collapsed"] .m-rail { width: 68px; }
+        [data-rail="collapsed"] .m-rail .m-drawer__item { justify-content: center; padding: 10px 0; }
+        [data-rail="collapsed"] .m-rail .m-drawer__label { display: none; }
+        [data-rail="collapsed"] .m-rail .m-drawer__group { visibility: hidden; padding: var(--space-base) 0 0; }
+
+        /* ── Variant plumbing ─────────────────────────────────────── */
+
+        .proto-shell {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: stretch;
+            min-height: 0;
+        }
+
+        .proto-shell > .proto-app-body { min-width: 0; }
+
+        /* Variant B: rail above 1024, overlay drawer below it. */
+        .proto-stage--rail .m-drawer { display: none; }
+        @media (max-width: 1023px) {
+            .proto-stage--rail .m-rail { display: none; }
+            .proto-stage--rail .m-drawer { display: block; }
+        }
+
+        /* ── Dashboard layouts under test ─────────────────────────── */
+
+        /* A: the 8/4 split the dashboard has today, kept. */
+        .proto-split {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-md);
+            align-items: start;
+        }
+
+        @media (min-width: 1024px) {
+            .proto-split { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
+            .proto-split--7-5 { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+        }
+
+        .proto-tiles {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            /* Equal rows, because "Membership Directory" takes two lines and a
+               grid left to size each row to its contents makes the row holding
+               it visibly taller than the row above. */
+            grid-auto-rows: 1fr;
+            gap: var(--space-sm);
+        }
+
+        @media (min-width: 560px) {
+            .proto-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (min-width: 1024px) {
+            .proto-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+
+        /* The tile is .m-nav-card from the design system. Its shipped padding
+           is --space-lg, which at three columns inside an 8-of-12 track makes
+           a very tall tile; the dashboard is the one surface that shows nine
+           of them at once, so it asks for the tighter step. Candidate for a
+           real --sm modifier on NavCard rather than a page override. */
+        .proto-tiles .m-nav-card { padding: var(--space-md) var(--space-sm); }
+
+        /* A two-word tile name should break evenly rather than leaving
+           "Directory" alone on the second line. */
+        .m-nav-card__title { text-wrap: balance; }
+
+        /* B / C: the Sunday, given the top of the page instead of a rail. */
+        .proto-sunday {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .proto-sunday__theme {
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: var(--headline-lg-size);
+            line-height: var(--headline-lg-line);
+            font-weight: var(--headline-lg-weight);
+            color: var(--primary);
+            text-wrap: balance;
+        }
+
+        .proto-who {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-sm);
+        }
+
+        @media (min-width: 560px) {
+            .proto-who { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+
+        .proto-who__cell {
+            display: flex;
+            align-items: center;
+            gap: var(--space-base);
+            min-width: 0;
+        }
+
+        .proto-who__main { min-width: 0; }
+
+        .proto-who__role {
+            display: block;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .proto-who__name {
+            display: block;
+            margin-top: 2px;
+            font-family: var(--font-serif);
+            font-size: 16px;
+            color: var(--on-surface);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* A pair of label/value lines — the Sunday at a Glance panel's body. */
+        .proto-pairs {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            margin: 0;
+        }
+
+        .proto-pairs > div {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: var(--space-sm);
+        }
+
+        .proto-pairs dt {
+            flex: 0 0 auto;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .proto-pairs dd {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: 16px;
+            color: var(--on-surface);
+            text-align: right;
+            text-wrap: pretty;
+        }
+
+        .proto-states {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-md);
+        }
+
+        @media (min-width: 720px) {
+            .proto-states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        /* Four across only where a column is still as wide as the real
+           right-hand rail. At 1,280&nbsp;px it is not, and the label/value
+           lines start wrapping in a way production never would. */
+        @media (min-width: 1560px) {
+            .proto-states { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        .proto-state { display: flex; flex-direction: column; gap: var(--space-base); }
+        .proto-state > .m-card { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-sm); }
+
+        .proto-num { font-variant-numeric: tabular-nums; }
+
+        .proto-hairline {
+            margin: var(--space-sm) 0;
+        }
+
+        /* The page's own header, drawn inside a stage, is chrome rather than a
+           heading in THIS document's outline — so it is a <span>, not the <h1>
+           production renders. The class does all the drawing either way. */
+        span.m-header__title { display: block; }
+    </style>
+</head>
+
+<body class="proto-body">
+    <a class="proto-skip" href="#main">Skip to content</a>
+
+    <header class="proto-bar">
+        <p class="proto-bar__kicker">Prototype · MS-686 + MS-691 · fictional data only</p>
+        <h1 class="proto-bar__title">Dashboard restyle and a desktop hamburger drawer</h1>
+        <nav class="proto-jump" aria-label="Jump to a section">
+            <a href="#thesis">Why one task</a>
+            <a href="#variant-a">A · Overlay drawer, tiles kept</a>
+            <a href="#variant-b">B · Docked rail, no tiles</a>
+            <a href="#variant-c">C · One list, two sizes</a>
+            <a href="#states">Content states</a>
+            <a href="#feedback">What I need decided</a>
+        </nav>
+    </header>
+
+    <main class="proto-main" id="main">
+        <section class="proto-section" id="thesis">
+            <h2>Why these two tickets are one</h2>
+            <p class="proto-note">
+                The desktop dashboard <em>is</em> the navigation. Twelve of its tiles are the only
+                door to twelve pages, so every trip between two of them goes home first. The phone
+                solved this years ago: the drawer is the navigation, and Home is a screen rather
+                than a map. MS-691 brings that drawer to the desktop header — and the moment it
+                lands, the tile grid is a second copy of the same list, which is what MS-686 has
+                to answer.
+            </p>
+            <p class="proto-note">
+                So the choice below is not a paint job. It is <strong>what the dashboard is for
+                once the drawer carries the navigation</strong>: still the map (A), the week
+                (B), or the same list read at a different size (C).
+            </p>
+            <p class="proto-note">
+                All three wear the shipped design system — <code>m-nav-card</code>,
+                <code>m-medallion</code>, <code>m-card</code>, <code>m-notice</code>,
+                <code>m-empty</code>, <code>m-row</code>, <code>m-badge</code>,
+                <code>m-scripture</code>, <code>m-header</code> — and the drawer is written as a
+                proposed <code>m-drawer</code> in tokens, because the design system has no Drawer
+                yet and the phone has two hand-styled copies of one.
+                Everybody named here is invented.
+            </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             VARIANT A — the overlay drawer, and the tile grid kept
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="variant-a">
+            <h2>A · Overlay drawer, tile grid kept</h2>
+            <div class="proto-verdict">
+                <span class="m-badge m-badge--success">Smallest change</span>
+                <span class="m-badge m-badge--primary">Matches the phone exactly</span>
+                <span class="m-badge m-badge--warning">Two copies of one list</span>
+            </div>
+            <p class="proto-note">
+                The hamburger goes in <code>m-header__lead</code>, left of the seal, and opens the
+                phone’s drawer over the page you are on. The dashboard keeps its 8/4 split and its
+                tiles, but the tiles become <code>m-nav-card</code> and <code>m-medallion</code>
+                instead of nine hand-written Tailwind card strings, and the floating 64&nbsp;px
+                logo moves into the header so the page can start with a sentence instead of a
+                picture. The saved arrangement (<code>dashboardCardOrder</code>) survives untouched.
+            </p>
+
+            <h3 class="proto-stage-label" id="variant-a-closed">Drawer shut — press the hamburger</h3>
+            <div class="proto-stage" data-stage data-variant="a" data-drawer="closed">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="false" aria-controls="drawer-a1"
+                                aria-label="Open menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;"
+                                fetchpriority="high" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__actions">
+                            <a href="#variant-a" class="m-btn m-btn--secondary m-btn--sm">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-btn__label">2 commitments</span>
+                            </a>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-a"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                                <button type="button"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">logout</span>
+                                    <span class="hidden md:inline">Log Out</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split">
+                            <div class="proto-stack">
+                                <!-- The page opens with the one thing that needs doing
+                                     rather than with a picture of the seal. Its action
+                                     is the validating view of the editor, which is a
+                                     different URL from the card's plain "open" below —
+                                     the same two doors index.html already draws. -->
+                                <div class="m-notice m-notice--warning">
+                                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Sunday 4 October is not ready</span>
+                                        <span class="m-notice__text"><span class="proto-num">4</span> fields are blank
+                                            on the Order of Service, and nobody is on the sound desk.</span>
+                                    </div>
+                                    <div class="m-notice__acts">
+                                        <a href="#variant-a" class="m-btn m-btn--primary m-btn--sm">
+                                            <span class="m-btn__label">Fix the blanks</span>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <div class="proto-tiles">
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Services</h4>
+                                        <p class="m-nav-card__desc">Every Sunday, and the Order of Service behind it.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Hymns</h4>
+                                        <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Calendar</h4>
+                                        <p class="m-nav-card__desc">Everything on at church, and what you are part of.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Membership Directory</h4>
+                                        <p class="m-nav-card__desc">Who is in the congregation, and how to reach them.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Roles Manager</h4>
+                                        <p class="m-nav-card__desc">Set up serving roles and who may fill them.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Shepherd Dashboard</h4>
+                                        <p class="m-nav-card__desc">Elder tools, and the care the church owes people.</p>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:0;color:var(--on-surface-variant);font-size:13.5px;">
+                                    Six of twelve shown. Drag a tile to rearrange — the saved order is unchanged.
+                                </p>
+                            </div>
+
+                            <!-- Sunday at a Glance, as an m-card. Same panel the page
+                                 has today; the states section below shows all four of
+                                 its readings. -->
+                            <div class="m-card">
+                                <h4 class="m-serif-head">Sunday at a Glance</h4>
+                                <hr class="m-divider proto-hairline" />
+                                <dl class="proto-pairs">
+                                    <div>
+                                        <dt>Theme</dt>
+                                        <dd>The True Vine</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Sermon</dt>
+                                        <dd>Abide in Me</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Preacher</dt>
+                                        <dd>Rowan Ashfield</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Service Leader</dt>
+                                        <dd>Tobias Grieve</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Music Leader</dt>
+                                        <dd>Priya Okonjo</dd>
+                                    </div>
+                                </dl>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                                    <span class="m-badge m-badge--tertiary">
+                                        <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                        Baptism — Noa Feldman
+                                    </span>
+                                </div>
+                                <a href="#variant-a" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                    <span class="m-btn__label">Open in Service Editor</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- The drawer. Flat list, in destinations.js order, exactly as the
+                     phone draws it. Signed in as an Elder, so Admin Dashboard is
+                     absent — canSee() gates it to admin and super_admin. -->
+                <div class="m-drawer" id="drawer-a1">
+                    <!-- The scrim is a <button> so clicking outside closes the drawer
+                         without a click handler on a <div>, and tabindex="-1" plus
+                         aria-hidden keep it out of both the tab order and the
+                         accessibility tree — Escape is the keyboard way out, the same
+                         as the phone's. -->
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-a">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-a" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label" id="variant-a-open">Drawer open — pinned, for review</h3>
+            <p class="proto-note">
+                Twelve entries, flat, in the order <code>destinations.js</code> already keeps them.
+                This is the honest cost of parity: the phone’s list was written when it held six,
+                and at twelve the eye has nothing to hold on to.
+            </p>
+            <div class="proto-stage proto-stage--tall" data-stage data-variant="a" data-drawer="open"
+                data-static="true">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="true" aria-controls="drawer-a2"
+                                aria-label="Close menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-a"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <!-- Deliberately the same dashboard as the stage above, so the only
+                     difference between the two is the drawer. Anything else changing
+                     would make the comparison useless. -->
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split">
+                            <div class="proto-stack">
+                                <div class="m-notice m-notice--warning">
+                                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Sunday 4 October is not ready</span>
+                                        <span class="m-notice__text"><span class="proto-num">4</span> fields are blank
+                                            on the Order of Service, and nobody is on the sound desk.</span>
+                                    </div>
+                                    <div class="m-notice__acts">
+                                        <a href="#variant-a" class="m-btn m-btn--primary m-btn--sm">
+                                            <span class="m-btn__label">Fix the blanks</span>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <div class="proto-tiles">
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Services</h4>
+                                        <p class="m-nav-card__desc">Every Sunday, and the Order of Service behind it.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Hymns</h4>
+                                        <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Calendar</h4>
+                                        <p class="m-nav-card__desc">Everything on at church, and what you are part of.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Membership Directory</h4>
+                                        <p class="m-nav-card__desc">Who is in the congregation, and how to reach them.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Roles Manager</h4>
+                                        <p class="m-nav-card__desc">Set up serving roles and who may fill them.</p>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <h4 class="m-nav-card__title">Shepherd Dashboard</h4>
+                                        <p class="m-nav-card__desc">Elder tools, and the care the church owes people.</p>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:0;color:var(--on-surface-variant);font-size:13.5px;">
+                                    Six of twelve shown. Drag a tile to rearrange — the saved order is unchanged.
+                                </p>
+                            </div>
+
+                            <div class="m-card">
+                                <h4 class="m-serif-head">Sunday at a Glance</h4>
+                                <hr class="m-divider proto-hairline" />
+                                <dl class="proto-pairs">
+                                    <div>
+                                        <dt>Theme</dt>
+                                        <dd>The True Vine</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Sermon</dt>
+                                        <dd>Abide in Me</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Preacher</dt>
+                                        <dd>Rowan Ashfield</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Service Leader</dt>
+                                        <dd>Tobias Grieve</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Music Leader</dt>
+                                        <dd>Priya Okonjo</dd>
+                                    </div>
+                                </dl>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                                    <span class="m-badge m-badge--tertiary">
+                                        <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                        Baptism — Noa Feldman
+                                    </span>
+                                </div>
+                                <a href="#variant-a" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                    <span class="m-btn__label">Open in Service Editor</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="m-drawer" id="drawer-a2">
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-a">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-a" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             VARIANT B — a docked, collapsible rail; the dashboard becomes
+             the week rather than the map
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="variant-b">
+            <h2>B · Docked rail, and the dashboard becomes the week</h2>
+            <div class="proto-verdict">
+                <span class="m-badge m-badge--success">Navigation always visible</span>
+                <span class="m-badge m-badge--primary">Grouped, so twelve entries scan</span>
+                <span class="m-badge m-badge--error">Deletes the tile grid</span>
+            </div>
+            <p class="proto-note">
+                At 1024&nbsp;px and up the drawer is <em>docked</em> as a 248&nbsp;px rail and the
+                hamburger collapses it to its glyphs; below 1024&nbsp;px the same list becomes the
+                overlay drawer from A, so the phone’s behaviour arrives at the bottom of the desktop
+                range rather than at a device boundary. Because the list is permanently on screen,
+                the tiles are pure duplication — so the dashboard stops being a map and answers the
+                question people actually arrive with: <strong>what is happening, and what am I
+                on?</strong>
+            </p>
+            <p class="proto-note proto-note--narrow">
+                You are reading this below 1024&nbsp;px, so the rail is not on screen: both stages
+                below have fallen back to A’s overlay drawer, which is exactly the point. Widen the
+                window past 1024&nbsp;px to see the rail itself.
+            </p>
+
+            <h3 class="proto-stage-label" id="variant-b-open">Rail docked</h3>
+            <div class="proto-stage proto-stage--rail" data-stage data-variant="b" data-drawer="closed"
+                data-rail="open">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="true" aria-controls="rail-b1"
+                                aria-label="Collapse menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-b"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                                <button type="button"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">logout</span>
+                                    <span class="hidden md:inline">Log Out</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="proto-shell">
+                    <nav class="m-rail" id="rail-b1" aria-label="Menu">
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-b" aria-current="page" title="Home">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">The Sunday</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Services">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Hymns">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Service Analytics">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Church life</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Calendar">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Membership Directory">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Forms &amp; Registrations">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Printables">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Serving</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Commitments">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Roles Manager">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Shepherding</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Shepherd Dashboard">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Admin</span>
+                            <a class="m-drawer__item" href="#variant-b" title="MCP Manager">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                        </div>
+                    </nav>
+
+                    <div class="proto-app-body proto-stack">
+                        <!-- The hero. The Sunday, in the church's own serif, with the
+                             key verse in m-scripture — the one gold hairline on the
+                             page, spent on the one thing the page is about. -->
+                        <div class="m-card proto-sunday">
+                            <span class="m-label">Sunday 4 October · 10.30&nbsp;am</span>
+                            <h4 class="proto-sunday__theme">The True Vine</h4>
+                            <blockquote class="m-scripture">
+                                I am the vine; you are the branches. Whoever abides in me and I in him,
+                                he it is that bears much fruit.
+                                <cite class="m-label m-label--sm">John 15:5</cite>
+                            </blockquote>
+                            <hr class="m-divider" />
+                            <div class="proto-who">
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">RA</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Preacher</span>
+                                        <span class="proto-who__name">Rowan Ashfield</span>
+                                    </span>
+                                </div>
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">TG</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Service Leader</span>
+                                        <span class="proto-who__name">Tobias Grieve</span>
+                                    </span>
+                                </div>
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">PO</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Music Leader</span>
+                                        <span class="proto-who__name">Priya Okonjo</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="m-notice m-notice--warning">
+                                <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                <div class="m-notice__body">
+                                    <span class="m-notice__title"><span class="proto-num">4</span> fields not completed</span>
+                                    <span class="m-notice__text">Call to Worship, Assurance of Pardon, Hymn 2, Benediction.</span>
+                                </div>
+                                <div class="m-notice__acts">
+                                    <a href="#variant-b" class="m-btn m-btn--primary m-btn--sm">
+                                        <span class="m-btn__label">Open in Service Editor</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="proto-split">
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">What you are on</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm m-medallion--tint" aria-hidden="true">
+                                            <span class="material-symbols-outlined">record_voice_over</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Scripture Reading</span>
+                                            <span class="m-row__sub">Sunday 11 October — confirmed</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm m-medallion--tint" aria-hidden="true">
+                                            <span class="material-symbols-outlined">graphic_eq</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Sound desk</span>
+                                            <span class="m-row__sub">Sunday 25 October — not answered yet</span>
+                                        </span>
+                                        <span class="m-badge m-badge--warning">Reply</span>
+                                    </a>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">This week at church</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-b" class="m-row m-row--interactive">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Prayer meeting</span>
+                                            <span class="m-row__sub">Wednesday, 7.30&nbsp;pm</span>
+                                        </span>
+                                        <span class="m-row__meta">1 Oct</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Mosaic Kids planning</span>
+                                            <span class="m-row__sub">Friday, 10.00&nbsp;am</span>
+                                        </span>
+                                        <span class="m-row__meta">3 Oct</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--last">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Hospitality rota — half term</span>
+                                            <span class="m-row__sub">Needs two more names</span>
+                                        </span>
+                                        <span class="m-badge m-badge--error">Gap</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Below 1024px this rail is not a rail: the same list arrives as
+                     the overlay drawer from A, opened by the same button. -->
+                <div class="m-drawer" id="drawer-b1">
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-b">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-b" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">The Sunday</span>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Church life</span>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Serving</span>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Shepherding</span>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Admin</span>
+                            <a class="m-drawer__item" href="#variant-b">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label proto-rail-only" id="variant-b-collapsed">Rail collapsed to its glyphs</h3>
+            <p class="proto-note proto-rail-only">
+                Collapsed, the rail keeps position but gives the content 180&nbsp;px back. The group
+                headings go with the words — an icon rail cannot carry them, which is the argument
+                against grouping in the first place and the reason this state needs a decision
+                rather than a default.
+            </p>
+            <div class="proto-stage proto-stage--rail proto-rail-only" data-stage data-variant="b"
+                data-drawer="closed" data-rail="collapsed" data-static="true">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="false" aria-controls="rail-b2"
+                                aria-label="Expand menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-b"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <div class="proto-shell">
+                    <nav class="m-rail" id="rail-b2" aria-label="Menu">
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-b" aria-current="page" title="Home">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">The Sunday</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Services">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Hymns">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Service Analytics">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Church life</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Calendar">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Membership Directory">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Forms &amp; Registrations">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Printables">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Serving</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Commitments">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-b" title="Roles Manager">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Shepherding</span>
+                            <a class="m-drawer__item" href="#variant-b" title="Shepherd Dashboard">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Admin</span>
+                            <a class="m-drawer__item" href="#variant-b" title="MCP Manager">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                        </div>
+                    </nav>
+                    <div class="proto-app-body proto-stack">
+                        <div class="m-card proto-sunday">
+                            <span class="m-label">Sunday 4 October · 10.30&nbsp;am</span>
+                            <h4 class="proto-sunday__theme">The True Vine</h4>
+                            <blockquote class="m-scripture">
+                                I am the vine; you are the branches. Whoever abides in me and I in him,
+                                he it is that bears much fruit.
+                                <cite class="m-label m-label--sm">John 15:5</cite>
+                            </blockquote>
+                            <hr class="m-divider" />
+                            <div class="proto-who">
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">RA</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Preacher</span>
+                                        <span class="proto-who__name">Rowan Ashfield</span>
+                                    </span>
+                                </div>
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">TG</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Service Leader</span>
+                                        <span class="proto-who__name">Tobias Grieve</span>
+                                    </span>
+                                </div>
+                                <div class="proto-who__cell">
+                                    <span class="m-avatar m-avatar--sm" aria-hidden="true">PO</span>
+                                    <span class="proto-who__main">
+                                        <span class="proto-who__role">Music Leader</span>
+                                        <span class="proto-who__name">Priya Okonjo</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="m-notice m-notice--warning">
+                                <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                <div class="m-notice__body">
+                                    <span class="m-notice__title"><span class="proto-num">4</span> fields not completed</span>
+                                    <span class="m-notice__text">Call to Worship, Assurance of Pardon, Hymn 2, Benediction.</span>
+                                </div>
+                                <div class="m-notice__acts">
+                                    <a href="#variant-b" class="m-btn m-btn--primary m-btn--sm">
+                                        <span class="m-btn__label">Open in Service Editor</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="proto-split">
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">What you are on</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Scripture Reading</span>
+                                            <span class="m-row__sub">Sunday 11 October — confirmed</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Sound desk</span>
+                                            <span class="m-row__sub">Sunday 25 October — not answered yet</span>
+                                        </span>
+                                        <span class="m-badge m-badge--warning">Reply</span>
+                                    </a>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">This week at church</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-b" class="m-row m-row--interactive">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Prayer meeting</span>
+                                            <span class="m-row__sub">Wednesday, 7.30&nbsp;pm</span>
+                                        </span>
+                                        <span class="m-row__meta">1 Oct</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Mosaic Kids planning</span>
+                                            <span class="m-row__sub">Friday, 10.00&nbsp;am</span>
+                                        </span>
+                                        <span class="m-row__meta">3 Oct</span>
+                                    </a>
+                                    <a href="#variant-b" class="m-row m-row--interactive m-row--last">
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Hospitality rota — half term</span>
+                                            <span class="m-row__sub">Needs two more names</span>
+                                        </span>
+                                        <span class="m-badge m-badge--error">Gap</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             VARIANT C — the drawer's list IS the dashboard's list
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="variant-c">
+            <h2>C · One list, two sizes</h2>
+            <div class="proto-verdict">
+                <span class="m-badge m-badge--success">One list to maintain</span>
+                <span class="m-badge m-badge--primary">Scales past twelve entries</span>
+                <span class="m-badge m-badge--error">Deletes the tile grid</span>
+            </div>
+            <p class="proto-note">
+                The overlay drawer from A, but the dashboard stops competing with it: the tile grid
+                becomes <em>the same list</em>, grouped, rendered as <code>m-row</code>s in the
+                right-hand column. One authored list — the desktop’s answer to what
+                <code>destinations.js</code> is for the phone — drawn twice at two sizes, so the two
+                can never disagree about which pages exist or who may see them. The left column is
+                the Sunday, which is what the page is actually about.
+            </p>
+
+            <h3 class="proto-stage-label" id="variant-c-closed">Drawer shut</h3>
+            <div class="proto-stage" data-stage data-variant="c" data-drawer="closed">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="false" aria-controls="drawer-c1"
+                                aria-label="Open menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__actions">
+                            <a href="#variant-c" class="m-btn m-btn--secondary m-btn--sm">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-btn__label">2 commitments</span>
+                            </a>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-c"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                                <button type="button"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">logout</span>
+                                    <span class="hidden md:inline">Log Out</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split proto-split--7-5">
+                            <div class="proto-stack">
+                                <div class="m-card proto-sunday">
+                                    <span class="m-label">Sunday 4 October · 10.30&nbsp;am</span>
+                                    <h4 class="proto-sunday__theme">The True Vine</h4>
+                                    <blockquote class="m-scripture">
+                                        I am the vine; you are the branches. Whoever abides in me and I in
+                                        him, he it is that bears much fruit.
+                                        <cite class="m-label m-label--sm">John 15:5</cite>
+                                    </blockquote>
+                                    <hr class="m-divider" />
+                                    <dl class="proto-pairs">
+                                        <div>
+                                            <dt>Sermon</dt>
+                                            <dd>Abide in Me</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Preacher</dt>
+                                            <dd>Rowan Ashfield</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Service Leader</dt>
+                                            <dd>Tobias Grieve</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Music Leader</dt>
+                                            <dd>Priya Okonjo</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Pastoral Prayer</dt>
+                                            <dd>Hester Vale, Marcus Lindqvist</dd>
+                                        </div>
+                                    </dl>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                        <span class="m-badge m-badge--tertiary">
+                                            <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                            Baptism — Noa Feldman
+                                        </span>
+                                        <span class="m-badge m-badge--neutral">5 hymns linked</span>
+                                    </div>
+                                    <div class="m-notice m-notice--warning">
+                                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                        <div class="m-notice__body">
+                                            <span class="m-notice__title"><span class="proto-num">4</span> fields not completed</span>
+                                            <span class="m-notice__text">Call to Worship, Assurance of Pardon, Hymn 2, Benediction.</span>
+                                        </div>
+                                        <div class="m-notice__acts">
+                                            <a href="#variant-c" class="m-btn m-btn--primary m-btn--sm">
+                                                <span class="m-btn__label">Open in Service Editor</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <span class="m-label" style="display:block;margin-bottom:var(--space-base);">What you are on</span>
+                                    <div class="m-card-list">
+                                        <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                            <span class="m-row__main">
+                                                <span class="m-row__title">Scripture Reading</span>
+                                                <span class="m-row__sub">Sunday 11 October — confirmed</span>
+                                            </span>
+                                            <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                        </a>
+                                        <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                            <span class="m-row__main">
+                                                <span class="m-row__title">Sound desk</span>
+                                                <span class="m-row__sub">Sunday 25 October — not answered yet</span>
+                                            </span>
+                                            <span class="m-badge m-badge--warning">Reply</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- The same list the drawer holds, opened out. Grouped, so
+                                 twelve entries read as four kinds of work. -->
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">The Sunday</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Services</span>
+                                            <span class="m-row__sub">Every Sunday and its Order of Service</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Hymns</span>
+                                            <span class="m-row__sub">The book, and the sheets that print</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">monitoring</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Service Analytics</span>
+                                            <span class="m-row__sub">Who has served, how often, when last</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Church life</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Calendar</span>
+                                            <span class="m-row__sub">Everything on at church</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Membership Directory</span>
+                                            <span class="m-row__sub">Who is here, and how to reach them</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">ballot</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Forms &amp; Registrations</span>
+                                            <span class="m-row__sub">Build a sign-up, read what came back</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">print</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Printables</span>
+                                            <span class="m-row__sub">Lay out a handout from live church data</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Serving</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">handshake</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Commitments</span>
+                                            <span class="m-row__sub">What you said yes to</span>
+                                        </span>
+                                        <span class="m-badge m-badge--primary"><span class="proto-num">2</span></span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Roles Manager</span>
+                                            <span class="m-row__sub">Serving roles, and who may fill them</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Shepherding</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Shepherd Dashboard</span>
+                                            <span class="m-row__sub">Elder tools and member care</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Admin</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">smart_toy</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">MCP Manager</span>
+                                            <span class="m-row__sub">Guide the assistant, see what it can do</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:var(--space-base) 0 0;color:var(--on-surface-variant);font-size:13.5px;">
+                                    Signed in as an Elder. Admin Dashboard is absent because
+                                    <code>canSee</code> gates it to admin and super&nbsp;admin — the same
+                                    gate the tile has today.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="m-drawer" id="drawer-c1">
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-c">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-c" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">The Sunday</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Church life</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Serving</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Shepherding</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Admin</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label" id="variant-c-open">Drawer open — the same list, compact</h3>
+            <div class="proto-stage" data-stage data-variant="c" data-drawer="open"
+                data-static="true">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="true" aria-controls="drawer-c2"
+                                aria-label="Close menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-c"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <!-- Deliberately the same dashboard as the stage above, so the only
+                     difference between the two is the drawer. -->
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split proto-split--7-5">
+                            <div class="proto-stack">
+                                <div class="m-card proto-sunday">
+                                    <span class="m-label">Sunday 4 October · 10.30&nbsp;am</span>
+                                    <h4 class="proto-sunday__theme">The True Vine</h4>
+                                    <blockquote class="m-scripture">
+                                        I am the vine; you are the branches. Whoever abides in me and I in
+                                        him, he it is that bears much fruit.
+                                        <cite class="m-label m-label--sm">John 15:5</cite>
+                                    </blockquote>
+                                    <hr class="m-divider" />
+                                    <dl class="proto-pairs">
+                                        <div>
+                                            <dt>Sermon</dt>
+                                            <dd>Abide in Me</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Preacher</dt>
+                                            <dd>Rowan Ashfield</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Service Leader</dt>
+                                            <dd>Tobias Grieve</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Music Leader</dt>
+                                            <dd>Priya Okonjo</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Pastoral Prayer</dt>
+                                            <dd>Hester Vale, Marcus Lindqvist</dd>
+                                        </div>
+                                    </dl>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                        <span class="m-badge m-badge--tertiary">
+                                            <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                            Baptism — Noa Feldman
+                                        </span>
+                                        <span class="m-badge m-badge--neutral">5 hymns linked</span>
+                                    </div>
+                                    <div class="m-notice m-notice--warning">
+                                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                        <div class="m-notice__body">
+                                            <span class="m-notice__title"><span class="proto-num">4</span> fields not completed</span>
+                                            <span class="m-notice__text">Call to Worship, Assurance of Pardon, Hymn 2, Benediction.</span>
+                                        </div>
+                                        <div class="m-notice__acts">
+                                            <a href="#variant-c" class="m-btn m-btn--primary m-btn--sm">
+                                                <span class="m-btn__label">Open in Service Editor</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <span class="m-label" style="display:block;margin-bottom:var(--space-base);">What you are on</span>
+                                    <div class="m-card-list">
+                                        <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                            <span class="m-row__main">
+                                                <span class="m-row__title">Scripture Reading</span>
+                                                <span class="m-row__sub">Sunday 11 October — confirmed</span>
+                                            </span>
+                                            <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                        </a>
+                                        <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                            <span class="m-row__main">
+                                                <span class="m-row__title">Sound desk</span>
+                                                <span class="m-row__sub">Sunday 25 October — not answered yet</span>
+                                            </span>
+                                            <span class="m-badge m-badge--warning">Reply</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- The same list the drawer holds, opened out. Grouped, so
+                                 twelve entries read as four kinds of work. -->
+                            <div>
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">The Sunday</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Services</span>
+                                            <span class="m-row__sub">Every Sunday and its Order of Service</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Hymns</span>
+                                            <span class="m-row__sub">The book, and the sheets that print</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">monitoring</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Service Analytics</span>
+                                            <span class="m-row__sub">Who has served, how often, when last</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Church life</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Calendar</span>
+                                            <span class="m-row__sub">Everything on at church</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Membership Directory</span>
+                                            <span class="m-row__sub">Who is here, and how to reach them</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">ballot</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Forms &amp; Registrations</span>
+                                            <span class="m-row__sub">Build a sign-up, read what came back</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">print</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Printables</span>
+                                            <span class="m-row__sub">Lay out a handout from live church data</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Serving</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">handshake</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Commitments</span>
+                                            <span class="m-row__sub">What you said yes to</span>
+                                        </span>
+                                        <span class="m-badge m-badge--primary"><span class="proto-num">2</span></span>
+                                    </a>
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Roles Manager</span>
+                                            <span class="m-row__sub">Serving roles, and who may fill them</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Shepherding</span>
+                                <div class="m-card-list" style="margin-bottom:var(--space-md);">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">Shepherd Dashboard</span>
+                                            <span class="m-row__sub">Elder tools and member care</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+
+                                <span class="m-label" style="display:block;margin-bottom:var(--space-base);">Admin</span>
+                                <div class="m-card-list">
+                                    <a href="#variant-c" class="m-row m-row--interactive m-row--serif m-row--last">
+                                        <span class="m-medallion m-medallion--sm" aria-hidden="true">
+                                            <span class="material-symbols-outlined">smart_toy</span>
+                                        </span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title">MCP Manager</span>
+                                            <span class="m-row__sub">Guide the assistant, see what it can do</span>
+                                        </span>
+                                        <span class="m-row__chevron material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:var(--space-base) 0 0;color:var(--on-surface-variant);font-size:13.5px;">
+                                    Signed in as an Elder. Admin Dashboard is absent because
+                                    <code>canSee</code> gates it to admin and super&nbsp;admin — the same
+                                    gate the tile has today.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="m-drawer" id="drawer-c2">
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-c">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-c" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">The Sunday</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Church life</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Serving</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Shepherding</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                            <span class="m-drawer__group m-label m-label--sm">Admin</span>
+                            <a class="m-drawer__item" href="#variant-c">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             CONTENT STATES
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="states">
+            <h2>Content states</h2>
+            <p class="proto-note">
+                The dashboard’s only live reading is the Sunday, so these four are its four
+                readings — the same card in every variant, drawn from what
+                <code>index.html</code> already computes today. Dates are written out here because
+                this is a static page; production formats them through
+                <code>Intl.DateTimeFormat</code> the way <code>date-utils.js</code> does.
+            </p>
+            <div class="proto-states">
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Empty — nothing saved yet</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <div class="m-empty">
+                            <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                            <p>Sunday 4 October has no Order of Service yet. Start it and the theme,
+                                the hymns and who is on will appear here.</p>
+                        </div>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                            <span class="m-btn__label">Create Service</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">One — a single detail set</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <dl class="proto-pairs">
+                            <div>
+                                <dt>Theme</dt>
+                                <dd>The True Vine</dd>
+                            </div>
+                        </dl>
+                        <p class="m-body-md" style="margin:var(--space-sm) 0 0;color:var(--on-surface-variant);font-size:14px;">
+                            Nothing else set. The next thing this Sunday needs is a preacher.
+                        </p>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            <span class="m-btn__label">Open in Service Editor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Many — a full Sunday</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <dl class="proto-pairs">
+                            <div>
+                                <dt>Theme</dt>
+                                <dd>The True Vine</dd>
+                            </div>
+                            <div>
+                                <dt>Sermon</dt>
+                                <dd>Abide in Me</dd>
+                            </div>
+                            <div>
+                                <dt>Preacher</dt>
+                                <dd>Rowan Ashfield</dd>
+                            </div>
+                            <div>
+                                <dt>Service Leader</dt>
+                                <dd>Tobias Grieve</dd>
+                            </div>
+                            <div>
+                                <dt>Music Leader</dt>
+                                <dd>Priya Okonjo</dd>
+                            </div>
+                            <div>
+                                <dt>Pastoral Prayer</dt>
+                                <dd>Hester Vale, Marcus Lindqvist</dd>
+                            </div>
+                        </dl>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                            <span class="m-badge m-badge--tertiary">
+                                <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                Baptism — Noa Feldman
+                            </span>
+                            <span class="m-badge m-badge--neutral">5 hymns linked</span>
+                        </div>
+                        <div class="m-notice m-notice--warning" style="margin-top:var(--space-sm);">
+                            <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                            <div class="m-notice__body">
+                                <span class="m-notice__title"><span class="proto-num">2</span> hymns not linked to the book</span>
+                                <span class="m-notice__text">Hymn Mid 1 and Hymn End 2 are typed names, so no sheets will print.</span>
+                            </div>
+                        </div>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            <span class="m-btn__label">Open in Service Editor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Error — the read failed</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                            <div class="m-notice m-notice--error" role="status" aria-live="polite">
+                                <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">cloud_off</span>
+                                <div class="m-notice__body">
+                                    <span class="m-notice__title">Sunday 4 October did not load</span>
+                                    <span class="m-notice__text">The connection dropped before the service came
+                                        back. Nothing has been lost — try again.</span>
+                                </div>
+                            </div>
+                        <button type="button" class="m-btn m-btn--secondary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                            <span class="m-btn__label">Try again</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             WHAT NEEDS DECIDING
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="feedback">
+            <h2>What I need decided</h2>
+            <div class="m-card-list">
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Do the tiles live or die?</span>
+                        <span class="m-row__sub" style="white-space:normal;">A keeps them; B and C delete them.
+                            Deleting them also deletes the home of the saved arrangement —
+                            <code>users.dashboardCardOrder</code> and every
+                            <code>data-card-key</code> — so B and C need a decision about what
+                            happens to an arrangement somebody already dragged.</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Flat like the phone, or grouped?</span>
+                        <span class="m-row__sub" style="white-space:normal;">The phone’s list holds ten and the
+                            desktop’s holds twelve for an Elder, thirteen for a super admin. A is flat
+                            for parity and is the weakest of the three to read. If grouped wins,
+                            <code>destinations.js</code> gains a group per entry and the phone
+                            inherits the grouping — that is a phone change inside a desktop ticket.</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Are Shepherding and Admin groups of one?</span>
+                        <span class="m-row__sub" style="white-space:normal;">For an Elder they are: a heading over a
+                            single row, twice. Worth it, because elder-only work and church-wide
+                            settings are different kinds of thing and a super admin sees two rows
+                            under Admin — or should a group of one lose its heading and sit at the
+                            foot of the list?</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif m-row--last">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Does the seal move into the header?</span>
+                        <span class="m-row__sub" style="white-space:normal;">All three move it there, which costs
+                            the 64&nbsp;px wordless mark its moment and gives the page a headline
+                            instead. <code>index.html</code>’s comment says the seal is this page’s
+                            name; the restyle disagrees with that comment and needs you to say so.</span>
+                    </span>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label">Recommendation</h3>
+            <p class="proto-note">
+                <strong>C.</strong> It is the only one where the drawer and the dashboard cannot
+                drift apart, it takes twelve entries without the eye sliding off, and it keeps the
+                Sunday as the thing the page is about. B is the better desktop app and the worse
+                first step: a docked rail changes every page’s width, not just this one.
+                A is the safe half-measure — ship it and the duplication MS-686 exists to fix is
+                still there, just prettier.
+            </p>
+        </section>
+    </main>
+
+    <script>
+        // Prototype-only. One hamburger per stage; each stage owns its own state
+        // so this page can show the same page shut and open at once.
+        //
+        // Variant B's button does two jobs, because at 1024px and up its list is
+        // docked and the verb is "collapse", while below it the list is an overlay
+        // and the verb is "open". Production would read the same media query.
+        (function () {
+            "use strict";
+
+            var WIDE = "(min-width: 1024px)";
+
+            function railStage(stage) {
+                return stage.dataset.variant === "b" && window.matchMedia(WIDE).matches;
+            }
+
+            function label(stage, open) {
+                if (railStage(stage)) return open ? "Collapse menu" : "Expand menu";
+                return open ? "Close menu" : "Open menu";
+            }
+
+            function apply(stage, open) {
+                if (railStage(stage)) {
+                    // A docked rail is part of the page, so nothing behind it is
+                    // covered and nothing needs holding back.
+                    stage.dataset.rail = open ? "open" : "collapsed";
+                } else {
+                    stage.dataset.drawer = open ? "open" : "closed";
+                    // An overlay drawer covers the page, so the page stops taking
+                    // keyboard focus while it is open — otherwise Tab walks off
+                    // the panel and behind the scrim into links nobody can see.
+                    //
+                    // ⚠ FINDING: neither of the phone's two drawers does this
+                    // today. On a phone it is survivable; on a desktop dashboard
+                    // there are 30-odd links behind a 296px panel.
+                    stage.querySelectorAll(".proto-shell, .m-header").forEach(function (el) {
+                        el.inert = open;
+                    });
+                }
+                stage.querySelectorAll('[data-toggle="drawer"]').forEach(function (btn) {
+                    btn.setAttribute("aria-expanded", String(open));
+                    btn.setAttribute("aria-label", label(stage, open));
+                });
+            }
+
+            function isOpen(stage) {
+                return railStage(stage)
+                    ? stage.dataset.rail === "open"
+                    : stage.dataset.drawer === "open";
+            }
+
+            var stages = document.querySelectorAll("[data-stage]");
+
+            stages.forEach(function (stage) {
+                stage.querySelectorAll('[data-toggle="drawer"]').forEach(function (btn) {
+                    btn.addEventListener("click", function () { apply(stage, !isOpen(stage)); });
+                });
+                stage.querySelectorAll("[data-close-drawer]").forEach(function (el) {
+                    el.addEventListener("click", function () { apply(stage, false); });
+                });
+            });
+
+            function sync() { stages.forEach(function (s) { apply(s, isOpen(s)); }); }
+
+            // Once on load, so the pinned-open stages hold the page behind them
+            // back too, and again when the window crosses 1024px, where variant
+            // B's one button changes which verb it means.
+            sync();
+            window.matchMedia(WIDE).addEventListener("change", sync);
+
+            // Escape shuts the drawers you opened, and leaves the pinned reference
+            // stages alone — they exist so the open state is always on the page.
+            //
+            // A docked rail is deliberately exempt. Escape dismisses the thing
+            // covering your work; the rail covers nothing, so collapsing it on
+            // Escape would throw away a deliberate choice and leave the user
+            // wondering what they broke.
+            document.addEventListener("keydown", function (e) {
+                if (e.key !== "Escape") return;
+                document.querySelectorAll('[data-stage]:not([data-static="true"])').forEach(function (stage) {
+                    if (railStage(stage)) return;
+                    if (isOpen(stage)) apply(stage, false);
+                });
+            });
+        })();
+    </script>
+</body>
+
+</html>
