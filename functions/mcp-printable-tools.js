@@ -38,6 +38,7 @@ const Firestore = require("./mcp-firestore.js");
 const {jsonResult, refuse} = require("./mcp-result.js");
 
 const Printables = require("./printable-writes.js");
+const Guidance = require("./shared/printable-guidance.js");
 
 const printableId = z.string().min(1).describe(
     "The Printable's id, from printable_list. Never a name, never guessed.");
@@ -117,6 +118,16 @@ function register(server, deps) {
 
   // ── Finding and reading ──────────────────────────────────────────────────
 
+  tool("printable_guidance", {
+    title: "How to write a printable",
+    description:
+      "The standing instructions for changing a Printable. Read this " +
+      "BEFORE you add, rewrite, or delete a page. It is how a directory " +
+      "stays one list, and how a delete is confirmed.",
+    inputSchema: {},
+    annotations: read,
+  }, () => Guidance.file());
+
   tool("printable_list", {
     title: "List the printables",
     description:
@@ -132,10 +143,12 @@ function register(server, deps) {
     description:
       "One Printable in full: its paper, and every page as HTML and CSS. The " +
       "HTML that comes back is what printable_write_page accepts, so this is " +
-      "the first call before changing anything. Values are NOT resolved here " +
-      "— a wired element comes back with its data-bind, not with today's " +
-      "text, because a Printable stores which field feeds it and never the " +
-      "value (ADR-0057).",
+      "the first call before changing anything. Read printable_guidance " +
+      "first. Each page includes continues: null when the page is its own " +
+      "list, or which page it continues when it is part of one. Values are " +
+      "NOT resolved here — a wired element comes back with its data-bind, " +
+      "not with today's text, because a Printable stores which field feeds " +
+      "it and never the value (ADR-0057).",
     inputSchema: {printableId: printableId},
     annotations: read,
   }, (a) => Printables.read(db, a));
@@ -201,25 +214,37 @@ function register(server, deps) {
   tool("printable_write_page", {
     title: "Write a page",
     description:
-      "Replace what is on one page. Read the page first: this writes over " +
-      "everything on it, it does not merge. Markup that cannot be read is " +
-      "refused with its line number and NOTHING IS SAVED, so a refusal never " +
-      "leaves a half-written page. Leave a field out to keep what is there.",
+      "Replace what is on one page. Read printable_guidance, then the page: " +
+      "this writes over the elements, it does not merge. Markup that cannot " +
+      "be read is refused with its line number and NOTHING IS SAVED, so a " +
+      "refusal never leaves a half-written page. Leave a field out to keep " +
+      "what is there. Leave continues out to KEEP it — clearing it makes " +
+      "this page its own copy of the list.",
     inputSchema: Object.assign({
       printableId: printableId,
       html: z.string().optional().describe(HTML_HELP),
       css: z.string().optional().describe("The page's stylesheet"),
       name: z.string().optional().describe("Rename the page"),
       margins: margins,
+      continues: z.object({
+        from: z.string().min(1)
+            .describe("The page id the list started on"),
+        repeat: z.string().optional()
+            .describe("The iterated element on that page"),
+      }).nullable().optional()
+          .describe("Leave out to keep the current mark. null clears it, " +
+            "which starts a second copy of the list."),
     }, pageWhich),
   }, (a, actor) => Printables.writePage(db, a, actor));
 
   tool("printable_add_page", {
     title: "Add a page",
     description:
-      "Put a new page in, at the end or after a page you name. A list with " +
-      "overflow 'new-page' also keeps real pages as the data grows — those " +
-      "are stored and can be edited; you do not add them here.",
+      "Put a new page in, at the end or after a page you name. Read " +
+      "printable_guidance first. A list with overflow 'new-page' grows its " +
+      "own continuation pages as the data grows — do not add another page " +
+      "that repeats the same list. Those stored pages can be edited; you " +
+      "do not add them here.",
     inputSchema: {
       printableId: printableId,
       html: z.string().optional().describe(HTML_HELP),
@@ -233,12 +258,25 @@ function register(server, deps) {
   }, (a, actor) => Printables.addPage(db, a, actor));
 
   tool("printable_delete_page", {
-    title: "Delete a page",
+    title: "Delete pages",
     description:
-      "Remove one page and everything on it. This cannot be undone from " +
-      "here. The last remaining page cannot be deleted.",
-    inputSchema: Object.assign({printableId: printableId}, pageWhich),
-    annotations: {destructiveHint: true},
+      "Remove one page, or a run of them, and everything on them. Read " +
+      "printable_guidance first. This cannot be undone from here. The last " +
+      "remaining page cannot be deleted.\n\n" +
+      "⚠ Call it once WITHOUT confirm: it deletes nothing and names the " +
+      "pages and the count. A multiple-choice chip is not a yes and does " +
+      "not approve this call. Ask the person to reply in chat with a " +
+      "sentence that names the pages, then call again with confirm set to " +
+      "that count. One call can remove the whole run — pass pageNumbers.",
+    inputSchema: Object.assign({
+      printableId: printableId,
+      pageNumbers: z.array(z.number().int().positive()).optional()
+          .describe("Every page to remove, 1 for the first. Use this for " +
+            "a run. Otherwise give pageNumber or pageId."),
+      confirm: z.number().int().positive().optional()
+          .describe("How many pages the person has agreed to delete, in " +
+            "a reply that names them. Omit it the first time."),
+    }, pageWhich),
   }, (a, actor) => Printables.deletePage(db, a, actor));
 
   tool("printable_rename", {

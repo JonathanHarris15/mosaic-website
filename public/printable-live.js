@@ -213,8 +213,18 @@
             if (claimed[page.id]) return;
             const data = res || STAND_INS;
 
+            // A continuation that is not in its list's chain — a page sits
+            // between it and the start, or the start is gone — must not draw
+            // the list again. The rows belong to the chain. An empty slice
+            // is the same answer a leftover page gives when the list shrinks.
             if (page.continues && page.continues.from) {
-                const expanded = Render.expandPage(page, data);
+                const origin = pages.find(p => p.id === page.continues.from);
+                const originRepeat = origin ? overflowingRepeatOn(origin) : null;
+                const mine = overflowingRepeatOn(page);
+                const sliced = (res && mine)
+                    ? emptySlice(res, originRepeat || mine, mine.id)
+                    : data;
+                const expanded = Render.expandPage(page, sliced);
                 out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
                 return;
             }

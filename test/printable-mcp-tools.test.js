@@ -279,11 +279,88 @@ describe('pages, and keeping one as a template', () => {
         assert.match(back.pages[2].html, /second/);
     });
 
+    test('writing a page keeps the mark that it continues a list', async () => {
+        await Printables.addPage(db, {
+            printableId: id, name: 'Members', html: CARD_HTML,
+        }, ACTOR);
+        const before = await Printables.read(db, {printableId: id});
+        const originId = before.pages[0].id;
+        db.store.printables[id].pages[1].continues = {
+            from: originId, repeat: 'card',
+        };
+
+        await Printables.writePage(db, {
+            printableId: id, pageNumber: 2, html: CARD_HTML,
+        }, ACTOR);
+        const after = await Printables.read(db, {printableId: id});
+        assert.strictEqual(after.pages[0].continues, null);
+        assert.deepStrictEqual(after.pages[1].continues, {
+            from: originId, repeat: 'card',
+        });
+
+        await Printables.writePage(db, {
+            printableId: id, pageNumber: 2, continues: null, html: CARD_HTML,
+        }, ACTOR);
+        const cleared = await Printables.read(db, {printableId: id});
+        assert.strictEqual(cleared.pages[1].continues, null);
+    });
+
     test('the only page cannot be deleted', async () => {
         await assert.rejects(
             () => Printables.deletePage(db, {printableId: id, pageNumber: 1}, ACTOR),
             /only page/,
         );
+    });
+
+    test('a delete without confirm removes nothing and names the count', async () => {
+        await Printables.addPage(db, {printableId: id, name: 'Members', html: '<p>list</p>'}, ACTOR);
+        await Printables.addPage(db, {printableId: id, name: 'Members', html: '<p>again</p>'}, ACTOR);
+        const before = JSON.stringify(db.store.printables[id].pages);
+
+        await assert.rejects(
+            () => Printables.deletePage(db, {
+                printableId: id, pageNumbers: [2, 3],
+            }, ACTOR),
+            (e) => /Nothing was deleted/.test(e.message) &&
+                /confirm: 2/.test(e.message) &&
+                /multiple-choice/.test(e.message),
+        );
+        assert.strictEqual(JSON.stringify(db.store.printables[id].pages), before);
+    });
+
+    test('confirming the count removes the run and keeps one list', async () => {
+        await Printables.writePage(db, {
+            printableId: id, pageNumber: 1, name: 'Members', html: CARD_HTML,
+        }, ACTOR);
+        await Printables.addPage(db, {
+            printableId: id, name: 'Members', html: CARD_HTML,
+        }, ACTOR);
+        await Printables.addPage(db, {
+            printableId: id, name: 'Members', html: CARD_HTML,
+        }, ACTOR);
+        const read = await Printables.read(db, {printableId: id});
+        const origin = read.pages[0].id;
+        db.store.printables[id].pages[1].continues = {from: origin, repeat: 'card'};
+        db.store.printables[id].pages[2].continues = {from: origin, repeat: 'card'};
+
+        const gone = await Printables.deletePage(db, {
+            printableId: id, pageNumbers: [1], confirm: 1,
+        }, ACTOR);
+        assert.strictEqual(gone.deleted, true);
+        assert.strictEqual(gone.pages, 2);
+        const after = await Printables.read(db, {printableId: id});
+        assert.strictEqual(after.pages[0].continues, null);
+        assert.strictEqual(after.pages[1].continues.from, after.pages[0].id);
+    });
+
+    test('the guidance says a directory is one list and a chip is not a yes', () => {
+        const Guidance = require('../public/printable-guidance.js');
+        const text = Guidance.file().body;
+        assert.match(text, /one Repeat of People/);
+        assert.match(text, /continues/);
+        assert.match(text, /multiple-choice chip/);
+        assert.match(text, /confirm/);
+        assert.match(Guidance.file().summary, /how a delete is confirmed/);
     });
 
     test('a page kept as a template brings its elements and wires with it', async () => {

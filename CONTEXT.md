@@ -1209,6 +1209,14 @@ pages use. An account that resolves to neither is **refused** rather than writte
 — the [[Author]] rule, applied at the one place every write passes through.
 _Avoid_: user, caller (those are the account; the Actor is the author)
 
+### Printable guidance
+The standing instructions an assistant reads before it changes a [[Printable]]
+(`printable_guidance`). A directory is one list; a continuation page is not a
+second copy; a delete waits for a reply that names the pages. Shipped with the
+tools, so the words and the page stay in step. Distinct from the guidance files
+an editor writes on the MCP Manager page, which are this church's preferences.
+_Avoid_: prompt, system prompt
+
 
 ## Environments
 

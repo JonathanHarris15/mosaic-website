@@ -170,6 +170,37 @@ test('overflow continuation pages keep their own design and take the next rows o
     assert.notEqual(pages[2].page.nodes[0].id, origin.nodes[0].id);
 });
 
+test('a continuation that is not in the chain does not print the list again', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'Members', nodes: [
+        { id: 'card', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+            { id: 'nm', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+        ] },
+    ] });
+    const gap = Core.buildPage(t, { id: 'gap', name: 'Note', nodes: [
+        { id: 'note', tag: 'p', text: 'A note between the pages' },
+    ] });
+    const again = Core.buildPage(t, {
+        id: 'pg2',
+        name: 'Members',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [
+            { id: 'card2', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+                { id: 'nm2', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+        ],
+    });
+    const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, gap, again] });
+    const res = Live.resolver(p, peopleBundle(5), { today: '2026-09-03', level: 'editor' });
+    const pages = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    const members = pages.filter(pg => pg.page.name === 'Members');
+    assert.equal(members[0].page.id, 'pg1');
+    assert.equal(members[0].nodes[0].children.length, 5);
+    const second = members.find(pg => pg.page.id === 'pg2');
+    assert.ok(second, 'the continuation page is still in the document');
+    assert.equal(second.nodes[0].children.length, 0);
+});
+
 test('a leftover continuation page stays in the document when the list shrinks', () => {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const origin = Core.buildPage(t, { id: 'pg1', nodes: [

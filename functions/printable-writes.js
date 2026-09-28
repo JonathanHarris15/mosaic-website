@@ -119,6 +119,10 @@ async function read(db, args) {
       margins: p.margins,
       css: p.css || "",
       html: Core.pageToHtml(p),
+      // Null when this page is its own list. Set when it continues one
+      // that started on another page — the HTML still holds the card,
+      // and this is what says the rows are not a second copy.
+      continues: p.continues || null,
     })),
   };
 }
@@ -283,6 +287,9 @@ async function writePage(db, args, actor) {
     style: was.style,
     css: args.css != null ? args.css : was.css,
     nodes: args.html != null ? nodesFrom(args.html) : was.nodes,
+    // Left out means "keep it". Clearing it is how a continuation becomes
+    // its own list, which prints the directory a second time.
+    continues: args.continues !== undefined ? args.continues : was.continues,
   });
 
   const next = await savePages(db, args.printableId, project, pages, actor);
@@ -325,23 +332,86 @@ async function addPage(db, args, actor) {
 }
 
 /**
- * Remove a page. The last one cannot go: a Printable with no page is not one.
+ * Which pages a delete means, in document order, without duplicates.
+ *
+ * `pageNumbers` removes a run in one call. Otherwise the single pageNumber
+ * or pageId. Naming neither is refused rather than guessed at.
+ *
+ * @param {object} project the migrated record
+ * @param {object} args {pageNumbers} or a single page
+ * @return {Array<number>} 0-based indexes
+ */
+function pageIndexes(project, args) {
+  const pages = project.pages || [];
+  if (!pages.length) {
+    fail("This printable has no pages yet. Use printable_add_page.");
+  }
+  if (Array.isArray(args.pageNumbers) && args.pageNumbers.length) {
+    const seen = {};
+    args.pageNumbers.forEach((n) => {
+      const num = Number(n);
+      if (!(num >= 1 && num <= pages.length)) {
+        fail(`This printable has ${pages.length} page(s); ` +
+          `there is no page ${n}.`);
+      }
+      seen[num - 1] = true;
+    });
+    return Object.keys(seen).map(Number).sort((a, b) => a - b);
+  }
+  return [pageIndex(project, args)];
+}
+
+/**
+ * How a page is named in a refusal, so the person can agree to that page.
+ * @param {object} page the page
+ * @param {number} number 1-based
+ * @return {string} "page 4 \"Members\""
+ */
+function pageLabel(page, number) {
+  const name = page.name ? ` "${page.name}"` : "";
+  const cont = page.continues && page.continues.from ?
+    " (continues another page's list)" : "";
+  return `page ${number}${name}${cont}`;
+}
+
+/**
+ * Remove one page or a run of them.
+ *
+ * The first call, without `confirm` equal to the count, deletes nothing and
+ * names the pages. A multiple-choice in the chat is not that count. The
+ * last remaining page cannot go.
+ *
  * @param {object} db the Firestore handle
- * @param {object} args {printableId} and a page
+ * @param {object} args {printableId, confirm} and the pages
  * @param {?object} actor who is asking
  * @return {Promise<object>} what is left
  */
 async function deletePage(db, args, actor) {
   const {project} = await loadRecord(db, args.printableId);
-  const i = pageIndex(project, args);
-  const pages = (project.pages || []).slice();
-  if (pages.length <= 1) {
-    fail("This is the only page. Write over it instead, or delete the " +
-      "whole printable.");
+  const indexes = pageIndexes(project, args);
+  const pages = project.pages || [];
+  if (pages.length - indexes.length < 1) {
+    fail("This would remove the only page. A printable keeps at least " +
+      "one page. Write over it instead, or delete the whole printable.");
   }
-  const gone = pages.splice(i, 1)[0];
-  const next = await savePages(db, args.printableId, project, pages, actor);
-  return {deleted: true, pageId: gone.id, pages: next.pages.length};
+  const targets = indexes.map((i) => pages[i]);
+  const described = targets.map((p, n) => pageLabel(p, indexes[n] + 1))
+      .join(", ");
+  if (Number(args.confirm) !== targets.length) {
+    fail(`Nothing was deleted. This would remove ${targets.length} ` +
+      `page(s): ${described}. Deleting pages cannot be undone. A ` +
+      "multiple-choice answer is not a yes. After the person replies in " +
+      `chat naming these pages, call again with confirm: ${targets.length}.`);
+  }
+  const nextPages = Core.pagesWithout(pages, targets.map((p) => p.id));
+  const next = await savePages(
+      db, args.printableId, project, nextPages, actor);
+  return {
+    deleted: true,
+    pageId: targets[0].id,
+    pageIds: targets.map((p) => p.id),
+    pages: next.pages.length,
+  };
 }
 
 /**
