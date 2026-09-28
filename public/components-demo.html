@@ -50,7 +50,7 @@
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#f-pane">FormPane</a><a href="#f-qrow">QuestionEditor</a><a href="#f-set">SettingBlock</a><a href="#m-dropdown">Dropdown</a><a href="#m-option">OptionCard</a><a href="#m-search">SearchBar</a><a href="#m-seg">Segmented</a><a href="#m-unitfield">UnitField</a></div>
       <div class="g-navgroup"><span class="m-label">Display</span><a href="#f-tally">Tally</a><a href="#f-linkrow">LinkRow</a><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-body-md">Type</a><a href="#m-divider">Divider</a><a href="#m-token">Token</a><a href="#m-rule-row">RuleRow</a><a href="#m-locked-role">LockedRole</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a></div>
       <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a><a href="#m-notice">Notice</a></div>
-      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
+      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-drawer">Drawer</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
         </nav>
 
     <h2 class="g-group">Core</h2>
@@ -501,6 +501,17 @@
         
         <div class="g-demo">
         <div class="g-item"><body class="m-dense">…</body></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-drawer">
+        <header>
+          <h3>Drawer</h3>
+          <code>.m-drawer</code>
+        </header>
+        <p class="g-summary">The navigation panel a header's hamburger opens: a navy head saying who you are, the list of places you may go, and the way out at the foot. The phone had two hand-drawn copies of this and the desktop had none.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-drawer" id="app-drawer"><button class="m-drawer__scrim" tabindex="-1" aria-hidden="true"></button><nav class="m-drawer__panel" aria-label="Menu"><div class="m-drawer__head"><button class="m-icon-btn m-icon-btn--lg" aria-label="Close menu"><span class="material-symbols-outlined">menu</span></button><a class="m-drawer__who" href="profile.html"><span class="m-avatar">JH</span><span class="m-drawer__who-main"><span class="m-drawer__name">Jonathan Harris</span><span class="m-drawer__role">Elder</span></span></a></div><div class="m-drawer__list"><a class="m-drawer__item" href="index.html" aria-current="page"><span class="material-symbols-outlined">home</span><span class="m-drawer__label">Home</span></a></div><div class="m-drawer__foot"></div></nav></div></div>
         </div>
       </section>
       <section class="g-card" id="m-page">

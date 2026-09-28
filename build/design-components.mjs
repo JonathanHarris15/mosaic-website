@@ -1155,6 +1155,127 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   {
+    name: "Drawer",
+    cls: "m-drawer",
+    group: "Layout",
+    summary:
+      "The navigation panel a header's hamburger opens: a navy head saying who you are, the list of places you may go, and the way out at the foot. The phone had two hand-drawn copies of this and the desktop had none.",
+    variants: {},
+    notes: [
+      "⚠ THE LIST IS NOT THE COMPONENT'S BUSINESS. What goes in a drawer is a permission question, and this answers none of it — a caller hands it entries. On the dashboard those entries are the TILES the page just drew, so the drawer and the grid cannot disagree about who may see what.",
+      "The scrim is a <button>, so clicking outside closes the drawer without a click handler on a <div>; tabindex=-1 and aria-hidden keep it out of both the tab order and the accessibility tree. Escape is the keyboard way out.",
+      "The safe-area padding on the head and the foot is not decoration. On a desktop window both insets are 0, so it costs nothing — and it is what stops the panel sliding under an iPhone's status bar if this becomes the one Drawer both surfaces use.",
+      "Nothing behind an open drawer is reachable: the caller sets `inert` on the page, and the component stops the body scrolling under the panel. A drawer you can Tab out of and behind is worse than no drawer.",
+      "The head is navy — the one filled surface in the app besides a primary button — because the drawer is the only chrome that covers the page rather than bordering it, and it should not read as more parchment.",
+    ],
+    examples: [
+      '<div class="m-drawer" id="app-drawer"><button class="m-drawer__scrim" tabindex="-1" aria-hidden="true"></button><nav class="m-drawer__panel" aria-label="Menu"><div class="m-drawer__head"><button class="m-icon-btn m-icon-btn--lg" aria-label="Close menu"><span class="material-symbols-outlined">menu</span></button><a class="m-drawer__who" href="profile.html"><span class="m-avatar">JH</span><span class="m-drawer__who-main"><span class="m-drawer__name">Jonathan Harris</span><span class="m-drawer__role">Elder</span></span></a></div><div class="m-drawer__list"><a class="m-drawer__item" href="index.html" aria-current="page"><span class="material-symbols-outlined">home</span><span class="m-drawer__label">Home</span></a></div><div class="m-drawer__foot"></div></nav></div>',
+    ],
+    css: `
+.m-drawer { position: fixed; inset: 0; z-index: 60; visibility: hidden; }
+.m-drawer__scrim {
+  position: absolute; inset: 0; border: 0; padding: 0;
+  background: color-mix(in srgb, var(--navy-900) 42%, transparent);
+  opacity: 0; transition: opacity var(--duration-slow) var(--ease-standard);
+}
+.m-drawer__panel {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  display: flex; flex-direction: column;
+  width: 296px; max-width: 86%;
+  background: var(--surface);
+  border-right: 1px solid var(--outline-variant); box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+  transform: translateX(-100%);
+  transition: transform var(--duration-slow) var(--ease-standard);
+}
+
+/* The state lives on the element the drawer is a child of — the caller sets
+   data-drawer, and one attribute moves the scrim, the panel and the page
+   behind them together. */
+[data-drawer="open"] .m-drawer { visibility: visible; }
+[data-drawer="open"] .m-drawer__scrim { opacity: 1; }
+[data-drawer="open"] .m-drawer__panel { transform: translateX(0); }
+/* Nothing scrolls under an open panel. Scrolling the page you cannot reach is
+   the one thing every hand-rolled drawer in this app got wrong. */
+[data-drawer="open"] { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-drawer__scrim, .m-drawer__panel { transition: none; }
+}
+
+/* The safe-area padding is carried over from the phone's drawer deliberately.
+   On a desktop window both insets are 0, so it costs nothing here — and if
+   this becomes the one Drawer both surfaces use, dropping it is how the panel
+   ends up under an iPhone's status bar. */
+.m-drawer__head {
+  flex: 0 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--space-base))
+           var(--space-sm) var(--space-sm);
+  background: var(--primary); color: var(--on-primary);
+}
+.m-drawer__who {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: var(--space-xs); padding: 6px;
+  border-radius: var(--radius); color: inherit; text-decoration: none;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-drawer__who:hover { background: color-mix(in srgb, var(--on-primary) 12%, transparent); }
+.m-drawer__who:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+.m-drawer__who-main { display: block; flex: 1 1 auto; min-width: 0; }
+.m-drawer__name {
+  display: block; font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-drawer__role {
+  display: block; font-family: var(--font-sans); font-size: 11.5px;
+  color: var(--primary-fixed-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.m-drawer__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-base) var(--space-sm);
+}
+.m-drawer__item {
+  display: flex; align-items: center; gap: 14px;
+  min-height: 44px; padding: 10px 14px; margin-bottom: 2px;
+  border-radius: var(--radius); color: var(--on-surface);
+  font-family: var(--font-sans); font-size: 15px; font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-standard),
+              color var(--duration) var(--ease-standard);
+}
+.m-drawer__item:hover { background: var(--surface-container); color: var(--primary); }
+.m-drawer__item:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-drawer__item[aria-current="page"] {
+  background: var(--primary-fixed); color: var(--primary); font-weight: 600;
+}
+.m-drawer__item .material-symbols-outlined { flex: 0 0 auto; font-size: 20px; }
+.m-drawer__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.m-drawer__foot {
+  flex: 0 0 auto;
+  padding: var(--space-base) var(--space-sm)
+           calc(env(safe-area-inset-bottom, 0px) + var(--space-base));
+  border-top: 1px solid var(--outline-variant);
+}
+
+/* A drawer is chrome. It never prints. */
+@media print { .m-drawer { display: none; } }
+
+/* Dense: 296px is the phone's width, where it is 86% of the screen. On a
+   desktop the panel only has to hold the longest label, and a narrower one
+   covers less of the page it came from. */
+@media (min-width: 1024px) {
+  .m-dense .m-drawer__panel { width: 248px; }
+  .m-dense .m-drawer__item { padding: var(--space-base) var(--space-sm); }
+  .m-dense .m-drawer__item .material-symbols-outlined { font-size: 19px; }
+  .m-dense .m-drawer__label { font-size: 13.5px; }
+}
+`,
+  },
+
+  {
     name: "PageShell",
     cls: "m-page",
     group: "Layout",
