@@ -22,7 +22,7 @@
     "test": "node --test",
     "check:design": "npm run build:tokens -- --check && npm run build:components -- --check && npm run check:design-drift -- --strict && npm run check:design-components -- --strict",
     "test:emulator": "node scripts/run-emulator-tests.mjs",
-    "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify",
+    "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify && node scripts/append-ghost-density.mjs",
     "build:tokens": "node scripts/build-design-tokens.mjs",
     "check:design-drift": "node scripts/check-design-drift.mjs",
     "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --watch",

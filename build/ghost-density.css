@@ -183,4 +183,56 @@
   html:not(.shell-mobile) .pt-base {
     padding-top: var(--space-base);
   }
+  html:not(.shell-mobile) .p-lg {
+    padding: var(--space-lg);
+  }
+  html:not(.shell-mobile) .pb-lg {
+    padding-bottom: var(--space-lg);
+  }
+
+  /* Lists, tabs, notices */
+  html:not(.shell-mobile) .m-tabs__tab {
+    min-height: var(--m-density-control-h);
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  html:not(.shell-mobile) .m-tabs--underline .m-tabs__tab {
+    padding-bottom: 8px;
+  }
+  html:not(.shell-mobile) .m-notice {
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+  html:not(.shell-mobile) .m-notice__body {
+    font-size: 14px;
+  }
+  html:not(.shell-mobile) .m-actionbar {
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+  }
+
+  /* Calendar month cells — slightly tighter without shrinking event chips */
+  html:not(.shell-mobile) .m-cal__cell {
+    padding: 6px 6px 8px;
+  }
+  html:not(.shell-mobile) .m-cal__num {
+    font-size: 13px;
+  }
+
+  /* Data tables (admin, analytics) */
+  html:not(.shell-mobile) table th,
+  html:not(.shell-mobile) table td {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  html:not(.shell-mobile) table th {
+    font-size: var(--label-md-size);
+  }
+
+  /* Auth widget in the header — desktop pointer floor */
+  html:not(.shell-mobile) #auth-container a,
+  html:not(.shell-mobile) #auth-container button {
+    min-height: var(--m-density-target-min);
+    font-size: 13px;
+  }
 }

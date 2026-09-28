@@ -1537,5 +1537,4 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   background: currentColor;
 }
 
-/* Ghost sandbox: desktop density layer (see docs/ops/ghost-main.md) */
-@import "./ghost-density.css";
+/* Ghost density ships via scripts/append-ghost-density.mjs → public/mosaic.css */
