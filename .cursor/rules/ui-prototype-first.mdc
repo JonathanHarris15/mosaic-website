@@ -1,0 +1,62 @@
+---
+description: Standalone HTML prototypes in docs/design/prototypes before look/layout UI work; draft PR and stop for approval.
+alwaysApply: true
+---
+
+# UI prototype first (Mosaic)
+
+Any ticket that **changes a page's look or layout** must produce a **standalone HTML prototype** before implementation lands in `public/`.
+
+## Where prototypes live
+
+- Path: `docs/design/prototypes/<ms-key>-<slug>.html` (e.g. `MS-400-settings-cards.html`).
+- **Never** under `public/` and never behind Hosting.
+
+## How prototypes are built
+
+- Link the real stylesheets by **relative path** from the prototype file:
+  - **Desktop:** `../../../public/fonts.css` and `../../../public/mosaic.css`
+  - **Phone:** `../../../public/mobile/tokens.css` and `../../../public/mobile-shell.css` (plus `fonts.css` when the screen needs it)
+- Use real **`m-*`** component classes and design tokens; prototype-only CSS goes in an inline `<style>` block and must use `var(--token)` from the linked sheets.
+- **Fictional data only** — no real congregation names, people, or records (the repo is public).
+- Must read correctly at **390px** and **1280px** width.
+- Show **empty**, **one**, **many**, and **error** states on the same page (labelled sections).
+- When there is a real design choice, show **2–3 structurally different variants** labelled **A / B / C** (not colour-only tweaks).
+
+## Review passes (before the draft PR)
+
+1. **`frontend-design`** — layout, hierarchy, copy, critique pass (Mosaic override: design system is the brief).
+2. **`web-interface-guidelines`** — run against the prototype file per `.cursor/skills/web-interface-guidelines/SKILL.md`.
+
+## Draft PR workflow
+
+1. Commit **only** the prototype (and any docs tied to it).
+2. Open a **draft** PR titled `[Prototype] MS-XXX` (not the implementation PR).
+3. Attach screenshots at **390×844** and **1280×800**.
+4. Post the view link (primary — use the format that loads relative CSS; see below) with a **3-line summary** of what changed and what you want feedback on.
+5. Open the link yourself and confirm Mosaic CSS loaded (fonts, cream background, token-driven styles).
+6. **Stop** until Jonathan approves. Implementation PR follows in a separate branch/PR.
+
+### View links
+
+Use the commit SHA that contains the prototype file.
+
+- **Primary:** `https://htmlpreview.github.io/?https://github.com/JonathanHarris15/mosaic-website/blob/<commitSHA>/docs/design/prototypes/<file>.html`
+- **Backup:** `https://raw.githack.com/JonathanHarris15/mosaic-website/<commitSHA>/docs/design/prototypes/<file>.html` (click through the githack interstitial once; relative `../../../public/*.css` links resolve via raw.githack)
+
+Both formats were verified to load `fonts.css` and `mosaic.css` and apply the cream background and Cinzel/Libre Franklin stack when the prototype uses the relative paths above.
+
+## When to skip (state the reason in the PR)
+
+- Pure bug fix with no layout change
+- Copy-only change
+- Style fix of **10 lines or fewer** with no layout change
+- Jonathan explicitly says no prototype
+
+## Smoke test
+
+Prototype-only commits **skip** the jev smoke test. The **implementation** PR that follows still runs jev in full per `.cursor/rules/smoke-test.mdc`.
+
+## Supersedes in-app `?variant=` prototypes
+
+This rule supersedes the `?variant=` on-route approach in `.cursor/skills/prototype/UI.md` and related prototype docs **unless Jonathan asks for in-app variants**. Point new look/layout work here instead.
