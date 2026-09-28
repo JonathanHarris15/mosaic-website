@@ -140,6 +140,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 
 **Layout**
 - **Breadcrumbs** `.f-crumbs` — Where you are in a library you can navigate into.
+- **Density** `.m-dense` — A desktop scale, set on the element a dense surface starts at.
 - **PageShell** `.m-page` — The body of a desktop page: warm background, navy ink, a column capped at --container-max.
 - **PageHeader** `.m-header` — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account.
 - **BackLink** `.m-back` — The way out of a page, top left.

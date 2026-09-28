@@ -76,6 +76,125 @@
         @media (pointer: coarse) and (max-width: 820px) {
             #mobile-switch { display: flex; }
         }
+
+        /* ── This page's own layout ───────────────────────────────────
+           The split, the tile grid, and the Glance panel's label/value
+           lines. Layout of one page rather than a component, so it lives
+           here — but every length is a token, which is what lets the
+           m-dense class on <body> take the whole page down a step at
+           1024px without a second set of numbers written out below.
+
+           ⚠ AND THAT IS WHY THESE GAPS ARE var() RATHER THAN TAILWIND.
+           Tailwind's spacing utilities compile to literal pixels: gap-sm
+           is 12px whatever --space-sm says, so a utility here would sit
+           outside the density scope and quietly ignore it. */
+
+        .dash-seal { width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }
+
+        .dash-main { display: flex; flex-direction: column; gap: var(--space-sm); }
+
+        .dash-split {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-md);
+            align-items: start;
+        }
+
+        .dash-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+
+        .dash-tiles {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-sm);
+            align-content: start;
+        }
+
+        @media (min-width: 640px) {
+            .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (min-width: 1024px) {
+            /* A fixed side column rather than 4-of-12: the Glance panel holds
+               six label/value pairs and nothing longer, so past about 300px it
+               is only a wider gutter, and every pixel it gives back goes to
+               the tiles. */
+            .dash-split { grid-template-columns: minmax(0, 1fr) 300px; }
+            .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+            /* The panel is as tall as what it has to say — align-items: start
+               above — but the tiles take the whole column, because the tile grid
+               is the one thing on this page allowed to scroll inside itself
+               when somebody can see more pages than the fold holds. */
+            .dash-stack { align-self: stretch; }
+        }
+
+        /* Four across only once a tile is still wide enough to hold its own
+           sentence. At 1280px it is not: the description clamps mid-word and
+           the tile stops explaining itself, which is the opposite of
+           welcoming. */
+        @media (min-width: 1500px) {
+            .dash-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        .dash-caption {
+            margin: 0;
+            font-family: var(--font-sans); font-size: 13px;
+            color: var(--on-surface-variant);
+        }
+
+        /* The Glance panel's body: a label on the left, the answer on the
+           right, in the serif because it is read rather than operated. */
+        .dash-pairs { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; }
+
+        .dash-pairs > div {
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: var(--space-sm);
+        }
+
+        .dash-pairs dt {
+            flex: 0 0 auto;
+            font-family: var(--font-sans); font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase; color: var(--on-surface-variant);
+        }
+
+        .dash-pairs dd {
+            flex: 1 1 auto; min-width: 0; margin: 0;
+            font-family: var(--font-serif); font-size: 16px;
+            color: var(--on-surface); text-align: right; text-wrap: pretty;
+        }
+
+        .dash-hairline { margin: var(--space-sm) 0; }
+        .dash-num { font-variant-numeric: tabular-nums; }
+        .dash-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        /* The panel's one action sits on its floor, wherever the reading above
+           it happened to end. */
+        .dash-glance-act { margin-top: auto; width: 100%; flex: 0 0 auto; }
+
+        /* Drag to rearrange. Only on the tile under the pointer, and always
+           once it has keyboard focus — a control you can Tab to but cannot see
+           is worse than no control. It carries the hovered tile's own surface
+           so that on a compact tile, where it sits over the end of a line, it
+           covers the text rather than muddling it. */
+        .drag-handle {
+            position: absolute; top: 6px; right: 6px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 2px; border: 0; border-radius: var(--radius-sm);
+            background: var(--surface-container-low); color: var(--on-surface-variant);
+            opacity: 0; cursor: grab; touch-action: none;
+            transition: opacity var(--duration) var(--ease-standard);
+        }
+
+        .m-nav-card:hover .drag-handle { opacity: .75; }
+        .drag-handle:hover, .drag-handle:focus-visible { opacity: 1; }
+        .drag-handle:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; }
+        .drag-handle:active { cursor: grabbing; }
+        .drag-handle .material-symbols-outlined { font-size: 18px; pointer-events: none; }
+
+        @media (min-width: 1024px) {
+            .m-nav-card--dense .drag-handle { top: 50%; right: 4px; transform: translateY(-50%); }
+        }
     </style>
 
     <!-- Firebase SDKs -->
@@ -102,75 +221,76 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen md:h-screen overflow-x-hidden md:overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
-    <!-- Home. No way back from here, and no title: the seal below is this
-         page's name, and it is the one page in the app allowed to say so with a
-         picture rather than a word. -->
+    class="m-dense bg-background text-on-background font-body-md text-body-md antialiased min-h-screen lg:h-screen overflow-x-hidden lg:overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
+    <!-- Home. No way back from here — but the seal and the app's name now sit
+         IN the bar rather than in a 64px band of their own below it. A wordless
+         mark you recognised before the page painted does not need a sixth of
+         the fold to say so, and every pixel it gives back is a tile the reader
+         can see without scrolling. -->
     <header class="m-header">
         <div class="m-header__inner">
-            <div class="m-header__lead"></div>
+            <div class="m-header__lead">
+                <img alt="" class="dash-seal" src="assets/mosaic-logo.png" width="32" height="32" />
+                <div class="m-header__titles">
+                    <h1 class="m-header__title" translate="no">Mosaic Services</h1>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
             <!-- Auth UI is injected here by auth.js -->
             <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
-    <main class="flex-grow max-w-container w-full mx-auto px-margin pb-md flex flex-col gap-margin pt-base md:min-h-0 md:overflow-hidden">
-        <!-- Logo. Smaller and tight to the top: this is a wordless mark you have
-             already recognised by the time the page paints, and every pixel it
-             holds is one the cards below it do not get. -->
-        <div class="w-full flex justify-center shrink-0">
-            <img alt="Mosaic Liturgy Logo" class="h-16 w-16 object-contain"
-                src="assets/mosaic-logo.png" />
-        </div>
+    <main class="dash-main flex-grow max-w-container w-full mx-auto px-margin pb-md pt-sm lg:min-h-0 lg:overflow-hidden">
+        <!-- The one thing that needs doing, above everything the page offers.
+             Filled in by updateDashboard() for the people who may fix it, and
+             empty — taking no room at all — for everybody else. -->
+        <div id="service-notice"></div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 md:grid-rows-1 gap-margin flex-grow min-h-0">
+        <div class="dash-split flex-grow min-h-0">
             <!-- Left Column -->
-            <div class="md:col-span-8 flex flex-col gap-margin md:min-h-0 md:overflow-hidden">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md content-start md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1 md:pb-1" id="nav-cards-grid">
+            <div class="dash-stack lg:min-h-0 lg:overflow-hidden">
+                <div class="dash-tiles lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-1" id="nav-cards-grid">
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
                          every saved home screen (same rule as Services). -->
-                    <a href="hymns.html" data-card-key="hymn-directory"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>menu_book</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymns</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the book, and the sheets that print.</p>
+                    <a href="hymns.html" data-card-key="hymn-directory" class="m-nav-card m-nav-card--dense">
+                        <span class="m-medallion" aria-hidden="true">
+                            <span class="material-symbols-outlined">menu_book</span>
+                        </span>
+                        <span class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Hymns</h2>
+                            <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
+                        </span>
                     </a>
 
                     <!-- Calendar — every Event the viewer is allowed to see (MS-99).
                          Distinct from Services, which shows Sundays only. -->
-                    <a href="calendar.html" data-card-key="calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>event</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Calendar</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Everything on at church, and what you're part of.</p>
+                    <a href="calendar.html" data-card-key="calendar" class="m-nav-card m-nav-card--dense">
+                        <span class="m-medallion" aria-hidden="true">
+                            <span class="material-symbols-outlined">event</span>
+                        </span>
+                        <span class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Calendar</h2>
+                            <p class="m-nav-card__desc">Everything on at church, and what you're part of.</p>
+                        </span>
                     </a>
 
                     <!-- Services — the Sunday view. Renamed from "Service Calendar"
                          (MS-99) so it does not compete with the new Calendar for the
                          word. The data-card-key is the STORED key behind every user's
-                         saved dashboard arrangement, so it keeps its old value. -->
-                    <a href="service-calendar.html" data-card-key="service-calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <!-- A church with a cross, not a calendar. Services and
-                                 the Calendar stopped competing for the same word in
-                                 MS-99; they should not compete for the same glyph
-                                 either — this one is Sundays and worship, that one
-                                 is everything that is on. -->
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>church</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Services</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">View upcoming and past service dates.</p>
+                         saved dashboard arrangement, so it keeps its old value.
+
+                         A church with a cross, not a calendar: Services and the
+                         Calendar stopped competing for the same word in MS-99, and
+                         they should not compete for the same glyph either. -->
+                    <a href="service-calendar.html" data-card-key="service-calendar" class="m-nav-card m-nav-card--dense">
+                        <span class="m-medallion" aria-hidden="true">
+                            <span class="material-symbols-outlined">church</span>
+                        </span>
+                        <span class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Services</h2>
+                            <p class="m-nav-card__desc">Every Sunday, and the Order of Service behind it.</p>
+                        </span>
                     </a>
 
                     <!-- Service Analytics is NOT here. It is editor-and-above, so
@@ -179,14 +299,17 @@
                          markup is a card a member can see and click, and being
                          refused on arrival is worse than never being offered. -->
                 </div>
+                <!-- Said once the cards can actually be dragged, which is only
+                     when somebody is signed in to save the arrangement to. -->
+                <p class="dash-caption" hidden id="dash-caption">Your pages, in your saved order. Drag a tile to
+                    rearrange.</p>
             </div>
 
             <!-- Right Column -->
-            <div class="md:col-span-4 flex flex-col md:min-h-0 md:overflow-hidden">
-                <div
-                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col md:overflow-hidden" id="sunday-glance">
-                    <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant mb-md flex-shrink-0">
-                        Sunday at a Glance</h2>
+            <div class="flex flex-col lg:min-h-0 lg:overflow-hidden">
+                <div class="m-card flex flex-col lg:max-h-full lg:overflow-hidden" id="sunday-glance">
+                    <h2 class="m-serif-head shrink-0">Sunday at a Glance</h2>
+                    <hr class="m-divider dash-hairline shrink-0" />
                     <div id="glance-content" class="flex-grow overflow-y-auto flex flex-col gap-sm pr-1">
                         <!-- Data will be injected here -->
                     </div>
@@ -225,6 +348,29 @@
             [...ordered, ...remaining].forEach(c => grid.appendChild(c));
         }
 
+        // One tile, drawn the one way. Every gated card below used to carry its
+        // own copy of the same six lines of Tailwind; the shape now lives in the
+        // NavCard component and this is the only place that spells it out.
+        function navTile({ id, key, href, icon, title, desc }) {
+            const card = document.createElement('a');
+            card.id = id;
+            // ⚠ THE STORED KEY BEHIND EVERY USER'S SAVED CARD ORDER. Renaming
+            // one silently drops that card to the end of every dashboard that
+            // has ever been arranged.
+            card.dataset.cardKey = key;
+            card.href = href;
+            card.className = 'm-nav-card m-nav-card--dense';
+            card.innerHTML = `
+                <span class="m-medallion" aria-hidden="true">
+                    <span class="material-symbols-outlined">${icon}</span>
+                </span>
+                <span class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">${title}</h2>
+                    <p class="m-nav-card__desc">${desc}</p>
+                </span>`;
+            return card;
+        }
+
         function decorateCardsWithHandles(grid) {
             Array.from(grid.children).forEach(card => {
                 if (!card.dataset.cardKey || card.querySelector('.drag-handle')) return;
@@ -237,10 +383,14 @@
                 card.addEventListener('dragstart', e => e.preventDefault());
                 const handle = document.createElement('button');
                 handle.type = 'button';
-                handle.className = 'drag-handle absolute top-2 right-2 p-1 rounded-md text-on-surface-variant opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-surface-container transition-all duration-200 cursor-grab active:cursor-grabbing touch-none';
+                // Drawn by the .drag-handle rules in this page's <style>, not by
+                // Tailwind utilities: the reveal used to hang off `group-hover`,
+                // which meant the class list on the card had to carry `group`
+                // for the handle on it to ever appear.
+                handle.className = 'drag-handle';
                 handle.title = 'Drag to reorder';
                 handle.setAttribute('aria-label', 'Drag to reorder this card');
-                handle.innerHTML = '<span class="material-symbols-outlined text-[20px] pointer-events-none">drag_indicator</span>';
+                handle.innerHTML = '<span class="material-symbols-outlined">drag_indicator</span>';
                 // The card is an <a>; keep a click on the handle from navigating.
                 handle.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
                 card.appendChild(handle);
@@ -271,6 +421,44 @@
                 ghostClass: 'opacity-40',
                 onEnd: () => saveDashboardOrder(uid, grid)
             });
+        }
+
+        // The Sunday that is not ready, said once at the top of the page. Only
+        // ever drawn for somebody who can do something about it — see the gate
+        // at the call site.
+        function showServiceNotice(when, message, href) {
+            const slot = document.getElementById('service-notice');
+            if (!slot) return;
+            const day = when.toLocaleDateString(undefined, {
+                weekday: 'long', day: 'numeric', month: 'long'
+            });
+            slot.innerHTML = `
+                <div class="m-notice m-notice--warning">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">${day} is not ready</span>
+                        <span class="m-notice__text dash-num">${message}</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <a class="m-btn m-btn--primary m-btn--sm" href="${href}">
+                            <span class="m-btn__label">Fix the blanks</span>
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+
+        // The Glance panel's one action, pinned to the bottom of the panel
+        // whatever the reading above it came to.
+        function glanceAction(href, icon, label) {
+            const link = document.createElement('a');
+            link.href = href;
+            link.className = 'm-btn m-btn--primary dash-glance-act';
+            link.innerHTML = `
+                <span class="material-symbols-outlined" aria-hidden="true">${icon}</span>
+                <span class="m-btn__label">${label}</span>
+            `;
+            return link;
         }
 
         async function updateDashboard() {
@@ -325,7 +513,6 @@
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                 }
-                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
                 const grid = document.getElementById('nav-cards-grid');
                 const account = (typeof AccessCore !== 'undefined')
                     ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
@@ -335,18 +522,11 @@
                 if (grid && !document.getElementById('directory-card') &&
                     (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)
                         || AccessCore.readsAsElder(account))) {
-                    const dirCard = document.createElement('a');
-                    dirCard.id = 'directory-card';
-                    dirCard.dataset.cardKey = 'directory';
-                    dirCard.href = 'peoples-page.html';
-                    dirCard.className = cardClass;
-                    dirCard.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>groups</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Membership Directory</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the church directory.</p>
-                    `;
+                    const dirCard = navTile({
+                        id: 'directory-card', key: 'directory', href: 'peoples-page.html',
+                        icon: 'groups', title: 'Membership Directory',
+                        desc: 'Who is in the congregation, and how to reach them.',
+                    });
                     // Place it right after the Hymns card
                     grid.insertBefore(dirCard, grid.children[1] || null);
                 }
@@ -360,22 +540,11 @@
                 // be hidden and a URL cannot.
                 if (grid && !document.getElementById('service-analytics-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'service-analytics-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    // Renaming it would silently drop this card to the end of
-                    // every dashboard that has ever been arranged.
-                    card.dataset.cardKey = 'service-analytics';
-                    card.href = 'analytics.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>monitoring</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Analytics</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Insights into historical services.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'service-analytics-card', key: 'service-analytics', href: 'analytics.html',
+                        icon: 'monitoring', title: 'Service Analytics',
+                        desc: 'Who has served, how often, and when they last did.',
+                    }));
                 }
 
                 // MCP Manager — editors and above (MS-262). Where the guidance
@@ -387,22 +556,11 @@
                 // not a lock.
                 if (grid && !document.getElementById('mcp-manager-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'mcp-manager-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    // Renaming it drops this card to the end of every dashboard
-                    // that has ever been arranged.
-                    card.dataset.cardKey = 'mcp-manager';
-                    card.href = 'mcp-manager.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>smart_toy</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">MCP Manager</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Guide the AI assistant, and see what it can do.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'mcp-manager-card', key: 'mcp-manager', href: 'mcp-manager.html',
+                        icon: 'smart_toy', title: 'MCP Manager',
+                        desc: 'Guide the assistant, and see what it can do.',
+                    }));
                 }
 
                 // Roles Manager — editors and above (author the serving Roles).
@@ -410,19 +568,11 @@
                 // page gates itself too — a card can be hidden, a URL can't.
                 if (grid && !document.getElementById('roles-manager-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'roles-manager-card';
-                    card.dataset.cardKey = 'roles-manager';
-                    card.href = 'roles-manager.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>volunteer_activism</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Roles Manager</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Set up serving roles &amp; who fills them.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'roles-manager-card', key: 'roles-manager', href: 'roles-manager.html',
+                        icon: 'volunteer_activism', title: 'Roles Manager',
+                        desc: 'Set up serving roles and who may fill them.',
+                    }));
                 }
 
                 // Forms & Registrations — editors and above.
@@ -433,20 +583,11 @@
                 // rules gate the data — a hidden card is not a lock.
                 if (grid && !document.getElementById('forms-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'forms-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    card.dataset.cardKey = 'forms';
-                    card.href = 'forms.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>ballot</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Forms &amp; Registrations</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Build a sign-up or a poll, send the link, read what came back.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'forms-card', key: 'forms', href: 'forms.html',
+                        icon: 'ballot', title: 'Forms &amp; Registrations',
+                        desc: 'Build a sign-up, and read what came back.',
+                    }));
                 }
 
                 // Printables — editors and above (MS-392). A project the
@@ -455,56 +596,31 @@
                 // not a lock.
                 if (grid && !document.getElementById('printables-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'printables-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    card.dataset.cardKey = 'printables';
-                    card.href = 'printables.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>print</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Printables</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Lay out a directory, a service guide or a handout from live church data, and print it.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'printables-card', key: 'printables', href: 'printables.html',
+                        icon: 'print', title: 'Printables',
+                        desc: 'Lay out a handout from live church data.',
+                    }));
                 }
 
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
                     AccessCore.readsAsElder(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'shepherding-card';
-                    card.dataset.cardKey = 'shepherding';
-                    card.href = 'shepherding-dashboard.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>shield_person</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Shepherd Dashboard</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Elder tools &amp; member care.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'shepherding-card', key: 'shepherding', href: 'shepherding-dashboard.html',
+                        icon: 'shield_person', title: 'Shepherd Dashboard',
+                        desc: 'Elder tools, and the care the church owes people.',
+                    }));
                 }
 
                 // Admin Dashboard — admins and super_admins. Hosts the admin tools (SMS, etc.).
                 if (grid && !document.getElementById('admin-dashboard-card') &&
                     ['admin', 'super_admin'].includes(permissionLevel)) {
-                    const card = document.createElement('a');
-                    card.id = 'admin-dashboard-card';
-                    card.dataset.cardKey = 'admin-dashboard';
-                    card.href = 'admin-dashboard.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>admin_panel_settings</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Admin Dashboard</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">SMS &amp; system admin tools.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(navTile({
+                        id: 'admin-dashboard-card', key: 'admin-dashboard', href: 'admin-dashboard.html',
+                        icon: 'admin_panel_settings', title: 'Admin Dashboard',
+                        desc: 'SMS and the system tools behind the app.',
+                    }));
                 }
 
                 // Apply the user's saved card arrangement, then make the cards
@@ -512,6 +628,8 @@
                 // newly unlocked by a promotion) fall to the end automatically.
                 applyDashboardOrder(grid, savedCardOrder);
                 setupCardReordering(user.uid, grid);
+                const caption = document.getElementById('dash-caption');
+                if (caption) caption.hidden = false;
             }
 
             // 2. Fetch Next Sunday's Service
@@ -554,93 +672,46 @@
                     const svc = _norm;
                     console.log("Service data found:", svc);
                     
-                    // Update Sunday at a Glance Panel
-                    let glanceHtml = '';
-                    
-                    if (svc.isIrregular) {
-                        glanceHtml = ''; // Irregular services don't flag the glance panel
-                    } else {
-                        if (svc.theme) {
-                            glanceHtml += `
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Theme</span>
-                                    <span class="text-body-lg text-primary font-medium">${svc.theme}</span>
-                                </div>
-                            `;
-                        }
-                        
-                        if (svc.liturgy?.sermon) {
-                            glanceHtml += `
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Sermon</span>
-                                    <span class="text-body-md text-primary font-medium">${svc.liturgy.sermon}</span>
-                                </div>
-                            `;
-                        }
-
-                        if (svc.preacher) {
-                            glanceHtml += `
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Preacher</span>
-                                    <span class="text-body-md text-on-surface">${svc.preacher}</span>
-                                </div>
-                            `;
-                        }
-
-                        const roles = [];
-                        if (svc.serviceLeader) roles.push({ label: 'Service Leader', name: svc.serviceLeader });
-                        if (svc.musicLeader) roles.push({ label: 'Music Leader', name: svc.musicLeader });
-
-                        if (roles.length > 0) {
-                            glanceHtml += `
-                                <div class="flex flex-col gap-xs mt-xs">
-                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Roles</span>
-                                    <div class="flex flex-col gap-1">
-                                        ${roles.map(r => `
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-on-surface-variant">${r.label}</span>
-                                                <span class="text-on-surface font-medium">${r.name}</span>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            `;
-                        }
+                    // Sunday at a Glance: a label, and the answer beside it. One
+                    // shape for every line rather than four hand-written ones —
+                    // the panel is a reading, not a form, so nothing in it is
+                    // styled as a field.
+                    const pairs = [];
+                    // An Irregular Service has no Order of Service behind it, so
+                    // it has nothing to be short of and says nothing here.
+                    if (!svc.isIrregular) {
+                        if (svc.theme) pairs.push(['Theme', svc.theme]);
+                        if (svc.liturgy?.sermon) pairs.push(['Sermon', svc.liturgy.sermon]);
+                        if (svc.preacher) pairs.push(['Preacher', svc.preacher]);
+                        if (svc.serviceLeader) pairs.push(['Service Leader', svc.serviceLeader]);
+                        if (svc.musicLeader) pairs.push(['Music Leader', svc.musicLeader]);
                     }
 
                     // Pastoral Prayer
                     const prayers = [];
                     if (svc.liturgy?.prayerMale?.name) prayers.push(svc.liturgy.prayerMale.name);
                     if (svc.liturgy?.prayerFemale?.name) prayers.push(svc.liturgy.prayerFemale.name);
+                    if (prayers.length > 0) pairs.push(['Pastoral Prayer', prayers.join(', ')]);
 
-                    if (prayers.length > 0) {
-                        glanceHtml += `
-                            <div class="flex flex-col gap-xs mt-xs">
-                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Pastoral Prayer</span>
-                                <div class="flex flex-col gap-1">
-                                    ${prayers.map(p => `
-                                        <div class="flex items-center gap-xs text-on-surface">
-                                            <span class="material-symbols-outlined text-[20px] text-primary">favorite</span>
-                                            <span class="text-sm font-medium">${p}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }
+                    let glanceHtml = pairs.length
+                        ? `<dl class="dash-pairs">${pairs.map(([label, value]) =>
+                            `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`
+                        : '';
 
+                    // A Baptism is not a role and not a field: it is a thing that
+                    // is happening. A Badge says so without taking a line of the
+                    // panel's own shape.
                     if (svc.hasBaptism) {
                         const bap = svc.liturgy?.baptism;
                         const baptismName = (Array.isArray(bap)
                             ? bap.map(c => c && c.name).filter(Boolean).join(', ')
                             : (typeof bap === 'string' ? bap : '')) || 'Name not specified';
                         glanceHtml += `
-                            <div class="mt-xs flex flex-col gap-xs">
-                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Baptism</span>
-                                <div class="flex items-center gap-xs text-secondary">
-                                    <span class="material-symbols-outlined text-[20px]">water_drop</span>
-                                    <span class="text-sm font-medium">${baptismName}</span>
-                                </div>
+                            <div class="dash-badges">
+                                <span class="m-badge m-badge--tertiary">
+                                    <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                    Baptism — ${baptismName}
+                                </span>
                             </div>
                         `;
                     }
@@ -648,7 +719,12 @@
                     if (glanceHtml) {
                         glanceContent.innerHTML = glanceHtml;
                     } else {
-                        glanceContent.innerHTML = '<p class="text-on-surface-variant italic">No specific details set for this Sunday yet.</p>';
+                        glanceContent.innerHTML = `
+                            <div class="m-empty">
+                                <span class="material-symbols-outlined" aria-hidden="true">event_note</span>
+                                <p>Nothing is set for this Sunday yet.</p>
+                            </div>
+                        `;
                     }
 
                     // 4. Check for Incomplete Fields and Literal Hymns
@@ -706,66 +782,56 @@
                     const totalIssues = missingFields.length + literalHymns.length;
 
                     if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
-                        const actionDiv = document.createElement('div');
-                        actionDiv.className = 'mt-auto pt-md flex flex-col gap-2';
-                        
+                        // ⚠ THE WARNING HAS LEFT THE PANEL, ON PURPOSE. It used
+                        // to sit at the bottom of Sunday at a Glance, inside a
+                        // scrolling column in the narrowest part of the page —
+                        // the one thing on the dashboard that is asking somebody
+                        // to act, in the least visible place on it. It is now the
+                        // first thing in the page, above everything the page
+                        // merely OFFERS. Same gate, same two doors: this one
+                        // lands on the validating view of the editor, the button
+                        // below on the plain one.
                         if (!svc.isIrregular && totalIssues > 0) {
-                            const alertDiv = document.createElement('a');
-                            alertDiv.href = `service-builder.html?date=${dateKey}&validate=true`;
-                            alertDiv.className = 'flex items-center justify-between group/alert cursor-pointer';
-                            
                             let message = '';
                             if (missingFields.length > 0 && literalHymns.length > 0) {
-                                message = `${totalIssues} items need attention (missing fields & unlinked hymns)`;
+                                message = `${totalIssues} items need attention — blank fields, and hymns not linked to the book.`;
                             } else if (literalHymns.length > 0) {
-                                message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's' : ''} not linked to database`;
+                                message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's are' : ' is'} not linked to the book.`;
                             } else {
-                                message = `${missingFields.length} field${missingFields.length > 1 ? 's' : ''} not completed`;
+                                message = `${missingFields.length} field${missingFields.length > 1 ? 's are' : ' is'} blank on the Order of Service.`;
                             }
-
-                            alertDiv.innerHTML = `
-                                <div class="flex items-center gap-2 bg-error-container text-on-error-container px-3 py-2 rounded-lg w-full transition-transform group-hover/alert:scale-[1.02]">
-                                    <span class="material-symbols-outlined text-[20px]">warning</span>
-                                    <span class="text-sm font-medium">${message}</span>
-                                    <span class="material-symbols-outlined text-[18px] ml-auto">chevron_right</span>
-                                </div>
-                            `;
-                            actionDiv.appendChild(alertDiv);
+                            showServiceNotice(nextSunday, message,
+                                `service-builder.html?date=${dateKey}&validate=true`);
                         }
 
-                        const editBtn = document.createElement('a');
-                        editBtn.href = `service-builder.html?date=${dateKey}`;
-                        editBtn.className = 'flex items-center justify-center group';
-                        editBtn.innerHTML = `
-                            <div class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg w-full justify-center transition-all hover:bg-primary/90 shadow-sm">
-                                <span class="material-symbols-outlined text-[20px]">edit</span>
-                                <span class="text-sm font-medium">Open in Service Editor</span>
-                            </div>
-                        `;
-                        actionDiv.appendChild(editBtn);
-                        glanceContent.appendChild(actionDiv);
+                        glanceContent.appendChild(glanceAction(
+                            `service-builder.html?date=${dateKey}`, 'edit', 'Open in Service Editor'));
                     }
                 } else {
                     console.log("No service data found for:", dateKey);
-                    glanceContent.innerHTML = '<p class="text-on-surface-variant italic">No service data found for this Sunday.</p>';
-                    
+                    glanceContent.innerHTML = `
+                        <div class="m-empty">
+                            <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+                            <p>No service is on the books for this Sunday.</p>
+                        </div>
+                    `;
+
                     if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
-                        const createBtn = document.createElement('a');
-                        createBtn.href = `service-builder.html?date=${dateKey}`;
-                        createBtn.className = 'mt-auto pt-md flex items-center justify-center group';
-                        createBtn.innerHTML = `
-                            <div class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg w-full justify-center transition-all hover:bg-primary/90 shadow-sm">
-                                <span class="material-symbols-outlined text-[20px]">add</span>
-                                <span class="text-sm font-medium">Create Service</span>
-                            </div>
-                        `;
-                        glanceContent.appendChild(createBtn);
+                        glanceContent.appendChild(glanceAction(
+                            `service-builder.html?date=${dateKey}`, 'add', 'Create Service'));
                     }
 
                 }
             } catch (e) {
                 console.error("Error updating dashboard data:", e);
-                glanceContent.innerHTML = '<p class="text-error italic">Failed to load service details.</p>';
+                glanceContent.innerHTML = `
+                    <div class="m-notice m-notice--error">
+                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                        <div class="m-notice__body">
+                            <span class="m-notice__title">This Sunday's details did not load.</span>
+                        </div>
+                    </div>
+                `;
             }
         }
 
