@@ -4,6 +4,11 @@ name: PR CI
 # Both are green on main after MS-543 / PR #65. The old red baseline is recorded in
 # docs/ops/ms-543-ci-baseline-inventory.md (landed with #65). This workflow still
 # runs them so every PR has the same signal; do not weaken eslint or skip the jobs.
+#
+# node-version must be the runtime the functions actually ship on, which is
+# functions/package.json `engines.node` (MS-683 moved both to 22). Testing on a
+# different major than Cloud Functions runs is a green CI that proves nothing.
+# test/functions-node-runtime.test.js fails if the two drift apart.
 
 on:
   pull_request:
@@ -24,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -44,7 +49,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: functions/package-lock.json
 

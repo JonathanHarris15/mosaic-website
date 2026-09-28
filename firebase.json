@@ -96,6 +96,7 @@
         "node scripts/sync-shared-to-functions.js"
       ],
       "//discovery": "⚠ DEPLOYING MAY NEED FUNCTIONS_DISCOVERY_TIMEOUT. The CLI loads index.js and gives it 10 seconds to describe the backend. Since MS-278 the entry point pulls in the whole MCP tool surface — events-store, forms-core and the shepherding modules — and on a cold machine that can take longer than the budget. The failure says 'User code failed to load. Cannot determine backend specification. Timeout after 10000' and names nothing, which reads like broken code rather than a stopwatch. Deploy with FUNCTIONS_DISCOVERY_TIMEOUT=120 set in the environment. The lasting fix is to require the MCP modules lazily inside buildServer, so the other thirty functions stop paying for them at load.",
+      "//runtime": "There is deliberately no `runtime` key here. The CLI takes `runtime` from firebase.json if present and ONLY otherwise falls back to functions/package.json `engines.node` (firebase-tools lib/deploy/functions/runtimes/node/parseRuntimeAndValidateSDK.js). Two places to say the same thing is two places to disagree, and the one that loses is silent — so the runtime lives in `engines.node` alone, which is also what `npm ci` enforces locally. MS-683 moved it to 22; Node 20 is decommissioned 2026-10-30, after which a deploy on it fails outright. test/functions-node-runtime.test.js holds `engines.node` and every workflow's node-version to the same number.",
       "source": "functions",
       "codebase": "default",
       "disallowLegacyRuntimeConfig": true,

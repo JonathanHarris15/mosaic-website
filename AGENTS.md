@@ -13,7 +13,7 @@ Cloud agents start from a checkout of this repo. Dependencies are **not** in git
 | Tree | Lockfile | What it is for |
 | --- | --- | --- |
 | repo root | `package-lock.json` | unit tests (`node --test`), Tailwind, Capacitor, Firebase CLI |
-| `functions/` | `functions/package-lock.json` | Cloud Functions (Node **20**), ESLint |
+| `functions/` | `functions/package-lock.json` | Cloud Functions (Node **22**), ESLint |
 
 `.cursor/environment.json` runs `.cursor/install.sh` on Build. That script is idempotent: it always `npm ci`s both trees from the lockfiles and does not start servers. Re-running it on a warm disk is expected.
 
@@ -41,7 +41,7 @@ npm test                          # root: node --test  (unit suite in test/)
 npm run lint --prefix functions   # functions/: eslint .
 ```
 
-PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on both trees, on Node **20** (the `functions.engines` version). Cloud Agent VMs may be Node 22; `npm ci --prefix functions` then warns `EBADENGINE` and still installs.
+PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on both trees, on Node **22** (the `functions.engines` version, since MS-683). That is the runtime the functions actually deploy on, and `test/functions-node-runtime.test.js` fails if `engines.node`, any workflow's `node-version`, or a `runtime` key in `firebase.json` drift apart. It also fails 90 days before the runtime's Firebase decommission date — Node 20's was 2026-10-30 and nothing blocked on it, which is why that test exists (`docs/ops/ms-683-node-22-runtime.md`).
 
 `npm test` is the default unit gate. It does **not** start emulators. Tests under `test/emulator/` skip unless `FIRESTORE_EMULATOR_HOST` is set (they `require('firebase-admin')` at load; that module comes from the root `npm ci`).
 
@@ -96,7 +96,7 @@ One authored copy of the pure domain modules lives in `public/`. `node scripts/s
 - `CONTEXT.md` — domain language. Use those words.
 - `CLAUDE.md` — Jira board (`MS`, To Plan → Done). A ticket right of To Plan needs a PRD.
 - `.cursor/skills/` — Cursor Cloud board skills (`plan-ticket`, `implement`, …).
-- `GEMINI.md` — stack sketch (Firebase, Node 20 functions, emulator ports).
+- `GEMINI.md` — stack sketch (Firebase, Node 22 functions, emulator ports).
 - `docs/adr/` — decisions already made. Do not re-litigate them in a feature PR.
 
 ### Jev smoke test (hosted UI)
