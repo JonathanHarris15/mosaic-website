@@ -202,11 +202,11 @@
     },
     {
       "collectionGroup": "announcement_going_out",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
+      "fieldPath": "way",
+      "indexes": [
         {
-          "fieldPath": "way",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
