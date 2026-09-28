@@ -53,11 +53,14 @@
             '<span class="ml-auto material-symbols-outlined text-[18px] ' +
             'text-on-surface-variant">chevron_right</span>';
 
-        // Above the cards, below the mark. It is the only thing on this page
-        // that is waiting on the reader.
-        const logo = main.firstElementChild;
-        if (logo && logo.nextSibling) main.insertBefore(line, logo.nextSibling);
-        else main.appendChild(line);
+        // Above the cards, under whatever the page is already telling the reader
+        // about this Sunday. It used to go after main's first child because that
+        // was the seal; the seal is in the header bar now (MS-686) and the first
+        // child is the Sunday-not-ready slot, which is the one notice that
+        // outranks this one.
+        const notice = main.querySelector('#service-notice');
+        if (notice && notice.nextSibling) main.insertBefore(line, notice.nextSibling);
+        else main.insertBefore(line, main.firstChild);
     }
 
     async function count(personId, today) {

@@ -1,0 +1,16 @@
+<!-- @dsCard group="Layout" viewport="700x170" name="Drawer" subtitle="The navigation panel a header's hamburger opens: a navy head saying who you are, the list of places you may go, and the " -->
+<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../styles.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"/>
+<style>
+  body { margin:0; padding:18px; background:var(--background); font-family:var(--font-sans); color:var(--on-surface); }
+  .r { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .sw { display:flex; flex-direction:column; width:150px; border-radius:var(--radius); overflow:hidden; border:1px solid var(--outline-variant); }
+  .sw .t { padding:16px 12px; font-size:12px; font-weight:600; }
+  .sw .b { padding:7px 12px; font-size:10.5px; background:var(--surface-container-lowest); color:var(--on-surface-variant); display:flex; justify-content:space-between; gap:6px; }
+  .sw .b code { font-family:ui-monospace,monospace; }
+</style></head><body>
+<div class="r">
+  <div><div class="m-drawer" id="app-drawer"><button class="m-drawer__scrim" tabindex="-1" aria-hidden="true"></button><nav class="m-drawer__panel" aria-label="Menu"><div class="m-drawer__head"><button class="m-icon-btn m-icon-btn--lg" aria-label="Close menu"><span class="material-symbols-outlined">menu</span></button><a class="m-drawer__who" href="profile.html"><span class="m-avatar">JH</span><span class="m-drawer__who-main"><span class="m-drawer__name">Jonathan Harris</span><span class="m-drawer__role">Elder</span></span></a></div><div class="m-drawer__list"><a class="m-drawer__item" href="index.html" aria-current="page"><span class="material-symbols-outlined">home</span><span class="m-drawer__label">Home</span></a></div><div class="m-drawer__foot"></div></nav></div></div>
+</div>
+</body></html>

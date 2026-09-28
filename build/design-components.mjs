@@ -688,10 +688,14 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     group: "Display",
     summary:
       "The dashboard tile: a medallion, a title, one line of description. Four identical copies of this lived in shepherding-dashboard.html alone.",
-    variants: {},
-    notes: ["One descriptive line, never two. The Medallion fills on hover to say the whole tile is the target."],
+    variants: { density: ["default", "dense"] },
+    notes: [
+      "One descriptive line, never two. The Medallion fills on hover to say the whole tile is the target.",
+      "Wrap the title and the description in `.m-nav-card__body`. The centred column does not need it, but --dense lays the tile out as a row and a row needs the words to be one flex child rather than two.",
+      "--dense is for the surface that shows a DOZEN of these rather than four. The centred column puts a 56px plate over a 24px serif title in --space-lg padding, which fills a fold with three tiles; --dense turns the same tile on its side, drops the plate to 40px and clamps the description at two lines. It only applies from 1024px up — a phone has the room for the shipped tile and a 56px plate is the comfortable target there.",
+    ],
     examples: [
-      '<a class="m-nav-card" href="#"><span class="m-medallion"><span class="material-symbols-outlined">groups</span></span><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">View and manage member profiles.</p></a>',
+      '<a class="m-nav-card" href="#"><span class="m-medallion"><span class="material-symbols-outlined">groups</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">View and manage member profiles.</p></span></a>',
     ],
     css: `
 .m-nav-card {
@@ -703,14 +707,38 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   transition: background-color var(--duration) var(--ease-standard);
 }
 .m-nav-card:hover { background: var(--surface-container-low); }
+.m-nav-card__body { display: block; min-width: 0; }
 .m-nav-card__title {
   margin: 0 0 var(--space-xs); font-family: var(--font-serif);
   font-size: var(--headline-md-size); font-weight: var(--headline-md-weight);
-  color: var(--on-surface);
+  color: var(--on-surface); text-wrap: balance;
 }
 .m-nav-card__desc {
   margin: 0; font-family: var(--font-sans); font-size: 14px;
   line-height: 1.5; color: var(--on-surface-variant);
+}
+
+/* The tile on its side, for a surface carrying a dozen of them. Nothing here
+   is a new value: the Medallion lands on its own --sm metrics and every length
+   is a token. Below 1024px the modifier does nothing at all, which is how the
+   phone keeps the shipped centred tile. */
+@media (min-width: 1024px) {
+  .m-nav-card--dense {
+    flex-direction: row; align-items: center; justify-content: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-sm);
+    text-align: left;
+  }
+  .m-nav-card--dense .m-medallion { width: 40px; height: 40px; margin-bottom: 0; }
+  .m-nav-card--dense .m-medallion .material-symbols-outlined { font-size: 20px; }
+  .m-nav-card--dense .m-nav-card__title { margin-bottom: 1px; }
+  /* Two lines of description, then stop. A tile is a label with a reason
+     attached, not a paragraph, and the tiles beside it should not all grow to
+     fit the longest one. */
+  .m-nav-card--dense .m-nav-card__desc {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
 }
 `,
   },
@@ -725,7 +753,10 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     css: `
 .m-medallion {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 56px; height: 56px; margin-bottom: var(--space-sm);
+  /* flex: 0 0 auto because a NavCard laid out as a row is a flex container and
+     the plate is one of its children: left to shrink, a 40px circle settles at
+     about 29px and goes oval. */
+  width: 56px; height: 56px; flex: 0 0 auto; margin-bottom: var(--space-sm);
   border-radius: var(--radius-full); background: var(--surface-container);
   color: var(--primary);
   transition: background-color var(--duration) var(--ease-standard);
@@ -1058,6 +1089,192 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   /* ── Layout ─────────────────────────────────────────────── */
+  {
+    name: "Density",
+    cls: "m-dense",
+    group: "Layout",
+    summary:
+      "A desktop scale, set on the element a dense surface starts at. A professional tool has small elements; a toy has big letters and big blocks. This is the whole of the difference, expressed as tokens.",
+    variants: {},
+    notes: [
+      "It moves NOTHING on its own — it re-points the tokens the components already read, so one class on a <body> takes a whole page down a step: Card padding is --space-md, NavCard's title is --headline-md-size, SerifHead's is --headline-md-size, and so on.",
+      "⚠ FROM 1024px ONLY, AND THAT IS THE POINT. A phone is a thumb on glass and keeps every shipped size; the desktop is a mouse and can afford a 34px control. Set the class unconditionally and the phone is unharmed.",
+      "Two floors are held and neither is negotiable: nothing that is a SENTENCE drops under 13px, and no pointer target drops under 32px (--m-dense-target-min). The label scale is deliberately untouched — --label-sm already ships at 11.5px, and taking tracked caps to 10px reads as cramped rather than as precise. Density comes from the space around a label, not from the label.",
+      "Adopt it per surface rather than app-wide. It landed on the dashboard (MS-686); every other desktop page still carries the shipped scale until somebody has looked at it.",
+    ],
+    examples: ['<body class="m-dense">…</body>'],
+    css: `
+@media (min-width: 1024px) {
+  .m-dense {
+    /* Spacing — one step tighter throughout. --space-lg is the only one that
+       moves far, because at 48px it was sized for the gap between sections of
+       a marketing page rather than for anything inside a tool. */
+    --space-xs: 3px;
+    --space-base: 6px;
+    --space-sm: 10px;
+    --space-md: 16px;
+    --space-lg: 28px;
+
+    /* Type — each step down one. The serif character is in the family, not in
+       the size. */
+    --headline-lg-size: 22px;
+    --headline-md-size: 17px;
+    --body-lg-size: 15px;
+    --body-md-size: 14px;
+
+    /* A 16px corner on a 40px row reads as a pill. */
+    --radius-xl: 12px;
+
+    /* Three values the token set has no name for yet: what "dense" means for
+       a Button and a Row, and the floor a desktop pointer target may not go
+       under. */
+    --m-dense-control-h: 34px;
+    --m-dense-row-h: 40px;
+    --m-dense-target-min: 32px;
+  }
+
+  /* 64px of chrome above a dense page is a banner. 48px still clears a 34px
+     control with room, and the wordmark comes down from 28px with it. */
+  .m-dense .m-header {
+    --m-header-h: 48px;
+    --m-header-pad: var(--space-md);
+    --m-header-title: 19px;
+  }
+
+  /* 46px is a thumb on glass; a mouse needs far less. --m-dense-target-min is
+     the floor, and --sm sits exactly on it. */
+  .m-dense .m-btn { height: var(--m-dense-control-h); padding: 0 var(--space-sm); font-size: 13px; }
+  .m-dense .m-btn--sm { height: var(--m-dense-target-min); padding: 0 var(--space-sm); font-size: 13px; }
+  .m-dense .m-icon-btn--lg { width: var(--m-dense-control-h); height: var(--m-dense-control-h); }
+  .m-dense .m-icon-btn .material-symbols-outlined { font-size: 19px; }
+
+  /* 48px tall on 13px of vertical padding is a phone list. */
+  .m-dense .m-row { min-height: var(--m-dense-row-h); padding: var(--space-base) var(--space-sm); }
+}
+`,
+  },
+
+  {
+    name: "Drawer",
+    cls: "m-drawer",
+    group: "Layout",
+    summary:
+      "The navigation panel a header's hamburger opens: a navy head saying who you are, the list of places you may go, and the way out at the foot. The phone had two hand-drawn copies of this and the desktop had none.",
+    variants: {},
+    notes: [
+      "⚠ THE LIST IS NOT THE COMPONENT'S BUSINESS. What goes in a drawer is a permission question, and this answers none of it — a caller hands it entries. On the dashboard those entries are the TILES the page just drew, so the drawer and the grid cannot disagree about who may see what.",
+      "The scrim is a <button>, so clicking outside closes the drawer without a click handler on a <div>; tabindex=-1 and aria-hidden keep it out of both the tab order and the accessibility tree. Escape is the keyboard way out.",
+      "The safe-area padding on the head and the foot is not decoration. On a desktop window both insets are 0, so it costs nothing — and it is what stops the panel sliding under an iPhone's status bar if this becomes the one Drawer both surfaces use.",
+      "Nothing behind an open drawer is reachable: the caller sets `inert` on the page, and the component stops the body scrolling under the panel. A drawer you can Tab out of and behind is worse than no drawer.",
+      "The head is navy — the one filled surface in the app besides a primary button — because the drawer is the only chrome that covers the page rather than bordering it, and it should not read as more parchment.",
+    ],
+    examples: [
+      '<div class="m-drawer" id="app-drawer"><button class="m-drawer__scrim" tabindex="-1" aria-hidden="true"></button><nav class="m-drawer__panel" aria-label="Menu"><div class="m-drawer__head"><button class="m-icon-btn m-icon-btn--lg" aria-label="Close menu"><span class="material-symbols-outlined">menu</span></button><a class="m-drawer__who" href="profile.html"><span class="m-avatar">JH</span><span class="m-drawer__who-main"><span class="m-drawer__name">Jonathan Harris</span><span class="m-drawer__role">Elder</span></span></a></div><div class="m-drawer__list"><a class="m-drawer__item" href="index.html" aria-current="page"><span class="material-symbols-outlined">home</span><span class="m-drawer__label">Home</span></a></div><div class="m-drawer__foot"></div></nav></div>',
+    ],
+    css: `
+.m-drawer { position: fixed; inset: 0; z-index: 60; visibility: hidden; }
+.m-drawer__scrim {
+  position: absolute; inset: 0; border: 0; padding: 0;
+  background: color-mix(in srgb, var(--navy-900) 42%, transparent);
+  opacity: 0; transition: opacity var(--duration-slow) var(--ease-standard);
+}
+.m-drawer__panel {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  display: flex; flex-direction: column;
+  width: 296px; max-width: 86%;
+  background: var(--surface);
+  border-right: 1px solid var(--outline-variant); box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+  transform: translateX(-100%);
+  transition: transform var(--duration-slow) var(--ease-standard);
+}
+
+/* The state lives on the element the drawer is a child of — the caller sets
+   data-drawer, and one attribute moves the scrim, the panel and the page
+   behind them together. */
+[data-drawer="open"] .m-drawer { visibility: visible; }
+[data-drawer="open"] .m-drawer__scrim { opacity: 1; }
+[data-drawer="open"] .m-drawer__panel { transform: translateX(0); }
+/* Nothing scrolls under an open panel. Scrolling the page you cannot reach is
+   the one thing every hand-rolled drawer in this app got wrong. */
+[data-drawer="open"] { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-drawer__scrim, .m-drawer__panel { transition: none; }
+}
+
+/* The safe-area padding is carried over from the phone's drawer deliberately.
+   On a desktop window both insets are 0, so it costs nothing here — and if
+   this becomes the one Drawer both surfaces use, dropping it is how the panel
+   ends up under an iPhone's status bar. */
+.m-drawer__head {
+  flex: 0 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--space-base))
+           var(--space-sm) var(--space-sm);
+  background: var(--primary); color: var(--on-primary);
+}
+.m-drawer__who {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: var(--space-xs); padding: 6px;
+  border-radius: var(--radius); color: inherit; text-decoration: none;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-drawer__who:hover { background: color-mix(in srgb, var(--on-primary) 12%, transparent); }
+.m-drawer__who:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+.m-drawer__who-main { display: block; flex: 1 1 auto; min-width: 0; }
+.m-drawer__name {
+  display: block; font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-drawer__role {
+  display: block; font-family: var(--font-sans); font-size: 11.5px;
+  color: var(--primary-fixed-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.m-drawer__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-base) var(--space-sm);
+}
+.m-drawer__item {
+  display: flex; align-items: center; gap: 14px;
+  min-height: 44px; padding: 10px 14px; margin-bottom: 2px;
+  border-radius: var(--radius); color: var(--on-surface);
+  font-family: var(--font-sans); font-size: 15px; font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease-standard),
+              color var(--duration) var(--ease-standard);
+}
+.m-drawer__item:hover { background: var(--surface-container); color: var(--primary); }
+.m-drawer__item:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-drawer__item[aria-current="page"] {
+  background: var(--primary-fixed); color: var(--primary); font-weight: 600;
+}
+.m-drawer__item .material-symbols-outlined { flex: 0 0 auto; font-size: 20px; }
+.m-drawer__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.m-drawer__foot {
+  flex: 0 0 auto;
+  padding: var(--space-base) var(--space-sm)
+           calc(env(safe-area-inset-bottom, 0px) + var(--space-base));
+  border-top: 1px solid var(--outline-variant);
+}
+
+/* A drawer is chrome. It never prints. */
+@media print { .m-drawer { display: none; } }
+
+/* Dense: 296px is the phone's width, where it is 86% of the screen. On a
+   desktop the panel only has to hold the longest label, and a narrower one
+   covers less of the page it came from. */
+@media (min-width: 1024px) {
+  .m-dense .m-drawer__panel { width: 248px; }
+  .m-dense .m-drawer__item { padding: var(--space-base) var(--space-sm); }
+  .m-dense .m-drawer__item .material-symbols-outlined { font-size: 19px; }
+  .m-dense .m-drawer__label { font-size: 13.5px; }
+}
+`,
+  },
+
   {
     name: "PageShell",
     cls: "m-page",
@@ -1610,14 +1827,20 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       '<div class="m-notice m-notice--gold"><span class="material-symbols-outlined m-notice__icon">person_off</span><div class="m-notice__body"><p class="m-notice__title">You are not signed in.</p><p class="m-notice__text">Sign in to see the events that repeat and who is on them.</p></div><div class="m-notice__acts"><a class="m-btn m-btn--primary m-btn--sm" href="#">Sign in</a></div></div>',
     ],
     css: `
+/* ⚠ IT WRAPS, AND IT HAS TO. The bar is three flex children — glyph, words,
+   action — and the action is a button that cannot narrow. On a phone the words
+   got whatever was left, which was about one word per line: a four-line column
+   of single words beside a button, for a sentence that would have fitted on two
+   lines if the button had dropped below it. 24ch is the point at which it does
+   (MS-686). */
 .m-notice {
-  display: flex; align-items: flex-start; gap: var(--space-sm);
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-sm);
   padding: 11px var(--space-md);
   border: 1px solid var(--outline-variant); border-left-width: 3px;
   border-radius: var(--radius); background: var(--surface-container-low);
 }
 .m-notice__icon { flex: 0 0 auto; font-size: 20px; color: var(--on-surface-variant); }
-.m-notice__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-notice__body { flex: 1 1 24ch; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .m-notice__title { font-size: 14px; color: var(--on-surface); }
 .m-notice__text { font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
 .m-notice__acts { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-base); }

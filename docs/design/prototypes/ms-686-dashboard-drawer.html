@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The review page's own background (--surface-container-highest), not the
+         app's, because the tan around the stages is what this document is. -->
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-686 + MS-691 — Dashboard restyle and desktop drawer (prototype)</title>
+
+    <!-- The real stylesheets, by relative path, per .cursor/rules/ui-prototype-first.mdc.
+         Everything with an m-* class below is drawn by the shipped design system;
+         nothing about the cream, the navy ink or the Cinzel / EB Garamond /
+         Libre Franklin stack is redrawn here. -->
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <!-- The same font families public/fonts.css vendors, fetched from Google by
+         absolute URL. public/fonts.css is the real pages' source of truth and is
+         linked above, but its @font-face src values are relative
+         (fonts/files/*.woff2) and resolve against whatever directory the document
+         sits in. Under htmlpreview, which inlines the sheet it fetched, that is
+         docs/design/prototypes/ — so every font file 404s and Material Symbols
+         ligature names render as the literal words "church", "menu_book",
+         "warning". Declared after fonts.css so these faces win.
+
+         The Material Symbols query is the one public/fonts.css itself cites in the
+         comment above its vendored copy, so this is the same font, not a
+         substitute. Prototypes only: a page under public/ must use the vendored
+         copy, which needs no network. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        /* ============================================================
+           PROTOTYPE-ONLY CSS. Two kinds of rule live in here, and they
+           have different futures:
+
+           1. .m-drawer* / .m-rail*  — a PROPOSED design-system component.
+              There is no Drawer in build/design-components.mjs today (the
+              phone has two hand-written renderings of one, in
+              public/mobile/app.js and public/mobile-shell-header.js, both
+              styled inline). If MS-691 is approved, these move into the
+              generator and the phone's two copies collapse onto them.
+              Written only in tokens so that move is a copy-paste.
+
+           2. .proto-*  — the prototype's own scaffolding: the review
+              chrome, and the "stage" boxes that let one page show a page
+              twice with its drawer shut and open. This never ships.
+
+           Every value is a var(--token) from the linked sheets.
+           ============================================================ */
+
+        /* ── The review page itself ───────────────────────────────── */
+
+        .proto-body {
+            margin: 0;
+            background: var(--surface-container-highest);
+            color: var(--on-background);
+            font-family: var(--font-sans);
+            font-size: var(--body-md-size);
+            line-height: var(--body-md-line);
+            -webkit-font-smoothing: antialiased;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: color-mix(in srgb, var(--tertiary) 24%, transparent);
+        }
+
+        .proto-skip {
+            position: absolute;
+            left: var(--space-sm);
+            top: -3rem;
+            z-index: 100;
+            padding: var(--space-base) var(--space-sm);
+            border-radius: var(--radius);
+            background: var(--primary);
+            color: var(--on-primary);
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: top var(--duration) var(--ease-standard);
+        }
+
+        .proto-skip:focus-visible {
+            top: var(--space-sm);
+            outline: 2px solid var(--tertiary);
+            outline-offset: 2px;
+        }
+
+        /* Deliberately not sticky. At 390&nbsp;px this bar is 200&nbsp;px tall, and a
+           review page that permanently spends a quarter of a phone screen on
+           its own chrome cannot be trusted about how much room the app has. */
+        .proto-bar {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--primary);
+            color: var(--on-primary);
+            border-bottom: 1px solid var(--primary-container);
+        }
+
+        .proto-bar__kicker {
+            margin: 0;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--primary-fixed-dim);
+        }
+
+        .proto-bar__title {
+            margin: 2px 0 0;
+            font-family: var(--font-serif);
+            font-size: var(--headline-md-size);
+            line-height: var(--headline-md-line);
+            font-weight: var(--headline-md-weight);
+            text-wrap: balance;
+        }
+
+        .proto-jump {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-base);
+            margin-top: var(--space-sm);
+        }
+
+        .proto-jump a {
+            padding: 6px 12px;
+            border: 1px solid var(--primary-fixed-dim);
+            border-radius: var(--radius-full);
+            color: var(--on-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard),
+                        color var(--duration) var(--ease-standard);
+        }
+
+        .proto-jump a:hover {
+            background: var(--primary-fixed);
+            color: var(--primary);
+        }
+
+        .proto-jump a:focus-visible {
+            outline: 2px solid var(--primary-fixed);
+            outline-offset: 2px;
+        }
+
+        .proto-main {
+            width: 100%;
+            max-width: 1360px;
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-sm) var(--space-xl);
+        }
+
+        @media (min-width: 900px) {
+            .proto-main { padding-left: var(--space-md); padding-right: var(--space-md); }
+        }
+
+        .proto-note {
+            max-width: 68ch;
+            margin: 0 0 var(--space-sm);
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--on-surface-variant);
+            text-wrap: pretty;
+        }
+
+        .proto-note strong { color: var(--on-surface); }
+
+        .proto-section {
+            margin-top: var(--space-lg);
+            scroll-margin-top: var(--space-md);
+        }
+
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs);
+            font-family: var(--font-serif);
+            font-size: var(--headline-lg-size);
+            line-height: var(--headline-lg-line);
+            font-weight: var(--headline-lg-weight);
+            color: var(--primary);
+            text-wrap: balance;
+        }
+
+        .proto-section > h3,
+        .proto-stage-label {
+            margin: var(--space-md) 0 var(--space-base);
+            scroll-margin-top: var(--space-md);
+            font-family: var(--font-sans);
+            font-size: var(--label-sm-size);
+            font-weight: var(--label-sm-weight);
+            letter-spacing: var(--label-sm-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        /* ── Two findings against the shipped components ───────────
+           Both are real, both are reproducible, and both belong in
+           build/design-components.mjs rather than in a page. They are
+           patched here only so this prototype shows what it means to
+           show; the implementation ticket should fix them at source.
+
+           1. Row's two lines only stack when its parts are block. The
+              canonical markup in build/design-components.mjs uses
+              <div>s, so it works there — but forms.html,
+              printables.html and calendar-event.html all use <span>s,
+              where the title and the sub run together on one line and
+              .m-row__sub's margin-top does nothing at all. The
+              component should not depend on which element you reach
+              for.
+
+           2. Notice does not wrap. .m-notice__body is flex:1 1 auto
+              beside a no-wrap .m-notice__acts, so at phone width a
+              Notice carrying an action squeezes its own sentence to
+              one word per line. .m-actionbar already solves this with
+              flex-wrap and a flex-basis in ch. */
+        .m-row__main,
+        .m-row__title,
+        .m-row__sub { display: block; }
+
+        .m-notice { flex-wrap: wrap; }
+        .m-notice__body { flex: 1 1 24ch; }
+
+        .proto-verdict {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-base);
+            margin: 0 0 var(--space-sm);
+        }
+
+        /* The frame a whole page is drawn inside, so this one document can
+           show the dashboard twice — shut and open — without two windows.
+           PRODUCTION DIFFERENCE: the drawer here is position:absolute inside
+           this box; in the app it is position:fixed to the viewport, exactly
+           as the phone's is. Nothing else about it changes. */
+        .proto-stage {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 560px;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            background: var(--background);
+            box-shadow: var(--shadow-sm);
+        }
+
+        @media (min-width: 900px) {
+            .proto-stage { min-height: 680px; }
+        }
+
+        /* Tall enough that a twelve-entry drawer is judged on the list rather
+           than on where it happened to be cut off. */
+        .proto-stage--tall { min-height: 780px; }
+
+        /* The page column inside a stage — .m-page__body's metrics, without
+           .m-page's min-height:100vh, which would blow the frame out. */
+        .proto-app-body {
+            flex: 1 1 auto;
+            width: 100%;
+            max-width: var(--container-max);
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-sm) var(--space-md);
+        }
+
+        @media (min-width: 641px) {
+            .proto-app-body { padding: var(--space-md) var(--space-margin) var(--space-lg); }
+        }
+
+        .proto-stack {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .proto-row {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .proto-spacer { flex: 1 1 auto; }
+
+        /* ── Proposed component: Drawer ────────────────────────────
+           The phone's navigation drawer (public/mobile/app.js Drawer,
+           public/mobile-shell-header.js buildDrawer) as one class set the
+           desktop header can open too. Same 296px panel, same navy head
+           carrying avatar / name / role, same scrim, same slide. */
+
+        .m-drawer {
+            position: absolute;
+            inset: 0;
+            z-index: 60;
+            visibility: hidden;
+        }
+
+        .m-drawer__scrim {
+            position: absolute;
+            inset: 0;
+            background: color-mix(in srgb, var(--navy-900) 42%, transparent);
+            opacity: 0;
+            border: 0;
+            padding: 0;
+            transition: opacity var(--duration-slow) var(--ease-standard);
+        }
+
+        .m-drawer__panel {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            width: 296px;
+            max-width: 86%;
+            background: var(--surface);
+            border-right: 1px solid var(--outline-variant);
+            box-shadow: var(--shadow-lg);
+            overscroll-behavior: contain;
+            transform: translateX(-100%);
+            transition: transform var(--duration-slow) var(--ease-standard);
+        }
+
+        [data-drawer="open"] .m-drawer { visibility: visible; }
+        [data-drawer="open"] .m-drawer__scrim { opacity: 1; }
+        [data-drawer="open"] .m-drawer__panel { transform: translateX(0); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .m-drawer__scrim,
+            .m-drawer__panel { transition: none; }
+        }
+
+        /* The safe-area padding is carried over from the phone's head and foot
+           deliberately. On a desktop window both insets are 0, so it costs
+           nothing here — and if this becomes the one Drawer both surfaces use,
+           dropping it is how the panel ends up under an iPhone's status bar. */
+        .m-drawer__head {
+            flex: 0 0 auto;
+            padding: calc(env(safe-area-inset-top, 0px) + var(--space-base))
+                     var(--space-sm) var(--space-sm);
+            background: var(--primary);
+            color: var(--on-primary);
+        }
+
+        .m-drawer__who {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: var(--space-xs);
+            padding: 6px;
+            border-radius: var(--radius);
+            color: inherit;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard);
+        }
+
+        .m-drawer__who:hover { background: color-mix(in srgb, var(--on-primary) 12%, transparent); }
+        .m-drawer__who:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+
+        .m-drawer__who-main {
+            display: block;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .m-drawer__name {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .m-drawer__role {
+            display: block;
+            font-size: 11.5px;
+            color: var(--primary-fixed-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .m-drawer__list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: var(--space-base) var(--space-sm);
+        }
+
+        .m-drawer__group {
+            display: block;
+            padding: var(--space-sm) 14px var(--space-xs);
+        }
+
+        .m-drawer__item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-height: 44px;
+            padding: 10px 14px;
+            margin-bottom: 2px;
+            border-radius: var(--radius);
+            color: var(--on-surface);
+            font-family: var(--font-sans);
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background-color var(--duration) var(--ease-standard),
+                        color var(--duration) var(--ease-standard);
+        }
+
+        .m-drawer__item:hover { background: var(--surface-container); color: var(--primary); }
+        .m-drawer__item:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+
+        .m-drawer__item[aria-current="page"] {
+            background: var(--primary-fixed);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .m-drawer__item .material-symbols-outlined {
+            flex: 0 0 auto;
+            font-size: 20px;
+        }
+
+        .m-drawer__label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .m-drawer__foot {
+            flex: 0 0 auto;
+            padding: var(--space-base) var(--space-sm)
+                     calc(env(safe-area-inset-bottom, 0px) + var(--space-base));
+            border-top: 1px solid var(--outline-variant);
+        }
+
+        /* ── Variant plumbing ─────────────────────────────────────── */
+
+        .proto-shell {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: stretch;
+            min-height: 0;
+        }
+
+        .proto-shell > .proto-app-body { min-width: 0; }
+
+        /* ── Dashboard layouts under test ─────────────────────────── */
+
+        /* A: the 8/4 split the dashboard has today, kept. */
+        .proto-split {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-md);
+            align-items: start;
+        }
+
+        @media (min-width: 1024px) {
+            /* A fixed side column rather than 4-of-12: the Glance panel holds
+               six label/value pairs and nothing longer, so past about 300px it
+               is just a wider gutter, and every pixel it gives back goes to the
+               tiles. */
+            .proto-split { grid-template-columns: minmax(0, 1fr) 300px; }
+        }
+
+        .proto-tiles {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            /* Equal rows, because "Membership Directory" takes two lines and a
+               grid left to size each row to its contents makes the row holding
+               it visibly taller than the row above. */
+            grid-auto-rows: 1fr;
+            gap: var(--space-sm);
+        }
+
+        @media (min-width: 560px) {
+            .proto-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (min-width: 1024px) {
+            .proto-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+
+        /* Four columns only once a tile is still wide enough to hold its own
+           sentence. At 1280px it is not: the description clamps mid-word and the
+           tile stops explaining itself, which is the opposite of welcoming. */
+        @media (min-width: 1500px) {
+            .proto-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        /* A two-word tile name should break evenly rather than leaving
+           "Directory" alone on the second line. */
+        .m-nav-card__title { text-wrap: balance; }
+
+        /* NavCard has no wrapper around its title and description today, so a
+           row layout would put the Medallion, the title and the description in
+           one line. A --compact modifier needs this element; on the phone, where
+           the tile stays a centred column, it does nothing. */
+        .m-nav-card__body { display: block; }
+
+        /* ── The phone's 44px floor ───────────────────────────────────
+           ⚠ FINDING: below 1024px two shipped things sit under 44px —
+           .m-btn--sm ships at 38px, and the auth widget's links are
+           auth.js's own Tailwind (p-2, 36px). Both are fine under a mouse
+           and neither is a comfortable thumb. Raised here so the phone
+           screenshots are honest about the target Jonathan asked for; the
+           fix belongs in build/design-components.mjs and auth.js, not on
+           a page. */
+        @media (max-width: 1023px) {
+            .proto-stage .m-btn--sm { min-height: 44px; }
+
+            .proto-stage .m-header__auth a,
+            .proto-stage .m-header__auth button {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
+
+        /* ── The compact tile ─────────────────────────────────────────
+           NavCard ships as a centred column: a 56px Medallion over a 24px
+           serif title over a description, in --space-lg padding. That is
+           the right shape for a landing page with four choices on it, and
+           the wrong shape for the one surface that shows twelve — three
+           tiles fill the fold and the rest of the list is below it.
+
+           So on the desktop this turns the same tile on its side: the
+           Medallion drops to --sm and loses its bottom margin, the text
+           left-aligns beside it, and the padding comes down two steps.
+           The phone keeps the shipped centred tile, where there is room
+           for it and a 56px plate is a comfortable target.
+
+           This is the shape a real NavCard --compact modifier would take.
+           Nothing here is a new value: --sm is a shipped Medallion
+           modifier, and every length is a token. */
+        @media (min-width: 1024px) {
+            .proto-tiles .m-nav-card {
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                gap: var(--space-sm);
+                padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-sm);
+                text-align: left;
+            }
+
+            .proto-tiles .m-medallion {
+                /* flex:0 0 auto because the compact tile is a flex row and the
+                   Medallion ships without it — left to shrink, a 40px plate
+                   settles at about 29px and goes oval. */
+                flex: 0 0 auto;
+                width: 40px;
+                height: 40px;
+                margin-bottom: 0;
+            }
+
+            .proto-tiles .m-medallion .material-symbols-outlined { font-size: 20px; }
+
+            .proto-tiles .m-nav-card__body { min-width: 0; }
+            .proto-tiles .m-nav-card__title { margin-bottom: 1px; }
+
+            /* Two lines of description, then stop. A tile is a label with a
+               reason attached, not a paragraph, and the row of tiles beside it
+               should not grow to fit the longest one. */
+            .proto-tiles .m-nav-card__desc {
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                overflow: hidden;
+            }
+        }
+
+        .proto-sunday {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .proto-sunday__theme {
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: var(--headline-lg-size);
+            line-height: var(--headline-lg-line);
+            font-weight: var(--headline-lg-weight);
+            color: var(--primary);
+            text-wrap: balance;
+        }
+
+        .proto-who {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-sm);
+        }
+
+        @media (min-width: 560px) {
+            .proto-who { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+
+        .proto-who__cell {
+            display: flex;
+            align-items: center;
+            gap: var(--space-base);
+            min-width: 0;
+        }
+
+        .proto-who__main { min-width: 0; }
+
+        .proto-who__role {
+            display: block;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .proto-who__name {
+            display: block;
+            margin-top: 2px;
+            font-family: var(--font-serif);
+            font-size: 16px;
+            color: var(--on-surface);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* A pair of label/value lines — the Sunday at a Glance panel's body. */
+        .proto-pairs {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            margin: 0;
+        }
+
+        .proto-pairs > div {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: var(--space-sm);
+        }
+
+        .proto-pairs dt {
+            flex: 0 0 auto;
+            font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight);
+            letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .proto-pairs dd {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: 16px;
+            color: var(--on-surface);
+            text-align: right;
+            text-wrap: pretty;
+        }
+
+        .proto-states {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-md);
+        }
+
+        @media (min-width: 720px) {
+            .proto-states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        /* Four across only where a column is still as wide as the real
+           right-hand rail. At 1,280&nbsp;px it is not, and the label/value
+           lines start wrapping in a way production never would. */
+        @media (min-width: 1560px) {
+            .proto-states { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        .proto-state { display: flex; flex-direction: column; gap: var(--space-base); }
+        .proto-state > .m-card { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-sm); }
+
+        .proto-num { font-variant-numeric: tabular-nums; }
+
+        .proto-hairline {
+            margin: var(--space-sm) 0;
+        }
+
+        /* ══════════════════════════════════════════════════════════════
+           DESKTOP DENSITY  —  the scale correction
+           ══════════════════════════════════════════════════════════════
+           A professional tool has smaller elements; a toy has big letters
+           and big blocks. Everything below is scoped to .proto-stage and to
+           1024px and up, so it is the desktop that gets denser and the phone
+           that stays comfortable. Nothing changes colour, so every AA ratio
+           the design system already passes is untouched.
+
+           It is all var() overrides on the same tokens the components
+           already read, which is why one block of custom properties moves
+           a whole page: Card padding is --space-md, NavCard's title is
+           --headline-md-size, SectionLabel is --label-sm-size, and so on.
+           They are listed in the PR body because they are the proposal —
+           either a desktop density scale in build/design-tokens, or a
+           --compact modifier on the handful of components below.
+
+           Two rules are held: nothing readable drops under 13px, and no
+           pointer target drops under 32px on the desktop (44px stays on
+           the phone, where the shipped values already give it).  */
+        @media (min-width: 1024px) {
+            .proto-stage {
+                /* Spacing — one step tighter throughout. --space-lg is the
+                   only one that moves far, because at 48px it was sized for
+                   the gap between sections of a marketing page. */
+                --space-xs: 3px;
+                --space-base: 6px;
+                --space-sm: 10px;
+                --space-md: 16px;
+                --space-lg: 28px;
+
+                /* Type — each step down one, floor at 13px for anything that
+                   is a sentence rather than a label. The serif character is
+                   in the family, not the size. */
+                --headline-lg-size: 22px;
+                --headline-md-size: 17px;
+                --body-lg-size: 15px;
+                --body-md-size: 14px;
+                /* The label scale is deliberately NOT touched. --label-md /
+                   --label-sm / --label-xs already ship at 13 / 11.5 / 10.5px,
+                   which is small before anything here happens; taking them down
+                   a step put tracked caps at 10px and read as cramped rather
+                   than as precise. Density comes from the space around a label,
+                   not from the label. */
+
+                /* Radius — a 16px corner on a 40px row reads as a pill. */
+                --radius-xl: 12px;
+
+                /* Three values the token set has no name for yet. The first
+                   two are what "compact" means for Button and Row; the third
+                   is the floor a desktop pointer target may not go under. */
+                --m-density-control-h: 34px;
+                --m-density-row-h: 40px;
+                --m-density-target-min: 32px;
+            }
+
+            /* Header — 64px of chrome above a dense page is a banner. 48px
+               still clears a 34px control with room, and the wordmark comes
+               down from 28px with it. */
+            .proto-stage .m-header {
+                --m-header-h: 48px;
+                --m-header-pad: var(--space-md);
+                --m-header-title: 19px;
+            }
+
+            /* Controls — 46px is a thumb on glass. A mouse needs far less,
+                and --m-density-target-min is the floor. */
+            .proto-stage .m-btn {
+                height: var(--m-density-control-h);
+                padding: 0 var(--space-sm);
+                font-size: 13px;
+            }
+
+            /* The floor, exactly: 32px tall, and a 13px label because that is
+               the smallest size a sentence-shaped thing may be. */
+            .proto-stage .m-btn--sm {
+                height: var(--m-density-target-min);
+                padding: 0 var(--space-sm);
+                font-size: 13px;
+            }
+
+            .proto-stage .m-icon-btn--lg {
+                width: var(--m-density-control-h);
+                height: var(--m-density-control-h);
+            }
+
+            .proto-stage .m-icon-btn .material-symbols-outlined { font-size: 19px; }
+
+            /* Row — 48px and 13px of vertical padding is a phone list. */
+            .proto-stage .m-row {
+                min-height: var(--m-density-row-h);
+                padding: var(--space-base) var(--space-sm);
+            }
+
+            /* Drawer — 296px was the phone's, where it is 86% of the screen.
+               On a desktop it only has to hold the longest label, and a
+               narrower panel covers less of the page it came from. */
+            .proto-stage .m-drawer__panel { width: 248px; }
+            .proto-stage .m-drawer__item { padding: var(--space-base) var(--space-sm); }
+            .proto-stage .m-drawer__item .material-symbols-outlined { font-size: 19px; }
+            .proto-stage .m-drawer__label { font-size: 13.5px; }
+
+            /* Scripture — the one place the serif is allowed to stay large,
+               because it is the quotation the Sunday is about. Still a step
+               down from --body-lg. */
+            .proto-stage .m-scripture { font-size: 15px; }
+        }
+
+        /* The page's own header, drawn inside a stage, is chrome rather than a
+           heading in THIS document's outline — so it is a <span>, not the <h1>
+           production renders. The class does all the drawing either way. */
+        span.m-header__title { display: block; }
+    </style>
+</head>
+
+<body class="proto-body">
+    <a class="proto-skip" href="#main">Skip to content</a>
+
+    <header class="proto-bar">
+        <p class="proto-bar__kicker">Prototype · MS-686 + MS-691 · fictional data only</p>
+        <h1 class="proto-bar__title">Dashboard restyle and a desktop hamburger drawer</h1>
+        <nav class="proto-jump" aria-label="Jump to a section">
+            <a href="#thesis">Why one task</a>
+            <a href="#variant-a-closed">Drawer shut</a>
+            <a href="#variant-a-open">Drawer open</a>
+            <a href="#states">Content states</a>
+            <a href="#feedback">What I need decided</a>
+        </nav>
+    </header>
+
+    <main class="proto-main" id="main">
+        <section class="proto-section" id="thesis">
+            <h2>Why these two tickets are one</h2>
+            <p class="proto-note">
+                The desktop dashboard <em>is</em> the navigation. Eleven of its tiles are the only
+                door to eleven pages, so every trip between two of them goes home first. The phone
+                solved this years ago: the drawer is the navigation, and Home is a screen rather
+                than a map. MS-691 brings that drawer to the desktop header — and the moment it
+                lands, the tile grid is a second copy of the same list, which is what MS-686 has
+                to answer.
+            </p>
+            <p class="proto-note">
+                <strong>The answer here is that the grid stays and earns its keep by getting
+                smaller.</strong> A grid of eleven tiles is a board you read at a glance and point
+                at; a drawer is a list you walk. They are worth having twice only if the board
+                actually fits in one look — which the shipped tile does not allow, because three of
+                them fill the fold. So the scale of everything on this page is the design decision,
+                not a finishing pass over it.
+            </p>
+            <p class="proto-note">
+                A professional tool has small elements; a toy has big letters and big blocks. The
+                desktop below is a step denser in every direction — type, padding, header height,
+                controls, the Glance panel and the drawer itself — while the cream, the navy ink
+                and the Cinzel&nbsp;/ EB&nbsp;Garamond&nbsp;/ Libre&nbsp;Franklin stack are
+                untouched, because density is a matter of size and not of character. Nothing
+                readable goes under 13&nbsp;px, no desktop pointer target under 32&nbsp;px, and the
+                phone keeps the comfortable shipped values, 44&nbsp;px targets included.
+            </p>
+            <p class="proto-note">
+                It wears the shipped design system — <code>m-nav-card</code>,
+                <code>m-medallion</code>, <code>m-card</code>, <code>m-notice</code>,
+                <code>m-empty</code>, <code>m-row</code>, <code>m-badge</code>,
+                <code>m-scripture</code>, <code>m-header</code> — and the drawer is written as a
+                proposed <code>m-drawer</code> in tokens, because the design system has no Drawer
+                yet and the phone has two hand-styled copies of one. The density is
+                <code>var()</code> overrides on the tokens those components already read, so it is
+                a proposal the design system can adopt rather than a pile of magic numbers.
+                Everybody named here is invented.
+            </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             VARIANT A — the overlay drawer, and the tile grid kept
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="variant-a">
+            <h2>The dashboard, denser, with the drawer over it</h2>
+            <div class="proto-verdict">
+                <span class="m-badge m-badge--success">Eleven tiles in one look</span>
+                <span class="m-badge m-badge--primary">Drawer matches the phone</span>
+                <span class="m-badge m-badge--neutral">Phone scale unchanged</span>
+            </div>
+            <p class="proto-note">
+                The hamburger goes in <code>m-header__lead</code>, left of the seal, and opens the
+                phone’s drawer over the page you are on. The tiles become <code>m-nav-card</code>
+                and <code>m-medallion</code> instead of eleven hand-written Tailwind card strings,
+                and the floating 64&nbsp;px logo moves into the header so the page can start with a
+                sentence instead of a picture. The saved arrangement
+                (<code>dashboardCardOrder</code>) survives untouched.
+            </p>
+            <p class="proto-note">
+                On the desktop the tile turns on its side: a 40&nbsp;px Medallion at the left, the
+                title and its reason beside it, padding two steps tighter. That is what buys all
+                eleven tiles above the fold where three used to sit. The side column is a fixed
+                300&nbsp;px rather than 4-of-12, because the Glance panel holds six label/value
+                pairs and nothing longer, so past 300&nbsp;px it is only a wider gutter. Narrow the
+                window below 1024&nbsp;px and every one of those overrides lifts: the tile goes
+                back to the centred column with its 56&nbsp;px plate, and the targets go back to
+                44&nbsp;px. At the shipped tile size only three of these eleven cleared the fold;
+                all eleven do now, in the order <code>dashboardCardOrder</code> already saves.
+            </p>
+
+            <h3 class="proto-stage-label" id="variant-a-closed">Drawer shut — press the hamburger</h3>
+            <div class="proto-stage" data-stage data-variant="a" data-drawer="closed">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="false" aria-controls="drawer-a1"
+                                aria-label="Open menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;"
+                                fetchpriority="high" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__actions">
+                            <a href="#variant-a" class="m-btn m-btn--secondary m-btn--sm">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-btn__label">2 commitments</span>
+                            </a>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-a"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                                <button type="button"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">logout</span>
+                                    <span class="hidden md:inline">Log Out</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split">
+                            <div class="proto-stack">
+                                <!-- The page opens with the one thing that needs doing
+                                     rather than with a picture of the seal. Its action
+                                     is the validating view of the editor, which is a
+                                     different URL from the card's plain "open" below —
+                                     the same two doors index.html already draws. -->
+                                <div class="m-notice m-notice--warning">
+                                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Sunday 4 October is not ready</span>
+                                        <span class="m-notice__text"><span class="proto-num">4</span> fields are blank
+                                            on the Order of Service, and nobody is on the sound desk.</span>
+                                    </div>
+                                    <div class="m-notice__acts">
+                                        <a href="#variant-a" class="m-btn m-btn--primary m-btn--sm">
+                                            <span class="m-btn__label">Fix the blanks</span>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <div class="proto-tiles">
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Hymns</h4>
+                                            <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Services</h4>
+                                            <p class="m-nav-card__desc">Every Sunday, and the Order of Service behind it.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Calendar</h4>
+                                            <p class="m-nav-card__desc">Everything on at church, and what you are part of.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Membership Directory</h4>
+                                            <p class="m-nav-card__desc">Who is in the congregation, and how to reach them.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">handshake</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Commitments</h4>
+                                            <p class="m-nav-card__desc">What you said yes to, and what is still unanswered.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Roles Manager</h4>
+                                            <p class="m-nav-card__desc">Set up serving roles and who may fill them.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">ballot</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Forms &amp; Registrations</h4>
+                                            <p class="m-nav-card__desc">Build a sign-up, and read what came back.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">print</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Printables</h4>
+                                            <p class="m-nav-card__desc">Lay out a handout from live church data.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">monitoring</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Service Analytics</h4>
+                                            <p class="m-nav-card__desc">Who has served, how often, and when last.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">smart_toy</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">MCP Manager</h4>
+                                            <p class="m-nav-card__desc">Guide the assistant, and see what it can do.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Shepherd Dashboard</h4>
+                                            <p class="m-nav-card__desc">Elder tools, and the care the church owes people.</p>
+                                        </span>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:0;color:var(--on-surface-variant);font-size:13px;">
+                                    All eleven pages you may see, in your saved order. Drag a tile to rearrange.
+                                </p>
+                            </div>
+
+                            <!-- Sunday at a Glance, as an m-card. Same panel the page
+                                 has today; the states section below shows all four of
+                                 its readings. -->
+                            <div class="m-card">
+                                <h4 class="m-serif-head">Sunday at a Glance</h4>
+                                <hr class="m-divider proto-hairline" />
+                                <dl class="proto-pairs">
+                                    <div>
+                                        <dt>Theme</dt>
+                                        <dd>The True Vine</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Sermon</dt>
+                                        <dd>Abide in Me</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Preacher</dt>
+                                        <dd>Rowan Ashfield</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Service Leader</dt>
+                                        <dd>Tobias Grieve</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Music Leader</dt>
+                                        <dd>Priya Okonjo</dd>
+                                    </div>
+                                </dl>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                                    <span class="m-badge m-badge--tertiary">
+                                        <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                        Baptism — Noa Feldman
+                                    </span>
+                                </div>
+                                <a href="#variant-a" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                    <span class="m-btn__label">Open in Service Editor</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- The drawer. Flat list, in destinations.js order, exactly as the
+                     phone draws it. Signed in as an Elder, so Admin Dashboard is
+                     absent — canSee() gates it to admin and super_admin. -->
+                <div class="m-drawer" id="drawer-a1">
+                    <!-- The scrim is a <button> so clicking outside closes the drawer
+                         without a click handler on a <div>, and tabindex="-1" plus
+                         aria-hidden keep it out of both the tab order and the
+                         accessibility tree — Escape is the keyboard way out, the same
+                         as the phone's. -->
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-a">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-a" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label" id="variant-a-open">Drawer open — pinned, for review</h3>
+            <p class="proto-note">
+                Twelve entries, flat, in the order <code>destinations.js</code> already keeps them.
+                This is the honest cost of parity: the phone’s list was written when it held six,
+                and at twelve the eye has nothing to hold on to.
+            </p>
+            <div class="proto-stage" data-stage data-variant="a" data-drawer="open"
+                data-static="true">
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost"
+                                data-toggle="drawer" aria-expanded="true" aria-controls="drawer-a2"
+                                aria-label="Close menu">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <img src="../../../public/assets/mosaic-logo.png" alt="" width="32" height="32"
+                                style="width:32px;height:32px;object-fit:contain;flex:0 0 auto;" loading="lazy" />
+                            <div class="m-header__titles">
+                                <span class="m-header__title" translate="no">Mosaic Services</span>
+                            </div>
+                        </div>
+                        <div class="m-header__rule"></div>
+                        <div class="m-header__auth">
+                            <div class="flex items-center gap-2 md:gap-4">
+                                <a href="#variant-a"
+                                    class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[20px] md:text-[18px]"
+                                        aria-hidden="true">account_circle</span>
+                                    <span class="hidden md:inline">User Page</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <!-- Deliberately the same dashboard as the stage above, so the only
+                     difference between the two is the drawer. Anything else changing
+                     would make the comparison useless. -->
+                <div class="proto-shell">
+                    <div class="proto-app-body">
+                        <div class="proto-split">
+                            <div class="proto-stack">
+                                <div class="m-notice m-notice--warning">
+                                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Sunday 4 October is not ready</span>
+                                        <span class="m-notice__text"><span class="proto-num">4</span> fields are blank
+                                            on the Order of Service, and nobody is on the sound desk.</span>
+                                    </div>
+                                    <div class="m-notice__acts">
+                                        <a href="#variant-a" class="m-btn m-btn--primary m-btn--sm">
+                                            <span class="m-btn__label">Fix the blanks</span>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <div class="proto-tiles">
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">menu_book</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Hymns</h4>
+                                            <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">church</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Services</h4>
+                                            <p class="m-nav-card__desc">Every Sunday, and the Order of Service behind it.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">calendar_month</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Calendar</h4>
+                                            <p class="m-nav-card__desc">Everything on at church, and what you are part of.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">groups</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Membership Directory</h4>
+                                            <p class="m-nav-card__desc">Who is in the congregation, and how to reach them.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">handshake</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Commitments</h4>
+                                            <p class="m-nav-card__desc">What you said yes to, and what is still unanswered.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">volunteer_activism</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Roles Manager</h4>
+                                            <p class="m-nav-card__desc">Set up serving roles and who may fill them.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">ballot</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Forms &amp; Registrations</h4>
+                                            <p class="m-nav-card__desc">Build a sign-up, and read what came back.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">print</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Printables</h4>
+                                            <p class="m-nav-card__desc">Lay out a handout from live church data.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">monitoring</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Service Analytics</h4>
+                                            <p class="m-nav-card__desc">Who has served, how often, and when last.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">smart_toy</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">MCP Manager</h4>
+                                            <p class="m-nav-card__desc">Guide the assistant, and see what it can do.</p>
+                                        </span>
+                                    </a>
+                                    <a href="#variant-a" class="m-nav-card">
+                                        <span class="m-medallion" aria-hidden="true">
+                                            <span class="material-symbols-outlined">shield_person</span>
+                                        </span>
+                                        <span class="m-nav-card__body">
+                                            <h4 class="m-nav-card__title">Shepherd Dashboard</h4>
+                                            <p class="m-nav-card__desc">Elder tools, and the care the church owes people.</p>
+                                        </span>
+                                    </a>
+                                </div>
+                                <p class="m-body-md" style="margin:0;color:var(--on-surface-variant);font-size:13px;">
+                                    All eleven pages you may see, in your saved order. Drag a tile to rearrange.
+                                </p>
+                            </div>
+
+                            <div class="m-card">
+                                <h4 class="m-serif-head">Sunday at a Glance</h4>
+                                <hr class="m-divider proto-hairline" />
+                                <dl class="proto-pairs">
+                                    <div>
+                                        <dt>Theme</dt>
+                                        <dd>The True Vine</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Sermon</dt>
+                                        <dd>Abide in Me</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Preacher</dt>
+                                        <dd>Rowan Ashfield</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Service Leader</dt>
+                                        <dd>Tobias Grieve</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Music Leader</dt>
+                                        <dd>Priya Okonjo</dd>
+                                    </div>
+                                </dl>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                                    <span class="m-badge m-badge--tertiary">
+                                        <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                        Baptism — Noa Feldman
+                                    </span>
+                                </div>
+                                <a href="#variant-a" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                    <span class="m-btn__label">Open in Service Editor</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="m-drawer" id="drawer-a2">
+                    <button type="button" class="m-drawer__scrim" data-close-drawer tabindex="-1"
+                        aria-hidden="true"></button>
+                    <nav class="m-drawer__panel" aria-label="Menu">
+                        <div class="m-drawer__head">
+                            <button type="button" class="m-icon-btn m-icon-btn--lg" data-close-drawer
+                                aria-label="Close menu" style="color:var(--on-primary);margin-left:-8px;">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                            </button>
+                            <a class="m-drawer__who" href="#variant-a">
+                                <span class="m-avatar" aria-hidden="true">DM</span>
+                                <span class="m-drawer__who-main">
+                                    <span class="m-drawer__name">Delia Marchetti</span>
+                                    <span class="m-drawer__role">Elder</span>
+                                </span>
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                    style="color:var(--primary-fixed-dim);font-size:18px;">chevron_right</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__list">
+                            <a class="m-drawer__item" href="#variant-a" aria-current="page">
+                                <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                <span class="m-drawer__label">Home</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <span class="m-drawer__label">Hymns</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                                <span class="m-drawer__label">Services</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                                <span class="m-drawer__label">Calendar</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span class="m-drawer__label">Membership Directory</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">handshake</span>
+                                <span class="m-drawer__label">Commitments</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                                <span class="m-drawer__label">Roles Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">ballot</span>
+                                <span class="m-drawer__label">Forms &amp; Registrations</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                                <span class="m-drawer__label">Printables</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                                <span class="m-drawer__label">Service Analytics</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+                                <span class="m-drawer__label">MCP Manager</span>
+                            </a>
+                            <a class="m-drawer__item" href="#variant-a">
+                                <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+                                <span class="m-drawer__label">Shepherd Dashboard</span>
+                            </a>
+                        </div>
+                        <div class="m-drawer__foot">
+                            <button type="button" class="m-btn m-btn--quiet" style="width:100%;justify-content:flex-start;">
+                                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                <span class="m-btn__label">Sign out</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ══════════════════════════════════════════════════════════
+             CONTENT STATES
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="states">
+            <h2>Content states</h2>
+            <p class="proto-note">
+                The dashboard’s only live reading is the Sunday, so these four are its four
+                readings — the same card in every variant, drawn from what
+                <code>index.html</code> already computes today. Dates are written out here because
+                this is a static page; production formats them through
+                <code>Intl.DateTimeFormat</code> the way <code>date-utils.js</code> does.
+            </p>
+            <div class="proto-states">
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Empty — nothing saved yet</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <div class="m-empty">
+                            <span class="material-symbols-outlined" aria-hidden="true">church</span>
+                            <p>Sunday 4 October has no Order of Service yet. Start it and the theme,
+                                the hymns and who is on will appear here.</p>
+                        </div>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                            <span class="m-btn__label">Create Service</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">One — a single detail set</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <dl class="proto-pairs">
+                            <div>
+                                <dt>Theme</dt>
+                                <dd>The True Vine</dd>
+                            </div>
+                        </dl>
+                        <p class="m-body-md" style="margin:var(--space-sm) 0 0;color:var(--on-surface-variant);font-size:14px;">
+                            Nothing else set. The next thing this Sunday needs is a preacher.
+                        </p>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            <span class="m-btn__label">Open in Service Editor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Many — a full Sunday</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                        <dl class="proto-pairs">
+                            <div>
+                                <dt>Theme</dt>
+                                <dd>The True Vine</dd>
+                            </div>
+                            <div>
+                                <dt>Sermon</dt>
+                                <dd>Abide in Me</dd>
+                            </div>
+                            <div>
+                                <dt>Preacher</dt>
+                                <dd>Rowan Ashfield</dd>
+                            </div>
+                            <div>
+                                <dt>Service Leader</dt>
+                                <dd>Tobias Grieve</dd>
+                            </div>
+                            <div>
+                                <dt>Music Leader</dt>
+                                <dd>Priya Okonjo</dd>
+                            </div>
+                            <div>
+                                <dt>Pastoral Prayer</dt>
+                                <dd>Hester Vale, Marcus Lindqvist</dd>
+                            </div>
+                        </dl>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--space-sm);">
+                            <span class="m-badge m-badge--tertiary">
+                                <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
+                                Baptism — Noa Feldman
+                            </span>
+                            <span class="m-badge m-badge--neutral">5 hymns linked</span>
+                        </div>
+                        <div class="m-notice m-notice--warning" style="margin-top:var(--space-sm);">
+                            <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
+                            <div class="m-notice__body">
+                                <span class="m-notice__title"><span class="proto-num">2</span> hymns not linked to the book</span>
+                                <span class="m-notice__text">Hymn Mid 1 and Hymn End 2 are typed names, so no sheets will print.</span>
+                            </div>
+                        </div>
+                        <a href="#states" class="m-btn m-btn--primary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            <span class="m-btn__label">Open in Service Editor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="proto-state">
+                    <h3 class="proto-stage-label" style="margin-top:0;">Error — the read failed</h3>
+                    <div class="m-card">
+                        <h4 class="m-serif-head">Sunday at a Glance</h4>
+                        <hr class="m-divider proto-hairline" />
+                            <div class="m-notice m-notice--error" role="status" aria-live="polite">
+                                <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">cloud_off</span>
+                                <div class="m-notice__body">
+                                    <span class="m-notice__title">Sunday 4 October did not load</span>
+                                    <span class="m-notice__text">The connection dropped before the service came
+                                        back. Nothing has been lost — try again.</span>
+                                </div>
+                            </div>
+                        <button type="button" class="m-btn m-btn--secondary" style="margin-top:var(--space-sm);width:100%;">
+                            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                            <span class="m-btn__label">Try again</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             WHAT NEEDS DECIDING
+             ══════════════════════════════════════════════════════════ -->
+        <section class="proto-section" id="feedback">
+            <h2>What I need decided</h2>
+            <p class="proto-note">
+                Four things the density raises that I should not settle on my own.
+            </p>
+            <div class="m-card-list">
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Does the density belong to the page or
+                            to the design system?</span>
+                        <span class="m-row__sub" style="white-space:normal;">Every override here is scoped to one
+                            stage. The same argument applies to Shepherd Dashboard, Printables, the
+                            Service editor — every desktop page in the app. Either
+                            <code>build/design-tokens</code> grows a desktop density scale that all
+                            of them inherit, or each component grows a <code>--compact</code>
+                            modifier and pages opt in. The first is one change and a lot of blast
+                            radius; the second is eight small changes and no surprises.</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Is the compact tile a NavCard modifier
+                            or a second component?</span>
+                        <span class="m-row__sub" style="white-space:normal;">The row layout needs a wrapper NavCard
+                            does not have today (<code>m-nav-card__body</code>), so it is not a pure
+                            modifier. If the centred 56&nbsp;px tile has no remaining caller once
+                            this lands, the honest move is to change NavCard itself rather than keep
+                            two shapes alive.</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Eleven tiles, or the eleven you
+                            use?</span>
+                        <span class="m-row__sub" style="white-space:normal;">Density means the whole list now fits,
+                            so the grid shows everything and <code>dashboardCardOrder</code> keeps
+                            deciding the order. The alternative is that the grid becomes the short
+                            list — pinned or recent — and the drawer stays the complete one, which
+                            is a stronger reason for having both but a bigger change to what people
+                            already saved.</span>
+                    </span>
+                </div>
+                <div class="m-row m-row--serif m-row--last">
+                    <span class="m-row__main">
+                        <span class="m-row__title" style="white-space:normal;">Does the seal move into the
+                            header?</span>
+                        <span class="m-row__sub" style="white-space:normal;">The restyle moves it there at
+                            32&nbsp;px, which costs the wordless 64&nbsp;px mark its moment and gives
+                            the page a headline instead. <code>index.html</code>’s own comment says
+                            the seal is this page’s name; this disagrees with that comment and needs
+                            you to say so.</span>
+                    </span>
+                </div>
+            </div>
+
+            <h3 class="proto-stage-label">What I would do</h3>
+            <p class="proto-note">
+                Ship the density as <strong>component <code>--compact</code> modifiers</strong>
+                rather than a global desktop scale, starting with the five this page actually
+                needs — NavCard, Card, Header, Button and Row. It is the same visual result with a
+                blast radius you can see, it lets the phone keep the shipped values by simply not
+                opting in, and it gives the token set a chance to grow the two names that are
+                missing (a control height and a row height) with real callers behind them rather
+                than on spec.
+            </p>
+        </section>
+    </main>
+
+    <script>
+        // Prototype-only. One hamburger per stage; each stage owns its own state
+        // so this page can show the same page shut and open at once.
+        (function () {
+            "use strict";
+
+            function apply(stage, open) {
+                stage.dataset.drawer = open ? "open" : "closed";
+                // An overlay drawer covers the page, so the page stops taking
+                // keyboard focus while it is open — otherwise Tab walks off the
+                // panel and behind the scrim into links nobody can see.
+                //
+                // ⚠ FINDING: neither of the phone's two drawers does this today.
+                // On a phone it is survivable; on a desktop dashboard there are
+                // a dozen links and a Sunday behind a 248px panel.
+                stage.querySelectorAll(".proto-shell, .m-header").forEach(function (el) {
+                    el.inert = open;
+                });
+                stage.querySelectorAll('[data-toggle="drawer"]').forEach(function (btn) {
+                    btn.setAttribute("aria-expanded", String(open));
+                    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+                });
+            }
+
+            function isOpen(stage) { return stage.dataset.drawer === "open"; }
+
+            var stages = document.querySelectorAll("[data-stage]");
+
+            stages.forEach(function (stage) {
+                stage.querySelectorAll('[data-toggle="drawer"]').forEach(function (btn) {
+                    btn.addEventListener("click", function () { apply(stage, !isOpen(stage)); });
+                });
+                stage.querySelectorAll("[data-close-drawer]").forEach(function (el) {
+                    el.addEventListener("click", function () { apply(stage, false); });
+                });
+            });
+
+            // Once on load, so the stage pinned open holds the page behind it
+            // back too rather than only doing that after a click.
+            stages.forEach(function (s) { apply(s, isOpen(s)); });
+
+            // Escape shuts the drawer you opened, and leaves the pinned reference
+            // stage alone — it exists so the open state is always on the page.
+            document.addEventListener("keydown", function (e) {
+                if (e.key !== "Escape") return;
+                document.querySelectorAll('[data-stage]:not([data-static="true"])').forEach(function (stage) {
+                    if (isOpen(stage)) apply(stage, false);
+                });
+            });
+        })();
+    </script>
+</body>
+
+</html>

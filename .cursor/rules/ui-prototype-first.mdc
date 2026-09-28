@@ -17,6 +17,7 @@ Any ticket that **changes a page's look or layout** must produce a **standalone 
 - Link the real stylesheets by **relative path** from the prototype file:
   - **Desktop:** `../../../public/fonts.css` and `../../../public/mosaic.css`
   - **Phone:** `../../../public/mobile/tokens.css` and `../../../public/mobile-shell.css` (plus `fonts.css` when the screen needs it)
+- Also link the **icon font by absolute URL** — `https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap`, the query `public/fonts.css` itself cites above its vendored copy. Relative paths are not enough: `fonts.css` declares its `@font-face src` as `fonts/files/*.woff2`, which resolves against the document's own directory, and htmlpreview inlines the sheet it fetched — so the font 404s and every Material Symbols ligature renders as the literal word (`church`, `menu_book`, `warning`). Absolute URLs are for prototypes only; a page under `public/` uses the vendored copy and needs no network.
 - Use real **`m-*`** component classes and design tokens; prototype-only CSS goes in an inline `<style>` block and must use `var(--token)` from the linked sheets.
 - **Fictional data only** — no real congregation names, people, or records (the repo is public).
 - Must read correctly at **390px** and **1280px** width.
@@ -34,7 +35,7 @@ Any ticket that **changes a page's look or layout** must produce a **standalone 
 2. Open a **draft** PR titled `[Prototype] MS-XXX` (not the implementation PR).
 3. Attach screenshots at **390×844** and **1280×800**.
 4. Post the view link (primary — use the format that loads relative CSS; see below) with a **3-line summary** of what changed and what you want feedback on.
-5. Open the link yourself and confirm Mosaic CSS loaded (fonts, cream background, token-driven styles).
+5. Open the link yourself and confirm Mosaic CSS loaded (fonts, cream background, token-driven styles) **and that icons render as glyphs, not as their ligature names** — check the rendered pixels or the icon's computed `font-family`, because the stylesheet applying does not mean the font file arrived.
 6. **Stop** until Jonathan approves. Implementation PR follows in a separate branch/PR.
 
 ### View links
