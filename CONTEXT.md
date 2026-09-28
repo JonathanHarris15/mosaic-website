@@ -1149,7 +1149,7 @@ A box that stands for one row of a list and is drawn once per row — the [[Data
 _Avoid_: loop, list element, template row
 
 **Stand-in**:
-What an element shows when no data is loaded or its field has nothing today: its own typed text, its own picture. The editor's **Live / Stand-ins** switch shows either. A field with nothing behind it keeps the stand-in and is listed under **Not all data could be pulled** in the drawer, which names the element and the reason; a source that has nothing (no Sunday planned, nobody holding the role) says so there too. The **TBA** on an unwritten Sunday is not a stand-in: it is text the editor chose for that Sunday, and blanking it hands those rows back to the stand-in and the list.
+What an element shows when no data is loaded: its own typed text, its own picture. The editor's **Live / Stand-ins** switch shows either. A **live row** whose field has nothing today is **blank** — the seed's typed text is not copied onto the next card, which is how one address used to print on every person who had none. The gap is still listed under **Not all data could be pulled**. A source that has nothing (no Sunday planned, nobody holding the role) says so there too. The **TBA** on an unwritten Sunday is not a stand-in: it is text the editor chose for that Sunday, and blanking it hands those rows back to the stand-in and the list.
 _Avoid_: placeholder (fine in prose), fallback, default value
 
 **View-only page**:
