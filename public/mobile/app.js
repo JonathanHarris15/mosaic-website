@@ -182,7 +182,7 @@
     }
     function onEnter(ev) { if (ev.key === "Enter") submit(); }
     var err = errS[0], bad = !!(err && err.fields), notice = noticeS[0];
-    var linkStyle = { background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", padding: 4 };
+    var linkStyle = { background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", padding: "12px 8px", minHeight: 44, lineHeight: 1.35, width: "100%", textAlign: "center" };
     return html`
       <div style=${{ height: "100%", background: "var(--background)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px calc(40px + env(safe-area-inset-bottom, 0px))", position: "relative" }}>
@@ -209,10 +209,10 @@
               <//>
             </div>
             ${signup ? null : html`
-              <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${linkStyle}>Continue as guest</button>
-              <button onClick=${sendReset} disabled=${busyS[0]} style=${Object.assign({}, linkStyle, { marginTop: -8, opacity: busyS[0] ? 0.5 : 1 })}>Forgot password?</button>`}
+              <button class="m-mobile-link-btn" onClick=${function () { setGuest(true); props.nav("home"); }} style=${linkStyle}>Continue as guest</button>
+              <button class="m-mobile-link-btn" onClick=${sendReset} disabled=${busyS[0]} style=${Object.assign({}, linkStyle, { marginTop: -8, opacity: busyS[0] ? 0.5 : 1 })}>Forgot password?</button>`}
             <div style=${{ display: "flex", justifyContent: "center", borderTop: "1px solid var(--outline-variant)", paddingTop: 12, marginTop: 2 }}>
-              <button onClick=${toggleMode} style=${linkStyle}>${signup ? "Already have an account? Log in" : "Don't have an account? Sign up"}</button>
+              <button class="m-mobile-link-btn" onClick=${toggleMode} style=${linkStyle}>${signup ? "Already have an account? Log in" : "Don't have an account? Sign up"}</button>
             </div>
           </div>
         </div>
