@@ -82,7 +82,7 @@
                 <span x-text="notice"></span>
             </div>
 
-            <button type="submit" :disabled="loading" class="bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container transition-all duration-200 mt-md shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" :disabled="loading" class="bg-primary text-on-primary font-label-md text-label-md min-h-[44px] py-3 rounded-lg hover:bg-primary-container transition-all duration-200 mt-md shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                 <span x-show="!loading" x-text="mode === 'login' ? 'Access Portal' : 'Create Account'">Access Portal</span>
                 <span x-show="loading" class="flex items-center justify-center gap-2">
                     <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -98,15 +98,15 @@
             <!-- The way back in. Only on the login side — there is nothing to
                  reset while you are creating an account. -->
             <button x-show="mode === 'login'" x-cloak @click="sendReset" :disabled="loading" type="button"
-                    class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+                    class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors disabled:opacity-50 min-h-[44px] inline-flex items-center justify-center px-3 w-full">
                 Forgot password?
             </button>
 
-            <button @click="toggleMode" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors">
+            <button @click="toggleMode" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors min-h-[44px] inline-flex items-center justify-center px-3 w-full">
                 <span x-text="mode === 'login' ? 'Don\'t have an account? Sign Up' : 'Already have an account? Log In'"></span>
             </button>
 
-            <a href="index.html" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+            <a href="index.html" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors min-h-[44px] px-3">
                 <span class="material-symbols-outlined text-sm">chevron_left</span>
                 Back to Public Directory
             </a>

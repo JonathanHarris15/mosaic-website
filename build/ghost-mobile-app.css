@@ -1,0 +1,16 @@
+/* Ghost mobile app (mobile.html / Preact) — touch targets and overflow */
+
+:root {
+  --m-touch-min: 44px;
+}
+
+html, body, #app {
+  overflow-x: clip;
+  max-width: 100vw;
+}
+
+.m-mobile-link-btn {
+  min-height: var(--m-touch-min);
+  padding: 12px 8px;
+  line-height: 1.35;
+}

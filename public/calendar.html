@@ -191,6 +191,11 @@
                                    text-transform: uppercase; cursor: pointer; }
         .cal-viewtoggle > button[aria-pressed="true"] { background: var(--surface-container-lowest); color: var(--primary); }
 
+        @media (max-width: 820px) {
+            .cal-stepper > button { min-width: 44px; height: 44px; padding: 0 10px; }
+            .cal-viewtoggle > button { min-width: 44px; min-height: 44px; height: 44px; }
+        }
+
         /* Show is a DISCLOSURE, not a panel. It is asked for about once a
            month, and as a permanent third panel it was what stood between the
            rail and the bottom of the window. The count on the button is what
@@ -437,12 +442,12 @@
                      controls is 7px too much at 320px. -->
                 <div class="flex items-center gap-1 min-w-0">
                     <button @click="prevMonth()" aria-label="Previous month"
-                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 min-w-11 min-h-11 w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_left</span>
                     </button>
                     <h2 class="font-display text-[17px] text-primary truncate" x-text="monthLabel"></h2>
                     <button @click="nextMonth()" aria-label="Next month"
-                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 min-w-11 min-h-11 w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_right</span>
                     </button>
                     <!-- ⚠ ONLY ONCE THERE IS SOMEWHERE TO GO BACK TO. The row
@@ -456,7 +461,7 @@
                          September that is the difference between the row
                          fitting and not. -->
                     <button x-show="awayFromToday" @click="goToToday()" aria-label="Back to today"
-                            class="ml-0.5 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
+                            class="ml-0.5 shrink-0 min-w-11 min-h-11 w-11 h-11 flex items-center justify-center rounded-lg
                                    border border-outline-variant text-secondary
                                    cal-motion cal-press cal-focus">
                         <span class="material-symbols-outlined text-[18px]">today</span>
@@ -469,7 +474,7 @@
                 <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
                     <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
                         <button @click="setView(opt[0])" :aria-label="opt[2]"
-                                class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
+                                class="min-w-11 min-h-11 w-11 h-11 flex items-center justify-center rounded-lg cal-motion cal-focus"
                                 :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
                             <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
                         </button>

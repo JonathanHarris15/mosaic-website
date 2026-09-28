@@ -26,3 +26,13 @@ html.shell-mobile body {
 html.shell-mobile .m-toast {
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
+
+/* Ghost pass: clip shell pages; mosaic.css carries component touch rules */
+html.shell-mobile {
+  overflow-x: clip;
+}
+
+html.shell-mobile body {
+  overflow-x: clip;
+  max-width: 100vw;
+}

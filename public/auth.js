@@ -146,13 +146,13 @@ function updateAuthUI(user) {
         // A kiosk has no User Page — the gate would bounce it straight back.
         const kiosk = isKioskAccount(rememberedUserDoc(user.uid));
         const userPage = kiosk ? '' : `
-                <a href="profile.html" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="User Page">
+                <a href="profile.html" class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 gap-1" title="User Page">
                     <span class="material-symbols-outlined text-[20px] md:text-[18px]">account_circle</span>
                     <span class="hidden md:inline">User Page</span>
                 </a>`;
         authContainer.innerHTML = `
             <div class="flex items-center gap-2 md:gap-4">${userPage}
-                <button onclick="logout()" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="Log Out">
+                <button onclick="logout()" class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 gap-1" title="Log Out">
                     <span class="material-symbols-outlined text-[20px] md:text-[18px]">logout</span>
                     <span class="hidden md:inline">Log Out</span>
                 </button>
@@ -161,7 +161,7 @@ function updateAuthUI(user) {
     } else {
         // User is signed out or anonymous
         authContainer.innerHTML = `
-            <a href="login.html" class="px-4 py-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
+            <a href="login.html" class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-4 py-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
                 Log In
             </a>
         `;

@@ -1,0 +1,215 @@
+/* ============================================================
+   Ghost sandbox — phone / touch scale (390px, 360px, shell-mobile)
+
+   Professional but touch-friendly: 44px targets, readable body type,
+   no horizontal overflow, scrollable tables, consistent chrome.
+   Desktop density remains in ghost-density.css (min-width: 1024px).
+   ============================================================ */
+
+@media (max-width: 820px) {
+  :root {
+    --body-md-size: 15px;
+    --body-lg-size: 16px;
+    --headline-md-size: 20px;
+    --headline-lg-size: 24px;
+    --space-margin: 16px;
+    --space-gutter: 16px;
+    --m-touch-min: 44px;
+  }
+
+  html {
+    overflow-x: clip;
+  }
+
+  body {
+    overflow-x: clip;
+    max-width: 100vw;
+  }
+
+  /* Auth header + login links */
+  #auth-container a,
+  #auth-container button {
+    min-height: var(--m-touch-min);
+    min-width: var(--m-touch-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  .m-btn {
+    min-height: var(--m-touch-min);
+  }
+
+  .m-btn--sm {
+    height: var(--m-touch-min);
+    min-height: var(--m-touch-min);
+    padding: 0 14px;
+  }
+
+  .m-icon-btn {
+    width: var(--m-touch-min);
+    height: var(--m-touch-min);
+    min-width: var(--m-touch-min);
+    min-height: var(--m-touch-min);
+  }
+
+  .m-icon-btn--sm {
+    width: var(--m-touch-min);
+    height: var(--m-touch-min);
+  }
+
+  .m-input,
+  .m-select-wrap .m-select-trigger {
+    min-height: var(--m-touch-min);
+    height: auto;
+  }
+
+  .m-row {
+    min-height: var(--m-touch-min);
+    padding: 10px 12px;
+  }
+
+  .m-seg__opt {
+    min-height: var(--m-touch-min);
+  }
+
+  .m-tabs__tab {
+    min-height: var(--m-touch-min);
+  }
+
+  /* Login / sign-up cards must not exceed the viewport */
+  .max-w-md,
+  .max-w-sm,
+  .max-w-lg {
+    max-width: 100%;
+  }
+
+  .p-gutter {
+    padding-left: var(--space-gutter);
+    padding-right: var(--space-gutter);
+    box-sizing: border-box;
+  }
+
+  main,
+  .max-w-container {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Decorative login art bleeds past narrow viewports */
+  body > .absolute.-right-12,
+  body > .absolute.-left-12 {
+    display: none;
+  }
+
+  /* Tables and wide data */
+  main table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main table thead,
+  main table tbody,
+  main table tr {
+    display: table;
+    width: 100%;
+    table-layout: auto;
+  }
+
+  .overflow-x-auto {
+    max-width: 100%;
+  }
+
+  /* Calendar phone toolbar — shipped at 32–38px; bump to touch floor */
+  html.shell-mobile .cal-phone-only button,
+  html.shell-mobile .cal-toolbar button {
+    min-width: var(--m-touch-min);
+    min-height: var(--m-touch-min);
+  }
+
+  html.shell-mobile .cal-phone-only .w-8.h-8,
+  html.shell-mobile .cal-phone-only .w-9 {
+    width: var(--m-touch-min);
+    height: var(--m-touch-min);
+  }
+
+  html.shell-mobile .cal-phone-only .h-\[30px\] {
+    height: var(--m-touch-min);
+  }
+
+  /* Calendar desktop toolbar still visible below shell breakpoint in some flows */
+  .cal-stepper > button {
+    min-width: var(--m-touch-min);
+    height: var(--m-touch-min);
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .cal-viewtoggle > button {
+    min-width: var(--m-touch-min);
+    min-height: var(--m-touch-min);
+    height: var(--m-touch-min);
+    padding: 0 10px;
+  }
+
+  .cal-filters label {
+    min-height: var(--m-touch-min);
+  }
+
+  /* Nav tiles stay easy to tap when stacked */
+  .m-nav-card {
+    min-height: var(--m-touch-min);
+    padding: var(--space-md);
+  }
+
+  .m-nav-card .m-medallion {
+    width: 48px;
+    height: 48px;
+  }
+
+  #nav-cards-grid > a {
+    min-height: var(--m-touch-min);
+  }
+
+  /* Notices and action bars wrap instead of squeezing copy */
+  .m-notice {
+    flex-wrap: wrap;
+  }
+
+  .m-notice__body {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .m-actionbar {
+    flex-wrap: wrap;
+  }
+
+  .m-chip {
+    min-height: var(--m-touch-min);
+    padding: 8px 10px;
+  }
+
+  .m-header--tall {
+    --m-header-h: 56px;
+  }
+
+  .m-header__inner {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+}
+
+/* shell-mobile without a width media query (WebView at desktop width is rare) */
+html.shell-mobile {
+  overflow-x: clip;
+}
+
+html.shell-mobile body {
+  overflow-x: clip;
+  max-width: 100vw;
+}
