@@ -141,6 +141,7 @@
      * @param {object} opts
      *   toggle      the hamburger button in the header
      *   grid        the dashboard's tile grid, read for its tiles
+     *   entries     tile list already resolved (non-dashboard pages, MS-697)
      *   who         { name, role, initials, href } or null when signed out
      *   currentHref the page the drawer is being opened FROM
      *   behind      elements to make inert while the drawer is open
@@ -149,7 +150,9 @@
         const toggle = opts.toggle;
         if (!toggle) return null;
         const state = document.body;
-        const entries = entriesFor(tilesOf(opts.grid));
+        const entries = opts.entries
+            ? entriesFor(opts.entries)
+            : entriesFor(tilesOf(opts.grid));
         const behind = opts.behind || [];
 
         const old = document.getElementById('app-drawer');

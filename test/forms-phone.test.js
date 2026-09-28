@@ -133,17 +133,18 @@ test('the phone opens these pages rather than reimplementing them', () => {
 const MAY_MANAGE = ['editor', 'elder', 'admin', 'super_admin'];
 
 test('the dashboard offers Forms to editors and above', () => {
-    const index = read('index.html');
-    const card = index.match(/id: 'forms-card'[\s\S]{0,400}?\}\)\);/);
-    assert.ok(card, 'the Forms card has gone missing from the dashboard');
-    assert.match(card[0], /href: 'forms\.html'/);
-    assert.match(card[0], /Forms/, 'the card does not say what it is');
+    const nav = read('dashboard-nav.js');
+    const card = nav.match(/key: 'forms'[\s\S]{0,200}?label: 'Forms & Registrations'/);
+    assert.ok(card, 'the Forms card has gone missing from the dashboard registry');
+    assert.match(card[0], /Forms & Registrations/);
+    assert.match(read('index.html'), /DashboardNav\.injectGatedCards/,
+        'the dashboard still injects gated cards from the shared registry');
 });
 
 test('the dashboard card, the drawer entry and the page agree on who may see it', () => {
-    const index = read('index.html');
-    const gate = index.match(/!document\.getElementById\('forms-card'\) &&\s*\n\s*AccessCore\.readsAsEditor\(account\)/);
-    assert.ok(gate, 'the Forms card has no permission gate at all');
+    const nav = read('dashboard-nav.js');
+    const gate = nav.match(/key: 'forms'[\s\S]{0,500}?readsAsEditor/);
+    assert.ok(gate, 'the Forms card has no permission gate in the registry');
 
     const Destinations = require('../public/mobile/destinations.js');
     const forms = Destinations.DESTINATIONS.find(d => d.key === 'forms');

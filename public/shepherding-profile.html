@@ -54,10 +54,15 @@
     <script src="live-read.js"></script>
     <script src="firebase-config.js"></script>
     <script src="auth.js"></script>
+
+    <script src="dashboard-nav.js"></script>
+    <script src="desktop-drawer.js"></script>
+    <script src="desktop-header-lead.js"></script>
+    <script src="desktop-nav-boot.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body data-mosaic-skip-desktop-lead class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
       x-data="shepherdingProfile" x-cloak>
 
     <!-- Header -->
@@ -1741,6 +1746,7 @@
     <script src="presence-core.js"></script>
     <script src="shepherding-presence.js"></script>
     <script src="access-core.js"></script>
+    <script src="mobile/destinations.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="relationship-core.js"></script>
     <script src="family-core.js"></script>

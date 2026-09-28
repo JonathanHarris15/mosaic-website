@@ -33,6 +33,12 @@ test('the drawer is Home and then the tiles, in the order the tiles are in', () 
         'the drawer rewrote the tiles instead of mirroring them');
 });
 
+test('mount accepts a pre-built tile list without a dashboard grid (MS-697)', () => {
+    const src = read('desktop-drawer.js');
+    assert.match(src, /opts\.entries/,
+        'the drawer can be built from entries the registry already filtered');
+});
+
 test('a reader with no tiles still gets Home', () => {
     // Nobody is signed in, so every gated tile is absent. The drawer is then the
     // dashboard's own door and nothing else, which is honest — it is not empty.
@@ -70,6 +76,8 @@ test('the dashboard builds the drawer from the grid it just drew', () => {
     assert.ok(call, 'index.html no longer mounts the drawer');
     assert.match(call[0], /grid: document\.getElementById\('nav-cards-grid'\)/,
         'the drawer is built from something other than the dashboard tile grid');
+    assert.match(read('index.html'), /dashboard-nav\.js/,
+        'the dashboard shares the tile registry with other pages');
 
     // After the saved arrangement, so the drawer opens in the reader's own
     // order rather than the markup's.

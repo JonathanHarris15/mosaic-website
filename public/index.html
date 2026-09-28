@@ -212,6 +212,7 @@
     <!-- The header's drawer (MS-691), and the one place the app's name for a
          permission level is written — the drawer says "Elder", not "elder". -->
     <script src="mobile/destinations.js"></script>
+    <script src="dashboard-nav.js"></script>
     <script src="desktop-drawer.js"></script>
 
     <!-- One line, one count, landing on the Commitments page (MS-215). Built as
@@ -541,109 +542,10 @@
                     href: 'profile.html',
                 };
 
-                // Membership Directory — members and above, or a Pastoral Assistant
-                if (grid && !document.getElementById('directory-card') &&
-                    (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)
-                        || AccessCore.readsAsElder(account))) {
-                    const dirCard = navTile({
-                        id: 'directory-card', key: 'directory', href: 'peoples-page.html',
-                        icon: 'groups', title: 'Membership Directory',
-                        desc: 'Who is in the congregation, and how to reach them.',
-                    });
-                    // Place it right after the Hymns card
-                    grid.insertBefore(dirCard, grid.children[1] || null);
-                }
-
-                // Service Analytics — editors and above. It reads the whole
-                // history of the church's services and turns it into who has
-                // served, how often, and when they last did: a planning tool for
-                // the people who staff Sundays, not a public record of anybody's
-                // serving. It sat in the page markup for everyone until MS-99's
-                // successor work; the page gates itself too, because a card can
-                // be hidden and a URL cannot.
-                if (grid && !document.getElementById('service-analytics-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    grid.appendChild(navTile({
-                        id: 'service-analytics-card', key: 'service-analytics', href: 'analytics.html',
-                        icon: 'monitoring', title: 'Service Analytics',
-                        desc: 'Who has served, how often, and when they last did.',
-                    }));
-                }
-
-                // MCP Manager — editors and above (MS-262). Where the guidance
-                // an AI assistant reads is written, and where you can see what
-                // that assistant is actually able to do. Editor+ because a
-                // guidance file steers the assistant: whoever can write one can
-                // change how it behaves on every Sunday it touches. The page
-                // gates itself and the rules gate the data — a hidden card is
-                // not a lock.
-                if (grid && !document.getElementById('mcp-manager-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    grid.appendChild(navTile({
-                        id: 'mcp-manager-card', key: 'mcp-manager', href: 'mcp-manager.html',
-                        icon: 'smart_toy', title: 'MCP Manager',
-                        desc: 'Guide the assistant, and see what it can do.',
-                    }));
-                }
-
-                // Roles Manager — editors and above (author the serving Roles).
-                // ADR-0016: one roles list, liturgical and servant together. The
-                // page gates itself too — a card can be hidden, a URL can't.
-                if (grid && !document.getElementById('roles-manager-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    grid.appendChild(navTile({
-                        id: 'roles-manager-card', key: 'roles-manager', href: 'roles-manager.html',
-                        icon: 'volunteer_activism', title: 'Roles Manager',
-                        desc: 'Set up serving roles and who may fill them.',
-                    }));
-                }
-
-                // Forms & Registrations — editors and above.
-                //
-                // MS-360 built the library and never put a door on it, so until
-                // now it was reachable only by typing the URL. Same gate as the
-                // page's own `mayManageForms`, and the page gates itself and the
-                // rules gate the data — a hidden card is not a lock.
-                if (grid && !document.getElementById('forms-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    grid.appendChild(navTile({
-                        id: 'forms-card', key: 'forms', href: 'forms.html',
-                        icon: 'ballot', title: 'Forms &amp; Registrations',
-                        desc: 'Build a sign-up, and read what came back.',
-                    }));
-                }
-
-                // Printables — editors and above (MS-392). A project the
-                // church lays out and prints; the library and the editor gate
-                // themselves and the rules gate the records — a hidden card is
-                // not a lock.
-                if (grid && !document.getElementById('printables-card') &&
-                    AccessCore.readsAsEditor(account)) {
-                    grid.appendChild(navTile({
-                        id: 'printables-card', key: 'printables', href: 'printables.html',
-                        icon: 'print', title: 'Printables',
-                        desc: 'Lay out a handout from live church data.',
-                    }));
-                }
-
-                // Shepherd Dashboard — elders and super_admins
-                if (grid && !document.getElementById('shepherding-card') &&
-                    AccessCore.readsAsElder(account)) {
-                    grid.appendChild(navTile({
-                        id: 'shepherding-card', key: 'shepherding', href: 'shepherding-dashboard.html',
-                        icon: 'shield_person', title: 'Shepherd Dashboard',
-                        desc: 'Elder tools, and the care the church owes people.',
-                    }));
-                }
-
-                // Admin Dashboard — admins and super_admins. Hosts the admin tools (SMS, etc.).
-                if (grid && !document.getElementById('admin-dashboard-card') &&
-                    ['admin', 'super_admin'].includes(permissionLevel)) {
-                    grid.appendChild(navTile({
-                        id: 'admin-dashboard-card', key: 'admin-dashboard', href: 'admin-dashboard.html',
-                        icon: 'admin_panel_settings', title: 'Admin Dashboard',
-                        desc: 'SMS and the system tools behind the app.',
-                    }));
+                // Gated cards — one registry (dashboard-nav.js), same gates the
+                // drawer reads on every other page (MS-697).
+                if (grid && typeof DashboardNav !== 'undefined') {
+                    DashboardNav.injectGatedCards(grid, account);
                 }
 
                 // Apply the user's saved card arrangement, then make the cards
