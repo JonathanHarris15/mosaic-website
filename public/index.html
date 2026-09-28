@@ -118,13 +118,13 @@
              already recognised by the time the page paints, and every pixel it
              holds is one the cards below it do not get. -->
         <div class="w-full flex justify-center shrink-0">
-            <img alt="Mosaic Liturgy Logo" class="h-16 w-16 object-contain"
+            <img alt="Mosaic Liturgy Logo" class="h-12 w-12 md:h-14 md:w-14 object-contain"
                 src="assets/mosaic-logo.png" />
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 md:grid-rows-1 gap-margin flex-grow min-h-0">
+        <div class="flex flex-col md:flex-row gap-margin flex-grow min-h-0">
             <!-- Left Column -->
-            <div class="md:col-span-8 flex flex-col gap-margin md:min-h-0 md:overflow-hidden">
+            <div class="ghost-dashboard__main flex flex-col gap-margin md:min-h-0 md:overflow-hidden">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md content-start md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1 md:pb-1" id="nav-cards-grid">
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
@@ -182,7 +182,7 @@
             </div>
 
             <!-- Right Column -->
-            <div class="md:col-span-4 flex flex-col md:min-h-0 md:overflow-hidden">
+            <div class="ghost-dashboard__glance md:col-span-4 flex flex-col md:min-h-0 md:overflow-hidden w-full">
                 <div
                     class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col md:overflow-hidden" id="sunday-glance">
                     <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant mb-md flex-shrink-0">
@@ -325,7 +325,7 @@
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                 }
-                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
+                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:bg-surface-container-low transition-colors duration-300 no-underline';
                 const grid = document.getElementById('nav-cards-grid');
                 const account = (typeof AccessCore !== 'undefined')
                     ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })

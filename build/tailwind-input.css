@@ -616,6 +616,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-size: var(--headline-md-size); font-weight: var(--headline-md-weight);
   color: var(--on-surface);
 }
+.m-nav-card__body { min-width: 0; }
 .m-nav-card__desc {
   margin: 0; font-family: var(--font-sans); font-size: 14px;
   line-height: 1.5; color: var(--on-surface-variant);
@@ -624,6 +625,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 /* Medallion — The round icon plate on a NavCard. */
 .m-medallion {
   display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
   width: 56px; height: 56px; margin-bottom: var(--space-sm);
   border-radius: var(--radius-full); background: var(--surface-container);
   color: var(--primary);
@@ -1534,3 +1536,6 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border-radius: 9999px;
   background: currentColor;
 }
+
+/* Ghost sandbox: desktop density layer (see docs/ops/ghost-main.md) */
+@import "./ghost-density.css";
