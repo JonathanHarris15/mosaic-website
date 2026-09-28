@@ -12,6 +12,12 @@ name: Deploy Firebase (hosting + publicForm)
 #   hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
 # Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
+# The runtime this ships on comes from functions/package.json `engines.node`,
+# not from the node-version below — that only picks the runner's node. MS-683
+# moved both to 22 because nodejs20 is decommissioned 2026-10-30, after which
+# this job fails outright rather than warning. Keep them equal:
+# test/functions-node-runtime.test.js fails if they drift.
+#
 # App Check stays **monitor**. This job writes PUBLIC_FORM_APP_CHECK_MODE=monitor
 # for the deploy (gitignored .env, never committed) and never passes enforce.
 # It also writes MCP_ISSUER_URL (mosaic-hymn-mcp hosting origin, no trailing
@@ -51,7 +57,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: |
             package-lock.json
