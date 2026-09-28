@@ -5,7 +5,7 @@ A Firebase-based platform for managing liturgical resources, including a hymn di
 ## Project Overview
 
 - **Frontend**: Single Page Application (SPA) style built with HTML, [Tailwind CSS](https://tailwindcss.com/) (via CDN), and [Alpine.js](https://alpinejs.dev/).
-- **Backend**: [Firebase Cloud Functions](https://firebase.google.com/docs/functions) (Node.js 20, v2 functions).
+- **Backend**: [Firebase Cloud Functions](https://firebase.google.com/docs/functions) (Node.js 22, v2 functions).
 - **Database**: [Cloud Firestore](https://firebase.google.com/docs/firestore).
 - **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth).
 - **Storage**: [Firebase Storage](https://firebase.google.com/docs/storage) for hymn pages/images.
@@ -28,7 +28,7 @@ A Firebase-based platform for managing liturgical resources, including a hymn di
 
 ### Prerequisites
 - [Firebase CLI](https://firebase.google.com/docs/cli) installed and logged in.
-- Node.js 20.x.
+- Node.js 22.x — the functions runtime (`functions/package.json` `engines.node`) and what CI runs.
 
 ### Local Development
 The project uses Firebase Emulators for local development of all services.
