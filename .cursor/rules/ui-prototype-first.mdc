@@ -41,10 +41,10 @@ Any ticket that **changes a page's look or layout** must produce a **standalone 
 
 Use the commit SHA that contains the prototype file.
 
-- **Primary (relative CSS works):** `https://raw.githack.com/JonathanHarris15/mosaic-website/<commitSHA>/docs/design/prototypes/<file>.html`
-- **Backup:** `https://htmlpreview.github.io/?https://github.com/JonathanHarris15/mosaic-website/blob/<commitSHA>/docs/design/prototypes/<file>.html`
+- **Primary:** `https://htmlpreview.github.io/?https://github.com/JonathanHarris15/mosaic-website/blob/<commitSHA>/docs/design/prototypes/<file>.html`
+- **Backup:** `https://raw.githack.com/JonathanHarris15/mosaic-website/<commitSHA>/docs/design/prototypes/<file>.html` (click through the githack interstitial once; relative `../../../public/*.css` links resolve via raw.githack)
 
-If htmlpreview cannot load relative stylesheets, say so in the PR and treat **raw.githack** as primary (as above).
+Both formats were verified to load `fonts.css` and `mosaic.css` and apply the cream background and Cinzel/Libre Franklin stack when the prototype uses the relative paths above.
 
 ## When to skip (state the reason in the PR)
 
