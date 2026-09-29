@@ -134,9 +134,9 @@ const MAY_MANAGE = ['editor', 'elder', 'admin', 'super_admin'];
 
 test('the dashboard offers Forms to editors and above', () => {
     const index = read('index.html');
-    const card = index.match(/id = 'forms-card'[\s\S]{0,1200}?grid\.appendChild\(card\);/);
+    const card = index.match(/id: 'forms-card'[\s\S]{0,1200}?grid\.appendChild\(createDashboardNavCard/);
     assert.ok(card, 'the Forms card has gone missing from the dashboard');
-    assert.match(card[0], /card\.href = 'forms\.html'/);
+    assert.match(card[0], /href: 'forms\.html'/);
     assert.match(card[0], /Forms/, 'the card does not say what it is');
 });
 

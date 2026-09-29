@@ -113,6 +113,13 @@ export const COMPONENTS = [
   background: var(--surface-container-lowest); color: var(--error); border-color: var(--error);
 }
 .m-btn--danger-outline:hover:not(:disabled) { background: var(--error-container); color: var(--on-error-container); }
+
+@media (max-width: 820px) {
+  .m-btn--sm {
+    height: 44px; min-height: 44px;
+    padding: 0 14px;
+  }
+}
 `,
   },
 
@@ -168,6 +175,17 @@ export const COMPONENTS = [
   border: 1.5px solid var(--surface-container-lowest); border-radius: var(--radius-full);
   background: var(--error); color: var(--on-error);
   font-family: var(--font-sans); font-size: 10px; font-weight: 700;
+}
+
+@media (max-width: 820px) {
+  .m-icon-btn {
+    width: 44px; height: 44px;
+    min-width: 44px; min-height: 44px;
+  }
+  .m-icon-btn--sm {
+    width: 44px; height: 44px;
+    min-width: 44px; min-height: 44px;
+  }
 }
 `,
   },

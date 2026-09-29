@@ -41,24 +41,6 @@
     min-height: var(--m-touch-min);
   }
 
-  .m-btn--sm {
-    height: var(--m-touch-min);
-    min-height: var(--m-touch-min);
-    padding: 0 14px;
-  }
-
-  .m-icon-btn {
-    width: var(--m-touch-min);
-    height: var(--m-touch-min);
-    min-width: var(--m-touch-min);
-    min-height: var(--m-touch-min);
-  }
-
-  .m-icon-btn--sm {
-    width: var(--m-touch-min);
-    height: var(--m-touch-min);
-  }
-
   .m-input,
   .m-select-wrap .m-select-trigger {
     min-height: var(--m-touch-min);
