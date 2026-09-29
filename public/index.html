@@ -129,48 +129,34 @@
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
                          every saved home screen (same rule as Services). -->
-                    <a href="hymns.html" data-card-key="hymn-directory"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>menu_book</span>
+                    <a href="hymns.html" data-card-key="hymn-directory" class="m-nav-card group">
+                        <span class="m-medallion"><span class="material-symbols-outlined">menu_book</span></span>
+                        <div class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Hymns</h2>
+                            <p class="m-nav-card__desc">Browse the book, and the sheets that print.</p>
                         </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymns</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the book, and the sheets that print.</p>
                     </a>
 
                     <!-- Calendar — every Event the viewer is allowed to see (MS-99).
                          Distinct from Services, which shows Sundays only. -->
-                    <a href="calendar.html" data-card-key="calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>event</span>
+                    <a href="calendar.html" data-card-key="calendar" class="m-nav-card group">
+                        <span class="m-medallion"><span class="material-symbols-outlined">event</span></span>
+                        <div class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Calendar</h2>
+                            <p class="m-nav-card__desc">Everything on at church, and what you're part of.</p>
                         </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Calendar</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Everything on at church, and what you're part of.</p>
                     </a>
 
                     <!-- Services — the Sunday view. Renamed from "Service Calendar"
                          (MS-99) so it does not compete with the new Calendar for the
                          word. The data-card-key is the STORED key behind every user's
                          saved dashboard arrangement, so it keeps its old value. -->
-                    <a href="service-calendar.html" data-card-key="service-calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <!-- A church with a cross, not a calendar. Services and
-                                 the Calendar stopped competing for the same word in
-                                 MS-99; they should not compete for the same glyph
-                                 either — this one is Sundays and worship, that one
-                                 is everything that is on. -->
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>church</span>
+                    <a href="service-calendar.html" data-card-key="service-calendar" class="m-nav-card group">
+                        <span class="m-medallion"><span class="material-symbols-outlined">church</span></span>
+                        <div class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Services</h2>
+                            <p class="m-nav-card__desc">View upcoming and past service dates.</p>
                         </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Services</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">View upcoming and past service dates.</p>
                     </a>
 
                     <!-- Service Analytics is NOT here. It is editor-and-above, so
@@ -223,6 +209,21 @@
             // ...followed by any remaining cards in their current (default) order.
             const remaining = cards.filter(c => !placed.has(c.dataset.cardKey));
             [...ordered, ...remaining].forEach(c => grid.appendChild(c));
+        }
+
+        function createDashboardNavCard({ id, cardKey, href, icon, title, desc }) {
+            const card = document.createElement('a');
+            if (id) card.id = id;
+            card.dataset.cardKey = cardKey;
+            card.href = href;
+            card.className = 'm-nav-card group';
+            card.innerHTML = `
+                <span class="m-medallion"><span class="material-symbols-outlined">${icon}</span></span>
+                <div class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">${title}</h2>
+                    <p class="m-nav-card__desc">${desc}</p>
+                </div>`;
+            return card;
         }
 
         function decorateCardsWithHandles(grid) {
@@ -325,7 +326,6 @@
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                 }
-                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:bg-surface-container-low transition-colors duration-300 no-underline';
                 const grid = document.getElementById('nav-cards-grid');
                 const account = (typeof AccessCore !== 'undefined')
                     ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
@@ -335,18 +335,14 @@
                 if (grid && !document.getElementById('directory-card') &&
                     (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)
                         || AccessCore.readsAsElder(account))) {
-                    const dirCard = document.createElement('a');
-                    dirCard.id = 'directory-card';
-                    dirCard.dataset.cardKey = 'directory';
-                    dirCard.href = 'peoples-page.html';
-                    dirCard.className = cardClass;
-                    dirCard.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>groups</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Membership Directory</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the church directory.</p>
-                    `;
+                    const dirCard = createDashboardNavCard({
+                        id: 'directory-card',
+                        cardKey: 'directory',
+                        href: 'peoples-page.html',
+                        icon: 'groups',
+                        title: 'Membership Directory',
+                        desc: 'Browse the church directory.',
+                    });
                     // Place it right after the Hymns card
                     grid.insertBefore(dirCard, grid.children[1] || null);
                 }
@@ -360,22 +356,14 @@
                 // be hidden and a URL cannot.
                 if (grid && !document.getElementById('service-analytics-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'service-analytics-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    // Renaming it would silently drop this card to the end of
-                    // every dashboard that has ever been arranged.
-                    card.dataset.cardKey = 'service-analytics';
-                    card.href = 'analytics.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>monitoring</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Analytics</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Insights into historical services.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'service-analytics-card',
+                        cardKey: 'service-analytics',
+                        href: 'analytics.html',
+                        icon: 'monitoring',
+                        title: 'Service Analytics',
+                        desc: 'Insights into historical services.',
+                    }));
                 }
 
                 // MCP Manager — editors and above (MS-262). Where the guidance
@@ -387,22 +375,14 @@
                 // not a lock.
                 if (grid && !document.getElementById('mcp-manager-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'mcp-manager-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    // Renaming it drops this card to the end of every dashboard
-                    // that has ever been arranged.
-                    card.dataset.cardKey = 'mcp-manager';
-                    card.href = 'mcp-manager.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>smart_toy</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">MCP Manager</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Guide the AI assistant, and see what it can do.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'mcp-manager-card',
+                        cardKey: 'mcp-manager',
+                        href: 'mcp-manager.html',
+                        icon: 'smart_toy',
+                        title: 'MCP Manager',
+                        desc: 'Guide the AI assistant, and see what it can do.',
+                    }));
                 }
 
                 // Roles Manager — editors and above (author the serving Roles).
@@ -410,19 +390,14 @@
                 // page gates itself too — a card can be hidden, a URL can't.
                 if (grid && !document.getElementById('roles-manager-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'roles-manager-card';
-                    card.dataset.cardKey = 'roles-manager';
-                    card.href = 'roles-manager.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>volunteer_activism</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Roles Manager</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Set up serving roles &amp; who fills them.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'roles-manager-card',
+                        cardKey: 'roles-manager',
+                        href: 'roles-manager.html',
+                        icon: 'volunteer_activism',
+                        title: 'Roles Manager',
+                        desc: 'Set up serving roles &amp; who fills them.',
+                    }));
                 }
 
                 // Forms & Registrations — editors and above.
@@ -433,20 +408,14 @@
                 // rules gate the data — a hidden card is not a lock.
                 if (grid && !document.getElementById('forms-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'forms-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    card.dataset.cardKey = 'forms';
-                    card.href = 'forms.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>ballot</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Forms &amp; Registrations</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Build a sign-up or a poll, send the link, read what came back.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'forms-card',
+                        cardKey: 'forms',
+                        href: 'forms.html',
+                        icon: 'ballot',
+                        title: 'Forms &amp; Registrations',
+                        desc: 'Build a sign-up or a poll, send the link, read what came back.',
+                    }));
                 }
 
                 // Printables — editors and above (MS-392). A project the
@@ -455,56 +424,40 @@
                 // not a lock.
                 if (grid && !document.getElementById('printables-card') &&
                     AccessCore.readsAsEditor(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'printables-card';
-                    // ⚠ The STORED key behind every user's saved card order.
-                    card.dataset.cardKey = 'printables';
-                    card.href = 'printables.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>print</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Printables</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Lay out a directory, a service guide or a handout from live church data, and print it.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'printables-card',
+                        cardKey: 'printables',
+                        href: 'printables.html',
+                        icon: 'print',
+                        title: 'Printables',
+                        desc: 'Lay out a directory, a service guide or a handout from live church data, and print it.',
+                    }));
                 }
 
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
                     AccessCore.readsAsElder(account)) {
-                    const card = document.createElement('a');
-                    card.id = 'shepherding-card';
-                    card.dataset.cardKey = 'shepherding';
-                    card.href = 'shepherding-dashboard.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>shield_person</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Shepherd Dashboard</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Elder tools &amp; member care.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'shepherding-card',
+                        cardKey: 'shepherding',
+                        href: 'shepherding-dashboard.html',
+                        icon: 'shield_person',
+                        title: 'Shepherd Dashboard',
+                        desc: 'Elder tools &amp; member care.',
+                    }));
                 }
 
                 // Admin Dashboard — admins and super_admins. Hosts the admin tools (SMS, etc.).
                 if (grid && !document.getElementById('admin-dashboard-card') &&
                     ['admin', 'super_admin'].includes(permissionLevel)) {
-                    const card = document.createElement('a');
-                    card.id = 'admin-dashboard-card';
-                    card.dataset.cardKey = 'admin-dashboard';
-                    card.href = 'admin-dashboard.html';
-                    card.className = cardClass;
-                    card.innerHTML = `
-                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>admin_panel_settings</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Admin Dashboard</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">SMS &amp; system admin tools.</p>
-                    `;
-                    grid.appendChild(card);
+                    grid.appendChild(createDashboardNavCard({
+                        id: 'admin-dashboard-card',
+                        cardKey: 'admin-dashboard',
+                        href: 'admin-dashboard.html',
+                        icon: 'admin_panel_settings',
+                        title: 'Admin Dashboard',
+                        desc: 'SMS &amp; system admin tools.',
+                    }));
                 }
 
                 // Apply the user's saved card arrangement, then make the cards

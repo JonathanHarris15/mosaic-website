@@ -121,12 +121,13 @@ test('the dashboard card is injected for editors, not sitting in the page', asyn
 
     // Injected behind the editor gate, and keeping its stored key — renaming
     // that would drop the card to the end of every dashboard ever arranged.
-    const at = html.indexOf("card.href = 'analytics.html'");
-    assert.ok(at !== -1, 'nothing injects the Service Analytics card');
-    assert.ok(html.slice(0, at).lastIndexOf('AccessCore.readsAsEditor')
-        > html.slice(0, at).lastIndexOf('grid.appendChild'),
+    const block = html.match(/service-analytics-card[\s\S]{0,900}/);
+    assert.ok(block, 'nothing injects the Service Analytics card');
+    assert.match(block[0], /AccessCore\.readsAsEditor\(account\)/,
         'the Service Analytics card is injected without an editor gate above it');
-    assert.match(html, /cardKey = 'service-analytics'/,
+    assert.match(block[0], /grid\.appendChild\(createDashboardNavCard/,
+        'the Service Analytics card is not appended to the grid');
+    assert.match(block[0], /cardKey: 'service-analytics'/,
         'the card lost the key every saved dashboard order refers to');
 });
 

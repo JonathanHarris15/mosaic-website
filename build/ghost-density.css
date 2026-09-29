@@ -125,32 +125,6 @@
     line-height: 1.45;
   }
 
-  /* Home dashboard — bespoke Tailwind tiles, same compact row */
-  html:not(.shell-mobile) #nav-cards-grid > a {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    text-align: left;
-    padding: var(--space-sm) var(--space-md);
-    gap: var(--space-sm);
-  }
-  html:not(.shell-mobile) #nav-cards-grid > a > div:first-child {
-    width: 40px;
-    height: 40px;
-    margin-bottom: 0;
-    flex: 0 0 auto;
-  }
-  html:not(.shell-mobile) #nav-cards-grid > a > div:first-child .material-symbols-outlined {
-    font-size: 20px !important;
-  }
-  html:not(.shell-mobile) #nav-cards-grid > a h2 {
-    margin-bottom: var(--space-xs);
-  }
-  html:not(.shell-mobile) #nav-cards-grid > a p {
-    font-size: 13px;
-    line-height: 1.45;
-  }
-
   /* Dashboard layout — fixed glance column */
   html:not(.shell-mobile) .ghost-dashboard__glance {
     width: 300px;
