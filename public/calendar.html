@@ -191,6 +191,50 @@
                                    text-transform: uppercase; cursor: pointer; }
         .cal-viewtoggle > button[aria-pressed="true"] { background: var(--surface-container-lowest); color: var(--primary); }
 
+        /* Phone shell: two rows — controls, then month title + Today (MS-686 r2). */
+        .cal-phone-toolbar { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+        .cal-phone-toolbar__row { display: flex; align-items: center; width: 100%; min-width: 0; }
+        .cal-phone-toolbar__controls { justify-content: space-between; gap: 12px; }
+        .cal-phone-toolbar__title { gap: 10px; }
+        .cal-phone-toolbar__month {
+            flex: 1 1 auto; min-width: 0; margin: 0;
+            font-family: var(--font-serif); font-size: 20px; line-height: 1.25;
+            color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cal-phone-stepper {
+            display: flex; align-items: stretch; flex-shrink: 0;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            overflow: hidden; background: var(--surface-container-lowest);
+        }
+        .cal-phone-stepper > button {
+            display: flex; align-items: center; justify-content: center;
+            min-width: 44px; min-height: 44px; width: 44px; height: 44px;
+            padding: 0; background: transparent; border: 0;
+            border-left: 1px solid var(--outline-variant);
+            color: var(--on-surface-variant); cursor: pointer;
+        }
+        .cal-phone-stepper > button:first-child { border-left: 0; }
+        .cal-phone-stepper > button:hover:not(:disabled) { background: var(--surface-container); color: var(--primary); }
+        .cal-phone-viewtoggle {
+            display: flex; flex-shrink: 0; gap: 3px; padding: 3px;
+            background: var(--surface-container); border: 1px solid var(--outline-variant);
+            border-radius: var(--radius);
+        }
+        .cal-phone-viewtoggle > button {
+            min-width: 44px; min-height: 44px; width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            border: 0; border-radius: var(--radius-sm); background: transparent;
+            color: var(--on-surface-variant); cursor: pointer;
+        }
+        .cal-phone-viewtoggle > button[aria-pressed="true"],
+        .cal-phone-viewtoggle > button.cal-phone-viewtoggle--on {
+            background: var(--surface-container-lowest); color: var(--primary);
+        }
+        .cal-phone-today {
+            flex: 0 0 auto; min-height: 44px; height: 44px;
+            padding: 0 14px; white-space: nowrap;
+        }
+
         /* Show is a DISCLOSURE, not a panel. It is asked for about once a
            month, and as a permanent third panel it was what stood between the
            rail and the bottom of the window. The count on the button is what
@@ -435,50 +479,34 @@
              day you tapped — or the whole month, if you asked for the list. -->
         <div class="cal-phone-only mt-md flex-col gap-md">
 
-            <div class="flex items-center justify-between gap-sm">
-                <!-- `min-w-0` so the month's name is what gives way on a very
-                     narrow phone. Without it the row is as wide as its longest
-                     month and simply overflows — "September 2026" plus four
-                     controls is 7px too much at 320px. -->
-                <div class="flex items-center gap-1 min-w-0">
-                    <button @click="prevMonth()" aria-label="Previous month"
-                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
-                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
-                    </button>
-                    <h2 class="font-display text-[17px] text-primary truncate" x-text="monthLabel"></h2>
-                    <button @click="nextMonth()" aria-label="Next month"
-                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
-                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
-                    </button>
-                    <!-- ⚠ ONLY ONCE THERE IS SOMEWHERE TO GO BACK TO. The row
-                         already carries two arrows, a month and a view toggle;
-                         a fourth control that does nothing most of the time is
-                         what made this row cramped the last time. Off this
-                         month it is the most useful thing on the row.
-
-                         Icon only, for the same reason as the view toggle
-                         opposite: the word costs 48px, and on a 360px phone in
-                         September that is the difference between the row
-                         fitting and not. -->
-                    <button x-show="awayFromToday" @click="goToToday()" aria-label="Back to today"
-                            class="ml-0.5 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
-                                   border border-outline-variant text-secondary
-                                   cal-motion cal-press cal-focus">
-                        <span class="material-symbols-outlined text-[18px]">today</span>
-                    </button>
-                </div>
-
-                <!-- Icon only. The words that ride alongside them on a desktop
-                     cost a third of the row here, and the two glyphs are the
-                     same two everywhere else in the app. -->
-                <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
-                    <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
-                        <button @click="setView(opt[0])" :aria-label="opt[2]"
-                                class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
-                                :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
-                            <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
+            <div class="cal-phone-toolbar">
+                <div class="cal-phone-toolbar__row cal-phone-toolbar__controls">
+                    <div class="cal-phone-stepper">
+                        <button @click="prevMonth()" aria-label="Previous month" class="cal-motion cal-focus">
+                            <span class="material-symbols-outlined text-[20px]">chevron_left</span>
                         </button>
-                    </template>
+                        <button @click="nextMonth()" aria-label="Next month" class="cal-motion cal-focus">
+                            <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                        </button>
+                    </div>
+                    <div class="cal-phone-viewtoggle">
+                        <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
+                            <button @click="setView(opt[0])" :aria-label="opt[2]"
+                                    :aria-pressed="view === opt[0]"
+                                    class="cal-motion cal-focus"
+                                    :class="view === opt[0] ? 'cal-phone-viewtoggle--on' : ''">
+                                <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+                <div class="cal-phone-toolbar__row cal-phone-toolbar__title">
+                    <h2 class="cal-phone-toolbar__month" x-text="monthLabel"></h2>
+                    <button @click="goToToday()" :disabled="!awayFromToday" aria-label="Go to today"
+                            class="m-btn m-btn--secondary m-btn--sm cal-phone-today cal-motion cal-press cal-focus">
+                        <span class="material-symbols-outlined text-[18px]">today</span>
+                        <span class="m-btn__label">Today</span>
+                    </button>
                 </div>
             </div>
 
