@@ -19,6 +19,16 @@ test('drawer pages load the shared desktop nav scripts', () => {
     }
 });
 
+test('every drawer destination loads access-core so gated tiles can appear (MS-698)', () => {
+    // Without AccessCore, editor/elder gates are false and a signed-in
+    // super_admin only sees Hymns, Calendar, Services, Directory, and Admin.
+    const destinations = Array.from(DashboardNav.DRAWER_HREFS);
+    for (const file of destinations) {
+        const html = read(file);
+        assert.match(html, /access-core\.js/, file + ' is missing access-core.js');
+    }
+});
+
 test('the header lead helper builds a hamburger on drawer destinations', () => {
     const src = read('desktop-header-lead.js');
     assert.match(src, /createHamburger/);
@@ -48,4 +58,65 @@ test('desktop nav boot is wired on calendar but not on the dashboard', () => {
 
 test('createBack is exported for tests and pages that manage their own lead', () => {
     assert.equal(typeof DesktopHeaderLead.createBack, 'function');
+});
+
+test('the header lead passes tiles to the drawer, not a list that already has Home (MS-698)', () => {
+    const src = read('desktop-header-lead.js');
+    assert.doesNotMatch(src, /entries:\s*global\.DesktopDrawer\.entriesFor/,
+        'mount wraps entries in entriesFor; passing entriesFor(tiles) lists Home twice');
+    assert.match(src, /entries:\s*tiles/);
+});
+
+test('desktop-header-lead does not read window.auth or window.db (MS-698)', () => {
+    // auth.js declares `const auth` / `const db`. Those are lexical bindings,
+    // not window properties — the same trap calendar-pages.test.js already
+    // pins. Reading window.auth here is why every page except Home drew a
+    // signed-out drawer.
+    const src = read('desktop-header-lead.js');
+    ['auth', 'db', 'getUserData'].forEach((name) => {
+        assert.doesNotMatch(src, new RegExp('window\\.' + name + '\\b'),
+            'uses window.' + name + ', which is undefined');
+        assert.doesNotMatch(src, new RegExp('global\\.' + name + '\\b'),
+            'uses global.' + name + ', which is window.' + name + ' in the browser');
+    });
+    assert.match(src, /firebase\.auth\(/,
+        'the session must resolve auth the way auth.js created it');
+});
+
+test('resolveWho names a signed-in reader even without MosaicDestinations (MS-698)', () => {
+    const who = DesktopHeaderLead.resolveWho(
+        { permissionLevel: 'super_admin', pastoralAssistant: false },
+        'Jonathan',
+        true,
+    );
+    assert.ok(who, 'a signed-in account must have a who, or the drawer says Log in');
+    assert.equal(who.name, 'Jonathan');
+    assert.equal(who.initials, 'J');
+    assert.equal(who.href, 'profile.html');
+});
+
+test('a signed-in viewer still has a who (MS-698)', () => {
+    const who = DesktopHeaderLead.resolveWho(
+        { permissionLevel: 'viewer', pastoralAssistant: false },
+        'Sam',
+        true,
+    );
+    assert.ok(who);
+    assert.equal(who.name, 'Sam');
+    assert.equal(who.initials, 'S');
+});
+
+test('resolveWho is empty when nobody is signed in (MS-698)', () => {
+    assert.equal(DesktopHeaderLead.resolveWho(
+        { permissionLevel: 'super_admin' }, 'Jonathan', false), null);
+    assert.equal(DesktopHeaderLead.resolveWho(null, 'Friend', false), null);
+});
+
+test('loadSession can unsubscribe if auth answers in the same turn (MS-698)', () => {
+    // `const unsub = auth.onAuthStateChanged(...)` throws if the callback
+    // fires before the assignment finishes. A session that is already known
+    // can do that, and the drawer then never mounts.
+    const src = read('desktop-header-lead.js');
+    assert.match(src, /let unsub/);
+    assert.doesNotMatch(src, /const unsub = auth\.onAuthStateChanged/);
 });

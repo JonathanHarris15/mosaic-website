@@ -46,9 +46,13 @@
     }
 
     /** Home, then every tile. Pure, so the rule this module exists for can be
-     *  tested without a browser. */
+     *  tested without a browser. Idempotent: a list that already starts with
+     *  Home is returned as-is, so a caller that wrapped once and a mount that
+     *  wraps again cannot list Home twice (MS-698). */
     function entriesFor(tiles) {
-        return [HOME].concat(tiles || []);
+        const list = tiles || [];
+        if (list[0] && list[0].key === HOME.key) return list.slice();
+        return [HOME].concat(list);
     }
 
     function el(tag, cls, text) {
