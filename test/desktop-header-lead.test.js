@@ -111,3 +111,12 @@ test('resolveWho is empty when nobody is signed in (MS-698)', () => {
         { permissionLevel: 'super_admin' }, 'Jonathan', false), null);
     assert.equal(DesktopHeaderLead.resolveWho(null, 'Friend', false), null);
 });
+
+test('loadSession can unsubscribe if auth answers in the same turn (MS-698)', () => {
+    // `const unsub = auth.onAuthStateChanged(...)` throws if the callback
+    // fires before the assignment finishes. A session that is already known
+    // can do that, and the drawer then never mounts.
+    const src = read('desktop-header-lead.js');
+    assert.match(src, /let unsub/);
+    assert.doesNotMatch(src, /const unsub = auth\.onAuthStateChanged/);
+});

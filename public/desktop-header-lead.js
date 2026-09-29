@@ -110,8 +110,13 @@
             return { account: DashboardNav.accountOf(null), savedOrder: null, who: null };
         }
         const user = await new Promise(function (resolve) {
-            const unsub = auth.onAuthStateChanged(function (u) {
-                unsub();
+            // Firebase usually answers on a later turn, but a mock — or a
+            // session that is already known — can fire before this assignment
+            // finishes. A `const unsub` in that case is a TDZ throw, and the
+            // drawer hangs on "signed out" forever.
+            let unsub;
+            unsub = auth.onAuthStateChanged(function (u) {
+                if (typeof unsub === 'function') unsub();
                 resolve(u);
             });
         });
