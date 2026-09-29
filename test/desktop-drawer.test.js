@@ -46,6 +46,18 @@ test('a reader with no tiles still gets Home', () => {
     assert.deepStrictEqual(Drawer.entriesFor(undefined).map((e) => e.label), ['Home']);
 });
 
+test('entriesFor does not prepend Home when Home is already first (MS-698)', () => {
+    // The header lead once wrapped tiles in entriesFor and mount wrapped them
+    // again, so every page except the dashboard listed Home twice.
+    const tiles = [
+        { key: 'hymn-directory', href: 'hymns.html', symbol: 'menu_book', label: 'Hymns' },
+    ];
+    const once = Drawer.entriesFor(tiles);
+    const twice = Drawer.entriesFor(once);
+    assert.deepStrictEqual(twice.map((e) => e.label), ['Home', 'Hymns']);
+    assert.strictEqual(twice[0].href, 'index.html');
+});
+
 test('Home cannot be edited out from under a caller', () => {
     const first = Drawer.entriesFor([])[0];
     assert.throws(() => { 'use strict'; first.href = 'elsewhere.html'; },

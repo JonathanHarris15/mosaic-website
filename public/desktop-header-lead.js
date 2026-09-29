@@ -62,24 +62,50 @@
         });
     }
 
-    function resolveWho(account, displayName) {
-        const Destinations = global.MosaicDestinations;
+    // The same 1–2 letter rule MosaicDestinations.initials uses. Kept here so
+    // a page that has not loaded destinations.js still draws an avatar rather
+    // than a '?' or nothing (MS-698).
+    function initialsOf(name) {
+        const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return '?';
+        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
+    /**
+     * Who the drawer should say you are. Null only when nobody is signed in —
+     * a signed-in viewer still has a name and initials. Treating viewer as
+     * signed out is what hid the avatar on every page except Home (MS-698).
+     */
+    function resolveWho(account, displayName, signedIn) {
+        if (!signedIn) return null;
+        const Destinations = global && global.MosaicDestinations;
         const name = displayName || 'Friend';
-        if (!account || account.permissionLevel === 'viewer') {
-            return null;
-        }
         return {
             name,
             role: Destinations ? Destinations.accountLabel(account) : '',
-            initials: Destinations ? Destinations.initials(name) : '?',
+            initials: Destinations ? Destinations.initials(name) : initialsOf(name),
             href: 'profile.html',
         };
     }
 
+    // auth.js declares `const auth` / `const db`. Those are lexical bindings,
+    // not properties of the window object. firebase.auth() is the same
+    // singleton that assignment created. Looking them up on the window is why
+    // every page except Home drew a signed-out drawer (MS-698; see
+    // calendar-pages.test.js).
+    function sessionAuth() {
+        return (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : null;
+    }
+
+    function sessionDb() {
+        return (typeof firebase !== 'undefined' && firebase.firestore)
+            ? firebase.firestore() : null;
+    }
+
     async function loadSession() {
-        const auth = global.auth;
-        const db = global.db;
-        const getUserData = global.getUserData;
+        const auth = sessionAuth();
+        const db = sessionDb();
         if (!auth) {
             return { account: DashboardNav.accountOf(null), savedOrder: null, who: null };
         }
@@ -129,7 +155,7 @@
         return {
             account,
             savedOrder,
-            who: resolveWho(account, name),
+            who: resolveWho(account, name, true),
         };
     }
 
@@ -179,7 +205,7 @@
             if (typeof global.DesktopDrawer !== 'undefined') {
                 global.DesktopDrawer.mount({
                     toggle: toggle,
-                    entries: global.DesktopDrawer.entriesFor(tiles),
+                    entries: tiles,
                     who: session.who,
                     currentHref: currentHref,
                     behind: [
@@ -210,6 +236,7 @@
         bootFromDocument,
         createHamburger,
         createBack,
+        resolveWho,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = DesktopHeaderLead;
