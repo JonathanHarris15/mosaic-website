@@ -6641,14 +6641,11 @@ test('the way back appears once there is somewhere to come back from', () => {
     assert.strictEqual(page.awayFromToday, true, 'the past is somewhere to come back from too');
 });
 
-test('both layouts carry a way back to today, and the phone hides its when it would do nothing', () => {
-    // ⚠ THE PHONE ROW IS THE CONSTRAINT. Two arrows, the month's name and the
-    // view toggle already fill it; a fourth control that sits there doing
-    // nothing most of the time is what made the row cramped before. So the
-    // desktop, which has the room, greys its out and the phone drops its.
+test('both layouts carry a way back to today, and the phone greys its out when it would do nothing', () => {
+    // Round 2 (MS-686): the phone toolbar is two rows — stepper + view on top,
+    // month title + labelled Today below — so the way back stays visible but
+    // disabled on the month it already shows.
     const html = readPage('calendar.html');
-    // The phone BLOCK, not the rule that hides it — the class name appears in
-    // the stylesheet at the top of the file, long before either toolbar.
     const phoneAt = html.indexOf('class="cal-phone-only mt-md');
     const backs = [...html.matchAll(/goToToday\(\)/g)].map(m => m.index);
 
@@ -6661,11 +6658,10 @@ test('both layouts carry a way back to today, and the phone hides its when it wo
     const phone = html.slice(backs[1] - 400, backs[1] + 400);
     assert.ok(/:disabled="!awayFromToday"/.test(desktop),
         'the desktop way back stays live on the month it goes to');
-    assert.ok(/x-show="awayFromToday"/.test(phone),
-        'the phone way back sits on the row when it has nothing to do');
-
-    // Icon-only, so it needs a name of its own.
-    assert.ok(/aria-label="Back to today"/.test(phone), 'the phone way back is an unlabelled glyph');
+    assert.ok(/:disabled="!awayFromToday"/.test(phone),
+        'the phone way back greys out on the month it goes to');
+    assert.ok(/m-btn__label">Today</.test(phone), 'the phone way back says Today');
+    assert.ok(/aria-label="Go to today"/.test(phone), 'the phone Today control is named');
 });
 
 test('opening the page puts the rail on this month, not on the first one drawn', async () => {
