@@ -1010,7 +1010,7 @@
     return 'flex:0 0 auto;width:' + s + 'px;height:' + s + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-weight:600;font-size:' + (s * 0.36) + 'px;background:' + bg + ';color:' + col + ';' + ring;
   };
   RelationsViewer.prototype.presetBtn = function (on) {
-    return 'flex:1 1 0;padding:9px 6px;border-radius:9px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid ' +
+    return 'flex:1 1 auto;white-space:nowrap;padding:9px 6px;border-radius:9px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid ' +
       (on ? 'var(--navy)' : 'var(--outline-variant)') + ';background:' + (on ? 'var(--navy)' : 'var(--surface-container-lowest)') +
       ';color:' + (on ? 'var(--cream)' : 'var(--navy-900)') + ';box-shadow:' + (on ? '0 1px 2px rgba(14,28,54,.14)' : 'none');
   };
@@ -1144,7 +1144,7 @@
 
   RelationsViewer.prototype.renderPresets = function () {
     var self = this, ap = this.activePreset();
-    var defs = [['full', 'Full Web'], ['family', 'By Family'], ['elder', 'By Elder']];
+    var defs = [['full', 'Full Web'], ['family', 'By Household'], ['elder', 'By Elder']];
     this.refs.presets.innerHTML = defs.map(function (d) {
       return '<button data-act="preset:' + d[0] + '" class="rv-preset" style="' + self.presetBtn(ap === d[0]) + '">' + d[1] + '</button>';
     }).join('');
