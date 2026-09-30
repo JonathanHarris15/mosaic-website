@@ -24,6 +24,9 @@ document.addEventListener('alpine:init', () => {
     // page-load values. See shepherding-relationships.js.
     Alpine.data('shepherdingTags', () => window.withRelationshipsTab({
 
+        // Closed until auth answers. An undeclared flag is a ReferenceError in
+        // every x-show that names it, not a false.
+        ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
 

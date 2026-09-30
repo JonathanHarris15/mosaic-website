@@ -53,6 +53,36 @@ test('no component spreads pageFlags over a getter of the same name', () => {
         collisions.join('\n  '));
 });
 
+// ⚠ AND A FLAG THE COMPONENT NEVER DECLARED IS A ReferenceError, NOT A FALSE.
+// Alpine evaluates x-show="canDecide" against the component's own keys. Until
+// the auth callback assigns the flags, a name that is not one of them throws
+// on every binding — the Shepherding Profile logged it a dozen times a load.
+test('a component declares the flags its template reads before auth answers', () => {
+    const undeclared = [];
+    filesThatAssignPageFlags().forEach(({ file, src }) => {
+        const htmlFile = path.join(PUBLIC, file.replace(/\.js$/, '.html'));
+        if (!fs.existsSync(htmlFile)) return;
+        if (/\.\.\.AccessCore\.pageFlags\(null\)/.test(src)) return;
+        const html = fs.readFileSync(htmlFile, 'utf8');
+        FLAG_KEYS.forEach(key => {
+            const read = new RegExp('(?:x-show|x-if|:class|:disabled|@click)="[^"]*\\b' + key + '\\b').test(html);
+            const declared = new RegExp('^\\s+' + key + '\\s*:', 'm').test(src)
+                || new RegExp('\\bget\\s+' + key + '\\s*\\(').test(src);
+            if (read && !declared) undeclared.push(file + ' reads ' + key + ' in its template but never declares it');
+        });
+    });
+
+    assert.deepStrictEqual(undeclared, [],
+        'start the component with ...AccessCore.pageFlags(null) so every flag reads closed:\n  ' +
+        undeclared.join('\n  '));
+});
+
+test('pageFlags(null) is the closed set a component can start from', () => {
+    const closed = AccessCore.pageFlags(null);
+    FLAG_KEYS.filter(k => k.startsWith('can')).forEach(k => assert.strictEqual(closed[k], false, k));
+    assert.strictEqual(closed.pastoralAssistant, false);
+});
+
 test('the collision really is fatal on a reactive proxy', () => {
     const component = { get currentPermissionLevel() { return null; } };
     const proxy = new Proxy(component, { set: (t, k, v, r) => Reflect.set(t, k, v, r) });
