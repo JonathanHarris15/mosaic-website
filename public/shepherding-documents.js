@@ -194,6 +194,14 @@ document.addEventListener('alpine:init', () => {
                     this.allDocs[doc.id] = { id: doc.id, ...doc.data() };
                 });
 
+                // A document about this person that never reached their tree
+                // (MS-701: the assistant tools filed interviews in the Library
+                // only) is still theirs. File it, and keep it filed.
+                if (this.isProfileScope
+                    && Docs.fileOwnedDocuments(this.structure, this.allDocs, this.ownerPersonId).length) {
+                    this.saveStructure().catch(e => console.error('Error filing documents on this profile:', e));
+                }
+
                 if (viewsSnap) this.views = viewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 if (tagsSnap) this.shepherdingTags = tagsSnap.docs.map(doc => ({
                     id: doc.id,

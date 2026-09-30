@@ -62,10 +62,12 @@ async function loadTree(db) {
  * @param {object} db the Firestore handle
  * @param {function(object): *} change given the tree, mutates it; whatever it
  *   returns is handed back to the caller. Throw to abort the whole thing.
+ * @param {string} [structureDocId] which tree — the Library unless a
+ *   profile's `person_<id>` is named
  * @return {Promise<*>} what `change` returned
  */
-async function withTree(db, change) {
-  const ref = db.collection(STRUCTURE).doc(STRUCTURE_DOC);
+async function withTree(db, change, structureDocId = STRUCTURE_DOC) {
+  const ref = db.collection(STRUCTURE).doc(structureDocId);
   let result = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

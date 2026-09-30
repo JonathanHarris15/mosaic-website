@@ -259,6 +259,15 @@
         return true;
     }
 
+    // File every document that names `personId` as its owner but is nowhere in
+    // that person's tree. `docs` is { id: record }. Returns the ids it filed, in
+    // the order it met them, so a caller can skip the write when it is empty.
+    function fileOwnedDocuments(root, docs, personId) {
+        if (!root || !personId) return [];
+        return Object.keys(docs || {}).filter(id =>
+            docs[id] && docs[id].ownerPersonId === personId && fileInRoot(root, id));
+    }
+
     const ROOT = '__root__';
 
     // Move `item` (a {type,id[,...]} descriptor) to `targetFolderId` (ROOT for the
@@ -282,6 +291,7 @@
         MISSING_AUTHOR,
         buildElderDocument,
         fileInRoot,
+        fileOwnedDocuments,
         resolveAuthor,
         newId,
         getFolderById,
