@@ -68,8 +68,9 @@
    Household. Scrolls sideways once it is wider than the card. */
 .ftC-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: var(--space-xs); }
 .ftC-scroll:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; border-radius: 8px; }
-.ftC { display: flex; flex-direction: column; align-items: center; min-width: max-content; padding: var(--space-xs) var(--space-xs) 0; }
-.ftC__origins { display: flex; justify-content: center; gap: var(--space-md); margin-bottom: var(--space-sm); flex-wrap: wrap; }
+.ftC { position: relative; display: flex; flex-direction: column; align-items: center; min-width: max-content; padding: var(--space-xs) var(--space-xs) 0; }
+.ftC__links { position: absolute; inset: 0; pointer-events: none; overflow: visible; fill: none; stroke: var(--outline); stroke-width: 2; }
+.ftC__origins { display: flex; justify-content: center; gap: var(--space-md); margin-bottom: var(--space-md); flex-wrap: wrap; }
 .ftC__origin { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ftC__olabel { font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--on-surface-variant); }
 .ftC__unit { display: flex; flex-direction: column; align-items: center; }

@@ -168,7 +168,7 @@
         var h = href(o, id);
         var me = id === meId;
         var inner = '<span class="m-avatar" aria-hidden="true">' + esc(initials(name)) + '</span>' + esc(firstOf(o, id));
-        var attrs = ' class="ft-person' + (me ? ' ft-person--me' : '') + '" title="' + esc(name) + '"' + (me ? ' aria-current="true"' : '');
+        var attrs = ' class="ft-person' + (me ? ' ft-person--me' : '') + '" data-ft-pid="' + esc(id) + '" title="' + esc(name) + '"' + (me ? ' aria-current="true"' : '');
         return (h && !me)
             ? '<a' + attrs + linkAttrs(o, id) + '>' + inner + '</a>'
             : '<span' + attrs + '>' + inner + '</span>';
@@ -200,12 +200,46 @@
         if (single) return '<p class="hh-hint">No parents or children recorded yet, so there is no tree to draw.</p>';
         var origins = t.origins.length
             ? '<div class="ftC__origins">' + t.origins.map(function (g) {
-                return '<div class="ftC__origin"><span class="ftC__olabel">' + esc(firstOf(o, g.forPersonId)) + '’s parents</span>' +
+                return '<div class="ftC__origin" data-ft-for="' + esc(g.forPersonId) + '"><span class="ftC__olabel">' + esc(firstOf(o, g.forPersonId)) + '’s parents</span>' +
                     (couple(o, g.husbandId, g.wifeId, o.personId) || '<span class="hh-empty">Not recorded</span>') + '</div>';
             }).join('') + '</div>'
             : '';
         return '<div class="ftC-scroll" tabindex="0" role="region" aria-label="Family tree, scrolls sideways">' +
             '<div class="ftC">' + origins + unit(o, t.root, o.personId, true) + '</div></div>';
+    }
+
+    // Each origin sits wherever its row's wrapping puts it, so the line from a
+    // parents' marriage down to their child in the home couple is measured and
+    // drawn after layout, not in CSS.
+    var SVG = 'http://www.w3.org/2000/svg';
+    function linkOrigins(el) {
+        var tree = el.querySelector('.ftC');
+        if (!tree) return;
+        var old = tree.querySelector('.ftC__links');
+        if (old) old.remove();
+        var home = tree.querySelector('.ft-home');
+        var origins = tree.querySelectorAll('.ftC__origin[data-ft-for]');
+        if (!home || !origins.length) return;
+        var box = tree.getBoundingClientRect();
+        if (!box.width) return;
+        var svg = document.createElementNS(SVG, 'svg');
+        svg.setAttribute('class', 'ftC__links');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('width', box.width);
+        svg.setAttribute('height', box.height);
+        Array.prototype.forEach.call(origins, function (origin) {
+            var child = home.querySelector('[data-ft-pid="' + CSS.escape(origin.getAttribute('data-ft-for')) + '"]');
+            var from = origin.querySelector('.ft-couple__bond') || origin.querySelector('.ft-person');
+            if (!child || !from) return;
+            var a = from.getBoundingClientRect(), b = child.getBoundingClientRect(), o = origin.getBoundingClientRect();
+            var x1 = a.left + a.width / 2 - box.left, y1 = a.bottom - box.top;
+            var x2 = b.left + b.width / 2 - box.left, y2 = b.top - box.top;
+            var mid = (o.bottom + home.getBoundingClientRect().top) / 2 - box.top;
+            var path = document.createElementNS(SVG, 'path');
+            path.setAttribute('d', 'M' + x1 + ' ' + y1 + ' V' + mid + ' H' + x2 + ' V' + y2);
+            svg.appendChild(path);
+        });
+        tree.appendChild(svg);
     }
 
     function html(el) {
@@ -272,6 +306,10 @@
         var focusKey = active && el.contains(active) && active.getAttribute('data-hh-find');
         var caret = focusKey ? active.selectionStart : null;
         el.innerHTML = html(el);
+        var tree = el.querySelector('.ftC');
+        el._hh.ro.disconnect();
+        if (tree) el._hh.ro.observe(tree);
+        linkOrigins(el);
         if (focusKey) {
             var input = el.querySelector('[data-hh-find="' + focusKey + '"]');
             if (input) { input.focus(); try { input.setSelectionRange(caret, caret); } catch (e) { /* not a text input */ } }
@@ -353,7 +391,9 @@
         if (!el) return;
         if (!el._hh) {
             el._hh = { q: {}, error: null, busy: false, uid: 'hh' + (++seq), key: null };
+            el._hh.ro = new ResizeObserver(function () { linkOrigins(el); });
             bind(el);
+            if (document.fonts) document.fonts.ready.then(function () { linkOrigins(el); });
         }
         var key = (opts.familyId || '') + '|' + (opts.personId || '');
         if (el._hh.key !== key) { el._hh.q = {}; el._hh.error = null; el._hh.key = key; }
