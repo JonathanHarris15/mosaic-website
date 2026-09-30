@@ -111,6 +111,7 @@ async function initProfile() {
             if (userData && userData.personId) {
                 drPersonId = userData.personId;
                 initMyInfo(userData.personId);
+                loadPrayerAskCard();
             } else {
                 // Not a Linked User yet. Rather than showing this person an empty
                 // page and leaving them to wait for an admin to notice their
@@ -1393,6 +1394,53 @@ async function updateUserPasswordAdmin(uid) {
         loadUsersList(); // Reload to see the new password in the input
     } catch (error) {
         alert('Error updating password: ' + error.message);
+    }
+}
+
+// --- PASTORAL PRAYER ASK CARD (MS-516) ---
+// One door: answerLink read with no token. Only subjects with an open ask see it.
+
+function prayerAnswerPageHref(serviceDate) {
+    const q = new URLSearchParams();
+    if (serviceDate) q.set('thing', serviceDate);
+    try {
+        if (window.MOSAIC_SHELL === 'mobile' || sessionStorage.getItem('mosaicShell') === 'mobile') {
+            q.set('shell', 'mobile');
+        }
+    } catch (e) { /* ignore */ }
+    const tail = q.toString();
+    return 'prayer-answer.html' + (tail ? '?' + tail : '');
+}
+
+async function loadPrayerAskCard() {
+    const card = document.getElementById('prayer-ask-card');
+    const copy = document.getElementById('prayer-ask-copy');
+    const link = document.getElementById('prayer-ask-link');
+    if (!card || !copy || !link) return;
+
+    try {
+        const callable = firebase.app().functions('us-central1').httpsCallable('answerLink');
+        const res = await callable({ op: 'read' });
+        const data = (res && res.data) || {};
+        const items = (data.ok && Array.isArray(data.items)) ? data.items : [];
+        const prayer = items.filter(it => it && it.purpose === 'prayer_request');
+        if (!prayer.length) {
+            card.classList.add('hidden');
+            card.classList.remove('flex');
+            return;
+        }
+        const item = prayer[0];
+        const view = item.view || {};
+        const label = view.serviceDateLabel || item.thing || 'this Sunday';
+        copy.textContent = 'You are on the prayer list for ' + label +
+            '. Share what you would like the church to pray about — only elders will see it.';
+        link.href = prayerAnswerPageHref(item.thing);
+        card.classList.remove('hidden');
+        card.classList.add('flex');
+    } catch (error) {
+        console.warn('Prayer ask card could not load:', error && error.message);
+        card.classList.add('hidden');
+        card.classList.remove('flex');
     }
 }
 

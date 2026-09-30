@@ -13,6 +13,11 @@
           "//": "A form's link (MS-360). /f/<token> is what goes in a text message to the whole church, and it has to look like something a person would tap — but the token is 128 bits of base58 and never the form's title, because a readable slug is a guessable one and would make every public form enumerable (ADR-0051). The page reads the token off the path; ?f=<token> still works so links copied from an older build do not break.",
           "source": "/f/**",
           "destination": "/form-answer.html"
+        },
+        {
+          "//": "A pastoral prayer Answer link (MS-247, ADR-0067). /a/<token> is what goes in the prayer text; same rewrite rules as /f/** — root-absolute assets only on the page it serves. ?a=<token> still works for older copied links.",
+          "source": "/a/**",
+          "destination": "/prayer-answer.html"
         }
       ],
       "headers": [
