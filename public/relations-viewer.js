@@ -694,7 +694,7 @@
       ctx.globalAlpha = hi ? (on ? 1 : 0.045) : 0.9;
       if (group.length === 1) {
         var def = self.EDGE[e0.type];
-        ctx.strokeStyle = def.color;
+        ctx.strokeStyle = paint(def.color);
         ctx.lineWidth = on && hi ? def.w + 0.7 : def.w;
         ctx.setLineDash(def.dash);
         ctx.lineDashOffset = 0;
@@ -714,7 +714,7 @@
       var start = -((nT - 1) * slot) / 2;
       group.forEach(function (e, i) {
         var def = self.EDGE[e.type], off = start + i * slot, ox = nx * off, oy = ny * off;
-        ctx.strokeStyle = def.color;
+        ctx.strokeStyle = paint(def.color);
         ctx.lineWidth = def.w + bump;
         ctx.setLineDash(def.dash);
         ctx.lineDashOffset = 0;
@@ -750,7 +750,7 @@
       var tipx = bsx - dx * rB, tipy = bsy - dy * rB;
       var s = 8.5, ang = Math.atan2(dy, dx);
       ctx.globalAlpha = hi ? (on ? 1 : 0.05) : 0.95;
-      ctx.fillStyle = def.color;
+      ctx.fillStyle = paint(def.color);
       ctx.beginPath();
       ctx.moveTo(tipx, tipy);
       ctx.lineTo(tipx - Math.cos(ang - 0.42) * s, tipy - Math.sin(ang - 0.42) * s);
@@ -790,7 +790,7 @@
     // leads without following the line back to the bubble.
     var lead = this.leaderColour && this.leaderColour[n.id];
     if (lead && this.nodeGroups && this.nodeGroups[n.id]) {
-      ctx.strokeStyle = lead;
+      ctx.strokeStyle = paint(lead);
       ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 3.5, 0, Math.PI * 2); ctx.stroke();
     }
@@ -819,7 +819,7 @@
     ctx.fillText(n.initials, n.x, n.y + 0.5);
     var pr = 5.2, px = n.x + r * 0.68, py = n.y + r * 0.68;
     ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fillStyle = stageOf(n).color;
+    ctx.fillStyle = paint(stageOf(n).color);
     ctx.globalAlpha = alpha * (n.inactive ? 0.6 : 1); ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = tok('--surface'); ctx.stroke();
     ctx.globalAlpha = 1;
