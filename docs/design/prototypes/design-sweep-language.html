@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design language — page recipes</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        .stage {
+            border-top: 1px solid var(--outline-variant);
+            background: var(--surface-container);
+        }
+        .stage__cap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-margin) 0;
+        }
+        .stage__kicker {
+            font-family: var(--font-sans);
+            font-size: var(--label-sm-size);
+            font-weight: var(--label-sm-weight);
+            letter-spacing: var(--label-sm-spacing);
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        .stage__name {
+            margin: 4px 0 0;
+            font-family: var(--font-serif);
+            font-size: 28px;
+            color: var(--on-surface);
+        }
+        .stage__why {
+            margin: 6px 0 var(--space-sm);
+            max-width: 62ch;
+            color: var(--on-surface-variant);
+            font-size: 15px;
+            line-height: 1.45;
+        }
+        .frame {
+            margin: 0 auto var(--space-lg);
+            max-width: 1200px;
+            background: var(--background);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .frame--narrow { max-width: 420px; }
+    </style>
+</head>
+<body class="m-page">
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Page recipes</h1>
+                    <span class="m-header__sub">One step tighter. Same liturgy, one shell.</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section class="stage" id="a-many">
+        <div class="stage__cap">
+            <div class="stage__kicker">A — List</div>
+            <h2 class="stage__name">Many</h2>
+            <p class="stage__why">A directory is one toolbar and one list. The primary action is in the header. Names are serif because they are records.</p>
+        </div>
+        <div class="frame">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="#a-many"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                        <div class="m-header__titles"><h3 class="m-header__title">People</h3></div>
+                    </div>
+                    <div class="m-header__actions">
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm">Add person</button>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <div class="m-toolbar">
+                    <span class="m-search">
+                        <span class="material-symbols-outlined">search</span>
+                        <input type="search" placeholder="Search people" aria-label="Search people" />
+                    </span>
+                    <div class="m-toolbar__cluster">
+                        <span class="m-label">3 people</span>
+                    </div>
+                </div>
+                <div class="m-card-list">
+                    <div class="m-row m-row--interactive m-row--serif">
+                        <span class="m-avatar m-avatar--sm">AL</span>
+                        <div class="m-row__main">
+                            <div class="m-row__title">Ada Lowell</div>
+                            <div class="m-row__sub">Member</div>
+                        </div>
+                        <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                    </div>
+                    <div class="m-row m-row--interactive m-row--serif">
+                        <span class="m-avatar m-avatar--sm">SK</span>
+                        <div class="m-row__main">
+                            <div class="m-row__title">Sam Keene</div>
+                            <div class="m-row__sub">Elder · Music</div>
+                        </div>
+                        <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                    </div>
+                    <div class="m-row m-row--interactive m-row--serif">
+                        <span class="m-avatar m-avatar--sm">JH</span>
+                        <div class="m-row__main">
+                            <div class="m-row__title">Jules Hart</div>
+                            <div class="m-row__sub">Member</div>
+                        </div>
+                        <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    <section class="stage" id="a-one">
+        <div class="stage__cap">
+            <div class="stage__kicker">A — List</div>
+            <h2 class="stage__name">One</h2>
+            <p class="stage__why">The same row. A single record does not get a special layout.</p>
+        </div>
+        <div class="frame">
+            <main class="m-page__body">
+                <div class="m-card-list">
+                    <div class="m-row m-row--serif">
+                        <span class="m-avatar m-avatar--sm">AL</span>
+                        <div class="m-row__main">
+                            <div class="m-row__title">Ada Lowell</div>
+                            <div class="m-row__sub">Member</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    <section class="stage" id="a-empty">
+        <div class="stage__cap">
+            <div class="stage__kicker">A — List</div>
+            <h2 class="stage__name">Empty</h2>
+            <p class="stage__why">Dashed, calm, and it says what to do. Not italic grey.</p>
+        </div>
+        <div class="frame">
+            <main class="m-page__body">
+                <div class="m-empty">
+                    <span class="material-symbols-outlined">group</span>
+                    <p>No one matches that search. Try a last name.</p>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    <section class="stage" id="a-error">
+        <div class="stage__cap">
+            <div class="stage__kicker">A — List</div>
+            <h2 class="stage__name">Error</h2>
+            <p class="stage__why">What failed, and the action that tries again. No apology.</p>
+        </div>
+        <div class="frame">
+            <main class="m-page__body">
+                <div class="m-notice m-notice--error">
+                    <span class="material-symbols-outlined m-notice__icon">error</span>
+                    <div class="m-notice__body">
+                        <p class="m-notice__title">People didn’t load.</p>
+                        <p class="m-notice__text">The directory could not be read. Nothing was changed.</p>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    <section class="stage" id="b">
+        <div class="stage__cap">
+            <div class="stage__kicker">B — Reading</div>
+            <h2 class="stage__name">Settings</h2>
+            <p class="stage__why">720px. The section name is outside the card. One field stack, one primary button.</p>
+        </div>
+        <div class="frame" style="max-width: 760px;">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="#b"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                        <div class="m-header__titles"><h3 class="m-header__title">Profile</h3></div>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body" style="max-width: 720px;">
+                <section class="m-section">
+                    <div class="m-section__head">
+                        <h2 class="m-section__title">Security</h2>
+                        <p class="m-section__hint">Change the password on this account.</p>
+                    </div>
+                    <form class="m-card" style="display:flex;flex-direction:column;gap:var(--space-md);">
+                        <label class="m-field">
+                            <span class="m-label">Current password</span>
+                            <input class="m-input" type="password" autocomplete="current-password" />
+                        </label>
+                        <label class="m-field">
+                            <span class="m-label">New password</span>
+                            <input class="m-input" type="password" autocomplete="new-password" />
+                        </label>
+                        <button type="button" class="m-btn m-btn--primary">Update password</button>
+                    </form>
+                </section>
+            </main>
+        </div>
+    </section>
+
+    <section class="stage" id="c">
+        <div class="stage__cap">
+            <div class="stage__kicker">C — Door</div>
+            <h2 class="stage__name">Sign in</h2>
+            <p class="stage__why">One card, centred. No gradient, no rings, no second “back” under the form. The header already goes home.</p>
+        </div>
+        <div class="frame">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="#c"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body" style="align-items:center;">
+                <div class="m-door">
+                    <img class="m-door__mark" src="../../../public/assets/mosaic-logo.png" alt="" />
+                    <h3 class="m-door__title">Log in</h3>
+                    <form class="m-card" style="display:flex;flex-direction:column;gap:var(--space-md);">
+                        <label class="m-field">
+                            <span class="m-label">Email address</span>
+                            <input class="m-input" type="email" autocomplete="username" placeholder="ada@example.test" />
+                        </label>
+                        <label class="m-field">
+                            <span class="m-label">Password</span>
+                            <input class="m-input" type="password" autocomplete="current-password" />
+                        </label>
+                        <button type="button" class="m-btn m-btn--primary m-btn--block">Log in</button>
+                        <button type="button" class="m-btn m-btn--quiet">Forgot password?</button>
+                    </form>
+                </div>
+            </main>
+        </div>
+    </section>
+</body>
+</html>

@@ -49,6 +49,7 @@ export const COMPONENTS = [
       "Shadow only on primary, and only --shadow-xs. Everything else is flat — depth here comes from tonal layers and warm hairlines.",
       "Disabled drops to 40% and takes not-allowed; it is never hidden, because a control that vanishes reads as a bug.",
       "46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.",
+      "A button lifts 1px on hover and settles on press. That motion is the sign that it can be pressed. It is not optional, and it is not a bounce. prefers-reduced-motion keeps the colour change and drops the lift.",
       "Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.",
     ],
     examples: [
@@ -66,9 +67,18 @@ export const COMPONENTS = [
   line-height: 1; white-space: nowrap; cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
               border-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
 }
 .m-btn:disabled, .m-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+@media (hover: hover) {
+  .m-btn:hover:not(:disabled) { transform: translateY(-1px); }
+}
+.m-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-btn { transition: none; }
+  .m-btn:hover:not(:disabled), .m-btn:active:not(:disabled) { transform: none; }
+}
 .m-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
 
 /* An optional slot for the button's word. A button that only ever shows its
@@ -79,6 +89,7 @@ export const COMPONENTS = [
 
 .m-btn--sm { height: 38px; padding: 0 14px; font-size: 13.5px; }
 .m-btn--lg { height: 52px; padding: 0 20px; font-size: 16px; }
+.m-btn--block { width: 100%; }
 
 .m-btn--primary {
   background: var(--primary); color: var(--on-primary);
@@ -145,7 +156,16 @@ export const COMPONENTS = [
   border: 1px solid transparent; border-radius: var(--radius-sm);
   background: transparent; color: var(--on-surface-variant); cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
+}
+@media (hover: hover) {
+  .m-icon-btn:hover:not(:disabled) { background: var(--surface-container); color: var(--primary); transform: translateY(-1px); }
+}
+.m-icon-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-icon-btn { transition: none; }
+  .m-icon-btn:hover:not(:disabled), .m-icon-btn:active:not(:disabled) { transform: none; }
 }
 .m-icon-btn .material-symbols-outlined { font-size: 20px; }
 .m-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -207,7 +227,7 @@ export const COMPONENTS = [
       '<input class="m-input m-input--invalid" aria-invalid="true" value="not an email" />',
     ],
     css: `
-.m-field { display: block; }
+.m-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .m-input {
   width: 100%; height: 48px; padding: 0 14px;
   border: 1px solid var(--outline-variant); border-radius: var(--radius);
@@ -1290,13 +1310,20 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     name: "PageShell",
     cls: "m-page",
     group: "Layout",
-    summary: "The body of a desktop page: warm background, navy ink, a column capped at --container-max.",
-    variants: {},
+    summary: "The body of a desktop page: warm background, navy ink, and one of four columns. Pick the recipe; do not invent a fifth width.",
+    variants: { recipe: ["list", "wide", "reading", "tool", "door"] },
     notes: [
-      "The width is the token, not Tailwind's max-w-7xl. Ten pages reached for the framework default before this.",
-      "The bar is PageHeader's job now. `.m-page__bar` was removed in MS-187: its declarations sat INSIDE the capped column, so a bar built on it could never run its background or its hairline to the window edge — which is most of why the eight hand-rolled headers read as eight products. `.m-header` is a sibling of `.m-page__body`, not a child of the column.",
+      "The body class is `m-page` plus at most one recipe. The long Tailwind string (`bg-background font-body-md antialiased min-h-screen flex flex-col`) is the same thing, written out, and it is retired.",
+      "List (`m-page__body`) caps at --container-max. Wide (`m-page__body--wide`) is 1600px, for a directory or a month that needs the room. Reading (`m-page--reading`) caps at 720px: settings, a policy, commitments. Tool (`m-page--tool`) fills the window and scrolls inside its panes. Door (`m-page--door`) centres one card. Home is a list that also carries `m-page--app` so the tiles fit the viewport.",
+      "The gutter is --space-margin, the same inset the header uses. A 24px body beside a 32px bar is how pages started to look like they were not the same product.",
+      "The bar is PageHeader's job. `.m-header` is a sibling of `.m-page__body`, not a child of the column. The page title is not repeated in the body.",
+      "The kiosk and the Relations Viewer are the two exceptions, and both are written down where they break the rule. A new page is not an exception.",
     ],
-    examples: ['<body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body>'],
+    examples: [
+      '<body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body>',
+      '<body class="m-page m-page--reading"><header class="m-header">…</header><main class="m-page__body">…</main></body>',
+      '<body class="m-page m-page--door"><header class="m-header">…</header><main class="m-page__body"><div class="m-door">…</div></main></body>',
+    ],
     css: `
 .m-page {
   min-height: 100vh; display: flex; flex-direction: column;
@@ -1306,9 +1333,35 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-page__body {
   width: 100%; max-width: var(--container-max); margin: 0 auto;
-  padding-left: var(--space-md); padding-right: var(--space-md);
+  padding-left: var(--space-margin); padding-right: var(--space-margin);
   flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md);
   padding-top: var(--space-md); padding-bottom: var(--space-lg);
+  min-width: 0;
+}
+.m-page__body--wide { max-width: 1600px; }
+.m-page--reading .m-page__body { max-width: 720px; }
+.m-page--tool {
+  height: 100vh; height: 100dvh; overflow: hidden;
+}
+.m-page--app { overflow-x: hidden; }
+@media (min-width: 1024px) {
+  .m-page--app { height: 100vh; height: 100dvh; overflow: hidden; }
+}
+.m-page--door .m-page__body {
+  max-width: none; align-items: center; justify-content: center;
+}
+.m-door {
+  width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--space-md);
+}
+.m-door__mark { width: 64px; height: 64px; object-fit: contain; align-self: center; }
+.m-door__title {
+  margin: 0; text-align: center;
+  font-family: var(--font-display); font-size: 32px; font-weight: 600;
+  line-height: 1.15; letter-spacing: .02em; color: var(--primary);
+}
+@media (min-width: 768px) {
+  .m-page__body--split { flex-direction: row; align-items: flex-start; }
 }
 `,
   },
@@ -2162,6 +2215,134 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   color: var(--on-surface); text-wrap: pretty;
 }
 .m-settled--sm { font-size: 15px; }
+`,
+  },
+
+  {
+    name: "Section",
+    cls: "m-section",
+    group: "Layout",
+    summary:
+      "One labelled group. The name sits above a single surface. Rows that belong together share that surface.",
+    variants: {},
+    notes: [
+      "The label is outside the card. A title repeated inside every card is how a list starts to look like a stack of products.",
+      "The hint is one sentence, sentence case, and it is optional. It says what the group is for.",
+      "Put one m-card or one m-card-list inside. Do not put a card inside a card.",
+    ],
+    examples: [
+      '<section class="m-section"><div class="m-section__head"><h2 class="m-section__title">Security</h2><p class="m-section__hint">Change the password on this account.</p></div><div class="m-card">…</div></section>',
+    ],
+    css: `
+.m-section { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.m-section__head { display: flex; flex-direction: column; gap: 2px; }
+.m-section__title {
+  margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 600;
+  line-height: 1.25; color: var(--on-surface);
+}
+.m-section__hint {
+  margin: 0; font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+`,
+  },
+
+  {
+    name: "Side",
+    cls: "m-side",
+    group: "Layout",
+    summary:
+      "Facts that stay beside the work: a glance, an identity, the frame a form is written inside. They do not scroll off the screen.",
+    variants: {},
+    notes: [
+      "Put `m-with-side` on the row that holds the work and the card, and `m-side` on the card. From 1024px the card sticks under the header, grows no taller than the viewport, and scrolls inside itself. Below that the card stacks, because a side column that cannot stay in view is a second page.",
+      "The card holds a title and a defined set of facts — about six — not the rest of the page. If the facts run long, `.m-side__scroll` is the part that moves. The title stays.",
+      "A button lifts. A side card does not. Motion on the card would say it is a control.",
+    ],
+    examples: [
+      '<div class="m-with-side"><div class="m-side"><h2 class="m-section__title">Sunday</h2><div class="m-side__scroll">…</div></div><div>…</div></div>',
+    ],
+    css: `
+.m-with-side { align-items: start; }
+.m-side { align-self: start; min-width: 0; min-height: 0; }
+.m-side__scroll { min-height: 0; }
+@media (min-width: 1024px) {
+  .m-with-side > .m-side {
+    position: sticky;
+    top: calc(64px + var(--space-md));
+    max-height: calc(100dvh - 64px - var(--space-lg));
+    overflow: auto;
+  }
+  .m-with-side > .m-side:has(> .m-side__scroll) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .m-with-side > .m-side > .m-side__scroll {
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+`,
+  },
+
+  {
+    name: "Toolbar",
+    cls: "m-toolbar",
+    group: "Layout",
+    summary:
+      "The row above a list: search on the left, filters and a quiet count on the right. Not a second header.",
+    variants: {},
+    notes: [
+      "One search field. Filters sit beside it, not in a panel of their own, unless there are more than three.",
+      "The primary action of the page stays in the header. The toolbar does not grow a second primary button.",
+    ],
+    examples: [
+      '<div class="m-toolbar"><span class="m-search"><span class="material-symbols-outlined">search</span><input type="search" placeholder="Search people" /></span><div class="m-toolbar__cluster"></div></div>',
+    ],
+    css: `
+.m-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+}
+.m-toolbar__cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); min-width: 0; }
+.m-toolbar .m-search { flex: 1 1 220px; max-width: 420px; }
+`,
+  },
+
+  {
+    name: "Prose",
+    cls: "m-prose",
+    group: "Display",
+    summary:
+      "A reading column: a policy, a letter. Serif for the opening, Cinzel for the sections, sans for the body.",
+    variants: {},
+    notes: [
+      "Lives inside m-page--reading. The page title is the header's. Do not repeat it as an h1 in the column.",
+      "Section headings are separated by a hairline, because a policy is a sequence of topics, not a stack of cards.",
+    ],
+    examples: [
+      '<article class="m-prose"><p class="m-prose__lede">A private tool for the members of a church.</p><h2>Who is responsible</h2><p>Write to the church office.</p></article>',
+    ],
+    css: `
+.m-prose { font-size: 17px; line-height: 1.65; color: var(--on-surface); }
+.m-prose__lede {
+  margin: 0 0 var(--space-md);
+  font-family: var(--font-serif); font-size: 22px; line-height: 1.4;
+  color: var(--on-surface-variant);
+}
+.m-prose h2 {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  color: var(--primary); letter-spacing: .02em;
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--outline-variant);
+}
+.m-prose h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.m-prose p, .m-prose li { margin: 0 0 14px; }
+.m-prose ul { padding-left: 1.25rem; }
+.m-prose strong { color: var(--primary); font-weight: 600; }
+.m-prose a { color: var(--primary); }
 `,
   },
 ];

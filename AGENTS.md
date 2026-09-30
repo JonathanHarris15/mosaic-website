@@ -96,6 +96,7 @@ One authored copy of the pure domain modules lives in `public/`. `node scripts/s
 ### Docs to read first
 
 - `CONTEXT.md` — domain language. Use those words.
+- `docs/design/design-language.md` — page recipes and the rules a new page follows. Use the `m-*` classes. Do not invent a second shell.
 - `CLAUDE.md` — Jira board (`MS`, To Plan → Done). A ticket right of To Plan needs a PRD.
 - `.cursor/skills/` — Cursor Cloud board skills (`plan-ticket`, `implement`, …).
 - `GEMINI.md` — stack sketch (Firebase, Node 22 functions, emulator ports).

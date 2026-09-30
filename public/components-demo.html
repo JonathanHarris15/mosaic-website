@@ -48,9 +48,9 @@
         <nav class="g-nav">
       <div class="g-navgroup"><span class="m-label">Core</span><a href="#m-btn">Button</a><a href="#m-icon-btn">IconButton</a></div>
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#f-pane">FormPane</a><a href="#f-qrow">QuestionEditor</a><a href="#f-set">SettingBlock</a><a href="#m-dropdown">Dropdown</a><a href="#m-option">OptionCard</a><a href="#m-search">SearchBar</a><a href="#m-seg">Segmented</a><a href="#m-unitfield">UnitField</a></div>
-      <div class="g-navgroup"><span class="m-label">Display</span><a href="#f-tally">Tally</a><a href="#f-linkrow">LinkRow</a><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-body-md">Type</a><a href="#m-divider">Divider</a><a href="#m-token">Token</a><a href="#m-rule-row">RuleRow</a><a href="#m-locked-role">LockedRole</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a></div>
+      <div class="g-navgroup"><span class="m-label">Display</span><a href="#f-tally">Tally</a><a href="#f-linkrow">LinkRow</a><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-body-md">Type</a><a href="#m-divider">Divider</a><a href="#m-token">Token</a><a href="#m-rule-row">RuleRow</a><a href="#m-locked-role">LockedRole</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a><a href="#m-prose">Prose</a></div>
       <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a><a href="#m-notice">Notice</a></div>
-      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-drawer">Drawer</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
+      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-drawer">Drawer</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a><a href="#m-section">Section</a><a href="#m-side">Side</a><a href="#m-toolbar">Toolbar</a></div>
         </nav>
 
     <h2 class="g-group">Core</h2>
@@ -434,6 +434,17 @@
         <div class="g-item"><p class="m-settled">Anyone at all. A Sunday Service is always public — that is settled, not a setting.</p></div>
         </div>
       </section>
+      <section class="g-card" id="m-prose">
+        <header>
+          <h3>Prose</h3>
+          <code>.m-prose</code>
+        </header>
+        <p class="g-summary">A reading column: a policy, a letter. Serif for the opening, Cinzel for the sections, sans for the body.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><article class="m-prose"><p class="m-prose__lede">A private tool for the members of a church.</p><h2>Who is responsible</h2><p>Write to the church office.</p></article></div>
+        </div>
+      </section>
     <h2 class="g-group">Feedback</h2>
       <section class="g-card" id="m-spinner">
         <header>
@@ -519,10 +530,12 @@
           <h3>PageShell</h3>
           <code>.m-page</code>
         </header>
-        <p class="g-summary">The body of a desktop page: warm background, navy ink, a column capped at --container-max.</p>
-        
+        <p class="g-summary">The body of a desktop page: warm background, navy ink, and one of four columns. Pick the recipe; do not invent a fifth width.</p>
+        <div class="g-variants"><b>recipe</b> list · wide · reading · tool · door</div>
         <div class="g-demo">
         <div class="g-item"><body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body></div>
+        <div class="g-item"><body class="m-page m-page--reading"><header class="m-header">…</header><main class="m-page__body">…</main></body></div>
+        <div class="g-item"><body class="m-page m-page--door"><header class="m-header">…</header><main class="m-page__body"><div class="m-door">…</div></main></body></div>
         </div>
       </section>
       <section class="g-card" id="m-header">
@@ -613,6 +626,39 @@
         
         <div class="g-demo">
         <div class="g-item"><div class="m-actionbar"><div class="m-actionbar__said"><p class="m-actionbar__count">5 dates ticked</p><p class="m-actionbar__note">Two more come with them.</p></div><div class="m-actionbar__acts"><button class="m-btn m-btn--primary m-btn--sm">Auto-assign 7 dates</button></div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-section">
+        <header>
+          <h3>Section</h3>
+          <code>.m-section</code>
+        </header>
+        <p class="g-summary">One labelled group. The name sits above a single surface. Rows that belong together share that surface.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><section class="m-section"><div class="m-section__head"><h2 class="m-section__title">Security</h2><p class="m-section__hint">Change the password on this account.</p></div><div class="m-card">…</div></section></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-side">
+        <header>
+          <h3>Side</h3>
+          <code>.m-side</code>
+        </header>
+        <p class="g-summary">Facts that stay beside the work: a glance, an identity, the frame a form is written inside. They do not scroll off the screen.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-with-side"><div class="m-side"><h2 class="m-section__title">Sunday</h2><div class="m-side__scroll">…</div></div><div>…</div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-toolbar">
+        <header>
+          <h3>Toolbar</h3>
+          <code>.m-toolbar</code>
+        </header>
+        <p class="g-summary">The row above a list: search on the left, filters and a quiet count on the right. Not a second header.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-toolbar"><span class="m-search"><span class="material-symbols-outlined">search</span><input type="search" placeholder="Search people" /></span><div class="m-toolbar__cluster"></div></div></div>
         </div>
       </section>
     </div>
