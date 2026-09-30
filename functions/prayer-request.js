@@ -34,11 +34,12 @@ const REMINDER_DAYS_OUT = 3;
 const DEFAULT_PRAYER_MESSAGES = {
   initial: "Hi {name}, this is Mosaic Church. You're in our pastoral prayer " +
     "this Sunday. What would you like us to pray about? (This information " +
-    "will be private and only shared with Elders) Just reply to this message.",
+    "will be private and only shared with Elders) Just reply to this " +
+    "message, or answer here: {link}",
   reminder: "Hi {name}, a gentle reminder from Mosaic Church — we'd love to " +
     "pray for you this Sunday. What would you like us to pray about? (This " +
     "information will be private and only shared with Elders) Just reply " +
-    "here whenever you're ready.",
+    "here whenever you're ready, or answer here: {link}",
   thankyou: "Thank you, {name}. We'll be lifting this up in prayer this " +
     "Sunday. — Mosaic Church",
   elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
@@ -68,6 +69,10 @@ const DEFAULT_PUSH_WORDING = {
 
 /** Purposes that have a lock-screen title and body. */
 const PUSH_WORDING_KINDS = ["initial", "reminder", "thankyou"];
+
+/** Shown on the Answer page; matches the automated text's promise. */
+const PRAYER_ANSWER_PRIVACY_LINE =
+  "What you write is private and only shared with Elders.";
 
 /**
  * Config field for one half of a push template, e.g. pushInitialTitle.
@@ -142,14 +147,34 @@ function resolvePushWording(config) {
  * @param {'initial'|'reminder'|'thankyou'} kind
  * @param {string} firstName
  * @param {{initial: string, reminder: string, thankyou: string}} [templates]
+ * @param {?string} [answerLink] substituted for {link} on initial/reminder
  * @return {string}
  */
-function renderPrayerRequestMessage(kind, firstName, templates) {
-  const tpl = (templates && templates[kind]) ||
+function renderPrayerRequestMessage(kind, firstName, templates, answerLink) {
+  let tpl = (templates && templates[kind]) ||
     DEFAULT_PRAYER_MESSAGES[kind] || "";
   const name = (typeof firstName === "string" && firstName.trim()) ?
     firstName.trim() : "there";
-  return tpl.split("{name}").join(name);
+  const link = typeof answerLink === "string" ? answerLink.trim() : "";
+  if (link && (kind === "initial" || kind === "reminder")) {
+    tpl = ensureAnswerLinkInTemplate(tpl, link);
+  }
+  return tpl.split("{name}").join(name).split("{link}").join(link);
+}
+
+/**
+ * Saved templates without {link} still send a link on its own line (MS-247).
+ * @param {string} template
+ * @param {string} answerLink
+ * @return {string}
+ */
+function ensureAnswerLinkInTemplate(template, answerLink) {
+  const base = String(template == null ? "" : template);
+  const link = String(answerLink == null ? "" : answerLink).trim();
+  if (!link) return base;
+  if (base.includes("{link}")) return base;
+  const trimmed = base.trimEnd();
+  return trimmed ? `${trimmed}\n${link}` : link;
 }
 
 /**
@@ -175,6 +200,120 @@ function daysUntil(serviceDate, todayDate) {
     return Date.UTC(y, m - 1, day);
   };
   return Math.round((toUTC(serviceDate) - toUTC(todayDate)) / 86400000);
+}
+
+/**
+ * Whether personId is pastoral prayer on this service's liturgy.
+ * @param {?Object} liturgy
+ * @param {?string} personId
+ * @return {boolean}
+ */
+function isPastoralPrayerSubject(liturgy, personId) {
+  if (!personId || !liturgy) return false;
+  const male = liturgy.prayerMale && liturgy.prayerMale.id;
+  const female = liturgy.prayerFemale && liturgy.prayerFemale.id;
+  return personId === male || personId === female;
+}
+
+/**
+ * Church-local calendar day has moved past the service date.
+ * @param {string} todayDate YYYY-MM-DD
+ * @param {string} serviceDate YYYY-MM-DD
+ * @return {boolean}
+ */
+function serviceDateHasEnded(todayDate, serviceDate) {
+  return String(todayDate) > String(serviceDate);
+}
+
+/**
+ * May this person open the prayer Answer page now? Link path: still a subject
+ * and the service date has not ended. Signed-in without a link: also only from
+ * five days out or once the initial text has gone.
+ * @param {Object} state
+ * @param {string} state.personId
+ * @param {string} state.serviceDate
+ * @param {string} state.todayDate church-local today
+ * @param {?Object} state.liturgy prayerMale / prayerFemale
+ * @param {boolean} state.viaAnswerLink
+ * @param {?string} state.initialSentDate
+ * @return {boolean}
+ */
+function mayAnswerPrayerRequest(state) {
+  const s = state || {};
+  const personId = s.personId;
+  const serviceDate = s.serviceDate;
+  const todayDate = s.todayDate;
+  if (!personId || !serviceDate || !todayDate) return false;
+  if (!isPastoralPrayerSubject(s.liturgy, personId)) return false;
+  if (serviceDateHasEnded(todayDate, serviceDate)) return false;
+  if (s.viaAnswerLink) return true;
+  if (s.initialSentDate) return true;
+  return daysUntil(serviceDate, todayDate) <= INITIAL_DAYS_OUT;
+}
+
+/**
+ * What the Answer page may show. Elder-typed requests never leak Elder text.
+ * @param {Object} args
+ * @param {string} args.firstName
+ * @param {string} args.serviceDate
+ * @param {?Object} args.prayerRequest stored request doc fields
+ * @return {Object}
+ */
+function prayerAnswerPageView(args) {
+  const a = args || {};
+  const req = a.prayerRequest && typeof a.prayerRequest === "object" ?
+    a.prayerRequest : {};
+  const source = req.prayerRequestSource || null;
+  const text = String(req.prayerRequest || "").trim();
+  const base = {
+    firstName: firstNameOf(a.firstName) || "there",
+    serviceDateLabel: formatServiceDate(a.serviceDate),
+    privacyLine: PRAYER_ANSWER_PRIVACY_LINE,
+    eldersAlreadyHaveIt: false,
+    showAnswerBox: true,
+    existingAnswer: null,
+  };
+  if (source === "elder" && text) {
+    return Object.assign({}, base, {
+      eldersAlreadyHaveIt: true,
+      showAnswerBox: false,
+    });
+  }
+  if ((source === "reply" || source === "form") && text) {
+    return Object.assign({}, base, {existingAnswer: text});
+  }
+  return base;
+}
+
+/**
+ * Create, update, or leave the generated Shepherding Note (ADR-0007).
+ * @param {Object} args
+ * @param {boolean} args.hadRequestBefore
+ * @param {?string} args.noteId
+ * @param {?string} args.noteText current note body, null when missing
+ * @param {?string} args.noteGeneratedText snapshot from the request doc
+ * @return {{action: string}}
+ */
+function prayerRequestNoteDecision(args) {
+  const a = args || {};
+  if (!a.hadRequestBefore) {
+    return {action: "create"};
+  }
+  if (!a.noteId) {
+    return {action: "leave"};
+  }
+  const generated = String(
+      a.noteGeneratedText == null ? "" : a.noteGeneratedText,
+  ).trim();
+  const current = a.noteText == null ? null :
+    String(a.noteText).trim();
+  if (current === null || current === "") {
+    return {action: "leave"};
+  }
+  if (current === generated) {
+    return {action: "update"};
+  }
+  return {action: "leave"};
 }
 
 /**
@@ -330,7 +469,7 @@ function elderDigestDecision({
   if (!Array.isArray(subjectStates) || subjectStates.length === 0) return false;
   if (!subjectStates.every((s) => s && s.filled)) return false;
   if (wasCompleteBefore) return false;
-  return changedSource === "reply";
+  return changedSource === "reply" || changedSource === "form";
 }
 
 const DIGEST_MONTHS = [
@@ -383,13 +522,20 @@ if (typeof module !== "undefined" && module.exports) {
     DEFAULT_PRAYER_MESSAGES,
     DEFAULT_PUSH_WORDING,
     PUSH_WORDING_KINDS,
+    PRAYER_ANSWER_PRIVACY_LINE,
     pushConfigKey,
     firstNameOf,
     resolveTemplates,
     resolvePushWording,
     renderPrayerRequestMessage,
+    ensureAnswerLinkInTemplate,
     churchDateParts,
     daysUntil,
+    isPastoralPrayerSubject,
+    serviceDateHasEnded,
+    mayAnswerPrayerRequest,
+    prayerAnswerPageView,
+    prayerRequestNoteDecision,
     prayerRequestAction,
     manualPrayerRequestKind,
     prayerNotifyRequest,
