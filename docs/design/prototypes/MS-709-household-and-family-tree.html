@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-709 — Household and Family tree (prototype)</title>
+
+    <!-- The real stylesheets, by relative path, per .cursor/rules/ui-prototype-first.mdc.
+         Everything with an m-* class is drawn by the shipped design system. -->
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <!-- fonts.css declares its @font-face src relative to the document, which
+         404s under htmlpreview, so the same families come by absolute URL too —
+         the Material Symbols query is the one public/fonts.css cites. Prototype
+         only; a page under public/ uses the vendored copy. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        /* PROTOTYPE-ONLY CSS. .hh-* / .ft-* are proposed page styles for the
+           Household card and the Family tree; .proto-* is review scaffolding
+           and never ships. Every value is a var(--token) from the linked sheets. */
+
+        /* ── Review scaffolding ─────────────────────────────────── */
+        .proto-body {
+            margin: 0;
+            background: var(--surface-container-highest);
+            color: var(--on-background);
+            font-family: var(--font-sans);
+            font-size: var(--body-md-size);
+            line-height: var(--body-md-line);
+            -webkit-font-smoothing: antialiased;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: color-mix(in srgb, var(--tertiary) 24%, transparent);
+        }
+        .proto-skip {
+            position: absolute; left: var(--space-sm); top: -3rem; z-index: 100;
+            padding: var(--space-base) var(--space-sm); border-radius: var(--radius);
+            background: var(--primary); color: var(--on-primary); font-weight: 600; text-decoration: none;
+        }
+        .proto-skip:focus-visible { top: var(--space-sm); outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar__title {
+            margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size);
+            line-height: var(--headline-md-line); font-weight: var(--headline-md-weight); text-wrap: balance;
+        }
+        .proto-bar__sub { margin: 4px 0 0; color: var(--primary-fixed-dim); font-size: 14px; }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: var(--space-base); margin-top: var(--space-sm); }
+        .proto-jump a {
+            padding: 6px 12px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 13px; font-weight: 600; text-decoration: none;
+        }
+        .proto-jump a:hover { background: var(--primary-fixed); color: var(--primary); }
+        .proto-jump a:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        @media (min-width: 900px) { .proto-main { padding-left: var(--space-md); padding-right: var(--space-md); } }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: var(--space-md); }
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: var(--headline-lg-size);
+            line-height: var(--headline-lg-line); font-weight: var(--headline-lg-weight); color: var(--primary); text-wrap: balance;
+        }
+        .proto-section > h3 {
+            margin: var(--space-md) 0 var(--space-base); font-size: var(--label-sm-size);
+            font-weight: var(--label-sm-weight); letter-spacing: var(--label-sm-spacing); color: var(--on-surface-variant);
+        }
+        .proto-note { max-width: 68ch; margin: 0 0 var(--space-sm); font-size: 15px; line-height: 1.6; color: var(--on-surface-variant); text-wrap: pretty; }
+        .proto-note strong { color: var(--on-surface); }
+        .proto-stage {
+            background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-sm); overflow: hidden;
+        }
+        @media (min-width: 900px) { .proto-stage { padding: var(--space-md); } }
+        .proto-stage__label {
+            display: block; margin: 0 0 var(--space-sm); font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing); color: var(--on-surface-variant);
+        }
+        .proto-grid { display: grid; gap: var(--space-sm); }
+        @media (min-width: 900px) { .proto-grid--2 { grid-template-columns: 1fr 1fr; } .proto-grid--4 { grid-template-columns: repeat(4, 1fr); } }
+        .proto-model { display: grid; gap: var(--space-sm); }
+        @media (min-width: 900px) { .proto-model { grid-template-columns: 1fr 1fr; } }
+        .proto-ask { margin: 0; padding-left: 1.25rem; max-width: 72ch; }
+        .proto-ask li { margin-bottom: var(--space-xs); line-height: 1.55; }
+
+        /* ── Household card (proposed) ──────────────────────────── */
+        .hh-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+        .hh-title { margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size); line-height: var(--headline-md-line); color: var(--primary); }
+        .hh-name { margin: 2px 0 0; color: var(--on-surface-variant); font-size: 14px; }
+        .hh-group + .hh-group { margin-top: var(--space-sm); }
+        .hh-group > .m-label { display: block; margin-bottom: var(--space-base); }
+        .hh-rows { display: flex; flex-direction: column; gap: 2px; }
+        .hh-out {
+            display: flex; align-items: center; gap: var(--space-xs); margin-top: var(--space-sm);
+            padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-md);
+            background: var(--surface-container-low); color: var(--on-surface-variant); font-size: 13px; line-height: 1.45;
+        }
+        .hh-out a { color: var(--primary); font-weight: 600; }
+        .hh-out .material-symbols-outlined { font-size: 18px; color: var(--secondary); flex: 0 0 auto; }
+        .hh-edit { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .hh-edit__pair { display: grid; gap: var(--space-sm); }
+        @media (min-width: 600px) { .hh-edit__pair { grid-template-columns: 1fr 1fr; } }
+        .hh-chips { display: flex; flex-wrap: wrap; gap: var(--space-base); }
+        .hh-chip {
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-full);
+            background: var(--surface-container-lowest); font-size: 14px;
+        }
+        .hh-chip .m-icon-btn { width: 28px; height: 28px; }
+        .hh-foot { display: flex; justify-content: flex-end; gap: var(--space-xs); flex-wrap: wrap; }
+        .hh-hint { margin: 0; font-size: 13px; color: var(--on-surface-variant); line-height: 1.45; }
+
+        /* ── Family tree, shared ─────────────────────────────────── */
+        .ft-person {
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-full);
+            background: var(--surface-container-lowest); color: var(--on-surface); font-size: 14px; font-weight: 500;
+            text-decoration: none; white-space: nowrap;
+        }
+        a.ft-person:hover, a.ft-hh:hover { background: var(--surface-container); }
+        a.ft-hh:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        a.ft-person:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .ft-person--me { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); font-weight: 700; }
+        .ft-person .m-avatar { width: 26px; height: 26px; font-size: 11px; }
+        /* A marriage is two people joined by a double line — the same mark the
+           Relations Viewer uses since MS-704. */
+        .ft-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        .ft-couple { display: inline-flex; align-items: center; gap: 0; }
+        .ft-couple__bond { width: 18px; height: 6px; border-top: 2px solid var(--primary); border-bottom: 2px solid var(--primary); flex: 0 0 auto; }
+        .ft-hh {
+            display: inline-flex; flex-direction: column; gap: 4px; padding: var(--space-xs);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low);
+        }
+        .ft-hh__name { font-size: 12px; font-weight: 600; color: var(--on-surface-variant); }
+        .ft-hh--mine { background: var(--primary-fixed); border-color: var(--primary-fixed-dim); }
+
+        /* Variant A — generation rows */
+        .ftA { display: flex; flex-direction: column; }
+        .ftA__row { display: grid; gap: var(--space-xs); padding: var(--space-xs) 0; border-top: 1px solid var(--outline-variant); }
+        .ftA__row:first-child { border-top: 0; }
+        @media (min-width: 700px) { .ftA__row { grid-template-columns: 9rem 1fr; align-items: start; } }
+        .ftA__gen { font-size: var(--label-xs-size); font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing); color: var(--on-surface-variant); padding-top: 10px; }
+        .ftA__units { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+
+        /* Variant B — indented outline */
+        .ftB, .ftB ul { list-style: none; margin: 0; padding: 0; }
+        .ftB ul { margin-left: 14px; padding-left: var(--space-sm); border-left: 2px solid var(--outline-variant); }
+        .ftB li { padding: 4px 0; }
+        .ftB details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .ftB details > summary::-webkit-details-marker { display: none; }
+        .ftB details > summary::before { content: 'expand_more'; font-family: 'Material Symbols Outlined'; font-size: 20px; color: var(--on-surface-variant); transform: rotate(-90deg); transition: transform var(--duration) var(--ease-standard); }
+        .ftB details[open] > summary::before { transform: none; }
+        .ftB summary:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; border-radius: var(--radius); }
+        .ftB__up { color: var(--on-surface-variant); font-size: 13px; margin: 0 0 var(--space-xs); }
+
+        /* Variant C — pedigree diagram */
+        .ftC-scroll { overflow-x: auto; padding-bottom: var(--space-xs); overscroll-behavior-x: contain; }
+        .ftC { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 640px; }
+        .ftC__gen { display: flex; justify-content: center; gap: var(--space-md); }
+        .ftC__drop { width: 2px; height: 22px; background: var(--outline); }
+        .ftC__bar { height: 2px; background: var(--outline); }
+        .ftC__kids { display: flex; justify-content: center; gap: var(--space-sm); position: relative; padding-top: 22px; }
+        .ftC__kids::before { content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 2px; background: var(--outline); }
+        .ftC__kid { display: flex; flex-direction: column; align-items: center; position: relative; }
+        .ftC__kid::before { content: ''; position: absolute; top: -22px; width: 2px; height: 22px; background: var(--outline); }
+
+        .ft-legend { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-sm); font-size: 13px; color: var(--on-surface-variant); }
+        .ft-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .ft-legend .ft-couple__bond { width: 16px; }
+        .ft-swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--primary-fixed-dim); background: var(--primary-fixed); }
+        .ft-actions { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-top: var(--space-sm); }
+
+        /* ── Surface frames ──────────────────────────────────────── */
+        .sp-layout { display: grid; gap: var(--space-sm); }
+        @media (min-width: 1000px) { .sp-layout { grid-template-columns: 360px 1fr; align-items: start; } }
+        .rm-tabs { margin-bottom: var(--space-sm); overflow-x: auto; }
+        .rm-list { display: flex; flex-direction: column; gap: 2px; }
+        .dp-modal { max-width: 640px; margin: 0 auto; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); padding: var(--space-md); }
+        .dp-modal .dp-title { margin: 0 0 var(--space-sm); font-family: var(--font-serif); font-size: var(--headline-md-size); color: var(--primary); }
+        .dp-section + .dp-section { margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--outline-variant); }
+        .dp-section > .m-label { display: block; margin-bottom: var(--space-xs); }
+
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+</head>
+
+<body class="proto-body">
+    <a class="proto-skip" href="#main">Skip to the prototype</a>
+
+    <header class="proto-bar">
+        <h1 class="proto-bar__title">Household and Family tree — two things, not one</h1>
+        <p class="proto-bar__sub">MS-709 prototype. Fictional people only. Nothing here is wired to data.</p>
+        <nav class="proto-jump" aria-label="Sections">
+            <a href="#model">The model</a>
+            <a href="#tree-variants">Family tree: A / B / C</a>
+            <a href="#profile">Shepherding Profile</a>
+            <a href="#manager">Relationships manager</a>
+            <a href="#directory">Directory (editors)</a>
+            <a href="#states">States</a>
+            <a href="#decide">What I need decided</a>
+        </nav>
+    </header>
+
+    <main class="proto-main" id="main">
+
+        <!-- ═════════════ The model ═════════════ -->
+        <section class="proto-section" id="model" aria-labelledby="model-h">
+            <h2 id="model-h">The model</h2>
+            <p class="proto-note">
+                A <strong>Household</strong> is the unit: a husband and wife, or a single parent, and their
+                unmarried children. No children is fine. A child who marries leaves and starts their own.
+                A <strong>Family</strong> is the tree those Households make when you follow each child into the
+                Household they started — grandparents, parents, children, grandchildren.
+            </p>
+            <p class="proto-note">
+                Only the Household is stored. It is the record the directory already keeps
+                (<code>families</code>: husband, wife, children), so no data moves. The Family tree is worked out
+                from Households and is edited by editing them: “add parents” means “say which Household this
+                person grew up in”; “married” means “start their Household”.
+            </p>
+            <div class="proto-model">
+                <div class="m-card">
+                    <span class="m-label">Household · stored</span>
+                    <p class="proto-note" style="margin-top: var(--space-xs)">Tobias and Petra Quill, with Iris and Theo. Linus is married, so he is not in it.</p>
+                    <div class="ft-hh ft-hh--mine">
+                        <span class="ft-hh__name">The Quill Household</span>
+                        <span class="ft-couple">
+                            <span class="ft-person"><span class="m-avatar m-avatar--sm">TQ</span>Tobias</span>
+                            <span class="ft-couple__bond" aria-hidden="true"></span>
+                            <span class="ft-person"><span class="m-avatar m-avatar--sm">PQ</span>Petra</span>
+                        </span>
+                        <span style="display:flex;gap:4px;flex-wrap:wrap">
+                            <span class="ft-person"><span class="m-avatar m-avatar--sm">IQ</span>Iris</span>
+                            <span class="ft-person"><span class="m-avatar m-avatar--sm">TQ</span>Theo</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="m-card">
+                    <span class="m-label">Family tree · derived</span>
+                    <p class="proto-note" style="margin-top: var(--space-xs)">Four Households, three generations, one tree. Nothing extra is stored to draw it.</p>
+                    <p class="proto-note" style="margin:0">Ambrose &amp; Hattie Quill → <strong>Tobias &amp; Petra</strong> → Linus &amp; Nell (with Pip) · Iris · Theo</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════ Tree variants ═════════════ -->
+        <section class="proto-section" id="tree-variants" aria-labelledby="tv-h">
+            <h2 id="tv-h">Family tree: three ways to draw it</h2>
+            <p class="proto-note">The same tree, seen from Petra Quill. Pick one; the surfaces below use <strong>A</strong> until you do.</p>
+
+            <h3>A. Generation rows</h3>
+            <p class="proto-note">Each generation is a row of Households. Reads top to bottom, wraps on a phone, never scrolls sideways. Best for “who is in this family”.</p>
+            <div class="proto-stage">
+                <div class="ftA" role="list" aria-label="Family tree by generation">
+                    <div class="ftA__row" role="listitem">
+                        <span class="ftA__gen">Grandparents</span>
+                        <div class="ftA__units">
+                            <span class="ft-hh"><span class="ft-hh__name">Petra’s parents</span>
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">OH</span>Oswin Harrow</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">MH</span>Mae Harrow</a></span></span>
+                            <span class="ft-hh"><span class="ft-hh__name">Tobias’s parents</span>
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">AQ</span>Ambrose Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">HQ</span>Hattie Quill</a></span></span>
+                        </div>
+                    </div>
+                    <div class="ftA__row" role="listitem">
+                        <span class="ftA__gen">Parents</span>
+                        <div class="ftA__units">
+                            <span class="ft-hh ft-hh--mine"><span class="ft-hh__name">The Quill Household</span>
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Tobias Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">PQ</span>Petra Quill</span></span></span>
+                        </div>
+                    </div>
+                    <div class="ftA__row" role="listitem">
+                        <span class="ftA__gen">Children</span>
+                        <div class="ftA__units">
+                            <span class="ft-hh"><span class="ft-hh__name">Linus’s Household</span>
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">LQ</span>Linus Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">NQ</span>Nell Quill</a></span></span>
+                            <span class="ft-hh ft-hh--mine"><span class="ft-hh__name">At home</span>
+                                <span style="display:flex;gap:4px;flex-wrap:wrap"><a class="ft-person" href="#"><span class="m-avatar">IQ</span>Iris Quill</a><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Theo Quill</a></span></span>
+                        </div>
+                    </div>
+                    <div class="ftA__row" role="listitem">
+                        <span class="ftA__gen">Grandchildren</span>
+                        <div class="ftA__units">
+                            <span class="ft-hh"><span class="ft-hh__name">In Linus’s Household</span><a class="ft-person" href="#"><span class="m-avatar">PQ</span>Pip Quill</a></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="ft-legend">
+                    <span><span class="ft-couple__bond" aria-hidden="true"></span>Married</span>
+                    <span><span class="ft-swatch" aria-hidden="true"></span>Petra’s own Household</span>
+                </div>
+            </div>
+
+            <h3>B. Outline</h3>
+            <p class="proto-note">Ancestors as one line above; below, each Household nests the next, and folds. Longest trees stay short. Best on a phone and for large families.</p>
+            <div class="proto-stage">
+                <p class="ftB__up"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px" aria-hidden="true">north</span> Grew up with <a href="#">Oswin &amp; Mae Harrow</a></p>
+                <ul class="ftB" aria-label="Family tree outline">
+                    <li>
+                        <details open>
+                            <summary><span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Tobias Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">PQ</span>Petra Quill</span></span><span class="m-badge m-badge--neutral">3 children</span></summary>
+                            <ul>
+                                <li>
+                                    <details open>
+                                        <summary><span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">LQ</span>Linus Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">NQ</span>Nell Quill</a></span><span class="m-badge m-badge--neutral">Own Household</span></summary>
+                                        <ul><li><a class="ft-person" href="#"><span class="m-avatar">PQ</span>Pip Quill</a></li></ul>
+                                    </details>
+                                </li>
+                                <li><a class="ft-person" href="#"><span class="m-avatar">IQ</span>Iris Quill</a></li>
+                                <li><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Theo Quill</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                </ul>
+            </div>
+
+            <h3>C. Pedigree diagram</h3>
+            <p class="proto-note">The classic drawn tree: couples on a double line, children hanging below. Most recognisable, but scrolls sideways on a phone once there are more than three children.</p>
+            <div class="proto-stage">
+                <div class="ftC-scroll" tabindex="0" role="region" aria-label="Family tree diagram, scrolls sideways">
+                    <div class="ftC">
+                        <div class="ftC__gen">
+                            <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Tobias</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">PQ</span>Petra</span></span>
+                        </div>
+                        <span class="ftC__drop" aria-hidden="true"></span>
+                        <div class="ftC__kids">
+                            <div class="ftC__kid">
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">LQ</span>Linus</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">NQ</span>Nell</a></span>
+                                <span class="ftC__drop" aria-hidden="true"></span>
+                                <a class="ft-person" href="#"><span class="m-avatar">PQ</span>Pip</a>
+                            </div>
+                            <div class="ftC__kid"><a class="ft-person" href="#"><span class="m-avatar">IQ</span>Iris</a></div>
+                            <div class="ftC__kid"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Theo</a></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="hh-hint" style="margin-top: var(--space-xs)">Grandparents collapse to a “Show Petra’s parents” link above the diagram so the width is spent on descendants.</p>
+            </div>
+        </section>
+
+        <!-- ═════════════ Shepherding Profile ═════════════ -->
+        <section class="proto-section" id="profile" aria-labelledby="sp-h">
+            <h2 id="sp-h">Shepherding Profile</h2>
+            <p class="proto-note">
+                Household and Family tree replace the Family rows in the Relationships panel. Custom Relationships stay where they are.
+                An elder or Pastoral Assistant edits the Household in place; the tree’s buttons open the same editor on the right Household.
+            </p>
+            <div class="proto-stage">
+                <span class="proto-stage__label">Petra Quill · Relationships</span>
+                <div class="sp-layout">
+                    <!-- Household, read -->
+                    <div class="m-card">
+                        <div class="hh-head">
+                            <div>
+                                <h3 class="hh-title">Household</h3>
+                                <p class="hh-name">The Quill Household</p>
+                            </div>
+                            <button class="m-btn m-btn--secondary m-btn--sm" type="button"><span class="material-symbols-outlined" aria-hidden="true">edit</span><span class="m-btn__label">Edit</span></button>
+                        </div>
+                        <div class="hh-group">
+                            <span class="m-label">Parents</span>
+                            <div class="hh-rows">
+                                <div class="m-row"><span class="m-avatar m-avatar--sm">TQ</span><div class="m-row__main"><div class="m-row__title">Tobias Quill</div><div class="m-row__sub">Husband</div></div></div>
+                                <div class="m-row m-row--current"><span class="m-avatar m-avatar--sm">PQ</span><div class="m-row__main"><div class="m-row__title">Petra Quill</div><div class="m-row__sub">Wife · this profile</div></div></div>
+                            </div>
+                        </div>
+                        <div class="hh-group">
+                            <span class="m-label">Children at home</span>
+                            <div class="hh-rows">
+                                <a class="m-row m-row--interactive" href="#"><span class="m-avatar m-avatar--sm">IQ</span><div class="m-row__main"><div class="m-row__title">Iris Quill</div><div class="m-row__sub">Daughter</div></div><span class="material-symbols-outlined m-row__chevron" aria-hidden="true">chevron_right</span></a>
+                                <a class="m-row m-row--interactive" href="#"><span class="m-avatar m-avatar--sm">TQ</span><div class="m-row__main"><div class="m-row__title">Theo Quill</div><div class="m-row__sub">Son</div></div><span class="material-symbols-outlined m-row__chevron" aria-hidden="true">chevron_right</span></a>
+                            </div>
+                        </div>
+                        <p class="hh-out"><span class="material-symbols-outlined" aria-hidden="true">diversity_1</span><span>Linus is married and has his own Household. He is still in the <a href="#sp-tree">Family tree</a>.</span></p>
+                    </div>
+
+                    <!-- Family tree -->
+                    <div class="m-card" id="sp-tree">
+                        <div class="hh-head">
+                            <h3 class="hh-title">Family tree</h3>
+                            <span class="m-badge m-badge--neutral">4 Households</span>
+                        </div>
+                        <div class="ftA">
+                            <div class="ftA__row"><span class="ftA__gen">Grandparents</span><div class="ftA__units">
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">OH</span>Oswin Harrow</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">MH</span>Mae Harrow</a></span>
+                                <span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">AQ</span>Ambrose Quill</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">HQ</span>Hattie Quill</a></span>
+                            </div></div>
+                            <div class="ftA__row"><span class="ftA__gen">Parents</span><div class="ftA__units">
+                                <span class="ft-hh ft-hh--mine"><span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Tobias</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">PQ</span>Petra</span></span></span>
+                            </div></div>
+                            <div class="ftA__row"><span class="ftA__gen">Children</span><div class="ftA__units">
+                                <span class="ft-hh"><span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">LQ</span>Linus</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">NQ</span>Nell</a></span></span>
+                                <span class="ft-hh ft-hh--mine"><span style="display:flex;gap:4px;flex-wrap:wrap"><a class="ft-person" href="#"><span class="m-avatar">IQ</span>Iris</a><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Theo</a></span></span>
+                            </div></div>
+                            <div class="ftA__row"><span class="ftA__gen">Grandchildren</span><div class="ftA__units"><a class="ft-person" href="#"><span class="m-avatar">PQ</span>Pip Quill</a></div></div>
+                        </div>
+                        <div class="ft-actions">
+                            <button class="m-btn m-btn--ghost m-btn--sm" type="button"><span class="material-symbols-outlined" aria-hidden="true">north</span><span class="m-btn__label">Edit Parents</span></button>
+                            <button class="m-btn m-btn--ghost m-btn--sm" type="button"><span class="material-symbols-outlined" aria-hidden="true">south</span><span class="m-btn__label">Add a child</span></button>
+                            <a class="m-btn m-btn--ghost m-btn--sm" href="#"><span class="material-symbols-outlined" aria-hidden="true">hub</span><span class="m-btn__label">Open in Relations Viewer</span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Editing the Household (same editor on every surface)</h3>
+            <div class="proto-stage">
+                <div class="m-card" style="max-width: 560px">
+                    <div class="hh-head"><h3 class="hh-title">Edit Household</h3></div>
+                    <form class="hh-edit" onsubmit="return false">
+                        <div class="hh-edit__pair">
+                            <label class="m-field"><span class="m-label">Husband</span>
+                                <span class="m-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input name="husband" autocomplete="off" value="Tobias Quill" aria-label="Husband" /></span></label>
+                            <label class="m-field"><span class="m-label">Wife</span>
+                                <span class="m-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input name="wife" autocomplete="off" value="Petra Quill" aria-label="Wife" /></span></label>
+                        </div>
+                        <p class="hh-hint">Leave one empty for a single parent.</p>
+                        <div class="m-field">
+                            <span class="m-label" id="kids-l">Children at home</span>
+                            <div class="hh-chips" role="list" aria-labelledby="kids-l">
+                                <span class="hh-chip" role="listitem">Iris Quill<button class="m-icon-btn m-icon-btn--ghost m-icon-btn--sm" type="button" aria-label="Take Iris Quill out of this Household"><span class="material-symbols-outlined">close</span></button></span>
+                                <span class="hh-chip" role="listitem">Theo Quill<button class="m-icon-btn m-icon-btn--ghost m-icon-btn--sm" type="button" aria-label="Take Theo Quill out of this Household"><span class="material-symbols-outlined">close</span></button></span>
+                            </div>
+                            <span class="m-search" style="margin-top: var(--space-xs)"><span class="material-symbols-outlined" aria-hidden="true">person_add</span><input name="child" autocomplete="off" placeholder="Add a child…" aria-label="Add a child" /></span>
+                        </div>
+                        <div class="m-notice m-notice--info">
+                            <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">diversity_1</span>
+                            <div class="m-notice__body">
+                                <p class="m-notice__title">Linus Quill is married.</p>
+                                <p class="m-notice__text">He moved to his own Household with Nell. He is still Tobias and Petra’s son in the Family tree.</p>
+                            </div>
+                        </div>
+                        <label class="m-field" style="max-width: 16rem"><span class="m-label">Anniversary</span><input class="m-input" type="date" name="anniversary" value="1994-06-18" /></label>
+                        <div class="hh-foot">
+                            <button class="m-btn m-btn--quiet m-btn--sm" type="button">Cancel</button>
+                            <button class="m-btn m-btn--primary m-btn--sm" type="submit">Save Household</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════ Relationships manager ═════════════ -->
+        <section class="proto-section" id="manager" aria-labelledby="rm-h">
+            <h2 id="rm-h">Relationships manager</h2>
+            <p class="proto-note">
+                Manage Tags and Relationships gains a <strong>Households</strong> tab: every Household on the left, the chosen one on the right with its place in the tree.
+                This is where an elder fixes a family’s shape in one go — the case that started MS-704.
+            </p>
+            <div class="proto-stage">
+                <span class="proto-stage__label">Manage Tags and Relationships</span>
+                <div class="m-tabs rm-tabs" role="tablist" aria-label="Manage">
+                    <button class="m-tabs__tab" role="tab" aria-selected="false" type="button">Tags</button>
+                    <button class="m-tabs__tab" role="tab" aria-selected="false" type="button">Relationships</button>
+                    <button class="m-tabs__tab m-tabs__tab--current" role="tab" aria-selected="true" aria-controls="rm-panel" id="rm-tab" type="button">Households</button>
+                </div>
+                <div class="m-split" role="tabpanel" id="rm-panel" aria-labelledby="rm-tab">
+                    <div class="m-split__list">
+                        <div class="m-search" style="margin-bottom: var(--space-xs)"><span class="material-symbols-outlined" aria-hidden="true">search</span><input name="hh-search" autocomplete="off" placeholder="Search Households…" aria-label="Search Households" /></div>
+                        <div class="rm-list">
+                            <a class="m-row m-row--interactive" href="#"><div class="m-row__main"><div class="m-row__title">Ambrose &amp; Hattie Quill</div><div class="m-row__sub">2 people · no children at home</div></div></a>
+                            <a class="m-row m-row--interactive m-row--current" href="#" aria-current="true"><div class="m-row__main"><div class="m-row__title">Tobias &amp; Petra Quill</div><div class="m-row__sub">4 people</div></div></a>
+                            <a class="m-row m-row--interactive" href="#"><div class="m-row__main"><div class="m-row__title">Linus &amp; Nell Quill</div><div class="m-row__sub">3 people · married 2024</div></div></a>
+                            <a class="m-row m-row--interactive" href="#"><div class="m-row__main"><div class="m-row__title">Oswin Harrow</div><div class="m-row__sub">1 person</div></div></a>
+                            <a class="m-row m-row--interactive" href="#"><div class="m-row__main"><div class="m-row__title">June Okafor</div><div class="m-row__sub">2 people · single parent</div></div></a>
+                        </div>
+                        <button class="m-btn m-btn--secondary m-btn--sm" type="button" style="margin-top: var(--space-xs)"><span class="material-symbols-outlined" aria-hidden="true">add</span><span class="m-btn__label">New Household</span></button>
+                    </div>
+                    <div class="m-split__pane">
+                        <div class="hh-head">
+                            <div><h3 class="hh-title">Tobias &amp; Petra Quill</h3><p class="hh-name">The Quill Household</p></div>
+                            <button class="m-btn m-btn--secondary m-btn--sm" type="button"><span class="material-symbols-outlined" aria-hidden="true">edit</span><span class="m-btn__label">Edit</span></button>
+                        </div>
+                        <div class="hh-rows">
+                            <div class="m-row"><span class="m-avatar m-avatar--sm">TQ</span><div class="m-row__main"><div class="m-row__title">Tobias Quill</div><div class="m-row__sub">Husband · grew up with Ambrose &amp; Hattie</div></div></div>
+                            <div class="m-row"><span class="m-avatar m-avatar--sm">PQ</span><div class="m-row__main"><div class="m-row__title">Petra Quill</div><div class="m-row__sub">Wife · grew up with Oswin &amp; Mae Harrow</div></div></div>
+                            <div class="m-row"><span class="m-avatar m-avatar--sm">IQ</span><div class="m-row__main"><div class="m-row__title">Iris Quill</div><div class="m-row__sub">Daughter</div></div></div>
+                            <div class="m-row"><span class="m-avatar m-avatar--sm">TQ</span><div class="m-row__main"><div class="m-row__title">Theo Quill</div><div class="m-row__sub">Son</div></div></div>
+                        </div>
+                        <p class="hh-out"><span class="material-symbols-outlined" aria-hidden="true">diversity_1</span><span>Married out: <a href="#">Linus &amp; Nell Quill</a></span></p>
+                        <span class="m-label" style="display:block;margin-top:var(--space-sm)">In the Family tree</span>
+                        <div class="ftA">
+                            <div class="ftA__row"><span class="ftA__gen">Grew up in</span><div class="ftA__units"><a class="ft-hh" href="#" style="text-decoration:none"><span class="ft-hh__name">Ambrose &amp; Hattie Quill</span></a><a class="ft-hh" href="#" style="text-decoration:none"><span class="ft-hh__name">Oswin &amp; Mae Harrow</span></a></div></div>
+                            <div class="ftA__row"><span class="ftA__gen">This Household</span><div class="ftA__units"><span class="ft-hh ft-hh--mine"><span class="ft-hh__name">Tobias &amp; Petra Quill</span></span></div></div>
+                            <div class="ftA__row"><span class="ftA__gen">Started from it</span><div class="ftA__units"><a class="ft-hh" href="#" style="text-decoration:none"><span class="ft-hh__name">Linus &amp; Nell Quill</span></a></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════ Directory (editors) ═════════════ -->
+        <section class="proto-section" id="directory" aria-labelledby="dp-h">
+            <h2 id="dp-h">Directory profile, for editors</h2>
+            <p class="proto-note">
+                The editor’s person modal swaps its “Family” block for <strong>Household</strong> (editable, the same fields as today plus single parent)
+                and a read-only <strong>Family tree</strong>. Members still only propose changes from their own profile, as now.
+            </p>
+            <div class="proto-stage">
+                <div class="dp-modal" role="group" aria-label="Edit Theo Quill">
+                    <h3 class="dp-title">Theo Quill</h3>
+                    <div class="dp-section">
+                        <span class="m-label">Household</span>
+                        <div class="m-row"><div class="m-row__main"><div class="m-row__title">The Quill Household</div><div class="m-row__sub">Son of Tobias &amp; Petra · with Iris</div></div><button class="m-btn m-btn--ghost m-btn--sm" type="button">Change</button></div>
+                        <div class="ft-actions">
+                            <button class="m-btn m-btn--secondary m-btn--sm" type="button"><span class="material-symbols-outlined" aria-hidden="true">diversity_1</span><span class="m-btn__label">Start His Own Household</span></button>
+                        </div>
+                        <p class="hh-hint" style="margin-top: var(--space-xs)">Starting his Household moves him out of his parents’. He stays their son in the Family tree.</p>
+                    </div>
+                    <div class="dp-section">
+                        <span class="m-label">Family tree</span>
+                        <div class="ftA">
+                            <div class="ftA__row"><span class="ftA__gen">Parents</span><div class="ftA__units"><span class="ft-couple"><a class="ft-person" href="#"><span class="m-avatar">TQ</span>Tobias</a><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">PQ</span>Petra</a></span></div></div>
+                            <div class="ftA__row"><span class="ftA__gen">Siblings</span><div class="ftA__units"><a class="ft-person" href="#"><span class="m-avatar">LQ</span>Linus</a><a class="ft-person" href="#"><span class="m-avatar">IQ</span>Iris</a><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">TQ</span>Theo</span></div></div>
+                        </div>
+                    </div>
+                    <div class="hh-foot" style="margin-top: var(--space-md)">
+                        <button class="m-btn m-btn--quiet m-btn--sm" type="button">Cancel</button>
+                        <button class="m-btn m-btn--primary m-btn--sm" type="button">Save</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════ States ═════════════ -->
+        <section class="proto-section" id="states" aria-labelledby="st-h">
+            <h2 id="st-h">States</h2>
+
+            <h3>Household card</h3>
+            <div class="proto-grid proto-grid--4">
+                <div class="m-card">
+                    <span class="proto-stage__label">Empty</span>
+                    <div class="m-empty"><span class="material-symbols-outlined" aria-hidden="true">home</span><p>Ada Lindqvist isn’t in a Household yet.</p></div>
+                    <div class="ft-actions"><button class="m-btn m-btn--secondary m-btn--sm" type="button">Start a Household</button><button class="m-btn m-btn--ghost m-btn--sm" type="button">Add to one</button></div>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">One person</span>
+                    <h3 class="hh-title">Household</h3>
+                    <div class="m-row"><span class="m-avatar m-avatar--sm">OH</span><div class="m-row__main"><div class="m-row__title">Oswin Harrow</div><div class="m-row__sub">No children at home</div></div></div>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">Many</span>
+                    <h3 class="hh-title">Household</h3>
+                    <p class="hh-name">The Okafor Household · single parent</p>
+                    <div class="hh-rows">
+                        <div class="m-row"><span class="m-avatar m-avatar--sm">JO</span><div class="m-row__main"><div class="m-row__title">June Okafor</div><div class="m-row__sub">Mother</div></div></div>
+                        <div class="m-row"><span class="m-avatar m-avatar--sm">AO</span><div class="m-row__main"><div class="m-row__title">Ade Okafor</div></div></div>
+                        <div class="m-row"><span class="m-avatar m-avatar--sm">BO</span><div class="m-row__main"><div class="m-row__title">Bisi Okafor</div></div></div>
+                        <div class="m-row"><span class="m-avatar m-avatar--sm">CO</span><div class="m-row__main"><div class="m-row__title">Chidi Okafor</div></div></div>
+                        <div class="m-row"><span class="m-avatar m-avatar--sm">DO</span><div class="m-row__main"><div class="m-row__title">Dayo Okafor</div></div></div>
+                    </div>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">Error</span>
+                    <div class="m-notice m-notice--error">
+                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                        <div class="m-notice__body"><p class="m-notice__title">Iris Quill is a child in two Households.</p><p class="m-notice__text">Take her out of one. Until then the tree shows her under both.</p></div>
+                        <div class="m-notice__acts"><button class="m-btn m-btn--secondary m-btn--sm" type="button">Fix</button></div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Family tree card</h3>
+            <div class="proto-grid proto-grid--4">
+                <div class="m-card">
+                    <span class="proto-stage__label">Empty</span>
+                    <div class="m-empty"><span class="material-symbols-outlined" aria-hidden="true">account_tree</span><p>No parents or children recorded for Ada.</p></div>
+                    <div class="ft-actions"><button class="m-btn m-btn--ghost m-btn--sm" type="button">Add parents</button><button class="m-btn m-btn--ghost m-btn--sm" type="button">Add a child</button></div>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">One generation</span>
+                    <div class="ftA"><div class="ftA__row"><span class="ftA__gen">Marriage</span><div class="ftA__units"><span class="ft-couple"><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">MK</span>Mabel</span><span class="ft-couple__bond"><span class="ft-sr">married to</span></span><a class="ft-person" href="#"><span class="m-avatar">RK</span>Rolf</a></span></div></div></div>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">Many (five generations)</span>
+                    <button class="m-btn m-btn--ghost m-btn--sm" type="button" aria-expanded="false"><span class="material-symbols-outlined" aria-hidden="true">unfold_more</span><span class="m-btn__label">Show 3 More Generations Above</span></button>
+                    <div class="ftA">
+                        <div class="ftA__row"><span class="ftA__gen">Parents</span><div class="ftA__units"><a class="ft-person" href="#"><span class="m-avatar">EV</span>Edith Vane</a></div></div>
+                        <div class="ftA__row"><span class="ftA__gen">This person</span><div class="ftA__units"><span class="ft-person ft-person--me" aria-current="true"><span class="m-avatar">CV</span>Cora Vane</span></div></div>
+                    </div>
+                    <p class="hh-hint">Two generations either side show; the rest fold.</p>
+                </div>
+                <div class="m-card">
+                    <span class="proto-stage__label">Error</span>
+                    <div class="m-notice m-notice--error">
+                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">cloud_off</span>
+                        <div class="m-notice__body"><p class="m-notice__title">The Family tree didn’t load.</p><p class="m-notice__text">The Household above is still right. Try again.</p></div>
+                        <div class="m-notice__acts"><button class="m-btn m-btn--secondary m-btn--sm" type="button">Try again</button></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════ Decide ═════════════ -->
+        <section class="proto-section" id="decide" aria-labelledby="dc-h">
+            <h2 id="dc-h">What I need decided</h2>
+            <ol class="proto-ask">
+                <li><strong>Tree layout:</strong> A (generation rows), B (outline) or C (drawn pedigree)?</li>
+                <li><strong>The kiosk’s “Household”.</strong> Today the foyer groups anyone who arrives together — a couple and a grandmother, say — and calls it a Household. Under your definition that is not a Household. Rename the foyer one (e.g. “Check-in group”), derive it from the new Household, or keep both?</li>
+                <li><strong>Where Family lives in the data:</strong> keep the stored record as <code>families</code> and call it Household in the UI (no migration), or rename the collection too?</li>
+                <li><strong>Edge cases you haven’t ruled on:</strong> remarriage and step-children, and a child of separated parents who belongs in two Households. Today a person is a child in at most one record, so the error state above is what they would see.</li>
+                <li><strong>Who edits:</strong> editors can edit today; should elders and Pastoral Assistants edit from the Shepherding Profile as shown, or only read?</li>
+            </ol>
+        </section>
+    </main>
+</body>
+
+</html>
