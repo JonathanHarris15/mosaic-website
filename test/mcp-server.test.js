@@ -343,6 +343,24 @@ describe('the Order of Service MCP server', () => {
         ]);
     });
 
+    // MS-702: an assistant backfilling elder interviews reached for
+    // shep_write_note, which offers "Elder Interview" as a Note Type, and left
+    // notes where the elders wanted the interview form filled in on the profile.
+    test('an elder interview is steered to a Form Document on the person, not a note', async () => {
+        const {client} = await connectAs('elder');
+        const byName = {};
+        (await client.listTools()).tools.forEach((t) => { byName[t.name] = t; });
+
+        const note = byName.shep_write_note.description;
+        assert.match(note, /elder interview/i);
+        assert.match(note, /shep_create_form_document/);
+
+        const form = byName.shep_create_form_document;
+        assert.match(form.description, /shep_list_form_templates/);
+        assert.match(form.description, /shep_answer_form_document/);
+        assert.match(form.inputSchema.properties.personId.description, /profile/i);
+    });
+
     test('an editor is offered them and refused every one', async () => {
         // Registered for everybody on purpose. A tool an editor cannot SEE
         // answers "unknown tool", which reads as a broken server; a tool that

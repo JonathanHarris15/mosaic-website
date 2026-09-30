@@ -229,7 +229,11 @@ function register(server, deps) {
       "the editor an elder opens it in. BEFORE REACHING FOR THIS, check " +
       "shep_list_notes: if there is already a note about the same " +
       "conversation, shep_append_to_note keeps it as one record instead of " +
-      "leaving an elder two half-records to reconcile.",
+      "leaving an elder two half-records to reconcile. ⚠ AN ELDER INTERVIEW " +
+      "IS A FORM, NOT A NOTE: the elders want the interview form filled in " +
+      "and on the person's profile. Find the interview template with " +
+      "shep_list_form_templates, start it with shep_create_form_document " +
+      "(pass personId), and fill it in with shep_answer_form_document.",
     inputSchema: {
       personId,
       type: z.string().describe(
@@ -664,10 +668,15 @@ function register(server, deps) {
       "Start a Form Document from a template, about a Person. It takes a " +
       "COPY of the template's questions, so editing the template later never " +
       "reaches this record. The questions come back in the result, ready for " +
-      "shep_answer_form_document.",
+      "shep_answer_form_document. The templateId comes from " +
+      "shep_list_form_templates. This, not shep_write_note, is how an elder " +
+      "interview is recorded. Start ONE per interview — a second call makes " +
+      "a second copy on the profile.",
     inputSchema: {
       templateId: z.string().min(1).describe("From shep_list_form_templates"),
-      personId: z.string().optional().describe("Who it is about"),
+      personId: z.string().optional().describe(
+          "Who it is about. Pass it: this is what puts the document on " +
+          "their profile's Documents tab"),
       title: z.string().optional()
           .describe("What to call it; the template's name if left out"),
       folderId: z.string().optional().describe("Which Folder to file it in"),
