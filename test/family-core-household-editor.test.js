@@ -161,3 +161,32 @@ test('planMergeHouseholds joins both parents to every child and deletes the left
     assert.strictEqual(Family.planMergeHouseholds(splitFixture(), 'famO', 'famOther').valid, false, 'different wives');
     assert.strictEqual(Family.planMergeHouseholds(splitFixture(), 'famBoth', 'famO').valid, false, 'no shared parent');
 });
+
+test('familyTrees: one Family per top father, holding every Household below', () => {
+    const named = [['amb', 'Ambrose Hatley'], ['hat', 'Hattie Hatley'], ['osw', 'Oswin Vale'], ['mae', 'Maeve Vale'],
+        ['tob', 'Tobiah Hatley'], ['pet', 'Petra Hatley'], ['lin', 'Linus Hatley'], ['nel', 'Nell Hatley'],
+        ['iri', 'Iris Hatley'], ['the', 'Theo Hatley'], ['pip', 'Pip Hatley']].map(([id, name]) => ({ id, name }));
+    const trees = Family.familyTrees(fixture(), named);
+    assert.deepStrictEqual(trees.map(t => t.name), ['Hatley family', 'Vale family']);
+    const hatley = trees[0];
+    assert.strictEqual(hatley.id, 'famG');
+    assert.deepStrictEqual(hatley.households, [
+        { familyId: 'famG', depth: 0 }, { familyId: 'famH', depth: 1 }, { familyId: 'famL', depth: 2 },
+    ]);
+    assert.deepStrictEqual(trees[1].households.map(h => h.familyId), ['famO', 'famH', 'famL'],
+        'a married daughter’s Household is in her parents’ Family too');
+    assert.strictEqual(hatley.peopleIds.length, 9);
+});
+
+test('familyTrees names by surname, adding the top father’s first name when surnames repeat', () => {
+    const people2 = [['a', 'Carl Hattaway'], ['b', 'Gwen Hattaway'], ['c', 'Rhys Hattaway'], ['d', 'Ada Hattaway'], ['e', 'Ivo Kerr']]
+        .map(([id, name]) => ({ id, name }));
+    const fams = [
+        { id: 'f1', husbandId: 'a', wifeId: 'b', childIds: [] },
+        { id: 'f2', husbandId: 'c', wifeId: 'd', childIds: [] },
+        { id: 'f3', husbandId: 'e', childIds: [] },
+        { id: 'f4', childIds: [] },
+    ];
+    assert.deepStrictEqual(Family.familyTrees(fams, people2).map(t => t.name),
+        ['Hattaway, Carl family', 'Hattaway, Rhys family', 'Kerr family'], 'an empty record is no Family');
+});

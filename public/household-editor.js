@@ -11,7 +11,11 @@
 //     onChange(families, info),  after a write; info.familyId is the record written
 //     toast(message, kind),      optional
 //     headingLevel,              2 or 3 (default 2)
+//     showTree,                  false leaves the Family tree off the card
 //   })
+//
+//   HouseholdEditor.renderTree(el, { families, people, familyId, personHref })
+//     draws just the Family tree from one Household down, read-only.
 //
 // Call it again whenever the inputs change; it redraws in place and keeps
 // whatever is typed in a search box. The planners are FamilyCore's; this file
@@ -309,7 +313,7 @@
                         : '<span id="' + el._hh.uid + '-anniv">' + esc(view.anniversary) + '</span>') + '</div>';
             }
 
-            out += '<div class="hh-group"><span class="m-label">Family tree</span>' + treeHtml(o, family) + '</div>';
+            if (o.showTree !== false) out += '<div class="hh-group"><span class="m-label">Family tree</span>' + treeHtml(o, family) + '</div>';
         }
         return out + errorHtml(el) + '</section>';
     }
@@ -443,7 +447,18 @@
         draw(el);
     }
 
-    var HouseholdEditor = { render: render };
+    function renderTree(el, opts) {
+        if (!el) return;
+        var family = (opts.families || []).find(function (f) { return f.id === opts.familyId; }) || null;
+        el.innerHTML = family ? treeHtml(opts, family) : '';
+        if (!el._ft) el._ft = new ResizeObserver(function () { linkOrigins(el); });
+        el._ft.disconnect();
+        var tree = el.querySelector('.ftC');
+        if (tree) el._ft.observe(tree);
+        linkOrigins(el);
+    }
+
+    var HouseholdEditor = { render: render, renderTree: renderTree };
     if (typeof module !== 'undefined' && module.exports) module.exports = HouseholdEditor;
     if (global) global.HouseholdEditor = HouseholdEditor;
 })(typeof window !== 'undefined' ? window : null);

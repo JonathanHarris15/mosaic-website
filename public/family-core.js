@@ -512,6 +512,66 @@
         return { root: tree, origins };
     }
 
+    // ── Families (MS-709) ────────────────────────────────────────────────────
+    //
+    // A Family is a tree of Households, never stored. It starts at a Household
+    // whose father (the single parent, when there is no husband) is nobody's
+    // recorded child, and takes in every Household its children start when they
+    // marry, all the way down. A married daughter's Household is in her parents'
+    // Family and, when her husband's parents are not recorded, it starts his.
+    //
+    // It is named for that top father: "Hatley family", or "Hatley, Ambrose
+    // family" once two Families share the surname.
+
+    function familyHouseholdIds(families, rootId) {
+        const tree = familyTree(families, rootId, 12);
+        if (!tree) return [];
+        const out = [];
+        (function walk(node, depth) {
+            out.push({ familyId: node.familyId, depth });
+            node.children.forEach(k => { if (k.household) walk(k.household, depth + 1); });
+        })(tree.root, 0);
+        return out;
+    }
+
+    function familyTrees(families, people) {
+        const list = families || [];
+        const roots = list.filter(f => !isEmptyFamily(f) && !familyOfChild(list, f.husbandId || f.wifeId || null));
+        const named = roots.map(root => {
+            const fatherId = root.husbandId || root.wifeId || (root.childIds || [])[0] || null;
+            const parts = String(nameIn(people, fatherId) || '').trim().split(/\s+/).filter(Boolean);
+            const households = familyHouseholdIds(list, root.id);
+            const peopleIds = [];
+            households.forEach(h => {
+                const f = findFamily(list, h.familyId);
+                [f.husbandId, f.wifeId].concat(f.childIds || []).forEach(id => {
+                    if (id && peopleIds.indexOf(id) === -1) peopleIds.push(id);
+                });
+            });
+            return {
+                id: root.id,
+                fatherId,
+                surname: parts.length ? parts[parts.length - 1] : 'Unnamed',
+                firstName: parts.length > 1 ? parts[0] : '',
+                households,
+                peopleIds,
+            };
+        });
+        const bySurname = {};
+        named.forEach(t => { const k = t.surname.toLowerCase(); bySurname[k] = (bySurname[k] || 0) + 1; });
+        const seen = {};
+        return named
+            .map(t => {
+                let name = bySurname[t.surname.toLowerCase()] > 1 && t.firstName
+                    ? t.surname + ', ' + t.firstName + ' family'
+                    : t.surname + ' family';
+                seen[name] = (seen[name] || 0) + 1;
+                if (seen[name] > 1) name += ' (' + seen[name] + ')';
+                return Object.assign(t, { name });
+            })
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     // ── Families as serving groups (ADR-0012, MS-18) ─────────────────────────
     //
     // A serving Role can say "no two people from the same Family" or "…the same
@@ -614,6 +674,8 @@
         householdDuplicates,
         planMergeHouseholds,
         familyTree,
+        familyTrees,
+        familyHouseholdIds,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
