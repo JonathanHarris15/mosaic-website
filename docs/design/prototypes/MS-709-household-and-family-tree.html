@@ -28,6 +28,25 @@
            Household card and the Family tree; .proto-* is review scaffolding
            and never ships. Every value is a var(--token) from the linked sheets. */
 
+        /* ⚠ htmlpreview fetches fonts.css and mosaic.css and appends them AFTER
+           everything in this document, so fonts.css's faces — whose relative
+           src 404s from here — are declared last and beat the Google faces
+           linked above. Only the text fonts; Material Symbols survives. These
+           aliases have names nothing else declares, point at the same vendored
+           files by absolute URL, and go first in the stacks at a specificity
+           mosaic.css's :root cannot override. Prototype only. */
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
         /* ── Review scaffolding ─────────────────────────────────── */
         .proto-body {
             margin: 0;
