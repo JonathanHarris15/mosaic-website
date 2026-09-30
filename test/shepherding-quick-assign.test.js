@@ -1,11 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-// Profile quick-assign (MS-104). The card applies vocabulary and authors Family by
-// write-through. Its decisions — which side of a prioritized type this Person takes,
-// whether a leader seat is open, and above all that a Family change lands in
-// `families` and NEVER in `relationships` — are pinned here against an in-memory
-// Firestore. The Alpine template is not covered; it needs a real page.
+// Profile quick-assign (MS-104). The card applies vocabulary. Its decisions — which
+// side of a prioritized type this Person takes, whether a leader seat is open — are
+// pinned here against an in-memory Firestore. Family left this card for the
+// Household card (MS-709). The Alpine template is not covered; it needs a real page.
 
 function fakeDb(seed = {}) {
     const data = JSON.parse(JSON.stringify(seed));
@@ -198,75 +197,22 @@ test('leaving a group she leads vacates the leader seat and leaves the roster in
     assert.deepStrictEqual(stored('relationship_groups')['g1'].memberIds, [BOB]);
 });
 
-// ── Family write-through: it lands in `families`, never in `relationships` ─────
+// ── Family is not this card's (MS-709) ──────────────────────────────────────
+// The Household card seats parents and children; this card neither shows Family
+// rows nor writes `families`.
 
-test('adding a spouse writes the families record and creates no edge', async () => {
-    const card = await mountCard({});
-    card.qaOpen('family');
-    card.qaForm.familyKind = 'spouse';
-    card.qaPickPerson({ id: BOB, name: 'Bob Marsh' });
-    await card.qaAddFamily();
-
-    const fam = Object.values(stored('families'))[0];
-    assert.strictEqual(fam.wifeId, ALICE);
-    assert.strictEqual(fam.husbandId, BOB);
-    assert.deepStrictEqual(stored('relationships'), {}, 'Family is NEVER a relationships edge');
-});
-
-test('removing a spouse ends the pairing for both, and keeps the children', async () => {
+test('Family is not on the card: no Family rows, no Family mode', async () => {
     const card = await mountCard({
         families: { famA: { husbandId: BOB, wifeId: ALICE, childIds: [CARA] } },
     });
-    const spouseRow = card.personRelationships.find(r => r.familyKind === 'spouse');
-    assert.strictEqual(spouseRow.otherId, BOB);
-    assert.strictEqual(spouseRow.removable, true);
-
-    await card.qaRemoveFamily(spouseRow);
-    assert.strictEqual(stored('families')['famA'].husbandId, null, 'Bob vacates the husband seat');
-    assert.strictEqual(stored('families')['famA'].wifeId, ALICE);
-    assert.deepStrictEqual(stored('families')['famA'].childIds, [CARA], 'the children stay');
+    assert.deepStrictEqual(card.personRelationships, []);
+    assert.strictEqual(typeof card.qaAddFamily, 'undefined');
+    assert.strictEqual(typeof card.qaRemoveFamily, 'undefined');
 });
 
-test('removing a parent detaches HER from the family — the siblings keep both parents', async () => {
-    const card = await mountCard(
-        { families: { famA: { husbandId: BOB, wifeId: CARA, childIds: [ALICE, 'ben'] } } },
-        ALICE);
-    const parentRow = card.personRelationships.find(r => r.familyKind === 'parent');
-    await card.qaRemoveFamily(parentRow);
+// ── The panel shows both sources ──────────────────────────────────────────────
 
-    const fam = stored('families')['famA'];
-    assert.deepStrictEqual(fam.childIds, ['ben'], 'Alice leaves; Ben stays');
-    assert.strictEqual(fam.husbandId, BOB, 'Bob is still Ben\'s father');
-    assert.strictEqual(fam.wifeId, CARA);
-});
-
-test('a sibling row offers no remove — it is emergent, not a link she holds', async () => {
-    // Bob's children are Alice and Cara, so Cara is Alice's sister.
-    const card = await mountCard(
-        { families: { famA: { husbandId: BOB, wifeId: null, childIds: [ALICE, CARA] } } },
-        ALICE);
-    const sibling = card.personRelationships.find(r => r.familyKind === 'sibling');
-    assert.ok(sibling, 'the sibling still shows');
-    assert.strictEqual(sibling.otherId, CARA);
-    assert.strictEqual(sibling.removable, false);
-
-    // Her father, by contrast, can be removed — that is a link she holds.
-    const parent = card.personRelationships.find(r => r.familyKind === 'parent');
-    assert.strictEqual(parent.removable, true);
-});
-
-test('declining the confirmation writes nothing', async () => {
-    const card = await mountCard(
-        { families: { famA: { husbandId: BOB, wifeId: ALICE, childIds: [] } } },
-        ALICE, { confirmAnswer: false });
-    const spouseRow = card.personRelationships.find(r => r.familyKind === 'spouse');
-    await card.qaRemoveFamily(spouseRow);
-    assert.strictEqual(stored('families')['famA'].husbandId, BOB, 'unchanged');
-});
-
-// ── The panel shows all three sources ─────────────────────────────────────────
-
-test('the panel merges Family, Pairwise and Group rows', async () => {
+test('the panel merges Pairwise and Group rows', async () => {
     const card = await mountCard({
         relationship_types: { t1: DISCIPLESHIP, t2: BIBLE_STUDY },
         relationships: { e1: { fromId: ALICE, toId: BOB, typeId: 't1' } },
@@ -274,7 +220,7 @@ test('the panel merges Family, Pairwise and Group rows', async () => {
         families: { famA: { husbandId: BOB, wifeId: ALICE, childIds: [] } },
     });
     const sources = card.personRelationships.map(r => r.source);
-    assert.ok(sources.includes('family'));
+    assert.ok(!sources.includes('family'), 'Family lives on the Household card');
     assert.ok(sources.includes('pairwise'));
     assert.ok(sources.includes('group'));
 

@@ -113,13 +113,13 @@ test('Close and the header icon leave the person dialog without saving the Perso
     assert.doesNotMatch(head, /updatePerson/);
 });
 
-test('Membership Track, tags, and Family in the person dialog still write as they change', () => {
+test('Membership Track, tags, and the Household in the person dialog still write as they change', () => {
     const body = scrollingBody(personDialog()).html;
     assert.match(body, /@change="setMembershipStageByIndex\(\$event\.target\.value\)"/);
     assert.match(body, /@click="toggleMembershipInactive\(\)"/);
     assert.match(body, /@click="addTag\(selectedPerson, tag\)/);
     assert.match(body, /@click="removeTag\(selectedPerson, tag\)"/);
-    assert.match(body, /@click="setSpouse\(c\.id\)"/);
-    assert.match(body, /@click="addChild\(c\.id\)"/);
+    // The Household card writes each change itself (household-editor.js, MS-709).
+    assert.match(body, /x-effect="renderHousehold\(\$el\.firstElementChild\)"/);
     assert.doesNotMatch(body, /@click="updatePerson"/);
 });

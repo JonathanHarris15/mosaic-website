@@ -6,6 +6,7 @@
     <title>Attendance — Mosaic Church</title>
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="household.css" />
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -18,8 +19,10 @@
     <script src="events-occurrence-core.js"></script>
     <script src="kiosk-core.js"></script>
     <script src="person-name.js"></script>
+    <script src="family-core.js"></script>
     <script src="household-core.js"></script>
     <script src="household-store.js"></script>
+    <script src="household-editor.js"></script>
     <script src="nametag-core.js"></script>
     <script src="events-store.js"></script>
     <script src="kiosk.js"></script>
@@ -139,13 +142,14 @@
         <!-- Create a household, or add people to one -->
         <section x-show="view === 'create'">
             <h2 class="font-headline-md text-primary mb-sm" x-text="draftTitle"></h2>
-            <p class="text-sm text-on-surface-variant mb-md">First name, last name, suffix, phone, adult or kid, male or female. Nothing else — they fill the rest in later.</p>
+            <p class="text-sm text-on-surface-variant mb-md">First name, last name, suffix, phone, male or female, parent or child, and Kid for a child's name tag. Nothing else — they fill the rest in later.</p>
 
-            <label class="block mb-md" x-show="!addingToHousehold">
-                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Household name</span>
-                <input type="text" x-model="draft.name" autocomplete="off"
-                       class="mt-1 w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none font-body-md">
-            </label>
+            <!-- Named for its people, like every Household on every screen: the
+                 first parent's last name. Nothing to type, so nothing to drift. -->
+            <p class="mb-md text-sm text-on-surface-variant" x-show="!addingToHousehold">
+                Shows up as <span class="font-label-md text-on-surface" x-text="draftHouseholdName"></span>.
+                Parents are seated as husband and wife; everyone else is their child.
+            </p>
 
             <!-- The duplicate a busy Sunday makes: the same household typed a
                  second time. Named, and offered, rather than silently allowed. -->
@@ -168,18 +172,18 @@
                     <div class="m-card grid grid-cols-1 md:grid-cols-12 gap-sm items-end">
                         <label class="md:col-span-3">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">First name</span>
-                            <input type="text" x-model="p.firstName" autocomplete="off" @input="refreshHouseholdName()"
+                            <input type="text" x-model="p.firstName" autocomplete="off"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
                         </label>
                         <label class="md:col-span-3">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Last name</span>
-                            <input type="text" x-model="p.lastName" autocomplete="off" @input="refreshHouseholdName()"
+                            <input type="text" x-model="p.lastName" autocomplete="off"
                                    :disabled="p.noLastName"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none disabled:opacity-50">
                         </label>
                         <label class="md:col-span-2">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Suffix</span>
-                            <input type="text" x-model="p.suffix" autocomplete="off" placeholder="Jr." @input="refreshHouseholdName()"
+                            <input type="text" x-model="p.suffix" autocomplete="off" placeholder="Jr."
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
                         </label>
                         <label class="md:col-span-2">
@@ -197,12 +201,20 @@
                             </select>
                         </label>
                         <label class="md:col-span-3 flex items-center gap-sm py-2">
-                            <input type="checkbox" x-model="p.noLastName" @change="refreshHouseholdName()"
+                            <input type="checkbox" x-model="p.noLastName"
                                    class="rounded border-outline-variant text-primary">
                             <span class="text-sm">No last name</span>
                         </label>
+                        <label class="md:col-span-3">
+                            <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">In the household</span>
+                            <select x-model="p.role"
+                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
+                                <option value="parent">Parent</option>
+                                <option value="child">Child</option>
+                            </select>
+                        </label>
                         <label class="md:col-span-2 flex items-center gap-sm py-2">
-                            <input type="checkbox" x-model="p.kid" @change="refreshHouseholdName()"
+                            <input type="checkbox" x-model="p.kid" @change="kidChanged(p)"
                                    class="rounded border-outline-variant text-primary">
                             <span class="text-sm">Kid</span>
                         </label>
@@ -282,6 +294,57 @@
                         :disabled="!checkedCount || marking"
                         @click="submitPresent()"
                         x-text="footerLabel"></button>
+                <!-- Quiet, like "Create household": fixing a Household is the
+                     rare job at the desk, and never the next step of checking in. -->
+                <button type="button"
+                        class="self-center text-[11.5px] font-label-md uppercase tracking-wider text-on-surface-variant
+                               underline underline-offset-4 decoration-outline-variant
+                               px-sm py-2 rounded-lg hover:text-primary transition-colors"
+                        @click="startEdit()">Edit household</button>
+            </div>
+        </section>
+
+        <!-- Edit a Household (MS-709): names, and who is in it -->
+        <section x-show="view === 'edit'">
+            <h2 class="font-headline-md text-primary mb-sm" x-text="'Edit ' + (selected ? selected.name : 'household')"></h2>
+            <p class="text-sm text-on-surface-variant mb-md">Fix a name, or move the people listed here between parent and child. Someone new to this household goes in with “Add someone”.</p>
+
+            <div class="m-card mb-md">
+                <h3 class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant mb-sm">Names</h3>
+                <div class="flex flex-col gap-sm">
+                    <template x-for="n in editNames" :key="n.personId">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-sm items-end pb-sm border-b border-outline-variant last:border-b-0">
+                            <label class="md:col-span-4">
+                                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">First name</span>
+                                <input type="text" x-model="n.firstName" autocomplete="off"
+                                       class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
+                            </label>
+                            <label class="md:col-span-3">
+                                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Last name</span>
+                                <input type="text" x-model="n.lastName" autocomplete="off" :disabled="n.noLastName"
+                                       class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none disabled:opacity-50">
+                            </label>
+                            <label class="md:col-span-2">
+                                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Suffix</span>
+                                <input type="text" x-model="n.suffix" autocomplete="off" placeholder="Jr."
+                                       class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
+                            </label>
+                            <label class="md:col-span-3 flex items-center gap-sm py-2">
+                                <input type="checkbox" x-model="n.noLastName" class="rounded border-outline-variant text-primary">
+                                <span class="text-sm">No last name</span>
+                            </label>
+                            <p x-show="n.away" class="md:col-span-12 text-xs text-on-surface-variant">
+                                Taken out of this household. Find them in the card below to put them back.
+                            </p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="m-card mb-md" x-effect="renderHouseholdCard($el.firstElementChild)"><div x-ignore></div></div>
+
+            <div class="flex gap-sm">
+                <button type="button" class="m-btn m-btn--primary" :disabled="saving" @click="finishEdit()">Done</button>
             </div>
         </section>
     </main>

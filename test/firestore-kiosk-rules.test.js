@@ -71,3 +71,20 @@ test('a kiosk may add to a Household but never rename or empty one', () => {
     assert.match(update[1], /request\.resource\.data\.name == resource\.data\.name/);
     assert.match(update[1], /memberIds\.hasAll\(resource\.data\.memberIds\)/);
 });
+
+// MS-709 (ADR-0075): the kiosk's Households are the `families` records, and
+// the desk edits them — but only their seats and children.
+test('a kiosk may write a Household record, and only its seats and children', () => {
+    const families = blockFor(/match \/families\/\{familyId\}\s*\{([\s\S]*?)\n    \}/);
+    const write = families.match(/allow create, update: if isKiosk\(\)([\s\S]*?);/);
+    assert.ok(write, 'no kiosk write rule on families');
+    assert.match(write[1], /keys\(\)\.hasOnly\(\['husbandId', 'wifeId', 'childIds', 'anniversary'\]\)/);
+    assert.match(families, /allow delete: if isKiosk\(\)/);
+});
+
+test('a kiosk may rename a Person and change nothing else about them', () => {
+    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/);
+    const kioskUpdates = person.match(/allow update: if isKiosk\(\)[\s\S]*?;/g) || [];
+    assert.strictEqual(kioskUpdates.length, 1);
+    assert.match(kioskUpdates[0], /affectedKeys\(\)\s*\.hasOnly\(\['name', 'nameParts', 'updatedAt'\]\)/);
+});

@@ -1,10 +1,13 @@
 // Manage Tags and Relationships — the full-page home for the elder-only
-// vocabulary. Two tabs (MS-103, ADR-0014):
+// vocabulary. Three tabs (MS-103, ADR-0014, MS-709):
 //
 //   Tags          — create, rename, merge, delete and flag Shepherding Tags.
 //                   Unchanged from when this page was just "Manage Tags".
 //   Relationships — define Relationship Types and manage who holds them.
 //                   Lives in shepherding-relationships.js, mixed in below.
+//   Families      — list every Family (a tree of Households), show its tree,
+//                   and edit any Household in it with the shared Household
+//                   editor card (household-editor.js).
 //
 // The dashboard still reads tags (for Filtered View filters and display); this
 // page owns every write. Tag identity is a stable auto-id independent of the name
@@ -30,7 +33,17 @@ document.addEventListener('alpine:init', () => {
         currentUser: null,
         currentPermissionLevel: null,
 
-        activeTab: 'tags', // 'tags' | 'relationships'
+        activeTab: 'tags', // 'tags' | 'relationships' | 'families'
+
+        // Families tab (MS-709). A Family is a tree of Households; pick one, then
+        // a Household in it to edit with the card from household-editor.js.
+        hhFamilies: [], // the `families` records, each one Household
+        hhPeople: [],
+        famSelectedId: null, // the Family's top Household
+        hhSelectedId: null,
+        hhNew: false,
+        hhQuery: '',
+        hhError: '',
 
         shepherdingTags: [],
         newTagName: '',
@@ -69,10 +82,131 @@ document.addEventListener('alpine:init', () => {
                 // the other, and must not leave the page stuck on its spinner —
                 // each load owns its own errors, and `loading` clears regardless.
                 try {
-                    await Promise.all([this.loadTags(), this.loadRelationshipsTab()]);
+                    await Promise.all([this.loadTags(), this.loadRelationshipsTab(), this.loadFamiliesTab()]);
+                    this.openFromUrl();
                 } finally {
                     this.loading = false;
                 }
+            });
+        },
+
+        async loadFamiliesTab() {
+            try {
+                const [familiesSnap, peopleSnap] = await Promise.all([
+                    db.collection('families').get(),
+                    db.collection('people').orderBy('name', 'asc').get(),
+                ]);
+                this.hhFamilies = familiesSnap.docs.map(d => ({ id: d.id, childIds: [], ...d.data() }));
+                this.hhPeople = peopleSnap.docs.map(d => ({ id: d.id, name: d.data().name || d.id, sex: d.data().sex || null }));
+                this.hhError = '';
+            } catch (e) {
+                console.error('Error loading households:', e);
+                this.hhError = 'Families could not load.';
+            }
+        },
+
+        // ?tab=families&household=<id> is where a Household card's "See family
+        // tree" lands: that Household's Family, with the Household open below.
+        openFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get('tab');
+            if (['tags', 'relationships', 'families'].includes(tab)) this.activeTab = tab;
+            const householdId = params.get('household');
+            if (!householdId) return;
+            const home = this.famTrees.find(t => t.households.some(h => h.familyId === householdId));
+            if (!home) return;
+            this.activeTab = 'families';
+            this.selectFamily(home.id);
+            this.selectHousehold(householdId);
+        },
+
+        // One entry per Family (a tree of Households, FamilyCore.familyTrees).
+        get famTrees() {
+            return FamilyCore.familyTrees(this.hhFamilies, this.hhPeople);
+        },
+
+        get famList() {
+            const q = this.hhQuery.trim().toLowerCase();
+            const nameOf = id => (this.hhPeople.find(p => p.id === id) || {}).name || '';
+            return this.famTrees
+                .filter(t => !q || t.name.toLowerCase().includes(q) || t.peopleIds.some(id => nameOf(id).toLowerCase().includes(q)))
+                .map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    sub: (t.households.length === 1 ? '1 Household' : t.households.length + ' Households') +
+                        ' · ' + (t.peopleIds.length === 1 ? '1 person' : t.peopleIds.length + ' people'),
+                }));
+        },
+
+        get famSelected() {
+            return this.famTrees.find(t => t.id === this.famSelectedId) || null;
+        },
+
+        get famHouseholds() {
+            const t = this.famSelected;
+            if (!t) return [];
+            return t.households.map(h => ({
+                id: h.familyId,
+                depth: h.depth,
+                name: FamilyCore.familyGroupName(this.hhFamilies.find(f => f.id === h.familyId) || {}, this.hhPeople),
+            }));
+        },
+
+        selectFamily(id) {
+            this.famSelectedId = id;
+            this.hhSelectedId = id;
+            this.hhNew = false;
+        },
+
+        selectHousehold(id) {
+            this.hhSelectedId = id;
+            this.hhNew = false;
+        },
+
+        newFamily() {
+            this.famSelectedId = null;
+            this.hhSelectedId = null;
+            this.hhNew = true;
+        },
+
+        renderFamilyTree(el) {
+            if (!this.famSelectedId) return;
+            HouseholdEditor.renderTree(el, {
+                families: this.hhFamilies, people: this.hhPeople,
+                familyId: this.famSelectedId,
+                personHref: id => 'shepherding-profile.html?id=' + encodeURIComponent(id),
+            });
+        },
+
+        renderHouseholdPane(el) {
+            if (!this.hhSelectedId && !this.hhNew) return;
+            HouseholdEditor.render(el, {
+                db, families: this.hhFamilies, people: this.hhPeople,
+                familyId: this.hhSelectedId,
+                canEdit: !!this.canWriteEditor,
+                headingLevel: 3,
+                personHref: id => 'shepherding-profile.html?id=' + encodeURIComponent(id),
+                // An edit can move a Household to another Family (a father's
+                // parents recorded) or end one (its top Household emptied), so
+                // the Family is found again from the Household just written.
+                onChange: (next, info) => {
+                    this.hhFamilies = next;
+                    this.hhNew = false;
+                    const trees = FamilyCore.familyTrees(next, this.hhPeople);
+                    const holds = (t, id) => t.households.some(h => h.familyId === id);
+                    const current = trees.find(t => t.id === this.famSelectedId) || null;
+                    if (info.familyId) {
+                        this.hhSelectedId = info.familyId;
+                        if (!current || !holds(current, info.familyId)) {
+                            const home = trees.find(t => holds(t, info.familyId));
+                            this.famSelectedId = home ? home.id : null;
+                        }
+                    } else {
+                        this.famSelectedId = current ? current.id : null;
+                        this.hhSelectedId = this.famSelectedId;
+                    }
+                },
+                toast: (message, kind) => this.showToast(message, kind),
             });
         },
 

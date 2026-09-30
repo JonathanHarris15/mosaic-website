@@ -210,7 +210,7 @@ test('a household can gain people without a second household being made', () => 
     assert.match(html, />Add someone</);
     assert.match(html, /@click="startAddPeople\(\)"/);
     const js = read('kiosk.js');
-    assert.match(js, /addPeopleToHousehold/);
+    assert.match(js, /HouseStore\.saveDraft\(db, target, this\.draft, this\.families\)/);
 });
 
 test('the same household typed twice is named rather than quietly duplicated', () => {
@@ -234,10 +234,28 @@ test('the remove control on the create form is an icon, not a word in a one-colu
     assert.doesNotMatch(html, /m-btn--sm"[^>]*>Remove</);
 });
 
-test('a used Household stops being a projection and gets written down', () => {
+// MS-709 (ADR-0075): the kiosk's Households are the Household records, so
+// there is nothing to mint and no name to type.
+test('checking in writes Attendance and nothing else, and a Household is not named by hand', () => {
     const js = read('kiosk.js');
-    assert.match(js, /mintIfProjected/);
-    assert.match(js, /HouseStore\.mintHousehold/);
+    assert.doesNotMatch(js, /mintIfProjected|mintHousehold|HouseStore\.loadHouseholds/);
+    const html = read('kiosk.html');
+    assert.doesNotMatch(html, /x-model="draft\.name"/);
+    assert.match(html, /x-text="draftHouseholdName"/);
+    assert.match(html, /x-model="p\.role"/);
+});
+
+test('a household opened at the desk has a quiet Edit household button under check-in', () => {
+    const html = read('kiosk.html');
+    const present = html.match(/<section x-show="view === 'present'">([\s\S]*?)<\/section>/)[1];
+    assert.match(present, /@click="startEdit\(\)">Edit household</);
+    assert.ok(present.indexOf('startEdit()') > present.indexOf('submitPresent()'), 'below the check-in button');
+    const edit = html.match(/<section x-show="view === 'edit'">([\s\S]*?)<\/section>/)[1];
+    assert.match(edit, /x-effect="renderHouseholdCard\(\$el\.firstElementChild\)"><div x-ignore><\/div>/);
+    assert.match(edit, /x-model="n\.firstName"/);
+    assert.match(edit, /@click="finishEdit\(\)"/);
+    for (const src of ['family-core.js', 'household-editor.js', 'household.css']) assert.match(html, new RegExp(src.replace('.', '\\.')));
+    assert.ok(html.indexOf('family-core.js') < html.indexOf('household-core.js'), 'FamilyCore loads before HouseholdCore reads it');
 });
 
 test('a wrong tap can be taken back off the list', () => {

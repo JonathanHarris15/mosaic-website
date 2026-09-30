@@ -1,0 +1,102 @@
+name: Firebase Hosting preview
+
+# A pull request's hosted pages on a Firebase Hosting preview channel
+# (`pr-<number>`, expires after 7 days) on mosaic-hymn-database — the Preview
+# URL the PR template asks for. Hosting only: no functions, no rules, so the
+# preview runs the pages under review against the live backend and the live
+# firestore.rules. A PR that changes rules is not exercised by its preview.
+#
+# Design prototypes (docs/design/prototypes/*.html) are staged into the
+# runner's copy of public/ at /prototypes/ — only here, never committed and
+# never on the live site (.cursor/rules/ui-prototype-first.mdc).
+#
+# Never `firebase deploy` — a channel deploy cannot touch the live site.
+# Forks get no secrets, and the same-repo guard below skips them outright.
+# The URL is written to the job summary.
+
+on:
+  pull_request:
+    paths:
+      - "public/**"
+      - "firebase.json"
+      - "docs/design/prototypes/**"
+      - ".github/workflows/firebase-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Hosting preview channel
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Load Firebase service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE }}
+        run: |
+          set -euo pipefail
+          SA_JSON="${FIREBASE_SERVICE_ACCOUNT:-${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE:-}}"
+          if [ -z "${SA_JSON}" ]; then
+            echo "::error::No Firebase service account secret. Add FIREBASE_SERVICE_ACCOUNT (preferred) or FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "${SA_JSON}" > "${RUNNER_TEMP}/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-sa.json" >> "${GITHUB_ENV}"
+
+      - name: Refuse a preview whose config is not the church project
+        run: node scripts/check-firebase-deploy.js --project mosaic-hymn-database --i-mean-prod
+
+      - name: Stage design prototypes at /prototypes/
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p public/prototypes
+          : > "${RUNNER_TEMP}/prototypes.txt"
+          for f in docs/design/prototypes/*.html; do
+            # A prototype links the real sheets as ../../../public/<sheet>;
+            # served from /prototypes/ that is the site root.
+            sed 's#\.\./\.\./\.\./public/#/#g' "$f" > "public/prototypes/$(basename "$f")"
+            basename "$f" >> "${RUNNER_TEMP}/prototypes.txt"
+          done
+
+      - name: Deploy to the PR's preview channel
+        run: |
+          set -euo pipefail
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          npx firebase hosting:channel:deploy "${CHANNEL}" \
+            --only church \
+            --expires 7d \
+            --project mosaic-hymn-database \
+            --non-interactive \
+            --json > "${RUNNER_TEMP}/channel.json"
+          URL="$(node -e 'const r=require(process.argv[1]).result||{};const s=Object.values(r)[0]||{};process.stdout.write(s.url||"")' "${RUNNER_TEMP}/channel.json")"
+          if [ -z "${URL}" ]; then
+            cat "${RUNNER_TEMP}/channel.json"
+            echo "::error::Channel deploy returned no URL."
+            exit 1
+          fi
+          echo "Preview: ${URL}"
+          echo "### Preview: ${URL}" >> "${GITHUB_STEP_SUMMARY}"
+          while read -r name; do
+            echo "Prototype: ${URL}/prototypes/${name}"
+            echo "- Prototype: ${URL}/prototypes/${name}" >> "${GITHUB_STEP_SUMMARY}"
+          done < "${RUNNER_TEMP}/prototypes.txt"

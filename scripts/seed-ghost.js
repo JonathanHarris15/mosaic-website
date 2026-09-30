@@ -111,15 +111,10 @@ function congregation(now, userIds) {
             displayName: row.name,
         } : null,
     }));
-    const householdMembers = PEOPLE
-        .filter(row => row.id !== 'ghost-drew-lane')
-        .map(row => ({personId: row.id, kid: row.kid, name: row.name}));
+    // The kiosk groups by this record (ADR-0075), so it is the Coles'
+    // Household at the desk too; Drew, in none, is a Household of one.
     return {
         people,
-        household: {
-            id: 'ghost-cole',
-            doc: Household.householdWrite('The Cole Household', householdMembers, now),
-        },
         family: {
             id: 'ghost-cole-family',
             doc: {
@@ -156,8 +151,7 @@ if (require.main === module) {
         const account = person.account ? ` login ${person.account.permissionLevel}` : '';
         console.log(`  ${person.doc.name} <${person.doc.contact.email}>${account}`);
     }
-    console.log(`  household ${plan.household.doc.name}`);
-    console.log('  family Ben Cole + Ada Cole, child Cora Cole');
+    console.log('  household (families) Ben Cole + Ada Cole, child Cora Cole');
     if (!commit) {
         console.log('Dry run: no writes. Pass --commit to apply.');
         process.exit(0);
@@ -205,11 +199,6 @@ if (require.main === module) {
             if (existing.exists) delete doc.createdAt;
             await ref.set(doc, {merge: true});
         }
-        const houseRef = db.collection('households').doc(stamped.household.id);
-        const house = await houseRef.get();
-        const houseDoc = stamped.household.doc;
-        if (house.exists) delete houseDoc.createdAt;
-        await houseRef.set(houseDoc, {merge: true});
         await db.collection('families').doc(stamped.family.id).set(stamped.family.doc, {merge: true});
 
         const sunday = db.collection('events').doc(EventsCore.SUNDAY_SERVICE_ID);

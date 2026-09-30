@@ -10,12 +10,12 @@
 //   • slot this Person into an existing Pairwise type, choosing which side they hold
 //   • join them to an existing Relationship Group, as a member or as its leader
 //     (only when the type is Prioritized and the leader seat is vacant)
-//   • add a Family relation — spouse, parent, child — by WRITE-THROUGH to the
-//     `families` collection, never as an edge in `relationships`
 //   • remove any of this Person's own relationships
 //
 // It cannot create a Relationship Type or a named Relationship Group. That lives in
-// Manage Tags and Relationships, and only there.
+// Manage Tags and Relationships, and only there. Family is not on this card:
+// the Household card beside it (household-editor.js, MS-709) seats parents and
+// children, and a person's parents and siblings are read from that.
 //
 // Mixed into the shepherdingProfile Alpine component. Compose with
 // withQuickAssign, NOT object spread — spread evaluates getters and would freeze
@@ -28,14 +28,13 @@ window.QuickAssign = () => ({
 
     relGroups: [],  // Relationship Groups (ADR-0014) — loaded alongside the edges.
 
-    // The card opens onto one of three sources of vocabulary. Nothing is created.
-    qaMode: null,   // null | 'pairwise' | 'group' | 'family'
+    // The card opens onto one of two sources of vocabulary. Nothing is created.
+    qaMode: null,   // null | 'pairwise' | 'group'
     qaForm: {
         typeId: '',      // pairwise: which type
         side: 'holder',  // pairwise: which side THIS Person holds
         groupId: '',     // group: which named group to join
         asLeader: false, // group: take the vacant leader seat
-        familyKind: 'spouse',
         otherId: '',
         otherName: '',
     },
@@ -86,8 +85,7 @@ window.QuickAssign = () => ({
     },
 
     // ── The rows on the card ──────────────────────────────────────────────────
-    // Family (projected from `families`), Pairwise edges, and Group memberships.
-    // Every row except a sibling can be removed from here.
+    // Pairwise edges and Group memberships. Every row can be removed from here.
 
     get qaGroupRows() {
         return RelationshipGroupCore.groupsForPerson(this.relGroups, this.personId).map(g => {
@@ -105,33 +103,11 @@ window.QuickAssign = () => ({
         });
     },
 
-    // Every relationship on this profile, from this Person's viewpoint. Three
-    // sources share the panel (ADR-0014):
+    // Every relationship on this profile, from this Person's viewpoint (ADR-0014):
     //
-    //   family   — Projected from `families`. Still derived at render time, never
-    //              stored as an edge — but since MS-104 it is AUTHORABLE here by
-    //              write-through, so spouse/parent/child rows now carry a remove.
-    //              Siblings remain read-only: they are emergent from the roster,
-    //              not a link this Person holds.
     //   pairwise — the elder-authored `relationships` edges.
     //   group    — this Person's Relationship Group memberships.
     get personRelationships() {
-        const family = FamilyCore.familyRelations(this.families, this.personId, id => this.relPersonSex(id))
-            .filter(r => !!this.allPeople.find(p => p.id === r.otherId))
-            .map(r => ({
-                key: 'fam:' + r.kind + ':' + r.otherId,
-                source: 'family',
-                familyKind: r.kind,
-                otherId: r.otherId,
-                typeName: r.label,
-                label: r.label,
-                prioritized: false,
-                sentence: null,
-                // A sibling is emergent from the family roster, not a link this
-                // Person holds — there is nothing here to remove.
-                removable: r.kind !== 'sibling',
-            }));
-
         const pairwise = RelationshipCore.edgesForPerson(this.relationships, this.personId).map(edge => {
             const type = this.relTypeById(edge.typeId);
             const desc = RelationshipCore.describeRelationship(edge, type, this.personId, id => this.relPersonName(id));
@@ -150,7 +126,7 @@ window.QuickAssign = () => ({
             removable: true,
         }));
 
-        return family.concat(pairwise, groups);
+        return pairwise.concat(groups);
     },
 
     // ── Applying existing vocabulary ──────────────────────────────────────────
@@ -159,7 +135,7 @@ window.QuickAssign = () => ({
         this.qaMode = mode;
         this.qaForm = {
             typeId: '', side: 'holder', groupId: '', asLeader: false,
-            familyKind: 'spouse', otherId: '', otherName: '',
+            otherId: '', otherName: '',
         };
     },
 
@@ -250,83 +226,6 @@ window.QuickAssign = () => ({
         } catch (e) {
             console.error('Error leaving group:', e);
             this.showToast('Error leaving group', 'error');
-        }
-    },
-
-    // ── Family, by write-through (ADR-0014 s4) ────────────────────────────────
-    // Adding or removing Family here changes the `families` record — the single
-    // source of truth — and never writes a parallel edge. So the Family rows on
-    // this card stay a projection of `families`, exactly as before; they are just
-    // authorable now.
-
-    async qaAddFamily() {
-        const { familyKind, otherId } = this.qaForm;
-        if (!otherId) {
-            this.showToast('Pick a person', 'error');
-            return;
-        }
-        const plan = FamilyCore.planAddFamilyRelation(
-            this.families, this.personId, familyKind, otherId,
-            id => this.allPeople.find(p => p.id === id) || null);
-
-        if (!plan.valid) {
-            this.showToast(plan.errors[0], 'error');
-            return;
-        }
-        try {
-            if (plan.action === 'create') {
-                const ref = await db.collection('families').add(plan.changes);
-                this.families.push({ id: ref.id, childIds: [], ...plan.changes });
-            } else {
-                await db.collection('families').doc(plan.familyId).update(plan.changes);
-                this.families = this.families.map(f =>
-                    f.id === plan.familyId ? { ...f, ...plan.changes } : f);
-            }
-            this.qaClose();
-            this.showToast('Family updated');
-        } catch (e) {
-            console.error('Error updating family:', e);
-            this.showToast('Error updating family', 'error');
-        }
-    },
-
-    // A Family removal is scoped to one individual's membership. Spouse ends the
-    // pairing for both (it is one mutual field). Removing a PARENT pulls this
-    // Person out of their family of origin — which necessarily costs them the other
-    // parent and their siblings too, since a Family seats exactly one father and one
-    // mother. That collateral is spelled out before anything is written.
-    async qaRemoveFamily(row) {
-        const plan = FamilyCore.planRemoveFamilyRelation(
-            this.families, this.personId, row.familyKind, row.otherId);
-
-        if (!plan.valid) {
-            this.showToast(plan.errors[0], 'error');
-            return;
-        }
-
-        let message = `Remove ${this.relPersonName(row.otherId)} as ${this.person.name}'s ${row.label.toLowerCase()}?`;
-        if (row.familyKind === 'spouse') {
-            message += ' This ends the marriage record for both of them.';
-        }
-        if (row.familyKind === 'parent') {
-            const also = plan.alsoDetaches || { parentIds: [], siblingIds: [] };
-            const lost = also.parentIds.filter(id => id !== row.otherId).map(id => this.relPersonName(id))
-                .concat(also.siblingIds.map(id => this.relPersonName(id)));
-            message = `Remove ${this.person.name} from that family?`;
-            if (lost.length) {
-                message += ` A family has one father and one mother, so ${this.person.name} leaves it entirely — they will also no longer show ${lost.join(', ')}. Everyone else keeps their place.`;
-            }
-        }
-        if (!confirm(message)) return;
-
-        try {
-            await db.collection('families').doc(plan.familyId).update(plan.changes);
-            this.families = this.families.map(f =>
-                f.id === plan.familyId ? { ...f, ...plan.changes } : f);
-            this.showToast('Family updated');
-        } catch (e) {
-            console.error('Error updating family:', e);
-            this.showToast('Error updating family', 'error');
         }
     },
 });

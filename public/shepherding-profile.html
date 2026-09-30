@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="fonts.css" />
     <!-- A Task looks the same here as it does on its own page (ADR-0061). -->
     <link rel="stylesheet" href="tasks.css" />
+    <link rel="stylesheet" href="household.css" />
 
     <style>
         [x-cloak] { display: none !important; }
@@ -336,6 +337,13 @@
                     </div>
                 </div>
 
+                <!-- Household (MS-709): parents, children at home, children with their own
+                     Household, and the Family tree. household-editor.js owns the DOM. -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md"
+                     x-effect="renderHousehold($el.firstElementChild)">
+                    <div x-ignore></div>
+                </div>
+
                 <!-- Relationships Panel (ADR-0012, MS-89) — elder-only edge graph -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <div class="flex items-center justify-between">
@@ -351,15 +359,10 @@
                             <div class="flex items-center justify-between gap-sm bg-surface-container rounded-lg px-sm py-xs" :class="ShepherdingBlur.pastoralClass({ownProfile})">
                                 <div class="flex items-center gap-xs min-w-0">
                                     <span class="material-symbols-outlined text-[16px] text-secondary flex-shrink-0"
-                                          x-text="r.source === 'family' ? 'family_restroom'
-                                                : r.source === 'group'  ? (r.leading ? 'star' : 'groups')
+                                          x-text="r.source === 'group' ? (r.leading ? 'star' : 'groups')
                                                 : (r.prioritized ? 'trending_flat' : 'sync_alt')"></span>
 
                                     <span class="text-sm text-on-surface truncate">
-                                        <!-- Family: the gendered role, then the person -->
-                                        <template x-if="r.source === 'family'">
-                                            <span><span class="font-medium" x-text="r.label"></span> · <span x-text="relPersonName(r.otherId)"></span></span>
-                                        </template>
                                         <!-- Group: the group's name, and the role this Person holds in it -->
                                         <template x-if="r.source === 'group'">
                                             <span><span class="font-medium" x-text="r.groupName"></span> · <span x-text="r.roleLabel"></span></span>
@@ -374,12 +377,8 @@
                                     </span>
                                 </div>
 
-                                <!-- A sibling is emergent from the family roster, not a link this Person holds. -->
-                                <span x-show="!r.removable" class="material-symbols-outlined text-[15px] text-on-surface-variant flex-shrink-0"
-                                      title="Emergent from the family — remove a parent or child instead">lock</span>
-
                                 <button x-show="r.removable"
-                                        @click="r.source === 'family' ? qaRemoveFamily(r) : r.source === 'group' ? qaLeaveGroup(r) : deleteRelationship(r.edge.id)"
+                                        @click="r.source === 'group' ? qaLeaveGroup(r) : deleteRelationship(r.edge.id)"
                                         class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
                                     <span class="material-symbols-outlined text-[16px]">close</span>
                                 </button>
@@ -391,10 +390,9 @@
                     <!-- ── Quick-assign (MS-104, ADR-0014) ────────────────────────
                          This card APPLIES vocabulary; it never creates it. A new
                          Relationship Type or named group is made in Manage Tags and
-                         Relationships, and only there. Family is authored here by
-                         write-through — straight to the `families` record, never as
-                         a parallel edge. -->
-                    <div x-show="!qaMode" class="grid grid-cols-3 gap-xs pt-sm border-t border-outline-variant">
+                         Relationships, and only there. Family lives on the Household
+                         card above (MS-709). -->
+                    <div x-show="!qaMode" class="grid grid-cols-2 gap-xs pt-sm border-t border-outline-variant">
                         <button @click="qaOpen('pairwise')"
                                 class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
                             <span class="material-symbols-outlined text-[20px]">swap_horiz</span>
@@ -404,11 +402,6 @@
                                 class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
                             <span class="material-symbols-outlined text-[20px]">groups</span>
                             <span class="text-[11px] font-semibold">Join group</span>
-                        </button>
-                        <button @click="qaOpen('family')"
-                                class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
-                            <span class="material-symbols-outlined text-[20px]">family_restroom</span>
-                            <span class="text-[11px] font-semibold">Family</span>
                         </button>
                     </div>
 
@@ -479,40 +472,6 @@
                         <button @click="qaJoinGroup()" :disabled="!qaForm.groupId"
                             class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                             Join group
-                        </button>
-                    </div>
-
-                    <!-- ─── Add a Family relation (write-through) ───────────── -->
-                    <div x-show="qaMode === 'family'" class="flex flex-col gap-sm pt-sm border-t border-outline-variant">
-                        <div class="flex gap-xs">
-                            <template x-for="k in ['spouse','parent','child']" :key="k">
-                                <button type="button" @click="qaForm.familyKind = k"
-                                    :class="qaForm.familyKind === k ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface-variant hover:border-primary'"
-                                    class="flex-1 rounded-lg border px-xs py-xs text-[11px] font-semibold capitalize transition-colors"
-                                    x-text="k"></button>
-                            </template>
-                        </div>
-
-                        <div class="relative">
-                            <input type="text" x-model="qaForm.otherName" @input="qaForm.otherId = ''"
-                                   placeholder="Type their name…"
-                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                            <div x-show="!qaForm.otherId && qaForm.otherName && qaCandidates.length"
-                                 class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                <template x-for="c in qaCandidates" :key="c.id">
-                                    <button @click="qaPickPerson(c)" class="w-full text-left px-3 py-1.5 text-sm hover:bg-primary-fixed" x-text="c.name"></button>
-                                </template>
-                            </div>
-                        </div>
-
-                        <p class="text-[11px] text-on-surface-variant italic leading-snug">
-                            This updates the family record itself, so it shows the same everywhere. Bigger
-                            restructuring still belongs in the Membership Directory.
-                        </p>
-
-                        <button @click="qaAddFamily()" :disabled="!qaForm.otherId"
-                            class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                            Add family relation
                         </button>
                     </div>
                 </div>
@@ -1755,6 +1714,7 @@
     <script src="shepherding-core.js"></script>
     <script src="relationship-core.js"></script>
     <script src="family-core.js"></script>
+    <script src="household-editor.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="tiptap-render.js"></script>
     <script src="relationship-group-core.js"></script>

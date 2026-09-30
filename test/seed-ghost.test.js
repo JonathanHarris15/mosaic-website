@@ -25,7 +25,7 @@ test('the ghost seed refuses the church project even with the loud flag', () => 
     assert.doesNotThrow(() => assertGhostTarget(GHOST_PROJECT_ID));
 });
 
-test('the invented congregation uses fake phones, fake emails, and a household', () => {
+test('the invented congregation uses fake phones, fake emails, and a Household record', () => {
     const plan = congregation('2026-09-21T00:00:00.000Z', {
         'ghost-ada-cole': 'uid-ada',
         'ghost-ben-cole': 'uid-ben',
@@ -51,10 +51,15 @@ test('the invented congregation uses fake phones, fake emails, and a household',
     assert.strictEqual(plan.family.doc.husbandId, 'ghost-ben-cole');
     assert.strictEqual(plan.family.doc.wifeId, 'ghost-ada-cole');
     assert.deepStrictEqual(plan.family.doc.childIds, ['ghost-cora-cole']);
-    assert.deepStrictEqual(
-        plan.household.doc.memberIds,
-        ['ghost-ada-cole', 'ghost-ben-cole', 'ghost-cora-cole']);
-    assert.strictEqual(plan.household.doc.name, 'The Cole Household');
+    assert.strictEqual(plan.household, undefined);
+    const Household = require('../public/household-core.js');
+    const groups = Household.householdsFromDirectory(
+        plan.people.map(p => Object.assign({id: p.id}, p.doc)),
+        [Object.assign({id: plan.family.id}, plan.family.doc)]);
+    const cole = groups.find(h => h.familyId === plan.family.id);
+    assert.deepStrictEqual(cole.members.map(m => m.personId),
+        ['ghost-ben-cole', 'ghost-ada-cole', 'ghost-cora-cole']);
+    assert.strictEqual(cole.name, 'The Cole Household');
 });
 
 test('the seed script checks the project before it opens a credential', () => {

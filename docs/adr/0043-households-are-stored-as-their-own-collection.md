@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded for the kiosk by [ADR 0075](0075-the-kiosk-groups-by-the-household-records.md) (MS-709): the kiosk groups by the `families` records and no longer reads this collection.
 
 ## Context
 

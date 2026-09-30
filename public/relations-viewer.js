@@ -64,6 +64,13 @@
   }
   function stageOf(n) { return STAGE[n.stage] || STAGE_FALLBACK; }
 
+  // "Hide one-person Households" goes by the record: somebody with no spouse
+  // and no children at home. A couple with one member hidden as inactive is
+  // still a Household of two.
+  function hidesAsSolo(group, householdKey, hideSolo) {
+    return !!hideSolo && group.key === householdKey && group.recorded < 2;
+  }
+
   // A marriage and a parent-and-child link are both Family. A marriage draws as
   // a double line, the way a family tree draws one, so the two never read alike.
   function isMarriage(e) { return e.type === 'family' && e.rel === 'spouse'; }
@@ -91,6 +98,7 @@
     this.toggles = {};          // edgeTypeKey -> bool
     this.showIsolated = true;
     this.showInactive = false;
+    this.hideSoloHouseholds = true;
     this.query = '';
     this.searchFocus = false;
     this.selectedId = null;
@@ -160,14 +168,11 @@
       // Relationship Groups (MS-105). A brand-new collection, so tolerate its
       // absence rather than taking the whole viewer down with it.
       db.collection('relationship_groups').get().catch(function () { return { docs: [] }; }),
-      // Households (MS-321). Stored ones only — the kiosk's projections are a
-      // guess and this graph draws records. Tolerate the collection's absence.
-      db.collection('households').get().catch(function () { return { docs: [] }; }),
       // The Shepherding Tag vocabulary (MS-280). The panel applies existing tags
       // and creates new ones, so it needs the same list the profile reads.
       db.collection('people_tags').orderBy('name', 'asc').get().catch(function () { return { docs: [] }; }),
     ]).then(function (snaps) {
-      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], houseSnap = snaps[6], tagSnap = snaps[7];
+      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], tagSnap = snaps[6];
 
       // Elder-ness comes from the projected Elder Tag (MS-92). Interim fallback:
       // personIds linked to an *elder* User (super_admins excluded), so the graph
@@ -197,13 +202,18 @@
         };
       });
 
+      // A Household bubble is a Household record (MS-709): the parents and the
+      // children at home. Not the kiosk's `households` collection — that is
+      // who checks in together at the foyer, and it holds guests and visitors
+      // under a family's name, so drawing it here put strangers in a family.
+      var families = toArr(famSnap);
       var graph = RelationsGraphCore.buildGraph({
         people: people,
-        families: toArr(famSnap),
+        families: families,
         relationships: toArr(relSnap),
         relationshipTypes: toArr(typeSnap),
         relationshipGroups: toArr(groupSnap),
-        households: toArr(houseSnap),
+        households: FamilyCore.householdRosters(families, people),
         eldersById: eldersById,
       });
 
@@ -268,8 +278,8 @@
   };
   // Every key a View Preset speaks for. Households are deliberately outside it:
   // there is one bubble per household in the directory, so drawing them by
-  // default would bury the web this page exists to show. The foyer's grouping
-  // is opt-in, and a preset never switches it back on behind your back.
+  // default would bury the web this page exists to show. The bubbles are
+  // opt-in, and a preset never switches them back on behind your back.
   RelationsViewer.prototype.presetKeys = function () {
     return this.primaryKeys.concat(this.customKeys, this.groupKeys || []);
   };
@@ -315,9 +325,12 @@
       return {
         id: g.id, key: g.key, name: g.name, typeId: g.typeId, colour: g.colour,
         prio: !!(self.EDGE[g.key] || {}).prio,
+        recorded: (g.memberIds || []).length,
         memberNodes: memberNodes, leaderNode: leaderNode || null,
       };
-    }).filter(function (g) { return g.memberNodes.length > 0; });
+    }).filter(function (g) {
+      return g.memberNodes.length > 0 && !hidesAsSolo(g, RelationsGraphCore.HOUSEHOLD_KEY, st.hideSoloHouseholds);
+    });
 
     // Belonging to a visible group counts as being connected — otherwise a group's
     // members would vanish under "hide isolated people" and leave an empty bubble.
@@ -1001,7 +1014,7 @@
     return 'flex:0 0 auto;width:' + s + 'px;height:' + s + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-weight:600;font-size:' + (s * 0.36) + 'px;background:' + bg + ';color:' + col + ';' + ring;
   };
   RelationsViewer.prototype.presetBtn = function (on) {
-    return 'flex:1 1 0;padding:9px 6px;border-radius:9px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid ' +
+    return 'flex:1 1 auto;white-space:nowrap;padding:9px 6px;border-radius:9px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid ' +
       (on ? 'var(--navy)' : 'var(--outline-variant)') + ';background:' + (on ? 'var(--navy)' : 'var(--surface-container-lowest)') +
       ';color:' + (on ? 'var(--cream)' : 'var(--navy-900)') + ';box-shadow:' + (on ? '0 1px 2px rgba(14,28,54,.14)' : 'none');
   };
@@ -1072,7 +1085,7 @@
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><p data-rv="familyNote" style="margin:4px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant)">In Family, a double line is a marriage and a single line is a parent and child.</p><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
               '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p>' +
-              '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Who lives together, as the foyer records it — not the kinship tree. Off by default: there is one bubble per household, and all of them at once hides the web.</p></div>' +
+              '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Parents and the children at home, one bubble per Household record. Off by default: all of them at once hides the web.</p></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Display</span>' +
                 '<div data-act="toggleIsolated" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">scatter_plot</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show isolated people</span><span data-rv="isoBg"><span data-rv="isoKnob"></span></span></div>' +
                 '<div data-act="toggleInactive" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">do_not_disturb_on</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show inactive people</span><span data-rv="inactBg"><span data-rv="inactKnob"></span></span></div>' +
@@ -1135,7 +1148,7 @@
 
   RelationsViewer.prototype.renderPresets = function () {
     var self = this, ap = this.activePreset();
-    var defs = [['full', 'Full Web'], ['family', 'By Family'], ['elder', 'By Elder']];
+    var defs = [['full', 'Full Web'], ['family', 'By Household'], ['elder', 'By Elder']];
     this.refs.presets.innerHTML = defs.map(function (d) {
       return '<button data-act="preset:' + d[0] + '" class="rv-preset" style="' + self.presetBtn(ap === d[0]) + '">' + d[1] + '</button>';
     }).join('');
@@ -1193,7 +1206,14 @@
 
     var hasHouseholds = (this.householdKeys || []).length > 0;
     if (this.refs.householdTypes) {
-      this.refs.householdTypes.innerHTML = (this.householdKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('');
+      var householdsOn = (this.householdKeys || []).some(function (k) { return self.toggles[k]; });
+      this.refs.householdTypes.innerHTML = (this.householdKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('') +
+        (hasHouseholds
+          ? '<label style="display:flex;align-items:center;gap:9px;padding:2px 8px 4px 12px;font-size:12.5px;color:var(--on-surface);cursor:' + (householdsOn ? 'pointer' : 'default') + ';opacity:' + (householdsOn ? '1' : '.55') + '">' +
+              '<input type="checkbox" data-rv="hideSoloHouseholds" style="width:15px;height:15px;margin:0;accent-color:var(--navy);cursor:inherit"' +
+              (this.hideSoloHouseholds ? ' checked' : '') + (householdsOn ? '' : ' disabled') + '>' +
+              'Hide one-person Households</label>'
+          : '');
       this.refs.householdHdr.style.display = hasHouseholds ? 'flex' : 'none';
       this.refs.householdNote.style.display = hasHouseholds ? 'block' : 'none';
     }
@@ -1746,6 +1766,13 @@
     // has to survive the panel re-rendering under it — so both are delegated
     // separately rather than folded into the click chain above.
     this.mount.addEventListener('change', function (e) {
+      if (e.target.getAttribute && e.target.getAttribute('data-rv') === 'hideSoloHouseholds') {
+        self.hideSoloHouseholds = e.target.checked;
+        self.afterFilter();
+        var again = self.mount.querySelector('[data-rv="hideSoloHouseholds"]');
+        if (again) again.focus();
+        return;
+      }
       var el = e.target.closest ? e.target.closest('[data-act="setStage"]') : null;
       if (!el) return;
       var stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(el.value)];

@@ -624,9 +624,25 @@ document.addEventListener('alpine:init', () => {
             return this.relationshipTypes.find(t => t.id === id) || null;
         },
 
-        // personRelationships — the card's row model (Family + Pairwise + Group)
-        // — now lives in shepherding-quick-assign.js, beside the actions that
-        // mutate those rows.
+        // personRelationships — the card's row model (Pairwise + Group) — lives in
+        // shepherding-quick-assign.js, beside the actions that mutate those rows.
+
+        // The Household card (MS-709). Read under x-effect, so a change to the
+        // families or people roster redraws it. Writes need the editor rung,
+        // the same one firestore.rules asks of `families`.
+        renderHousehold(el) {
+            HouseholdEditor.render(el, {
+                db,
+                families: this.families,
+                people: this.allPeople,
+                personId: this.personId,
+                canEdit: !!this.canWriteEditor,
+                personHref: id => 'shepherding-profile.html?id=' + encodeURIComponent(id),
+                treeHref: id => 'shepherding-tags.html?tab=families&household=' + encodeURIComponent(id),
+                onChange: next => { this.families = next; },
+                toast: (message, kind) => this.showToast(message, kind),
+            });
+        },
 
         relInitials(name) {
             const parts = (name || '').trim().split(/\s+/).filter(Boolean);
