@@ -240,6 +240,9 @@ document.addEventListener('alpine:init', () => {
     // withQuickAssign, not object spread: the quick-assign card exposes getters and
     // spreading would freeze them at their page-load values.
     Alpine.data('shepherdingProfile', () => window.withQuickAssign({
+        // Closed until auth answers. An undeclared flag is a ReferenceError in
+        // every x-show that names it, not a false.
+        ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
         currentUserName: '',

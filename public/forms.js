@@ -14,6 +14,9 @@
 
 function formsPage() {
     return {
+        // Closed until auth answers. An undeclared flag is a ReferenceError in
+        // every x-show that names it, not a false.
+        canWriteEditor: false,
         loading: true,
         forms: [],
         folders: [],

@@ -123,7 +123,10 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                Object.assign(this, AccessCore.pageFlags(userData));
+                // currentPermissionLevel is a getter here, and Object.assign
+                // throws on a getter-only key of Alpine's proxy.
+                const { currentPermissionLevel, ...flags } = AccessCore.pageFlags(userData);
+                Object.assign(this, flags);
                 if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
@@ -131,7 +134,7 @@ document.addEventListener('alpine:init', () => {
                 this.ownIdentity = {
                     user: user,
                     name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
-                    permissionLevel: this.currentPermissionLevel,
+                    permissionLevel: currentPermissionLevel,
                     pastoralAssistant: this.pastoralAssistant,
                 };
 
@@ -190,6 +193,14 @@ document.addEventListener('alpine:init', () => {
                 docsSnap.docs.forEach(doc => {
                     this.allDocs[doc.id] = { id: doc.id, ...doc.data() };
                 });
+
+                // A document about this person that never reached their tree
+                // (MS-701: the assistant tools filed interviews in the Library
+                // only) is still theirs. File it, and keep it filed.
+                if (this.isProfileScope
+                    && Docs.fileOwnedDocuments(this.structure, this.allDocs, this.ownerPersonId).length) {
+                    this.saveStructure().catch(e => console.error('Error filing documents on this profile:', e));
+                }
 
                 if (viewsSnap) this.views = viewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 if (tagsSnap) this.shepherdingTags = tagsSnap.docs.map(doc => ({

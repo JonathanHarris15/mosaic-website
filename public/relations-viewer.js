@@ -64,6 +64,27 @@
   }
   function stageOf(n) { return STAGE[n.stage] || STAGE_FALLBACK; }
 
+  // A marriage and a parent-and-child link are both Family. A marriage draws as
+  // a double line, the way a family tree draws one, so the two never read alike.
+  function isMarriage(e) { return e.type === 'family' && e.rel === 'spouse'; }
+  var MARRIAGE_SPAN = 2.4;   // how much wider than a single line the pair sits
+  function strokeEdge(ctx, A, B, ox, oy, w, marriage) {
+    if (!marriage) {
+      ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(A.x + ox, A.y + oy); ctx.lineTo(B.x + ox, B.y + oy); ctx.stroke();
+      return;
+    }
+    var dx = B.x - A.x, dy = B.y - A.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var gap = w * 0.9, px = -dy / len * gap, py = dx / len * gap;
+    ctx.lineWidth = Math.max(1, w * 0.55);
+    [-1, 1].forEach(function (side) {
+      ctx.beginPath();
+      ctx.moveTo(A.x + ox + px * side, A.y + oy + py * side);
+      ctx.lineTo(B.x + ox + px * side, B.y + oy + py * side);
+      ctx.stroke();
+    });
+  }
+
   function RelationsViewer(mount) {
     this.mount = mount;
     // reactive-ish UI state
@@ -694,12 +715,11 @@
       ctx.globalAlpha = hi ? (on ? 1 : 0.045) : 0.9;
       if (group.length === 1) {
         var def = self.EDGE[e0.type];
-        ctx.strokeStyle = def.color;
-        ctx.lineWidth = on && hi ? def.w + 0.7 : def.w;
+        ctx.strokeStyle = paint(def.color);
         ctx.setLineDash(def.dash);
         ctx.lineDashOffset = 0;
         ctx.lineCap = def.css === 'dotted' ? 'round' : 'butt';
-        ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+        strokeEdge(ctx, A, B, 0, 0, on && hi ? def.w + 0.7 : def.w, isMarriage(e0));
         return;
       }
       // Striped combined line: one thin line per connection type, laid side by
@@ -709,17 +729,16 @@
       var dx = B.x - A.x, dy = B.y - A.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
       var nx = -dy / len, ny = dx / len; // unit perpendicular
       var maxW = 0;
-      group.forEach(function (e) { maxW = Math.max(maxW, self.EDGE[e.type].w); });
+      group.forEach(function (e) { maxW = Math.max(maxW, self.EDGE[e.type].w * (isMarriage(e) ? MARRIAGE_SPAN : 1)); });
       var slot = maxW + bump + 1.1; // centre-to-centre spacing between stripes
       var start = -((nT - 1) * slot) / 2;
       group.forEach(function (e, i) {
         var def = self.EDGE[e.type], off = start + i * slot, ox = nx * off, oy = ny * off;
-        ctx.strokeStyle = def.color;
-        ctx.lineWidth = def.w + bump;
+        ctx.strokeStyle = paint(def.color);
         ctx.setLineDash(def.dash);
         ctx.lineDashOffset = 0;
         ctx.lineCap = def.css === 'dotted' ? 'round' : 'butt';
-        ctx.beginPath(); ctx.moveTo(A.x + ox, A.y + oy); ctx.lineTo(B.x + ox, B.y + oy); ctx.stroke();
+        strokeEdge(ctx, A, B, ox, oy, def.w + bump, isMarriage(e));
       });
     });
     ctx.setLineDash([]); ctx.lineDashOffset = 0; ctx.globalAlpha = 1;
@@ -750,7 +769,7 @@
       var tipx = bsx - dx * rB, tipy = bsy - dy * rB;
       var s = 8.5, ang = Math.atan2(dy, dx);
       ctx.globalAlpha = hi ? (on ? 1 : 0.05) : 0.95;
-      ctx.fillStyle = def.color;
+      ctx.fillStyle = paint(def.color);
       ctx.beginPath();
       ctx.moveTo(tipx, tipy);
       ctx.lineTo(tipx - Math.cos(ang - 0.42) * s, tipy - Math.sin(ang - 0.42) * s);
@@ -790,7 +809,7 @@
     // leads without following the line back to the bubble.
     var lead = this.leaderColour && this.leaderColour[n.id];
     if (lead && this.nodeGroups && this.nodeGroups[n.id]) {
-      ctx.strokeStyle = lead;
+      ctx.strokeStyle = paint(lead);
       ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 3.5, 0, Math.PI * 2); ctx.stroke();
     }
@@ -819,7 +838,7 @@
     ctx.fillText(n.initials, n.x, n.y + 0.5);
     var pr = 5.2, px = n.x + r * 0.68, py = n.y + r * 0.68;
     ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fillStyle = stageOf(n).color;
+    ctx.fillStyle = paint(stageOf(n).color);
     ctx.globalAlpha = alpha * (n.inactive ? 0.6 : 1); ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = tok('--surface'); ctx.stroke();
     ctx.globalAlpha = 1;
@@ -1051,7 +1070,7 @@
           '<aside data-rv="rail" class="rv-scroll" style="flex:0 0 288px;width:288px;background:var(--surface-container-lowest);border-right:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden">' +
             '<div style="padding:20px 18px 26px;display:flex;flex-direction:column;gap:22px">' +
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
-              '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
+              '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><p data-rv="familyNote" style="margin:4px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant)">In Family, a double line is a marriage and a single line is a parent and child.</p><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
               '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p>' +
               '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Who lives together, as the foyer records it — not the kinship tree. Off by default: there is one bubble per household, and all of them at once hides the web.</p></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Display</span>' +

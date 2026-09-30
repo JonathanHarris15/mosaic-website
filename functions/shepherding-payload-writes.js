@@ -161,6 +161,12 @@ async function createFormDocument(
     parent.children.push({type: "document", id: ref.id});
     return true;
   });
+  // A shepherding document is in both places by construction, the same as
+  // one started on the page: the profile's Documents tab reads person_<id>.
+  if (shepherding) {
+    await withTree(db, (tree) => DocsCore.fileInRoot(tree, ref.id),
+        "person_" + personId);
+  }
 
   return {
     ok: true,

@@ -95,6 +95,14 @@
             households.push(h);
         });
 
+        // A child who has married is a spouse in a Family of their own, and that
+        // marriage is their Household — whichever of the two Families is read first.
+        const marriedIn = {};
+        (families || []).forEach(function (family) {
+            if (!family) return;
+            [family.husbandId, family.wifeId].forEach(function (id) { if (id) marriedIn[id] = family.id; });
+        });
+
         (families || []).forEach(function (family) {
             if (!family) return;
             const members = [];
@@ -108,6 +116,7 @@
             });
             (family.childIds || []).forEach(function (id) {
                 if (!id || seated[id]) return;
+                if (marriedIn[id] && marriedIn[id] !== family.id) return;
                 const m = memberOf(byId, id, true);
                 if (m) {
                     members.push(m);

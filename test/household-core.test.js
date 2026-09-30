@@ -25,6 +25,43 @@ test('a Family projects as a named Household of its members', () => {
     assert.strictEqual(harris.members.find(m => m.personId === 'bob').kid, false);
 });
 
+// MS-704: a child who marries is still in their parents' Family — that is
+// kinship — but the marriage carves them out a Household of their own. The
+// parents' Family being read first must not seat them back home as a Kid.
+test('a married child is housed with their spouse, not in the Household they grew up in', () => {
+    const folk = [
+        { id: 'pa', name: 'Tobias Quill' }, { id: 'ma', name: 'Petra Quill' },
+        { id: 'son', name: 'Linus Quill' }, { id: 'sis', name: 'Iris Quill' },
+        { id: 'bride', name: 'Nell Quill' },
+    ];
+    const fams = [
+        { id: 'origin', husbandId: 'pa', wifeId: 'ma', childIds: ['son', 'sis'] },
+        { id: 'newlyweds', husbandId: 'son', wifeId: 'bride', childIds: [] },
+    ];
+    for (const order of [fams, fams.slice().reverse()]) {
+        const households = Household.householdsFromDirectory(folk, order);
+        const home = households.find(h => h.id === 'family:origin');
+        const theirs = households.find(h => h.id === 'family:newlyweds');
+        assert.deepStrictEqual(home.members.map(m => m.personId), ['pa', 'ma', 'sis']);
+        assert.deepStrictEqual(theirs.members.map(m => m.personId), ['son', 'bride']);
+        assert.strictEqual(theirs.members.find(m => m.personId === 'son').kid, false);
+    }
+});
+
+test('a married child a stored Household already seats stays where it was written down', () => {
+    const folk = [
+        { id: 'pa', name: 'Tobias Quill' }, { id: 'son', name: 'Linus Quill' }, { id: 'bride', name: 'Nell Quill' },
+    ];
+    const fams = [
+        { id: 'origin', husbandId: 'pa', childIds: ['son'] },
+        { id: 'newlyweds', husbandId: 'son', wifeId: 'bride', childIds: [] },
+    ];
+    const stored = [{ id: 'family:origin', name: 'The Quill Household', memberIds: ['pa', 'son'] }];
+    const households = Household.householdsFromDirectory(folk, fams, stored);
+    assert.deepStrictEqual(households.find(h => h.id === 'family:origin').members.map(m => m.personId), ['pa', 'son']);
+    assert.deepStrictEqual(households.find(h => h.id === 'family:newlyweds').members.map(m => m.personId), ['bride']);
+});
+
 test('a Person in no Family still appears as their own Household', () => {
     const households = Household.householdsFromDirectory(people, families);
     const solo = households.find(h => h.id === 'person:solo');

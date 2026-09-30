@@ -183,6 +183,7 @@
         const currentHref = opts.currentHref || DashboardNav.normalizePage(global.location.pathname);
         let mode = opts.mode;
         let back = opts.back;
+        const backNamed = !!back;
         if (typeof opts.getState === 'function') {
             const dynamic = opts.getState();
             if (dynamic) {
@@ -194,6 +195,19 @@
             const classified = DashboardNav.classifyPage(currentHref);
             mode = classified.mode;
             back = back || classified.back;
+        }
+
+        // A page that draws its own back link knows where the reader came from
+        // (a note opened from a profile goes back to that Person); the
+        // parent map only knows the page's usual parent.
+        const ownBack = (mode === 'back' && !backNamed)
+            ? lead.querySelector('.m-back:not(.mosaic-desktop-lead)') : null;
+        if (ownBack) {
+            lead.querySelectorAll('#' + TOGGLE_ID + ', .mosaic-desktop-lead').forEach(function (n) {
+                n.remove();
+            });
+            mounted = { backEl: ownBack, mode };
+            return mounted;
         }
 
         stripLegacyLead(lead);

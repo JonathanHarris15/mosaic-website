@@ -11,6 +11,9 @@ const DASH_TASK_LOOK_AHEAD_DAYS = 180;
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingDashboard', () => ({
+        // Closed until auth answers. An undeclared flag is a ReferenceError in
+        // every x-show that names it, not a false.
+        ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
         currentUserName: '',

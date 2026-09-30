@@ -137,8 +137,6 @@
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-md">
             <div class="flex flex-col gap-xs flex-grow">
                 <div class="flex items-center gap-2">
-                    <span class="font-label-md text-label-md text-on-surface-variant capitalize"
-                          x-text="person?.sex || 'Unknown'"></span>
                     <template x-if="person?.membership?.status">
                         <span class="px-2 py-0.5 bg-secondary/10 text-secondary text-[10px] font-bold rounded-full uppercase tracking-widest border border-secondary/20" x-text="person.membership.status"></span>
                     </template>
@@ -208,6 +206,12 @@
                     </div>
 
                     <div class="flex flex-col gap-3">
+                        <template x-if="person?.sex">
+                            <div class="flex items-center gap-3 text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[20px]">person</span>
+                                <span class="font-body-md text-sm capitalize" x-text="person.sex"></span>
+                            </div>
+                        </template>
                         <template x-if="person?.contact?.email">
                             <div class="flex items-center gap-3 text-on-surface-variant">
                                 <span class="material-symbols-outlined text-[20px]">mail</span>
@@ -1664,8 +1668,9 @@
                         </div>
                         <div class="flex flex-col gap-xs">
                             <label class="m-label">Sex</label>
-                            <select x-model="selectedPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
-                                <option value="">Unknown</option>
+                            <!-- A Pastoral Assistant may change name, contact and birthday (MS-703); sex stays an editor write. -->
+                            <select x-model="selectedPerson.sex" :disabled="!canWriteEditor" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm disabled:opacity-60">
+                                <option value="">Not set</option>
                                 <option value="male">Male</option>
                                 <option value="female">Female</option>
                             </select>

@@ -135,6 +135,31 @@ suite('the payload-carrying shepherding tools', () => {
         assert.strictEqual(stored.inLibrary, true);
     });
 
+    test('a personal shepherding form is filed on its subject\'s profile too', async () => {
+        // MS-701. The page puts a shepherding document in both places; this
+        // path filed it in the Library only, and the profile's Documents tab —
+        // which reads person_<id> — never showed it.
+        await seedTemplate('interview', {shepherdingDoc: true});
+        const made = await Payload.createFormDocument(db, {
+            templateId: 'interview', personId: A, actor,
+        });
+
+        const tree = (await db.collection('elder_document_structure')
+            .doc('person_' + A).get()).data();
+        assert.deepStrictEqual(tree.children, [{type: 'document', id: made.documentId}]);
+        const library = (await db.collection('elder_document_structure')
+            .doc('root').get()).data();
+        assert.ok(library.children.some((c) => c.id === made.documentId),
+            'and it is still in the Library');
+    });
+
+    test('a form document that is not a shepherding one stays off profiles', async () => {
+        await seedTemplate('interview');
+        await Payload.createFormDocument(db, {templateId: 'interview', personId: A, actor});
+        const tree = await db.collection('elder_document_structure').doc('person_' + A).get();
+        assert.strictEqual(tree.exists, false);
+    });
+
     test('a personal shepherding form about nobody is refused', async () => {
         await seedTemplate('interview', {shepherdingDoc: true});
         await assert.rejects(() => Payload.createFormDocument(db, {

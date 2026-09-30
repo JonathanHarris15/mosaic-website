@@ -637,10 +637,15 @@
         people.forEach(p => { if (p && p.id) byId[p.id] = p; });
         const seated = {};
         const out = [];
+        const marriedIn = {};
+        (data.families || []).forEach(f => {
+            [f.husbandId, f.wifeId].forEach(id => { if (id) marriedIn[id] = f.id; });
+        });
         (data.families || []).forEach(f => {
             const childSet = {};
             (f.childIds || []).forEach(id => { if (id) childSet[id] = true; });
-            const ids = [f.husbandId, f.wifeId].concat(f.childIds || []).filter(id => id && byId[id] && !seated[id]);
+            const children = (f.childIds || []).filter(id => !(marriedIn[id] && marriedIn[id] !== f.id));
+            const ids = [f.husbandId, f.wifeId].concat(children).filter(id => id && byId[id] && !seated[id]);
             if (!ids.length) return;
             ids.forEach(id => { seated[id] = true; });
             const members = ids.map(id => ({

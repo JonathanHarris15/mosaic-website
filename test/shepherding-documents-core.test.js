@@ -143,3 +143,33 @@ test('a document shared between two trees is only orphaned when absent from BOTH
     assert.strictEqual(Core.containsDoc(library, 'private'), false);
     assert.strictEqual(Core.containsDoc(profile, 'private'), true);
 });
+
+// MS-701. A document that says who it is about but was never put in that
+// person's tree — the MCP path filed interviews in the Library only — is
+// still that person's, and their profile tab files it rather than hiding it.
+test('fileOwnedDocuments puts a person\'s unfiled documents at the top of their tree', () => {
+    const profile = { children: [{ type: 'document', id: 'already' }] };
+    const docs = {
+        already: { ownerPersonId: 'p1' },
+        interview: { ownerPersonId: 'p1' },
+        someoneElse: { ownerPersonId: 'p2' },
+        library: { ownerPersonId: null },
+    };
+
+    const filed = Core.fileOwnedDocuments(profile, docs, 'p1');
+
+    assert.deepStrictEqual(filed, ['interview']);
+    assert.deepStrictEqual(profile.children.map(c => c.id), ['already', 'interview']);
+});
+
+test('fileOwnedDocuments leaves a document already filed in a folder where it is', () => {
+    const profile = { children: [{ type: 'folder', id: 'f', name: 'Care', children: [{ type: 'document', id: 'd' }] }] };
+    assert.deepStrictEqual(Core.fileOwnedDocuments(profile, { d: { ownerPersonId: 'p1' } }, 'p1'), []);
+    assert.strictEqual(profile.children.length, 1);
+});
+
+test('fileOwnedDocuments does nothing without a person', () => {
+    const tree = { children: [] };
+    assert.deepStrictEqual(Core.fileOwnedDocuments(tree, { d: { ownerPersonId: null } }, null), []);
+    assert.deepStrictEqual(tree.children, []);
+});

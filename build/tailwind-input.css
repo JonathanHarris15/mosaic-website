@@ -1200,14 +1200,6 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     --m-dense-target-min: 32px;
   }
 
-  /* 64px of chrome above a dense page is a banner. 48px still clears a 34px
-     control with room, and the wordmark comes down from 28px with it. */
-  .m-dense .m-header {
-    --m-header-h: 48px;
-    --m-header-pad: var(--space-md);
-    --m-header-title: 19px;
-  }
-
   /* 46px is a thumb on glass; a mouse needs far less. --m-dense-target-min is
      the floor, and --sm sits exactly on it. */
   .m-dense .m-btn { height: var(--m-dense-control-h); padding: 0 var(--space-sm); font-size: 13px; }

@@ -554,6 +554,9 @@ function coerceBaptismCandidates(bap) {
 
 function serviceForm() {
     return {
+        // Closed until auth answers. An undeclared flag is a ReferenceError in
+        // every x-show that names it, not a false.
+        canDecide: false,
         date: '',
         // When opened from the mobile shell (service-builder.html?shell=mobile),
         // the back link returns to the mobile app and the chrome gets phone polish.
