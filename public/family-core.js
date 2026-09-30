@@ -304,6 +304,167 @@
         };
     }
 
+    // ── The Household editor (MS-709) ────────────────────────────────────────
+    //
+    // A Household is a `families` record read as the people who live together:
+    // the husband and wife (either may be empty — a single parent) and their
+    // unmarried children. A child who is a husband or wife in another record
+    // has left for their own Household; they stay in `childIds`, because that
+    // is what places them in the Family tree. So "at home" and "their own
+    // Household" are never stored, only read off marriage.
+    //
+    // The editor seats parents and children. It never sets a person's parents
+    // or siblings: those are the same fact read from the other end.
+
+    // The Household a Person lives in: their marriage, else the one they grew up in.
+    function householdOf(families, personId) {
+        return familyOfSpouse(families, personId) || familyOfChild(families, personId);
+    }
+
+    function householdView(families, family) {
+        if (!family) return null;
+        const atHome = [];
+        const ownHousehold = [];
+        (family.childIds || []).forEach(id => {
+            const own = familyOfSpouse(families, id);
+            if (own && own.id !== family.id) ownHousehold.push({ personId: id, familyId: own.id });
+            else atHome.push(id);
+        });
+        return {
+            familyId: family.id || null,
+            husbandId: family.husbandId || null,
+            wifeId: family.wifeId || null,
+            atHome,
+            ownHousehold,
+            anniversary: family.anniversary || null,
+        };
+    }
+
+    const SEATS = ['husbandId', 'wifeId'];
+
+    // Who may fill a slot of `family` (null for a Household not yet written).
+    // `slot` is 'husbandId' | 'wifeId' | 'child'. A husband is male and a wife
+    // female; nobody is a husband or wife in two records, or a child in two.
+    function householdCandidates(families, people, family, slot) {
+        const fam = family || {};
+        const inIt = [fam.husbandId, fam.wifeId].concat(fam.childIds || []).filter(Boolean);
+        return (people || []).filter(p => {
+            if (!p || !p.id || inIt.indexOf(p.id) !== -1) return false;
+            if (slot === 'child') return !familyOfChild(families, p.id);
+            if (seatFor(p) !== slot) return false;
+            return !familyOfSpouse(families, p.id);
+        });
+    }
+
+    function isEmptyFamily(f) {
+        return !f.husbandId && !f.wifeId && !(f.childIds || []).length;
+    }
+
+    function findFamily(families, familyId) {
+        return familyId ? (families || []).find(f => f.id === familyId) || null : null;
+    }
+
+    function planned(action, familyId, changes) {
+        return { valid: true, errors: [], collection: 'families', action, familyId: familyId || null, changes };
+    }
+
+    // An update that would leave the record with nobody in it deletes it instead.
+    function updateOrDelete(family, changes) {
+        return isEmptyFamily({ ...family, ...changes })
+            ? planned('delete', family.id, null)
+            : planned('update', family.id, changes);
+    }
+
+    // Seat `personId` as husband or wife, or empty the seat when personId is null.
+    // With no familyId the Household is created by its first parent.
+    function planSetParent(families, familyId, seat, personId, personById) {
+        if (SEATS.indexOf(seat) === -1) return refuse([`"${seat}" is not a parent seat`]);
+        const family = findFamily(families, familyId);
+        if (familyId && !family) return refuse(['that Household no longer exists']);
+
+        if (!personId) {
+            if (!family) return refuse(['there is no Household to change']);
+            return updateOrDelete(family, { [seat]: null });
+        }
+
+        const byId = typeof personById === 'function' ? personById : function () { return null; };
+        const person = byId(personId);
+        if (seatFor(person) !== seat) {
+            return refuse([seat === 'husbandId'
+                ? 'a husband must be recorded as male — set sex in Member Details first'
+                : 'a wife must be recorded as female — set sex in Member Details first']);
+        }
+        const elsewhere = familyOfSpouse(families, personId);
+        if (elsewhere && (!family || elsewhere.id !== family.id)) {
+            return refuse(['that Person is already a husband or wife in another Household']);
+        }
+        if (family && (family.childIds || []).indexOf(personId) !== -1) {
+            return refuse(['that Person is a child of this Household']);
+        }
+        if (!family) return planned('create', null, { [seat]: personId, childIds: [] });
+        return planned('update', family.id, { [seat]: personId });
+    }
+
+    function planAddChild(families, familyId, childId) {
+        const family = findFamily(families, familyId);
+        if (!family) return refuse(['add a parent before adding children']);
+        if (!childId) return refuse(['choose a child']);
+        if (family.husbandId === childId || family.wifeId === childId) {
+            return refuse(['that Person is a parent of this Household']);
+        }
+        if ((family.childIds || []).indexOf(childId) !== -1) return refuse(['that Person is already a child of this Household']);
+        if (familyOfChild(families, childId)) return refuse(['that Person is already a child in another Household']);
+        return planned('update', family.id, { childIds: (family.childIds || []).concat(childId) });
+    }
+
+    function planRemoveChild(families, familyId, childId) {
+        const family = findFamily(families, familyId);
+        if (!family || (family.childIds || []).indexOf(childId) === -1) {
+            return refuse(['that Person is not a child of this Household']);
+        }
+        return updateOrDelete(family, { childIds: family.childIds.filter(id => id !== childId) });
+    }
+
+    function planSetAnniversary(families, familyId, value) {
+        const family = findFamily(families, familyId);
+        if (!family) return refuse(['there is no Household to change']);
+        return planned('update', family.id, { anniversary: value || null });
+    }
+
+    // The Family tree drawn as a pedigree (MS-709 layout C), from one Household
+    // down: each child either stays a leaf or, once married, becomes the couple
+    // of their own Household with their children beneath. `origins` are the
+    // Households the two parents grew up in, drawn above. Chained records are
+    // not trusted to be acyclic, so a Household is drawn at most once.
+    function familyTree(families, familyId, maxDepth) {
+        const root = findFamily(families, familyId);
+        if (!root) return null;
+        const limit = typeof maxDepth === 'number' ? maxDepth : 6;
+        const drawn = new Set();
+
+        function node(fam, depth) {
+            drawn.add(fam.id);
+            return {
+                familyId: fam.id,
+                husbandId: fam.husbandId || null,
+                wifeId: fam.wifeId || null,
+                children: (fam.childIds || []).map(id => {
+                    const own = familyOfSpouse(families, id);
+                    const grows = own && own.id !== fam.id && !drawn.has(own.id) && depth < limit;
+                    return { personId: id, household: grows ? node(own, depth + 1) : null };
+                }),
+            };
+        }
+
+        const tree = node(root, 0);
+        const origins = [root.husbandId, root.wifeId].filter(Boolean).map(pid => {
+            const o = familyOfChild(families, pid);
+            if (!o || drawn.has(o.id)) return null;
+            return { forPersonId: pid, familyId: o.id, husbandId: o.husbandId || null, wifeId: o.wifeId || null };
+        }).filter(Boolean);
+        return { root: tree, origins };
+    }
+
     // ── Families as serving groups (ADR-0012, MS-18) ─────────────────────────
     //
     // A serving Role can say "no two people from the same Family" or "…the same
@@ -395,6 +556,15 @@
         // write-through (ADR-0014 s4)
         planAddFamilyRelation,
         planRemoveFamilyRelation,
+        // the Household editor (MS-709)
+        householdOf,
+        householdView,
+        householdCandidates,
+        planSetParent,
+        planAddChild,
+        planRemoveChild,
+        planSetAnniversary,
+        familyTree,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
