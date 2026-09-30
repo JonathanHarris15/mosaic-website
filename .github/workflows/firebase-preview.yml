@@ -6,6 +6,10 @@ name: Firebase Hosting preview
 # preview runs the pages under review against the live backend and the live
 # firestore.rules. A PR that changes rules is not exercised by its preview.
 #
+# Design prototypes (docs/design/prototypes/*.html) are staged into the
+# runner's copy of public/ at /prototypes/ — only here, never committed and
+# never on the live site (.cursor/rules/ui-prototype-first.mdc).
+#
 # Never `firebase deploy` — a channel deploy cannot touch the live site.
 # Forks get no secrets, and the same-repo guard below skips them outright.
 # The URL is written to the job summary.
@@ -15,6 +19,7 @@ on:
     paths:
       - "public/**"
       - "firebase.json"
+      - "docs/design/prototypes/**"
       - ".github/workflows/firebase-preview.yml"
 
 permissions:
@@ -60,6 +65,19 @@ jobs:
       - name: Refuse a preview whose config is not the church project
         run: node scripts/check-firebase-deploy.js --project mosaic-hymn-database --i-mean-prod
 
+      - name: Stage design prototypes at /prototypes/
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p public/prototypes
+          : > "${RUNNER_TEMP}/prototypes.txt"
+          for f in docs/design/prototypes/*.html; do
+            # A prototype links the real sheets as ../../../public/<sheet>;
+            # served from /prototypes/ that is the site root.
+            sed 's#\.\./\.\./\.\./public/#/#g' "$f" > "public/prototypes/$(basename "$f")"
+            basename "$f" >> "${RUNNER_TEMP}/prototypes.txt"
+          done
+
       - name: Deploy to the PR's preview channel
         run: |
           set -euo pipefail
@@ -78,3 +96,7 @@ jobs:
           fi
           echo "Preview: ${URL}"
           echo "### Preview: ${URL}" >> "${GITHUB_STEP_SUMMARY}"
+          while read -r name; do
+            echo "Prototype: ${URL}/prototypes/${name}"
+            echo "- Prototype: ${URL}/prototypes/${name}" >> "${GITHUB_STEP_SUMMARY}"
+          done < "${RUNNER_TEMP}/prototypes.txt"
