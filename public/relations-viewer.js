@@ -167,14 +167,11 @@
       // Relationship Groups (MS-105). A brand-new collection, so tolerate its
       // absence rather than taking the whole viewer down with it.
       db.collection('relationship_groups').get().catch(function () { return { docs: [] }; }),
-      // Households (MS-321). Stored ones only — the kiosk's projections are a
-      // guess and this graph draws records. Tolerate the collection's absence.
-      db.collection('households').get().catch(function () { return { docs: [] }; }),
       // The Shepherding Tag vocabulary (MS-280). The panel applies existing tags
       // and creates new ones, so it needs the same list the profile reads.
       db.collection('people_tags').orderBy('name', 'asc').get().catch(function () { return { docs: [] }; }),
     ]).then(function (snaps) {
-      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], houseSnap = snaps[6], tagSnap = snaps[7];
+      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], tagSnap = snaps[6];
 
       // Elder-ness comes from the projected Elder Tag (MS-92). Interim fallback:
       // personIds linked to an *elder* User (super_admins excluded), so the graph
@@ -204,13 +201,18 @@
         };
       });
 
+      // A Household bubble is a Household record (MS-709): the parents and the
+      // children at home. Not the kiosk's `households` collection — that is
+      // who checks in together at the foyer, and it holds guests and visitors
+      // under a family's name, so drawing it here put strangers in a family.
+      var families = toArr(famSnap);
       var graph = RelationsGraphCore.buildGraph({
         people: people,
-        families: toArr(famSnap),
+        families: families,
         relationships: toArr(relSnap),
         relationshipTypes: toArr(typeSnap),
         relationshipGroups: toArr(groupSnap),
-        households: toArr(houseSnap),
+        households: FamilyCore.householdRosters(families, people),
         eldersById: eldersById,
       });
 
@@ -275,8 +277,8 @@
   };
   // Every key a View Preset speaks for. Households are deliberately outside it:
   // there is one bubble per household in the directory, so drawing them by
-  // default would bury the web this page exists to show. The foyer's grouping
-  // is opt-in, and a preset never switches it back on behind your back.
+  // default would bury the web this page exists to show. The bubbles are
+  // opt-in, and a preset never switches them back on behind your back.
   RelationsViewer.prototype.presetKeys = function () {
     return this.primaryKeys.concat(this.customKeys, this.groupKeys || []);
   };
@@ -1081,7 +1083,7 @@
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><p data-rv="familyNote" style="margin:4px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant)">In Family, a double line is a marriage and a single line is a parent and child.</p><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
               '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p>' +
-              '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Who lives together, as the foyer records it — not the kinship tree. Off by default: there is one bubble per household, and all of them at once hides the web.</p></div>' +
+              '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Parents and the children at home, one bubble per Household record. Off by default: all of them at once hides the web.</p></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Display</span>' +
                 '<div data-act="toggleIsolated" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">scatter_plot</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show isolated people</span><span data-rv="isoBg"><span data-rv="isoKnob"></span></span></div>' +
                 '<div data-act="toggleInactive" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">do_not_disturb_on</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show inactive people</span><span data-rv="inactBg"><span data-rv="inactKnob"></span></span></div>' +

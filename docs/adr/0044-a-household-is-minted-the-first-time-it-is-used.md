@@ -55,6 +55,12 @@ colour rather than a cycling palette (they are one kind of thing), and there is
 never a leader, because a Household has no head — it is who lives together, not
 who is in charge.
 
+> **Amended (MS-709):** the Relations Viewer's Household bubbles are now drawn from
+> the Household records in `families` (parents and the children at home), not from
+> this collection. The kiosk's stored Households group whoever checks in together,
+> guests and visitors included, so drawing them put people in a family they are
+> not part of. Everything else here, minting included, stands.
+
 **The Households toggle starts off**, and no View Preset turns it back on. There
 is one bubble per household in the directory; drawn by default they would bury
 the web the page exists to show.

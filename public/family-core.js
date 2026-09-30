@@ -572,6 +572,19 @@
             .sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    // Each Household record as the people in it — parents and the children at
+    // home, never a married child — for the Relations Viewer's Household bubbles.
+    function householdRosters(families, people) {
+        const list = families || [];
+        return list.filter(f => f && f.id && !isEmptyFamily(f)).map(f => {
+            const view = householdView(list, f);
+            const memberIds = [f.husbandId, f.wifeId].concat(view.atHome).filter(Boolean);
+            const parts = String(nameIn(people, f.husbandId || f.wifeId) || '').trim().split(/\s+/).filter(Boolean);
+            const name = parts.length > 1 ? 'The ' + parts[parts.length - 1] + ' Household' : familyGroupName(f, people);
+            return { id: f.id, name, memberIds };
+        });
+    }
+
     // ── Families as serving groups (ADR-0012, MS-18) ─────────────────────────
     //
     // A serving Role can say "no two people from the same Family" or "…the same
@@ -676,6 +689,7 @@
         familyTree,
         familyTrees,
         familyHouseholdIds,
+        householdRosters,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

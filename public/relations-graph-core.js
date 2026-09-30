@@ -76,10 +76,9 @@
         var relationships = inp.relationships || [];
         var relationshipTypes = inp.relationshipTypes || [];
         var relationshipGroups = inp.relationshipGroups || [];
-        // STORED Households only. The kiosk projects a Family as a Household so
-        // its search is never empty, but a projection is a guess and the graph
-        // must not draw guesses as records — a Household is minted the first
-        // time somebody uses it, and only then does a bubble appear.
+        // `{ id, name, memberIds }` rosters, one per bubble. The viewer passes
+        // the Household records (FamilyCore.householdRosters), not the kiosk's
+        // check-in groupings.
         var households = inp.households || [];
         var eldersById = inp.eldersById || null;
 

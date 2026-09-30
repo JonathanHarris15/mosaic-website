@@ -190,3 +190,22 @@ test('familyTrees names by surname, adding the top father’s first name when su
     assert.deepStrictEqual(Family.familyTrees(fams, people2).map(t => t.name),
         ['Hattaway, Carl family', 'Hattaway, Rhys family', 'Kerr family'], 'an empty record is no Family');
 });
+
+test('householdRosters: a bubble per Household is its parents and the children at home', () => {
+    const rosters = Family.householdRosters(fixture(), people);
+    const famH = rosters.find(r => r.id === 'famH');
+    assert.deepStrictEqual(famH.memberIds, ['tob', 'pet', 'iri', 'the'], 'Lin married, so he is in famL, not here');
+    assert.deepStrictEqual(rosters.find(r => r.id === 'famL').memberIds, ['lin', 'nel', 'pip']);
+});
+
+test('householdRosters names a Household for its father’s surname, and skips an empty record', () => {
+    const people2 = [['a', 'Carl Hattaway'], ['b', 'Gwen Hattaway'], ['c', 'Rhys'], ['d', 'Ada Kerr']]
+        .map(([id, name]) => ({ id, name }));
+    const rosters = Family.householdRosters([
+        { id: 'f1', husbandId: 'a', wifeId: 'b', childIds: [] },
+        { id: 'f2', husbandId: 'c', childIds: [] },
+        { id: 'f3', wifeId: 'd', childIds: [] },
+        { id: 'f4', childIds: [] },
+    ], people2);
+    assert.deepStrictEqual(rosters.map(r => r.name), ['The Hattaway Household', 'Rhys’s family', 'The Kerr Household']);
+});
