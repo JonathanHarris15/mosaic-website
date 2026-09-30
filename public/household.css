@@ -1,0 +1,100 @@
+/* Household editor + Family tree (MS-709). One card, mounted by
+   household-editor.js on the Shepherding Profile, the Directory profile and
+   the Households tab of Manage Tags and Relationships. Tokens only. */
+
+.hh { display: flex; flex-direction: column; gap: var(--space-sm); }
+.hh-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
+.hh-title { margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size); line-height: var(--headline-md-line); color: var(--primary); }
+.hh-name { margin: 0; font-size: 13px; color: var(--on-surface-variant); }
+.hh-group { display: flex; flex-direction: column; gap: var(--space-base); }
+.hh-group > .m-label { display: block; }
+.hh-hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--on-surface-variant); }
+.hh-pair { display: grid; gap: var(--space-xs); }
+@media (min-width: 520px) { .hh-pair { grid-template-columns: 1fr 1fr; } }
+.hh-slot { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hh-slot__role { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--on-surface-variant); }
+.hh-empty { font-size: 13px; color: var(--on-surface-variant); font-style: italic; }
+
+.hh-chips { display: flex; flex-wrap: wrap; gap: var(--space-base); }
+.hh-chip {
+    display: inline-flex; align-items: center; gap: 2px; min-height: 32px; max-width: 100%;
+    padding: 2px 2px 2px 10px; border-radius: 999px;
+    background: var(--surface-container); border: 1px solid var(--outline-variant);
+    font-size: 13px; color: var(--on-surface);
+}
+.hh-chip--own { background: var(--surface-container-lowest); border-style: dashed; }
+.hh-chip a { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-chip a:hover { text-decoration: underline; }
+.hh-chip a:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; border-radius: 4px; }
+.hh-chip__x {
+    display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+    width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent;
+    color: var(--on-surface-variant); cursor: pointer; touch-action: manipulation;
+}
+.hh-chip__x:hover { background: var(--surface-container-high); color: var(--error); }
+.hh-chip__x:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; }
+.hh-chip__x .material-symbols-outlined { font-size: 16px; }
+.hh-chip:not(:has(.hh-chip__x)) { padding-right: 10px; }
+
+.hh-find { position: relative; }
+.hh-find input {
+    width: 100%; box-sizing: border-box; min-height: 36px; padding: 6px 10px;
+    border: 1px solid var(--outline-variant); border-radius: 8px;
+    background: var(--surface); color: var(--on-surface); font: inherit; font-size: 13px;
+}
+.hh-find input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-fixed); }
+.hh-find__list {
+    position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+    max-height: 220px; overflow-y: auto; margin: 0; padding: 4px 0; list-style: none;
+    background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: 8px;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--on-surface) 14%, transparent);
+}
+.hh-find__list button {
+    display: block; width: 100%; padding: 8px 12px; border: 0; background: transparent;
+    text-align: left; font: inherit; font-size: 13px; color: var(--on-surface); cursor: pointer;
+}
+.hh-find__list button:hover, .hh-find__list button:focus-visible { background: var(--primary-fixed); outline: none; }
+.hh-find__none { padding: 8px 12px; font-size: 12px; color: var(--on-surface-variant); }
+
+.hh-date {
+    max-width: 14rem; min-height: 36px; padding: 6px 10px; box-sizing: border-box;
+    border: 1px solid var(--outline-variant); border-radius: 8px; background: var(--surface);
+    color: var(--on-surface); font: inherit; font-size: 13px;
+}
+.hh-error { margin: 0; font-size: 12px; color: var(--error); }
+
+/* Family tree, drawn as a pedigree (layout C): a couple on a double line,
+   their children hanging beneath, each married child the couple of their own
+   Household. Scrolls sideways once it is wider than the card. */
+.ftC-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: var(--space-xs); }
+.ftC-scroll:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; border-radius: 8px; }
+.ftC { display: flex; flex-direction: column; align-items: center; min-width: max-content; padding: var(--space-xs) var(--space-xs) 0; }
+.ftC__origins { display: flex; justify-content: center; gap: var(--space-md); margin-bottom: var(--space-sm); flex-wrap: wrap; }
+.ftC__origin { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ftC__olabel { font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--on-surface-variant); }
+.ftC__unit { display: flex; flex-direction: column; align-items: center; }
+.ftC__kids { display: flex; justify-content: center; position: relative; padding-top: 18px; }
+.ftC__kids::before { content: ''; position: absolute; top: 0; left: 50%; height: 18px; border-left: 2px solid var(--outline); }
+.ftC__kid { position: relative; display: flex; flex-direction: column; align-items: center; padding: 18px var(--space-xs) 0; }
+.ftC__kid::before, .ftC__kid::after {
+    content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 18px;
+    border-top: 2px solid var(--outline);
+}
+.ftC__kid::after { right: auto; left: 50%; border-left: 2px solid var(--outline); }
+.ftC__kid:first-child::before, .ftC__kid:last-child::after { border-top: 0; }
+.ftC__kid:last-child::after { border-left: 0; }
+.ftC__kid:last-child::before { border-right: 2px solid var(--outline); }
+
+.ft-person {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 3px 10px 3px 3px;
+    border-radius: 999px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant);
+    font-size: 13px; color: var(--on-surface); text-decoration: none; white-space: nowrap;
+}
+a.ft-person:hover { background: var(--surface-container); }
+a.ft-person:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+.ft-person--me { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); font-weight: 700; }
+.ft-person .m-avatar { width: 26px; height: 26px; font-size: 11px; }
+.ft-couple { display: inline-flex; align-items: center; }
+.ft-couple__bond { width: 16px; height: 6px; flex: 0 0 auto; border-top: 2px solid var(--primary); border-bottom: 2px solid var(--primary); }
+.ft-home { padding: 4px; border-radius: 999px; background: var(--primary-fixed); }
+.ft-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
