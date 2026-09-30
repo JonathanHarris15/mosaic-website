@@ -178,6 +178,26 @@ function ensureAnswerLinkInTemplate(template, answerLink) {
 }
 
 /**
+ * Put a {link} slot on initial/reminder when a saved template omitted it.
+ * The send path still substitutes the URL; this only keeps the slot.
+ * @param {?Object} templates
+ * @return {Object}
+ */
+function templatesWithAnswerLink(templates) {
+  const t = templates || {};
+  const addSlot = (kind) => {
+    const src = typeof t[kind] === "string" ? t[kind] : "";
+    if (src.includes("{link}")) return src;
+    const trimmed = src.trimEnd();
+    return trimmed ? `${trimmed}\n{link}` : "{link}";
+  };
+  return Object.assign({}, t, {
+    initial: addSlot("initial"),
+    reminder: addSlot("reminder"),
+  });
+}
+
+/**
  * The church-local date (YYYY-MM-DD) and hour (0-23) for an instant.
  * Defined on the notification core; this name stays for existing callers.
  * @param {Date} now
@@ -529,6 +549,7 @@ if (typeof module !== "undefined" && module.exports) {
     resolvePushWording,
     renderPrayerRequestMessage,
     ensureAnswerLinkInTemplate,
+    templatesWithAnswerLink,
     churchDateParts,
     daysUntil,
     isPastoralPrayerSubject,

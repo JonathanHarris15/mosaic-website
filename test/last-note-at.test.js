@@ -172,7 +172,7 @@ const CREATE_PATHS = [
     'public/service-builder.js',
     'functions/shepherding-writes.js',
     'functions/shepherding-doc-writes.js',
-    'functions/index.js',
+    'functions/prayer-request-writes.js',
 ];
 
 const DELETE_PATHS = [

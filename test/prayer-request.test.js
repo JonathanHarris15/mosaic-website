@@ -520,6 +520,17 @@ test('renderPrayerRequestMessage substitutes {link} when sending', () => {
     assert.strictEqual(msg, 'Hi Jane. Answer: ' + url);
 });
 
+test('templatesWithAnswerLink adds a {link} slot when a saved template omitted it', () => {
+    const withSlot = pr.templatesWithAnswerLink({
+        initial: 'Custom {name} only.',
+        reminder: 'Ready {name}: {link}',
+        thankyou: 'Thanks {name}.',
+    });
+    assert.strictEqual(withSlot.initial, 'Custom {name} only.\n{link}');
+    assert.strictEqual(withSlot.reminder, 'Ready {name}: {link}');
+    assert.strictEqual(withSlot.thankyou, 'Thanks {name}.');
+});
+
 test('ensureAnswerLinkInTemplate appends the link when {link} is missing', () => {
     const url = 'https://mosaic-hymn-database.web.app/a/tok';
     const withSlot = pr.ensureAnswerLinkInTemplate('Hi {name}, reply here: {link}', url);
