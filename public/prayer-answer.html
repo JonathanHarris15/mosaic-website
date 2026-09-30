@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Prayer request · Mosaic Church</title>
+    <!-- ⚠ ROOT-ABSOLUTE ASSETS ONLY. This page is served at /a/<token> by a
+         hosting rewrite; relative paths resolve under /a/ and come back as HTML. -->
+    <script src="/mobile-shell.js"></script>
+    <link rel="stylesheet" href="/mobile-shell.css" />
+    <link rel="stylesheet" href="/mosaic.css" />
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="icon" href="/assets/mosaic-logo.png" />
+
+    <style>
+      [x-cloak] { display: none !important; }
+      [hidden]  { display: none !important; }
+
+      /* Denser professional layout — smaller type and tighter tiles than the
+         member app, while staying readable on a phone browser. */
+      .pa-main { max-width: 520px; margin: 0 auto; padding: 0 var(--space-sm) 28px; }
+      .pa-centred { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px 12px; }
+      .pa-centred__icon { font-size: 34px; color: var(--outline); }
+      .pa-centred__icon--good { color: var(--primary); }
+      .pa-quiet { color: var(--on-surface-variant); font-size: 12.5px; line-height: 1.45; margin: 0; }
+      .pa-wide { width: 100%; max-width: 360px; }
+      .pa-card { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+      .pa-lead { font-size: 13px; line-height: 1.5; color: var(--on-surface); margin: 0; }
+      .pa-sunday { font-family: var(--font-serif); font-size: 17px; line-height: 1.25; color: var(--primary); margin: 0; }
+      .pa-privacy { font-size: 11.5px; line-height: 1.45; color: var(--on-surface-variant); margin: 0; }
+      .pa-field { width: 100%; min-height: 120px; padding: 10px 11px; font-size: 14px; line-height: 1.45; border-radius: var(--radius-sm); border: 1px solid var(--outline-variant); background: var(--surface); color: var(--on-surface); resize: vertical; }
+      .pa-field:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+      .pa-send { padding-top: 4px; display: flex; flex-direction: column; gap: 8px; }
+    </style>
+
+    <!-- App + Auth (signed-in path only) + Functions. No Firestore (ADR-0067). -->
+    <script src="/vendor/firebase/firebase-app-compat.js"></script>
+    <script src="/vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="/vendor/firebase/firebase-functions-compat.js"></script>
+    <script defer src="/vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="m-page" x-data="prayerAnswerPage()" x-init="load()" :data-state="state" x-cloak>
+
+    <header class="m-header m-header--compact">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="backHref" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Back</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title m-header__title--serif">Prayer request</h1>
+                    <span class="m-header__sub">Mosaic Church</span>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+        </div>
+    </header>
+
+    <div id="fatal" class="pa-centred" hidden>
+        <span class="material-symbols-outlined pa-centred__icon">error</span>
+        <h1 class="m-headline-md">This page did not start.</h1>
+        <p class="m-body-md" id="fatal-why"></p>
+        <button type="button" class="m-btn m-btn--primary m-btn--lg pa-wide" onclick="location.reload()">
+            <span class="m-btn__label">Reload</span>
+        </button>
+    </div>
+
+    <main class="pa-main" id="prayer-answer-main">
+
+        <div x-show="state === 'loading'" class="pa-centred">
+            <span class="m-spinner m-spinner--lg"></span>
+        </div>
+
+        <div x-show="state === 'notfound'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">link_off</span>
+            <h1 class="m-headline-md">There is no link here.</h1>
+            <p class="pa-quiet">The address may be wrong, or you may need to open the link from your text message while signed out, or sign in from your profile.</p>
+        </div>
+
+        <div x-show="state === 'error'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">cloud_off</span>
+            <h1 class="m-headline-md">This did not load.</h1>
+            <p class="m-body-md" x-text="problem"></p>
+            <button type="button" class="m-btn m-btn--primary m-btn--lg pa-wide" @click="retry()">
+                <span class="m-btn__label">Try again</span>
+            </button>
+        </div>
+
+        <div x-show="state === 'closed'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">event_busy</span>
+            <h1 class="m-headline-md">This link has closed.</h1>
+            <p class="pa-quiet">The Sunday has passed, or this request is no longer open. If you think that is wrong, tell an Elder.</p>
+        </div>
+
+        <div x-show="state === 'limited'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">schedule</span>
+            <h1 class="m-headline-md">Try again later.</h1>
+            <p class="pa-quiet">Too many attempts in a short time. Wait a little while and open the link again.</p>
+        </div>
+
+        <div x-show="state === 'elders'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">verified_user</span>
+            <h1 class="m-headline-md">The elders already have it.</h1>
+            <p class="pa-quiet">An Elder typed a request for this Sunday. Their wording stays with the elders — you do not need to add anything here.</p>
+        </div>
+
+        <div x-show="state === 'thanks'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon pa-centred__icon--good">task_alt</span>
+            <h1 class="m-headline-md" x-text="thanksLine"></h1>
+            <p class="pa-quiet">What you wrote is with the elders. You can come back and change it until Sunday has passed.</p>
+            <button type="button" class="m-btn m-btn--secondary pa-wide" @click="state = 'open'">
+                <span class="m-btn__label">View or edit</span>
+            </button>
+        </div>
+
+        <section x-show="state === 'open'" class="pa-card">
+            <p class="pa-lead" x-text="greeting"></p>
+            <p class="pa-sunday" x-text="view.serviceDateLabel"></p>
+            <p class="pa-privacy" x-text="view.privacyLine"></p>
+
+            <div class="m-notice m-notice--error" x-show="problem">
+                <span class="material-symbols-outlined m-notice__icon">error</span>
+                <div class="m-notice__body">
+                    <span class="m-notice__text" x-text="problem"></span>
+                </div>
+            </div>
+
+            <label class="m-label m-label--sm" for="prayer-answer-text">What would you like the church to pray about?</label>
+            <textarea id="prayer-answer-text" class="pa-field" x-model="answerText" rows="5"
+                placeholder="Share what is on your heart…"></textarea>
+
+            <div class="pa-send">
+                <button type="button" class="m-btn m-btn--primary m-btn--lg pa-wide" :disabled="sending" @click="save()">
+                    <span class="m-btn__label" x-text="saveLabel"></span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <script src="/firebase-config.js"></script>
+    <script src="/prayer-answer.js"></script>
+</body>
+</html>
