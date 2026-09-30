@@ -30,8 +30,6 @@ Comparable lists and settings ([GoPay](https://mobbin.com/screens/afec092d-2620-
 
 ## Pick a recipe
 
-## Pick a recipe
-
 Every page is `<body class="m-page">` plus at most one modifier, then `<header class="m-header">`, then `<main class="m-page__body">`.
 
 | Recipe | Body | When |
