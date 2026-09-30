@@ -64,10 +64,11 @@
   }
   function stageOf(n) { return STAGE[n.stage] || STAGE_FALLBACK; }
 
-  // "Hide one-person Households" counts who is drawn, not who is recorded: a
-  // Household of two with one inactive member is still one bubble round one person.
+  // "Hide one-person Households" goes by the record: somebody with no spouse
+  // and no children at home. A couple with one member hidden as inactive is
+  // still a Household of two.
   function hidesAsSolo(group, householdKey, hideSolo) {
-    return !!hideSolo && group.key === householdKey && group.memberNodes.length < 2;
+    return !!hideSolo && group.key === householdKey && group.recorded < 2;
   }
 
   // A marriage and a parent-and-child link are both Family. A marriage draws as
@@ -97,7 +98,7 @@
     this.toggles = {};          // edgeTypeKey -> bool
     this.showIsolated = true;
     this.showInactive = false;
-    this.hideSoloHouseholds = false;
+    this.hideSoloHouseholds = true;
     this.query = '';
     this.searchFocus = false;
     this.selectedId = null;
@@ -324,6 +325,7 @@
       return {
         id: g.id, key: g.key, name: g.name, typeId: g.typeId, colour: g.colour,
         prio: !!(self.EDGE[g.key] || {}).prio,
+        recorded: (g.memberIds || []).length,
         memberNodes: memberNodes, leaderNode: leaderNode || null,
       };
     }).filter(function (g) {
