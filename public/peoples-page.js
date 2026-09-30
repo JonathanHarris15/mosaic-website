@@ -292,8 +292,6 @@ document.addEventListener('alpine:init', () => {
 
         // ── Families (ADR-0012, MS-88) ───────────────────────────────────────
         families: [],
-        familyChildQuery: '',
-        familySpouseQuery: '',
 
         async loadFamilies() {
             try {
@@ -320,144 +318,23 @@ document.addEventListener('alpine:init', () => {
             return FamilyCore.resolveRelations(this.families, person.id);
         },
 
-        // The Family the selected Person is a spouse in (for the modal editor).
-        get selectedFamily() {
-            if (!this.selectedPerson) return null;
-            return FamilyCore.familyOfSpouse(this.families, this.selectedPerson.id);
-        },
-
-        // The role the selected Person plays as a spouse, from their sex.
-        get selectedSpouseRole() {
-            const sex = this.selectedPerson && this.selectedPerson.sex;
-            return sex === 'male' ? 'husband' : sex === 'female' ? 'wife' : null;
-        },
-
-        // People eligible to be the selected Person's spouse: the opposite sex,
-        // not the person themselves, not already a spouse in another family.
-        get spouseCandidates() {
-            if (!this.selectedPerson || !this.selectedSpouseRole) return [];
-            const otherRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
-            const needSex = otherRole === 'husband' ? 'male' : 'female';
-            const q = (this.familySpouseQuery || '').toLowerCase();
-            return this.people.filter(p =>
-                p.id !== this.selectedPerson.id &&
-                p.sex === needSex &&
-                (!q || p.name.toLowerCase().includes(q)) &&
-                !FamilyCore.familyOfSpouse(this.families, p.id)
-            ).slice(0, 8);
-        },
-
-        // Only People who could actually be seated: not already a child somewhere
-        // else (a Person has one family of origin), and not this household's own
-        // spouse. Offering the rest would only earn a refusal from the planner.
-        get childCandidates() {
-            if (!this.selectedPerson) return [];
-            const fam = this.selectedFamily;
-            const existing = fam ? (fam.childIds || []) : [];
-            const spouseId = FamilyCore.spouseOf(fam, this.selectedPerson.id);
-            const q = (this.familyChildQuery || '').toLowerCase();
-            return this.people.filter(p =>
-                p.id !== this.selectedPerson.id &&
-                p.id !== spouseId &&
-                existing.indexOf(p.id) === -1 &&
-                !FamilyCore.familyOfChild(this.families, p.id) &&
-                (!q || p.name.toLowerCase().includes(q))
-            ).slice(0, 8);
-        },
-
-        // Write a plain FIELD of the selected Person's Family, creating the Family
-        // if they have none. Anniversary only — who is seated where is a relation,
-        // and relations go through the planners below.
-        async saveFamily(patch) {
-            const person = this.selectedPerson;
-            if (!person) return;
-            if (!this.selectedSpouseRole) {
-                this.showToast('Set this person’s sex before building a family', 'error');
-                return;
-            }
-            try {
-                let fam = this.selectedFamily;
-                if (!fam) {
-                    // Create a new family anchoring the selected person in their role.
-                    const base = { husbandId: null, wifeId: null, childIds: [], anniversary: null };
-                    base[this.selectedSpouseRole === 'husband' ? 'husbandId' : 'wifeId'] = person.id;
-                    Object.assign(base, patch);
-                    const ref = await db.collection('families').add(base);
-                    this.families.push({ id: ref.id, ...base });
-                } else {
-                    await db.collection('families').doc(fam.id).update(patch);
-                    Object.assign(fam, patch);
-                }
-                this.showToast('Family updated');
-            } catch (e) {
-                console.error('Error saving family:', e);
-                this.showToast('Error saving family', 'error');
-            }
-        },
-
-        // Who a Family relation is being changed for — the Person whose card is
-        // open. Every relation below goes through the FamilyCore planners, the
-        // same ones the quick-assign card and the Family Request approval use.
-        // They are the only place the household rules live: who may be seated
-        // where, and — the one that bit us — which Family a child belongs in when
-        // their parent is already married into one. A second writer with its own
-        // idea of the rules is how one couple ends up recorded five times.
-        async applyFamilyPlan(plan) {
-            if (!plan.valid) {
-                this.showToast(plan.errors[0], 'error');
-                return false;
-            }
-            try {
-                if (plan.action === 'create') {
-                    const base = { husbandId: null, wifeId: null, childIds: [], anniversary: null, ...plan.changes };
-                    const ref = await db.collection('families').add(base);
-                    this.families.push({ id: ref.id, ...base });
-                } else {
-                    await db.collection('families').doc(plan.familyId).update(plan.changes);
-                    const fam = this.families.find(f => f.id === plan.familyId);
-                    if (fam) Object.assign(fam, plan.changes);
-                }
-                this.showToast('Family updated');
-                return true;
-            } catch (e) {
-                console.error('Error saving family:', e);
-                this.showToast('Error saving family', 'error');
-                return false;
-            }
-        },
-
-        planFamily(kind, otherId, removing) {
-            const personId = this.selectedPerson && this.selectedPerson.id;
-            const plan = removing
-                ? FamilyCore.planRemoveFamilyRelation(this.families, personId, kind, otherId)
-                : FamilyCore.planAddFamilyRelation(this.families, personId, kind, otherId,
-                    id => this.people.find(p => p.id === id) || null);
-            return plan;
-        },
-
-        async setSpouse(spouseId) {
-            if (await this.applyFamilyPlan(this.planFamily('spouse', spouseId))) {
-                this.familySpouseQuery = '';
-            }
-        },
-
-        async removeSpouse(spouseId) {
-            if (!confirm('End the marriage record for these two? Each keeps their own record.')) return;
-            await this.applyFamilyPlan(this.planFamily('spouse', spouseId, true));
-        },
-
-        async addChild(childId) {
-            if (await this.applyFamilyPlan(this.planFamily('child', childId))) {
-                this.familyChildQuery = '';
-            }
-        },
-
-        async removeChild(childId) {
-            await this.applyFamilyPlan(this.planFamily('child', childId, true));
-        },
-
-        async setAnniversary(value) {
-            await this.saveFamily({ anniversary: value || null });
+        // The Household card in the person dialog (MS-709) — the same card as
+        // the Shepherding Profile's. The dialog's own sex wins over the stored
+        // one, as it is the field an editor fills in just above it. Names are
+        // plain text here: moving to another person would drop unsaved edits.
+        renderHousehold(el) {
+            const sel = this.selectedPerson;
+            if (!sel) return;
+            HouseholdEditor.render(el, {
+                db,
+                families: this.families,
+                people: this.people.map(p => p.id === sel.id ? { ...p, sex: sel.sex || null } : p),
+                personId: sel.id,
+                canEdit: !!this.canEdit,
+                onChange: next => { this.families = next; },
+                toast: (message, kind) => this.showToast(message, kind),
+                headingLevel: 3,
+            });
         },
 
         // ── Membership Track (ADR-0012) ──────────────────────────────────────
