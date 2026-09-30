@@ -1119,6 +1119,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "⚠ FROM 1024px ONLY, AND THAT IS THE POINT. A phone is a thumb on glass and keeps every shipped size; the desktop is a mouse and can afford a 34px control. Set the class unconditionally and the phone is unharmed.",
       "Two floors are held and neither is negotiable: nothing that is a SENTENCE drops under 13px, and no pointer target drops under 32px (--m-dense-target-min). The label scale is deliberately untouched — --label-sm already ships at 11.5px, and taking tracked caps to 10px reads as cramped rather than as precise. Density comes from the space around a label, not from the label.",
       "Adopt it per surface rather than app-wide. It landed on the dashboard (MS-686); every other desktop page still carries the shipped scale until somebody has looked at it.",
+      "⚠ THE HEADER IS NOT DENSE. It once dropped to 48px under this class, which made the dashboard the one page whose bar was shorter than every other page's — the top of the app jumped on the way in and out of Home. The bar belongs to the window, not to the surface below it, so it keeps PageHeader's height here too.",
     ],
     examples: ['<body class="m-dense">…</body>'],
     css: `
@@ -1149,14 +1150,6 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     --m-dense-control-h: 34px;
     --m-dense-row-h: 40px;
     --m-dense-target-min: 32px;
-  }
-
-  /* 64px of chrome above a dense page is a banner. 48px still clears a 34px
-     control with room, and the wordmark comes down from 28px with it. */
-  .m-dense .m-header {
-    --m-header-h: 48px;
-    --m-header-pad: var(--space-md);
-    --m-header-title: 19px;
   }
 
   /* 46px is a thumb on glass; a mouse needs far less. --m-dense-target-min is
