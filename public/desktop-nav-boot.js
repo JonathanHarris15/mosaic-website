@@ -2,7 +2,8 @@
 (function () {
     'use strict';
     function boot() {
-        if (document.body && document.body.dataset.mosaicSkipDesktopLead) return;
+        // A bare attribute's dataset value is "", which is falsy.
+        if (document.body && 'mosaicSkipDesktopLead' in document.body.dataset) return;
         if (typeof DesktopHeaderLead === 'undefined' || typeof DashboardNav === 'undefined') {
             return;
         }
