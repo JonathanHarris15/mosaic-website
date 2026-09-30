@@ -639,7 +639,7 @@
         const HC = global && global.HouseholdCore;
         const people = data.people || [];
         if (HC && typeof HC.householdsFromDirectory === 'function') {
-            return HC.householdsFromDirectory(people, data.families || [], data.households || []);
+            return HC.householdsFromDirectory(people, data.families || []);
         }
         const byId = {};
         people.forEach(p => { if (p && p.id) byId[p.id] = p; });

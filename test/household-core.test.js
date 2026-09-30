@@ -48,18 +48,38 @@ test('a married child is housed with their spouse, not in the Household they gre
     }
 });
 
-test('a married child a stored Household already seats stays where it was written down', () => {
+// MS-709 (ADR-0075): the kiosk groups by the Household records alone. A
+// grouping left behind in the old `households` collection seats nobody.
+test('a grouping in the old kiosk collection no longer puts anybody together', () => {
+    const folk = [{ id: 'v1', name: 'Wren' }, { id: 'v2', name: 'Otto' }];
+    const stored = [{ id: 'hh-old', name: 'The Pell Household', memberIds: ['v1', 'v2'] }];
+    const households = Household.householdsFromDirectory(folk, [], stored);
+    assert.deepStrictEqual(households.map(h => h.id), ['person:v1', 'person:v2']);
+});
+
+test('a Person left in two records by older edits is placed once, in the one with both parents', () => {
     const folk = [
-        { id: 'pa', name: 'Tobias Quill' }, { id: 'son', name: 'Linus Quill' }, { id: 'bride', name: 'Nell Quill' },
+        { id: 'ma', name: 'Petra Quill' }, { id: 'pa', name: 'Tobias Quill' },
+        { id: 'a', name: 'Iris Quill' }, { id: 'b', name: 'Linus Quill' },
     ];
     const fams = [
-        { id: 'origin', husbandId: 'pa', childIds: ['son'] },
-        { id: 'newlyweds', husbandId: 'son', wifeId: 'bride', childIds: [] },
+        { id: 'alone', wifeId: 'ma', childIds: ['a'] },
+        { id: 'both', husbandId: 'pa', wifeId: 'ma', childIds: ['b'] },
     ];
-    const stored = [{ id: 'family:origin', name: 'The Quill Household', memberIds: ['pa', 'son'] }];
-    const households = Household.householdsFromDirectory(folk, fams, stored);
-    assert.deepStrictEqual(households.find(h => h.id === 'family:origin').members.map(m => m.personId), ['pa', 'son']);
-    assert.deepStrictEqual(households.find(h => h.id === 'family:newlyweds').members.map(m => m.personId), ['bride']);
+    const households = Household.householdsFromDirectory(folk, fams);
+    assert.deepStrictEqual(households.find(h => h.id === 'family:both').members.map(m => m.personId), ['pa', 'ma', 'b']);
+    assert.deepStrictEqual(households.find(h => h.id === 'family:alone').members.map(m => m.personId), ['a']);
+    assert.strictEqual(households.filter(h => h.members.some(m => m.personId === 'ma')).length, 1);
+});
+
+test('a projection names its record or its Person, and carries sex for seating', () => {
+    const households = Household.householdsFromDirectory(
+        [{ id: 'bob', name: 'Bob Harris', sex: 'male' }, { id: 'solo', name: 'Jordan Blake' }],
+        [{ id: 'f1', husbandId: 'bob', childIds: [] }]);
+    const harris = households.find(h => h.id === 'family:f1');
+    assert.strictEqual(harris.familyId, 'f1');
+    assert.strictEqual(harris.members[0].sex, 'male');
+    assert.strictEqual(households.find(h => h.id === 'person:solo').personId, 'solo');
 });
 
 test('a Person in no Family still appears as their own Household', () => {
@@ -98,21 +118,6 @@ test('an empty query does not dump the directory', () => {
     const households = Household.householdsFromDirectory(people, families);
     assert.deepStrictEqual(Household.searchHouseholds(households, '  '), []);
     assert.deepStrictEqual(Household.searchHouseholds(households, ''), []);
-});
-
-test('a stored Household seats its people so they are not projected twice', () => {
-    const stored = [{
-        id: 'hh1',
-        name: 'The Harris Household',
-        members: [
-            { personId: 'bob', kid: false },
-            { personId: 'alice', kid: false },
-            { personId: 'kid', kid: true },
-        ],
-    }];
-    const households = Household.householdsFromDirectory(people, families, stored);
-    assert.ok(households.find(h => h.id === 'hh1'));
-    assert.ok(!households.find(h => h.id === 'family:harrises'));
 });
 
 test('creating a Household needs a name and a sex on every person', () => {
@@ -173,39 +178,11 @@ test('a remembered last name names the projected Household, not the suffix', () 
     assert.strictEqual(solo.name, 'The Harris Household');
 });
 
-// ── Minting, and the duplicates it exists to stop (ADR-0044) ────────────────
-
-test('minting a projection keeps the projection id, so minting twice is one doc', () => {
-    const households = Household.householdsFromDirectory(people, families);
-    const harris = households.find(h => h.id === 'family:harrises');
-    const first = Household.mintWrite(harris, [], 't1');
-    const second = Household.mintWrite(harris, [], 't2');
-    assert.strictEqual(Household.isProjectionId(harris.id), true);
-    assert.strictEqual(first.doc.mintedFrom, 'family:harrises');
-    assert.deepStrictEqual(first.doc.memberIds, second.doc.memberIds);
-    assert.strictEqual(first.doc.name, 'The Harris Household');
-});
-
-test('minting appends new people without disturbing the ones already there', () => {
-    const households = Household.householdsFromDirectory(people, families);
-    const harris = households.find(h => h.id === 'family:harrises');
-    const plan = Household.mintWrite(harris, [{ personId: 'brother', name: 'Rory Harris', kid: false }], 't');
-    assert.deepStrictEqual(plan.doc.memberIds, ['bob', 'alice', 'kid', 'brother']);
-    assert.strictEqual(plan.members[3].name, 'Rory Harris');
-});
-
-test('minting the same person twice seats them once', () => {
-    const one = { id: 'hh', name: 'The Cole Household', members: [{ personId: 'a', name: 'Ada', kid: false }] };
-    const plan = Household.mintWrite(one, [{ personId: 'a', name: 'Ada', kid: true }], 't');
-    assert.deepStrictEqual(plan.doc.memberIds, ['a']);
-});
-
 test('a Household already called that is found, whatever the spacing or case', () => {
-    const stored = [{ id: 'hh1', name: 'The Harris Household', members: [{ personId: 'bob' }] }];
-    const households = Household.householdsFromDirectory(people, families, stored);
+    const households = Household.householdsFromDirectory(people, families);
     const twin = Household.duplicateOf(households, '  the   harris household ', null);
     assert.ok(twin);
-    assert.strictEqual(twin.id, 'hh1');
+    assert.strictEqual(twin.id, 'family:harrises');
     assert.strictEqual(Household.duplicateOf(households, 'The Okafor Household', null), null);
     assert.strictEqual(Household.duplicateOf(households, '', null), null);
 });
@@ -216,37 +193,6 @@ test('a Household is not its own duplicate', () => {
 });
 
 // ── MS-685: the Kid toggle is the Person's, and it is the last word ─────────
-
-test('unticking Kid on the Person turns it off inside a stored Household', () => {
-    // The Household was written down while Sam was a Kid. Unticking Kid in the
-    // Membership Directory only ever writes the Person — and that has to reach
-    // the foyer desk, or a pickup number keeps printing for somebody who is
-    // not a Kid.
-    const directory = [
-        { id: 'bob', name: 'Bob Harris', kid: false },
-        { id: 'sam', name: 'Sam Harris', kid: false },
-    ];
-    const stored = [{
-        id: 'hh1',
-        name: 'The Harris Household',
-        members: [{ personId: 'bob', kid: false }, { personId: 'sam', kid: true }],
-    }];
-    const harris = Household.householdsFromDirectory(directory, [], stored)
-        .find(h => h.id === 'hh1');
-    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, false);
-});
-
-test('ticking Kid on the Person turns it on inside a stored Household', () => {
-    const directory = [{ id: 'sam', name: 'Sam Harris', kid: true }];
-    const stored = [{
-        id: 'hh1',
-        name: 'The Harris Household',
-        members: [{ personId: 'sam', kid: false }],
-    }];
-    const harris = Household.householdsFromDirectory(directory, [], stored)
-        .find(h => h.id === 'hh1');
-    assert.strictEqual(harris.members.find(m => m.personId === 'sam').kid, true);
-});
 
 test('unticking Kid on the Person outranks being a child on their Family', () => {
     const directory = [
@@ -276,4 +222,72 @@ test('adding somebody already in the household is named, not silently allowed', 
     const household = { id: 'hh', name: 'The Harris Household', members: [{ personId: 'bob', name: 'Bob Harris' }] };
     assert.deepStrictEqual(Household.repeatedNames(household, [{ name: 'bob harris' }]), ['Bob Harris']);
     assert.deepStrictEqual(Household.repeatedNames(household, [{ name: 'Rory Harris' }]), []);
+});
+
+// ── What a kiosk draft writes to `families` (MS-709) ────────────────────────
+
+const add = (personId, sex, role) => ({ personId, sex, role });
+
+test('a new Household seats the parents by sex and the rest as children', () => {
+    const plan = Household.householdRecordFor(null, [add('w', 'female', 'parent'), add('h', 'male', 'parent'), add('k', 'female', 'child')], []);
+    assert.deepStrictEqual(plan, { action: 'create', changes: { husbandId: 'h', wifeId: 'w', childIds: ['k'] } });
+});
+
+test('a single parent and a child is a Household record with one seat empty', () => {
+    const plan = Household.householdRecordFor(null, [add('w', 'female', 'parent'), add('k', 'male', 'child')], []);
+    assert.deepStrictEqual(plan.changes, { husbandId: null, wifeId: 'w', childIds: ['k'] });
+});
+
+test('one new Person on their own needs no record', () => {
+    assert.deepStrictEqual(Household.householdRecordFor(null, [add('a', 'male', 'parent')], []), { action: 'none' });
+});
+
+test('two men as parents, or children with no parent, are refused', () => {
+    assert.match(Household.householdRecordFor(null, [add('a', 'male', 'parent'), add('b', 'male', 'parent')], []).fault, /already has a husband/);
+    assert.match(Household.householdRecordFor(null, [add('a', 'male', 'child'), add('b', 'male', 'child')], []).fault, /at least one person as a parent/);
+});
+
+test('adding to a Household fills an empty seat or appends a child, and never takes a seat', () => {
+    const fams = [{ id: 'f', wifeId: 'w', childIds: ['k1'] }];
+    const target = { id: 'family:f', familyId: 'f', members: [] };
+    assert.deepStrictEqual(Household.householdRecordFor(target, [add('h', 'male', 'parent'), add('k2', 'male', 'child')], fams),
+        { action: 'update', familyId: 'f', changes: { husbandId: 'h', wifeId: 'w', childIds: ['k1', 'k2'] } });
+    assert.match(Household.householdRecordFor(target, [add('w2', 'female', 'parent')], fams).fault, /already has a wife/);
+});
+
+test('adding to a Person on their own seats them with the newcomers; a Kid on their own is the child', () => {
+    const mum = { id: 'person:m', personId: 'm', members: [{ personId: 'm', sex: 'female', kid: false }] };
+    assert.deepStrictEqual(Household.householdRecordFor(mum, [add('k', 'male', 'child')], []).changes,
+        { husbandId: null, wifeId: 'm', childIds: ['k'] });
+    const kid = { id: 'person:k', personId: 'k', members: [{ personId: 'k', sex: 'male', kid: true }] };
+    assert.deepStrictEqual(Household.householdRecordFor(kid, [add('m', 'female', 'parent')], []).changes,
+        { husbandId: null, wifeId: 'm', childIds: ['k'] });
+});
+
+test('a record that changed under the draft is refused rather than guessed at', () => {
+    assert.match(Household.householdRecordFor({ familyId: 'gone', members: [] }, [add('a', 'male', 'child')], []).fault, /has changed/);
+});
+
+test('the draft is checked before anybody is written', () => {
+    const rows = [
+        Object.assign(Household.emptyCreatePerson(), { firstName: 'Al', lastName: 'Ng', sex: 'male' }),
+        Object.assign(Household.emptyCreatePerson(), { firstName: 'Bo', lastName: 'Ng', sex: 'male' }),
+    ];
+    assert.match(Household.draftRecordFault(null, rows, []), /already has a husband/);
+    rows[1].role = 'child';
+    assert.strictEqual(Household.draftRecordFault(null, rows, []), '');
+});
+
+test('a blank row is a parent until Kid says child', () => {
+    assert.strictEqual(Household.emptyCreatePerson().role, 'parent');
+    assert.strictEqual(Household.roleOf({ kid: true }), 'child');
+    assert.strictEqual(Household.roleOf({ kid: true, role: 'parent' }), 'parent');
+});
+
+test('a name left as it was writes nothing; a changed one writes the name and its parts', () => {
+    const bob = { id: 'bob', name: 'Bob Harris' };
+    assert.deepStrictEqual(Household.renameWrite(bob, { firstName: 'Bob', lastName: 'Harris', suffix: '', noLastName: false }, 't'), { unchanged: true });
+    assert.deepStrictEqual(Household.renameWrite(bob, { firstName: 'Rob', lastName: 'Harris', suffix: '', noLastName: false }, 't').patch,
+        { name: 'Rob Harris', nameParts: { firstName: 'Rob', lastName: 'Harris', suffix: '', noLastName: false }, updatedAt: 't' });
+    assert.ok(Household.renameWrite(bob, { firstName: '', lastName: 'Harris' }, 't').fault);
 });

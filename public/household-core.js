@@ -1,9 +1,11 @@
-// Household Core — the kiosk grouping (MS-318 / MS-319).
+// Household Core — the kiosk's Households (MS-318 / MS-319, MS-709).
 //
-// A Household is a named collection of people who belong together at the
-// foyer, not a kinship tree. Family stays husband / wife / children.
-// Stored Households are the source of truth once they exist; Families and
-// unattached People still project so search is not empty on day one.
+// The foyer groups people by the Household records in `families`: a husband,
+// a wife and the children still at home. A child who marries is a husband or
+// wife in a record of their own, so they leave their parents' group at the
+// desk without anybody touching it. Somebody in no record is a Household of
+// one. Nothing here is stored — the kiosk's old `households` collection is no
+// longer read (ADR-0075).
 //
 // Loaded as a classic <script> (window.HouseholdCore) and exported for Node tests.
 
@@ -13,6 +15,9 @@
     const PersonName = (typeof require !== 'undefined')
         ? require('./person-name.js')
         : (global && global.PersonName);
+    const FamilyCore = (typeof require !== 'undefined')
+        ? require('./family-core.js')
+        : (global && global.FamilyCore);
 
     function lastWord(name) {
         return PersonName.lastWord(name);
@@ -31,16 +36,12 @@
     }
 
     // ⚠ THE KID TOGGLE LIVES ON THE PERSON, AND NOTHING ELSE MAY OVERRULE IT
-    // (MS-685). The two other things that have an opinion about who is a Kid —
-    // a Family's `childIds`, and the member row inside a stored Household — are
-    // both SNAPSHOTS: one of kinship, one of what was true the day the
-    // Household was written down. Neither is a place an editor can turn Kid
-    // off, and neither was ever re-read against the Person, so unticking Kid in
-    // the Membership Directory changed nothing at the foyer desk: the pickup
-    // number was still minted and the guardian stub still printed for somebody
-    // who is not a Kid.
+    // (MS-685). A Family's `childIds` is a snapshot of kinship, not a place an
+    // editor can turn Kid off, so unticking Kid in the Membership Directory
+    // has to win over being somebody's child — or the pickup number is still
+    // minted and the guardian stub still printed for somebody who is not a Kid.
     //
-    // So a Person who has an answer answers for themselves, and the snapshot is
+    // So a Person who has an answer answers for themselves, and the seat is
     // the fallback only for a Person who has none — which is what still gets a
     // directory child the right tag on day one (CONTEXT.md, Kid).
     function kidFlagFor(p, fallback) {
@@ -57,90 +58,58 @@
             name: p.name || '',
             lastName: remembered.lastName,
             noLastName: remembered.noLastName,
+            sex: p.sex || '',
             kid: kidFlagFor(p, kid),
         };
     }
 
-    function hydrateStored(stored, byId) {
-        const members = (stored.members || []).map(function (m) {
-            return memberOf(byId, m.personId, m.kid);
-        }).filter(Boolean);
-        if (!members.length && stored.memberIds) {
-            stored.memberIds.forEach(function (id) {
-                const m = memberOf(byId, id, null);
-                if (m) members.push(m);
-            });
-        }
-        if (!members.length) return null;
-        return {
-            id: stored.id,
-            name: stored.name || householdNameFromMembers(members),
-            members: members,
-            stored: true,
-        };
-    }
-
-    // Stored Households first, then a projection from each Family whose people
-    // are not already seated, then a singleton for every remaining Person.
-    function householdsFromDirectory(people, families, stored) {
+    // One Household per record, then one per Person who lives in none. Each
+    // Person is placed once, in FamilyCore.householdOf: their marriage, else the
+    // record they grew up in.
+    function householdsFromDirectory(people, families) {
         const byId = personMap(people);
-        const seated = {};
+        const list = (families || []).filter(function (f) { return f && f.id; });
+        const home = {};
+        const place = function (id) {
+            if (!id || home[id] !== undefined) return;
+            const f = FamilyCore.householdOf(list, id);
+            home[id] = f ? f.id : null;
+        };
+        list.forEach(function (f) {
+            [f.husbandId, f.wifeId].concat(f.childIds || []).forEach(place);
+        });
+
         const households = [];
-
-        (stored || []).forEach(function (row) {
-            if (!row) return;
-            const h = hydrateStored(row, byId);
-            if (!h) return;
-            h.members.forEach(function (m) { seated[m.personId] = true; });
-            households.push(h);
-        });
-
-        // A child who has married is a spouse in a Family of their own, and that
-        // marriage is their Household — whichever of the two Families is read first.
-        const marriedIn = {};
-        (families || []).forEach(function (family) {
-            if (!family) return;
-            [family.husbandId, family.wifeId].forEach(function (id) { if (id) marriedIn[id] = family.id; });
-        });
-
-        (families || []).forEach(function (family) {
-            if (!family) return;
+        const seated = {};
+        list.forEach(function (family) {
             const members = [];
-            [family.husbandId, family.wifeId].forEach(function (id) {
-                if (!id || seated[id]) return;
-                const m = memberOf(byId, id, false);
-                if (m) {
-                    members.push(m);
-                    seated[id] = true;
-                }
-            });
-            (family.childIds || []).forEach(function (id) {
-                if (!id || seated[id]) return;
-                if (marriedIn[id] && marriedIn[id] !== family.id) return;
-                const m = memberOf(byId, id, true);
-                if (m) {
-                    members.push(m);
-                    seated[id] = true;
-                }
-            });
+            const seat = function (id, kid) {
+                if (!id || seated[id] || home[id] !== family.id) return;
+                const m = memberOf(byId, id, kid);
+                if (!m) return;
+                members.push(m);
+                seated[id] = true;
+            };
+            seat(family.husbandId, false);
+            seat(family.wifeId, false);
+            (family.childIds || []).forEach(function (id) { seat(id, true); });
             if (!members.length) return;
             households.push({
                 id: 'family:' + family.id,
+                familyId: family.id,
                 name: householdNameFromMembers(members),
                 members: members,
-                stored: false,
             });
         });
 
         (people || []).forEach(function (p) {
             if (!p || !p.id || seated[p.id]) return;
             const one = memberOf(byId, p.id, !!p.kid);
-            const members = one ? [one] : [];
             households.push({
                 id: 'person:' + p.id,
-                name: householdNameFromMembers(members),
-                members: members,
-                stored: false,
+                personId: p.id,
+                name: householdNameFromMembers([one]),
+                members: [one],
             });
         });
 
@@ -158,19 +127,14 @@
         });
     }
 
+    // `role` is where the row sits in the Household record: a parent is seated
+    // as husband or wife by sex, a child joins the children. Ticking Kid moves
+    // the row to child; a grown child still at home is a child who is not a Kid.
     function emptyCreatePerson() {
         return {
             firstName: '', lastName: '', suffix: '', noLastName: false,
-            phone: '', sex: '', kid: false,
+            phone: '', sex: '', kid: false, role: 'parent',
         };
-    }
-
-    function suggestedHouseholdName(people, query) {
-        return PersonName.suggestedHouseholdName(people, query);
-    }
-
-    function householdNameForDraft(people, currentName, previousSuggestion, options) {
-        return PersonName.householdNameForDraft(people, currentName, previousSuggestion, options);
     }
 
     function createFault(people) {
@@ -194,6 +158,76 @@
         const missing = rows.find(function (p) { return p.sex !== 'male' && p.sex !== 'female'; });
         if (missing) return 'Say whether each person is male or female.';
         return '';
+    }
+
+    function roleOf(row) {
+        if (row && (row.role === 'parent' || row.role === 'child')) return row.role;
+        return row && row.kid ? 'child' : 'parent';
+    }
+
+    // The `families` write a kiosk draft makes (MS-709). `target` is the kiosk
+    // Household being added to, or null for a new one; `added` is the new People
+    // as { personId, sex, role }. A Household of one needs no record, so a lone
+    // new Person writes nothing here.
+    //
+    //   { fault }                               refuse, and write nobody
+    //   { action: 'none' }
+    //   { action: 'create', changes }
+    //   { action: 'update', familyId, changes }
+    function householdRecordFor(target, added, families) {
+        const family = target && target.familyId
+            ? (families || []).find(function (f) { return f.id === target.familyId; }) || null
+            : null;
+        if (target && target.familyId && !family) return { fault: 'That household has changed. Search for it again.' };
+        const seats = {
+            husbandId: family ? family.husbandId || null : null,
+            wifeId: family ? family.wifeId || null : null,
+        };
+        const childIds = family ? (family.childIds || []).slice() : [];
+        const rows = [];
+        if (target && !family && target.personId) {
+            const alone = (target.members || [])[0] || {};
+            rows.push({ personId: target.personId, sex: alone.sex, role: alone.kid ? 'child' : 'parent', name: alone.name });
+        }
+        (added || []).forEach(function (a) { rows.push(a); });
+
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            if (roleOf(r) === 'child') {
+                if (childIds.indexOf(r.personId) === -1) childIds.push(r.personId);
+                continue;
+            }
+            const seat = r.sex === 'male' ? 'husbandId' : r.sex === 'female' ? 'wifeId' : null;
+            if (!seat) {
+                return { fault: (r.name || 'Everyone') + ' needs male or female recorded before they can be a parent here.' };
+            }
+            if (seats[seat]) {
+                return { fault: seat === 'husbandId'
+                    ? 'This household already has a husband. Mark the other man as a child, or give him a household of his own.'
+                    : 'This household already has a wife. Mark the other woman as a child, or give her a household of her own.' };
+            }
+            seats[seat] = r.personId;
+        }
+
+        const count = (seats.husbandId ? 1 : 0) + (seats.wifeId ? 1 : 0) + childIds.length;
+        if (!family && count < 2) return { action: 'none' };
+        if (!seats.husbandId && !seats.wifeId) {
+            return { fault: 'Mark at least one person as a parent.' };
+        }
+        const changes = { husbandId: seats.husbandId, wifeId: seats.wifeId, childIds: childIds };
+        return family
+            ? { action: 'update', familyId: family.id, changes: changes }
+            : { action: 'create', changes: changes };
+    }
+
+    // The same check before anybody is written, with stand-in ids.
+    function draftRecordFault(target, people, families) {
+        const rows = (people || []).filter(function (p) {
+            return p && !PersonName.enteredName(p).empty;
+        }).map(function (p, i) {
+            return { personId: 'draft-' + i, sex: p.sex, role: roleOf(p), name: PersonName.fullName(p) };
+        });
+        return householdRecordFor(target, rows, families).fault || '';
     }
 
     function personWrite(draft, now) {
@@ -224,53 +258,23 @@
         return doc;
     }
 
-    function householdWrite(name, members, now) {
-        return {
-            name: name,
-            memberIds: members.map(function (m) { return m.personId; }),
-            members: members.map(function (m) {
-                return { personId: m.personId, kid: !!m.kid };
-            }),
-            createdAt: now,
-        };
-    }
-
-    // ── Minting a projection (ADR-0044) ──────────────────────────────────────
-    // A projected Household is a guess the app makes so the foyer is never empty.
-    // The moment somebody USES one — checks people in from it, adds a brother to
-    // it — the guess becomes a fact, and a fact belongs in the collection.
-    //
-    // The minted doc keeps the PROJECTION'S OWN ID (`family:<id>` /
-    // `person:<id>`), which is what makes minting idempotent: two greeters
-    // checking in the same household on two screens write the same document
-    // twice instead of writing two documents. That is the duplicate this design
-    // used to accept and no longer does.
-
-    function isProjectionId(id) {
-        const s = String(id || '');
-        return s.indexOf('family:') === 0 || s.indexOf('person:') === 0;
-    }
-
-    // The single write that turns a projection (or an already-stored Household
-    // gaining people) into the stored doc. `extra` are brand-new members to
-    // append; existing ones are never reordered, so the list a greeter reads
-    // does not shuffle under them.
-    function mintWrite(household, extra, now) {
-        const base = (household && household.members) || [];
-        const seen = {};
-        const members = [];
-        base.concat(extra || []).forEach(function (m) {
-            if (!m || !m.personId || seen[m.personId]) return;
-            seen[m.personId] = true;
-            members.push({ personId: m.personId, name: m.name || '', kid: !!m.kid });
-        });
-        const doc = householdWrite(
-            (household && household.name) || householdNameFromMembers(members),
-            members,
-            now
-        );
-        if (household && isProjectionId(household.id)) doc.mintedFrom = household.id;
-        return { doc: doc, members: members };
+    // A name fixed at the desk. Only the name moves — the rules let the kiosk
+    // write `name`, `nameParts` and `updatedAt` on a Person and nothing else.
+    //   { fault } | { unchanged: true } | { patch }
+    function renameWrite(person, entry, now) {
+        const was = PersonName.blanksFor(person);
+        const e = entry || {};
+        const same = ['firstName', 'lastName', 'suffix'].every(function (k) {
+            return String(e[k] || '').trim() === String(was[k] || '').trim();
+        }) && !!e.noLastName === !!was.noLastName;
+        if (same) return { unchanged: true };
+        const saved = PersonName.saveExisting(person, entry);
+        if (saved.fault) return { fault: PersonName.nameFixFault(saved.fault) };
+        if (!saved.writeParts
+            || !PersonName.nameWouldChange(person && person.name, person && person.nameParts, saved.name, saved.nameParts)) {
+            return { unchanged: true };
+        }
+        return { patch: { name: saved.name, nameParts: saved.nameParts, updatedAt: now } };
     }
 
     // ── Duplicate guard (ADR-0044) ───────────────────────────────────────────
@@ -310,13 +314,12 @@
         householdsFromDirectory,
         searchHouseholds,
         emptyCreatePerson,
-        suggestedHouseholdName,
-        householdNameForDraft,
         createFault,
+        roleOf,
+        householdRecordFor,
+        draftRecordFault,
         personWrite,
-        householdWrite,
-        isProjectionId,
-        mintWrite,
+        renameWrite,
         normalName,
         duplicateOf,
         repeatedNames,

@@ -587,6 +587,13 @@ service cloud.firestore {
       allow create: if isKiosk();
       allow update: if isEditor();
 
+      // MS-709: a greeter fixes a name at the desk (ADR-0075). The name and
+      // its remembered parts only — contact, sex, membership and the rest stay
+      // editor writes.
+      allow update: if isKiosk()
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'nameParts', 'updatedAt']);
+
       // MS-530 / MS-594: a Pastoral Assistant is not an editor, so they
       // cannot otherwise update the Person. This hole is the cache field a
       // note write moves (lastNoteAt) plus the shepherding decision fields
@@ -715,11 +722,19 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if isSignedIn() || isKiosk();
       allow create, update, delete: if isEditor();
+      // MS-709: the kiosk's Households ARE these records (ADR-0075), so the
+      // desk seats and unseats people in them — and empties one out when the
+      // last person leaves. The seats and children only; nothing else may ride
+      // along on a kiosk write.
+      allow create, update: if isKiosk()
+        && request.resource.data.keys().hasOnly(['husbandId', 'wifeId', 'childIds', 'anniversary']);
+      allow delete: if isKiosk();
     }
 
-    // Households (MS-319): the foyer grouping. Distinct from Family. A Kiosk
-    // may create one (and its People) on the spot; it cannot edit or delete
-    // an existing Household or Person.
+    // Households (MS-319): the foyer grouping the kiosk used to keep. Since
+    // MS-709 (ADR-0075) the kiosk groups by the `families` records and no
+    // screen reads or writes this collection; the rules stay until the
+    // leftover documents are cleared.
     match /households/{householdId} {
       allow read: if isSignedIn() || isKiosk();
       allow create: if isKiosk() || isEditor();

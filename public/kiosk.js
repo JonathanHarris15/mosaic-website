@@ -8,6 +8,7 @@ function kioskPage() {
     const Household = window.HouseholdCore;
     const HouseStore = window.HouseholdStore;
     const Nametag = window.NametagCore;
+    const PersonName = window.PersonName;
 
     return {
         loading: true,
@@ -16,6 +17,10 @@ function kioskPage() {
         occurrences: [],
         seriesById: {},
         query: '',
+        // The directory as read, kept so the edit view can hand the Household
+        // editor the same records the groups were projected from.
+        people: [],
+        families: [],
         households: [],
         matches: [],
         selected: null,
@@ -35,7 +40,13 @@ function kioskPage() {
         // The person form is one form with two jobs: a brand-new Household, or
         // more people for one that already exists. draftTarget says which.
         draftTarget: null,
-        draft: { name: '', people: [] },
+        draft: { people: [] },
+        // The edit view (MS-709): the names of the people in `selected`, as
+        // blanks, and the Person the view follows when the record under it is
+        // rewritten or emptied.
+        editNames: [],
+        editAnchor: null,
+        editNote: '',
 
         get eventTitle() {
             return this.event ? this.titleOf(this.event) : '';
@@ -58,11 +69,18 @@ function kioskPage() {
         get draftTitle() {
             return this.draftTarget ? ('Add to ' + this.draftTarget.name) : 'Create household';
         },
+        // Not typed: a Household is named for its people, the way every other
+        // screen names it.
+        get draftHouseholdName() {
+            if (this.draftTarget) return this.draftTarget.name;
+            return Household.householdNameFromMembers(this.draft.people);
+        },
         // A Household already called this. Almost always the same household
         // being typed a second time, so it is offered rather than forbidden.
         get twinHousehold() {
             if (this.draftTarget) return null;
-            return Household.duplicateOf(this.households, this.draft.name, null);
+            if (!this.draft.people.some(p => PersonName.lastNameOf(p))) return null;
+            return Household.duplicateOf(this.households, this.draftHouseholdName, null);
         },
         // Somebody in this Household is already called that.
         get repeatedNames() {
@@ -110,14 +128,13 @@ function kioskPage() {
         },
 
         async reloadHouseholds() {
-            const [peopleSnap, familiesSnap, stored] = await Promise.all([
+            const [peopleSnap, familiesSnap] = await Promise.all([
                 db.collection('people').get(),
                 db.collection('families').get(),
-                HouseStore.loadHouseholds(db),
             ]);
-            const people = peopleSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-            const families = familiesSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-            this.households = Household.householdsFromDirectory(people, families, stored);
+            this.people = peopleSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            this.families = familiesSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            this.households = Household.householdsFromDirectory(this.people, this.families);
         },
 
         async reloadAttendance() {
@@ -175,11 +192,13 @@ function kioskPage() {
         get backLabel() {
             if (this.view === 'present') return 'Search';
             if (this.view === 'create') return this.addingToHousehold ? 'Household' : 'Search';
+            if (this.view === 'edit') return 'Household';
             return 'Events';
         },
         goBack() {
             if (this.view === 'present') { this.toSearch(); return; }
             if (this.view === 'create') { this.cancelDraft(); return; }
+            if (this.view === 'edit') { this.openHousehold(this.selected); return; }
             this.query = '';
             this.matches = [];
             this.view = 'events';
@@ -219,34 +238,27 @@ function kioskPage() {
             // A search that found nobody is a first name, not a last name.
             // The household name follows once a last name is typed.
             const seed = this.query.trim();
-            const people = [Object.assign(Household.emptyCreatePerson(), { firstName: seed })];
-            const named = Household.householdNameForDraft(people, '', null);
             this.draftTarget = null;
-            this.draft = { name: named.name, suggested: named.suggestion, people: people };
+            this.draft = { people: [Object.assign(Household.emptyCreatePerson(), { firstName: seed })] };
             this.error = '';
             this.view = 'create';
         },
         startAddPeople() {
             if (!this.selected) return;
             this.draftTarget = this.selected;
-            this.draft = {
-                name: this.selected.name,
-                suggested: this.selected.name,
-                people: [Household.emptyCreatePerson()],
-            };
+            this.draft = { people: [this.newDraftPerson()] };
             this.error = '';
             this.view = 'create';
         },
-        // While the household name still equals the suggestion, it follows the
-        // last name being typed. A name the greeter has changed is left alone.
-        // Adding to a household that already exists does not rename it.
-        refreshHouseholdName() {
-            if (!this.draft || this.addingToHousehold) return;
-            const named = Household.householdNameForDraft(
-                this.draft.people, this.draft.name, this.draft.suggested
-            );
-            this.draft.suggested = named.suggestion;
-            this.draft.name = named.name;
+        // Somebody joining a Household that already has its parents is most
+        // likely a child of it; somebody joining a Person on their own, a spouse.
+        newDraftPerson() {
+            const p = Household.emptyCreatePerson();
+            if (this.draftTarget && this.draftTarget.familyId) p.role = 'child';
+            return p;
+        },
+        kidChanged(p) {
+            if (p.kid) p.role = 'child';
         },
         cancelDraft() {
             if (this.draftTarget) {
@@ -258,11 +270,11 @@ function kioskPage() {
             this.view = 'search';
         },
         addDraftPerson() {
-            this.draft.people.push(Household.emptyCreatePerson());
+            this.draft.people.push(this.newDraftPerson());
         },
         removeDraftPerson(i) {
             this.draft.people.splice(i, 1);
-            if (!this.draft.people.length) this.draft.people.push(Household.emptyCreatePerson());
+            if (!this.draft.people.length) this.draft.people.push(this.newDraftPerson());
         },
         openTwin() {
             const twin = this.twinHousehold;
@@ -271,24 +283,25 @@ function kioskPage() {
             this.openHousehold(twin);
         },
         async submitDraft() {
-            const fault = Household.createFault(this.draft.people);
+            const target = this.draftTarget;
+            const fault = Household.createFault(this.draft.people)
+                || Household.draftRecordFault(target, this.draft.people, this.families);
             if (fault) { this.error = fault; return; }
             this.saving = true;
             this.error = '';
-            const target = this.draftTarget;
             try {
-                const saved = target
-                    ? await HouseStore.addPeopleToHousehold(db, target, this.draft)
-                    : await HouseStore.createHousehold(db, this.draft);
+                const saved = await HouseStore.saveDraft(db, target, this.draft, this.families);
                 this.draftTarget = null;
                 await this.reloadHouseholds();
-                const fresh = this.households.find(h => h.id === saved.id) || saved;
-                this.openHousehold(fresh);
+                const fresh = this.households.find(h => h.id === saved.id);
+                if (fresh) this.openHousehold(fresh); else this.toSearch();
             } catch (e) {
                 console.error(e);
-                this.error = target
+                // A Firestore failure carries a code; anything else is the
+                // planner refusing, and says why in words.
+                this.error = e && !e.code && e.message ? e.message : (target
                     ? 'Could not add them to that household.'
-                    : 'Could not create that household.';
+                    : 'Could not create that household.');
             }
             this.saving = false;
         },
@@ -310,7 +323,6 @@ function kioskPage() {
             this.marking = true;
             this.error = '';
             this.printNote = '';
-            const household = this.selected;
             try {
                 const ids = members.map(m => m.personId);
                 const extras = {};
@@ -332,10 +344,6 @@ function kioskPage() {
                 await this.reloadAttendance();
                 this.lastLabels = labels;
                 if (labels.length) this.printNow();
-                // A Household somebody has actually used is a fact, not a guess,
-                // so the projection is written down (ADR-0044). This runs after
-                // the attendance write and can never undo it.
-                await this.mintIfProjected(household);
                 this.toSearch();
             } catch (e) {
                 console.error(e);
@@ -344,14 +352,77 @@ function kioskPage() {
             this.marking = false;
         },
 
-        async mintIfProjected(household) {
-            if (!household || household.stored) return;
-            try {
-                await HouseStore.mintHousehold(db, household);
-                await this.reloadHouseholds();
-            } catch (e) {
-                console.error('Could not mint the household', e);
+        // ── Editing a Household (MS-709) ─────────────────────────────────────
+        // A full edit at the desk: fix anybody's name, and add or take people
+        // out with the same Household card the directory uses. Adding someone
+        // brand new stays on "Add someone".
+        startEdit() {
+            if (!this.selected) return;
+            this.editAnchor = (this.selected.members[0] || {}).personId || null;
+            this.editNames = [];
+            this.syncEditNames();
+            this.editNote = '';
+            this.error = '';
+            this.view = 'edit';
+        },
+        personById(id) {
+            return this.people.find(p => p.id === id) || null;
+        },
+        // One row of blanks per person in the Household, keeping whatever was
+        // already typed for anybody still in it.
+        syncEditNames() {
+            const typed = {};
+            this.editNames.forEach(n => { typed[n.personId] = n; });
+            this.editNames = ((this.selected && this.selected.members) || []).map(m =>
+                typed[m.personId] || Object.assign({ personId: m.personId }, PersonName.blanksFor(this.personById(m.personId))));
+        },
+        // The record under the view was just written. Find the Household again
+        // by that record, else by the Person the view started from.
+        refollow(familyId) {
+            this.households = Household.householdsFromDirectory(this.people, this.families);
+            const next = (familyId && this.households.find(h => h.familyId === familyId))
+                || this.households.find(h => h.members.some(m => m.personId === this.editAnchor))
+                || null;
+            if (next) {
+                this.selected = next;
+                if (!next.members.some(m => m.personId === this.editAnchor)) this.editAnchor = next.members[0].personId;
             }
+            this.syncEditNames();
+        },
+        renderHouseholdCard(el) {
+            const h = this.selected;
+            if (!el || !h || this.view !== 'edit') return;
+            HouseholdEditor.render(el, {
+                db,
+                families: this.families,
+                people: this.people,
+                familyId: h.familyId || null,
+                personId: h.familyId ? null : h.personId,
+                canEdit: true,
+                headingLevel: 3,
+                onChange: (next, info) => {
+                    this.families = next;
+                    this.refollow(info.familyId);
+                },
+            });
+        },
+        async finishEdit() {
+            this.saving = true;
+            this.error = '';
+            try {
+                const edits = this.editNames.map(n => ({ person: this.personById(n.personId), entry: n }))
+                    .filter(e => e.person);
+                const changed = await HouseStore.renamePeople(db, edits);
+                if (changed) {
+                    await this.reloadHouseholds();
+                    this.refollow(this.selected && this.selected.familyId);
+                }
+                this.openHousehold(this.selected);
+            } catch (e) {
+                console.error(e);
+                this.error = e && !e.code && e.message ? e.message : 'Could not save those names.';
+            }
+            this.saving = false;
         },
 
         // Hand the labels to the browser's own print dialog. It stays open until

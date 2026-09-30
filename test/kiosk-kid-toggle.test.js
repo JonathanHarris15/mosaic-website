@@ -3,7 +3,7 @@
 // ⚠ WHAT WENT WRONG. A Person whose Kid box was UNTICKED in the Membership
 // Directory still came out of the kiosk with a pickup number and a guardian
 // stub. The toggle writes the Person; the kiosk read the member row inside the
-// stored Household (and the Family's childIds) instead, and those are snapshots
+// Household (and the Family's childIds) instead, and those are snapshots
 // nobody can untick. So the whole print path — a code minted and written into
 // Attendance, a child tag, a stub — ran for somebody who is not a Kid.
 //
@@ -21,9 +21,9 @@ const Household = require('../public/household-core.js');
 
 const EVENT = { id: 'occ1', name: 'Sunday Service', date: '2026-09-27', needsNameTags: true };
 
-// The directory the kiosk reads. The stored Household and the Family both say
-// Sam is a Kid — they were written when he was one — so the only thing that
-// can turn it off is his own flag.
+// The directory the kiosk reads. The Family says Sam is a child — it was
+// written when he was one — so the only thing that can turn Kid off is his
+// own flag.
 function directoryWith(kidToggle) {
     return {
         people: [
@@ -31,11 +31,6 @@ function directoryWith(kidToggle) {
             { id: 'sam', name: 'Sam Harris', kid: kidToggle },
         ],
         families: [{ id: 'f1', husbandId: 'bob', childIds: ['sam'] }],
-        stored: [{
-            id: 'hh1',
-            name: 'The Harris Household',
-            members: [{ personId: 'bob', kid: false }, { personId: 'sam', kid: true }],
-        }],
     };
 }
 
@@ -52,7 +47,8 @@ function kioskWith(kidToggle, attendanceRows) {
     context.HouseholdCore = Household;
     context.KioskCore = require('../public/kiosk-core.js');
     context.NametagCore = require('../public/nametag-core.js');
-    context.HouseholdStore = { async mintHousehold(db, h) { return h; } };
+    context.PersonName = require('../public/person-name.js');
+    context.HouseholdStore = {};
     context.EventsStore = {
         async loadAttendance() { return rows.slice(); },
         async markPresent(db, occurrenceId, personIds, markedAt, extras) {
@@ -79,8 +75,8 @@ function kioskWith(kidToggle, attendanceRows) {
     const dir = directoryWith(kidToggle);
     page.event = EVENT;
     page.seriesById = {};
-    page.households = Household.householdsFromDirectory(dir.people, dir.families, dir.stored);
-    page.selected = page.households.find(function (h) { return h.id === 'hh1'; });
+    page.households = Household.householdsFromDirectory(dir.people, dir.families);
+    page.selected = page.households.find(function (h) { return h.id === 'family:f1'; });
     page.attendance = context.KioskCore.attendanceIndex(rows);
 
     return { page: page, printed: printed, written: written };

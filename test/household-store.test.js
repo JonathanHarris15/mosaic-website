@@ -8,16 +8,9 @@ function fakeDb() {
     const writes = [];
     function collection(name) {
         return {
-            async get() {
-                return { docs: [] };
-            },
             doc(id) {
                 const docId = id || ('auto' + (++n));
-                return {
-                    id: docId,
-                    path: name + '/' + docId,
-                    async set(data, opts) { writes.push({ path: name + '/' + docId, data, opts }); },
-                };
+                return { id: docId, path: name + '/' + docId };
             },
         };
     }
@@ -26,7 +19,8 @@ function fakeDb() {
         batch() {
             const ops = [];
             return {
-                set(ref, data, opts) { ops.push({ path: ref.path, data, opts }); },
+                set(ref, data, opts) { ops.push({ op: 'set', path: ref.path, data, opts }); },
+                update(ref, data) { ops.push({ op: 'update', path: ref.path, data }); },
                 async commit() { writes.push(...ops); },
             };
         },
@@ -34,130 +28,111 @@ function fakeDb() {
     };
 }
 
-test('creating a Household writes the people and the household in one batch', async () => {
-    const db = fakeDb();
-    const created = await Store.createHousehold(db, {
-        name: 'The Cole Household',
-        now: 't',
-        people: [
-            { name: 'Ada Cole', phone: '555', sex: 'female', kid: false },
-            { name: 'Pip Cole', phone: '', sex: 'male', kid: true },
-        ],
-    });
-    assert.strictEqual(created.name, 'The Cole Household');
-    assert.strictEqual(created.members.length, 2);
-    assert.strictEqual(db._writes.length, 3);
-    assert.ok(db._writes.some(w => w.path.startsWith('households/')));
-    const pip = db._writes.find(w => w.data && w.data.kid === true);
-    assert.strictEqual(pip.data.membership.stage, 'visitor');
-});
-
-test('a person entered in parts is stored as the full name, with the parts beside it', async () => {
-    const db = fakeDb();
-    const created = await Store.createHousehold(db, {
-        name: 'The Harris Household',
-        now: 't',
-        people: [{
-            firstName: 'Jonathan', lastName: 'Harris', suffix: 'Jr.',
-            phone: '', sex: 'male', kid: false,
-        }],
-    });
-    assert.strictEqual(created.name, 'The Harris Household');
-    const person = db._writes.find(w => w.path.startsWith('people/'));
-    assert.strictEqual(person.data.name, 'Jonathan Harris Jr.');
-    assert.strictEqual(person.data.nameParts.lastName, 'Harris');
-    assert.strictEqual(person.data.firstName, undefined);
-    assert.strictEqual(person.data.lastName, undefined);
-});
-
-test('adding a person does not rename the household', async () => {
-    const db = fakeDb();
-    const stored = {
-        id: 'hh1',
-        name: 'The Harris Household',
-        stored: true,
-        members: [{ personId: 'bob', name: 'Bob Harris', kid: false }],
-    };
-    const saved = await Store.addPeopleToHousehold(db, stored, {
-        now: 't',
-        people: [{
-            firstName: 'Ruth', lastName: 'Nguyen', suffix: '',
-            phone: '', sex: 'female', kid: false,
-        }],
-    });
-    assert.strictEqual(saved.name, 'The Harris Household');
-    const house = db._writes.find(w => w.path === 'households/hh1');
-    assert.strictEqual(house.data.name, 'The Harris Household');
-    const person = db._writes.find(w => w.path.startsWith('people/'));
-    assert.strictEqual(person.data.name, 'Ruth Nguyen');
-});
-
-test('the kiosk refuses to create a Household with nobody in it', async () => {
-    const db = fakeDb();
-    await assert.rejects(() => Store.createHousehold(db, { people: [] }), /at least one person/);
-});
-
-// ── Minting and growing a Household (MS-321, ADR-0044) ──────────────────────
-
-const projection = () => ({
+const harris = () => ({
     id: 'family:harrises',
+    familyId: 'harrises',
     name: 'The Harris Household',
-    stored: false,
     members: [
-        { personId: 'bob', name: 'Bob Harris', kid: false },
-        { personId: 'alice', name: 'Alice Harris', kid: false },
+        { personId: 'bob', name: 'Bob Harris', sex: 'male', kid: false },
+        { personId: 'alice', name: 'Alice Harris', sex: 'female', kid: false },
     ],
 });
+const families = () => [{ id: 'harrises', husbandId: 'bob', wifeId: 'alice', childIds: [] }];
 
-test('minting a projection writes it under the projection id', async () => {
+test('a new couple with a kid is two People, one child, and one Household record, in one batch', async () => {
     const db = fakeDb();
-    const minted = await Store.mintHousehold(db, projection(), 't');
-    assert.strictEqual(minted.id, 'family:harrises');
-    assert.strictEqual(minted.stored, true);
-    assert.strictEqual(db._writes.length, 1);
-    assert.strictEqual(db._writes[0].path, 'households/family:harrises');
-    assert.deepStrictEqual(db._writes[0].data.memberIds, ['bob', 'alice']);
-    assert.strictEqual(db._writes[0].data.mintedFrom, 'family:harrises');
+    const saved = await Store.saveDraft(db, null, {
+        now: 't',
+        people: [
+            { name: 'Ada Cole', phone: '555', sex: 'female', kid: false, role: 'parent' },
+            { name: 'Rex Cole', phone: '', sex: 'male', kid: false, role: 'parent' },
+            { name: 'Pip Cole', phone: '', sex: 'male', kid: true, role: 'child' },
+        ],
+    }, []);
+    const people = db._writes.filter(w => w.path.startsWith('people/'));
+    const record = db._writes.find(w => w.path.startsWith('families/'));
+    assert.strictEqual(people.length, 3);
+    assert.strictEqual(db._writes.some(w => w.path.startsWith('households/')), false);
+    const idOf = name => people.find(w => w.data.name === name).path.split('/')[1];
+    assert.deepStrictEqual(record.data, {
+        husbandId: idOf('Rex Cole'), wifeId: idOf('Ada Cole'), childIds: [idOf('Pip Cole')],
+    });
+    assert.strictEqual(saved.id, 'family:' + record.path.split('/')[1]);
+    assert.strictEqual(people.find(w => w.data.kid).data.membership.stage, 'visitor');
 });
 
-test('minting a Household that is already stored writes nothing', async () => {
+test('one new Person on their own writes no Household record', async () => {
     const db = fakeDb();
-    const stored = Object.assign(projection(), { id: 'hh1', stored: true });
-    await Store.mintHousehold(db, stored, 't');
+    const saved = await Store.saveDraft(db, null, {
+        now: 't',
+        people: [{ firstName: 'Jonas', lastName: 'Vale', suffix: 'Jr.', phone: '', sex: 'male', kid: false, role: 'parent' }],
+    }, []);
+    assert.strictEqual(db._writes.length, 1);
+    const person = db._writes[0];
+    assert.strictEqual(person.data.name, 'Jonas Vale Jr.');
+    assert.strictEqual(person.data.nameParts.lastName, 'Vale');
+    assert.strictEqual(person.data.firstName, undefined);
+    assert.strictEqual(saved.id, 'person:' + person.path.split('/')[1]);
+});
+
+test('adding a child to a Household appends them to its record', async () => {
+    const db = fakeDb();
+    const saved = await Store.saveDraft(db, harris(), {
+        now: 't',
+        people: [{ name: 'Sam Harris', phone: '', sex: 'male', kid: true, role: 'child' }],
+    }, families());
+    const update = db._writes.find(w => w.path === 'families/harrises');
+    assert.strictEqual(update.op, 'update');
+    const sam = db._writes.find(w => w.path.startsWith('people/')).path.split('/')[1];
+    assert.deepStrictEqual(update.data, { husbandId: 'bob', wifeId: 'alice', childIds: [sam] });
+    assert.strictEqual(saved.id, 'family:harrises');
+});
+
+test('a second husband is refused, and nobody is written', async () => {
+    const db = fakeDb();
+    await assert.rejects(() => Store.saveDraft(db, harris(), {
+        people: [{ name: 'Rory Harris', phone: '', sex: 'male', kid: false, role: 'parent' }],
+    }, families()), /already has a husband/);
     assert.strictEqual(db._writes.length, 0);
 });
 
-test('adding a brother to a projected Household mints it instead of making a second', async () => {
+test('a spouse added to a Person on their own starts a record for the two of them', async () => {
     const db = fakeDb();
-    const saved = await Store.addPeopleToHousehold(db, projection(), {
-        now: 't',
-        people: [{ name: 'Rory Harris', phone: '', sex: 'male', kid: false }],
-    });
-    assert.strictEqual(saved.id, 'family:harrises');
-    assert.strictEqual(saved.members.length, 3);
-    const house = db._writes.find(w => w.path === 'households/family:harrises');
-    assert.ok(house, 'the household was written under its own id');
-    assert.deepStrictEqual(house.data.memberIds.slice(0, 2), ['bob', 'alice']);
-    assert.strictEqual(house.data.name, 'The Harris Household');
-    const person = db._writes.find(w => w.path.startsWith('people/'));
-    assert.strictEqual(person.data.membership.stage, 'visitor');
+    const alone = { id: 'person:bea', personId: 'bea', name: 'The Lund Household', members: [{ personId: 'bea', name: 'Bea Lund', sex: 'female', kid: false }] };
+    const saved = await Store.saveDraft(db, alone, {
+        people: [{ name: 'Kai Lund', phone: '', sex: 'male', kid: false, role: 'parent' }],
+    }, []);
+    const record = db._writes.find(w => w.path.startsWith('families/'));
+    const kai = db._writes.find(w => w.path.startsWith('people/')).path.split('/')[1];
+    assert.deepStrictEqual(record.data, { husbandId: kai, wifeId: 'bea', childIds: [] });
+    assert.strictEqual(saved.id, 'family:' + record.path.split('/')[1]);
 });
 
-test('adding to a stored Household keeps its createdAt and only merges', async () => {
+test('the kiosk refuses a draft with nobody in it', async () => {
     const db = fakeDb();
-    const stored = Object.assign(projection(), { id: 'hh1', stored: true });
-    await Store.addPeopleToHousehold(db, stored, {
-        now: 't2',
-        people: [{ name: 'Rory Harris', phone: '', sex: 'male', kid: false }],
-    });
-    const house = db._writes.find(w => w.path === 'households/hh1');
-    assert.strictEqual(house.data.createdAt, undefined);
-    assert.strictEqual(house.data.updatedAt, 't2');
-    assert.deepStrictEqual(house.opts, { merge: true });
+    await assert.rejects(() => Store.saveDraft(db, null, { people: [] }, []), /at least one person/);
 });
 
-test('adding nobody to a Household is refused', async () => {
+test('renaming writes only the names that changed, and only the name fields', async () => {
     const db = fakeDb();
-    await assert.rejects(() => Store.addPeopleToHousehold(db, projection(), { people: [] }),
-        /at least one person/);
+    const bob = { id: 'bob', name: 'Bob Harris', sex: 'male', contact: { phone: '1' } };
+    const alice = { id: 'alice', name: 'Alice Harris' };
+    const n = await Store.renamePeople(db, [
+        { person: bob, entry: { firstName: 'Robert', lastName: 'Harris', suffix: '', noLastName: false } },
+        { person: alice, entry: { firstName: 'Alice', lastName: 'Harris', suffix: '', noLastName: false } },
+    ], 't');
+    assert.strictEqual(n, 1);
+    assert.deepStrictEqual(db._writes, [{
+        op: 'update', path: 'people/bob',
+        data: { name: 'Robert Harris', nameParts: { firstName: 'Robert', lastName: 'Harris', suffix: '', noLastName: false }, updatedAt: 't' },
+    }]);
+});
+
+test('a name with no first name stops every rename in the list', async () => {
+    const db = fakeDb();
+    await assert.rejects(() => Store.renamePeople(db, [
+        { person: { id: 'bob', name: 'Bob Harris' }, entry: { firstName: 'Robert', lastName: 'Harris' } },
+        { person: { id: 'alice', name: 'Alice Harris' }, entry: { firstName: '', lastName: 'Harris' } },
+    ], 't'));
+    assert.strictEqual(db._writes.length, 0);
 });
