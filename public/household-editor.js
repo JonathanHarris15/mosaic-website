@@ -68,6 +68,18 @@
                 return { families: list.concat([Object.assign({ id: ref.id }, plan.changes)]), familyId: ref.id };
             });
         }
+        if (plan.action === 'merge') {
+            var batch = db.batch();
+            batch.update(col.doc(plan.familyId), plan.changes);
+            batch.delete(col.doc(plan.deleteId));
+            return batch.commit().then(function () {
+                return {
+                    families: list.filter(function (f) { return f.id !== plan.deleteId; })
+                        .map(function (f) { return f.id === plan.familyId ? Object.assign({}, f, plan.changes) : f; }),
+                    familyId: plan.familyId,
+                };
+            });
+        }
         if (plan.action === 'delete') {
             return col.doc(plan.familyId).delete().then(function () {
                 return { families: list.filter(function (f) { return f.id !== plan.familyId; }), familyId: null };
@@ -266,6 +278,7 @@
         }
 
         var view = family ? F.householdView(o.families || [], family) : { atHome: [], ownHousehold: [], anniversary: null };
+        if (family) out += duplicatesHtml(el, family);
 
         out += '<div class="hh-group"><span class="m-label">Parents</span><div class="hh-pair">' +
             parentSlot(el, family, 'husbandId') + parentSlot(el, family, 'wifeId') + '</div>' +
@@ -299,6 +312,26 @@
             out += '<div class="hh-group"><span class="m-label">Family tree</span>' + treeHtml(o, family) + '</div>';
         }
         return out + errorHtml(el) + '</section>';
+    }
+
+    function seatsFilled(f) { return (f.husbandId ? 1 : 0) + (f.wifeId ? 1 : 0); }
+
+    function duplicatesHtml(el, family) {
+        var o = el._hh.o;
+        if (!o.canEdit) return '';
+        return F.householdDuplicates(o.families || [], family).map(function (d) {
+            var who = d.sharedIds.map(function (id) { return nameOf(o, id); }).join(' and ');
+            var kids = d.childIds.map(function (id) { return nameOf(o, id); });
+            var withKids = kids.length ? ' with ' + kids.join(', ') : '';
+            if (!d.mergeable) {
+                return '<div class="hh-dup" role="note"><p>' + esc(who) + ' is also a husband or wife in another Household' + esc(withKids) +
+                    '. Someone can be married in only one Household, so take them out of one of them.</p></div>';
+            }
+            return '<div class="hh-dup" role="note"><p>' + esc(who) + ' is also recorded in a second Household' + esc(withKids) +
+                '. Merge them so both parents are joined to every child.</p>' +
+                '<button type="button" class="m-btn m-btn--secondary m-btn--sm" data-hh="merge" data-id="' + esc(d.familyId) + '">' +
+                '<span class="material-symbols-outlined" aria-hidden="true">merge</span><span class="m-btn__label">Merge into one Household</span></button></div>';
+        }).join('');
     }
 
     function errorHtml(el) {
@@ -380,6 +413,11 @@
                 if (confirmWith(o, 'Remove ' + nameOf(o, id) + ' as ' + (seatOf === 'husbandId' ? 'husband' : 'wife') + ' of this Household?')) {
                     run(el, F.planSetParent(families, fid, seatOf, null, byId));
                 }
+            } else if (act === 'merge') {
+                var other = (families).find(function (f) { return f.id === id; });
+                if (!other || !family) return;
+                var keepThis = seatsFilled(family) >= seatsFilled(other);
+                run(el, keepThis ? F.planMergeHouseholds(families, fid, id) : F.planMergeHouseholds(families, id, fid), 'Households merged');
             } else if (act === 'removeChild') {
                 run(el, F.planRemoveChild(families, fid, id));
             } else if (act === 'removeOwn') {

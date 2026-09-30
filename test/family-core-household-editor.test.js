@@ -119,3 +119,45 @@ test('familyTree draws each Household once, even when records loop', () => {
     assert.deepStrictEqual(tob, { personId: 'tob', household: null });
     assert.strictEqual(Family.familyTree(f, 'missing'), null);
 });
+
+// A mother left recorded twice: alone with one child, and with her husband and
+// the rest. The first child is then joined to her only.
+function splitFixture() {
+    return [
+        { id: 'famSolo', wifeId: 'jun', childIds: ['iri'] },
+        { id: 'famBoth', husbandId: 'kai', wifeId: 'jun', childIds: ['the'], anniversary: '2001-05-05' },
+        { id: 'famO', husbandId: 'osw', wifeId: 'mae', childIds: [] },
+        { id: 'famOther', husbandId: 'osw', wifeId: 'nel', childIds: ['pip'] },
+    ];
+}
+
+test('householdOf picks the record with both parents when someone is seated twice', () => {
+    assert.strictEqual(Family.householdOf(splitFixture(), 'jun').id, 'famBoth');
+    assert.strictEqual(Family.householdOf(splitFixture(), 'iri').id, 'famSolo', 'the stranded child still reads their record');
+});
+
+test('householdDuplicates finds the other record, and only offers a merge when the parents agree', () => {
+    const f = splitFixture();
+    assert.deepStrictEqual(Family.householdDuplicates(f, f[1]), [
+        { familyId: 'famSolo', sharedIds: ['jun'], childIds: ['iri'], mergeable: true },
+    ]);
+    assert.deepStrictEqual(Family.householdDuplicates(f, f[2]), [
+        { familyId: 'famOther', sharedIds: ['osw'], childIds: ['pip'], mergeable: false },
+    ], 'a different wife is a second marriage, not a duplicate');
+    assert.deepStrictEqual(Family.householdDuplicates(fixture(), fixture()[2]), []);
+});
+
+test('planMergeHouseholds joins both parents to every child and deletes the leftover', () => {
+    const plan = Family.planMergeHouseholds(splitFixture(), 'famBoth', 'famSolo');
+    assert.strictEqual(plan.valid, true);
+    assert.strictEqual(plan.action, 'merge');
+    assert.strictEqual(plan.familyId, 'famBoth');
+    assert.strictEqual(plan.deleteId, 'famSolo');
+    assert.deepStrictEqual(plan.changes, { husbandId: 'kai', wifeId: 'jun', childIds: ['the', 'iri'], anniversary: '2001-05-05' });
+
+    const reverse = Family.planMergeHouseholds(splitFixture(), 'famSolo', 'famBoth');
+    assert.deepStrictEqual(reverse.changes.husbandId, 'kai', 'an empty seat is filled from the other record');
+
+    assert.strictEqual(Family.planMergeHouseholds(splitFixture(), 'famO', 'famOther').valid, false, 'different wives');
+    assert.strictEqual(Family.planMergeHouseholds(splitFixture(), 'famBoth', 'famO').valid, false, 'no shared parent');
+});

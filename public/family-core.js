@@ -317,8 +317,14 @@
     // or siblings: those are the same fact read from the other end.
 
     // The Household a Person lives in: their marriage, else the one they grew up in.
+    // Were they left seated in two records (see householdDuplicates), the one
+    // with both parents and then the most children is the Household they live in.
     function householdOf(families, personId) {
-        return familyOfSpouse(families, personId) || familyOfChild(families, personId);
+        const seated = (families || []).filter(f => personId && (f.husbandId === personId || f.wifeId === personId));
+        if (!seated.length) return familyOfChild(families, personId);
+        const weight = f => (f.husbandId ? 1 : 0) + (f.wifeId ? 1 : 0);
+        return seated.reduce((best, f) =>
+            weight(f) > weight(best) || (weight(f) === weight(best) && (f.childIds || []).length > (best.childIds || []).length) ? f : best);
     }
 
     function householdView(families, family) {
@@ -429,6 +435,47 @@
         const family = findFamily(families, familyId);
         if (!family) return refuse(['there is no Household to change']);
         return planned('update', family.id, { anniversary: value || null });
+    }
+
+    // Other records that seat one of this Household's parents in the same seat.
+    // Nobody may be a husband or wife in two records, but older edits left some
+    // behind: a mother recorded alone with one child, and again with her husband
+    // and the rest. Each of those children is then drawn under her only.
+    // `mergeable` is false when the other record names a different spouse — a
+    // second marriage, which is not the same Household recorded twice.
+    function householdDuplicates(families, family) {
+        if (!family) return [];
+        return (families || [])
+            .filter(f => f.id !== family.id && SEATS.some(s => family[s] && f[s] === family[s]))
+            .map(f => ({
+                familyId: f.id,
+                sharedIds: SEATS.filter(s => family[s] && f[s] === family[s]).map(s => family[s]),
+                childIds: (f.childIds || []).slice(),
+                mergeable: SEATS.every(s => !f[s] || !family[s] || f[s] === family[s]),
+            }));
+    }
+
+    // Fold `dropId` into `keepId`: one record with both records' parents and
+    // children, and the other deleted. Two writes, so the plan names both.
+    function planMergeHouseholds(families, keepId, dropId) {
+        const keep = findFamily(families, keepId);
+        const drop = findFamily(families, dropId);
+        if (!keep || !drop || keep.id === drop.id) return refuse(['those Households no longer exist']);
+        if (!SEATS.some(s => keep[s] && keep[s] === drop[s])) return refuse(['those Households share no parent']);
+        if (!SEATS.every(s => !keep[s] || !drop[s] || keep[s] === drop[s])) {
+            return refuse(['those Households have different husbands or wives, so they are not the same Household']);
+        }
+        const parents = SEATS.map(s => keep[s] || drop[s]).filter(Boolean);
+        const childIds = [];
+        (keep.childIds || []).concat(drop.childIds || []).forEach(id => {
+            if (parents.indexOf(id) === -1 && childIds.indexOf(id) === -1) childIds.push(id);
+        });
+        return Object.assign(planned('merge', keep.id, {
+            husbandId: keep.husbandId || drop.husbandId || null,
+            wifeId: keep.wifeId || drop.wifeId || null,
+            childIds,
+            anniversary: keep.anniversary || drop.anniversary || null,
+        }), { deleteId: drop.id });
     }
 
     // The Family tree drawn as a pedigree (MS-709 layout C), from one Household
@@ -564,6 +611,8 @@
         planAddChild,
         planRemoveChild,
         planSetAnniversary,
+        householdDuplicates,
+        planMergeHouseholds,
         familyTree,
     };
 
