@@ -108,10 +108,14 @@
 
     // ── Drawing ──────────────────────────────────────────────────────────────
 
+    // The person whose page this is gets a plain pill: no link back to the page
+    // you are on, and no × to take them out of their own Household from it.
     function chip(o, id, action, label, own) {
-        var h = href(o, id);
+        var me = !!o.personId && id === o.personId;
+        var h = me ? null : href(o, id);
         var name = esc(nameOf(o, id));
         var inner = h ? '<a' + linkAttrs(o, id) + '>' + name + '</a>' : '<span>' + name + '</span>';
+        if (me) return '<span class="hh-chip hh-chip--me' + (own ? ' hh-chip--own' : '') + '" role="listitem" aria-current="page">' + inner + '</span>';
         var x = (o.canEdit && action)
             ? '<button type="button" class="hh-chip__x" data-hh="' + action + '" data-id="' + esc(id) + '" aria-label="' + esc(label) + '">' +
               '<span class="material-symbols-outlined" aria-hidden="true">close</span></button>'
