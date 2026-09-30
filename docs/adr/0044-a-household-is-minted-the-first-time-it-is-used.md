@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Extends [ADR 0043](0043-households-are-stored-as-their-own-collection.md).
+Superseded by [ADR 0075](0075-the-kiosk-groups-by-the-household-records.md) (MS-709): the kiosk groups by the `families` records, so nothing is minted. Extended [ADR 0043](0043-households-are-stored-as-their-own-collection.md).
 
 ## Context
 
