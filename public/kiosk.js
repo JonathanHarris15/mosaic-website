@@ -369,12 +369,17 @@ function kioskPage() {
             return this.people.find(p => p.id === id) || null;
         },
         // One row of blanks per person in the Household, keeping whatever was
-        // already typed for anybody still in it.
+        // already typed. Somebody taken out during this edit keeps their row,
+        // marked `away`, so a wrong × can be put back from the card.
         syncEditNames() {
             const typed = {};
             this.editNames.forEach(n => { typed[n.personId] = n; });
-            this.editNames = ((this.selected && this.selected.members) || []).map(m =>
-                typed[m.personId] || Object.assign({ personId: m.personId }, PersonName.blanksFor(this.personById(m.personId))));
+            const members = ((this.selected && this.selected.members) || []).map(m => m.personId);
+            const here = members.map(id =>
+                Object.assign(typed[id] || Object.assign({ personId: id }, PersonName.blanksFor(this.personById(id))), { away: false }));
+            const away = this.editNames.filter(n => members.indexOf(n.personId) === -1)
+                .map(n => Object.assign(n, { away: true }));
+            this.editNames = here.concat(away);
         },
         // The record under the view was just written. Find the Household again
         // by that record, else by the Person the view started from.
@@ -400,6 +405,8 @@ function kioskPage() {
                 personId: h.familyId ? null : h.personId,
                 canEdit: true,
                 headingLevel: 3,
+                // A shared foyer screen searches the list above, never the directory.
+                pickFrom: this.editNames.map(n => n.personId),
                 onChange: (next, info) => {
                     this.families = next;
                     this.refollow(info.familyId);

@@ -36,8 +36,12 @@ written by any screen. Nothing is minted.
   last name, as on every other screen.
 - **Edit household** is a quiet button under check-in. It opens a full edit:
   every member's name as first, last and suffix blanks, and the same Household
-  card the directory uses, to seat and unseat people already in the directory.
-  Someone brand new still goes in through "Add someone".
+  card the directory uses, to seat and unseat the people in that Household.
+  Its search offers only the people listed in the edit (the members, and
+  anyone taken out during it), never the directory: the kiosk is a shared
+  screen, and browsing everyone from it is not the job. Someone new to the
+  Household still goes in through "Add someone". The rules cannot see that
+  list, so this limit is the page's, not the rules'.
 - **The rules give the kiosk exactly that, and no more.** On `families` it may
   create and update a record whose keys are only `husbandId`, `wifeId`,
   `childIds` and `anniversary`, and it may delete one (the card deletes a record

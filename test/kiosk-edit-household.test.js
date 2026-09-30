@@ -98,7 +98,8 @@ test('taking the last people out of a record follows the Person the edit started
     page.renderHouseholdCard({});
     rendered[0].onChange([], { familyId: null, action: 'delete' });
     assert.strictEqual(page.selected.id, 'person:pa');
-    assert.deepStrictEqual(page.editNames.map(n => n.personId), ['pa']);
+    assert.deepStrictEqual(page.editNames.map(n => n.personId + (n.away ? ' (away)' : '')),
+        ['pa', 'ma (away)', 'son (away)', 'sis (away)']);
 });
 
 test('the names start as they are, and Done writes only the one that changed', async () => {
@@ -121,4 +122,19 @@ test('a name with no first name keeps the edit open and says why', async () => {
     assert.strictEqual(page.view, 'edit');
     assert.match(page.error, /first name/);
     assert.deepStrictEqual(renamed, []);
+});
+
+test('the card searches only the people listed in the edit, and someone taken out stays listed', () => {
+    const { page, rendered } = kiosk();
+    page.openHousehold(page.households.find(h => h.familyId === 'origin'));
+    page.startEdit();
+    page.renderHouseholdCard({});
+    assert.deepStrictEqual(rendered[0].pickFrom, ['pa', 'ma', 'son', 'sis']);
+
+    // Iris is taken out by mistake: her row stays, marked, and she can be found again.
+    rendered[0].onChange([{ id: 'origin', husbandId: 'pa', wifeId: 'ma', childIds: ['son'] }], { familyId: 'origin', action: 'update' });
+    assert.deepStrictEqual(page.editNames.map(n => n.personId + (n.away ? ' (away)' : '')), ['pa', 'ma', 'son', 'sis (away)']);
+    page.renderHouseholdCard({});
+    assert.deepStrictEqual(rendered[1].pickFrom, ['pa', 'ma', 'son', 'sis']);
+    assert.ok(!rendered[1].pickFrom.includes('bride'), 'nobody from the wider directory');
 });

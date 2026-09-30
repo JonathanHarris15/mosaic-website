@@ -14,6 +14,7 @@
 //     headingLevel,              2 or 3 (default 2)
 //     treeHref(familyId),        where "See family tree" goes; no link without it
 //     treeNewTab,                open that link in a new tab
+//     pickFrom,                  person ids the finders may offer; all people without it
 //   })
 //
 //   HouseholdEditor.renderTree(el, { families, people, familyId, personHref })
@@ -156,11 +157,15 @@
         var q = (el._hh.q[key] || '').trim().toLowerCase();
         if (!q) return '';
         var family = familyOf(o);
+        var pool = Array.isArray(o.pickFrom) ? o.pickFrom : null;
         var found = F.householdCandidates(o.families || [], o.people || [], family, slotKey(key))
+            .filter(function (p) { return !pool || pool.indexOf(p.id) !== -1; })
             .filter(function (p) { return String(p.name || '').toLowerCase().indexOf(q) !== -1; })
             .slice(0, MAX_MATCHES);
         if (!found.length) {
-            var why = key === 'child'
+            var why = pool
+                ? 'No match. Only the people listed above can be added here.'
+                : key === 'child'
                 ? 'No match. A child who already has parents in another Household is not listed.'
                 : 'No match. Only unmarried people recorded as ' + (key === 'husbandId' ? 'male' : 'female') + ' are listed.';
             return '<div class="hh-find__list"><div class="hh-find__none">' + esc(why) + '</div></div>';

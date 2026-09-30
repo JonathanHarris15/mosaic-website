@@ -307,7 +307,7 @@
         <!-- Edit a Household (MS-709): names, and who is in it -->
         <section x-show="view === 'edit'">
             <h2 class="font-headline-md text-primary mb-sm" x-text="'Edit ' + (selected ? selected.name : 'household')"></h2>
-            <p class="text-sm text-on-surface-variant mb-md">Fix a name, or add and take out people already in the directory. Someone brand new goes in with “Add someone”.</p>
+            <p class="text-sm text-on-surface-variant mb-md">Fix a name, or move the people listed here between parent and child. Someone new to this household goes in with “Add someone”.</p>
 
             <div class="m-card mb-md">
                 <h3 class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant mb-sm">Names</h3>
@@ -333,6 +333,9 @@
                                 <input type="checkbox" x-model="n.noLastName" class="rounded border-outline-variant text-primary">
                                 <span class="text-sm">No last name</span>
                             </label>
+                            <p x-show="n.away" class="md:col-span-12 text-xs text-on-surface-variant">
+                                Taken out of this household. Find them in the card below to put them back.
+                            </p>
                         </div>
                     </template>
                 </div>
