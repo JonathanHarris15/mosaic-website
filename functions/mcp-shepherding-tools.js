@@ -38,6 +38,7 @@ const Firestore = require("./mcp-firestore.js");
 const {jsonResult, refuse} = require("./mcp-result.js");
 
 const Read = require("./shepherding-read.js");
+const Guidance = require("./shared/shepherding-guidance.js");
 const Writes = require("./shepherding-writes.js");
 const Tags = require("./shepherding-tag-writes.js");
 const Docs = require("./shepherding-doc-writes.js");
@@ -80,7 +81,7 @@ function elderTool(server, deps, name, spec, run) {
       // writing a record nobody can be traced to (CONTEXT.md, Author).
       const actor = readOnly ?
         null : await Actor.requireActor(deps.db, deps.auth.uid);
-      return jsonResult(await run(args || {}, actor));
+      return jsonResult(await run(args || {}, actor, account));
     } catch (e) {
       return refuse(e && e.message ? e.message : "That did not work.");
     }
@@ -112,9 +113,13 @@ function register(server, deps) {
     description:
       "Search the church directory by name, email address or phone number, " +
       "and get back the Person id every other tool needs. THE ONLY WAY to " +
-      "turn a name into an id. If more than one person matches, ASK WHICH " +
-      "ONE IS MEANT — do not pick. Writing a note onto the wrong Sarah is " +
-      "not something anybody finds out about later." + PRIVACY,
+      "turn a name into an id. Phone and email are read from the Person's " +
+      "contact. If more than one person matches, ASK WHICH ONE IS MEANT — " +
+      "do not pick. Writing onto the wrong person is not something anybody " +
+      "finds out about later. An editor sees name and contact. Shepherding " +
+      "tags and status come back only for an elder or a Pastoral " +
+      "Assistant — do not repeat those anywhere they have not asked for " +
+      "them.",
     inputSchema: {
       query: z.string().min(1)
           .describe("A name, part of a name, an email or a phone number"),
@@ -122,7 +127,21 @@ function register(server, deps) {
           .describe("How many to return (default 25)"),
     },
     annotations: read,
-  }, (a) => Read.findPerson(db, a));
+  }, (a, _actor, account) => Read.findPerson(db, Object.assign({}, a, {
+    includeShepherding: Actor.readsAsElder(account),
+  })));
+
+  tool("shep_guidance", {
+    title: "How to edit a person and answer a person question",
+    description:
+      "The standing instructions for a person's phone, address and other " +
+      "directory details, and for a form question that picks somebody from " +
+      "the directory. Read this BEFORE shep_update_person, and before " +
+      "filling in a form that has a person question. It is how the picker " +
+      "is answered, and which fields each rank may change.",
+    inputSchema: {},
+    annotations: read,
+  }, () => Guidance.file());
 
   tool("shep_get_profile", {
     title: "A person's Shepherding Profile",
@@ -220,6 +239,34 @@ function register(server, deps) {
   }, (a) => Read.listPeople(db, a));
 
   // ── B. Writing on a Person ───────────────────────────────────────────────
+
+  tool("shep_update_person", {
+    title: "Edit a person's directory details",
+    description:
+      "Change a person's name, phone, address, email or birthday — the " +
+      "same details an editor saves on their profile. Read shep_guidance " +
+      "first. Pass ONLY the fields that should change; anything you leave " +
+      "out stays as it is. An empty phone or address clears that one " +
+      "field. A blank name is refused. An editor may also set sex (male " +
+      "or female, or blank to clear) and the kid mark. A Pastoral " +
+      "Assistant may not: those two come back under refused and nothing " +
+      "else is blocked. The person id comes from shep_find_person. This " +
+      "does not change membership, tags or shepherding.",
+    inputSchema: {
+      personId,
+      name: z.string().optional().describe("The full name. Cannot be blank."),
+      email: z.string().optional().describe("Email. Empty clears it."),
+      phone: z.string().optional().describe("Phone. Empty clears it."),
+      address: z.string().optional().describe("Address. Empty clears it."),
+      birthday: z.string().nullable().optional()
+          .describe("YYYY-MM-DD, or empty to clear"),
+      sex: z.string().nullable().optional()
+          .describe("male or female, or empty to clear. Editor only."),
+      kid: z.boolean().optional()
+          .describe("The kid mark. Editor only."),
+    },
+  }, (a, actor, account) => Writes.updatePersonDetails(
+      db, Object.assign({}, a, {actor, account})));
 
   tool("shep_write_note", {
     title: "Write a note on a person",
@@ -698,10 +745,15 @@ function register(server, deps) {
     title: "Fill in a form document",
     description:
       "Answer, or change, a Form Document's questions. Pass answers keyed by " +
-      "question id. Anything refused comes back in `skipped` with the reason " +
-      "— a date that is not a date, a choice never offered, or an upload, " +
-      "which needs a file you do not have. Only the answers move; the " +
-      "questions are the record's own copy.",
+      "question id. A person question — the directory picker — is answered " +
+      "with {personId} from shep_find_person, never with a name. Read " +
+      "shep_guidance before the first one. Anything refused comes back in " +
+      "`skipped` with the reason — a date that is not a date, a choice " +
+      "never offered, a person the question's scope does not include, or " +
+      "an upload, which needs a file you do not have. Only the answers " +
+      "move; the questions are the record's own copy. Answering the " +
+      "subject question of a personal shepherding document files it on " +
+      "that person's profile.",
     inputSchema: {
       documentId: z.string().min(1),
       answers: z.record(z.any()).describe("Answers keyed by question id"),

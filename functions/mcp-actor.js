@@ -64,6 +64,11 @@ const EDITOR_LEVELS = Access.EDITOR_WRITE_LEVELS.slice();
 const READ = "read";
 const RECORD = "record";
 const DECIDE = "decide";
+// Directory identity: name, contact, birthday. An editor writes these in
+// Edit Mode. A Pastoral Assistant keeps the same facts current (MS-703)
+// except sex and the kid mark, which stay an editor's write. The admin SDK
+// does not consult firestore.rules, so this gate is the only one.
+const DIRECTORY = "directory";
 
 /**
  * Every `shep_` and `cal_` tool, classified. A tool missing from this map
@@ -72,7 +77,9 @@ const DECIDE = "decide";
  * unclassified.
  */
 const SHEP_CAL_GATES = Object.freeze({
-  shep_find_person: READ,
+  shep_find_person: DIRECTORY,
+  shep_guidance: DIRECTORY,
+  shep_update_person: DIRECTORY,
   shep_get_profile: READ,
   shep_get_pastoral_record: READ,
   shep_list_notes: READ,
@@ -202,11 +209,34 @@ function canDecide(value) {
 /**
  * The gate this `shep_` / `cal_` tool is classified under, or null.
  * @param {string} name the tool name
- * @return {?string} `read`, `record`, `decide`, or null
+ * @return {?string} `read`, `record`, `decide`, `directory`, or null
  */
 function gateFor(name) {
   return Object.prototype.hasOwnProperty.call(SHEP_CAL_GATES, name) ?
     SHEP_CAL_GATES[name] : null;
+}
+
+/**
+ * May this caller edit directory identity (name, contact, birthday)?
+ * An editor and above, or a Pastoral Assistant. Sex and the kid mark are
+ * a narrower question the write itself asks.
+ * @param {string|object} account the caller's account
+ * @return {boolean} whether they may edit those facts
+ */
+function mayEditDirectory(account) {
+  return Access.writesAsEditor(account) || Access.isPastoralAssistant(account);
+}
+
+/**
+ * Which directory fields this caller may write, or null when they may not.
+ * `editor` is the Edit Mode set. `assistant` is the MS-703 set.
+ * @param {string|object} account the caller's account
+ * @return {?string} `editor`, `assistant`, or null
+ */
+function directoryFieldSet(account) {
+  if (Access.writesAsEditor(account)) return "editor";
+  if (Access.isPastoralAssistant(account)) return "assistant";
+  return null;
 }
 
 /**
@@ -219,6 +249,7 @@ function gateFor(name) {
 function mayUseTool(account, name) {
   const gate = gateFor(name);
   if (gate === READ) return Access.readsAsElder(account);
+  if (gate === DIRECTORY) return mayEditDirectory(account);
   if (gate === RECORD) return Access.writesTheRecord(account);
   if (gate === DECIDE) {
     // shep_ decision writes admit a Pastoral Assistant (MS-594).
@@ -243,6 +274,19 @@ function heldLabel(value) {
 }
 
 /**
+ * Why a directory-details tool said no.
+ * @param {string|object} value the caller's level or account
+ * @return {string} the refusal
+ */
+function directoryRefusalFor(value) {
+  const held = heldLabel(value);
+  return "A person's name, phone, address, email and birthday are an " +
+    "editor's write, and a Pastoral Assistant may keep those current too. " +
+    "Sex and the kid mark stay with an editor. This account holds " + held +
+    ".";
+}
+
+/**
  * Why not, in words an assistant can pass on to the person asking.
  *
  * A Pastoral Assistant refused a decision hears that it is about the role,
@@ -253,6 +297,9 @@ function heldLabel(value) {
  * @return {string} the refusal
  */
 function refusalFor(value, toolName) {
+  if (toolName && gateFor(toolName) === DIRECTORY) {
+    return directoryRefusalFor(value);
+  }
   if (Access.isPastoralAssistant(value) && !Access.isAnElder(value)) {
     const gate = toolName ? gateFor(toolName) : DECIDE;
     if (gate === DECIDE || gate === null) {
@@ -361,6 +408,7 @@ module.exports = {
   READ,
   RECORD,
   DECIDE,
+  DIRECTORY,
   SHEP_CAL_GATES,
   SOURCE,
   MISSING_AUTHOR,
@@ -370,8 +418,11 @@ module.exports = {
   writesTheRecord,
   canDecide,
   gateFor,
+  mayEditDirectory,
+  directoryFieldSet,
   mayUseTool,
   refusalFor,
+  directoryRefusalFor,
   editorRefusalFor,
   resolveActor,
   requireActor,

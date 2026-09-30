@@ -38,6 +38,7 @@
 const F = require("./mcp-firestore.js");
 
 const FormsCore = require("./shared/forms-core.js");
+const ShepherdingCore = require("./shared/shepherding-core.js");
 const DocsCore = require("./shared/shepherding-documents-core.js");
 const NoteMarkdownCore = require("./shared/note-markdown-core.js");
 const CareListCore = require("./shared/care-list-core.js");
@@ -89,7 +90,7 @@ async function listFormTemplates(db) {
  * @return {object} the row
  */
 function questionRow(question) {
-  return {
+  const row = {
     questionId: question.id,
     text: question.text || "",
     type: question.type,
@@ -99,6 +100,120 @@ function questionRow(question) {
     answerable: FormsCore.asksSomething(question.type) &&
       question.type !== "file" && question.type !== "image",
   };
+  // A person question is a picker, not a text box. The page stores
+  // {personId, name}. A name typed in here used to be stored as text, and
+  // the picker then drew the question as unanswered.
+  if (question.type === "person") {
+    row.answerAs = "{personId} from shep_find_person. A name is refused.";
+    row.people = question.people || {scope: "everyone", tagId: null};
+  }
+  return row;
+}
+
+/**
+ * Whether this Person is inside the picker's scope.
+ * @param {object} person the Person
+ * @param {object} question the question, which may carry `people`
+ * @return {string} empty when they fit, otherwise why not
+ */
+function scopeFault(person, question) {
+  const people = (question && question.people) || {};
+  const scope = people.scope || "everyone";
+  if (scope === "everyone") return "";
+
+  const tags = (person && person.tags) || [];
+  const member = ShepherdingCore.carriesMemberTag(
+      person && person.membership) ||
+    tags.indexOf(ShepherdingCore.MEMBER_TAG_ID) !== -1;
+  if (scope === "member" && !member) {
+    return "That question only accepts a member, and this person is not one.";
+  }
+  if (scope === "non_member" && member) {
+    return "That question only accepts someone who is not a member.";
+  }
+  if (scope === "tag" &&
+      (!people.tagId || tags.indexOf(people.tagId) === -1)) {
+    return "That question only accepts someone carrying its tag.";
+  }
+  return "";
+}
+
+const PERSON_ANSWER_WHY =
+  "A person question takes a person id from shep_find_person, as " +
+  "{\"personId\": \"...\"}. A name is not an answer — two people can share " +
+  "one. Read shep_guidance if this is unclear.";
+
+/**
+ * Turn what an assistant sent for a person question into the shape the
+ * page's picker stores: {personId, name}.
+ *
+ * A string is accepted only when it is an id the directory holds. A name
+ * is refused rather than stored as text the picker cannot show.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} question the question
+ * @param {*} value what the assistant sent
+ * @return {Promise<{ok: boolean, answer: ?object, why: string}>}
+ */
+async function coercePersonAnswer(db, question, value) {
+  if (value == null) return {ok: true, answer: null, why: ""};
+
+  let personId = "";
+  if (typeof value === "string") personId = value.trim();
+  else if (value && typeof value === "object" && value.personId) {
+    personId = String(value.personId).trim();
+  }
+  if (!personId) return {ok: false, answer: null, why: PERSON_ANSWER_WHY};
+
+  let loaded;
+  try {
+    loaded = await loadPerson(db, personId);
+  } catch (e) {
+    const missing = e && e.message ? e.message : "No Person with that id.";
+    return {ok: false, answer: null, why: missing + " " + PERSON_ANSWER_WHY};
+  }
+
+  const why = scopeFault(loaded.data, question);
+  if (why) return {ok: false, answer: null, why: why};
+  return {
+    ok: true,
+    answer: {personId, name: loaded.data.name || ""},
+    why: "",
+  };
+}
+
+/**
+ * Move a personal shepherding document onto the profile its subject
+ * question now names. The Library copy is left where it is.
+ *
+ * Same order as the page: off the old profile first, then onto the new
+ * one. The answer is already decided; a failure here is reported, not
+ * rolled back, because the words were saved either way.
+ *
+ * @param {object} db the Firestore handle
+ * @param {string} documentId the document
+ * @param {object} data the document before this answer
+ * @param {object} answers the answers about to be stored
+ * @return {Promise<?object>} owner fields to merge, or null when it did
+ *   not move. Throws when the trees could not be updated.
+ */
+async function refileSubject(db, documentId, data, answers) {
+  if (!data.shepherdingDoc) return null;
+  const now = FormsCore.subjectPersonId({answers}) || "";
+  const was = String(data.ownerPersonId || "");
+  if (now === was) return null;
+
+  if (was) {
+    await withTree(db, (tree) => {
+      DocsCore.removeFromTree(tree, documentId);
+      return true;
+    }, "person_" + was);
+  }
+  if (now) {
+    await withTree(db, (tree) => DocsCore.fileInRoot(tree, documentId),
+        "person_" + now);
+  }
+  return {ownerPersonId: now || null, inLibrary: true};
 }
 
 /**
@@ -253,6 +368,15 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
       });
       continue;
     }
+    if (question.type === "person") {
+      const resolved = await coercePersonAnswer(db, question, value);
+      if (!resolved.ok) {
+        skipped.push({questionId, why: resolved.why});
+        continue;
+      }
+      proposed[questionId] = resolved.answer;
+      continue;
+    }
     proposed[questionId] = value;
   }
 
@@ -269,13 +393,31 @@ async function answerFormDocument(db, {documentId, answers, actor}) {
   Object.assign(merged, proposed);
   const answered = Object.keys(proposed);
 
+  // A cleared person answer is null. Leaving the old object in place would
+  // keep the picker showing somebody the assistant just removed.
+  Object.keys(proposed).forEach((questionId) => {
+    if (proposed[questionId] == null) delete merged[questionId];
+  });
+
+  let filing = null;
+  let filingNote = null;
+  try {
+    filing = await refileSubject(db, documentId, data, merged);
+  } catch (e) {
+    filingNote = "Saved, but this did not reach their profile. Answer the " +
+      "person question again to retry that part.";
+  }
+
   await ref.update(Object.assign({
     answers: merged,
     updatedAt: F.now(),
     updatedByName: actor.name,
-  }, Actor.provenance()));
+  }, filing || {}, Actor.provenance()));
 
-  return {ok: true, documentId, answered, skipped};
+  const result = {ok: true, documentId, answered, skipped};
+  if (filingNote) result.filing = filingNote;
+  else if (filing) result.ownerPersonId = filing.ownerPersonId;
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
