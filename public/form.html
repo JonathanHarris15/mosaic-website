@@ -123,13 +123,13 @@
 
                 <!-- ── Questions ──────────────────────────────────── -->
                 <div class="f-panebody" x-show="tab === 'questions'">
-                    <div class="fp-cols">
+                    <div class="fp-cols m-with-side">
 
                         <!-- Who may answer sits left, because it is the frame
                              everything else is written inside: the rung decides
                              what the other two switches are allowed to be at
                              all. On a phone it drops below the questions. -->
-                        <aside class="fp-aside">
+                        <aside class="fp-aside m-side">
                             <section class="fp-block">
                                 <div class="fp-block__head"><span class="m-label">What this is</span></div>
                                 <div class="m-seg">
@@ -618,9 +618,9 @@
         .fp-aside { order: 2; }
         .fp-maincol { order: 1; display: flex; flex-direction: column; gap: var(--space-md); }
 
-        @media (min-width: 1000px) {
+        @media (min-width: 1024px) {
             .fp-cols { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
-            .fp-aside { grid-column: 1; grid-row: 1; position: sticky; top: var(--space-md); }
+            .fp-aside { grid-column: 1; grid-row: 1; }
         }
 
         /* ── One card per section ─────────────────────────────────────────

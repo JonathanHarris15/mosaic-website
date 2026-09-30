@@ -7,90 +7,9 @@
     <title>Privacy Policy — Mosaic Manager</title>
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
-    <style>
-        /* This page stood alone — nothing in the app links to it; the app
-           stores do — so it carried its own copy of the palette under its own
-           names (--ink, --muted, --rule). It loads mosaic.css now, which sits
-           in the same folder and is reachable by anyone who can reach this
-           file, so the copy is gone and the names are the real ones. */
-
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            background: var(--parchment);
-            color: var(--on-surface);
-            font-family: var(--font-sans);
-            font-size: 17px;
-            line-height: 1.65;
-        }
-
-        header {
-            background: var(--navy);
-            color: var(--on-primary);
-            padding: 40px 24px 32px;
-        }
-
-        .wrap {
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 0 24px;
-        }
-
-        header .wrap { padding: 0; }
-
-        h1 {
-            font-family: var(--font-display);
-            font-size: 30px;
-            line-height: 1.25;
-            margin: 0 0 6px;
-        }
-
-        .subtitle {
-            margin: 0;
-            opacity: 0.75;
-            font-size: 15px;
-        }
-
-        main { padding: 40px 0 72px; }
-
-        h2 {
-            font-family: var(--font-display);
-            font-size: 21px;
-            color: var(--navy);
-            margin: 40px 0 12px;
-            padding-top: 24px;
-            border-top: 1px solid var(--surface-variant);
-        }
-
-        main > .wrap > h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
-
-        p, li { margin: 0 0 14px; }
-        ul { padding-left: 22px; }
-
-        .lede {
-            font-size: 19px;
-            color: var(--on-surface-variant);
-        }
-
-        strong { color: var(--navy); }
-
-        footer {
-            border-top: 1px solid var(--surface-variant);
-            padding: 24px 0 48px;
-            color: var(--on-surface-variant);
-            font-size: 14px;
-        }
-
-        @media (max-width: 600px) {
-            body { font-size: 16px; }
-            header { padding: 28px 20px 24px; }
-            h1 { font-size: 25px; }
-        }
-    </style>
 </head>
 
-<body>
+<body class="m-page m-page--reading">
     <header class="m-header m-header--tall">
         <div class="m-header__inner">
             <div class="m-header__lead">
@@ -106,9 +25,9 @@
         </div>
     </header>
 
-    <main>
-        <div class="wrap">
-            <p class="lede">Mosaic Manager is a private tool for the members and officers of
+    <main class="m-page__body">
+        <article class="m-prose">
+            <p class="m-prose__lede">Mosaic Manager is a private tool for the members and officers of
                 Mosaic Church. It is not a public product. You need an account created by a
                 church administrator to use it at all, and there is no way to sign yourself up.</p>
 
@@ -176,7 +95,7 @@
             <p>You can view and correct your own contact details and birthday from your profile
                 inside the app, and you can change your password there.</p>
             <p><strong>You can delete your account at any time.</strong> Open your profile in the
-                app and use <strong>Delete Account</strong>. This permanently removes your login —
+                app and use <strong>Delete account</strong>. This permanently removes your login —
                 your email address, your password, and your access to the app. It cannot be undone.</p>
             <p>Deleting your account does not remove your entry from the church's membership
                 records, which the church keeps for its own record-keeping in the same way it
@@ -191,13 +110,8 @@
 
             <h2>Changes to this policy</h2>
             <p>If this policy changes, the date at the top of the page will change with it.</p>
-        </div>
-
-        <div class="wrap">
-            <footer>
-                Questions about this policy? Write to jono591737@gmail.com.
-            </footer>
-        </div>
+            <p>Questions about this policy? Write to jono591737@gmail.com.</p>
+        </article>
     </main>
 
     <script src="dashboard-nav.js"></script>

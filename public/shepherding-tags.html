@@ -58,16 +58,16 @@
            Two columns: a sticky list of Relationship Types beside the pane that
            edits one. Collapses to a single column before the columns get too
            narrow to read. */
-        .rel-cols { display: grid; grid-template-columns: 326px minmax(0, 1fr); gap: 18px; align-items: start; }
+        .rel-cols { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+        @media (min-width: 1024px) {
+            .rel-cols { grid-template-columns: 326px minmax(0, 1fr); }
+        }
         .rel-cols > * { min-width: 0; }
         .tab-bar { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
         .tab-bar::-webkit-scrollbar { display: none; }
         .tab-bar > [role="tab"] { flex-shrink: 0; white-space: nowrap; }
-        .rel-types { position: sticky; top: 14px; }
-
         @media (max-width: 860px) {
             .rel-cols  { grid-template-columns: 1fr; }
-            .rel-types { position: static; }
         }
         @media (max-width: 640px) {
             /* Row actions are hover-revealed on desktop; touch has no hover, so
@@ -100,7 +100,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="shepherdingTags" x-cloak>
 
     <!-- Header -->
@@ -258,8 +258,8 @@
                 <span class="material-symbols-outlined text-[20px] text-error flex-shrink-0" aria-hidden="true">error</span>
                 <span class="flex-1 font-sans text-[13.5px] font-medium leading-snug" x-text="hhError"></span>
             </div>
-            <div class="rel-cols">
-                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-[18px] flex flex-col gap-sm">
+            <div class="rel-cols m-with-side">
+                <div class="m-side m-card flex flex-col gap-sm">
                     <input type="search" x-model="hhQuery" placeholder="Search Families…" aria-label="Search Families by surname or anyone in them"
                            autocomplete="off" spellcheck="false"
                            class="w-full border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
@@ -345,10 +345,10 @@
                 </button>
             </div>
 
-            <div class="rel-cols">
+            <div class="rel-cols m-with-side">
 
                 <!-- ═══ LEFT: the vocabulary ═══════════════════════════════ -->
-                <div class="rel-types bg-surface-container-lowest border border-outline-variant rounded-xl p-[18px]">
+                <div class="rel-types m-side m-card">
                     <div class="flex items-center justify-between mb-sm">
                         <div class="flex items-baseline gap-[7px]">
                             <span class="font-sans text-[11px] font-semibold uppercase tracking-[.14em] text-on-surface-variant">Types</span>

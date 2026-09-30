@@ -194,7 +194,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="recurringEventsPage()" x-cloak>
 
     <header class="m-header">
@@ -227,7 +227,7 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-[1600px] mx-auto px-4 md:px-margin pb-lg pt-md">
+    <main x-show="!loading" class="m-page__body m-page__body--wide">
 
         <!-- Signed out, and signed in without the rank. Two different answers:
              one is a door, the other is a wall, and a single "no" for both

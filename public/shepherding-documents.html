@@ -37,7 +37,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="documentLibrary" x-cloak>
 
     <!-- Header -->
@@ -73,7 +73,7 @@
     </div>
 
     <!-- Main -->
-    <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-md pt-md">
+    <main x-show="!loading" class="m-page__body">
 
         <!-- Breadcrumb -->
         <nav class="flex items-center gap-xs flex-wrap"

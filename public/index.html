@@ -227,7 +227,7 @@
 </head>
 
 <body
-    class="m-dense bg-background text-on-background font-body-md text-body-md antialiased min-h-screen lg:h-screen overflow-x-hidden lg:overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
+    class="m-page m-page--app m-dense selection:bg-primary-fixed selection:text-on-primary-fixed">
     <!-- Home. No way back from here — but the seal and the app's name now sit
          IN the bar rather than in a 64px band of their own below it. A wordless
          mark you recognised before the page painted does not need a sixth of
@@ -319,11 +319,11 @@
             </div>
 
             <!-- Right Column -->
-            <div class="flex flex-col lg:min-h-0 lg:overflow-hidden">
-                <div class="m-card flex flex-col lg:max-h-full lg:overflow-hidden" id="sunday-glance">
+            <div class="m-with-side flex flex-col lg:min-h-0 lg:overflow-hidden">
+                <div class="m-card m-side flex flex-col" id="sunday-glance">
                     <h2 class="m-serif-head shrink-0">Sunday at a Glance</h2>
                     <hr class="m-divider dash-hairline shrink-0" />
-                    <div id="glance-content" class="flex-grow overflow-y-auto flex flex-col gap-sm pr-1">
+                    <div id="glance-content" class="m-side__scroll flex flex-col gap-sm pr-1">
                         <!-- Data will be injected here -->
                     </div>
                 </div>

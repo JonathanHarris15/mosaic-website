@@ -31,17 +31,10 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body x-data="authForm()" x-init="init()" class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col relative overflow-hidden">
-    <!-- Architectural accent lines (Modern Minimalism) -->
-    <div class="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-surface-container-high to-transparent opacity-50 pointer-events-none"></div>
-    <div class="absolute -right-12 -top-12 w-64 h-64 border-[1px] border-outline-variant rounded-full opacity-20 pointer-events-none"></div>
-    <div class="absolute -left-12 -bottom-12 w-48 h-48 border-[1px] border-outline-variant rounded-full opacity-10 pointer-events-none"></div>
-
-    <!-- The door still gets a bar. No title — the card says Log In or Sign Up and
-         says it twice otherwise — and no account, because there isn't one yet.
-         The body centred its card directly; it now centres it in what is left
-         below the bar, so the card sits where it always did. -->
-    <header class="m-header relative z-10">
+<body x-data="authForm()" x-init="init()" class="m-page m-page--door">
+    <!-- The door still gets a bar. No title in the bar — the card says Log in
+         or Sign up — and no account, because there isn't one yet. -->
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a href="index.html" class="m-back">
@@ -52,72 +45,51 @@
         </div>
     </header>
 
-    <div class="flex-1 flex flex-col justify-center items-center p-gutter">
-    <div class="w-full max-w-md bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-lg shadow-sm relative z-10">
-        <div class="w-full flex justify-center mb-md">
-            <img alt="Mosaic Liturgy Logo" class="h-16 w-16 object-contain" src="assets/mosaic-logo.png" />
-        </div>
-        <h1 class="font-display-lg text-4xl text-primary text-center mb-md tracking-tight" x-text="mode === 'login' ? 'Log In' : 'Sign Up'">Log In</h1>
-        
-        <form @submit.prevent="submit" class="flex flex-col gap-md">
-            <div class="flex flex-col gap-xs">
-                <label for="email" class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">Email Address</label>
-                <input type="email" id="email" x-model="email" required class="w-full py-3 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md text-on-surface" placeholder="email@example.com" />
-            </div>
-            <div class="flex flex-col gap-xs">
-                <label for="password" class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">Password</label>
-                <input type="password" id="password" x-model="password" required class="w-full py-3 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md text-on-surface" placeholder="••••••••" />
-            </div>
-            
-            <div x-show="mode === 'signup'" x-cloak class="flex flex-col gap-xs">
-                <label for="confirmPassword" class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">Confirm Password</label>
-                <input type="password" id="confirmPassword" x-model="confirmPassword" :required="mode === 'signup'" class="w-full py-3 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md text-on-surface" placeholder="••••••••" />
+    <main class="m-page__body">
+    <div class="m-door">
+        <img alt="" class="m-door__mark" src="assets/mosaic-logo.png" />
+        <h1 class="m-door__title" x-text="mode === 'login' ? 'Log in' : 'Sign up'">Log in</h1>
+
+        <form @submit.prevent="submit" class="m-card" style="display:flex;flex-direction:column;gap:var(--space-md)">
+            <label class="m-field" for="email">
+                <span class="m-label">Email address</span>
+                <input type="email" id="email" x-model="email" required class="m-input" autocomplete="username" placeholder="ada@example.test" />
+            </label>
+            <label class="m-field" for="password">
+                <span class="m-label">Password</span>
+                <input type="password" id="password" x-model="password" required class="m-input" autocomplete="current-password" />
+            </label>
+
+            <label class="m-field" for="confirmPassword" x-show="mode === 'signup'" x-cloak>
+                <span class="m-label">Confirm password</span>
+                <input type="password" id="confirmPassword" x-model="confirmPassword" :required="mode === 'signup'" class="m-input" autocomplete="new-password" />
+            </label>
+
+            <div x-show="error" x-cloak class="m-notice m-notice--error">
+                <span class="material-symbols-outlined m-notice__icon">error</span>
+                <div class="m-notice__body"><p class="m-notice__text" x-text="error"></p></div>
             </div>
 
-            <div x-show="error" x-cloak class="text-error font-body-md text-sm flex items-center gap-1 bg-error-container/30 p-3 rounded-lg border border-error/20">
-                <span class="material-symbols-outlined text-sm">error</span>
-                <span x-text="error"></span>
-            </div>
-
-            <!-- A reset link went out. Not an error, so it does not wear the
-                 error colours — and it says the same thing whether or not the
+            <!-- A reset link went out. It says the same thing whether or not the
                  address has an account (see account-recovery-core.js). -->
-            <div x-show="notice" x-cloak class="text-primary font-body-md text-sm flex items-center gap-1 bg-surface-container p-3 rounded-lg border border-outline-variant/40">
-                <span class="material-symbols-outlined text-sm">mark_email_read</span>
-                <span x-text="notice"></span>
+            <div x-show="notice" x-cloak class="m-notice">
+                <span class="material-symbols-outlined m-notice__icon">mark_email_read</span>
+                <div class="m-notice__body"><p class="m-notice__text" x-text="notice"></p></div>
             </div>
 
-            <button type="submit" :disabled="loading" class="bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container transition-all duration-200 mt-md shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
-                <span x-show="!loading" x-text="mode === 'login' ? 'Access Portal' : 'Create Account'">Access Portal</span>
-                <span x-show="loading" class="flex items-center justify-center gap-2">
-                    <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                </span>
+            <button type="submit" :disabled="loading" class="m-btn m-btn--primary m-btn--block">
+                <span x-show="!loading" x-text="mode === 'login' ? 'Log in' : 'Create account'">Log in</span>
+                <span x-show="loading" class="m-spinner"></span>
             </button>
-        </form>
-        
-        <div class="mt-lg text-center flex flex-col gap-4">
-            <!-- The way back in. Only on the login side — there is nothing to
-                 reset while you are creating an account. -->
-            <button x-show="mode === 'login'" x-cloak @click="sendReset" :disabled="loading" type="button"
-                    class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+            <button x-show="mode === 'login'" x-cloak @click="sendReset" :disabled="loading" type="button" class="m-btn m-btn--quiet">
                 Forgot password?
             </button>
-
-            <button @click="toggleMode" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors">
-                <span x-text="mode === 'login' ? 'Don\'t have an account? Sign Up' : 'Already have an account? Log In'"></span>
+            <button @click="toggleMode" type="button" class="m-btn m-btn--ghost">
+                <span x-text="mode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Log in'"></span>
             </button>
-
-            <a href="index.html" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
-                <span class="material-symbols-outlined text-sm">chevron_left</span>
-                Back to Public Directory
-            </a>
-        </div>
+        </form>
     </div>
-    </div>
+    </main>
 
     <script>
         // Where to go once they are in. Normally that is wherever this account

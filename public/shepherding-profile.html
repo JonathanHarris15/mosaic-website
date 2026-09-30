@@ -63,7 +63,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body data-mosaic-skip-desktop-lead class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body data-mosaic-skip-desktop-lead class="m-page"
       x-data="shepherdingProfile" x-cloak>
 
     <!-- Header -->
@@ -131,7 +131,7 @@
     </div>
 
     <!-- Main content -->
-    <main x-show="!loading && person" class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <main x-show="!loading && person" class="m-page__body m-page__body--wide">
 
         <!-- Person Header. The name is the page's title and lives in the bar; what
              stays here is what the name alone does not tell you. -->
