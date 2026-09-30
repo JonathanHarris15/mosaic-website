@@ -37,9 +37,28 @@ test('scheduler and manual ask go through dispatchPrayerAsk', () => {
     assert.doesNotMatch(subject, /sendViaTextbelt/);
     assert.match(manual, /dispatchPrayerAsk/);
     assert.match(manual, /manual:\s*true/);
-    assert.match(manual, /request\.data && request\.data\.url/);
+    assert.doesNotMatch(manual, /request\.data && request\.data\.url/);
     assert.doesNotMatch(manual, /sendViaTextbelt/);
     assert.doesNotMatch(manual, /TEXTBELT_KEY\.value\(\)/);
+});
+
+test('dispatchPrayerAsk mints an Answer link for scheduler and send-now', () => {
+    const ask = sliceBetween(
+        index,
+        'async function dispatchPrayerAsk',
+        'async function processPrayerSubject');
+    assert.match(ask, /mintAnswerLink/);
+    assert.match(ask, /purpose:\s*["']prayer_request["']/);
+    assert.match(ask, /url:\s*minted\.url/);
+    assert.doesNotMatch(ask, /args\.url/);
+});
+
+test('answerLink is a v2 onCall door without App Check', () => {
+    assert.match(index, /exports\.answerLink\s*=\s*onCall/);
+    const door = sliceBetween(
+        index, 'exports.answerLink = onCall', 'exports.publicForm');
+    assert.match(door, /enforceAppCheck:\s*false/);
+    assert.match(door, /handleAnswerLink/);
 });
 
 test('service builder does not hide Send Now for a missing phone', () => {

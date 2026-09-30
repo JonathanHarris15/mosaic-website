@@ -1140,5 +1140,18 @@ service cloud.firestore {
     match /form_ledger/{entryId} {
       allow read, write: if false;
     }
+
+    // Answer links (MS-247, ADR-0067). The token is never stored; the
+    // document id is a SHA-256 of it. A client read would enumerate live
+    // doors. The public path is the answerLink callable, not a rule.
+    match /answer_links/{linkId} {
+      allow read, write: if false;
+    }
+
+    // Hashed caller addresses for unknown-token lookup limits. Raw
+    // addresses are never stored. Same closed door as the links.
+    match /answer_link_lookups/{addressHash} {
+      allow read, write: if false;
+    }
   }
 }

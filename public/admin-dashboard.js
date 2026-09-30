@@ -10,11 +10,12 @@
 const PRAYER_MESSAGE_DEFAULTS = {
     initial: "Hi {name}, this is Mosaic Church. You're in our pastoral prayer " +
         "this Sunday. What would you like us to pray about? (This information " +
-        "will be private and only shared with Elders) Just reply to this message.",
+        "will be private and only shared with Elders) Just reply to this " +
+        "message, or answer here: {link}",
     reminder: "Hi {name}, a gentle reminder from Mosaic Church — we'd love to " +
         "pray for you this Sunday. What would you like us to pray about? (This " +
         "information will be private and only shared with Elders) Just reply " +
-        "here whenever you're ready.",
+        "here whenever you're ready, or answer here: {link}",
     thankyou: "Thank you, {name}. We'll be lifting this up in prayer this " +
         "Sunday. — Mosaic Church",
     // Sent to Elder-tagged people once a service's requests are all in by text.
@@ -104,8 +105,8 @@ document.addEventListener('alpine:init', () => {
             { key: 'thankyou', label: 'Thank-you reply' },
         ],
         prayerFields: [
-            { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service. Uses {name}.' },
-            { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet. Uses {name}.' },
+            { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service. Uses {name} and {link}.' },
+            { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet. Uses {name} and {link}.' },
             { key: 'thankyou', label: 'Thank-you reply', help: 'Auto-reply after someone sends their request. Uses {name}.' },
             { key: 'elderDigest', label: 'Elder digest', help: 'Texted to Elder-tagged people once all of a service\'s requests are in by reply. Uses {date} and {requests}.' },
         ],

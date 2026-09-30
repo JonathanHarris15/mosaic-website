@@ -8,13 +8,14 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
 ```
 
 | Target | Why it is in the set |
 | --- | --- |
 | `hosting` | Church site (`mosaic-hymn-database`). App Check collection lives here. |
 | `functions:publicForm` | Public form door (ADR-0051). |
+| `functions:answerLink` | Answer link door (MS-247 / MS-513, ADR-0067). Export name in `functions/index.js` (`onCall`). The signed-out `/a/<token>` path and the signed-in no-token path both go through this one callable. Without this target a Hosting merge that serves the Answer page would talk to a function that was never installed. |
 | `functions:onAttendanceCreated` | Attendance rule (MS-425 / ADR-0066). Export name in `functions/index.js`. Create on `event_occurrences/{occurrenceId}/attendance/{personId}`. Without this target the Visitor → Regular Attender promotion never installs. |
 | `functions:syncAccountRankToPerson` | Account Rank projection (MS-539 / MS-557). Export name in `functions/index.js`. Write on `users/{uid}` (link, unlink, permission change, delete). Without this target `people.accountRank` never updates; merging the Trade picker before it is live fail-closes existing Linked Users on non-public Trades. |
 | `functions:sendPrayerRequestNow` | Service Builder "Send Prayer Request Text Now" (MS-598). Export name in `functions/index.js` (`onCall`). Without this target a Hosting merge that admits Pastoral Assistants on that button (MS-594 / #82) would show PA chrome against an elder-only deployed function. |
@@ -48,8 +49,9 @@ Hosting that calls them, which the single workflow run already guarantees —
 `firebase deploy` installs functions before hosting in one invocation. Do not
 split them across two runs.
 
-The CLI filter uses the **export name** (`onAttendanceCreated`,
-`syncAccountRankToPerson`, `sendPrayerRequestNow`, `mcp`), not a
+The CLI filter uses the **export name** (`publicForm`, `answerLink`,
+`onAttendanceCreated`, `syncAccountRankToPerson`, `sendPrayerRequestNow`,
+`mcp`), not a
 renamed Cloud Console label. The functions codebase is `default`;
 `functions:<export>` is enough. `firestore:rules` is the Firebase CLI
 rules target (`firebase.json` → `firestore.rules`), not a function
@@ -81,7 +83,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits

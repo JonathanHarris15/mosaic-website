@@ -323,3 +323,223 @@ test('resolveTemplates includes elderDigest (default and override)', () => {
         pr.resolveTemplates({ elderDigest: 'Custom {date} {requests}' }).elderDigest,
         'Custom {date} {requests}');
 });
+
+// ── MS-511: may this person answer on the page? ────────────────────────────
+
+const SERVICE = '2026-06-28';
+const TODAY_IN_WINDOW = '2026-06-23';
+const liturgyFor = (maleId, femaleId) => ({
+    prayerMale: { id: maleId || null, name: '' },
+    prayerFemale: { id: femaleId || null, name: '' },
+});
+
+const baseMayAnswer = {
+    personId: 'p-jane',
+    serviceDate: SERVICE,
+    todayDate: TODAY_IN_WINDOW,
+    liturgy: liturgyFor('p-jane', 'p-john'),
+    viaAnswerLink: false,
+    initialSentDate: null,
+};
+
+test('mayAnswer: still a subject, in the window → yes', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        viaAnswerLink: true,
+    }), true);
+});
+
+test('mayAnswer: no longer on the service → no', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        liturgy: liturgyFor('p-other', 'p-john'),
+        viaAnswerLink: true,
+    }), false);
+});
+
+test('mayAnswer: after the service date church-local → no', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        todayDate: '2026-06-29',
+        viaAnswerLink: true,
+    }), false);
+});
+
+test('mayAnswer: on the service date itself → still yes', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        todayDate: SERVICE,
+        viaAnswerLink: true,
+    }), true);
+});
+
+test('mayAnswer: signed-in before five days and no text yet → no', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        todayDate: '2026-06-22',
+        viaAnswerLink: false,
+    }), false);
+});
+
+test('mayAnswer: signed-in within five days → yes', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        viaAnswerLink: false,
+        todayDate: '2026-06-24',
+    }), true);
+});
+
+test('mayAnswer: signed-in early once a text has gone → yes', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        viaAnswerLink: false,
+        todayDate: '2026-06-20',
+        initialSentDate: '2026-06-20',
+    }), true);
+});
+
+// ── MS-511: what the answer page shows ───────────────────────────────────────
+
+const PRIVACY = pr.PRAYER_ANSWER_PRIVACY_LINE;
+
+test('page view: empty request offers the box and the privacy line', () => {
+    const view = pr.prayerAnswerPageView({
+        firstName: 'Jane Doe',
+        serviceDate: SERVICE,
+        prayerRequest: null,
+    });
+    assert.strictEqual(view.firstName, 'Jane');
+    assert.strictEqual(view.serviceDateLabel, 'Sunday, June 28, 2026');
+    assert.strictEqual(view.privacyLine, PRIVACY);
+    assert.strictEqual(view.showAnswerBox, true);
+    assert.strictEqual(view.existingAnswer, null);
+    assert.strictEqual(view.eldersAlreadyHaveIt, false);
+});
+
+test('page view: a texted reply shows the subject their own words', () => {
+    const view = pr.prayerAnswerPageView({
+        firstName: 'Jane',
+        serviceDate: SERVICE,
+        prayerRequest: {
+            prayerRequest: 'Please pray for my mother.',
+            prayerRequestSource: 'reply',
+        },
+    });
+    assert.strictEqual(view.existingAnswer, 'Please pray for my mother.');
+    assert.strictEqual(view.showAnswerBox, true);
+});
+
+test('page view: a form answer is shown the same way as a reply', () => {
+    const view = pr.prayerAnswerPageView({
+        firstName: 'Jane',
+        serviceDate: SERVICE,
+        prayerRequest: {
+            prayerRequest: 'Safe travels.',
+            prayerRequestSource: 'form',
+        },
+    });
+    assert.strictEqual(view.existingAnswer, 'Safe travels.');
+    assert.strictEqual(view.showAnswerBox, true);
+});
+
+test('page view: elder-typed never returns the elder words', () => {
+    const view = pr.prayerAnswerPageView({
+        firstName: 'Jane',
+        serviceDate: SERVICE,
+        prayerRequest: {
+            prayerRequest: 'Confidential elder wording.',
+            prayerRequestSource: 'elder',
+        },
+    });
+    assert.strictEqual(view.eldersAlreadyHaveIt, true);
+    assert.strictEqual(view.showAnswerBox, false);
+    assert.strictEqual(view.existingAnswer, null);
+    const json = JSON.stringify(view);
+    assert.ok(!json.includes('Confidential'));
+    assert.ok(!json.includes('elder wording'));
+});
+
+// ── MS-511: note decision on save ────────────────────────────────────────────
+
+test('note decision: first save generates one note', () => {
+    assert.deepStrictEqual(pr.prayerRequestNoteDecision({
+        hadRequestBefore: false,
+        noteId: null,
+        noteText: null,
+        noteGeneratedText: null,
+    }), { action: 'create' });
+});
+
+test('note decision: later change updates an untouched generated note', () => {
+    assert.deepStrictEqual(pr.prayerRequestNoteDecision({
+        hadRequestBefore: true,
+        noteId: 'note-1',
+        noteText: 'Original generated text.',
+        noteGeneratedText: 'Original generated text.',
+    }), { action: 'update' });
+});
+
+test('note decision: elder-edited note is left alone', () => {
+    assert.deepStrictEqual(pr.prayerRequestNoteDecision({
+        hadRequestBefore: true,
+        noteId: 'note-1',
+        noteText: 'An elder reworded this.',
+        noteGeneratedText: 'Original generated text.',
+    }), { action: 'leave' });
+});
+
+test('note decision: deleted note is not recreated', () => {
+    assert.deepStrictEqual(pr.prayerRequestNoteDecision({
+        hadRequestBefore: true,
+        noteId: 'note-1',
+        noteText: null,
+        noteGeneratedText: 'Original generated text.',
+    }), { action: 'leave' });
+});
+
+// ── MS-511: elder digest accepts form ────────────────────────────────────────
+
+test('digest: a form answer completes the pair → send', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: allFilled, changedSource: 'form', wasCompleteBefore: false,
+    }), true);
+});
+
+// ── MS-511: {link} in prayer texts ───────────────────────────────────────────
+
+test('DEFAULT_PRAYER_MESSAGES initial and reminder carry {link}', () => {
+    assert.ok(pr.DEFAULT_PRAYER_MESSAGES.initial.includes('{link}'));
+    assert.ok(pr.DEFAULT_PRAYER_MESSAGES.reminder.includes('{link}'));
+});
+
+test('renderPrayerRequestMessage substitutes {link} when sending', () => {
+    const url = 'https://mosaic-hymn-database.web.app/a/tok';
+    const msg = pr.renderPrayerRequestMessage('initial', 'Jane', {
+        initial: 'Hi {name}. Answer: {link}',
+    }, url);
+    assert.strictEqual(msg, 'Hi Jane. Answer: ' + url);
+});
+
+test('templatesWithAnswerLink adds a {link} slot when a saved template omitted it', () => {
+    const withSlot = pr.templatesWithAnswerLink({
+        initial: 'Custom {name} only.',
+        reminder: 'Ready {name}: {link}',
+        thankyou: 'Thanks {name}.',
+    });
+    assert.strictEqual(withSlot.initial, 'Custom {name} only.\n{link}');
+    assert.strictEqual(withSlot.reminder, 'Ready {name}: {link}');
+    assert.strictEqual(withSlot.thankyou, 'Thanks {name}.');
+});
+
+test('ensureAnswerLinkInTemplate appends the link when {link} is missing', () => {
+    const url = 'https://mosaic-hymn-database.web.app/a/tok';
+    const withSlot = pr.ensureAnswerLinkInTemplate('Hi {name}, reply here: {link}', url);
+    assert.ok(withSlot.includes('{link}'));
+    const appended = pr.ensureAnswerLinkInTemplate('Custom wording only.', url);
+    assert.strictEqual(appended, 'Custom wording only.\n' + url);
+    const rendered = pr.renderPrayerRequestMessage('initial', 'Sam', {
+        initial: appended,
+    }, url);
+    assert.ok(rendered.endsWith(url));
+    assert.ok(!rendered.includes('{link}'));
+});

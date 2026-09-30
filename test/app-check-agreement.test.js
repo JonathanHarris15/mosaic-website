@@ -116,7 +116,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     // sendPrayerRequestNow, mcp, AND firestore:rules. The old prefix
     // without the two new functions still matches a shorter string, so
     // pin the full list (and fail if either export is dropped).
-    assert.match(wf, /--only hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
+    assert.match(wf, /--only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -127,8 +127,10 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-    assert.match(ops, /hosting,functions:publicForm,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
+    assert.match(ops, /hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules/,
         'the ops note no longer lists the standing --only targets');
+    assert.match(ops, /functions:answerLink/,
+        'the ops note dropped functions:answerLink');
     assert.match(ops, /functions:sendPrayerRequestNow/,
         'the ops note dropped functions:sendPrayerRequestNow');
     assert.match(ops, /functions:mcp/,
@@ -163,6 +165,8 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     const index = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
     assert.match(index, /exports\.syncAccountRankToPerson\s*=\s*onDocumentWritten/,
         'syncAccountRankToPerson is not exported; the standing --only target would deploy nothing');
+    assert.match(index, /exports\.answerLink\s*=\s*onCall/,
+        'answerLink is not exported; the standing --only target would deploy nothing');
     assert.match(index, /exports\.sendPrayerRequestNow\s*=\s*onCall/,
         'sendPrayerRequestNow is not exported; the standing --only target would deploy nothing');
     assert.match(index, /exports\.mcp\s*=\s*onRequest/,

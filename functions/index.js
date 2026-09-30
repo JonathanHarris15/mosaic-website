@@ -20,6 +20,8 @@ const {
   verifyTextbeltSignature,
 } = require("./sms");
 const pr = require("./prayer-request");
+const prWrites = require("./prayer-request-writes");
+const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
 const notify = require("./notification-send");
@@ -2299,8 +2301,8 @@ function notifierDeps(db) {
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       return {
-        text: loaded.templates,
-        textFallback: pr.DEFAULT_PRAYER_MESSAGES,
+        text: pr.templatesWithAnswerLink(loaded.templates),
+        textFallback: pr.templatesWithAnswerLink(pr.DEFAULT_PRAYER_MESSAGES),
         push: loaded.push,
         pushFallback: pr.DEFAULT_PUSH_WORDING,
       };
@@ -2787,39 +2789,14 @@ async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
   const text = (replyText || "").trim();
   if (!serviceDate || !text) return;
 
-  const personRef = db.collection("people").doc(personId);
-  const reqRef = personRef.collection("prayer_requests").doc(serviceDate);
-  const [personSnap, reqSnap] = await Promise.all([
-    personRef.get(), reqRef.get(),
-  ]);
-  // Already filled (manually or by an earlier reply) — don't duplicate.
-  if (reqSnap.exists && (reqSnap.data().prayerRequest || "").trim()) return;
+  const applied = await prWrites.applyReply(db, {
+    personId, serviceDate, replyText: text,
+    now: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  if (!applied.filled) return;
 
+  const personSnap = await db.collection("people").doc(personId).get();
   const personName = personSnap.exists ? (personSnap.data().name || "") : "";
-  const note = pr.buildPrayerRequestNote({
-    personName, serviceDate, requestText: text,
-  });
-  const now = admin.firestore.FieldValue.serverTimestamp();
-
-  await reqRef.set({
-    serviceDate,
-    prayerRequest: text,
-    prayerRequestSource: "reply",
-    requestFilledAt: now,
-    noteGenerated: true,
-  }, {merge: true});
-
-  await personRef.collection("shepherding_notes").add({
-    type: note.type,
-    subject: note.subject,
-    content: note.content,
-    contentJson: note.contentJson,
-    authorName: "Prayer Request (texted)",
-    authorUid: null,
-    createdAt: now,
-  });
-
-  await personRef.update({lastNoteAt: now});
 
   // Thank the subject. Best-effort: a failed thank-you must not fail the reply.
   try {
@@ -2874,6 +2851,13 @@ async function dispatchPrayerAsk(db, args) {
   const intent = pr.prayerNotifyRequest(kind);
   if (!intent) return {success: false, error: "Nothing to send."};
 
+  const minted = await answerDoor.mintAnswerLink(db, {
+    purpose: "prayer_request",
+    personId,
+    thing: serviceDate,
+    now: new Date(),
+  });
+
   const result = await tell(db, {
     personId,
     purpose: intent.purpose,
@@ -2882,8 +2866,7 @@ async function dispatchPrayerAsk(db, args) {
     manual: !!args.manual,
     serviceDate,
     previousChannel: args.previousChannel || null,
-    // MS-247 passes the Answer link. Null until that mint exists.
-    url: pr.prayerAskUrl(args.url),
+    url: minted.url,
     values: {name: pr.firstNameOf(personSnap.data().name)},
     expectReply: true,
   });
@@ -3221,8 +3204,8 @@ exports.notificationReachability = onCall(
  * Assistant. Bypasses the timing/quiet-hours guards (a human is choosing
  * to send now) but keeps the reachability and already-filled guards.
  * Sends initial then reminder, re-sending the reminder on repeat calls.
- * The send path picks push or text. An optional url is the Answer link
- * (MS-247); this function does not mint one.
+ * The send path picks push or text. The Answer link is minted here, the
+ * same as the scheduler (MS-247 / MS-513).
  */
 exports.sendPrayerRequestNow = onCall(
     {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
@@ -3268,7 +3251,6 @@ exports.sendPrayerRequestNow = onCall(
         personSnap,
         reqRef,
         manual: true,
-        url: request.data && request.data.url,
         previousChannel: req.sentChannel || null,
       });
       if (!result.success) {
@@ -3413,6 +3395,53 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
     },
 );
 
+
+/**
+ * Caller address for the unknown-token throttle. Hashed before storage.
+ * @param {Object} request callable request
+ * @return {string}
+ */
+function callerAddressOf(request) {
+  const raw = request && request.rawRequest;
+  if (!raw) return "";
+  const headers = raw.headers || {};
+  const forwarded = headers["x-forwarded-for"] || headers["X-Forwarded-For"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return typeof raw.ip === "string" ? raw.ip : "";
+}
+
+/**
+ * The one door an Answer link is opened and answered through (MS-247,
+ * ADR-0067). Same v2 onCall shape as publicForm. App Check is not required.
+ *
+ * Person and thing come off the link document. A Linked User may call
+ * with no token for their own open items.
+ */
+exports.answerLink = onCall(
+    {cors: true, region: "us-central1", enforceAppCheck: false},
+    async (request) => {
+      const db = admin.firestore();
+      const data = request.data || {};
+      let personId = null;
+      if (request.auth) {
+        const userSnap = await db.collection("users")
+            .doc(request.auth.uid).get();
+        const user = userSnap.exists ? userSnap.data() : {};
+        personId = user.personId || null;
+      }
+      return answerDoor.handleAnswerLink(db, {
+        op: data.op,
+        token: data.token,
+        answer: data.answer,
+        thing: data.thing,
+        now: new Date(),
+        callerAddress: callerAddressOf(request),
+        personId,
+      });
+    },
+);
 
 /**
  * The one door a form is opened and answered through (MS-360, ADR-0051).
