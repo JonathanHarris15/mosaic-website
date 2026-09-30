@@ -134,6 +134,16 @@ test('a Pastoral Assistant may write lastNoteAt and shepherding decision fields 
     assert.match(block, /hasOnly\(/);
 });
 
+test('a Pastoral Assistant may keep name, contact and birthday current, and nothing else of identity (MS-703)', () => {
+    // The elder re-asks these at every meeting. Sex, the photo, and
+    // creating or deleting a Person stay editor writes.
+    const block = personBlock();
+    const clause = /allow update: if isPastoralAssistant\(\)[\s\S]*?hasOnly\((\[[^\]]*\])\)/.exec(block);
+    assert.ok(clause, 'no Pastoral Assistant directory-facts clause on the Person');
+    const keys = JSON.parse(clause[1].replace(/'/g, '"')).sort();
+    assert.deepStrictEqual(keys, ['birthday', 'contact', 'name', 'updatedAt', 'updatedByName']);
+});
+
 test('a Linked User can still edit their own record', () => {
     // The self-service clause (MS-87, ADR-0012, ADR-0029). Closing reads must
     // not have disturbed it.

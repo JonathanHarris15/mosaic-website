@@ -1668,8 +1668,9 @@
                         </div>
                         <div class="flex flex-col gap-xs">
                             <label class="m-label">Sex</label>
-                            <select x-model="selectedPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
-                                <option value="">Unknown</option>
+                            <!-- A Pastoral Assistant may change name, contact and birthday (MS-703); sex stays an editor write. -->
+                            <select x-model="selectedPerson.sex" :disabled="!canWriteEditor" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm disabled:opacity-60">
+                                <option value="">Not set</option>
                                 <option value="male">Male</option>
                                 <option value="female">Female</option>
                             </select>

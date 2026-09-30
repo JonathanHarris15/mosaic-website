@@ -599,6 +599,13 @@ service cloud.firestore {
                       'shepherdingHidden', 'updatedAt', 'membership',
                       'shepherding']);
 
+      // MS-703: the Pastoral Assistant keeps the facts an elder would otherwise
+      // re-ask at every meeting current — name, contact, birthday. Sex, the
+      // photo, and create/delete stay editor writes.
+      allow update: if isPastoralAssistant()
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'contact', 'birthday', 'updatedAt', 'updatedByName']);
+
       // Self-service (MS-87, ADR-0012): a Linked User may update ONLY their own
       // linked Person, and ONLY the self-editable fields — contact, birthday, and
       // sex while it is still unset. Membership (the Track), tags, and all
