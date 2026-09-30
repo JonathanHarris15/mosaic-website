@@ -21,7 +21,8 @@ interview, open it and finish it rather than starting another.
 
 Name, address, email, phone and birthday gathered at the start of the
 interview go on the person's own record, not only in the form: on their
-profile, **Edit**, change the details, **Save**.
+profile, **Edit**, change the details, **Save**. An assistant does the
+same write with `shep_update_person`.
 
 ## Through an AI assistant (the Mosaic MCP connection)
 
@@ -37,6 +38,19 @@ What it should do, in order:
    Leaving out `personId` makes a document that is on nobody's profile.
 4. `shep_answer_form_document` — fill in the answers, keyed by question id.
    Anything it could not fill comes back under `skipped` with the reason.
+5. `shep_update_person` — name, address, email, phone and birthday gathered
+   in the interview go on the person's own record, not only in the form.
+   Pass only the fields that changed. Read `shep_guidance` first.
+
+A question that picks somebody from the directory (the person picker) is
+answered with that person's id, not their name:
+
+```json
+{ "personId": "<id from shep_find_person>" }
+```
+
+A name is refused and comes back under `skipped`. The same guidance file
+says which ranks may change sex and the kid mark.
 
 It should call `shep_create_form_document` **once per interview**. Asking it to
 "try again" after an error can leave two copies on the profile; check the

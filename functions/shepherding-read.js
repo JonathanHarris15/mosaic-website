@@ -15,11 +15,14 @@
  * loads every Person for exactly this reason; this is a few hundred small
  * documents, not a table.
  *
- * ⚠ HIDDEN TAGS ARE VISIBLE HERE, AND THAT IS CORRECT. `hiddenFromOthers` and
- * `hidePeople` are lifted for elders — they hide things from everybody else, on
- * an elder's behalf. These tools are elder-gated, so they see everything an
- * elder standing at the People list sees. The tool descriptions say so, because
- * an assistant repeating a private tag into a summary an elder then pastes
+ * ⚠ HIDDEN TAGS ARE VISIBLE HERE, AND THAT IS CORRECT — FOR AN ELDER.
+ * `hiddenFromOthers` and `hidePeople` are lifted for elders — they hide things
+ * from everybody else, on an elder's behalf. The profile and the People list
+ * are elder-gated, so they see everything an elder standing at the People list
+ * sees. shep_find_person is also the door an editor uses before editing
+ * directory details, and that call passes includeShepherding false so the row
+ * has no tags and no status. The tool descriptions say so, because an
+ * assistant repeating a private tag into a summary an elder then pastes
  * somewhere is a leak this code cannot prevent.
  */
 
@@ -94,18 +97,49 @@ async function tagsById(db) {
 }
 
 /**
+ * Email, phone and address, wherever they were stored.
+ *
+ * The directory writes them under `contact`. A few older rows still have
+ * them on the Person itself. Searching only the old place is how a phone
+ * number the church can see comes back as nobody.
+ * @param {object} person the Person
+ * @return {{email: string, phone: string, address: string}} the three
+ */
+function contactOf(person) {
+  const c = (person && person.contact) || {};
+  return {
+    email: c.email || (person && person.email) || "",
+    phone: c.phone || (person && person.phone) || "",
+    address: c.address || (person && person.address) || "",
+  };
+}
+
+/**
  * The bones of a Person, enough to tell two of them apart.
+ *
+ * `pastoral` false is the directory row an editor may see: name and
+ * contact, no Shepherding Tags and no status. Omitted means the full row,
+ * which is what an elder's tools ask for.
  * @param {object} person the Person
  * @param {object} tags Shepherding Tags keyed by id
+ * @param {boolean} [pastoral] whether tags and status belong in the row
  * @return {object} the summary
  */
-function personSummary(person, tags) {
-  const membership = person.membership || {};
-  return {
+function personSummary(person, tags, pastoral) {
+  const contact = contactOf(person);
+  const row = {
     personId: person.id,
     name: person.name || "",
-    email: person.email || null,
-    phone: person.phone || null,
+    email: contact.email || null,
+    phone: contact.phone || null,
+    address: contact.address || null,
+    birthday: person.birthday || null,
+    sex: person.sex || null,
+  };
+  if (pastoral === false) return row;
+
+  const membership = person.membership || {};
+  return Object.assign(row, {
     membershipStage: membership.stage || null,
     inactive: ShepherdingCore.isInactiveMembership(membership),
     shepherdingStatus: person.shepherdingStatus || null,
@@ -115,7 +149,7 @@ function personSummary(person, tags) {
       tagId: id,
       name: (tags[id] && tags[id].name) || id,
     })),
-  };
+  });
 }
 
 /**
@@ -130,9 +164,11 @@ function personSummary(person, tags) {
  * @param {object} args
  * @param {string} args.query what to look for
  * @param {number} [args.limit] how many to return at most
+ * @param {boolean} [args.includeShepherding] false for an editor's row,
+ *   which has no tags and no status. Omitted keeps the elder's row.
  * @return {Promise<object>} { query, matches, count, truncated }
  */
-async function findPerson(db, {query, limit}) {
+async function findPerson(db, {query, limit, includeShepherding}) {
   const needle = String(query || "").trim().toLowerCase();
   if (!needle) {
     return {query: "", matches: [], count: 0, truncated: false,
@@ -145,8 +181,9 @@ async function findPerson(db, {query, limit}) {
   const scored = [];
   people.forEach((person) => {
     const name = String(person.name || "").toLowerCase();
-    const email = String(person.email || "").toLowerCase();
-    const phone = String(person.phone || "").replace(/\D/g, "");
+    const contact = contactOf(person);
+    const email = String(contact.email || "").toLowerCase();
+    const phone = String(contact.phone || "").replace(/\D/g, "");
 
     let score = -1;
     if (name === needle) score = 0;
@@ -163,8 +200,9 @@ async function findPerson(db, {query, limit}) {
       String(a.person.name || "").localeCompare(String(b.person.name || "")));
 
   const cap = Math.max(1, Math.min(Number(limit) || SEARCH_LIMIT, 100));
+  const pastoral = includeShepherding !== false;
   const matches = scored.slice(0, cap)
-      .map((s) => personSummary(s.person, tags));
+      .map((s) => personSummary(s.person, tags, pastoral));
 
   return {
     query: String(query).trim(),

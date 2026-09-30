@@ -106,6 +106,11 @@ const MODULES = [
     // changes a Printable. Shipped with the tools, not written on the
     // MCP Manager page, so the words and the page cannot drift.
     'printable-guidance.js',
+    // Directory details and the form person picker. Shipped with the
+    // shepherding tools, not written on the MCP Manager page, so the
+    // assistant is told the answer shape even when nobody has written a
+    // guidance file for it.
+    'shepherding-guidance.js',
     // MS-588. Per-Sunday booklet text (prayer-country facts, Mosaic Kids,
     // announcements). printable-data-core.js reads it for the sunday_typed
     // source, so the copy has to travel with the catalog.

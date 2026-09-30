@@ -78,6 +78,15 @@ function now() {
 }
 
 /**
+ * Remove a field. A changed name clears remembered name parts this way
+ * (ADR 0070, ADR 0074) rather than writing an empty object over them.
+ * @return {*} the delete sentinel
+ */
+function clear() {
+  return bound().delete();
+}
+
+/**
  * @param {*} value what to add
  * @return {*} the arrayUnion sentinel
  */
@@ -123,4 +132,6 @@ function namespace() {
   return {FieldValue: fieldValue, FieldPath};
 }
 
-module.exports = {bind, now, arrayUnion, arrayRemove, timestampFrom, namespace};
+module.exports = {
+  bind, now, clear, arrayUnion, arrayRemove, timestampFrom, namespace,
+};

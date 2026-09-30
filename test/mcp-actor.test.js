@@ -105,13 +105,39 @@ describe('the rank an assistant must hold', () => {
         assert.doesNotMatch(message, /raise it to elder/);
     });
 
-    test('every shep_ and cal_ gate is one of read, record or decide', () => {
+    test('every shep_ and cal_ gate is one of read, record, decide or directory', () => {
         Object.keys(Actor.SHEP_CAL_GATES).forEach((name) => {
             const gate = Actor.SHEP_CAL_GATES[name];
             assert.ok(
-                [Actor.READ, Actor.RECORD, Actor.DECIDE].includes(gate),
+                [Actor.READ, Actor.RECORD, Actor.DECIDE, Actor.DIRECTORY].includes(gate),
                 name + ' has unknown gate ' + gate);
         });
+    });
+
+    test('an editor may edit directory details and may not write a note', () => {
+        const editor = {permissionLevel: 'editor'};
+        assert.strictEqual(Actor.mayEditDirectory(editor), true);
+        assert.strictEqual(Actor.directoryFieldSet(editor), 'editor');
+        assert.strictEqual(Actor.mayUseTool(editor, 'shep_update_person'), true);
+        assert.strictEqual(Actor.mayUseTool(editor, 'shep_find_person'), true);
+        assert.strictEqual(Actor.mayUseTool(editor, 'shep_guidance'), true);
+        assert.strictEqual(Actor.mayUseTool(editor, 'shep_write_note'), false);
+    });
+
+    test('a Pastoral Assistant may keep contact current and may not set sex', () => {
+        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        assert.strictEqual(Actor.mayEditDirectory(pa), true);
+        assert.strictEqual(Actor.directoryFieldSet(pa), 'assistant');
+        assert.strictEqual(Actor.mayUseTool(pa, 'shep_update_person'), true);
+    });
+
+    test('a member is told directory details are an editor\'s write', () => {
+        const message = Actor.refusalFor(
+            {permissionLevel: 'member'}, 'shep_update_person');
+        assert.match(message, /editor/);
+        assert.match(message, /Pastoral Assistant/);
+        assert.match(message, /"member"/);
+        assert.doesNotMatch(message, /Shepherding System is elder-only/);
     });
 });
 

@@ -213,6 +213,7 @@ async function connectAs(permissionLevel, extras) {
 /** The smallest valid arguments for a tool, so a refusal can be provoked. */
 function argsFor(name) {
     if (name === 'shep_find_person') return {query: 'Sarah'};
+    if (name === 'shep_get_profile') return {personId: 'p1'};
     if (name === 'shep_write_note') {
         return {personId: 'p1', type: 'Elder Meeting', markdown: 'x'};
     }
@@ -304,6 +305,7 @@ describe('the Order of Service MCP server', () => {
             'shep_get_note',
             'shep_get_pastoral_record',
             'shep_get_profile',
+            'shep_guidance',
             'shep_list_documents',
             'shep_list_form_templates',
             'shep_list_notes',
@@ -324,6 +326,7 @@ describe('the Order of Service MCP server', () => {
             'shep_set_status',
             'shep_skip_task',
             'shep_update_document',
+            'shep_update_person',
             'shep_update_view',
             'shep_write_care_list_cell',
             'shep_write_note',
@@ -361,7 +364,25 @@ describe('the Order of Service MCP server', () => {
         assert.match(form.inputSchema.properties.personId.description, /profile/i);
     });
 
-    test('an editor is offered them and refused every one', async () => {
+    test('a person question is answered with an id, and details have their own tool', async () => {
+        const {client} = await connectAs('elder');
+        const byName = {};
+        (await client.listTools()).tools.forEach((t) => {
+            byName[t.name] = t;
+        });
+
+        assert.match(byName.shep_answer_form_document.description, /personId/);
+        assert.match(byName.shep_answer_form_document.description, /shep_guidance/);
+        assert.match(byName.shep_update_person.description, /phone/);
+        assert.match(byName.shep_guidance.description, /person question/);
+
+        const guidance = await client.callTool({name: 'shep_guidance', arguments: {}});
+        assert.ok(!guidance.isError, textOf(guidance));
+        assert.match(textOf(guidance), /personId/);
+        assert.match(textOf(guidance), /shep_update_person/);
+    });
+
+    test('an editor is offered them and refused the shepherding ones', async () => {
         // Registered for everybody on purpose. A tool an editor cannot SEE
         // answers "unknown tool", which reads as a broken server; a tool that
         // refuses can say it is elder-only and why.
@@ -372,10 +393,21 @@ describe('the Order of Service MCP server', () => {
 
         assert.ok(listed.length > 50, 'they must still be listed for an editor');
 
-        for (const name of ['shep_find_person', 'shep_write_note', 'cal_list_events']) {
+        for (const name of ['shep_write_note', 'shep_get_profile', 'cal_list_events']) {
             const result = await client.callTool({name, arguments: argsFor(name)});
             assert.strictEqual(result.isError, true, name + ' must refuse an editor');
             assert.match(textOf(result), /elder/i, name);
+        }
+
+        // Directory identity is an editor's write. Refusing the lookup here
+        // would leave shep_update_person with no way to turn a name into an id.
+        for (const [name, args] of [
+            ['shep_find_person', {query: 'Sarah'}],
+            ['shep_update_person', {personId: 'p1', phone: '555'}],
+            ['shep_guidance', {}],
+        ]) {
+            const result = await client.callTool({name, arguments: args});
+            assert.ok(!result.isError, name + ' refused an editor: ' + textOf(result));
         }
     });
 
@@ -484,7 +516,7 @@ describe('the Order of Service MCP server', () => {
         const {client} = await connectAs('elder');
         const {tools} = await client.listTools();
 
-        const shouldRead = /^(shep_(find|get|list|preview)|cal_(get|list))/;
+        const shouldRead = /^(shep_(find|get|list|preview|guidance)|cal_(get|list))/;
         tools.filter((t) => /^(shep|cal)_/.test(t.name)).forEach((t) => {
             const readOnly = !!(t.annotations && t.annotations.readOnlyHint);
             assert.strictEqual(readOnly, shouldRead.test(t.name),
