@@ -184,6 +184,21 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+test('a married child is listed in their own household, not their parents\' (MS-704)', () => {
+    const data = {
+        people: [
+            { id: 'd', name: 'Dan Baker' }, { id: 'a', name: 'Anna Baker' },
+            { id: 'e', name: 'Eli Baker' }, { id: 'r', name: 'Rhea Baker' },
+        ],
+        families: [
+            { id: 'fam1', husbandId: 'd', wifeId: 'a', childIds: ['e'] },
+            { id: 'fam2', husbandId: 'e', wifeId: 'r', childIds: [] },
+        ],
+    };
+    const r = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' });
+    assert.deepEqual(r.rows.map(x => x.members).sort(), ['Dan Baker, Anna Baker', 'Eli Baker, Rhea Baker']);
+});
+
 // A family with children — PEOPLE() stays childless so the existing
 // household tests keep reading "Dan Baker, Anna Baker".
 const FAMILY_WITH_KIDS = () => ({
