@@ -64,6 +64,12 @@
   }
   function stageOf(n) { return STAGE[n.stage] || STAGE_FALLBACK; }
 
+  // "Hide one-person Households" counts who is drawn, not who is recorded: a
+  // Household of two with one inactive member is still one bubble round one person.
+  function hidesAsSolo(group, householdKey, hideSolo) {
+    return !!hideSolo && group.key === householdKey && group.memberNodes.length < 2;
+  }
+
   // A marriage and a parent-and-child link are both Family. A marriage draws as
   // a double line, the way a family tree draws one, so the two never read alike.
   function isMarriage(e) { return e.type === 'family' && e.rel === 'spouse'; }
@@ -91,6 +97,7 @@
     this.toggles = {};          // edgeTypeKey -> bool
     this.showIsolated = true;
     this.showInactive = false;
+    this.hideSoloHouseholds = false;
     this.query = '';
     this.searchFocus = false;
     this.selectedId = null;
@@ -317,7 +324,9 @@
         prio: !!(self.EDGE[g.key] || {}).prio,
         memberNodes: memberNodes, leaderNode: leaderNode || null,
       };
-    }).filter(function (g) { return g.memberNodes.length > 0; });
+    }).filter(function (g) {
+      return g.memberNodes.length > 0 && !hidesAsSolo(g, RelationsGraphCore.HOUSEHOLD_KEY, st.hideSoloHouseholds);
+    });
 
     // Belonging to a visible group counts as being connected — otherwise a group's
     // members would vanish under "hide isolated people" and leave an empty bubble.
@@ -1193,7 +1202,14 @@
 
     var hasHouseholds = (this.householdKeys || []).length > 0;
     if (this.refs.householdTypes) {
-      this.refs.householdTypes.innerHTML = (this.householdKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('');
+      var householdsOn = (this.householdKeys || []).some(function (k) { return self.toggles[k]; });
+      this.refs.householdTypes.innerHTML = (this.householdKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('') +
+        (hasHouseholds
+          ? '<label style="display:flex;align-items:center;gap:9px;padding:2px 8px 4px 12px;font-size:12.5px;color:var(--on-surface);cursor:' + (householdsOn ? 'pointer' : 'default') + ';opacity:' + (householdsOn ? '1' : '.55') + '">' +
+              '<input type="checkbox" data-rv="hideSoloHouseholds" style="width:15px;height:15px;margin:0;accent-color:var(--navy);cursor:inherit"' +
+              (this.hideSoloHouseholds ? ' checked' : '') + (householdsOn ? '' : ' disabled') + '>' +
+              'Hide one-person Households</label>'
+          : '');
       this.refs.householdHdr.style.display = hasHouseholds ? 'flex' : 'none';
       this.refs.householdNote.style.display = hasHouseholds ? 'block' : 'none';
     }
@@ -1746,6 +1762,13 @@
     // has to survive the panel re-rendering under it — so both are delegated
     // separately rather than folded into the click chain above.
     this.mount.addEventListener('change', function (e) {
+      if (e.target.getAttribute && e.target.getAttribute('data-rv') === 'hideSoloHouseholds') {
+        self.hideSoloHouseholds = e.target.checked;
+        self.afterFilter();
+        var again = self.mount.querySelector('[data-rv="hideSoloHouseholds"]');
+        if (again) again.focus();
+        return;
+      }
       var el = e.target.closest ? e.target.closest('[data-act="setStage"]') : null;
       if (!el) return;
       var stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(el.value)];
