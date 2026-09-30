@@ -638,6 +638,7 @@ document.addEventListener('alpine:init', () => {
                 personId: this.personId,
                 canEdit: !!this.canWriteEditor,
                 personHref: id => 'shepherding-profile.html?id=' + encodeURIComponent(id),
+                treeHref: id => 'shepherding-tags.html?tab=families&household=' + encodeURIComponent(id),
                 onChange: next => { this.families = next; },
                 toast: (message, kind) => this.showToast(message, kind),
             });

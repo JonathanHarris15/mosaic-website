@@ -83,6 +83,7 @@ document.addEventListener('alpine:init', () => {
                 // each load owns its own errors, and `loading` clears regardless.
                 try {
                     await Promise.all([this.loadTags(), this.loadRelationshipsTab(), this.loadFamiliesTab()]);
+                    this.openFromUrl();
                 } finally {
                     this.loading = false;
                 }
@@ -102,6 +103,21 @@ document.addEventListener('alpine:init', () => {
                 console.error('Error loading households:', e);
                 this.hhError = 'Families could not load.';
             }
+        },
+
+        // ?tab=families&household=<id> is where a Household card's "See family
+        // tree" lands: that Household's Family, with the Household open below.
+        openFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get('tab');
+            if (['tags', 'relationships', 'families'].includes(tab)) this.activeTab = tab;
+            const householdId = params.get('household');
+            if (!householdId) return;
+            const home = this.famTrees.find(t => t.households.some(h => h.familyId === householdId));
+            if (!home) return;
+            this.activeTab = 'families';
+            this.selectFamily(home.id);
+            this.selectHousehold(householdId);
         },
 
         // One entry per Family (a tree of Households, FamilyCore.familyTrees).
@@ -169,7 +185,6 @@ document.addEventListener('alpine:init', () => {
                 familyId: this.hhSelectedId,
                 canEdit: !!this.canWriteEditor,
                 headingLevel: 3,
-                showTree: false,
                 personHref: id => 'shepherding-profile.html?id=' + encodeURIComponent(id),
                 // An edit can move a Household to another Family (a father's
                 // parents recorded) or end one (its top Household emptied), so

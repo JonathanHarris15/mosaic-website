@@ -1,6 +1,7 @@
 // Household editor + Family tree (MS-709) — one card for every surface that
 // shows a Household: the Shepherding Profile, the Directory profile and the
-// Households tab of Manage Tags and Relationships.
+// Families tab of Manage Tags and Relationships. The tree itself is drawn only
+// on the Families tab; the card links there.
 //
 //   HouseholdEditor.render(el, {
 //     db,                        firestore handle (writes go to `families`)
@@ -11,7 +12,8 @@
 //     onChange(families, info),  after a write; info.familyId is the record written
 //     toast(message, kind),      optional
 //     headingLevel,              2 or 3 (default 2)
-//     showTree,                  false leaves the Family tree off the card
+//     treeHref(familyId),        where "See family tree" goes; no link without it
+//     treeNewTab,                open that link in a new tab
 //   })
 //
 //   HouseholdEditor.renderTree(el, { families, people, familyId, personHref })
@@ -313,7 +315,12 @@
                         : '<span id="' + el._hh.uid + '-anniv">' + esc(view.anniversary) + '</span>') + '</div>';
             }
 
-            if (o.showTree !== false) out += '<div class="hh-group"><span class="m-label">Family tree</span>' + treeHtml(o, family) + '</div>';
+            var tree = typeof o.treeHref === 'function' ? o.treeHref(family.id) : null;
+            if (tree) {
+                out += '<a class="m-btn m-btn--secondary m-btn--sm hh-tree-link" href="' + esc(tree) + '"' +
+                    (o.treeNewTab ? ' target="_blank" rel="noopener"' : '') + '>' +
+                    '<span class="material-symbols-outlined" aria-hidden="true">account_tree</span><span class="m-btn__label">See family tree</span></a>';
+            }
         }
         return out + errorHtml(el) + '</section>';
     }
@@ -347,10 +354,6 @@
         var focusKey = active && el.contains(active) && active.getAttribute('data-hh-find');
         var caret = focusKey ? active.selectionStart : null;
         el.innerHTML = html(el);
-        var tree = el.querySelector('.ftC');
-        el._hh.ro.disconnect();
-        if (tree) el._hh.ro.observe(tree);
-        linkOrigins(el);
         if (focusKey) {
             var input = el.querySelector('[data-hh-find="' + focusKey + '"]');
             if (input) { input.focus(); try { input.setSelectionRange(caret, caret); } catch (e) { /* not a text input */ } }
@@ -437,9 +440,7 @@
         if (!el) return;
         if (!el._hh) {
             el._hh = { q: {}, error: null, busy: false, uid: 'hh' + (++seq), key: null };
-            el._hh.ro = new ResizeObserver(function () { linkOrigins(el); });
             bind(el);
-            if (document.fonts) document.fonts.ready.then(function () { linkOrigins(el); });
         }
         var key = (opts.familyId || '') + '|' + (opts.personId || '');
         if (el._hh.key !== key) { el._hh.q = {}; el._hh.error = null; el._hh.key = key; }
@@ -451,7 +452,10 @@
         if (!el) return;
         var family = (opts.families || []).find(function (f) { return f.id === opts.familyId; }) || null;
         el.innerHTML = family ? treeHtml(opts, family) : '';
-        if (!el._ft) el._ft = new ResizeObserver(function () { linkOrigins(el); });
+        if (!el._ft) {
+            el._ft = new ResizeObserver(function () { linkOrigins(el); });
+            if (document.fonts) document.fonts.ready.then(function () { linkOrigins(el); });
+        }
         el._ft.disconnect();
         var tree = el.querySelector('.ftC');
         if (tree) el._ft.observe(tree);

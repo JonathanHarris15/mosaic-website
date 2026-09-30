@@ -8,6 +8,7 @@
 .hh-name { margin: 0; font-size: 13px; color: var(--on-surface-variant); }
 .hh-group { display: flex; flex-direction: column; gap: var(--space-base); }
 .hh-group > .m-label { display: block; }
+.hh-tree-link { align-self: flex-start; text-decoration: none; }
 .hh-hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--on-surface-variant); }
 .hh-pair { display: grid; gap: var(--space-xs); }
 @media (min-width: 520px) { .hh-pair { grid-template-columns: 1fr 1fr; } }

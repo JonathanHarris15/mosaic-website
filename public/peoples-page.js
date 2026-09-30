@@ -321,7 +321,8 @@ document.addEventListener('alpine:init', () => {
         // The Household card in the person dialog (MS-709) — the same card as
         // the Shepherding Profile's. The dialog's own sex wins over the stored
         // one, as it is the field an editor fills in just above it. Names are
-        // plain text here: moving to another person would drop unsaved edits.
+        // plain text here: moving to another person would drop unsaved edits,
+        // and the family tree opens in a new tab for the same reason.
         renderHousehold(el) {
             const sel = this.selectedPerson;
             if (!sel) return;
@@ -334,6 +335,10 @@ document.addEventListener('alpine:init', () => {
                 onChange: next => { this.families = next; },
                 toast: (message, kind) => this.showToast(message, kind),
                 headingLevel: 3,
+                treeHref: this.canReadElder
+                    ? id => 'shepherding-tags.html?tab=families&household=' + encodeURIComponent(id)
+                    : null,
+                treeNewTab: true,
             });
         },
 
