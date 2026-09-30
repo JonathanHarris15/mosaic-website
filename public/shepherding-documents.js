@@ -123,7 +123,10 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                Object.assign(this, AccessCore.pageFlags(userData));
+                // currentPermissionLevel is a getter here, and Object.assign
+                // throws on a getter-only key of Alpine's proxy.
+                const { currentPermissionLevel, ...flags } = AccessCore.pageFlags(userData);
+                Object.assign(this, flags);
                 if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
@@ -131,7 +134,7 @@ document.addEventListener('alpine:init', () => {
                 this.ownIdentity = {
                     user: user,
                     name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
-                    permissionLevel: this.currentPermissionLevel,
+                    permissionLevel: currentPermissionLevel,
                     pastoralAssistant: this.pastoralAssistant,
                 };
 
