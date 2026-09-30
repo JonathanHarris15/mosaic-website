@@ -15,6 +15,7 @@
 
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="household.css" />
 
     <style>
         [x-cloak] { display: none !important; }
@@ -127,7 +128,7 @@
     <!-- The Relationships tab is a two-column layout and needs the room; the Tags
          tab is a single list and reads better narrow. -->
     <main x-show="!loading"
-          :class="activeTab === 'relationships' ? 'max-w-[1080px]' : 'max-w-3xl'"
+          :class="activeTab === 'tags' ? 'max-w-3xl' : 'max-w-[1080px]'"
           class="flex-grow w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
         <!-- The page's standfirst. Two sentences and instructional, so it is
@@ -135,7 +136,9 @@
         <p class="font-body-md text-body-md text-on-surface-variant"
            x-text="activeTab === 'tags'
                ? 'Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.'
-               : 'Define Relationship Types and manage who holds them. Types and named groups can only be created here.'"></p>
+               : activeTab === 'relationships'
+               ? 'Define Relationship Types and manage who holds them. Types and named groups can only be created here.'
+               : 'Pick a Household to edit its parents, children at home, and anniversary. A child who marries moves to their own Household on their own.'"></p>
 
         <!-- Tabs — a segmented control, not underlines: these are two peer surfaces,
              not a hierarchy. -->
@@ -151,6 +154,12 @@
                 :class="activeTab === 'relationships' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
                 class="inline-flex items-center gap-[5px] px-sm py-[7px] rounded-[9px] font-sans text-[11.5px] font-semibold uppercase tracking-[.1em] transition-colors">
                 <span class="material-symbols-outlined text-[18px]">hub</span>Relationships
+            </button>
+            <button role="tab" @click="activeTab = 'households'"
+                :aria-selected="activeTab === 'households'"
+                :class="activeTab === 'households' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
+                class="inline-flex items-center gap-[5px] px-sm py-[7px] rounded-[9px] font-sans text-[11.5px] font-semibold uppercase tracking-[.1em] transition-colors">
+                <span class="material-symbols-outlined text-[18px]">home</span>Households
             </button>
         </div>
 
@@ -234,6 +243,50 @@
                     No tags yet. Create one above.
                 </li>
             </ul>
+        </div>
+
+        <!-- ── Households tab (MS-709) ───────────────────────────────────────
+             Left: every Household, searchable by anyone in it. Right: the same
+             Household editor card the Shepherding Profile and Directory use. -->
+        <div x-show="activeTab === 'households'" class="flex flex-col gap-sm">
+            <div x-show="hhError" class="flex items-start gap-[10px] bg-error-container border border-error rounded-md px-sm py-sm text-on-error-container" role="alert">
+                <span class="material-symbols-outlined text-[20px] text-error flex-shrink-0" aria-hidden="true">error</span>
+                <span class="flex-1 font-sans text-[13.5px] font-medium leading-snug" x-text="hhError"></span>
+            </div>
+            <div class="rel-cols">
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-[18px] flex flex-col gap-sm">
+                    <input type="search" x-model="hhQuery" placeholder="Search Households…" aria-label="Search Households by anyone in them"
+                           autocomplete="off" spellcheck="false"
+                           class="w-full border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    <button x-show="canWriteEditor" type="button" @click="newHousehold()" class="m-btn m-btn--secondary m-btn--sm self-start">
+                        <span class="material-symbols-outlined" aria-hidden="true">add_home</span><span class="m-btn__label">New Household</span>
+                    </button>
+                    <ul class="flex flex-col gap-[2px]">
+                        <template x-for="h in hhList" :key="h.id">
+                            <li>
+                                <button type="button" @click="selectHousehold(h.id)"
+                                    :aria-current="hhSelectedId === h.id ? 'true' : null"
+                                    :class="hhSelectedId === h.id ? 'bg-surface-container-low border-outline-variant' : 'border-transparent hover:bg-surface-container-low hover:border-outline-variant'"
+                                    class="w-full text-left flex gap-[10px] p-[10px] rounded-[10px] border transition-colors">
+                                    <span class="w-[3px] rounded-full flex-shrink-0" :class="hhSelectedId === h.id ? 'bg-primary' : 'bg-transparent'"></span>
+                                    <span class="min-w-0 flex-1 flex flex-col">
+                                        <span class="font-body-md text-on-surface" x-text="h.name"></span>
+                                        <span class="text-xs text-on-surface-variant" x-text="h.sub"></span>
+                                    </span>
+                                </button>
+                            </li>
+                        </template>
+                        <li x-show="hhList.length === 0" class="text-on-surface-variant italic text-sm px-sm py-md"
+                            x-text="hhQuery.trim() ? 'No Household has anyone by that name.' : 'No Households yet.'"></li>
+                    </ul>
+                </div>
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-[18px]">
+                    <div x-show="hhSelectedId || hhNew" x-effect="renderHouseholdPane($el.firstElementChild)"><div x-ignore></div></div>
+                    <p x-show="!hhSelectedId && !hhNew" class="text-on-surface-variant italic text-sm">
+                        Pick a Household on the left<span x-show="canWriteEditor">, or start a new one</span>.
+                    </p>
+                </div>
+            </div>
         </div>
 
         <!-- ── Relationships tab (MS-103, ADR-0014) ──────────────────────────
@@ -761,6 +814,8 @@
     <script src="shepherding-blur.js"></script>
     <script src="relationship-core.js"></script>
     <script src="relationship-group-core.js"></script>
+    <script src="family-core.js"></script>
+    <script src="household-editor.js"></script>
     <script src="shepherding-relationships.js"></script>
     <script src="shepherding-tags.js"></script>
 </body>
