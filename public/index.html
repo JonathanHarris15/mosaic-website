@@ -111,23 +111,26 @@
             align-content: stretch;
         }
 
-        /* A place card that fills its cell. The medallion stays up; the name
-           and the sentence sit on the floor, so a short row of cards becomes
-           a set of posters instead of a cluster floating in empty parchment. */
+        /* A place card. The name is Cinzel and large. A short row stays the
+           height of its type; a longer set of cards fills the window and
+           scrolls inside the grid, so three tiles never become blank posters. */
         .dash-tiles > .m-nav-card {
             align-items: flex-start;
             justify-content: flex-start;
             text-align: left;
             gap: var(--space-md);
-            min-height: 156px;
+            min-height: 0;
             padding: var(--space-lg);
             border-top: 3px solid var(--primary);
         }
         .dash-tiles > .m-nav-card .m-medallion { margin-bottom: 0; }
-        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: auto; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; }
         .dash-tiles > .m-nav-card .m-nav-card__title {
-            font-size: 26px;
-            line-height: 1.15;
+            font-family: var(--font-display);
+            font-size: clamp(32px, 3vw, 44px);
+            line-height: 1.05;
+            color: var(--primary);
+            text-wrap: balance;
         }
         .dash-tiles > .m-nav-card .m-nav-card__desc {
             display: block;
@@ -145,14 +148,37 @@
             .dash-split { grid-template-columns: minmax(0, 1fr) 320px; }
             .dash-tiles {
                 grid-template-columns: repeat(3, minmax(0, 1fr));
-                grid-auto-rows: minmax(180px, 1fr);
+                align-content: start;
                 flex: 1;
                 min-height: 0;
             }
-            .dash-tiles > .m-nav-card { height: 100%; }
-            .dash-stack { align-self: stretch; height: 100%; }
-            .dash-split > .m-with-side { height: 100%; min-height: 0; }
-            #sunday-glance { height: 100%; min-height: 0; }
+            .dash-stack { align-self: stretch; min-height: 0; }
+            /* Four or more places: the row grows to the window and scrolls.
+               Three or fewer stay a band the height of the type, and Sunday
+               stays that same height instead of a blank column. */
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) {
+                align-items: stretch;
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles {
+                grid-auto-rows: minmax(200px, 1fr);
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card {
+                height: 100%;
+                justify-content: center;
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-stack,
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) > .m-with-side,
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) #sunday-glance {
+                height: 100%;
+                min-height: 0;
+            }
+            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) {
+                flex: 0 0 auto;
+                align-items: stretch;
+            }
+            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) #sunday-glance {
+                height: 100%;
+            }
         }
 
         .dash-caption {

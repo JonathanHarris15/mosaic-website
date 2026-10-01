@@ -8,6 +8,9 @@ const statusZoneKey = ShepherdingCore.statusZoneKey;
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingPeople', () => ({
+        // Closed until auth answers. The saved-view delete control reads
+        // canDecide, and an undeclared flag throws in Alpine rather than hiding.
+        ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
 
