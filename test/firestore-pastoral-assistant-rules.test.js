@@ -59,11 +59,11 @@ test('the rules name the AccessCore helpers', () => {
     });
 });
 
-test('isPastoralAssistant fails closed when the user doc or the flag is absent', () => {
+test('isPastoralAssistant is the role or the old flag, and fails closed without a user doc', () => {
     const body = fnBody(firestore, 'isPastoralAssistant');
     assert.match(body, /exists\(\/databases\/\$\(database\)\/documents\/users\/\$\(request\.auth\.uid\)\)/);
     assert.match(body, /pastoralAssistant == true/);
-    assert.doesNotMatch(body, /permissionLevel\(\)/);
+    assert.match(body, /permissionLevel\(\) == 'pastoral_assistant'/);
 });
 
 test('readsAsElder, writesTheRecord and canDecide are isElder or the grant; isAnElder is not widened', () => {
@@ -78,12 +78,12 @@ test('readsAsElder, writesTheRecord and canDecide are isElder or the grant; isAn
     assert.doesNotMatch(isElder, /isPastoralAssistant/);
 });
 
-test('readsAsEditor is isEditor or the grant; writesAsEditor stays the editor ladder', () => {
+test('readsAsEditor is isEditor or the role; isEditor includes pastoral_assistant and the old flag', () => {
     const reads = fnBody(firestore, 'readsAsEditor');
     const isEditor = fnBody(firestore, 'isEditor');
     assert.match(reads, /isEditor\(\) \|\| isPastoralAssistant\(\)/);
-    assert.match(isEditor, /permissionLevel\(\) in \['editor', 'admin', 'elder', 'super_admin'\]/);
-    assert.doesNotMatch(isEditor, /isPastoralAssistant/);
+    assert.match(isEditor, /'pastoral_assistant'/);
+    assert.match(isEditor, /isPastoralAssistant\(\)/);
 });
 
 test('the helper composition matches AccessCore for a member Pastoral Assistant', () => {
@@ -93,12 +93,12 @@ test('the helper composition matches AccessCore for a member Pastoral Assistant'
     assert.equal(Access.writesTheRecord(memberPa), true);
     assert.equal(Access.canDecide(memberPa), true);
     assert.equal(Access.isAnElder(memberPa), false);
-    assert.equal(Access.writesAsEditor(memberPa), false);
+    assert.equal(Access.writesAsEditor(memberPa), true);
     assert.match(fnBody(firestore, 'readsAsElder'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
     assert.match(fnBody(firestore, 'writesTheRecord'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
     assert.match(fnBody(firestore, 'canDecide'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
     assert.doesNotMatch(fnBody(firestore, 'isElder'), /pastoralAssistant/);
-    assert.doesNotMatch(fnBody(firestore, 'isEditor'), /pastoralAssistant/);
+    assert.match(fnBody(firestore, 'isEditor'), /isPastoralAssistant\(\)/);
 });
 
 test('every elder-gated read names readsAsElder, so a forgotten collection fails', () => {

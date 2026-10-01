@@ -90,7 +90,7 @@
             toolbarHasPersonPanel: false,
 
             get isEditor() {
-                return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
+                return ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].indexOf(this.rank) !== -1;
             },
 
             get backHref() {

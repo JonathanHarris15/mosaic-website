@@ -3511,7 +3511,9 @@ exports.deleteFormTemplate = onCall(
       const userSnap = await db.collection("users").doc(request.auth.uid).get();
       const user = userSnap.exists ? userSnap.data() : {};
       const rank = user.permissionLevel || user.role || null;
-      if (!EDITOR_RANKS.includes(rank)) {
+      const pastoralAssistant = rank === "pastoral_assistant" ||
+          user.pastoralAssistant === true;
+      if (!EDITOR_RANKS.includes(rank) && !pastoralAssistant) {
         return {ok: false, message: "Only an editor can delete a form."};
       }
 
@@ -3525,7 +3527,8 @@ exports.deleteFormTemplate = onCall(
       // A form shut to elders is deleted by an elder and nobody else (MS-404).
       // The rules say so for the record; this door has to say so too, because
       // it writes past them.
-      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank)) {
+      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank) &&
+          !pastoralAssistant) {
         return {ok: false, message: "There is no form here."};
       }
 
@@ -3612,6 +3615,10 @@ exports.publicForm = onCall(
             .doc(request.auth.uid).get();
         const user = userSnap.exists ? userSnap.data() : {};
         rank = user.permissionLevel || user.role || null;
+        if (user.pastoralAssistant === true &&
+            !["elder", "super_admin", "pastoral_assistant"].includes(rank)) {
+          rank = "pastoral_assistant";
+        }
         personId = user.personId || null;
       }
       const caller = {signedIn: !!request.auth, rank: rank};

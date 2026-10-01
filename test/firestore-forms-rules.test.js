@@ -67,7 +67,7 @@ test('a form shut to elders is closed to every editor who is not one', () => {
     const block = code(formsBlock());
     assert.match(block, /allow read: if readsAsEditor\(\) && \(readsAsElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
         'an ordinary editor can still read an elder-only form');
-    assert.match(block, /allow delete: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+    assert.match(block, /allow delete: if isEditor\(\) && \(canDecide\(\) \|\| !shutToElders\(resource\.data\)\)/,
         'an ordinary editor can still delete an elder-only form');
 });
 

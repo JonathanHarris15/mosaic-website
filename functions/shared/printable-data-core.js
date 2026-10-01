@@ -74,11 +74,17 @@
 
     function mayRead(level, minLevel) {
         const Access = access();
+        if (level === 'pastoral_assistant') {
+            return levelRank(minLevel) <= levelRank('elder');
+        }
         if (Access && level && typeof level === 'object') {
             // A Pastoral Assistant reads what an elder reads. Super-admin-only
-            // sources stay super-admin-only; the grant does not raise the tier.
+            // sources stay super-admin-only; the role does not raise the tier.
             if (Access.readsAsElder(level) && levelRank(minLevel) <= levelRank('elder')) {
                 return true;
+            }
+            if (Access.permissionLevelOf(level) === 'pastoral_assistant') {
+                return levelRank(minLevel) <= levelRank('elder');
             }
             return levelRank(Access.permissionLevelOf(level)) >= levelRank(minLevel);
         }

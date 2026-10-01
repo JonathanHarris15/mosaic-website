@@ -63,7 +63,7 @@
         const gate = access();
         if (!gate) return false;
         const myPersonId = user && user.personId;
-        return policy.canManagePhoto(gate.permissionLevelOf(user), myPersonId, personId);
+        return policy.canManagePhoto(user, myPersonId, personId);
     }
 
     function refused(error) {

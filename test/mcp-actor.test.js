@@ -80,7 +80,7 @@ describe('the rank an assistant must hold', () => {
         assert.strictEqual(Actor.readsAsElder(pa), true);
         assert.strictEqual(Actor.writesTheRecord(pa), true);
         assert.strictEqual(Actor.isElder(pa), false);
-        assert.strictEqual(Actor.isEditor(pa), false);
+        assert.strictEqual(Actor.isEditor(pa), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_get_profile'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_document'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_write_note'), true);
@@ -92,14 +92,14 @@ describe('the rank an assistant must hold', () => {
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_explain_change'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_create_view'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_set_membership_stage'), true);
-        assert.strictEqual(Actor.mayUseTool(pa, 'cal_create_event'), false);
+        assert.strictEqual(Actor.mayUseTool(pa, 'cal_create_event'), true);
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_unclassified_future'), false);
         assert.strictEqual(Actor.isElder(pa), false);
     });
 
-    test('a Pastoral Assistant refused a counted-as-elder write hears it is about the role', () => {
+    test('a Pastoral Assistant refused an unclassified write hears it is about the role', () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const message = Actor.refusalFor(pa, 'cal_create_event');
+        const message = Actor.refusalFor(pa, 'shep_unclassified_future');
         assert.match(message, /Pastoral Assistant/);
         assert.match(message, /elder's decision/);
         assert.doesNotMatch(message, /raise it to elder/);
@@ -124,11 +124,14 @@ describe('the rank an assistant must hold', () => {
         assert.strictEqual(Actor.mayUseTool(editor, 'shep_write_note'), false);
     });
 
-    test('a Pastoral Assistant may keep contact current and may not set sex', () => {
+    test('a Pastoral Assistant edits the directory with an editor\'s field set', () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
         assert.strictEqual(Actor.mayEditDirectory(pa), true);
-        assert.strictEqual(Actor.directoryFieldSet(pa), 'assistant');
+        assert.strictEqual(Actor.directoryFieldSet(pa), 'editor');
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_update_person'), true);
+        const role = {permissionLevel: 'pastoral_assistant'};
+        assert.strictEqual(Actor.directoryFieldSet(role), 'editor');
+        assert.strictEqual(Actor.isElder(role), false);
     });
 
     test('a member is told directory details are an editor\'s write', () => {

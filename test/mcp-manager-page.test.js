@@ -284,5 +284,5 @@ test('the rules close a locked file rather than merely hiding it', () => {
     assert.match(rules, /function guidanceLocked/);
     assert.match(rules, /allow read: if readsAsElder\(\) \|\| \(readsAsEditor\(\) && !guidanceLocked/);
     // An editor must not be able to lift one either.
-    assert.match(rules, /allow update: if isElder\(\)[\s\S]{0,200}request\.resource\.data/);
+    assert.match(rules, /allow update: if canDecide\(\)[\s\S]{0,200}request\.resource\.data/);
 });

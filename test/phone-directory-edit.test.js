@@ -32,10 +32,14 @@ test('a member is not offered Edit Mode', () => {
     assert.equal(Edit.mayOfferEditMode(null), false);
 });
 
-test('a Pastoral Assistant is not offered Edit Mode', () => {
+test('a Pastoral Assistant is offered Edit Mode, as a role and on the old flag', () => {
+    assert.equal(
+        Edit.mayOfferEditMode({ permissionLevel: 'pastoral_assistant' }),
+        true,
+    );
     assert.equal(
         Edit.mayOfferEditMode({ permissionLevel: 'member', pastoralAssistant: true }),
-        false,
+        true,
     );
 });
 

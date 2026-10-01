@@ -818,9 +818,10 @@ test('the tally does not treat a person or an upload as an option to count', () 
 // may ANSWER and leaves the template and every answer open to any editor,
 // because the library and the Responses tab are the editor ladder.
 
-test('only an elder and a super admin may shut a form to elders', () => {
+test('an elder, a pastoral assistant, and a super admin may shut a form to elders', () => {
     assert.equal(FormsCore.mayShutToElders('elder'), true);
     assert.equal(FormsCore.mayShutToElders('super_admin'), true);
+    assert.equal(FormsCore.mayShutToElders('pastoral_assistant'), true);
     ['editor', 'admin', 'member', 'viewer', '', null].forEach(rank => {
         assert.equal(FormsCore.mayShutToElders(rank), false, String(rank) + ' could shut a form');
     });

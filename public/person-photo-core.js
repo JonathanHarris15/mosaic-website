@@ -114,7 +114,13 @@
     // to it; anyone's if you are an editor or above. Mirrors the Firestore rule.
     function canManagePhoto(permissionLevel, myPersonId, personId) {
         if (!personId) return false;
-        if (['editor', 'elder', 'admin', 'super_admin'].indexOf(permissionLevel) !== -1) {
+        const Access = (typeof AccessCore !== 'undefined') ? AccessCore
+            : (typeof require === 'function' ? require('./access-core.js') : null);
+        if (Access && Access.writesAsEditor(permissionLevel)) return true;
+        const level = permissionLevel && typeof permissionLevel === 'object'
+            ? (permissionLevel.permissionLevel || permissionLevel.role || '')
+            : permissionLevel;
+        if (['editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant'].indexOf(level) !== -1) {
             return true;
         }
         return !!myPersonId && myPersonId === personId;

@@ -252,13 +252,9 @@ function mayUseTool(account, name) {
   if (gate === DIRECTORY) return mayEditDirectory(account);
   if (gate === RECORD) return Access.writesTheRecord(account);
   if (gate === DECIDE) {
-    // shep_ decision writes admit a Pastoral Assistant (MS-594).
-    // cal_ DECIDE stays counted-as-elder — calendar writes are not
-    // shepherding decision actions.
-    if (typeof name === "string" && name.indexOf("shep_") === 0) {
-      return Access.canDecide(account);
-    }
-    return Access.isAnElder(account);
+    // Shepherding decisions and calendar writes. A Pastoral Assistant has
+    // an elder's permissions and is still not counted as an elder.
+    return Access.canDecide(account);
   }
   return Access.isAnElder(account);
 }

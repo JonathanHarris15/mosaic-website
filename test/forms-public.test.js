@@ -92,9 +92,12 @@ test('a closed form gives its title and date, and never its questions', () => {
 
 // ── The rung ─────────────────────────────────────────────────────────────────
 
-test('a Pastoral Assistant does not satisfy the elder answering rung', () => {
-    // The grant stacks; it is not a rung. An elder-only form or ballot stays
-    // a vote of elders (MS-426).
+test('a Pastoral Assistant answers an elder form and is not counted as an elder', () => {
+    // The role satisfies the elder answering rung (ADR-0076). It stays off
+    // isElder()'s list, which is who counts as an elder.
+    assert.strictEqual(fp.rankSatisfies('elder', 'pastoral_assistant'), true);
+    assert.strictEqual(fp.rankSatisfies('editor', 'pastoral_assistant'), true);
+    assert.strictEqual(fp.rankSatisfies('member', 'pastoral_assistant'), true);
     assert.strictEqual(fp.rankSatisfies('elder', 'member'), false);
     assert.strictEqual(fp.rankSatisfies('elder', 'editor'), false);
     assert.deepStrictEqual(fp.RANKS_AT_OR_ABOVE.elder.slice().sort(), ['elder', 'super_admin']);
@@ -305,7 +308,7 @@ const asRank = (rank) => ({ signedIn: !!rank, rank: rank || null });
 
 test('an editors-only form is open to editors and above, and shut below', () => {
     const form = rungForm('editor');
-    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+    ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].forEach(rank => {
         assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
     });
     ['member', 'viewer'].forEach(rank => {
@@ -314,9 +317,9 @@ test('an editors-only form is open to editors and above, and shut below', () => 
     assert.strictEqual(fp.whatToServe(form, stranger, TODAY).ok, false);
 });
 
-test('an elders-only form is open to elders and super admins, and nobody else', () => {
+test('an elders-only form is open to elders, super admins, and pastoral assistants', () => {
     const form = rungForm('elder');
-    ['elder', 'super_admin'].forEach(rank => {
+    ['elder', 'super_admin', 'pastoral_assistant'].forEach(rank => {
         assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
     });
     ['admin', 'editor', 'member', 'viewer'].forEach(rank => {
@@ -527,7 +530,7 @@ const PERSON_FORM = {
 };
 
 test('an editor and above may add somebody from a form that asks for a person', () => {
-    ['editor', 'elder', 'admin', 'super_admin'].forEach(rank => {
+    ['editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant'].forEach(rank => {
         assert.ok(fp.mayAddPeople(PERSON_FORM, { signedIn: true, rank: rank }), rank + ' could not add');
     });
 });
@@ -589,7 +592,7 @@ test('a form shut to elders is not there at all for anybody else', () => {
 });
 
 test('an elder is served it', () => {
-    ['elder', 'super_admin'].forEach(rank => {
+    ['elder', 'super_admin', 'pastoral_assistant'].forEach(rank => {
         const served = fp.whatToServe(ELDER_ONLY_FORM, { signedIn: true, rank: rank }, '2026-09-04');
         assert.equal(served.ok, true, rank + ' could not open an elder-only form');
     });

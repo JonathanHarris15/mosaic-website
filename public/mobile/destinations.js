@@ -63,6 +63,7 @@
         super_admin: 'Super Admin',
         admin: 'Administrator',
         elder: 'Elder',
+        pastoral_assistant: 'Pastoral Assistant',
         editor: 'Editor',
         member: 'Member',
         viewer: 'Member',

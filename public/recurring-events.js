@@ -63,7 +63,7 @@
     const Grid = window.RecurringRosterCore;
     const Dates = window.DateUtils;
 
-    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin'];
+    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'];
 
     // How much calendar to compute dates across. Arithmetic, not a read, so it
     // costs nothing — but it is bounded, because "every date this series has

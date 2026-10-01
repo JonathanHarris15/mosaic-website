@@ -24,8 +24,12 @@ const FormsCore = require("./shared/forms-core");
 // cannot export anything — the same trade ADR-0046 already accepted, and
 // test/forms-public.test.js pins the two together.
 const RANKS_AT_OR_ABOVE = {
-  member: ["member", "editor", "admin", "elder", "super_admin"],
-  editor: ["editor", "admin", "elder", "super_admin"],
+  member: [
+    "member", "editor", "admin", "elder", "super_admin", "pastoral_assistant",
+  ],
+  editor: [
+    "editor", "admin", "elder", "super_admin", "pastoral_assistant",
+  ],
   elder: ["elder", "super_admin"],
 };
 
@@ -37,6 +41,11 @@ const RANKS_AT_OR_ABOVE = {
  */
 function rankSatisfies(rung, rank) {
   if (rung === "public") return true;
+  // A Pastoral Assistant answers what an elder answers. They are not on
+  // isElder()'s list: that list is who counts as an elder.
+  if (rank === "pastoral_assistant") {
+    return rung === "member" || rung === "editor" || rung === "elder";
+  }
   const allowed = RANKS_AT_OR_ABOVE[rung];
   if (!allowed) return false;
   return allowed.indexOf(rank) !== -1;

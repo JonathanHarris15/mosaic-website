@@ -214,7 +214,7 @@ test('a member matches an Inactive person on neither tab', () => {
     assert.equal(Track.matchesDirectoryTab(inactive, 'members', member), false);
     assert.equal(Track.matchesDirectoryTab(inactive, 'non_members', member), false);
     assert.equal(Track.matchesDirectoryTab(inactive, 'members', assistant), false);
-    assert.equal(Track.matchesDirectoryTab(inactive, 'non_members', assistant), false);
+    assert.equal(Track.matchesDirectoryTab(inactive, 'non_members', assistant), true);
 });
 
 test('an editor reads the stage or Inactive; a member reads only Member or Non-member', () => {
@@ -227,14 +227,16 @@ test('an editor reads the stage or Inactive; a member reads only Member or Non-m
     assert.equal(Track.directoryLabel(unset, editor), 'Not on the Track');
     assert.equal(Track.directoryLabel(onTrack, member), 'Member');
     assert.equal(Track.directoryLabel(visitor, member), 'Non-member');
-    assert.equal(Track.directoryLabel(inactive, assistant), 'Non-member');
+    assert.equal(Track.directoryLabel(inactive, assistant), 'Inactive');
     assert.equal(Track.directoryLabel(onTrack, assistant), 'Member');
 });
 
-test('a member and a Pastoral Assistant are not offered the Track or tag controls', () => {
+test('a member is not offered the Track or tag controls; a Pastoral Assistant is', () => {
     assert.equal(Track.offerEdits(member, true), false);
-    assert.equal(Track.offerEdits(assistant, true), false);
+    assert.equal(Track.offerEdits(assistant, true), true);
+    assert.equal(Track.offerEdits({ permissionLevel: 'pastoral_assistant' }, true), true);
     assert.equal(Track.offerEdits(member, false), false);
+    assert.equal(Track.offerEdits(assistant, false), false);
 });
 
 test('an editor is offered the Track and tag controls only while Edit Mode is on', () => {

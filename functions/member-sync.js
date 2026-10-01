@@ -15,7 +15,9 @@
 
 const track = require("./membership-track");
 
-const MEMBER_OR_HIGHER = ["member", "editor", "elder", "admin", "super_admin"];
+const MEMBER_OR_HIGHER = [
+  "member", "editor", "elder", "admin", "super_admin", "pastoral_assistant",
+];
 
 // The directory tag carried by people. Canonical casing is capital-M "Member" —
 // that is what the directory and the Service Builder/Calendar member queries

@@ -380,7 +380,7 @@
             : (typeof require === 'function' ? require('./access-core.js') : null);
         const isEditor = Access
             ? Access.writesAsEditor(opts.rank)
-            : ['editor', 'admin', 'elder', 'super_admin'].indexOf(opts.rank) !== -1;
+            : ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].indexOf(opts.rank) !== -1;
 
         await Promise.all(occurrences.map(async o => {
             const rosterRef = occurrenceRef(db, o.id).collection(ROSTER);

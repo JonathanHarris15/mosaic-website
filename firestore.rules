@@ -42,14 +42,19 @@ service cloud.firestore {
 
     // Helper to check if user is editor
     function isEditor() {
-      return request.auth != null && permissionLevel() in ['editor', 'admin', 'elder', 'super_admin'];
+      return request.auth != null && (
+        permissionLevel() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || isPastoralAssistant()
+      );
     }
 
     // Helper to check if user is a member or above. The floor of the `member`
     // visibility rung (MS-99): a viewer is signed in but sees only public things.
     function isMember() {
-      return request.auth != null
-        && permissionLevel() in ['member', 'editor', 'admin', 'elder', 'super_admin'];
+      return request.auth != null && (
+        permissionLevel() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || isPastoralAssistant()
+      );
     }
 
     // The Person record this signed-in User is linked to, or null. Event
@@ -64,15 +69,16 @@ service cloud.firestore {
       return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
     }
 
-    // Pastoral Assistant is a grant on the account, not a Permission Level
-    // (MS-426, ADR-0065). These restate AccessCore — Firestore cannot import
-    // it — and test/firestore-pastoral-assistant-rules.test.js pins them.
-    // Fail closed: a missing user doc, or a missing / non-true flag, is not
-    // a grant.
+    // Pastoral Assistant is the permissionLevel `pastoral_assistant` (ADR-0076).
+    // The old `pastoralAssistant` flag still counts, so an account granted
+    // that way keeps the doors until an admin sets the role. Fail closed: a
+    // missing user doc is not a Pastoral Assistant. isElder() is not this —
+    // a Pastoral Assistant is never counted as an elder.
     function isPastoralAssistant() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true;
+        && (permissionLevel() == 'pastoral_assistant'
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true);
     }
 
     function readsAsElder() {
@@ -942,7 +948,7 @@ service cloud.firestore {
     // Service's listener for the editors who write guides (MS-477).
     match /shepherding_presence/{uid} {
       allow read: if readsAsElder();
-      allow write, delete: if isElder() && request.auth.uid == uid;
+      allow write, delete: if readsAsElder() && request.auth.uid == uid;
     }
 
     // ── The MCP server's front door (MS-262, ADR-0038) ──────────────────
@@ -1016,12 +1022,12 @@ service cloud.firestore {
     }
     match /mcp_guidance/{fileId} {
       allow read: if readsAsElder() || (readsAsEditor() && !guidanceLocked(resource.data));
-      allow create: if isElder() ||
+      allow create: if canDecide() ||
           (isEditor() && !guidanceLocked(request.resource.data));
-      allow update: if isElder() ||
+      allow update: if canDecide() ||
           (isEditor() && !guidanceLocked(resource.data) &&
            !guidanceLocked(request.resource.data));
-      allow delete: if isElder() ||
+      allow delete: if canDecide() ||
           (isEditor() && !guidanceLocked(resource.data));
 
       // The edit history. Editors READ it — that is the whole point, since
@@ -1078,11 +1084,11 @@ service cloud.firestore {
     match /forms/{formId} {
       allow read: if readsAsEditor() && (readsAsElder() || !shutToElders(resource.data));
       allow create: if isEditor()
-        && (isElder() || !shutToElders(request.resource.data));
+        && (canDecide() || !shutToElders(request.resource.data));
       allow update: if isEditor()
-        && (isElder()
+        && (canDecide()
             || (!shutToElders(resource.data) && !shutToElders(request.resource.data)));
-      allow delete: if isEditor() && (isElder() || !shutToElders(resource.data));
+      allow delete: if isEditor() && (canDecide() || !shutToElders(resource.data));
     }
 
     // Where a form is filed: a name and the folder it sits in, and nothing

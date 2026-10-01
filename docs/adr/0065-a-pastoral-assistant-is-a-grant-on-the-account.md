@@ -1,6 +1,6 @@
 # ADR 0065 — A Pastoral Assistant is a grant on the account, not a Permission Level
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0076](0076-a-pastoral-assistant-is-a-permission-level.md)
 **Date:** 2026-09-17
 **Follows:** [ADR 0041](0041-a-kiosk-account-reads-like-any-signed-in-account.md), [ADR 0013](0013-elder-tag-projection-and-derived-relationships.md), [ADR 0046](0046-an-event-attachment-is-fetched-never-linked.md)
 **Ticket:** MS-426 (decision MS-512)
