@@ -6,6 +6,8 @@ The look stays Modern Liturgy: parchment, navy ink, Cinzel for a place, EB Garam
 
 Classes live in `build/design-components.mjs` and ship in `public/mosaic.css`. A restyle of a page that already exists lands on that page, on a test branch. A lightweight HTML prototype is only for a feature that has no page yet.
 
+This file grows with the site. When a page update settles a choice another page could follow — spacing, a type role, how a person is shown, how a control moves, what stays on screen, empty and error — that convention is added here in the same change, and the class that carries it is named. A one-off wording change is not a convention.
+
 ## Where this came from
 
 Mobbin does not carry Planning Center, Subsplash, Pushpay, or Church Center. These five are the closest jobs, and the structure is what transferred. Their grey canvases, black sidebars, and purple accents did not.

@@ -1,5 +1,5 @@
 ---
-description: Restyles land on the real site and a test branch. A lightweight HTML prototype is only for a brand-new feature with no page yet.
+description: Restyles land on the real site and a test branch. A reusable design choice from that work is written into the style guide. A lightweight HTML prototype is only for a brand-new feature with no page yet.
 alwaysApply: true
 ---
 
@@ -10,6 +10,12 @@ alwaysApply: true
 Change the real pages under `public/` (and the shared `m-*` components they inherit). Put the work on a test branch and show it on a Firebase Hosting preview URL. Do not make a standalone HTML prototype for a restyle, a style sweep, or a layout change to a page that already ships.
 
 If the preview is wrong, it is not merged. Rejection is leaving the branch unmerged. Do not stop and wait for a prototype approval before editing `public/`.
+
+## Write the convention into the style guide
+
+When a page update settles a design choice another page could follow, add that convention to `docs/design/design-language.md` in the same change. A choice is a convention when a second page would otherwise invent it: spacing, a type role, how a person is shown, how a control moves, what stays on screen, empty and error. A one-off wording change is not a convention.
+
+The class that carries the choice lives in `build/design-components.mjs` when pages should inherit it, and the style guide names that class. The page PR is done only when the new convention is in the style guide.
 
 ## A brand-new feature that needs a new design
 
