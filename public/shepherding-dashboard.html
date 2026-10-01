@@ -117,6 +117,32 @@
             .shep-row { grid-template-columns: auto minmax(0, 1fr); }
             .shep-row__due { grid-column: 2; }
         }
+
+        /* Insights strip (MS-696 variant B) — editor+, below the four places. */
+        .shep-insights {
+            display: flex; align-items: center; gap: var(--space-sm);
+            margin-top: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-lg);
+            text-decoration: none; color: inherit;
+        }
+        .shep-insights:hover { border-color: var(--primary); }
+        .shep-insights:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .shep-insights__icon {
+            width: 36px; height: 36px; flex: 0 0 auto;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: var(--radius); background: var(--primary-container); color: var(--on-primary-container);
+        }
+        .shep-insights__icon .material-symbols-outlined { font-size: 20px; }
+        .shep-insights__body { min-width: 0; flex: 1; }
+        .shep-insights__kicker {
+            margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        .shep-insights__title { margin: 2px 0 0; font-family: var(--font-display); font-size: 16px; color: var(--primary); }
+        .shep-insights__desc { margin: 2px 0 0; font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); text-wrap: pretty; }
+        .shep-insights__go { flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--primary); }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -214,6 +240,18 @@
                 </span>
             </a>
         </div>
+
+        <a x-show="canReadEditor" href="analytics.html" class="shep-insights">
+            <span class="shep-insights__icon" aria-hidden="true">
+                <span class="material-symbols-outlined">monitoring</span>
+            </span>
+            <span class="shep-insights__body">
+                <p class="shep-insights__kicker">Insights</p>
+                <p class="shep-insights__title">Service Analytics</p>
+                <p class="shep-insights__desc">Who has served, how often, and when they last did.</p>
+            </span>
+            <span class="shep-insights__go">Open<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;vertical-align:-3px">chevron_right</span></span>
+        </a>
 
         <!-- A glance (MS-79): yours, the ones nobody has picked up, and
              anything late. The full list is the Tasks card. -->
