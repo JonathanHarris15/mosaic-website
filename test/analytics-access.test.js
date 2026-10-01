@@ -109,29 +109,27 @@ test('editors and above still get the analytics', async () => {
 
 // ── The way in ────────────────────────────────────────────────────────────────
 
-test('the dashboard card is injected for editors, not sitting in the page', async () => {
-    // A card in the markup is a card a member sees and clicks, and being refused
-    // on arrival is worse than never being offered. Every other gated card on
-    // this dashboard is injected; this one used to be the exception.
+test('Service Analytics is not a home dashboard tile', () => {
     const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
-
     const cards = html.slice(0, html.indexOf('<script>'));
     assert.ok(cards.indexOf('analytics.html') === -1,
         'the Service Analytics card is still in the page for everyone');
 
-    // Injected behind the editor gate, and keeping its stored key — renaming
-    // that would drop the card to the end of every dashboard ever arranged.
     const nav = fs.readFileSync(path.join(PUBLIC, 'dashboard-nav.js'), 'utf8');
-    const at = nav.indexOf("href: 'analytics.html'");
-    assert.ok(at !== -1, 'nothing registers the Service Analytics card');
-    const keyAt = nav.indexOf("key: 'service-analytics'");
-    const block = nav.slice(keyAt, keyAt + 450);
-    assert.match(block, /readsAsEditor/,
-        'the Service Analytics card is registered without an editor gate');
-    assert.match(nav, /key: 'service-analytics'/,
-        'the card lost the key every saved dashboard order refers to');
+    assert.ok(nav.indexOf("key: 'service-analytics'") === -1,
+        'service-analytics is still registered on the home dashboard');
     assert.match(html, /DashboardNav\.injectGatedCards/,
         'the dashboard injects gated cards from the shared registry');
+});
+
+test('the shepherd desk links editors to Service Analytics', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'shepherding-dashboard.html'), 'utf8');
+    assert.match(html, /href="analytics\.html"[\s\S]*class="shep-insights"/,
+        'the Insights strip must link to analytics');
+    assert.match(html, /x-show="canReadEditor"/,
+        'the Insights strip must follow the editor gate');
+    assert.match(html, /shep-insights__kicker[\s\S]*Insights/,
+        'the strip label is Insights, not a fifth place tile');
 });
 
 test('the page draws nothing but the refusal when it refuses', () => {
