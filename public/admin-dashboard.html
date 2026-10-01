@@ -58,11 +58,11 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="adminDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a href="index.html" class="m-back">
@@ -71,7 +71,6 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">Admin Dashboard</h1>
-                    <span class="m-header__sub">Admin-only system tools.</span>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -85,7 +84,7 @@
     </div>
 
     <!-- Main content -->
-    <main x-show="!loading" class="flex-grow max-w-5xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-md pt-md">
+    <main x-show="!loading" class="m-page__body">
 
         <!-- ============================================================
              Tabs (MS-682). This page was one stack of sections, which was

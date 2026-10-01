@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home — three directions</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        .arena-nav {
+            position: sticky; top: 0; z-index: 30;
+            display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+            padding: 12px var(--space-margin);
+            background: var(--surface-container);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .arena-nav a {
+            font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+            color: var(--primary); text-decoration: none;
+        }
+        .arena-nav a:hover { text-decoration: underline; }
+        .skip {
+            position: absolute; left: 8px; top: 8px; z-index: 50;
+            transform: translateY(-140%);
+            background: var(--surface-container-lowest); color: var(--primary);
+            padding: 8px 12px; font-weight: 600;
+        }
+        .skip:focus { transform: none; }
+        .intro, .cap, .states {
+            max-width: 1100px; margin: 0 auto;
+            padding-left: var(--space-margin); padding-right: var(--space-margin);
+        }
+        .intro { padding-top: var(--space-lg); padding-bottom: var(--space-md); }
+        .intro h1 {
+            margin: 0 0 8px;
+            font-family: var(--font-serif); font-size: 36px; font-weight: 500;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .intro p { margin: 0; max-width: 62ch; font-size: 16px; line-height: 1.5; color: var(--on-surface-variant); text-wrap: pretty; }
+        .variant { scroll-margin-top: 64px; border-top: 1px solid var(--outline-variant); padding-top: var(--space-lg); }
+        .cap h2 {
+            margin: 0;
+            font-family: var(--font-display); font-size: 22px; font-weight: 600;
+            color: var(--primary); text-wrap: balance;
+        }
+        .cap p { margin: 6px 0 0; max-width: 68ch; font-size: 15px; line-height: 1.5; color: var(--on-surface-variant); text-wrap: pretty; }
+        .cap a { color: var(--primary); }
+        .sheet {
+            max-width: 1100px; margin: var(--space-md) auto var(--space-lg);
+            background: var(--background);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .sheet .m-header { background: var(--surface-container-lowest); }
+        .sheet .m-page__body { padding-top: var(--space-md); padding-bottom: var(--space-lg); }
+        a.m-row { text-decoration: none; color: inherit; }
+        .m-row__main { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+        .m-row__title, .m-row__sub, .m-person__name { display: block; white-space: normal; }
+        a:focus-visible, button:focus-visible, input:focus-visible, label:focus-within {
+            outline: 2px solid var(--primary); outline-offset: 2px;
+        }
+
+        /* A — Sunday is the page. Places are a list, not tiles. */
+        .sunday {
+            display: grid; grid-template-columns: 1.3fr 0.9fr; gap: var(--space-lg);
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-lg);
+        }
+        .sunday__date {
+            margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600;
+            color: var(--primary);
+        }
+        .sunday__name {
+            margin: 8px 0 10px;
+            font-family: var(--font-serif); font-size: 42px; font-weight: 500; line-height: 1.05;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .sunday__who { margin: 0 0 16px; font-size: 16px; line-height: 1.45; color: var(--on-surface); text-wrap: pretty; }
+        .sunday__role {
+            margin: 0 0 16px; font-family: var(--font-serif); font-size: 18px; font-style: italic;
+            color: var(--primary);
+        }
+        .hymns { margin: 0; padding: 0; list-style: none; }
+        .hymns li {
+            padding: 8px 0; border-top: 1px solid var(--outline-variant);
+            font-family: var(--font-serif); font-size: 18px; color: var(--on-surface);
+        }
+        .hymns li:first-child { border-top: 0; padding-top: 0; }
+        .places-label {
+            margin: var(--space-lg) 0 var(--space-sm);
+            font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--primary);
+        }
+
+        /* B — a contents page. Sunday is one ruled line. */
+        .running {
+            display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px;
+            padding-bottom: 14px; margin-bottom: 4px;
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .running strong {
+            font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--primary);
+        }
+        .running span { font-size: 15px; color: var(--on-surface); }
+        .running a { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--primary); }
+        .toc {
+            display: grid; grid-template-columns: 40px minmax(9rem, 14rem) 1fr auto;
+            align-items: center; gap: 12px 16px;
+            padding: 16px 4px; border-bottom: 1px solid var(--outline-variant);
+            text-decoration: none; color: inherit;
+        }
+        .toc:hover { background: var(--surface-container-low); }
+        .toc__name {
+            font-family: var(--font-serif); font-size: 26px; line-height: 1.15;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .toc__why { font-size: 15px; line-height: 1.4; color: var(--on-surface-variant); text-wrap: pretty; }
+        .toc .material-symbols-outlined.chev { color: var(--outline); }
+
+        /* C — your week beside Sunday. Places are a footer of names. */
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); align-items: start; }
+        .col h3 {
+            margin: 0 0 10px;
+            font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--primary);
+        }
+        .reading {
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-md) var(--space-lg);
+        }
+        .reading h4 {
+            margin: 4px 0 8px;
+            font-family: var(--font-serif); font-size: 32px; font-weight: 500; line-height: 1.1;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .reading p { margin: 0 0 10px; font-size: 15px; line-height: 1.5; color: var(--on-surface); text-wrap: pretty; }
+        .index {
+            display: flex; flex-wrap: wrap; gap: 8px 22px;
+            margin-top: var(--space-lg); padding-top: var(--space-md);
+            border-top: 1px solid var(--outline-variant);
+        }
+        .index a {
+            font-family: var(--font-serif); font-size: 20px; color: var(--primary); text-decoration: none;
+        }
+        .index a:hover { text-decoration: underline; }
+
+        .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-md); padding-bottom: var(--space-xl, 48px); }
+        .state {
+            background: var(--background);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-md); min-width: 0;
+        }
+        .state h3 {
+            margin: 0 0 10px; font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+            color: var(--on-surface-variant);
+        }
+        .mini-name {
+            margin: 0 0 6px; font-family: var(--font-serif); font-size: 22px; font-weight: 500;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .mini-line { margin: 0; font-size: 14px; line-height: 1.4; color: var(--on-surface-variant); text-wrap: pretty; }
+
+        @media (max-width: 800px) {
+            .sunday, .split, .states { grid-template-columns: 1fr; }
+            .sunday__name { font-size: 34px; }
+            .toc { grid-template-columns: 40px 1fr auto; }
+            .toc__why { grid-column: 2 / -1; }
+            .running a { margin-left: 0; }
+        }
+    </style>
+</head>
+<body class="m-page">
+    <a class="skip" href="#a">Skip to variant A</a>
+    <nav class="arena-nav" aria-label="Variants">
+        <a href="#a">A · Sunday leads</a>
+        <a href="#b">B · The directory</a>
+        <a href="#c">C · Your week</a>
+        <a href="shepherd-dashboard-arena.html">Shepherd desk</a>
+    </nav>
+
+    <header class="intro">
+        <h1>Home, three ways</h1>
+        <p>The header is one line. Sunday and the places are no longer the same kind of tile. Pick a letter, and say what to pull from the other two. None of this is on the site yet. Names are fictional.</p>
+    </header>
+
+    <!-- A -->
+    <section class="variant" id="a">
+        <div class="cap">
+            <h2>A · Sunday leads</h2>
+            <p>From <a href="https://mobbin.com/screens/97fcd777-2cae-4bec-81b5-a03aaebe5436">Partiful</a> and <a href="https://mobbin.com/screens/4358f550-897a-46ad-8d26-2508da69ebfd">Uxcel</a>: the next gathering is the page, and everything else is a list you can read in full. The equal tiles, and the cut-off sentences, are gone. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <img alt="" class="dash-seal" src="../../../public/assets/mosaic-logo.png" width="32" height="32" />
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Mosaic Services</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <article class="sunday">
+                    <div>
+                        <p class="sunday__date">Sunday 4 October</p>
+                        <h3 class="sunday__name">Morning worship</h3>
+                        <p class="sunday__who">Ada Lowell is preaching. The lesson is Psalm 23.</p>
+                        <p class="sunday__role">You are reading the lesson.</p>
+                        <a class="m-btn m-btn--primary m-btn--sm" href="#a">Open the order</a>
+                    </div>
+                    <div>
+                        <ol class="hymns">
+                            <li>How Great Thou Art</li>
+                            <li>Be Thou My Vision</li>
+                            <li>Amazing Grace</li>
+                        </ol>
+                    </div>
+                </article>
+                <h3 class="places-label">Places</h3>
+                <div class="m-card-list">
+                    <a class="m-row m-row--interactive m-row--serif" href="#a">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">church</span></span>
+                        <span class="m-row__main">
+                            <span class="m-row__title">Services</span>
+                            <span class="m-row__sub">Every Sunday, and the order of service behind it.</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                    <a class="m-row m-row--interactive m-row--serif" href="#a">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">event</span></span>
+                        <span class="m-row__main">
+                            <span class="m-row__title">Calendar</span>
+                            <span class="m-row__sub">Everything on at church, and what you are part of.</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                    <a class="m-row m-row--interactive m-row--serif" href="#a">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">menu_book</span></span>
+                        <span class="m-row__main">
+                            <span class="m-row__title">Hymns</span>
+                            <span class="m-row__sub">Browse the book, and the sheets that print.</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                    <a class="m-row m-row--interactive m-row--serif" href="#a">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">volunteer_activism</span></span>
+                        <span class="m-row__main">
+                            <span class="m-row__title">Shepherd</span>
+                            <span class="m-row__sub">Elder tools, and the care the congregation needs.</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                    <a class="m-row m-row--interactive m-row--serif" href="#a">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">group</span></span>
+                        <span class="m-row__main">
+                            <span class="m-row__title">Membership</span>
+                            <span class="m-row__sub">Who is in the congregation, and how to reach them.</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                </div>
+            </main>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+                    <p>No service is on the book yet. When one is added, it will lead this page.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Morning worship</p>
+                <p class="mini-line">Sunday 4 October. One hymn: How Great Thou Art. You have no other place on the home screen.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">Sunday did not load</span>
+                        <span class="m-notice__text">The places are still listed below. Try the order of service again.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- B -->
+    <section class="variant" id="b">
+        <div class="cap">
+            <h2>B · The directory</h2>
+            <p>From <a href="https://mobbin.com/screens/dcdccdef-007f-4e73-b10b-6deee3e91014">Magnific</a>, read as a list and not a row of icons. Sunday is one line. Each place is a name in the reading face and a sentence that is allowed to finish. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <img alt="" src="../../../public/assets/mosaic-logo.png" width="32" height="32" />
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Mosaic Services</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <div class="running">
+                    <strong>Sunday 4 October</strong>
+                    <span>Morning worship · Ada Lowell · Psalm 23</span>
+                    <a href="#b">You are reading the lesson</a>
+                </div>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">church</span></span>
+                    <span class="toc__name">Services</span>
+                    <span class="toc__why">Every Sunday, and the order of service behind it.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">event</span></span>
+                    <span class="toc__name">Calendar</span>
+                    <span class="toc__why">Everything on at church, and what you are part of.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">menu_book</span></span>
+                    <span class="toc__name">Hymns</span>
+                    <span class="toc__why">Browse the book, and the sheets that print.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">volunteer_activism</span></span>
+                    <span class="toc__name">Shepherd</span>
+                    <span class="toc__why">Elder tools, and the care the congregation needs.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">group</span></span>
+                    <span class="toc__name">Membership</span>
+                    <span class="toc__why">Who is in the congregation, and how to reach them.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">print</span></span>
+                    <span class="toc__name">Printables</span>
+                    <span class="toc__why">Lay out a handout from the live church record.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+                <a class="toc" href="#b">
+                    <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">assignment</span></span>
+                    <span class="toc__name">Forms</span>
+                    <span class="toc__why">Build a sign-up, and read what came back.</span>
+                    <span class="material-symbols-outlined chev" aria-hidden="true">chevron_right</span>
+                </a>
+            </main>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <p class="mini-line">Nothing is on for Sunday, and this account has no places yet.</p>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <p>When you are given a place, it will be listed here by name.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Services</p>
+                <p class="mini-line">Every Sunday, and the order of service behind it. Sunday 4 October is a single line above this, and there is nothing else.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">The directory did not load</span>
+                        <span class="m-notice__text">Sunday’s line is still here. The list of places is not.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- C -->
+    <section class="variant" id="c">
+        <div class="cap">
+            <h2>C · Your week</h2>
+            <p>From the <a href="https://mobbin.com/screens/4358f550-897a-46ad-8d26-2508da69ebfd">Uxcel</a> split: what you are down for sits beside Sunday, and the places shrink to names along the foot. Home stops being a menu and starts being the week. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <img alt="" src="../../../public/assets/mosaic-logo.png" width="32" height="32" />
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Mosaic Services</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <div class="split">
+                    <section class="col">
+                        <h3>Yours</h3>
+                        <div class="m-card-list">
+                            <a class="m-row m-row--interactive m-row--serif" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-row__title">Reading the lesson</span>
+                                    <span class="m-row__sub">Sunday 4 October · Morning worship · Psalm 23</span>
+                                </span>
+                            </a>
+                            <a class="m-row m-row--interactive m-row--serif" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-row__title">Door</span>
+                                    <span class="m-row__sub">Wednesday 7 October · Prayer meeting</span>
+                                </span>
+                            </a>
+                            <a class="m-row m-row--interactive m-row--serif" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-row__title">Nursery</span>
+                                    <span class="m-row__sub">Sunday 11 October · Morning worship</span>
+                                </span>
+                            </a>
+                        </div>
+                    </section>
+                    <section class="col reading">
+                        <h3>Sunday</h3>
+                        <h4>Morning worship</h4>
+                        <p>4 October. Ada Lowell is preaching. Psalm 23.</p>
+                        <p>How Great Thou Art. Be Thou My Vision. Amazing Grace.</p>
+                        <a class="m-btn m-btn--primary m-btn--sm" href="#c">Open the order</a>
+                    </section>
+                </div>
+                <nav class="index" aria-label="Places">
+                    <a href="#c">Services</a>
+                    <a href="#c">Calendar</a>
+                    <a href="#c">Hymns</a>
+                    <a href="#c">Shepherd</a>
+                    <a href="#c">Membership</a>
+                    <a href="#c">Printables</a>
+                    <a href="#c">Forms</a>
+                </nav>
+            </main>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
+                    <p>You are not down for anything this week, and Sunday is not on the book yet.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Reading the lesson</p>
+                <p class="mini-line">Sunday 4 October is your only commitment. The Sunday column still names the service. The footer is one word: Services.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">Your week did not load</span>
+                        <span class="m-notice__text">Commitments and Sunday both failed. The place names along the foot are still there.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

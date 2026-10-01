@@ -15,19 +15,108 @@
 
     <style>
         [x-cloak] { display: none !important; }
-    </style>
-    <style>
-        /* Per-tag Hold-Duration slider: a dot on the bottom edge of a selected tag. */
-        .tag-hold-slider {
-            -webkit-appearance: none; appearance: none;
-            position: absolute; left: 10px; right: 10px; bottom: 6px;
-            width: auto; height: 10px; margin: 0; background: transparent; cursor: pointer;
+
+        /* The elders' desk. Home is a field of tall posters on parchment.
+           This page is a blotter: a warmer ground, one even band of places,
+           then a ledger the same width. Lengths are tokens so a later
+           density pass can shrink them without a second set of numbers. */
+        body.m-page { background: var(--surface-container); }
+
+        .shep-band {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: var(--space-sm);
+            align-items: stretch;
         }
-        .tag-hold-slider:focus { outline: none; }
-        .tag-hold-slider::-webkit-slider-runnable-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
-        .tag-hold-slider::-moz-range-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
-        .tag-hold-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 10px; height: 10px; border-radius: 9999px; background: currentColor; }
-        .tag-hold-slider::-moz-range-thumb { width: 10px; height: 10px; border: none; border-radius: 9999px; background: currentColor; }
+        @media (min-width: 700px) {
+            .shep-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1100px) {
+            .shep-band { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+
+        .shep-band > .m-nav-card {
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: flex-start;
+            text-align: left;
+            gap: var(--space-sm);
+            height: 100%;
+            padding: var(--space-md);
+            border-left: 3px solid var(--primary);
+        }
+        .shep-band .m-medallion {
+            width: 40px; height: 40px; margin-bottom: 0;
+        }
+        .shep-band .m-medallion .material-symbols-outlined { font-size: 20px; }
+        .shep-band .m-nav-card__title {
+            font-family: var(--font-display);
+            font-size: 18px;
+            line-height: 1.2;
+            letter-spacing: 0.02em;
+            color: var(--primary);
+            text-wrap: balance;
+        }
+        .shep-band .m-nav-card__desc { text-wrap: pretty; }
+
+        .shep-ledger__head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: var(--space-sm);
+        }
+        .shep-ledger .m-section__title {
+            font-family: var(--font-display);
+            font-size: 26px;
+            letter-spacing: 0.02em;
+            color: var(--primary);
+        }
+        .shep-ledger__sheet { padding: 0; overflow: hidden; }
+        .shep-ledger__sheet > .m-empty { border: 0; border-radius: 0; }
+
+        .shep-rows { list-style: none; margin: 0; padding: 0; }
+        .shep-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: var(--space-sm) var(--space-md);
+            align-items: center;
+            padding: var(--space-sm) var(--space-md);
+            border-top: 1px solid var(--outline-variant);
+        }
+        .shep-row:first-child { border-top: 0; }
+        .shep-check {
+            width: 32px; height: 32px; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid var(--outline); border-radius: 2px;
+            background: transparent; color: var(--on-primary); cursor: pointer;
+        }
+        .shep-check:hover:not(:disabled) { border-color: var(--primary); }
+        .shep-check:disabled { cursor: default; }
+        .shep-check:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .shep-check--done { background: var(--primary); border-color: var(--primary); }
+        .shep-check .material-symbols-outlined { font-size: 16px; }
+        .shep-row__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .shep-row__title {
+            font-family: var(--font-serif); font-size: 17px; line-height: 1.3;
+            color: var(--on-surface); overflow-wrap: anywhere; text-wrap: pretty;
+        }
+        .shep-row__note {
+            font-family: var(--font-sans); font-size: 13px;
+            color: var(--on-surface-variant);
+        }
+        .shep-row__due {
+            font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+            font-variant-numeric: tabular-nums; color: var(--on-surface-variant);
+            white-space: nowrap;
+        }
+        .shep-row__due--late { color: var(--error); }
+        .shep-row--done .shep-row__title {
+            text-decoration: line-through; color: var(--on-surface-variant);
+        }
+        @media (max-width: 639px) {
+            .shep-row { grid-template-columns: auto minmax(0, 1fr); }
+            .shep-row__due { grid-column: 2; }
+        }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -52,11 +141,11 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="shepherdingDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="m-back">
@@ -65,7 +154,6 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">Shepherd Dashboard</h1>
-                    <span class="m-header__sub">Elder-only tools for member care.</span>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -78,344 +166,94 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <!-- Main content -->
-    <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <!-- Main content. Saved views of people live on the People page. This
+         desk is the places, then what is due. -->
+    <main x-show="!loading" class="m-page__body">
 
-        <!-- Navigation Buttons -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
-            <!-- Documents -->
+        <div class="shep-band">
             <a href="shepherding-documents.html" class="m-nav-card">
-                <div class="m-medallion">
+                <span class="m-medallion" aria-hidden="true">
                     <span class="material-symbols-outlined">folder_open</span>
-                </div>
-                <h2 class="m-nav-card__title">Documents</h2>
-                <p class="m-nav-card__desc">Elder notes &amp; meeting minutes.</p>
+                </span>
+                <span class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">Documents</h2>
+                    <p class="m-nav-card__desc">Notes and the minutes of a meeting.</p>
+                </span>
             </a>
 
-            <!-- People -->
             <a href="shepherding-people.html" class="m-nav-card">
-                <div class="m-medallion">
+                <span class="m-medallion" aria-hidden="true">
                     <span class="material-symbols-outlined">group</span>
-                </div>
-                <h2 class="m-nav-card__title">People</h2>
-                <p class="m-nav-card__desc">View &amp; manage member profiles.</p>
+                </span>
+                <span class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">People</h2>
+                    <p class="m-nav-card__desc">The congregation, one person at a time.</p>
+                </span>
             </a>
 
-            <!-- Manage Tags and Relationships (MS-103) — the one home for the
-                 elder-only vocabulary: Shepherding Tags and Relationship Types. -->
-            <a href="shepherding-tags.html" class="m-nav-card">
-                <div class="m-medallion">
-                    <span class="material-symbols-outlined">label</span>
-                </div>
-                <h2 class="m-nav-card__title">Manage Tags and Relationships</h2>
-                <p class="m-nav-card__desc">Shepherding tags, and the Relationship Types elders can apply.</p>
-            </a>
-
-            <!-- Tasks & Reminders (MS-79) — what the elders have to do. The
-                 panel below is a glance at yours; this is the whole of it. -->
+            <!-- Tasks & Reminders (MS-79). The ledger below is a glance.
+                 This card is the whole list. -->
             <a href="shepherding-tasks.html" class="m-nav-card">
-                <div class="m-medallion">
+                <span class="m-medallion" aria-hidden="true">
                     <span class="material-symbols-outlined">checklist</span>
-                </div>
-                <h2 class="m-nav-card__title">Tasks &amp; Reminders</h2>
-                <p class="m-nav-card__desc">What the elders have to do, and what got done.</p>
+                </span>
+                <span class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">Tasks</h2>
+                    <p class="m-nav-card__desc">What is due, and what is done.</p>
+                </span>
             </a>
 
-            <!-- Relations Viewer (MS-91) — the interactive relationship graph. -->
+            <!-- Relations Viewer (MS-91). -->
             <a href="relations-viewer.html" class="m-nav-card">
-                <div class="m-medallion">
+                <span class="m-medallion" aria-hidden="true">
                     <span class="material-symbols-outlined">hub</span>
-                </div>
-                <h2 class="m-nav-card__title">Relations Viewer</h2>
-                <p class="m-nav-card__desc">Visualize how members are connected.</p>
+                </span>
+                <span class="m-nav-card__body">
+                    <h2 class="m-nav-card__title">Relations</h2>
+                    <p class="m-nav-card__desc">The graph, the types, and the families.</p>
+                </span>
             </a>
         </div>
 
-        <!-- Content area: Filtered Views + your tasks -->
-        <div class="flex flex-col lg:flex-row gap-margin items-start">
-
-            <!-- Filtered Views -->
-            <section class="flex-1 min-w-0 flex flex-col gap-md">
-                <div class="flex items-center justify-between">
-                    <h2 class="font-headline-md text-headline-md text-primary">Filtered Views</h2>
-                    <button x-show="canDecide" @click="editingViewId = null; newView = blankView(); showViewModal = true"
-                        class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        New View
-                    </button>
+        <!-- A glance (MS-79): yours, the ones nobody has picked up, and
+             anything late. The full list is the Tasks card. -->
+        <section class="m-section shep-ledger">
+            <div class="shep-ledger__head">
+                <h2 class="m-section__title">To do</h2>
+                <a href="shepherding-tasks.html" class="m-btn m-btn--quiet m-btn--sm">All tasks</a>
+            </div>
+            <div class="m-card shep-ledger__sheet">
+                <div x-show="panelTasks.length === 0" class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
+                    <p>Nothing is waiting on you.</p>
                 </div>
-
-                <!-- View Selector Tabs -->
-                <div x-show="views.length > 0" class="flex flex-wrap gap-2">
-                    <template x-for="view in views" :key="view.id">
-                        <button @click="selectedViewId = (selectedViewId === view.id ? null : view.id)"
-                            :class="selectedViewId === view.id ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'"
-                            class="px-4 py-2 rounded-full font-label-md text-label-md transition-all shadow-sm flex items-center gap-2">
-                            <span x-text="view.title"></span>
-                            <span x-show="selectedViewId === view.id" class="material-symbols-outlined text-[14px]">close</span>
-                        </button>
-                    </template>
-                </div>
-
-                <div x-show="views.length === 0" class="text-on-surface-variant italic text-sm">
-                    No filtered views yet. Create one to see a custom subset of people here.
-                </div>
-
-                <template x-for="view in views" :key="view.id">
-                    <div x-show="selectedViewId === view.id" x-transition.opacity class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
-                        <!-- View Header -->
-                        <div class="flex items-center justify-between px-lg py-md border-b border-outline-variant">
-                            <div class="flex flex-col gap-xs">
-                                <h3 class="font-headline-md text-headline-md text-on-surface" x-text="view.title"></h3>
-                                <div class="flex flex-wrap gap-xs" x-show="view.filterTags && view.filterTags.length > 0">
-                                    <span class="font-label-md text-label-md text-on-surface-variant">Tags:</span>
-                                    <template x-for="tagId in view.filterTags" :key="tagId">
-                                        <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md">
-                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="viewTagHoldSummary(view, tagId)"></span>
-                                        </span>
-                                    </template>
-                                    <span class="font-label-md text-label-md text-on-surface-variant"
-                                          x-text="view.filterMode === 'all' ? '(match all)' : '(match any)'"></span>
-                                </div>
-                                <div class="flex items-center gap-xs" x-show="view.statusZoneFilters && view.statusZoneFilters.length > 0">
-                                    <span class="font-label-md text-label-md text-on-surface-variant">Status:</span>
-                                    <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
-                                          x-text="view.statusZoneFilters.length + ' zone' + (view.statusZoneFilters.length === 1 ? '' : 's') + ' selected'"></span>
-                                </div>
-                                <span x-show="(!view.filterTags || view.filterTags.length === 0) && (!view.statusZoneFilters || view.statusZoneFilters.length === 0)"
-                                      class="font-label-md text-label-md text-on-surface-variant">Showing all active members</span>
-                            </div>
-                            <div x-show="canDecide" class="flex items-center gap-2">
-                                <button @click="openEditView(view)"
-                                    class="text-on-surface-variant hover:text-primary transition-colors flex-shrink-0">
-                                    <span class="material-symbols-outlined text-[20px]">edit</span>
-                                </button>
-                                <button @click="deleteView(view.id)"
-                                    class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
-                                    <span class="material-symbols-outlined text-[20px]">delete</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- People Table -->
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="bg-surface-container">
-                                    <tr>
-                                        <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Name</th>
-                                        <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider hidden md:table-cell">Tags</th>
-                                        <th class="px-lg py-sm"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="person in getPeopleForView(view)" :key="person.id">
-                                        <tr class="border-t border-outline-variant hover:bg-surface-container-low transition-colors">
-                                            <td class="px-lg py-sm font-body-md text-on-surface" :class="ShepherdingBlur.nameClass({filterContext: true})" x-text="person.name"></td>
-                                            <td class="px-lg py-sm hidden md:table-cell">
-                                                <div class="flex flex-wrap gap-xs" :class="ShepherdingBlur.pastoralClass()">
-                                                    <template x-for="tagId in (person.tags || [])" :key="tagId">
-                                                        <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
-                                                              x-text="getTagName(tagId)"></span>
-                                                    </template>
-                                                </div>
-                                            </td>
-                                            <td class="px-lg py-sm text-right">
-                                                <a :href="`shepherding-profile.html?id=${person.id}&fromPage=dashboard`"
-                                                   class="text-primary hover:underline font-label-md text-label-md">View</a>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                    <tr x-show="getPeopleForView(view).length === 0">
-                                        <td colspan="4" class="px-lg py-md text-on-surface-variant italic text-sm">No people match this filter.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </template>
-            </section>
-
-            <!-- Your tasks (MS-79) — a GLANCE, not a second home. Yours, the
-                 ones nobody has picked up, and anything late, whoever it belongs
-                 to. Writing at length, filtering and the completed list all
-                 live on the Tasks & Reminders page. -->
-            <aside class="w-full lg:w-80 flex-shrink-0 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
-                <div class="flex items-center justify-between">
-                    <h2 class="font-headline-md text-headline-md text-primary">Your tasks</h2>
-                    <a href="shepherding-tasks.html"
-                        class="flex items-center gap-1 px-sm py-xs text-primary font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors">
-                        All tasks
-                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
-                    </a>
-                </div>
-
-                <div x-show="panelTasks.length === 0" class="text-on-surface-variant italic text-sm">
-                    Nothing outstanding.
-                </div>
-
-                <ul class="flex flex-col gap-sm">
+                <ul class="shep-rows" x-show="panelTasks.length > 0">
                     <template x-for="task in panelTasks" :key="task.id + task.dueDate">
-                        <li class="flex items-start justify-between gap-sm bg-surface-container rounded-lg px-md py-sm"
-                            :class="task.state === 'done' ? 'opacity-60' : ''">
-                            <button @click="completeTask(task)" :disabled="task.state === 'done'"
-                                :aria-label="'Mark ' + task.title + ' done'"
-                                class="mt-1 w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center"
-                                :class="task.state === 'done'
-                                    ? 'border-primary bg-primary text-on-primary'
-                                    : 'border-outline hover:border-primary'">
-                                <span x-show="task.state === 'done'" class="material-symbols-outlined text-[12px]">check</span>
+                        <li class="shep-row" :class="task.state === 'done' ? 'shep-row--done' : ''">
+                            <button type="button" class="shep-check"
+                                :class="task.state === 'done' ? 'shep-check--done' : ''"
+                                @click="completeTask(task)" :disabled="task.state === 'done'"
+                                :aria-label="'Mark ' + task.title + ' done'">
+                                <span x-show="task.state === 'done'" class="material-symbols-outlined" aria-hidden="true">check</span>
                             </button>
-                            <div class="flex flex-col gap-xs min-w-0 flex-1">
-                                <span class="font-body-md text-on-surface"
-                                      :class="(task.state === 'done' ? 'line-through ' : '') + ShepherdingBlur.contentClass(task.createdBy)"
+                            <div class="shep-row__main">
+                                <span class="shep-row__title"
+                                      :class="ShepherdingBlur.contentClass(task.createdBy)"
                                       x-text="task.title"></span>
-                                <span class="font-label-md text-label-md flex items-center gap-xs"
-                                      :class="task.state === 'overdue' ? 'text-error font-semibold' : 'text-on-surface-variant'">
-                                    <span class="material-symbols-outlined text-[14px]">schedule</span>
-                                    <span x-text="taskDueLabel(task)"></span>
-                                </span>
-                                <span x-show="task.isUnassigned"
-                                      class="font-label-md text-label-md text-on-surface-variant italic">
-                                    Nobody has picked this up
-                                </span>
+                                <span class="shep-row__note" x-show="task.isUnassigned">Nobody has picked this up</span>
                             </div>
+                            <span class="shep-row__due"
+                                  :class="task.state === 'overdue' ? 'shep-row__due--late' : ''"
+                                  x-text="taskDueLabel(task)"></span>
                         </li>
                     </template>
                 </ul>
-            </aside>
-
-        </div>
+            </div>
+        </section>
     </main>
 
-    <!-- Add/Edit Filtered View Modal -->
-    <div x-show="showViewModal" x-cloak
-         class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-         @click.self="showViewModal = false; editingViewId = null">
-        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant w-full max-w-md flex flex-col max-h-[85vh]">
-            <!-- Modal header -->
-            <div class="px-lg pt-lg pb-md flex-shrink-0">
-                <h2 class="font-headline-md text-headline-md text-primary" x-text="editingViewId ? 'Edit Filtered View' : 'New Filtered View'"></h2>
-            </div>
-
-            <!-- Scrollable body -->
-            <div class="px-lg pb-md flex flex-col gap-md overflow-y-auto flex-1">
-                <label class="flex flex-col gap-xs">
-                    <span class="font-label-md text-label-md text-on-surface-variant">View title</span>
-                    <input type="text" x-model="newView.title" placeholder="e.g. Red Flag Members"
-                           class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </label>
-
-                <!-- Filter by Tags -->
-                <div class="flex flex-col gap-xs">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Filter by tags</span>
-                    <p class="text-xs text-on-surface-variant">Leave empty to show all active members. Slide the dot under a selected tag to set a time held. Tap <span class="font-bold">older</span> to keep the longest holds, or <span class="font-bold">recent</span> to keep people tagged inside that time.</p>
-                    <div class="flex flex-wrap gap-x-xs gap-y-3 mt-xs">
-                        <template x-for="tag in shepherdingTags" :key="tag.id">
-                            <div class="relative">
-                                <button @click="toggleViewTag(tag.id)"
-                                    :class="newView.filterTags.includes(tag.id)
-                                        ? 'bg-primary text-on-primary pb-5'
-                                        : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
-                                    :style="newView.filterTags.includes(tag.id) ? 'min-width: 116px' : ''"
-                                    class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-all duration-300 ease-out flex items-center gap-1">
-                                    <span x-text="tag.name"></span>
-                                    <span x-show="newView.filterTags.includes(tag.id)"
-                                          class="inline-flex items-center gap-0.5 text-[10px] font-bold">
-                                        <!-- Direction, in words. Fixed width so the chip does not
-                                             resize as older / recent are toggled. -->
-                                        <span @click.stop="toggleViewNewCmp(tag.id)" role="button"
-                                              :title="viewNewDirectionHint(tag.id)"
-                                              class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer inline-block min-w-[42px] text-center"
-                                              x-text="viewNewDirectionWord(tag.id)"></span>
-                                        <span class="opacity-80 inline-block min-w-[24px] text-left" x-text="viewTagHoldShort(tag.id) || 'any'"></span>
-                                    </span>
-                                </button>
-                                <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
-                                <input x-show="newView.filterTags.includes(tag.id)"
-                                       x-transition:enter="transition ease-out duration-300 delay-100"
-                                       x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-                                       type="range"
-                                       min="0" :max="holdStops().length - 1" step="1"
-                                       :value="viewTagHoldStopIndex(tag.id)"
-                                       @input="setViewTagHoldStop(tag.id, $event.target.value)"
-                                       @click.stop @mousedown.stop
-                                       :title="viewNewScrubberLabel(tag.id)"
-                                       class="tag-hold-slider text-on-primary" />
-                            </div>
-                        </template>
-                        <span x-show="shepherdingTags.length === 0" class="text-on-surface-variant italic text-sm">No tags yet. Create some first.</span>
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-xs" x-show="newView.filterTags.length > 1">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Match mode</span>
-                    <div class="flex gap-sm">
-                        <label class="flex items-center gap-xs cursor-pointer">
-                            <input type="radio" x-model="newView.filterMode" value="any" class="accent-primary" />
-                            <span class="font-body-md text-on-surface">Match any tag</span>
-                        </label>
-                        <label class="flex items-center gap-xs cursor-pointer">
-                            <input type="radio" x-model="newView.filterMode" value="all" class="accent-primary" />
-                            <span class="font-body-md text-on-surface">Match all tags</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Filter by Status Matrix -->
-                <div class="flex flex-col gap-xs border-t border-outline-variant/50 pt-md">
-                    <div class="flex items-center justify-between">
-                        <span class="font-label-md text-label-md text-on-surface-variant">Filter by status</span>
-                        <button x-show="newView.statusZoneFilters.length > 0"
-                            @click="newView.statusZoneFilters = []"
-                            class="text-[10px] font-label-md text-on-surface-variant hover:text-error transition-colors uppercase tracking-wider font-bold">
-                            Clear
-                        </button>
-                    </div>
-                    <p class="text-xs text-on-surface-variant">Select cells to filter by urgency × importance. Leave empty to include all.</p>
-                    <div class="flex flex-col gap-1 items-center pt-1">
-                        <!-- Column headers: Urgent / Somewhat / Not -->
-                        <div class="grid gap-1" style="grid-template-columns: 56px 36px 36px 36px">
-                            <div></div>
-                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Urg.</div>
-                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Swht.</div>
-                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Not</div>
-                        </div>
-                        <!-- Row: Important -->
-                        <template x-for="imp in ['important', 'somewhat_important', 'not_important']" :key="imp">
-                            <div class="grid gap-1 items-center" style="grid-template-columns: 56px 36px 36px 36px">
-                                <div class="text-right pr-2 font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant leading-tight"
-                                     x-text="imp === 'important' ? 'Imp.' : imp === 'somewhat_important' ? 'Swht.' : 'Not'"></div>
-                                <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
-                                    <button @click="toggleViewStatusZone(urg, imp)"
-                                        :class="isViewZoneSelected(urg, imp)
-                                            ? 'bg-primary border-primary ring-2 ring-primary/30 shadow-sm'
-                                            : viewStatusCellColor(urg, imp) + ' hover:border-outline hover:bg-surface-container-high'"
-                                        class="w-8 h-8 border-2 rounded flex items-center justify-center transition-all duration-150 cursor-pointer mx-auto">
-                                        <span x-show="isViewZoneSelected(urg, imp)"
-                                              class="w-2 h-2 rounded-full bg-on-primary"></span>
-                                    </button>
-                                </template>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal footer -->
-            <div class="px-lg py-md border-t border-outline-variant flex justify-end gap-sm flex-shrink-0">
-                <button @click="showViewModal = false; editingViewId = null; newView = blankView()"
-                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
-                <button @click="editingViewId ? updateView() : addView()"
-                    :disabled="!newView.title.trim()"
-                    class="m-btn m-btn--primary m-btn--sm">
-                    <span x-text="editingViewId ? 'Save Changes' : 'Create View'"></span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast -->
-    <div x-show="toast.show" x-cloak x-transition
+    <div x-show="toast.show" x-cloak x-transition role="status" aria-live="polite"
          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-lg py-sm rounded-lg shadow-lg font-label-md text-label-md"
          :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-inverse-surface text-inverse-on-surface'">
         <span x-text="toast.message"></span>

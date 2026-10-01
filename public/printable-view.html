@@ -26,10 +26,12 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title m-header__title--serif" x-text="project ? project.name : 'Printable'"></h1>
-                    <span class="m-header__sub" x-show="template" x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + (bookletPadCount ? ' · print ' + printPageCount + ' (padded ×4)' : '') : '')) : ''"></span>
                 </div>
             </div>
             <div class="m-header__actions">
+                <span class="m-header__chip" x-show="template"
+                      x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + (bookletPadCount ? ' · print ' + printPageCount + ' (padded ×4)' : '') : '')) : ''"
+                      style="font-size:13px; color:var(--on-surface-variant); max-width:36ch; overflow:hidden; text-overflow:ellipsis;"></span>
                 <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="warnings.length" @click="showWarnings = !showWarnings" title="Not all data could be pulled">
                     <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
                 </button>

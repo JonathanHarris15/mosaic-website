@@ -15,6 +15,7 @@ Base class `.m-btn`, modifiers `.m-btn--<variant>`.
 - Shadow only on primary, and only --shadow-xs. Everything else is flat — depth here comes from tonal layers and warm hairlines.
 - Disabled drops to 40% and takes not-allowed; it is never hidden, because a control that vanishes reads as a bug.
 - 46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.
+- A button lifts 1px on hover and settles on press. That motion is the sign that it can be pressed. It is not optional, and it is not a bounce. prefers-reduced-motion keeps the colour change and drops the lift.
 - Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.
 
 Built from the Mosaic tokens only — no raw colours, no second icon set.

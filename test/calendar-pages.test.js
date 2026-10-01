@@ -5037,9 +5037,12 @@ test('the draft draws one header, not a second one under the first', () => {
     const headers = html.match(/<header[\s>]/g) || [];
 
     assert.equal(headers.length, 1, 'two bars saying the same kind of thing cost 74px of grid');
-    // And that one header carries both jobs.
-    assert.match(html, /<header[\s\S]*?draftSubtitle[\s\S]*?<\/header>/);
     assert.match(html, /<header[\s\S]*?auth-container[\s\S]*?<\/header>/);
+    // The event and the dates still name the draft. They live on the range
+    // strip, not under the title — a second line made this bar a different
+    // height from every other header.
+    assert.doesNotMatch(html, /<header[\s\S]*?draftSubtitle[\s\S]*?<\/header>/);
+    assert.match(html, /x-text="draftSubtitle"/);
 });
 
 // ── The strip is the horizontal scrollbar (thumb behaviour) ─────────────────

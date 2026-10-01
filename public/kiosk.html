@@ -30,11 +30,9 @@
 
     <style>
         [x-cloak] { display: none !important; }
-        body { font-family: 'Work Sans', sans-serif; }
-        h1, h2, h3 { font-family: 'Noto Serif', serif; }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
+<body class="m-page m-page--reading"
       x-data="kioskPage()" x-cloak>
     <!-- ⚠ NO `.m-header` HERE, AND NO `#auth-container`, ON PURPOSE.
          This screen is a desk in a foyer, not a page of the app. The one thing
@@ -53,7 +51,7 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-[720px] mx-auto px-margin pb-xl pt-md">
+    <main x-show="!loading" class="m-page__body">
         <div x-show="error"
              class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
             <span class="material-symbols-outlined text-[20px]">error</span>

@@ -254,9 +254,18 @@
   line-height: 1; white-space: nowrap; cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
               border-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
 }
 .m-btn:disabled, .m-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+@media (hover: hover) {
+  .m-btn:hover:not(:disabled) { transform: translateY(-1px); }
+}
+.m-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-btn { transition: none; }
+  .m-btn:hover:not(:disabled), .m-btn:active:not(:disabled) { transform: none; }
+}
 .m-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
 
 /* An optional slot for the button's word. A button that only ever shows its
@@ -267,6 +276,7 @@
 
 .m-btn--sm { height: 38px; padding: 0 14px; font-size: 13.5px; }
 .m-btn--lg { height: 52px; padding: 0 20px; font-size: 16px; }
+.m-btn--block { width: 100%; }
 
 .m-btn--primary {
   background: var(--primary); color: var(--on-primary);
@@ -316,7 +326,16 @@
   border: 1px solid transparent; border-radius: var(--radius-sm);
   background: transparent; color: var(--on-surface-variant); cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
+}
+@media (hover: hover) {
+  .m-icon-btn:hover:not(:disabled) { background: var(--surface-container); color: var(--primary); transform: translateY(-1px); }
+}
+.m-icon-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-icon-btn { transition: none; }
+  .m-icon-btn:hover:not(:disabled), .m-icon-btn:active:not(:disabled) { transform: none; }
 }
 .m-icon-btn .material-symbols-outlined { font-size: 20px; }
 .m-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -359,10 +378,73 @@
   }
 }
 
+/* Craft — The site still has hand-rolled controls that shout in 10px tracked capitals. */
+.uppercase { text-transform: none !important; letter-spacing: 0.01em !important; }
+/* A hairline is the edge. A soft shadow under every card is the generic kit. */
+.rounded-xl.shadow-sm,
+.rounded-2xl.shadow-sm,
+.rounded-lg.shadow-sm,
+.rounded-xl.shadow-md,
+.rounded-2xl.shadow-md {
+  box-shadow: none !important;
+}
+.tracking-widest,
+.tracking-wider { letter-spacing: 0.01em !important; }
+
+button.uppercase,
+button.tracking-widest,
+a.uppercase.tracking-widest,
+a.tracking-widest {
+  font-size: 14px !important;
+  font-weight: 600;
+  line-height: 1.2;
+}
+button.uppercase,
+button.tracking-widest {
+  min-height: 36px;
+}
+/* A tool already fills the window. Quiet the shout without growing every glyph into a 36px bar. */
+.m-page--tool button.uppercase,
+.m-page--tool button.tracking-widest,
+.m-page--tool a.uppercase.tracking-widest {
+  min-height: 32px;
+  font-size: 13px !important;
+}
+.font-label-md.uppercase,
+h2.uppercase, h3.uppercase, h4.uppercase,
+label.uppercase, legend.uppercase {
+  font-size: 13px !important;
+}
+.text-\[8px\].uppercase,
+.text-\[9px\].uppercase,
+.text-\[10px\].uppercase,
+.text-\[11px\].uppercase {
+  font-size: 13px !important;
+}
+
+@media (hover: hover) {
+  button.uppercase:hover:not(:disabled),
+  button.tracking-widest:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+button.uppercase:active:not(:disabled),
+button.tracking-widest:active:not(:disabled) {
+  transform: translateY(0) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  button.uppercase:hover:not(:disabled),
+  button.tracking-widest:hover:not(:disabled),
+  button.uppercase:active:not(:disabled),
+  button.tracking-widest:active:not(:disabled) {
+    transform: none !important;
+  }
+}
+
 /* ── Forms ─────────────────────────────────────────────────── */
 
 /* Input — A single-line text field, its label, and its error. */
-.m-field { display: block; }
+.m-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .m-input {
   width: 100%; height: 48px; padding: 0 14px;
   border: 1px solid var(--outline-variant); border-radius: var(--radius);
@@ -585,15 +667,12 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
 .f-linkrow code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* SectionLabel — The tracked-caps overline above a group of things. */
-/* Every size here is a token. The overline is --label-sm, one step below
-   the field-and-button label at --label-md; --label-xs is the tightest,
-   for a caption sitting directly on top of what it names. */
+/* SectionLabel — The quiet name of a group or a field. */
 .m-label {
   display: inline-block;
-  font-family: var(--font-sans); font-size: var(--label-sm-size);
-  font-weight: var(--label-sm-weight); line-height: var(--label-sm-line);
-  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 13px;
+  font-weight: 600; line-height: 1.35;
+  letter-spacing: 0.01em; text-transform: none;
   color: var(--on-surface-variant);
 }
 .m-label--sm { font-size: var(--label-xs-size); }
@@ -1105,6 +1184,81 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-settled--sm { font-size: 15px; }
 
+/* Prose — A reading column: a policy, a letter. */
+.m-prose { font-size: 17px; line-height: 1.65; color: var(--on-surface); }
+.m-prose__lede {
+  margin: 0 0 var(--space-md);
+  font-family: var(--font-serif); font-size: 22px; line-height: 1.4;
+  color: var(--on-surface-variant);
+}
+.m-prose h2 {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  color: var(--primary); letter-spacing: .02em;
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--outline-variant);
+}
+.m-prose h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.m-prose p, .m-prose li { margin: 0 0 14px; }
+.m-prose ul { padding-left: 1.25rem; }
+.m-prose strong { color: var(--primary); font-weight: 600; }
+.m-prose a { color: var(--primary); }
+
+/* Lede — An opening sentence inside a document, such as a policy. */
+.m-lede {
+  margin: 0;
+  max-width: 62ch;
+  font-family: var(--font-serif); font-size: 18px; line-height: 1.45;
+  color: var(--on-surface-variant); text-wrap: pretty;
+}
+
+/* Status — A short fact about a person or a row: Member, Away, Draft. */
+.m-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-container-high); color: var(--on-surface-variant);
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none; line-height: 1;
+  white-space: nowrap;
+}
+.m-status--info { background: var(--primary-fixed); color: var(--primary); }
+.m-status--good { background: var(--secondary-container); color: var(--on-secondary-container); }
+.m-status--warn { background: var(--error-container); color: var(--on-error-container); }
+
+/* PersonRow — How a person is shown: a face, their name in the reading face, then how to reach them. */
+.m-person {
+  display: flex; align-items: flex-start; gap: 12px; min-width: 0;
+  color: inherit; text-decoration: none;
+}
+.m-person__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-person__name {
+  font-family: var(--font-serif); font-size: 18px; font-weight: 600; line-height: 1.25;
+  color: var(--primary);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.m-person__meta, .m-person__reach {
+  font-family: var(--font-sans); font-size: 13px; line-height: 1.35;
+  color: var(--on-surface-variant);
+}
+.m-person__reach { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+a.m-person:hover .m-person__name, button.m-person:hover .m-person__name { color: var(--primary-container); }
+
+/* DataTable — A list with columns. */
+.m-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: 14px; }
+.m-table th {
+  text-align: left; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; text-transform: none;
+  color: var(--on-surface-variant);
+  padding: 8px 12px; border-bottom: 1px solid var(--outline-variant);
+}
+.m-table td {
+  padding: 12px; border-bottom: 1px solid var(--outline-variant);
+  color: var(--on-surface); vertical-align: middle;
+}
+.m-table tr:last-child td { border-bottom: 0; }
+.m-table tbody tr:hover td { background: var(--surface-container-low); }
+.m-table__num { text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ── Feedback ──────────────────────────────────────────────── */
 
 /* Spinner — The page's waiting state. */
@@ -1313,7 +1467,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   .m-dense .m-drawer__label { font-size: 13.5px; }
 }
 
-/* PageShell — The body of a desktop page: warm background, navy ink, a column capped at --container-max. */
+/* PageShell — The body of a desktop page: warm background, navy ink, and one of four columns. */
 .m-page {
   min-height: 100vh; display: flex; flex-direction: column;
   margin: 0; background: var(--background); color: var(--on-background);
@@ -1322,9 +1476,35 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-page__body {
   width: 100%; max-width: var(--container-max); margin: 0 auto;
-  padding-left: var(--space-md); padding-right: var(--space-md);
+  padding-left: var(--space-margin); padding-right: var(--space-margin);
   flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md);
   padding-top: var(--space-md); padding-bottom: var(--space-lg);
+  min-width: 0;
+}
+.m-page__body--wide { max-width: 1600px; }
+.m-page--reading .m-page__body { max-width: 720px; }
+.m-page--tool {
+  height: 100vh; height: 100dvh; overflow: hidden;
+}
+.m-page--app { overflow-x: hidden; }
+@media (min-width: 1024px) {
+  .m-page--app { height: 100vh; height: 100dvh; overflow: hidden; }
+}
+.m-page--door .m-page__body {
+  max-width: none; align-items: center; justify-content: center;
+}
+.m-door {
+  width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--space-md);
+}
+.m-door__mark { width: 64px; height: 64px; object-fit: contain; align-self: center; }
+.m-door__title {
+  margin: 0; text-align: center;
+  font-family: var(--font-display); font-size: 32px; font-weight: 600;
+  line-height: 1.15; letter-spacing: .02em; color: var(--primary);
+}
+@media (min-width: 768px) {
+  .m-page__body--split { flex-direction: row; align-items: flex-start; }
 }
 
 /* PageHeader — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. */
@@ -1369,11 +1549,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-family: var(--font-serif); font-size: var(--m-header-title-serif);
   letter-spacing: .01em; text-transform: none; color: var(--on-surface);
 }
+/* Retired. A second line under the title made every header a different height.
+   The rule stays so an old page does not explode. Do not use the class. */
 .m-header__sub {
   font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
   color: var(--on-surface-variant);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Retired with the subtitle. The standing bar is 64px. Do not use this to
+   make room for a second line. */
 .m-header--tall { --m-header-h: 84px; }
 
 /* The trail, above the title, where a page can be reached from more than one
@@ -1381,8 +1565,8 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    link rather than joining it — two ways out of one page is one too many. */
 .m-header__crumbs {
   display: flex; align-items: center; gap: 4px; min-width: 0;
-  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
-  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none;
   color: var(--on-surface-variant);
 }
 .m-header__crumbs a { color: inherit; text-decoration: none; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: color var(--duration) var(--ease-standard); }
@@ -1607,6 +1791,66 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-actionbar__note { font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
 .m-actionbar__acts { display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; flex: 0 0 auto; }
 @media print { .m-actionbar { display: none; } }
+
+/* Section — One labelled group. */
+.m-section { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.m-section__head { display: flex; flex-direction: column; gap: 2px; }
+.m-section__title {
+  margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 600;
+  line-height: 1.25; color: var(--on-surface);
+}
+.m-section__hint {
+  margin: 0; font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+
+/* Side — Facts that stay beside the work: a glance, an identity, the frame a form is written inside. */
+.m-with-side { align-items: start; }
+.m-side { align-self: start; min-width: 0; min-height: 0; }
+.m-side__scroll { min-height: 0; }
+@media (min-width: 1024px) {
+  .m-with-side > .m-side {
+    position: sticky;
+    top: calc(64px + var(--space-md));
+    max-height: calc(100dvh - 64px - var(--space-lg));
+    overflow: auto;
+  }
+  .m-with-side > .m-side:has(> .m-side__scroll) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .m-with-side > .m-side > .m-side__scroll {
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+/* Toolbar — The row above a list: search on the left, filters and a quiet count on the right. */
+.m-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+}
+.m-toolbar__cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); min-width: 0; }
+.m-toolbar .m-search { flex: 1 1 220px; max-width: 420px; }
+
+/* SettingRow — One setting: what it is and a sentence of help on the left, the control on the right. */
+.m-setting {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-setting:first-child { padding-top: 0; }
+.m-setting:last-child { border-bottom: 0; padding-bottom: 0; }
+.m-setting__title {
+  font-family: var(--font-sans); font-size: 15px; font-weight: 600; line-height: 1.3;
+  color: var(--on-surface);
+}
+.m-setting__hint {
+  margin: 2px 0 0;
+  font-family: var(--font-sans); font-size: 13px; line-height: 1.4;
+  color: var(--on-surface-variant); text-wrap: pretty;
+}
 /* @generated:end components */
 
 /* iOS auto-zooms into any focused input whose font-size is < 16px and then

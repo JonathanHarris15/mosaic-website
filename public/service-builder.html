@@ -170,7 +170,7 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+    class="m-page"
     x-data="serviceForm()" x-init="init()" x-cloak
     @prompt-add-person.window="promptAddPerson($event.detail.name, $event.detail.callback)">
 
@@ -304,7 +304,7 @@
         </div>
     </header>
 
-    <main class="flex-grow w-full px-6 py-8" style="max-width: 1240px; margin-left: auto; margin-right: auto;">
+    <main class="m-page__body">
 
         <!-- ── Service header card ─────────────────────────────────────────────
              Date, theme, key verse and progress up top; the people leading the

@@ -46,11 +46,11 @@
             right, all four are.</p>
 
         <nav class="g-nav">
-      <div class="g-navgroup"><span class="m-label">Core</span><a href="#m-btn">Button</a><a href="#m-icon-btn">IconButton</a></div>
+      <div class="g-navgroup"><span class="m-label">Core</span><a href="#m-btn">Button</a><a href="#m-icon-btn">IconButton</a><a href="#m-craft">Craft</a></div>
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#f-pane">FormPane</a><a href="#f-qrow">QuestionEditor</a><a href="#f-set">SettingBlock</a><a href="#m-dropdown">Dropdown</a><a href="#m-option">OptionCard</a><a href="#m-search">SearchBar</a><a href="#m-seg">Segmented</a><a href="#m-unitfield">UnitField</a></div>
-      <div class="g-navgroup"><span class="m-label">Display</span><a href="#f-tally">Tally</a><a href="#f-linkrow">LinkRow</a><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-body-md">Type</a><a href="#m-divider">Divider</a><a href="#m-token">Token</a><a href="#m-rule-row">RuleRow</a><a href="#m-locked-role">LockedRole</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a></div>
+      <div class="g-navgroup"><span class="m-label">Display</span><a href="#f-tally">Tally</a><a href="#f-linkrow">LinkRow</a><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-body-md">Type</a><a href="#m-divider">Divider</a><a href="#m-token">Token</a><a href="#m-rule-row">RuleRow</a><a href="#m-locked-role">LockedRole</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a><a href="#m-prose">Prose</a><a href="#m-lede">Lede</a><a href="#m-status">Status</a><a href="#m-person">PersonRow</a><a href="#m-table">DataTable</a></div>
       <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a><a href="#m-notice">Notice</a></div>
-      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-drawer">Drawer</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
+      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#f-crumbs">Breadcrumbs</a><a href="#m-dense">Density</a><a href="#m-drawer">Drawer</a><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a><a href="#m-section">Section</a><a href="#m-side">Side</a><a href="#m-toolbar">Toolbar</a><a href="#m-setting">SettingRow</a></div>
         </nav>
 
     <h2 class="g-group">Core</h2>
@@ -78,6 +78,17 @@
         <div class="g-demo">
         <div class="g-item"><button class="m-icon-btn m-icon-btn--ghost" aria-label="Close"><span class="material-symbols-outlined">close</span></button></div>
         <div class="g-item"><button class="m-icon-btn m-icon-btn--fab" aria-label="Add an event"><span class="material-symbols-outlined">add</span></button></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-craft">
+        <header>
+          <h3>Craft</h3>
+          <code>.m-craft</code>
+        </header>
+        <p class="g-summary">The site still has hand-rolled controls that shout in 10px tracked capitals. This is the rule that quiets them, so a page does not have to be rewritten before it can be read.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><button class="uppercase tracking-widest text-[10px]">Save my info</button></div>
         </div>
       </section>
     <h2 class="g-group">Forms</h2>
@@ -234,7 +245,7 @@
           <h3>SectionLabel</h3>
           <code>.m-label</code>
         </header>
-        <p class="g-summary">The tracked-caps overline above a group of things. The most-repeated pattern in the app by a distance — about 146 hand-written copies in five different spellings before it was named, one of which reached for text-gray-500.</p>
+        <p class="g-summary">The quiet name of a group or a field. Sentence case, the size of a caption, never a shout.</p>
         <div class="g-variants"><b>size</b> sm · md</div>
         <div class="g-demo">
         <div class="g-item"><span class="m-label">Filter by tags</span></div>
@@ -434,6 +445,62 @@
         <div class="g-item"><p class="m-settled">Anyone at all. A Sunday Service is always public — that is settled, not a setting.</p></div>
         </div>
       </section>
+      <section class="g-card" id="m-prose">
+        <header>
+          <h3>Prose</h3>
+          <code>.m-prose</code>
+        </header>
+        <p class="g-summary">A reading column: a policy, a letter. Serif for the opening, Cinzel for the sections, sans for the body.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><article class="m-prose"><p class="m-prose__lede">A private tool for the members of a church.</p><h2>Who is responsible</h2><p>Write to the church office.</p></article></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-lede">
+        <header>
+          <h3>Lede</h3>
+          <code>.m-lede</code>
+        </header>
+        <p class="g-summary">An opening sentence inside a document, such as a policy. Not a second line under the header title.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><p class="m-lede">The people of the church, and how to reach them.</p></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-status">
+        <header>
+          <h3>Status</h3>
+          <code>.m-status</code>
+        </header>
+        <p class="g-summary">A short fact about a person or a row: Member, Away, Draft. Sentence case, a tint, not a tracked stamp.</p>
+        <div class="g-variants"><b>variant</b> neutral · info · good · warn</div>
+        <div class="g-demo">
+        <div class="g-item"><span class="m-status m-status--info">Member</span></div>
+        <div class="g-item"><span class="m-status">Inactive</span></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-person">
+        <header>
+          <h3>PersonRow</h3>
+          <code>.m-person</code>
+        </header>
+        <p class="g-summary">How a person is shown: a face, their name in the reading face, then how to reach them. The name is the largest thing in the row.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><a class="m-person" href="#"><span class="m-avatar">AL</span><span class="m-person__text"><span class="m-person__name">Ada Lowell</span><span class="m-person__meta">Member · North household</span></span></a></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-table">
+        <header>
+          <h3>DataTable</h3>
+          <code>.m-table</code>
+        </header>
+        <p class="g-summary">A list with columns. Headers are sentence case and quiet. Rows are tall enough to read a name.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><table class="m-table"><thead><tr><th>Name</th><th>Raised</th></tr></thead><tbody><tr><td>General fund</td><td class="m-table__num">0</td></tr></tbody></table></div>
+        </div>
+      </section>
     <h2 class="g-group">Feedback</h2>
       <section class="g-card" id="m-spinner">
         <header>
@@ -519,10 +586,12 @@
           <h3>PageShell</h3>
           <code>.m-page</code>
         </header>
-        <p class="g-summary">The body of a desktop page: warm background, navy ink, a column capped at --container-max.</p>
-        
+        <p class="g-summary">The body of a desktop page: warm background, navy ink, and one of four columns. Pick the recipe; do not invent a fifth width.</p>
+        <div class="g-variants"><b>recipe</b> list · wide · reading · tool · door</div>
         <div class="g-demo">
         <div class="g-item"><body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body></div>
+        <div class="g-item"><body class="m-page m-page--reading"><header class="m-header">…</header><main class="m-page__body">…</main></body></div>
+        <div class="g-item"><body class="m-page m-page--door"><header class="m-header">…</header><main class="m-page__body"><div class="m-door">…</div></main></body></div>
         </div>
       </section>
       <section class="g-card" id="m-header">
@@ -613,6 +682,50 @@
         
         <div class="g-demo">
         <div class="g-item"><div class="m-actionbar"><div class="m-actionbar__said"><p class="m-actionbar__count">5 dates ticked</p><p class="m-actionbar__note">Two more come with them.</p></div><div class="m-actionbar__acts"><button class="m-btn m-btn--primary m-btn--sm">Auto-assign 7 dates</button></div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-section">
+        <header>
+          <h3>Section</h3>
+          <code>.m-section</code>
+        </header>
+        <p class="g-summary">One labelled group. The name sits above a single surface. Rows that belong together share that surface.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><section class="m-section"><div class="m-section__head"><h2 class="m-section__title">Security</h2><p class="m-section__hint">Change the password on this account.</p></div><div class="m-card">…</div></section></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-side">
+        <header>
+          <h3>Side</h3>
+          <code>.m-side</code>
+        </header>
+        <p class="g-summary">Facts that stay beside the work: a glance, an identity, the frame a form is written inside. They do not scroll off the screen.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-with-side"><div class="m-side"><h2 class="m-section__title">Sunday</h2><div class="m-side__scroll">…</div></div><div>…</div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-toolbar">
+        <header>
+          <h3>Toolbar</h3>
+          <code>.m-toolbar</code>
+        </header>
+        <p class="g-summary">The row above a list: search on the left, filters and a quiet count on the right. Not a second header.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-toolbar"><span class="m-search"><span class="material-symbols-outlined">search</span><input type="search" placeholder="Search people" /></span><div class="m-toolbar__cluster"></div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-setting">
+        <header>
+          <h3>SettingRow</h3>
+          <code>.m-setting</code>
+        </header>
+        <p class="g-summary">One setting: what it is and a sentence of help on the left, the control on the right. Not a stack of identical inputs with no explanation.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-setting"><div><div class="m-setting__title">Public list</div><p class="m-setting__hint">Anyone in the church can see it.</p></div><button class="m-btn m-btn--secondary m-btn--sm" type="button">Change</button></div></div>
         </div>
       </section>
     </div>

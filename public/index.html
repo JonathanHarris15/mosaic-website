@@ -97,16 +97,64 @@
             display: grid;
             grid-template-columns: minmax(0, 1fr);
             gap: var(--space-md);
-            align-items: start;
+            align-items: stretch;
+            flex: 1;
+            min-height: 0;
         }
 
-        .dash-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+        .dash-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; min-height: 0; }
 
         .dash-tiles {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
             gap: var(--space-sm);
-            align-content: start;
+            align-content: stretch;
+        }
+
+        /* A place card. The name is Cinzel. It wraps inside the card, at a
+           space, and it must not widen the row: a grid item's min-width is
+           the width of its longest word, and "Registrations" at display size
+           is wider than a third of a narrow pane. The size is a fraction of
+           the card. 13cqi sat on the border and the last letter crossed it. */
+        .dash-tiles { min-width: 0; }
+        .dash-tiles > .m-nav-card {
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            text-align: left;
+            gap: var(--space-sm);
+            min-width: 0;
+            min-height: 0;
+            padding: var(--space-sm) var(--space-md);
+            border-top: 3px solid var(--primary);
+            container-type: inline-size;
+            overflow: hidden;
+        }
+        .dash-tiles > .m-nav-card .m-medallion {
+            margin-bottom: 0;
+            width: 40px;
+            height: 40px;
+        }
+        .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 20px; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; min-width: 0; max-width: 100%; }
+        .dash-tiles > .m-nav-card .m-nav-card__title {
+            font-family: var(--font-display);
+            /* 10.5cqi keeps "Registrations" (~0.76em a letter in Cinzel)
+               inside the card, with room before the border. */
+            font-size: clamp(16px, 10.5cqi, 26px);
+            line-height: 1.15;
+            color: var(--primary);
+            max-width: 100%;
+            overflow-wrap: normal;
+            word-break: normal;
+            text-wrap: pretty;
+        }
+        .dash-tiles > .m-nav-card .m-nav-card__desc {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            line-height: 1.35;
         }
 
         @media (min-width: 640px) {
@@ -114,26 +162,57 @@
         }
 
         @media (min-width: 1024px) {
-            /* A fixed side column rather than 4-of-12: the Glance panel holds
-               six label/value pairs and nothing longer, so past about 300px it
-               is only a wider gutter, and every pixel it gives back goes to
-               the tiles. */
-            .dash-split { grid-template-columns: minmax(0, 1fr) 300px; }
-            .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-
-            /* The panel is as tall as what it has to say — align-items: start
-               above — but the tiles take the whole column, because the tile grid
-               is the one thing on this page allowed to scroll inside itself
-               when somebody can see more pages than the fold holds. */
-            .dash-stack { align-self: stretch; }
-        }
-
-        /* Four across only once a tile is still wide enough to hold its own
-           sentence. At 1280px it is not: the description clamps mid-word and
-           the tile stops explaining itself, which is the opposite of
-           welcoming. */
-        @media (min-width: 1500px) {
-            .dash-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            /* The glance is a column of a few facts. Wider than this it is
+               only a gutter, and the cards need the rest of the window. */
+            .dash-split { grid-template-columns: minmax(0, 1fr) 320px; }
+            /* The glance fills its column. .m-side is align-self: start, which
+               would shrink the panel to its text and leave a cream gutter. */
+            .dash-split > .m-with-side { min-width: 0; width: 100%; }
+            .dash-split #sunday-glance { width: 100%; align-self: stretch; }
+            .dash-tiles {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                align-content: start;
+                flex: 1;
+                min-height: 0;
+            }
+            .dash-stack { align-self: stretch; min-height: 0; }
+            /* Four or more places: the rows share the window and do not
+               scroll while the type still fits. Three or fewer stay a band
+               the height of the type, and Sunday stays that same height
+               instead of a blank column. */
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) {
+                align-items: stretch;
+            }
+            /* Rows share the window exactly. A 200px floor left four rows a
+               few pixels too tall, and the grid grew a scrollbar for that slop. */
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles {
+                grid-auto-rows: minmax(0, 1fr);
+                overflow: hidden;
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card {
+                height: 100%;
+                justify-content: center;
+                /* The row has a real height here, so the name can track it.
+                   Below 1024 the card sizes to its text, and size containment
+                   would collapse that. */
+                container-type: size;
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card .m-nav-card__title {
+                font-size: clamp(15px, min(10.5cqi, 13cqh), 26px);
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-stack,
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) > .m-with-side,
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) #sunday-glance {
+                height: 100%;
+                min-height: 0;
+            }
+            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) {
+                flex: 0 0 auto;
+                align-items: stretch;
+            }
+            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) #sunday-glance {
+                height: 100%;
+            }
         }
 
         .dash-caption {
@@ -151,11 +230,22 @@
             gap: var(--space-sm);
         }
 
+        .dash-kicker {
+            margin: 0;
+            font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+            letter-spacing: 0.01em; color: var(--on-surface-variant);
+        }
+        .dash-date {
+            margin: 2px 0 0;
+            font-family: var(--font-display); font-size: 28px; font-weight: 600;
+            line-height: 1.15; color: var(--primary); text-wrap: balance;
+        }
+
         .dash-pairs dt {
             flex: 0 0 auto;
-            font-family: var(--font-sans); font-size: var(--label-xs-size);
-            font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing);
-            text-transform: uppercase; color: var(--on-surface-variant);
+            font-family: var(--font-sans); font-size: 13px;
+            font-weight: 600; letter-spacing: 0.01em;
+            text-transform: none; color: var(--on-surface-variant);
         }
 
         .dash-pairs dd {
@@ -192,9 +282,7 @@
         .drag-handle:active { cursor: grabbing; }
         .drag-handle .material-symbols-outlined { font-size: 18px; pointer-events: none; }
 
-        @media (min-width: 1024px) {
-            .m-nav-card--dense .drag-handle { top: 50%; right: 4px; transform: translateY(-50%); }
-        }
+        .dash-tiles .drag-handle { top: 10px; right: 10px; transform: none; }
     </style>
 
     <!-- Firebase SDKs -->
@@ -227,7 +315,7 @@
 </head>
 
 <body
-    class="m-dense bg-background text-on-background font-body-md text-body-md antialiased min-h-screen lg:h-screen overflow-x-hidden lg:overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
+    class="m-page m-page--app m-dense selection:bg-primary-fixed selection:text-on-primary-fixed">
     <!-- Home. No way back from here — but the seal and the app's name now sit
          IN the bar rather than in a 64px band of their own below it. A wordless
          mark you recognised before the page painted does not need a sixth of
@@ -253,7 +341,7 @@
             <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
-    <main class="dash-main flex-grow max-w-container w-full mx-auto px-margin pb-md pt-sm lg:min-h-0 lg:overflow-hidden">
+    <main class="dash-main flex-grow w-full px-margin pb-sm pt-sm lg:min-h-0 lg:overflow-hidden">
         <!-- The one thing that needs doing, above everything the page offers.
              Filled in by updateDashboard() for the people who may fix it, and
              empty — taking no room at all — for everybody else. -->
@@ -262,11 +350,11 @@
         <div class="dash-split flex-grow min-h-0">
             <!-- Left Column -->
             <div class="dash-stack lg:min-h-0 lg:overflow-hidden">
-                <div class="dash-tiles lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-1" id="nav-cards-grid">
+                <div class="dash-tiles lg:min-h-0" id="nav-cards-grid">
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
                          every saved home screen (same rule as Services). -->
-                    <a href="hymns.html" data-card-key="hymn-directory" class="m-nav-card m-nav-card--dense">
+                    <a href="hymns.html" data-card-key="hymn-directory" class="m-nav-card">
                         <span class="m-medallion" aria-hidden="true">
                             <span class="material-symbols-outlined">menu_book</span>
                         </span>
@@ -278,7 +366,7 @@
 
                     <!-- Calendar — every Event the viewer is allowed to see (MS-99).
                          Distinct from Services, which shows Sundays only. -->
-                    <a href="calendar.html" data-card-key="calendar" class="m-nav-card m-nav-card--dense">
+                    <a href="calendar.html" data-card-key="calendar" class="m-nav-card">
                         <span class="m-medallion" aria-hidden="true">
                             <span class="material-symbols-outlined">event</span>
                         </span>
@@ -296,7 +384,7 @@
                          A church with a cross, not a calendar: Services and the
                          Calendar stopped competing for the same word in MS-99, and
                          they should not compete for the same glyph either. -->
-                    <a href="service-calendar.html" data-card-key="service-calendar" class="m-nav-card m-nav-card--dense">
+                    <a href="service-calendar.html" data-card-key="service-calendar" class="m-nav-card">
                         <span class="m-medallion" aria-hidden="true">
                             <span class="material-symbols-outlined">church</span>
                         </span>
@@ -319,11 +407,12 @@
             </div>
 
             <!-- Right Column -->
-            <div class="flex flex-col lg:min-h-0 lg:overflow-hidden">
-                <div class="m-card flex flex-col lg:max-h-full lg:overflow-hidden" id="sunday-glance">
-                    <h2 class="m-serif-head shrink-0">Sunday at a Glance</h2>
+            <div class="m-with-side flex flex-col lg:min-h-0 lg:overflow-hidden">
+                <div class="m-card m-side flex flex-col" id="sunday-glance">
+                    <p class="dash-kicker">This Sunday</p>
+                    <h2 class="dash-date shrink-0" id="glance-date">Sunday</h2>
                     <hr class="m-divider dash-hairline shrink-0" />
-                    <div id="glance-content" class="flex-grow overflow-y-auto flex flex-col gap-sm pr-1">
+                    <div id="glance-content" class="m-side__scroll flex flex-col gap-sm pr-1">
                         <!-- Data will be injected here -->
                     </div>
                 </div>
@@ -372,7 +461,7 @@
             // has ever been arranged.
             card.dataset.cardKey = key;
             card.href = href;
-            card.className = 'm-nav-card m-nav-card--dense';
+            card.className = 'm-nav-card';
             card.innerHTML = `
                 <span class="m-medallion" aria-hidden="true">
                     <span class="material-symbols-outlined">${icon}</span>
@@ -585,6 +674,12 @@
                 
                 // Match project's date format (YYYY-MM-DD)
                 const dateKey = `${nextSunday.getFullYear()}-${String(nextSunday.getMonth() + 1).padStart(2, '0')}-${String(nextSunday.getDate()).padStart(2, '0')}`;
+                const glanceDate = document.getElementById('glance-date');
+                if (glanceDate) {
+                    const dateOpts = { month: 'long', day: 'numeric' };
+                    if (nextSunday.getFullYear() !== today.getFullYear()) dateOpts.year = 'numeric';
+                    glanceDate.textContent = nextSunday.toLocaleDateString('en-US', dateOpts);
+                }
                 console.log("Fetching service data for:", dateKey);
                 
                 const doc = await db.collection('services').doc(dateKey).get();

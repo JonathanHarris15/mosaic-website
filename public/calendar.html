@@ -310,7 +310,7 @@
      is the one thing that lifts that — a week opened out is allowed to make
      the page longer than the window, because the alternative is a row that
      cannot show what somebody just asked to see. -->
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       :class="expandedWeek ? 'cal-open' : ''"
       x-data="calendarPage()" x-cloak>
 
@@ -370,7 +370,7 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
+    <main x-show="!loading" class="m-page__body">
 
         <!-- Signed out. Says so, because the alternative is a calendar that
              looks like the church's and is missing everything you are part of. -->

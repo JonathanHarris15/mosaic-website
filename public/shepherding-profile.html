@@ -63,7 +63,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body data-mosaic-skip-desktop-lead class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body data-mosaic-skip-desktop-lead class="m-page"
       x-data="shepherdingProfile" x-cloak>
 
     <!-- Header -->
@@ -72,7 +72,7 @@
          flattened into one (MS-187). The trail no longer ends with the Person's
          name: the title says it directly underneath, and twice in 30px is once
          too many. -->
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <div class="m-header__titles">
@@ -131,7 +131,7 @@
     </div>
 
     <!-- Main content -->
-    <main x-show="!loading && person" class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <main x-show="!loading && person" class="m-page__body m-page__body--wide">
 
         <!-- Person Header. The name is the page's title and lives in the bar; what
              stays here is what the name alone does not tell you. -->
@@ -389,9 +389,9 @@
 
                     <!-- ── Quick-assign (MS-104, ADR-0014) ────────────────────────
                          This card APPLIES vocabulary; it never creates it. A new
-                         Relationship Type or named group is made in Manage Tags and
-                         Relationships, and only there. Family lives on the Household
-                         card above (MS-709). -->
+                         Relationship Type or named group is made on the Relations
+                         viewer, under Relationships, and only there. Families are
+                         the Families tab on that same viewer (MS-709). -->
                     <div x-show="!qaMode" class="grid grid-cols-2 gap-xs pt-sm border-t border-outline-variant">
                         <button @click="qaOpen('pairwise')"
                                 class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
@@ -416,7 +416,7 @@
                         </select>
 
                         <p x-show="qaPairwiseTypes.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
-                            No relationship types defined yet. Create one in Manage Tags and Relationships.
+                            No relationship types defined yet. Create one on the Relations viewer, under Relationships.
                         </p>
 
                         <!-- Which side does THIS Person hold? Only a Prioritized type has sides. -->
@@ -460,7 +460,7 @@
                         </select>
 
                         <p x-show="qaJoinableGroups.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
-                            No groups left to join. New groups are created in Manage Tags and Relationships.
+                            No groups left to join. New groups are created on the Relations viewer, under Relationships.
                         </p>
 
                         <!-- The leader seat is only offered on a Prioritized group that has none. -->

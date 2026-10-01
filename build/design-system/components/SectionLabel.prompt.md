@@ -1,4 +1,4 @@
-**SectionLabel** — The tracked-caps overline above a group of things. The most-repeated pattern in the app by a distance — about 146 hand-written copies in five different spellings before it was named, one of which reached for text-gray-500.
+**SectionLabel** — The quiet name of a group or a field. Sentence case, the size of a caption, never a shout.
 
 ```html
 <span class="m-label">Filter by tags</span>
@@ -9,7 +9,8 @@
 
 Base class `.m-label`, modifiers `.m-label--<variant>`.
 
-- Uppercase, 0.14em tracking, --on-surface-variant. Never a heading: it labels a group, it does not open one.
+- Sentence case. 13px, weight 600, almost no tracking. A label that is 10px and tracked-out capitals is unfinished.
+- Never a heading: it labels a group or a field, it does not open one. The heading is .m-section__title or the header title.
 
 Built from the Mosaic tokens only — no raw colours, no second icon set.
 Icons are Material Symbols Outlined.

@@ -87,10 +87,7 @@
         }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col relative overflow-x-hidden">
-    <!-- Architectural accent lines -->
-    <div id="accent-lines" class="absolute right-0 top-0 h-[600px] w-1/2 bg-gradient-to-l from-surface-container-high/40 to-transparent opacity-30 pointer-events-none"></div>
-    
+<body class="m-page">
     <header class="m-header m-header--sticky">
         <div class="m-header__inner">
             <div class="m-header__lead">
@@ -99,7 +96,7 @@
                     <span class="m-back__label">Home</span>
                 </a>
                 <div class="m-header__titles">
-                    <h1 class="m-header__title">User Profile</h1>
+                    <h1 class="m-header__title">Profile</h1>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -107,20 +104,11 @@
         </div>
     </header>
 
-    <main class="flex-grow max-w-6xl w-full mx-auto px-gutter py-lg flex flex-col gap-lg relative z-10">
-        <!-- Profile Hero Section -->
-        <section id="profile-hero" class="flex flex-col gap-sm border-b border-surface-variant/20 pb-lg">
-            <div class="flex items-center gap-3">
-                <span class="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-label-md uppercase tracking-[0.2em] rounded-sm">Account Identity</span>
-                <div class="h-px flex-grow bg-surface-variant/30"></div>
-            </div>
-            <p class="text-on-surface-variant font-body-md max-w-2xl">Manage your account settings and access administrative tools for the Mosaic Liturgy Portal.</p>
-        </section>
-
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+    <main class="m-page__body">
+        <div class="m-with-side grid grid-cols-1 lg:grid-cols-12 gap-gutter">
             <!-- Left Side: User Details -->
-            <div class="lg:col-span-4 flex flex-col gap-md">
-                <div id="identity-card" class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-md shadow-sm flex flex-col gap-md">
+            <div class="m-side lg:col-span-4 flex flex-col gap-md">
+                <div id="identity-card" class="m-card flex flex-col gap-md">
                     <div class="flex items-center gap-4">
                         <div class="flex flex-col min-w-0">
                             <span id="user-email" class="font-headline-md text-headline-md text-primary truncate max-w-[200px]">Loading...</span>
@@ -139,9 +127,9 @@
                     <div class="pt-sm border-t border-surface-container flex flex-col gap-3">
                         <span class="m-label">Security</span>
                         <form id="change-password-form" class="flex flex-col gap-2">
-                            <input type="password" id="old-password" placeholder="Current Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
-                            <input type="password" id="new-password" placeholder="New Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
-                            <button type="submit" class="w-full py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-outline-variant/20 transition-all">Update Password</button>
+                            <input type="password" id="old-password" placeholder="Current Password" required class="m-input" />
+                            <input type="password" id="new-password" placeholder="New Password" required class="m-input" />
+                            <button type="submit" class="m-btn m-btn--secondary m-btn--block">Update password</button>
                         </form>
                         <div id="change-password-status" class="text-[10px] font-body-md"></div>
                     </div>
@@ -154,9 +142,7 @@
                     </div>
                     
                     <div class="pt-sm flex flex-col gap-3">
-                        <button onclick="logout()" class="w-full py-3 font-label-md text-xs uppercase tracking-widest text-error hover:bg-error-container/20 rounded-lg transition-all border border-transparent hover:border-error/10">
-                            Terminate Session
-                        </button>
+                        <button type="button" onclick="logout()" class="m-btn m-btn--quiet m-btn--block">Sign out</button>
                     </div>
 
                     <!-- Account deletion. Required by both app stores for any app with
@@ -170,8 +156,8 @@
                             <a href="mailto:jono591737@gmail.com" class="text-primary underline">jono591737@gmail.com</a>.
                         </p>
                         <form id="delete-account-form" class="flex flex-col gap-2">
-                            <input type="password" id="delete-account-password" placeholder="Confirm your password" required autocomplete="current-password" class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-error outline-none transition-all text-sm" />
-                            <button type="submit" id="delete-account-btn" class="w-full py-2 border border-error/40 text-error font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-error-container/20 transition-all disabled:opacity-50">Delete My Account</button>
+                            <input type="password" id="delete-account-password" placeholder="Confirm your password" required autocomplete="current-password" class="m-input" />
+                            <button type="submit" id="delete-account-btn" class="m-btn m-btn--danger-outline m-btn--block">Delete account</button>
                         </form>
                         <div id="delete-account-status" class="text-[10px] font-body-md"></div>
                     </div>
@@ -213,21 +199,21 @@
                                 <span id="link-request-state-icon" class="material-symbols-outlined text-primary">hourglass_top</span>
                                 <p id="link-request-state-text" class="text-sm font-body-md text-on-surface leading-relaxed"></p>
                             </div>
-                            <button id="link-request-withdraw" class="self-start px-4 py-2 border border-outline-variant text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-surface-container transition-all"></button>
+                            <button type="button" id="link-request-withdraw" class="m-btn m-btn--secondary m-btn--sm self-start"></button>
                             <div id="link-request-state-status" class="text-[11px] font-body-md"></div>
                         </div>
 
                         <!-- No request yet: ask for one -->
                         <div id="link-request-form" class="hidden p-md flex flex-col gap-4">
                             <div class="flex gap-2">
-                                <button type="button" id="lr-tab-match" class="flex-1 px-3 py-2 rounded-lg border font-label-md text-[10px] uppercase tracking-widest transition-all">I’m already listed</button>
-                                <button type="button" id="lr-tab-new" class="flex-1 px-3 py-2 rounded-lg border font-label-md text-[10px] uppercase tracking-widest transition-all">I’m not listed yet</button>
+                                <button type="button" id="lr-tab-match" class="m-btn m-btn--secondary m-btn--sm flex-1">I’m already listed</button>
+                                <button type="button" id="lr-tab-new" class="m-btn m-btn--secondary m-btn--sm flex-1">I’m not listed yet</button>
                             </div>
 
                             <!-- Claim an existing Person -->
                             <div id="lr-match" class="flex flex-col gap-2">
                                 <label class="m-label">Find yourself in the directory</label>
-                                <input id="lr-search" type="text" placeholder="Type your name" autocomplete="off" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                <input id="lr-search" type="text" placeholder="Type your name" autocomplete="off" class="m-input" />
                                 <div id="lr-results" class="max-h-56 overflow-y-auto rounded-lg border border-outline-variant/30 divide-y divide-surface-container empty:hidden"></div>
                                 <div id="lr-chosen" class="hidden items-center gap-2 text-sm font-body-md text-on-surface bg-primary/5 rounded-lg px-3 py-2"></div>
                             </div>
@@ -236,27 +222,27 @@
                             <div id="lr-new" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div class="flex flex-col gap-1 md:col-span-2">
                                     <label class="m-label">Full name</label>
-                                    <input id="lr-name" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    <input id="lr-name" type="text" class="m-input" />
                                 </div>
                                 <div class="flex flex-col gap-1">
                                     <label class="m-label">Email</label>
-                                    <input id="lr-email" type="email" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    <input id="lr-email" type="email" class="m-input" />
                                 </div>
                                 <div class="flex flex-col gap-1">
                                     <label class="m-label">Phone</label>
-                                    <input id="lr-phone" type="tel" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    <input id="lr-phone" type="tel" class="m-input" />
                                 </div>
                                 <div class="flex flex-col gap-1 md:col-span-2">
                                     <label class="m-label">Address</label>
-                                    <input id="lr-address" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    <input id="lr-address" type="text" class="m-input" />
                                 </div>
                                 <div class="flex flex-col gap-1">
                                     <label class="m-label">Birthday</label>
-                                    <input id="lr-birthday" type="date" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                    <input id="lr-birthday" type="date" class="m-input" />
                                 </div>
                                 <div class="flex flex-col gap-1">
                                     <label class="m-label">Sex</label>
-                                    <select id="lr-sex" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none">
+                                    <select id="lr-sex" class="m-input">
                                         <option value="">Prefer not to say</option>
                                         <option value="male">Male</option>
                                         <option value="female">Female</option>
@@ -266,11 +252,11 @@
 
                             <div class="flex flex-col gap-1">
                                 <label class="m-label">Anything that helps us place you (optional)</label>
-                                <textarea id="lr-note" rows="2" placeholder="e.g. I started coming in March, I sit with the Harris family" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none"></textarea>
+                                <textarea id="lr-note" rows="2" placeholder="e.g. I started coming in March, I sit with the Harris family" class="m-input"></textarea>
                             </div>
 
                             <div class="flex items-center gap-3">
-                                <button type="button" id="lr-submit" class="px-5 py-2.5 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all disabled:opacity-50">Send request</button>
+                                <button type="button" id="lr-submit" class="m-btn m-btn--primary">Send request</button>
                                 <span id="lr-status" class="text-[11px] font-body-md"></span>
                             </div>
                             <p class="text-[10px] text-on-surface-variant leading-relaxed">The church confirms every request by hand. Nothing about your membership standing changes because you asked.</p>
@@ -303,9 +289,9 @@
                                 <span class="m-label">Directory photo</span>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="hidden" />
-                                    <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
-                                    <button type="button" id="my-photo-reframe" class="hidden px-4 py-2 border border-primary/40 text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary/10 transition-all">Reframe</button>
-                                    <button type="button" id="my-photo-remove" class="hidden px-3 py-2 text-error font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all">Remove</button>
+                                    <button type="button" id="my-photo-choose" class="m-btn m-btn--secondary m-btn--sm">Upload a photo</button>
+                                    <button type="button" id="my-photo-reframe" class="m-btn m-btn--secondary m-btn--sm hidden">Reframe</button>
+                                    <button type="button" id="my-photo-remove" class="m-btn m-btn--danger-outline m-btn--sm hidden">Remove</button>
                                 </div>
                                 <span id="my-photo-status" class="text-[11px] font-body-md" role="status"></span>
                                 <p class="text-[10px] text-on-surface-variant leading-relaxed">Everyone in the church directory can see this. JPEG, PNG, WebP or HEIC.</p>
@@ -320,14 +306,14 @@
                             <span class="m-label">Name</span>
                             <div class="flex flex-wrap items-center gap-3">
                                 <span id="my-name-value" class="font-headline-md text-sm text-on-surface">…</span>
-                                <button type="button" id="my-name-ask" class="hidden text-[9px] font-label-md uppercase tracking-widest text-primary hover:underline">Spelt wrong?</button>
+                                <button type="button" id="my-name-ask" class="m-btn m-btn--ghost m-btn--sm hidden">Spelt wrong?</button>
                             </div>
 
                             <div id="my-name-form" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3">
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div class="flex flex-col gap-1">
                                         <label class="m-label" for="my-name-first">First name</label>
-                                        <input id="my-name-first" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                        <input id="my-name-first" type="text" class="m-input" />
                                     </div>
                                     <div class="flex flex-col gap-1">
                                         <label class="m-label" for="my-name-last">Last name</label>
@@ -335,7 +321,7 @@
                                     </div>
                                     <div class="flex flex-col gap-1">
                                         <label class="m-label" for="my-name-suffix">Suffix</label>
-                                        <input id="my-name-suffix" type="text" placeholder="Jr." class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                        <input id="my-name-suffix" type="text" placeholder="Jr." class="m-input" />
                                     </div>
                                     <label class="flex items-center gap-2 text-sm text-on-surface sm:mt-5">
                                         <input id="my-name-no-last" type="checkbox" class="rounded border-outline-variant text-primary" />
@@ -343,8 +329,8 @@
                                     </label>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <button type="button" id="my-name-send" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Ask the church</button>
-                                    <button type="button" id="my-name-cancel" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Cancel</button>
+                                    <button type="button" id="my-name-send" class="m-btn m-btn--primary m-btn--sm">Ask the church</button>
+                                    <button type="button" id="my-name-cancel" class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                                     <span id="my-name-status" class="text-[11px] font-body-md"></span>
                                 </div>
                             </div>
@@ -352,7 +338,7 @@
                             <div id="my-name-pending" class="hidden flex flex-wrap items-center gap-3 bg-primary/5 rounded-lg px-3 py-2">
                                 <span class="material-symbols-outlined text-primary text-base">hourglass_top</span>
                                 <span id="my-name-pending-text" class="text-[11px] font-body-md text-on-surface"></span>
-                                <button type="button" id="my-name-withdraw" class="text-[9px] font-label-md uppercase tracking-widest text-on-surface-variant hover:text-primary">Withdraw</button>
+                                <button type="button" id="my-name-withdraw" class="m-btn m-btn--quiet m-btn--sm">Withdraw</button>
                             </div>
                         </div>
 
@@ -383,7 +369,7 @@
                                 <span id="my-sex-locked" class="hidden text-[10px] text-on-surface-variant italic">Set — contact the office to change.</span>
                             </div>
                             <div class="md:col-span-2 flex items-center gap-3">
-                                <button type="submit" class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md text-[10px] uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm">Save my info</button>
+                                <button type="submit" class="m-btn m-btn--primary">Save my info</button>
                                 <span id="my-info-status" class="text-[11px] font-body-md"></span>
                             </div>
                         </form>
@@ -472,8 +458,8 @@
                                     </div>
                                 </div>
                                 <div class="md:col-span-3">
-                                    <button type="submit" class="w-full bg-secondary text-on-secondary font-label-md text-label-md py-3 rounded-lg hover:bg-primary transition-all shadow-sm active:scale-[0.98]">
-                                        Authorize User
+                                    <button type="submit" class="m-btn m-btn--primary m-btn--block">
+                                        Authorize user
                                     </button>
                                 </div>
                             </form>
@@ -567,9 +553,9 @@
             </div>
 
             <div class="p-md border-t border-outline-variant/20 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end sticky bottom-0 bg-surface-container-lowest">
-                <button type="button" id="reframe-reset" class="px-4 py-3 sm:py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-surface-container transition-all">Recentre</button>
-                <button type="button" id="reframe-cancel" class="px-4 py-3 sm:py-2 border border-outline-variant text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-surface-container transition-all">Cancel</button>
-                <button type="button" id="reframe-save" class="px-5 py-3 sm:py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Save framing</button>
+                <button type="button" id="reframe-reset" class="m-btn m-btn--quiet">Recentre</button>
+                <button type="button" id="reframe-cancel" class="m-btn m-btn--secondary">Cancel</button>
+                <button type="button" id="reframe-save" class="m-btn m-btn--primary">Save framing</button>
             </div>
         </div>
     </div>

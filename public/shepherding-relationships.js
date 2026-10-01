@@ -6,12 +6,12 @@
 // type, with their leaders and rosters. The Shepherding Profile's quick-assign card
 // can only apply what is defined here; it can never mint a new type or a new group.
 //
-// Mixed into the shepherdingTags Alpine component (the two tabs share a page), so
-// this file exposes a factory rather than registering its own component. All the
+// Mixed into the Relations viewer's Relationships tab (relationsManage in
+// shepherding-tags.js). The People page does not load this file. All the
 // model logic lives in RelationshipCore / RelationshipGroupCore — this layer only
 // loads, writes, and confirms.
 
-// Fold this tab into the Tags component that owns the page.
+// Fold this tab into the Relations viewer component that owns the page.
 //
 // This must NOT be done with object spread. `{ ...RelationshipsTab() }` *evaluates*
 // every getter and copies the resulting value — so `selectedType` and

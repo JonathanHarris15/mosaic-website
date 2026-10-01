@@ -49,6 +49,7 @@ export const COMPONENTS = [
       "Shadow only on primary, and only --shadow-xs. Everything else is flat — depth here comes from tonal layers and warm hairlines.",
       "Disabled drops to 40% and takes not-allowed; it is never hidden, because a control that vanishes reads as a bug.",
       "46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.",
+      "A button lifts 1px on hover and settles on press. That motion is the sign that it can be pressed. It is not optional, and it is not a bounce. prefers-reduced-motion keeps the colour change and drops the lift.",
       "Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.",
     ],
     examples: [
@@ -66,9 +67,18 @@ export const COMPONENTS = [
   line-height: 1; white-space: nowrap; cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
               border-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
 }
 .m-btn:disabled, .m-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+@media (hover: hover) {
+  .m-btn:hover:not(:disabled) { transform: translateY(-1px); }
+}
+.m-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-btn { transition: none; }
+  .m-btn:hover:not(:disabled), .m-btn:active:not(:disabled) { transform: none; }
+}
 .m-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
 
 /* An optional slot for the button's word. A button that only ever shows its
@@ -79,6 +89,7 @@ export const COMPONENTS = [
 
 .m-btn--sm { height: 38px; padding: 0 14px; font-size: 13.5px; }
 .m-btn--lg { height: 52px; padding: 0 20px; font-size: 16px; }
+.m-btn--block { width: 100%; }
 
 .m-btn--primary {
   background: var(--primary); color: var(--on-primary);
@@ -145,7 +156,16 @@ export const COMPONENTS = [
   border: 1px solid transparent; border-radius: var(--radius-sm);
   background: transparent; color: var(--on-surface-variant); cursor: pointer;
   transition: background-color var(--duration) var(--ease-standard),
-              color var(--duration) var(--ease-standard);
+              color var(--duration) var(--ease-standard),
+              transform var(--duration) var(--ease-standard);
+}
+@media (hover: hover) {
+  .m-icon-btn:hover:not(:disabled) { background: var(--surface-container); color: var(--primary); transform: translateY(-1px); }
+}
+.m-icon-btn:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .m-icon-btn { transition: none; }
+  .m-icon-btn:hover:not(:disabled), .m-icon-btn:active:not(:disabled) { transform: none; }
 }
 .m-icon-btn .material-symbols-outlined { font-size: 20px; }
 .m-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -207,7 +227,7 @@ export const COMPONENTS = [
       '<input class="m-input m-input--invalid" aria-invalid="true" value="not an email" />',
     ],
     css: `
-.m-field { display: block; }
+.m-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .m-input {
   width: 100%; height: 48px; padding: 0 14px;
   border: 1px solid var(--outline-variant); border-radius: var(--radius);
@@ -637,19 +657,19 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     cls: "m-label",
     group: "Display",
     summary:
-      "The tracked-caps overline above a group of things. The most-repeated pattern in the app by a distance — about 146 hand-written copies in five different spellings before it was named, one of which reached for text-gray-500.",
+      "The quiet name of a group or a field. Sentence case, the size of a caption, never a shout.",
     variants: { size: ["sm", "md"] },
-    notes: ["Uppercase, 0.14em tracking, --on-surface-variant. Never a heading: it labels a group, it does not open one."],
+    notes: [
+      "Sentence case. 13px, weight 600, almost no tracking. A label that is 10px and tracked-out capitals is unfinished.",
+      "Never a heading: it labels a group or a field, it does not open one. The heading is .m-section__title or the header title.",
+    ],
     examples: ['<span class="m-label">Filter by tags</span>', '<span class="m-label m-label--sm">Serving</span>'],
     css: `
-/* Every size here is a token. The overline is --label-sm, one step below
-   the field-and-button label at --label-md; --label-xs is the tightest,
-   for a caption sitting directly on top of what it names. */
 .m-label {
   display: inline-block;
-  font-family: var(--font-sans); font-size: var(--label-sm-size);
-  font-weight: var(--label-sm-weight); line-height: var(--label-sm-line);
-  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 13px;
+  font-weight: 600; line-height: 1.35;
+  letter-spacing: 0.01em; text-transform: none;
   color: var(--on-surface-variant);
 }
 .m-label--sm { font-size: var(--label-xs-size); }
@@ -1290,13 +1310,20 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     name: "PageShell",
     cls: "m-page",
     group: "Layout",
-    summary: "The body of a desktop page: warm background, navy ink, a column capped at --container-max.",
-    variants: {},
+    summary: "The body of a desktop page: warm background, navy ink, and one of four columns. Pick the recipe; do not invent a fifth width.",
+    variants: { recipe: ["list", "wide", "reading", "tool", "door"] },
     notes: [
-      "The width is the token, not Tailwind's max-w-7xl. Ten pages reached for the framework default before this.",
-      "The bar is PageHeader's job now. `.m-page__bar` was removed in MS-187: its declarations sat INSIDE the capped column, so a bar built on it could never run its background or its hairline to the window edge — which is most of why the eight hand-rolled headers read as eight products. `.m-header` is a sibling of `.m-page__body`, not a child of the column.",
+      "The body class is `m-page` plus at most one recipe. The long Tailwind string (`bg-background font-body-md antialiased min-h-screen flex flex-col`) is the same thing, written out, and it is retired.",
+      "List (`m-page__body`) caps at --container-max. Wide (`m-page__body--wide`) is 1600px, for a directory or a month that needs the room. Reading (`m-page--reading`) caps at 720px: settings, a policy, commitments. Tool (`m-page--tool`) fills the window and scrolls inside its panes. Door (`m-page--door`) centres one card. Home is a list that also carries `m-page--app` so the tiles fit the viewport.",
+      "The gutter is --space-margin, the same inset the header uses. A 24px body beside a 32px bar is how pages started to look like they were not the same product.",
+      "The bar is PageHeader's job. `.m-header` is a sibling of `.m-page__body`, not a child of the column. The page title is not repeated in the body.",
+      "The kiosk and the Relations Viewer are the two exceptions, and both are written down where they break the rule. A new page is not an exception.",
     ],
-    examples: ['<body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body>'],
+    examples: [
+      '<body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body>',
+      '<body class="m-page m-page--reading"><header class="m-header">…</header><main class="m-page__body">…</main></body>',
+      '<body class="m-page m-page--door"><header class="m-header">…</header><main class="m-page__body"><div class="m-door">…</div></main></body>',
+    ],
     css: `
 .m-page {
   min-height: 100vh; display: flex; flex-direction: column;
@@ -1306,9 +1333,35 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-page__body {
   width: 100%; max-width: var(--container-max); margin: 0 auto;
-  padding-left: var(--space-md); padding-right: var(--space-md);
+  padding-left: var(--space-margin); padding-right: var(--space-margin);
   flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md);
   padding-top: var(--space-md); padding-bottom: var(--space-lg);
+  min-width: 0;
+}
+.m-page__body--wide { max-width: 1600px; }
+.m-page--reading .m-page__body { max-width: 720px; }
+.m-page--tool {
+  height: 100vh; height: 100dvh; overflow: hidden;
+}
+.m-page--app { overflow-x: hidden; }
+@media (min-width: 1024px) {
+  .m-page--app { height: 100vh; height: 100dvh; overflow: hidden; }
+}
+.m-page--door .m-page__body {
+  max-width: none; align-items: center; justify-content: center;
+}
+.m-door {
+  width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--space-md);
+}
+.m-door__mark { width: 64px; height: 64px; object-fit: contain; align-self: center; }
+.m-door__title {
+  margin: 0; text-align: center;
+  font-family: var(--font-display); font-size: 32px; font-weight: 600;
+  line-height: 1.15; letter-spacing: .02em; color: var(--primary);
+}
+@media (min-width: 768px) {
+  .m-page__body--split { flex-direction: row; align-items: flex-start; }
 }
 `,
   },
@@ -1327,6 +1380,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "A Person's name is not chrome. Cinzel is the app's own word for a place — Calendar, Roles Manager. A record the database holds — a Person, a dated Service Guide — is set in EB Garamond, because setting somebody's name in tracked caps makes a member of the church look like a menu item.",
       "The account slot reserves 40px unconditionally. auth.js injects into #auth-container after Firebase resolves, and a bar that changes height when it lands is the layout shift this replaces.",
       "Actions live here, not stacked under the title in main. Up to three. A fourth would go behind a more_vert menu — that rule is written down but deliberately NOT built, because no page has four today and speculative chrome rots (MS-187).",
+      "The bar is one line and one height on every page. The title names the place or the record. Do not put a subtitle under it — `.m-header__sub` is retired, and `.m-header--tall` is not how you make room for one. A count, a template name, or a date lives in the body or in `.m-header__actions`. A trail (`.m-header__crumbs`) replaces the back link on a page reached from more than one place, and it still fits the standing 64px bar.",
       "The header never prints. That is in the component, so no page needs its own no-print.",
       "MOTION EXCEPTION: --pulse is an infinite animation, which the system's motion rule otherwise forbids. It is kept on purpose for the two chips that mean something is broken — 'Unsaved', and a booklet over its page limit — because the pulse is what makes anyone notice. Ruled on in MS-187. It yields to prefers-reduced-motion.",
     ],
@@ -1377,11 +1431,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-family: var(--font-serif); font-size: var(--m-header-title-serif);
   letter-spacing: .01em; text-transform: none; color: var(--on-surface);
 }
+/* Retired. A second line under the title made every header a different height.
+   The rule stays so an old page does not explode. Do not use the class. */
 .m-header__sub {
   font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
   color: var(--on-surface-variant);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Retired with the subtitle. The standing bar is 64px. Do not use this to
+   make room for a second line. */
 .m-header--tall { --m-header-h: 84px; }
 
 /* The trail, above the title, where a page can be reached from more than one
@@ -1389,8 +1447,8 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    link rather than joining it — two ways out of one page is one too many. */
 .m-header__crumbs {
   display: flex; align-items: center; gap: 4px; min-width: 0;
-  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
-  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none;
   color: var(--on-surface-variant);
 }
 .m-header__crumbs a { color: inherit; text-decoration: none; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: color var(--duration) var(--ease-standard); }
@@ -2162,6 +2220,365 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   color: var(--on-surface); text-wrap: pretty;
 }
 .m-settled--sm { font-size: 15px; }
+`,
+  },
+
+  {
+    name: "Section",
+    cls: "m-section",
+    group: "Layout",
+    summary:
+      "One labelled group. The name sits above a single surface. Rows that belong together share that surface.",
+    variants: {},
+    notes: [
+      "The label is outside the card. A title repeated inside every card is how a list starts to look like a stack of products.",
+      "The hint is one sentence, sentence case, and it is optional. It says what the group is for.",
+      "Put one m-card or one m-card-list inside. Do not put a card inside a card.",
+    ],
+    examples: [
+      '<section class="m-section"><div class="m-section__head"><h2 class="m-section__title">Security</h2><p class="m-section__hint">Change the password on this account.</p></div><div class="m-card">…</div></section>',
+    ],
+    css: `
+.m-section { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.m-section__head { display: flex; flex-direction: column; gap: 2px; }
+.m-section__title {
+  margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 600;
+  line-height: 1.25; color: var(--on-surface);
+}
+.m-section__hint {
+  margin: 0; font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+`,
+  },
+
+  {
+    name: "Side",
+    cls: "m-side",
+    group: "Layout",
+    summary:
+      "Facts that stay beside the work: a glance, an identity, the frame a form is written inside. They do not scroll off the screen.",
+    variants: {},
+    notes: [
+      "Put `m-with-side` on the row that holds the work and the card, and `m-side` on the card. From 1024px the card sticks under the header, grows no taller than the viewport, and scrolls inside itself. Below that the card stacks, because a side column that cannot stay in view is a second page.",
+      "The card holds a title and a defined set of facts — about six — not the rest of the page. If the facts run long, `.m-side__scroll` is the part that moves. The title stays.",
+      "A button lifts. A side card does not. Motion on the card would say it is a control.",
+    ],
+    examples: [
+      '<div class="m-with-side"><div class="m-side"><h2 class="m-section__title">Sunday</h2><div class="m-side__scroll">…</div></div><div>…</div></div>',
+    ],
+    css: `
+.m-with-side { align-items: start; }
+.m-side { align-self: start; min-width: 0; min-height: 0; }
+.m-side__scroll { min-height: 0; }
+@media (min-width: 1024px) {
+  .m-with-side > .m-side {
+    position: sticky;
+    top: calc(64px + var(--space-md));
+    max-height: calc(100dvh - 64px - var(--space-lg));
+    overflow: auto;
+  }
+  .m-with-side > .m-side:has(> .m-side__scroll) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .m-with-side > .m-side > .m-side__scroll {
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+`,
+  },
+
+  {
+    name: "Toolbar",
+    cls: "m-toolbar",
+    group: "Layout",
+    summary:
+      "The row above a list: search on the left, filters and a quiet count on the right. Not a second header.",
+    variants: {},
+    notes: [
+      "One search field. Filters sit beside it, not in a panel of their own, unless there are more than three.",
+      "The primary action of the page stays in the header. The toolbar does not grow a second primary button.",
+    ],
+    examples: [
+      '<div class="m-toolbar"><span class="m-search"><span class="material-symbols-outlined">search</span><input type="search" placeholder="Search people" /></span><div class="m-toolbar__cluster"></div></div>',
+    ],
+    css: `
+.m-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+}
+.m-toolbar__cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); min-width: 0; }
+.m-toolbar .m-search { flex: 1 1 220px; max-width: 420px; }
+`,
+  },
+
+  {
+    name: "Prose",
+    cls: "m-prose",
+    group: "Display",
+    summary:
+      "A reading column: a policy, a letter. Serif for the opening, Cinzel for the sections, sans for the body.",
+    variants: {},
+    notes: [
+      "Lives inside m-page--reading. The page title is the header's. Do not repeat it as an h1 in the column.",
+      "Section headings are separated by a hairline, because a policy is a sequence of topics, not a stack of cards.",
+    ],
+    examples: [
+      '<article class="m-prose"><p class="m-prose__lede">A private tool for the members of a church.</p><h2>Who is responsible</h2><p>Write to the church office.</p></article>',
+    ],
+    css: `
+.m-prose { font-size: 17px; line-height: 1.65; color: var(--on-surface); }
+.m-prose__lede {
+  margin: 0 0 var(--space-md);
+  font-family: var(--font-serif); font-size: 22px; line-height: 1.4;
+  color: var(--on-surface-variant);
+}
+.m-prose h2 {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  color: var(--primary); letter-spacing: .02em;
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--outline-variant);
+}
+.m-prose h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.m-prose p, .m-prose li { margin: 0 0 14px; }
+.m-prose ul { padding-left: 1.25rem; }
+.m-prose strong { color: var(--primary); font-weight: 600; }
+.m-prose a { color: var(--primary); }
+`,
+  },
+
+  {
+    name: "Lede",
+    cls: "m-lede",
+    group: "Display",
+    summary:
+      "An opening sentence inside a document, such as a policy. Not a second line under the header title.",
+    variants: {},
+    notes: [
+      "The header is one line. Do not put this sentence under the title, and do not use .m-header__sub.",
+      "A dashboard, a list, and a tool do not get a lede. A policy does, at the top of .m-prose.",
+      "Sentence case, serif, the colour of secondary text. It does not repeat the title.",
+    ],
+    examples: ['<p class="m-lede">The people of the church, and how to reach them.</p>'],
+    css: `
+.m-lede {
+  margin: 0;
+  max-width: 62ch;
+  font-family: var(--font-serif); font-size: 18px; line-height: 1.45;
+  color: var(--on-surface-variant); text-wrap: pretty;
+}
+`,
+  },
+
+  {
+    name: "Status",
+    cls: "m-status",
+    group: "Display",
+    summary:
+      "A short fact about a person or a row: Member, Away, Draft. Sentence case, a tint, not a tracked stamp.",
+    variants: { variant: ["neutral", "info", "good", "warn"] },
+    notes: [
+      "One or two words. It sits beside a name, never in place of one.",
+      "Do not uppercase it and do not track it out. The word is the fact.",
+    ],
+    examples: [
+      '<span class="m-status m-status--info">Member</span>',
+      '<span class="m-status">Inactive</span>',
+    ],
+    css: `
+.m-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-container-high); color: var(--on-surface-variant);
+  font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none; line-height: 1;
+  white-space: nowrap;
+}
+.m-status--info { background: var(--primary-fixed); color: var(--primary); }
+.m-status--good { background: var(--secondary-container); color: var(--on-secondary-container); }
+.m-status--warn { background: var(--error-container); color: var(--on-error-container); }
+`,
+  },
+
+  {
+    name: "PersonRow",
+    cls: "m-person",
+    group: "Display",
+    summary:
+      "How a person is shown: a face, their name in the reading face, then how to reach them. The name is the largest thing in the row.",
+    variants: {},
+    notes: [
+      "Name, then one line of role or household, then mail and phone in the quiet colour. Do not lead with a tracked label.",
+      "The row tints on hover when it opens a record. It does not lift.",
+    ],
+    examples: [
+      '<a class="m-person" href="#"><span class="m-avatar">AL</span><span class="m-person__text"><span class="m-person__name">Ada Lowell</span><span class="m-person__meta">Member · North household</span></span></a>',
+    ],
+    css: `
+.m-person {
+  display: flex; align-items: flex-start; gap: 12px; min-width: 0;
+  color: inherit; text-decoration: none;
+}
+.m-person__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-person__name {
+  font-family: var(--font-serif); font-size: 18px; font-weight: 600; line-height: 1.25;
+  color: var(--primary);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.m-person__meta, .m-person__reach {
+  font-family: var(--font-sans); font-size: 13px; line-height: 1.35;
+  color: var(--on-surface-variant);
+}
+.m-person__reach { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+a.m-person:hover .m-person__name, button.m-person:hover .m-person__name { color: var(--primary-container); }
+`,
+  },
+
+  {
+    name: "SettingRow",
+    cls: "m-setting",
+    group: "Layout",
+    summary:
+      "One setting: what it is and a sentence of help on the left, the control on the right. Not a stack of identical inputs with no explanation.",
+    variants: {},
+    notes: [
+      "The control is a switch, a button, or a short field. A long form stays a stack of .m-field, not a row of settings.",
+      "Rows in one group share one card. The hairline is the separator. Do not put a card inside each row.",
+    ],
+    examples: [
+      '<div class="m-setting"><div><div class="m-setting__title">Public list</div><p class="m-setting__hint">Anyone in the church can see it.</p></div><button class="m-btn m-btn--secondary m-btn--sm" type="button">Change</button></div>',
+    ],
+    css: `
+.m-setting {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-setting:first-child { padding-top: 0; }
+.m-setting:last-child { border-bottom: 0; padding-bottom: 0; }
+.m-setting__title {
+  font-family: var(--font-sans); font-size: 15px; font-weight: 600; line-height: 1.3;
+  color: var(--on-surface);
+}
+.m-setting__hint {
+  margin: 2px 0 0;
+  font-family: var(--font-sans); font-size: 13px; line-height: 1.4;
+  color: var(--on-surface-variant); text-wrap: pretty;
+}
+`,
+  },
+
+  {
+    name: "DataTable",
+    cls: "m-table",
+    group: "Display",
+    summary:
+      "A list with columns. Headers are sentence case and quiet. Rows are tall enough to read a name.",
+    variants: {},
+    notes: [
+      "Use this when a row has more than a name and one fact. A name plus a way to reach someone is .m-person, not a table.",
+      "Numbers align end. Names align start. Do not uppercase the headers.",
+    ],
+    examples: [
+      '<table class="m-table"><thead><tr><th>Name</th><th>Raised</th></tr></thead><tbody><tr><td>General fund</td><td class="m-table__num">0</td></tr></tbody></table>',
+    ],
+    css: `
+.m-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: 14px; }
+.m-table th {
+  text-align: left; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; text-transform: none;
+  color: var(--on-surface-variant);
+  padding: 8px 12px; border-bottom: 1px solid var(--outline-variant);
+}
+.m-table td {
+  padding: 12px; border-bottom: 1px solid var(--outline-variant);
+  color: var(--on-surface); vertical-align: middle;
+}
+.m-table tr:last-child td { border-bottom: 0; }
+.m-table tbody tr:hover td { background: var(--surface-container-low); }
+.m-table__num { text-align: right; font-variant-numeric: tabular-nums; }
+`,
+  },
+
+  {
+    name: "Craft",
+    cls: "m-craft",
+    group: "Core",
+    summary:
+      "The site still has hand-rolled controls that shout in 10px tracked capitals. This is the rule that quiets them, so a page does not have to be rewritten before it can be read.",
+    variants: {},
+    notes: [
+      "Sentence case. A button is 14px and at least 36px tall, and it lifts on hover the same way .m-btn does.",
+      "The utilities layer would otherwise win, because these classes (.uppercase, .tracking-widest, .text-[10px]) are utilities. The overridden properties are !important for that reason alone.",
+      "A finished control is still .m-btn. This only stops an unfinished one from shouting.",
+    ],
+    examples: ['<button class="uppercase tracking-widest text-[10px]">Save my info</button>'],
+    css: `
+.uppercase { text-transform: none !important; letter-spacing: 0.01em !important; }
+/* A hairline is the edge. A soft shadow under every card is the generic kit. */
+.rounded-xl.shadow-sm,
+.rounded-2xl.shadow-sm,
+.rounded-lg.shadow-sm,
+.rounded-xl.shadow-md,
+.rounded-2xl.shadow-md {
+  box-shadow: none !important;
+}
+.tracking-widest,
+.tracking-wider { letter-spacing: 0.01em !important; }
+
+button.uppercase,
+button.tracking-widest,
+a.uppercase.tracking-widest,
+a.tracking-widest {
+  font-size: 14px !important;
+  font-weight: 600;
+  line-height: 1.2;
+}
+button.uppercase,
+button.tracking-widest {
+  min-height: 36px;
+}
+/* A tool already fills the window. Quiet the shout without growing every glyph into a 36px bar. */
+.m-page--tool button.uppercase,
+.m-page--tool button.tracking-widest,
+.m-page--tool a.uppercase.tracking-widest {
+  min-height: 32px;
+  font-size: 13px !important;
+}
+.font-label-md.uppercase,
+h2.uppercase, h3.uppercase, h4.uppercase,
+label.uppercase, legend.uppercase {
+  font-size: 13px !important;
+}
+.text-\\[8px\\].uppercase,
+.text-\\[9px\\].uppercase,
+.text-\\[10px\\].uppercase,
+.text-\\[11px\\].uppercase {
+  font-size: 13px !important;
+}
+
+@media (hover: hover) {
+  button.uppercase:hover:not(:disabled),
+  button.tracking-widest:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+button.uppercase:active:not(:disabled),
+button.tracking-widest:active:not(:disabled) {
+  transform: translateY(0) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  button.uppercase:hover:not(:disabled),
+  button.tracking-widest:hover:not(:disabled),
+  button.uppercase:active:not(:disabled),
+  button.tracking-widest:active:not(:disabled) {
+    transform: none !important;
+  }
+}
 `,
   },
 ];

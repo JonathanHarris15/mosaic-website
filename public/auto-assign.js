@@ -2166,10 +2166,11 @@
                 this.remember();
             },
 
-            // What the header calls the thing on screen. The one place the blank
-            // start shows up, because it is the one thing about it that differs:
-            // an editor who asked for an empty grid and got a header saying
-            // "Auto-assign" would reasonably wonder what it had assigned.
+            // The header stays one line. "By hand" versus "Auto-assign" is the
+            // title, because an editor who asked for an empty grid and got a
+            // header saying "Auto-assign" would reasonably wonder what it had
+            // assigned. The event and the dates are draftSubtitle, and they
+            // sit on the range strip rather than under the title.
             get draftTitle() {
                 return this.byHand ? 'By hand' : 'Auto-assign';
             },

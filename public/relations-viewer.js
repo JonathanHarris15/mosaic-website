@@ -129,6 +129,7 @@
     this.newTagName = '';        // the create-tag box, kept across re-renders
     this.writing = false;        // a write is in flight; the panel refuses a second
     this.canDecide = false;      // AccessCore: elder/super-admin decisions only
+    this.viewTab = 'graph';      // graph | relationships | families
     this.me = { uid: null, name: 'Elder', personId: null, permissionLevel: 'viewer' };
   }
 
@@ -146,6 +147,7 @@
       self.wireChrome();
       self.recompute();
       self.renderAll();
+      self.openTabFromUrl();
       self.cam.k = 0.92;
       self.autoFit = true;
       self.raf = requestAnimationFrame(function () { self.loop(); });
@@ -1060,7 +1062,7 @@
               '<span style="font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--on-surface-variant)">Shepherd Dashboard</span>' +
               '<h1 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:.01em;color:var(--navy-900)">Relations Viewer</h1>' +
             '</div></div>' +
-          '<div style="flex:1 1 auto;display:flex;justify-content:center;position:relative;max-width:560px;margin:0 auto">' +
+          '<div data-rv="searchSlot" style="flex:1 1 auto;display:flex;justify-content:center;position:relative;max-width:560px;margin:0 auto">' +
             '<div style="position:relative;width:100%;max-width:420px">' +
               '<span class="msy" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--on-surface-variant);pointer-events:none">search</span>' +
               '<input data-rv="search" class="rv-search" placeholder="Search a member by name…" style="width:100%;height:42px;padding:0 40px 0 42px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;font-family:var(--font-sans);font-size:14px;font-weight:500;color:var(--navy-900);outline:none;transition:border-color .15s,box-shadow .15s">' +
@@ -1078,8 +1080,13 @@
           '<div style="width:1px;height:30px;background:var(--outline-variant);flex:0 0 auto"></div>' +
           '<div id="auth-container" style="flex:0 0 auto;display:flex;align-items:center;gap:8px;min-height:40px"></div>' +
         '</header>' +
-        // body
-        '<div style="flex:1 1 auto;display:flex;min-height:0;position:relative">' +
+        '<div data-rv="tabs" role="tablist" style="flex:0 0 auto;display:flex;align-items:stretch;gap:4px;padding:0 20px;background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant)">' +
+          '<button type="button" data-act="tab:graph" data-rv-tab="graph" role="tab" style="border:none;border-bottom:2px solid transparent;background:transparent;padding:10px 14px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);cursor:pointer">Graph</button>' +
+          '<button type="button" data-act="tab:relationships" data-rv-tab="relationships" role="tab" style="border:none;border-bottom:2px solid transparent;background:transparent;padding:10px 14px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);cursor:pointer">Relationships</button>' +
+          '<button type="button" data-act="tab:families" data-rv-tab="families" role="tab" style="border:none;border-bottom:2px solid transparent;background:transparent;padding:10px 14px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);cursor:pointer">Families</button>' +
+        '</div>' +
+        // body — the graph. Relationships and Families replace it.
+        '<div data-rv="stage" style="flex:1 1 auto;display:flex;min-height:0;position:relative">' +
           '<aside data-rv="rail" class="rv-scroll" style="flex:0 0 288px;width:288px;background:var(--surface-container-lowest);border-right:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden">' +
             '<div style="padding:20px 18px 26px;display:flex;flex-direction:column;gap:22px">' +
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
@@ -1111,6 +1118,7 @@
           '</main>' +
           '<aside data-rv="panel" class="rv-scroll" style="display:none;flex:0 0 340px;width:340px;background:var(--surface-container-lowest);border-left:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden"></aside>' +
         '</div>' +
+        '<div data-rv="manage" style="display:none;flex:1 1 auto;min-height:0;overflow:auto;background:var(--background)"></div>' +
       '</div>';
 
     // ⚠ #auth-container HAS ONLY JUST COME INTO EXISTENCE, WHICH IS LATER THAN
@@ -1136,14 +1144,84 @@
       railBtn.style.display = 'flex'; if (stats) stats.style.display = 'none';
     } else {
       rail.style.cssText = 'flex:0 0 288px;width:288px;background:var(--surface-container-lowest);border-right:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden';
-      railBtn.style.display = 'none'; if (stats) stats.style.display = 'flex';
+      railBtn.style.display = 'none'; if (stats) stats.style.display = this.viewTab === 'graph' ? 'flex' : 'none';
     }
   };
 
   RelationsViewer.prototype.renderAll = function () {
     this.applyRailLayout();
+    this.renderTabs();
     this.renderPresets(); this.renderTypes(); this.renderDisplay(); this.renderLegend();
     this.updateCounts(); this.updateEmpty(); this.renderPanel();
+  };
+
+  RelationsViewer.prototype.renderTabs = function () {
+    var self = this;
+    if (!this.mount) return;
+    this.mount.querySelectorAll('[data-rv-tab]').forEach(function (btn) {
+      var on = btn.getAttribute('data-rv-tab') === self.viewTab;
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      btn.style.color = on ? 'var(--primary)' : 'var(--on-surface-variant)';
+      btn.style.borderBottomColor = on ? 'var(--primary)' : 'transparent';
+    });
+  };
+
+  // Graph stays the canvas. Relationships and Families are the editors that
+  // used to live on the tags page, mounted once into the slot under the bar.
+  RelationsViewer.prototype.showManage = function (tab) {
+    var next = (tab === 'relationships' || tab === 'families') ? tab : 'graph';
+    this.viewTab = next;
+    var graph = next === 'graph';
+    var stage = this.refs.stage;
+    var host = this.refs.manage;
+    var search = this.refs.searchSlot;
+    var stats = this.refs.stats;
+    if (stage) stage.style.display = graph ? 'flex' : 'none';
+    if (host) host.style.display = graph ? 'none' : 'block';
+    if (search) search.style.display = graph ? 'flex' : 'none';
+    if (stats) stats.style.display = (!graph || this.narrow) ? 'none' : 'flex';
+    if (!graph) this.mountManage();
+    this.renderTabs();
+    this.syncManageTab();
+    var params = new URLSearchParams(window.location.search);
+    if (graph) params.delete('tab');
+    else params.set('tab', next);
+    var qs = params.toString();
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+    }
+    if (graph) {
+      var self = this;
+      requestAnimationFrame(function () { self.resize(); if (self.fitView) self.fitView(); });
+    }
+  };
+
+  RelationsViewer.prototype.mountManage = function () {
+    var host = this.refs.manage;
+    if (!host || host.childElementCount) { this.syncManageTab(); return; }
+    var tpl = document.getElementById('rv-manage-template');
+    if (!tpl) return;
+    host.appendChild(tpl.content.cloneNode(true));
+    var root = host.firstElementChild;
+    if (window.Alpine && typeof window.Alpine.initTree === 'function') window.Alpine.initTree(root);
+    this.syncManageTab();
+  };
+
+  RelationsViewer.prototype.syncManageTab = function () {
+    var host = this.refs.manage;
+    if (!host || !window.Alpine || typeof window.Alpine.$data !== 'function') return;
+    var root = host.querySelector('[x-data]');
+    if (!root) return;
+    try {
+      var data = window.Alpine.$data(root);
+      if (data && this.viewTab !== 'graph') data.activeTab = this.viewTab;
+    } catch (e) { /* Alpine has not initialised the tree yet. */ }
+  };
+
+  RelationsViewer.prototype.openTabFromUrl = function () {
+    var tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'relationships' || tab === 'families') this.showManage(tab);
+    else this.renderTabs();
   };
 
   RelationsViewer.prototype.renderPresets = function () {
@@ -1741,6 +1819,7 @@
       else if (act === 'zoomIn') { self.zoomBy(1.25); }
       else if (act === 'zoomOut') { self.zoomBy(0.8); }
       else if (act === 'fitView') { self.fitView(); }
+      else if (act.indexOf('tab:') === 0) { self.showManage(act.slice(4)); }
       // ── The detail panel's editable sections (MS-280) ───────────────────
       // Per-control and immediate: the panel is a page surface, not a dialog,
       // so there is no Save button between the elder and the write (ADR-0032).

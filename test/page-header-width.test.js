@@ -146,6 +146,11 @@ const NO_BAR_ON_PURPOSE = {
     'hymn-directory.html':
         'MS-661. A bookmark, not a page. It opens hymns.html before anything ' +
         'paints, so a bar here would be chrome for a document that is already gone',
+    'shepherding-tags.html':
+        'A bookmark, not a page. Tags moved into the People side panel and ' +
+        'relationships and families moved onto the Relations viewer, so this ' +
+        'URL only redirects. A bar here would be chrome for a document that ' +
+        'is already gone',
     'hymn-details.html':
         'MS-661. A bookmark, not a page. It opens the hymn on hymns.html ' +
         'before anything paints',

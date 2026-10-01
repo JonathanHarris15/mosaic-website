@@ -103,9 +103,9 @@ const PEOPLE = { alice: { name: 'Alice' }, bob: { name: 'Bob' }, cara: { name: '
 test('folding the tab into the page component keeps its getters live', async () => {
     global.db = fakeDb({ relationship_types: { t1: DISCIPLESHIP }, people: PEOPLE });
 
-    // Exactly what shepherding-tags.js does.
+    // Exactly what relationsManage does in shepherding-tags.js.
     const page = window.withRelationshipsTab({
-        activeTab: 'tags',
+        activeTab: 'relationships',
         showToast() {},
     });
     await page.loadRelationshipsTab();
@@ -120,8 +120,8 @@ test('folding the tab into the page component keeps its getters live', async () 
     page.openPicker('holder');
     assert.strictEqual(page.pickerOptions.length, 3, 'pickerOptions must recompute when a picker opens');
 
-    // And the Tags half is still intact.
-    assert.strictEqual(page.activeTab, 'tags');
+    // The host's own fields survive the fold.
+    assert.strictEqual(page.activeTab, 'relationships');
 });
 
 // ── Loading ───────────────────────────────────────────────────────────────────

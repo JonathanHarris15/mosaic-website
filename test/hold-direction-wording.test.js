@@ -20,9 +20,10 @@ const Core = require('../public/shepherding-core.js');
 // (the durable seam), and the templates are read as source to check they route
 // through it rather than writing the phrase out by hand.
 //
-// The widget exists twice — the People list filter and the saved Filtered View
-// editor — and that duplication is what let one copy drift from the other. The
-// source test below is what stops them drifting again.
+// The widget lives on the People list. The saved-view editor on the shepherd
+// desk used to carry a second copy; that editor left the desk, and this file
+// still checks the copy that remains so the phrases cannot be written out by
+// hand again.
 
 // ── The wording helper (unit) ─────────────────────────────────────────────────
 
@@ -70,8 +71,6 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 const WIDGET_FILES = [
     'shepherding-people.html',
     'shepherding-people.js',
-    'shepherding-dashboard.html',
-    'shepherding-dashboard.js',
 ];
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
@@ -87,15 +86,11 @@ test('only the core knows the direction phrases — no template writes one out',
         'ShepherdingCore.holdScrubberLabel instead:\n  ' + offenders.join('\n  '));
 });
 
-// The two copies name their method differently because each reads its own state
-// — the People list's live filter, the editor's half-built view — so the test
-// names both rather than pattern-matching loosely across them.
 const SCRUBBER_TOOLTIP = {
     'shepherding-people.html': 'holdScrubberLabel',
-    'shepherding-dashboard.html': 'viewNewScrubberLabel',
 };
 
-test('both copies of the widget build their scrubber tooltip through the helper', () => {
+test('the People filter builds its scrubber tooltip through the helper', () => {
     for (const [html, method] of Object.entries(SCRUBBER_TOOLTIP)) {
         const src = read(html);
         const slider = src.match(/<input[^>]*class="tag-hold-slider[^"]*"/gs);
@@ -107,8 +102,8 @@ test('both copies of the widget build their scrubber tooltip through the helper'
     }
 });
 
-test('both copies of the widget delegate their wording to the shared core', () => {
-    for (const js of ['shepherding-people.js', 'shepherding-dashboard.js']) {
+test('the People filter delegates its wording to the shared core', () => {
+    for (const js of ['shepherding-people.js']) {
         const src = read(js);
         contains(src, /ShepherdingCore\.holdScrubberLabel\(/,
             js + ' must ask the core for the scrubber tooltip');

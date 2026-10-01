@@ -7,7 +7,10 @@ const IMPORTANCE_LABEL = ShepherdingCore.IMPORTANCE_LABEL_SHORT;
 const statusZoneKey = ShepherdingCore.statusZoneKey;
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingPeople', () => ({
+    Alpine.data('shepherdingPeople', () => window.withTagManager({
+        // Closed until auth answers. The saved-view delete control reads
+        // canDecide, and an undeclared flag throws in Alpine rather than hiding.
+        ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
 
@@ -51,6 +54,10 @@ document.addEventListener('alpine:init', () => {
 
         showTagManagementModal: false,
         tagPerson: null,
+
+        // The left card is either the search, or the tag vocabulary. One panel,
+        // swapped — not a second page.
+        sideMode: 'filters',
 
         loading: true,
         toast: { show: false, message: '', type: 'success' },
@@ -113,6 +120,9 @@ document.addEventListener('alpine:init', () => {
                 ]);
                 // A restored Hold-Duration filter needs its history up front.
                 if (this.anyHoldActive()) await this.loadTagHolds();
+                if (new URLSearchParams(window.location.search).get('panel') === 'tags') {
+                    this.sideMode = 'tags';
+                }
                 this.loading = false;
             });
         },
@@ -135,6 +145,9 @@ document.addEventListener('alpine:init', () => {
                     name: doc.data().name || doc.id,
                     hiddenFromOthers: doc.data().hiddenFromOthers || false,
                     hidePeople: doc.data().hidePeople || false,
+                    // Projected tags are code-defined (ADR-0012, ADR-0013). The
+                    // panel locks rename, merge, delete, and hide on them.
+                    locked: ShepherdingCore.isProjectedTagId(doc.id),
                 }));
             } catch (e) {
                 console.error('Error loading tags:', e);
@@ -353,6 +366,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteFilterView(id) {
+            if (!this.canDecide) return;
+            if (!confirm('Delete this saved view?')) return;
             try {
                 await db.collection('shepherding_views').doc(id).delete();
                 this.filterViews = this.filterViews.filter(v => v.id !== id);
@@ -480,6 +495,16 @@ document.addEventListener('alpine:init', () => {
         showToast(message, type = 'success') {
             this.toast = { show: true, message, type };
             setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+
+        openTagManager() {
+            this.sideMode = 'tags';
+        },
+
+        closeTagManager() {
+            this.cancelRenameTag();
+            this.cancelMergeTag();
+            this.sideMode = 'filters';
         },
     }));
 });

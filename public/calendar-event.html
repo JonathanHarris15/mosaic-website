@@ -97,7 +97,7 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="eventDetailPage()" x-cloak>
 
     <!-- No __title on purpose. This page is one of three records — a new event,
@@ -122,7 +122,7 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
+    <main x-show="!loading" class="m-page__body">
 
         <div x-show="error"
              class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">

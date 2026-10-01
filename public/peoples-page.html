@@ -29,18 +29,14 @@
     
     <style>
         [x-cloak] { display: none !important; }
-        body { font-family: 'Work Sans', sans-serif; }
-        h1, h2, h3 { font-family: 'Noto Serif', serif; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--surface-container-high); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--outline-variant); }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md min-h-screen overflow-x-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed" x-data="peoplesPage" x-cloak>
+<body class="m-page overflow-x-hidden selection:bg-primary-fixed selection:text-on-primary-fixed" x-data="peoplesPage" x-cloak>
     <!-- Architectural accent lines -->
-    <div class="absolute right-0 top-0 h-96 w-1/3 bg-gradient-to-l from-surface-container-high to-transparent opacity-30 pointer-events-none"></div>
-
     <!-- Titled for the first time. The name is the Membership Directory, which
          is what CONTEXT.md has always called the concept; the UI labels said
          "Member Directory" and have been brought into line (MS-187). -->
@@ -60,7 +56,7 @@
         </div>
     </header>
 
-    <main x-show="authorized" class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
+    <main x-show="authorized" class="m-page__body m-page__body--wide m-page__body--split">
         <!-- Sidebar: Tags Manager — revealed only in Edit Mode. Editors land on the
              member view by default (editMode off) and turn this on to manage tags. -->
         <aside x-show="editMode" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
@@ -275,9 +271,9 @@
                              one that rises under the pointer and then does nothing reads as
                              broken rather than as read-only. `editMode` alone is the right
                              test: only an editor can turn it on. -->
-                        <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl transition-all group relative shadow-sm"
-                             :class="editMode ? 'hover:border-primary/40 hover:shadow-md' : ''">
-                            <div class="flex justify-between items-start">
+                        <div class="m-card p-4 transition-colors group relative"
+                             :class="editMode ? 'hover:border-primary' : ''">
+                            <div class="m-person">
                                 <!-- Photo slot (photo upload wired later; shows a placeholder until a photo is set) -->
                                 <!-- Photo. An editor sets or clears anyone's from here; a
                                      person sets their own on their profile page (ADR-0029).
@@ -305,20 +301,20 @@
                                         Remove
                                     </button>
                                 </div>
-                                <div class="flex-grow">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                <div class="m-person__text flex-grow">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="m-person__name" x-text="person.name"></h3>
                                         <!-- An editor reads the stage here; a member reads only
                                              Member / Non-member (ShepherdingCore holds the rule). -->
-                                        <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
-                                              :class="canEdit && person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                                        <span class="m-status"
+                                              :class="canEdit && person.membership && person.membership.inactive ? '' : 'm-status--info'"
                                               x-text="membershipStageLabel(person)"></span>
                                         <!-- Connected to a login. In Edit Mode an editor can
                                              break it, for when the wrong record got connected
                                              (ADR-0028). The account's email is deliberately not
                                              shown: reading `users` is admin-only. -->
                                         <span x-show="editMode && person.userId"
-                                              class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
+                                              class="m-status m-status--good"
                                               title="Connected to a website account">
                                             <span class="material-symbols-outlined text-[12px]">link</span> Account
                                             <button @click.stop="unlinkAccount(person)" :disabled="unlinkingId === person.id"
@@ -330,11 +326,11 @@
                                     </div>
                                     <!-- Self-service: a Person viewing their own card gets a link to edit their info (MS-87) -->
                                     <a x-show="person.userId && person.userId === currentUserUid" href="profile.html"
-                                       class="inline-flex items-center gap-1 text-primary text-[10px] font-label-md uppercase tracking-widest hover:underline mb-1">
+                                       class="m-btn m-btn--ghost m-btn--sm self-start">
                                         <span class="material-symbols-outlined text-[13px]">edit</span> Edit my info
                                         <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
                                     </a>
-                                    <div class="space-y-1">
+                                    <div class="m-person__reach">
                                         <div x-show="person.contact?.email" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
                                             <span class="material-symbols-outlined text-[14px]">mail</span>
                                             <span x-text="person.contact.email"></span>
@@ -461,9 +457,9 @@
                                 </button>
                             </div>
                             <div x-show="editMode" class="flex gap-2 mt-4">
-                                <button @click="editPerson(person)"
-                                        class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
-                                    <span class="material-symbols-outlined text-[14px]">edit</span> Edit Person
+                                <button type="button" @click="editPerson(person)"
+                                        class="m-btn m-btn--primary m-btn--sm">
+                                    <span class="material-symbols-outlined">edit</span> Edit person
                                 </button>
                                 <button @click="initiateMerge(person)" 
                                         :class="mergeSource?.id === person.id ? 'bg-error text-white' : (mergeSource ? 'bg-secondary text-white' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest')"
@@ -475,8 +471,9 @@
                         </div>
                     </template>
                 </div>
-                <div x-show="filteredPeople.length === 0" class="py-12 text-center text-on-surface-variant italic font-body-md">
-                    No people found. Add someone to get started.
+                <div x-show="filteredPeople.length === 0" class="m-empty">
+                    <span class="material-symbols-outlined">group</span>
+                    <p>No one matches. Clear a filter, or add someone to the directory.</p>
                 </div>
             </div>
         </section>

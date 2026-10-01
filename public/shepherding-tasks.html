@@ -42,10 +42,10 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="m-page"
       x-data="shepherdingTasks" x-cloak>
 
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'"
@@ -55,7 +55,6 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">Tasks &amp; Reminders</h1>
-                    <span class="m-header__sub">What the elders have to do, and what got done.</span>
                 </div>
             </div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -72,7 +71,7 @@
     </div>
 
     <main x-show="!loading && isElder"
-          class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+          class="m-page__body">
 
         <!-- Who, and whether to show what is finished -->
         <div class="flex flex-wrap items-center gap-md">

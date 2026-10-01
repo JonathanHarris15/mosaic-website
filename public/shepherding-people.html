@@ -35,27 +35,91 @@
             height: 100vh;
         }
 
-        /* Fixed filter sidebar — aligned with the People List table */
+        /* The filter card starts in the same band as the search, under the
+           header. It used to wait at 220px for a row of buttons that left a
+           cream strip above it. */
         .filter-sidebar {
             position: fixed;
-            top: 220px;  /* lines up with the table below header+title+search */
-            left: 32px;
+            top: calc(64px + var(--space-md));
+            left: var(--space-margin);
             width: 280px;
-            max-height: calc(100vh - 220px - 32px);
+            max-height: calc(100vh - 64px - var(--space-md) - var(--space-margin));
             overflow-y: auto;
             z-index: 10;
         }
 
-        /* Main content pushed right to clear the fixed sidebar */
+        /* The tag vocabulary replaces the search in this same card. 280px is
+           too narrow for a name and a row of hover-only icons, so the actions
+           sit under the name and stay visible. */
+        .tag-manager .tag-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+        .tag-manager .tag-actions {
+            opacity: 1 !important;
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        .tag-manager .tag-back {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: var(--primary);
+        }
+        .tag-manager .tag-back:hover { background: var(--surface-container); }
+
+        /* Main content pushed right to clear the fixed sidebar. The gutter
+           matches the header. The gap beside the card is one step, not another
+           margin. */
         .content-area {
-            margin-left: 344px; /* 32px left-pad + 280px sidebar + 32px gap */
-            padding: 0 32px 0 0;
+            margin-left: calc(var(--space-margin) + 280px + var(--space-md));
+            padding: var(--space-md) var(--space-margin) 0 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        /* Search, sort, and the count are one row. The sort words are sentence
+           case: the segmented control's tracked capitals space a phrase like
+           "Needs attention" until the buttons look loose. */
+        .people-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            flex: 0 0 auto;
+            margin-bottom: var(--space-sm);
+        }
+        .people-toolbar .m-search { flex: 1 1 220px; min-width: 0; max-width: none; }
+        .people-sort { flex: 0 0 auto; }
+        .people-sort .m-seg__opt {
+            letter-spacing: 0;
+            text-transform: none;
+            font-size: 14px;
+            padding: 0 14px;
+        }
+        .people-count { margin: 0; white-space: nowrap; flex: 0 0 auto; }
+        @media (max-width: 720px) {
+            .people-toolbar { flex-wrap: wrap; }
+            .people-toolbar .m-search { flex: 1 1 100%; }
         }
 
         /* Only the people table scrolls */
         .scrollable-table {
+            flex: 1 1 auto;
+            min-height: 0;
             overflow-y: auto;
-            max-height: calc(100vh - 220px);
+        }
+
+        @media (max-width: 640px) {
+            .filter-sidebar {
+                top: calc(46px + var(--space-md));
+                max-height: calc(100vh - 46px - var(--space-md) - var(--space-margin));
+            }
         }
 
         /* The mobile "Filters" toggle is hidden on desktop (sidebar is always shown). */
@@ -73,11 +137,11 @@
             margin-left: 0;
             padding: 0 16px;
         }
-        html.shell-mobile .people-search  { order: 1; }
+        html.shell-mobile .people-toolbar { order: 1; flex-wrap: wrap; }
+        html.shell-mobile .people-toolbar .m-search { flex: 1 1 100%; }
         html.shell-mobile .filters-wrap   { order: 2; }
-        html.shell-mobile .people-actions { order: 3; }
         html.shell-mobile .scrollable-table {
-            order: 4;
+            order: 3;
             max-height: none;
             overflow-y: visible;
         }
@@ -113,14 +177,14 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased"
+<body class="m-page"
       x-data="shepherdingPeople" x-cloak>
 
     <!-- ═══════════════════════════════════════════ -->
     <!-- HEADER                                      -->
     <!-- ═══════════════════════════════════════════ -->
     <!-- The one header that was written in inline styles rather than tokens. -->
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a href="shepherding-dashboard.html" class="m-back">
@@ -129,10 +193,13 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">People</h1>
-                    <span class="m-header__sub">
-                        <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
-                    </span>
                 </div>
+            </div>
+            <div class="m-header__actions">
+                <button type="button" @click="showAddPersonModal = true" class="m-btn m-btn--primary m-btn--sm">
+                    <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+                    <span class="m-btn__label">Add person</span>
+                </button>
             </div>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -158,8 +225,17 @@
             <span>Filters</span>
             <span class="material-symbols-outlined text-[20px] ml-auto transition-transform" :style="mobileFiltersOpen ? 'transform:rotate(180deg)' : ''">expand_more</span>
         </button>
-    <aside x-show="!loading && (window.MOSAIC_SHELL !== 'mobile' || mobileFiltersOpen)" class="filter-sidebar">
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm divide-y divide-outline-variant">
+    <aside x-show="!loading && (window.MOSAIC_SHELL !== 'mobile' || mobileFiltersOpen || sideMode === 'tags')" class="filter-sidebar">
+        <div x-show="sideMode !== 'tags'" class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm divide-y divide-outline-variant">
+
+            <!-- Edit tags swaps this card for the vocabulary. It stays visible
+                 when the list is empty, which is when you most need it. -->
+            <div class="p-6">
+                <button type="button" @click="openTagManager()" class="m-btn m-btn--secondary m-btn--sm">
+                    <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                    <span class="m-btn__label">Edit tags</span>
+                </button>
+            </div>
 
             <!-- Saved Views -->
             <div class="p-6 flex flex-col gap-3">
@@ -195,8 +271,9 @@
                             <button @click="loadFilterView(view)"
                                 class="flex-grow text-left text-sm text-on-surface hover:text-primary transition-colors truncate font-label-md"
                                 x-text="view.title"></button>
-                            <button @click.stop="deleteFilterView(view.id)"
-                                class="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-error transition-all">
+                            <button type="button" x-show="canDecide" @click.stop="deleteFilterView(view.id)"
+                                class="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-error transition-all"
+                                :aria-label="'Delete view ' + view.title">
                                 <span class="material-symbols-outlined text-[12px]">close</span>
                             </button>
                         </div>
@@ -318,47 +395,117 @@
             </div>
 
         </div>
+
+        <!-- Tag vocabulary. Same card, other contents. Back returns to the search. -->
+        <div x-show="sideMode === 'tags'" x-cloak class="tag-manager bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-4 flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+                <button type="button" @click="closeTagManager()" class="tag-back" aria-label="Back to search options">
+                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                </button>
+                <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Tags</span>
+            </div>
+            <p class="text-xs text-on-surface-variant leading-snug">Create, rename, merge, and delete shepherding tags.</p>
+
+            <!-- Create new tag — vocabulary writes are a decision. -->
+            <div x-show="canDecide" class="flex gap-1">
+                <input type="text" x-model="newTagName" placeholder="New tag name"
+                       @keydown.enter="addTag()"
+                       aria-label="New tag name"
+                       class="flex-grow min-w-0 border border-outline-variant rounded-lg px-2 py-1 font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <button @click="addTag()"
+                    :disabled="!newTagName.trim()"
+                    class="m-btn m-btn--primary m-btn--sm flex-shrink-0">
+                    Create
+                </button>
+            </div>
+
+            <!-- Tag list -->
+            <ul class="flex flex-col gap-1">
+                <template x-for="tag in shepherdingTags" :key="tag.id">
+                    <li class="group flex flex-col gap-1 px-1 py-1 rounded-lg border border-transparent hover:border-outline-variant hover:bg-surface-container transition-colors">
+                        <div class="tag-row flex items-center justify-between gap-1">
+                            <span x-show="editingTagId !== tag.id" class="font-body-md text-sm text-on-surface" x-text="tag.name"></span>
+                            <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
+                                   @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
+                                   :aria-label="'Rename ' + tag.name"
+                                   class="flex-grow min-w-0 border border-outline-variant rounded px-2 py-1 font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <span x-show="tag.locked" class="flex items-center gap-1 text-outline-variant text-xs flex-shrink-0" title="Managed by the Membership Track">
+                                <span class="material-symbols-outlined text-[16px]">lock</span>
+                                <span>System</span>
+                            </span>
+                            <div x-show="canDecide && !tag.locked" class="tag-actions flex items-center gap-1 flex-shrink-0">
+                                <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
+                                    class="text-primary transition-colors" title="Save name">
+                                    <span class="material-symbols-outlined text-[20px]">check</span>
+                                </button>
+                                <button x-show="editingTagId !== tag.id" @click="startRenameTag(tag)"
+                                    class="text-outline-variant hover:text-primary transition-colors" title="Rename tag">
+                                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                                </button>
+                                <button x-show="editingTagId !== tag.id" @click="startMergeTag(tag)"
+                                    :class="mergingTagId === tag.id ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    class="transition-colors" title="Merge into another tag">
+                                    <span class="material-symbols-outlined text-[20px]">merge</span>
+                                </button>
+                                <button @click="toggleTagFlag(tag.id, 'hiddenFromOthers')"
+                                    :class="tag.hiddenFromOthers ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    :title="tag.hiddenFromOthers ? 'Hidden from non-admins' : 'Visible to all'"
+                                    class="transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="tag.hiddenFromOthers ? 'visibility_off' : 'visibility'"></span>
+                                </button>
+                                <button @click="toggleTagFlag(tag.id, 'hidePeople')"
+                                    :class="tag.hidePeople ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    :title="tag.hidePeople ? 'People with this tag are hidden from non-admins' : 'People with this tag are visible'"
+                                    class="transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="tag.hidePeople ? 'person_off' : 'person'"></span>
+                                </button>
+                                <button @click="deleteTag(tag.id, tag.name)"
+                                    class="text-on-surface-variant hover:text-error transition-colors" :aria-label="'Delete tag ' + tag.name">
+                                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div x-show="canDecide && mergingTagId === tag.id" class="flex flex-col gap-1 bg-surface-container-low rounded-lg p-2">
+                            <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
+                            <div class="flex flex-wrap gap-1">
+                                <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id && !t.locked)" :key="other.id">
+                                    <button @click="mergeTagInto(other.id)"
+                                        class="tag-merge-option px-2 py-1 bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full text-xs transition-colors"
+                                        x-text="other.name"></button>
+                                </template>
+                                <span x-show="shepherdingTags.filter(t => t.id !== tag.id && !t.locked).length === 0" class="text-xs italic text-on-surface-variant">No other tag to merge into.</span>
+                            </div>
+                            <button @click="cancelMergeTag()" class="self-start text-xs text-on-surface-variant hover:text-error transition-colors">Cancel</button>
+                        </div>
+                    </li>
+                </template>
+                <li x-show="shepherdingTags.length === 0" class="text-on-surface-variant italic text-sm px-1 py-2">
+                    No tags yet. Create one above.
+                </li>
+            </ul>
+        </div>
     </aside>
     </div>
 
-        <!-- The title and the count are the header's. What stays is the row of
-             things you can do to the list. -->
-        <div style="margin-bottom:32px;" class="people-actions flex flex-col lg:flex-row lg:items-center justify-end gap-6">
-            <div class="flex flex-col sm:flex-row items-center gap-6">
-                <button @click="showAddPersonModal = true"
-                    class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-full hover:bg-primary/90 transition-all shadow-sm active:scale-95">
-                    <span class="material-symbols-outlined text-[20px]">person_add</span>
-                    <span>Add Person</span>
-                </button>
-                <!-- Sort control -->
-                <div class="flex items-center gap-3 bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
-                    <span class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant px-2">Sort by</span>
-                    <div class="flex bg-surface-container-lowest rounded-lg border border-outline-variant/50 overflow-hidden shadow-sm">
-                        <button @click="sortBy = 'name'"
-                            :class="sortBy === 'name' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant hover:bg-surface-container'"
-                            class="px-4 py-2 font-label-md text-label-md transition-colors">
-                            Name
-                        </button>
-                        <button @click="sortBy = 'attention'"
-                            :class="sortBy === 'attention' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant hover:bg-surface-container'"
-                            class="px-4 py-2 font-label-md text-label-md transition-colors border-l border-outline-variant/50">
-                            Needs Attention
-                        </button>
-                    </div>
-                </div>
+        <!-- Add person is the header's one action. Search, sort, and the count
+             share this row, so nothing sits in an empty band above the list. -->
+        <div class="people-toolbar">
+            <label class="m-search">
+                <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                <input type="text" x-model="search" placeholder="Search by name…" aria-label="Search by name">
+            </label>
+            <div class="people-sort m-seg" role="group" aria-label="Sort">
+                <button type="button" class="m-seg__opt" @click="sortBy = 'name'" :aria-pressed="sortBy === 'name'">Name</button>
+                <button type="button" class="m-seg__opt" @click="sortBy = 'attention'" :aria-pressed="sortBy === 'attention'">Needs attention</button>
             </div>
-        </div>
-
-        <!-- Search bar -->
-        <div class="relative people-search" style="margin-bottom:24px;">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
-            <input type="text" x-model="search" placeholder="Search by name…"
-                   class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />
+            <p class="people-count m-label">
+                <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> shown
+            </p>
         </div>
 
         <!-- People table (scrollable) -->
         <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm scrollable-table">
-                <table class="w-full text-sm">
+                <table class="m-table">
                     <thead class="bg-surface-container-low border-b border-outline-variant" style="position: sticky; top: 0; z-index: 1;">
                         <tr>
                             <th class="text-left px-6 py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Name</th>
@@ -373,7 +520,7 @@
                             <tr class="hover:bg-primary/5 transition-colors group cursor-pointer"
                                 @click="window.location.href = `shepherding-profile.html?id=${person.id}`">
                                 <td class="px-6 py-4">
-                                    <div class="font-body-md text-on-surface font-bold group-hover:text-primary transition-colors" :class="ShepherdingBlur.nameClass({filterContext: shepherdingFilterActive})" x-text="person.name"></div>
+                                    <div class="m-person__name group-hover:underline" :class="ShepherdingBlur.nameClass({filterContext: shepherdingFilterActive})" x-text="person.name"></div>
                                 </td>
                                 <td class="px-6 py-4 hidden lg:table-cell">
                                     <div class="flex items-center gap-2">
@@ -533,7 +680,7 @@
                         </template>
                         <div x-show="shepherdingTags.length === 0" class="py-8 text-center w-full opacity-50">
                             <p class="italic text-sm">No tags defined in the system.</p>
-                            <a href="shepherding-dashboard.html" class="text-primary font-bold text-xs hover:underline mt-2 inline-block">Go to Dashboard to create tags</a>
+                            <button type="button" @click="showTagManagementModal = false; openTagManager()" class="text-primary font-bold text-xs hover:underline mt-2 inline-block">Edit tags in the side panel</button>
                         </div>
                     </div>
                 </div>
@@ -556,6 +703,7 @@
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="person-name.js"></script>
+    <script src="shepherding-tags.js"></script>
     <script src="shepherding-people.js"></script>
 </body>
 </html>
