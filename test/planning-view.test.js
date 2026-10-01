@@ -244,8 +244,10 @@ test('the rail centres its compass by rule, not by luck', () => {
 
 test('the month separator still spans the whole row', () => {
     // A hard-coded colspan would leave the month heading short by nine columns
-    // the moment the Planning view opened.
-    assert.match(SRC, /colspan="\$\{10 \+ PLANNING_COLUMNS\.length\}"/);
+    // the moment the Planning view opened. The label sits in the sticky date
+    // column; the filler cell carries the rest of the band.
+    assert.match(SRC, /colspan="\$\{9 \+ PLANNING_COLUMNS\.length\}"/);
+    assert.match(SRC, /sticky-col-left bg-surface-container-low\/90 backdrop-blur-sm/);
 });
 
 // ── Writing a slot ────────────────────────────────────────────────────────

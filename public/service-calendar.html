@@ -110,13 +110,18 @@
             background-color: var(--surface-container-lowest) !important;
         }
 
+        /* Month headings use the same sticky date column as service rows. A single
+           colspan cell scrolls away horizontally even with position:sticky. */
         .sticky-month-row td {
-            position: sticky;
-            top: 41px; /* Height of the thead */
+            top: 41px; /* Height of the thead — pairs with position:sticky on .sticky-col-left */
             z-index: 25;
             background-color: var(--surface-container);
             border-top: 1px solid rgba(0,0,0,0.05);
             border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .sticky-month-row td.sticky-col-left {
+            z-index: 26;
         }
 
         /* Shadow only for service cells, not headers */
