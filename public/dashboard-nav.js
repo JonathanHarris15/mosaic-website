@@ -43,14 +43,6 @@
             },
         },
         {
-            key: 'service-analytics', domId: 'service-analytics-card', href: 'analytics.html', symbol: 'monitoring',
-            label: 'Service Analytics', desc: 'Who has served, how often, and when they last did.',
-            visible: function (account) {
-                const Access = accessCore();
-                return Access && Access.readsAsEditor(account);
-            },
-        },
-        {
             key: 'mcp-manager', domId: 'mcp-manager-card', href: 'mcp-manager.html', symbol: 'smart_toy',
             label: 'MCP Manager', desc: 'Guide the assistant, and see what it can do.',
             visible: function (account) {
@@ -177,6 +169,7 @@
     function applyOrder(tiles, savedOrder) {
         const order = Array.isArray(savedOrder) ? savedOrder : [];
         const byKey = new Map(tiles.map(function (t) { return [t.key, t]; }));
+        // Stale keys (e.g. retired `service-analytics` on home) are ignored.
         const ordered = order.map(function (key) { return byKey.get(key); }).filter(Boolean);
         const placed = new Set(ordered.map(function (t) { return t.key; }));
         tiles.forEach(function (t) {

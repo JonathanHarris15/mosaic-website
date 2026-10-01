@@ -21,7 +21,17 @@ test('visible tiles include editor-only cards for an editor', () => {
     const keys = tiles.map((t) => t.key);
     assert.ok(keys.includes('forms'));
     assert.ok(keys.includes('roles-manager'));
+    assert.ok(!keys.includes('service-analytics'));
     assert.ok(!keys.includes('shepherding'));
+});
+
+test('retired dashboard keys in saved order are ignored', () => {
+    const tiles = DashboardNav.visibleTiles(account('editor'));
+    const ordered = DashboardNav.applyOrder(tiles, [
+        'service-analytics', 'forms', 'hymn-directory', 'not-a-real-key',
+    ]);
+    assert.equal(ordered[0].key, 'forms');
+    assert.equal(ordered.length, tiles.length);
 });
 
 test('saved order is applied and unknown keys append at the end', () => {
