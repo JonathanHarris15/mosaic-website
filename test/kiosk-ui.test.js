@@ -8,8 +8,8 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 const read = f => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
 test('the account panel offers kiosk as a permission level', () => {
-    const html = read('profile.html');
-    const js = read('profile.js');
+    const html = read('admin-dashboard.html');
+    const js = read('admin-accounts.js');
     assert.match(html, /<option value="kiosk">Kiosk<\/option>/);
     assert.match(js, /'kiosk': 'Kiosk'/);
     assert.match(js, /<option value="kiosk"/);

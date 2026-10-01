@@ -193,7 +193,7 @@ test('every read that decides a write asks the server', () => {
     // old — deletes computed from a stale list, a merge that drops whoever was
     // added in between. Nothing else in the codebase would notice.
     const sites = [
-        ['profile.js', 3],                 // user↔person link: old + new person, and the user doc
+        ['admin-accounts.js', 3],          // user↔person link: old + new person, and the user doc
         ['service-builder.js', 3],         // clearing involvements, a baptism date, and the prayer history a new lastPastoralPrayerDate is computed from
         ['service-calendar.js', 3],        // clearing involvements, the history the person picker decides from, and re-deriving lastPastoralPrayerDate after a schedule shift
         ['shepherding-profile.js', 3],     // deleting notes, activity, and status/tag history
