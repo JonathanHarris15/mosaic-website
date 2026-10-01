@@ -1,4 +1,4 @@
-**Lede** — The one sentence under a page title that says what the page is for. Not an eyebrow, not a second title.
+**Lede** — An opening sentence inside a document, such as a policy. Not a second line under the header title.
 
 ```html
 <p class="m-lede">The people of the church, and how to reach them.</p>
@@ -6,7 +6,8 @@
 
 Base class `.m-lede`, modifiers `.m-lede--<variant>`.
 
-- Prefer .m-header__sub when the sentence fits the header. Use .m-lede at the top of the body when it is longer than one line.
+- The header is one line. Do not put this sentence under the title, and do not use .m-header__sub.
+- A dashboard, a list, and a tool do not get a lede. A policy does, at the top of .m-prose.
 - Sentence case, serif, the colour of secondary text. It does not repeat the title.
 
 Built from the Mosaic tokens only — no raw colours, no second icon set.

@@ -15,7 +15,7 @@ Mobbin does not carry Planning Center, Subsplash, Pushpay, or Church Center. The
 1. [Workable — People directory](https://mobbin.com/screens/d1b37b21-53ef-4518-b344-854c0bf7639e). The name is the headline of the row. The role is the second line. Mail and phone sit quietly beside. Filters are ordinary controls, and the active one is a chip you can clear.
 2. [folk — a person](https://mobbin.com/screens/0154da86-4bbd-44fb-a38e-455f6d0e1a22). The record opens with the name, a short row of actions, then labelled facts. Notes are the work, not a panel of identical inputs.
 3. [Fresha — a week and a person](https://mobbin.com/screens/8efc25e9-bef8-4514-b874-e5d62a83f6b3). The calendar is the page. The selected person is a column of a few facts with icons. Services are a grouped list you can search.
-4. [HoneyBook — a list of services](https://mobbin.com/screens/a01c45ac-97dc-422f-bf2e-9be5d27fbf89). One sentence under the title says what the page is for. Each row is a name, a quiet description, and an overflow. One primary action.
+4. [HoneyBook — a list of services](https://mobbin.com/screens/a01c45ac-97dc-422f-bf2e-9be5d27fbf89). Each row is a name, a quiet description, and an overflow. One primary action. The sentence they put under the page title did not transfer: a second line in the header makes every bar a different height.
 5. [Squarespace — funds](https://mobbin.com/screens/ae6d6939-d97a-4ac6-add9-9359ce214eae). A church-admin table: sentence-case headers, air, one solid primary, a sidebar that does not compete with the list.
 
 ## Decisions
@@ -28,7 +28,7 @@ A page that draws its own button, its own sticky `top`, or its own 10px tracked 
 
 3. **A person is a name, then how to reach them.** `.m-person`: face, name in EB Garamond, one line of role or household, then mail and phone in the quiet colour. A stage such as Member is `.m-status`, a short tinted word beside the name, never a stamp in place of it.
 
-4. **A page says what it is for, once.** The header title names the place. `.m-header__sub` or `.m-lede` is one sentence and does not repeat the title. The body does not open with an eyebrow and a fading rule.
+4. **The header is one line, and one height.** The title names the place or the record. Nothing sits under it. A count, a template name, a date, or an event range lives in the body, or in the header’s action cluster, where it stays vertically centred and cannot change the bar’s height. `.m-header--tall` is not used to make room for a second line. A page reached from more than one place may keep `.m-header__crumbs` above the title; that trail replaces the back link and still fits the standing 64px bar. The body does not open with an eyebrow and a fading rule. A `.m-lede` belongs in a document (a policy), not under a dashboard title.
 
 5. **One primary action.** It is `.m-btn.m-btn--primary`, and it lives in the header when the page has one. Everything else is quieter. A destructive action is an outline until deleting is the whole screen.
 
@@ -55,7 +55,7 @@ Every page is `<body class="m-page">` plus at most one modifier, then `<header c
 | Reading | `m-page m-page--reading` | Settings, a policy, commitments, the sign-in card’s quieter cousins. Column is 720px. |
 | Tool | `m-page m-page--tool` and header `m-header--tool` | The page fills the window and scrolls inside its own panes. |
 | Door | `m-page m-page--door` | One card, centred. Sign-in. |
-| Home | `m-page m-page--app m-dense` | The dashboard only. Tiles fit the viewport from 1024px up. |
+| Home | `m-page m-page--app m-dense` | The dashboard only. The current tiles are what is shipped. A replacement is waiting on a choice between the three prototypes in `docs/design/prototypes/home-dashboard-arena.html`. |
 
 The gutter is `--space-margin` (32px), the same inset as the header. Do not set a page width with `max-w-6xl`, `max-w-7xl`, `max-w-[760px]`, or an inline `max-width`.
 

@@ -974,7 +974,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-prose strong { color: var(--primary); font-weight: 600; }
 .m-prose a { color: var(--primary); }
 
-/* Lede — The one sentence under a page title that says what the page is for. */
+/* Lede — An opening sentence inside a document, such as a policy. */
 .m-lede {
   margin: 0;
   max-width: 62ch;
@@ -1319,11 +1319,15 @@ a.m-person:hover .m-person__name, button.m-person:hover .m-person__name { color:
   font-family: var(--font-serif); font-size: var(--m-header-title-serif);
   letter-spacing: .01em; text-transform: none; color: var(--on-surface);
 }
+/* Retired. A second line under the title made every header a different height.
+   The rule stays so an old page does not explode. Do not use the class. */
 .m-header__sub {
   font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
   color: var(--on-surface-variant);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Retired with the subtitle. The standing bar is 64px. Do not use this to
+   make room for a second line. */
 .m-header--tall { --m-header-h: 84px; }
 
 /* The trail, above the title, where a page can be reached from more than one

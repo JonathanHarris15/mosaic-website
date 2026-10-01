@@ -1380,6 +1380,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "A Person's name is not chrome. Cinzel is the app's own word for a place — Calendar, Roles Manager. A record the database holds — a Person, a dated Service Guide — is set in EB Garamond, because setting somebody's name in tracked caps makes a member of the church look like a menu item.",
       "The account slot reserves 40px unconditionally. auth.js injects into #auth-container after Firebase resolves, and a bar that changes height when it lands is the layout shift this replaces.",
       "Actions live here, not stacked under the title in main. Up to three. A fourth would go behind a more_vert menu — that rule is written down but deliberately NOT built, because no page has four today and speculative chrome rots (MS-187).",
+      "The bar is one line and one height on every page. The title names the place or the record. Do not put a subtitle under it — `.m-header__sub` is retired, and `.m-header--tall` is not how you make room for one. A count, a template name, or a date lives in the body or in `.m-header__actions`. A trail (`.m-header__crumbs`) replaces the back link on a page reached from more than one place, and it still fits the standing 64px bar.",
       "The header never prints. That is in the component, so no page needs its own no-print.",
       "MOTION EXCEPTION: --pulse is an infinite animation, which the system's motion rule otherwise forbids. It is kept on purpose for the two chips that mean something is broken — 'Unsaved', and a booklet over its page limit — because the pulse is what makes anyone notice. Ruled on in MS-187. It yields to prefers-reduced-motion.",
     ],
@@ -1430,11 +1431,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-family: var(--font-serif); font-size: var(--m-header-title-serif);
   letter-spacing: .01em; text-transform: none; color: var(--on-surface);
 }
+/* Retired. A second line under the title made every header a different height.
+   The rule stays so an old page does not explode. Do not use the class. */
 .m-header__sub {
   font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
   color: var(--on-surface-variant);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Retired with the subtitle. The standing bar is 64px. Do not use this to
+   make room for a second line. */
 .m-header--tall { --m-header-h: 84px; }
 
 /* The trail, above the title, where a page can be reached from more than one
@@ -2351,10 +2356,11 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     cls: "m-lede",
     group: "Display",
     summary:
-      "The one sentence under a page title that says what the page is for. Not an eyebrow, not a second title.",
+      "An opening sentence inside a document, such as a policy. Not a second line under the header title.",
     variants: {},
     notes: [
-      "Prefer .m-header__sub when the sentence fits the header. Use .m-lede at the top of the body when it is longer than one line.",
+      "The header is one line. Do not put this sentence under the title, and do not use .m-header__sub.",
+      "A dashboard, a list, and a tool do not get a lede. A policy does, at the top of .m-prose.",
       "Sentence case, serif, the colour of secondary text. It does not repeat the title.",
     ],
     examples: ['<p class="m-lede">The people of the church, and how to reach them.</p>'],

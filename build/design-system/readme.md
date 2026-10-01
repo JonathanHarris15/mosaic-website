@@ -133,7 +133,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **MonthStrip** `.m-strip` — The phone's month: seven columns of day numbers, each carrying up to three dots.
 - **Settled** `.m-settled` — Where something cannot change because it is settled, the sentence is the control.
 - **Prose** `.m-prose` — A reading column: a policy, a letter.
-- **Lede** `.m-lede` — The one sentence under a page title that says what the page is for.
+- **Lede** `.m-lede` — An opening sentence inside a document, such as a policy.
 - **Status** `.m-status` — A short fact about a person or a row: Member, Away, Draft.
 - **PersonRow** `.m-person` — How a person is shown: a face, their name in the reading face, then how to reach them.
 - **DataTable** `.m-table` — A list with columns.

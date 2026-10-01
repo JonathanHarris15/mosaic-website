@@ -120,7 +120,7 @@
     <!-- HEADER                                      -->
     <!-- ═══════════════════════════════════════════ -->
     <!-- The one header that was written in inline styles rather than tokens. -->
-    <header class="m-header m-header--tall">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a href="shepherding-dashboard.html" class="m-back">
@@ -129,9 +129,6 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">People</h1>
-                    <span class="m-header__sub">
-                        <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
-                    </span>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -349,11 +346,17 @@
             </div>
         </div>
 
-        <!-- Search bar -->
-        <div class="relative people-search" style="margin-bottom:24px;">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
-            <input type="text" x-model="search" placeholder="Search by name…"
-                   class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />
+        <!-- Search bar. The count used to sit under the title and made this
+             header taller than every other page. It belongs with the search. -->
+        <div class="people-search" style="margin-bottom:24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <div class="relative" style="flex:1 1 220px; min-width:0;">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
+                <input type="text" x-model="search" placeholder="Search by name…"
+                       class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />
+            </div>
+            <p class="m-label" style="margin:0; white-space:nowrap;">
+                <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> shown
+            </p>
         </div>
 
         <!-- People table (scrollable) -->

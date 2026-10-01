@@ -308,7 +308,7 @@
          states share the one bar — picking a range, and the draft room, which
          names itself because an editor who asked for an empty grid and got a
          header saying "Auto-assign" would reasonably wonder what it assigned. -->
-    <header class="m-header m-header--tool" :class="view === 'draft' && 'm-header--tall'">
+    <header class="m-header m-header--tool">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <template x-if="view === 'setup'">
@@ -329,14 +329,12 @@
                 <template x-if="view === 'draft'">
                     <div class="m-header__titles">
                         <h1 class="m-header__title" x-text="draftTitle"></h1>
-                        <span class="m-header__sub" x-text="draftSubtitle"></span>
                     </div>
                 </template>
 
                 <template x-if="view === 'setup'">
                     <div class="m-header__titles">
                         <h1 class="m-header__title">Auto-assign</h1>
-                        <span class="m-header__sub">Fill the open slots from who is able.</span>
                     </div>
                 </template>
             </div>
@@ -574,6 +572,10 @@
                  columns away. This is what buys that overview back. -->
             <div class="shrink-0 border-b border-outline-variant bg-surface-container-lowest px-6 py-2.5
                         flex items-center gap-3">
+                <!-- The event and the dates used to be a second line in the
+                     header, which made this bar taller than the tool bar on
+                     every other editor. They name the draft; they are not chrome. -->
+                <span class="text-[13px] text-on-surface shrink-0 max-w-[42%] truncate" x-text="draftSubtitle"></span>
                 <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant shrink-0">
                     Range
                 </span>
