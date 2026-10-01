@@ -114,28 +114,34 @@
         /* A place card. The name is Cinzel. It wraps inside the card, at a
            space, and it must not widen the row: a grid item's min-width is
            the width of its longest word, and "Registrations" at display size
-           is wider than a third of this pane. The size is a fraction of the
-           card, capped so the longest word still fits. */
-        .dash-tiles { min-width: 0; overflow-x: hidden; }
+           is wider than a third of a narrow pane. The size is a fraction of
+           the card. 13cqi sat on the border and the last letter crossed it. */
+        .dash-tiles { min-width: 0; }
         .dash-tiles > .m-nav-card {
+            flex-direction: column;
             align-items: flex-start;
             justify-content: flex-start;
             text-align: left;
-            gap: var(--space-md);
+            gap: var(--space-sm);
             min-width: 0;
             min-height: 0;
-            padding: var(--space-lg);
+            padding: var(--space-sm) var(--space-md);
             border-top: 3px solid var(--primary);
             container-type: inline-size;
+            overflow: hidden;
         }
-        .dash-tiles > .m-nav-card .m-medallion { margin-bottom: 0; }
-        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; min-width: 0; }
+        .dash-tiles > .m-nav-card .m-medallion {
+            margin-bottom: 0;
+            width: 40px;
+            height: 40px;
+        }
+        .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 20px; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; min-width: 0; max-width: 100%; }
         .dash-tiles > .m-nav-card .m-nav-card__title {
             font-family: var(--font-display);
-            /* 13cqi of the card's text box. "Registrations" is the longest
-               word, and at this fraction it stays inside the card from a
-               1024px window up. The floor is the size that still fits there. */
-            font-size: clamp(18px, 13cqi, 28px);
+            /* 10.5cqi keeps "Registrations" (~0.76em a letter in Cinzel)
+               inside the card, with room before the border. */
+            font-size: clamp(16px, 10.5cqi, 26px);
             line-height: 1.15;
             color: var(--primary);
             max-width: 100%;
@@ -144,9 +150,11 @@
             text-wrap: pretty;
         }
         .dash-tiles > .m-nav-card .m-nav-card__desc {
-            display: block;
-            overflow: visible;
-            -webkit-line-clamp: unset;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            line-height: 1.35;
         }
 
         @media (min-width: 640px) {
@@ -157,6 +165,10 @@
             /* The glance is a column of a few facts. Wider than this it is
                only a gutter, and the cards need the rest of the window. */
             .dash-split { grid-template-columns: minmax(0, 1fr) 320px; }
+            /* The glance fills its column. .m-side is align-self: start, which
+               would shrink the panel to its text and leave a cream gutter. */
+            .dash-split > .m-with-side { min-width: 0; width: 100%; }
+            .dash-split #sunday-glance { width: 100%; align-self: stretch; }
             .dash-tiles {
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 align-content: start;
@@ -164,18 +176,29 @@
                 min-height: 0;
             }
             .dash-stack { align-self: stretch; min-height: 0; }
-            /* Four or more places: the row grows to the window and scrolls.
-               Three or fewer stay a band the height of the type, and Sunday
-               stays that same height instead of a blank column. */
+            /* Four or more places: the rows share the window and do not
+               scroll while the type still fits. Three or fewer stay a band
+               the height of the type, and Sunday stays that same height
+               instead of a blank column. */
             .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) {
                 align-items: stretch;
             }
+            /* Rows share the window exactly. A 200px floor left four rows a
+               few pixels too tall, and the grid grew a scrollbar for that slop. */
             .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles {
-                grid-auto-rows: minmax(200px, 1fr);
+                grid-auto-rows: minmax(0, 1fr);
+                overflow: hidden;
             }
             .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card {
                 height: 100%;
                 justify-content: center;
+                /* The row has a real height here, so the name can track it.
+                   Below 1024 the card sizes to its text, and size containment
+                   would collapse that. */
+                container-type: size;
+            }
+            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card .m-nav-card__title {
+                font-size: clamp(15px, min(10.5cqi, 13cqh), 26px);
             }
             .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-stack,
             .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) > .m-with-side,
@@ -318,7 +341,7 @@
             <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
-    <main class="dash-main flex-grow max-w-container w-full mx-auto px-margin pb-md pt-sm lg:min-h-0 lg:overflow-hidden">
+    <main class="dash-main flex-grow w-full px-margin pb-sm pt-sm lg:min-h-0 lg:overflow-hidden">
         <!-- The one thing that needs doing, above everything the page offers.
              Filled in by updateDashboard() for the people who may fix it, and
              empty — taking no room at all — for everybody else. -->
@@ -327,7 +350,7 @@
         <div class="dash-split flex-grow min-h-0">
             <!-- Left Column -->
             <div class="dash-stack lg:min-h-0 lg:overflow-hidden">
-                <div class="dash-tiles lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-1" id="nav-cards-grid">
+                <div class="dash-tiles lg:min-h-0" id="nav-cards-grid">
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
                          every saved home screen (same rule as Services). -->
