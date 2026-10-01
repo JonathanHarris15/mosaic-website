@@ -1416,9 +1416,10 @@ function renderTable(grouped) {
                 separatorRow.id = `table-month-${year}-${month}`;
                 separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
                 separatorRow.innerHTML = `
-                    <td colspan="${10 + PLANNING_COLUMNS.length}" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                    <td class="px-md py-2 sticky-col-left bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
+                    <td colspan="${9 + PLANNING_COLUMNS.length}" class="px-md py-2 bg-surface-container-low/90 backdrop-blur-sm" aria-hidden="true"></td>
                 `;
                 tbody.appendChild(separatorRow);
 
