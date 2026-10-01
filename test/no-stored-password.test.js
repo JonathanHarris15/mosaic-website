@@ -299,7 +299,7 @@ test('an admin setting a password writes it to Firebase Auth and nowhere else', 
 // ── And nothing shows it ─────────────────────────────────────────────────────
 
 test('no admin screen offers to reveal or copy a stored password', () => {
-    const code = codeOnly(read('public', 'profile.js'));
+    const code = codeOnly(read('public', 'admin-accounts.js'));
 
     assert.ok(!/Password Visibility/i.test(code),
         'the Password Visibility panel is still on the admin screen');
@@ -310,7 +310,7 @@ test('no admin screen offers to reveal or copy a stored password', () => {
 });
 
 test('an admin can still set a password even though they cannot read one', () => {
-    const code = codeOnly(read('public', 'profile.js'));
+    const code = codeOnly(read('public', 'admin-accounts.js'));
 
     assert.match(code, /updateUserPasswordAdmin/,
         'the admin password-set control was removed too — admins lose the ability to READ a ' +

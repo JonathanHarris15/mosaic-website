@@ -1,6 +1,6 @@
 
 /**
- * Logic for the profile page, including admin user management.
+ * Logic for the profile page (personal settings; admin accounts → admin dashboard).
  */
 
 // A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
@@ -9,16 +9,15 @@
 // you old data, it destroys new data: a merge planned from a people list a
 // minute old silently drops whoever was added in that minute. Ignored on the
 // web, where reads were always live.
-var FRESH_READ = { source: 'server' };
 let currentUserUid = null;
 
 let isInitialAuthCheck = true;
 
-// Cache of directory people, used to display and pick person links in the admin panel.
+// Cache of directory people, used for family / link-request pickers on this page.
 let peopleCache = [];
 
-// ⚠ THE WHOLE DIRECTORY, AND FOUR PLACES ASK FOR IT. The link panel, the admin
-// user list, the name-fix picker and the household picker each awaited their own
+// ⚠ THE WHOLE DIRECTORY, AND SEVERAL PLACES ASK FOR IT. The link panel, the
+// name-fix picker and the household picker each awaited their own
 // copy, so an admin's profile page read all 89 Person records twice on the way
 // in — the same bytes, over the same connection, a fifth of a second apart.
 // Held here as the ONE read in flight, so the second caller joins the first
@@ -48,8 +47,7 @@ function loadPeopleCache() {
 
 // ⚠ CALL THIS AFTER ANY WRITE TO A PERSON THIS CACHE HOLDS A FIELD OF.
 // It holds `userId`, and linking an account writes exactly that — so without
-// this the admin list redrawn straight after a link still shows the person as
-// unclaimed, and the next click tries to link them a second time. The cache is
+// this a picker redrawn straight after a link still shows stale rows. The cache is
 // for a read repeated inside one visit, not for one that outlives a write.
 function forgetPeopleCache() {
     peopleCacheLoad = null;
@@ -91,15 +89,6 @@ async function initProfile() {
             const permissionLevelText = roleLabels[shownLevel] || shownLevel.charAt(0).toUpperCase() + shownLevel.slice(1);
             document.getElementById('user-role-badge').textContent = `${permissionLevelText} Access`;
             document.getElementById('user-role-display').textContent = permissionLevelText;
-
-            // Show Admin Panel if admin or super_admin
-            if (['admin', 'super_admin'].includes(permissionLevel)) {
-                const adminPanel = document.getElementById('admin-panel');
-                if (adminPanel) {
-                    adminPanel.classList.remove('hidden');
-                    loadUsersList();
-                }
-            }
 
             // Self-service (MS-87): a Linked User maintains their own Person's
             // contact details, birthday, and (set-once) sex. Everything else on
@@ -1076,315 +1065,6 @@ if (deleteAccountForm) {
     });
 }
 
-// --- ADMIN: CREATE USER ---
-const createUserForm = document.getElementById('create-user-form');
-const createUserStatus = document.getElementById('create-user-status');
-
-if (createUserForm) {
-    createUserForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('new-user-email').value;
-        const password = document.getElementById('new-user-password').value;
-        const permissionLevel = document.getElementById('new-user-role').value;
-
-        createUserStatus.textContent = 'Provisioning account...';
-        createUserStatus.className = 'mt-sm text-xs font-body-md text-primary animate-pulse';
-
-        try {
-            const createUserFunc = firebase.functions().httpsCallable('createUser');
-            await createUserFunc({ email, password, role: permissionLevel });
-            
-            createUserStatus.textContent = 'Account successfully authorized.';
-            createUserStatus.className = 'mt-sm text-xs font-body-md text-green-600';
-            createUserForm.reset();
-            setTimeout(() => {
-                createUserStatus.textContent = '';
-            }, 5000);
-            loadUsersList();
-        } catch (error) {
-            console.error(error);
-            createUserStatus.textContent = 'Authorization failed: ' + error.message;
-            createUserStatus.className = 'mt-sm text-xs font-body-md text-error';
-        }
-    });
-}
-
-// --- ADMIN: LOAD USERS ---
-async function loadUsersList() {
-    const usersList = document.getElementById('users-list');
-    const userCount = document.getElementById('user-count');
-    if (!usersList) return;
-
-    try {
-        await loadPeopleCache();
-        const snapshot = await db.collection('users').orderBy('email').get();
-        usersList.innerHTML = '';
-
-        if (userCount) userCount.textContent = `${snapshot.size} Active Accounts`;
-
-        if (snapshot.empty) {
-            usersList.innerHTML = '<div class="p-md text-sm text-on-surface-variant italic">No accounts found.</div>';
-            return;
-        }
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const permissionLevel = data.permissionLevel || data.role || 'viewer';
-            const pastoralAssistant = data.pastoralAssistant === true;
-            const roleLabels = {
-                'admin': 'Admin',
-                'super_admin': 'Super Admin',
-                'elder': 'Elder',
-                'pastoral_assistant': 'Pastoral Assistant',
-                'editor': 'Editor',
-                'member': 'Member',
-                'viewer': 'Viewer',
-                'kiosk': 'Kiosk'
-            };
-            const shownLevel = (permissionLevel === 'pastoral_assistant' || pastoralAssistant)
-                ? 'pastoral_assistant'
-                : permissionLevel;
-            const roleLabel = roleLabels[shownLevel] || shownLevel.charAt(0).toUpperCase() + shownLevel.slice(1);
-            const isSelf = doc.id === currentUserUid;
-
-            // Linked directory person (if any)
-            const linkedPerson = data.personId ? peopleCache.find(p => p.id === data.personId) : null;
-            const linkedLabel = linkedPerson ? linkedPerson.name :
-                (data.personId ? 'Linked record missing' : 'Not linked');
-            const safeEmail = (data.email || '').replace(/'/g, "\\'");
-
-            // Status color logic
-            let statusColor = 'bg-outline-variant';
-            if (shownLevel === 'admin' || shownLevel === 'super_admin') statusColor = 'bg-primary';
-            else if (shownLevel === 'editor' || shownLevel === 'elder' || shownLevel === 'pastoral_assistant') statusColor = 'bg-secondary';
-            else if (shownLevel === 'member') statusColor = 'bg-tertiary';
-
-            const userItem = document.createElement('div');
-            userItem.className = 'flex flex-col p-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors group border-b border-surface-container';
-            userItem.innerHTML = `
-                <div class="flex justify-between items-center w-full">
-                    <div class="flex flex-col gap-0.5">
-                        <p class="font-headline-md text-sm text-primary group-hover:text-primary-container transition-colors">${data.email || 'No Email'}</p>
-                        <div class="flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full ${statusColor}"></span>
-                            <span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">${roleLabel}</span>
-                        </div>
-                    </div>
-                    <div class="flex gap-3 items-center">
-                        <div class="relative">
-                            <select onchange="updateUserRole('${doc.id}', this.value)" 
-                                    class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                                <option value="viewer" ${shownLevel === 'viewer' ? 'selected' : ''}>Viewer</option>
-                                <option value="member" ${shownLevel === 'member' ? 'selected' : ''}>Member</option>
-                                <option value="editor" ${shownLevel === 'editor' ? 'selected' : ''}>Editor</option>
-                                <option value="pastoral_assistant" ${shownLevel === 'pastoral_assistant' ? 'selected' : ''}>Pastoral Assistant</option>
-                                <option value="elder" ${shownLevel === 'elder' ? 'selected' : ''}>Elder</option>
-                                <option value="admin" ${shownLevel === 'admin' ? 'selected' : ''}>Admin</option>
-                                <option value="super_admin" ${shownLevel === 'super_admin' ? 'selected' : ''}>Super Admin</option>
-                                <option value="kiosk" ${shownLevel === 'kiosk' ? 'selected' : ''}>Kiosk</option>
-                            </select>
-                            <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
-                        </div>
-                        ${!isSelf ? `
-                            <button onclick="deleteUser('${doc.id}', '${safeEmail}')" class="text-error hover:bg-error-container/20 p-1 rounded transition-colors" title="Delete User">
-                                <span class="material-symbols-outlined text-sm">delete</span>
-                            </button>
-                        ` : '<span class="text-[10px] font-label-md text-outline italic">Self</span>'}
-                    </div>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-4 pt-3 border-t border-surface-container/50">
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Linked Person</span>
-                        <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-sm ${linkedPerson ? 'text-primary' : 'text-outline'}">${linkedPerson ? 'link' : 'link_off'}</span>
-                            <span class="text-[11px] font-body-md ${linkedPerson ? 'text-on-surface' : 'text-on-surface-variant italic'}">${linkedLabel}</span>
-                            <button onclick="openLinkModal('${doc.id}', '${safeEmail}')" class="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all">${linkedPerson ? 'Change' : 'Link'}</button>
-                            ${linkedPerson ? `<button onclick="unlinkPerson('${doc.id}')" class="text-error/70 hover:text-error text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all" title="Unlink">Unlink</button>` : ''}
-                        </div>
-                    </div>
-                    <div class="flex flex-col gap-1 flex-grow">
-                        <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Change Password</span>
-                        <div class="flex items-center gap-2">
-                            <input type="text" placeholder="New Password" id="newpass-${doc.id}" class="text-[11px] bg-surface border border-outline-variant/30 py-1 px-2 rounded w-full focus:ring-1 focus:ring-primary outline-none" />
-                            <button onclick="updateUserPasswordAdmin('${doc.id}')" class="bg-secondary/10 text-secondary hover:bg-secondary hover:text-on-secondary text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all">Update</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            usersList.appendChild(userItem);
-        });
-    } catch (error) {
-        console.error("Error loading user directory:", error);
-        usersList.innerHTML = `<div class="p-md text-error text-sm font-body-md flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm">error</span>
-            Failed to load account directory: ${error.message}
-        </div>`;
-    }
-}
-
-// --- ADMIN ACTIONS ---
-async function updateUserRole(uid, newRole) {
-    try {
-        await db.collection('users').doc(uid).update({
-            permissionLevel: newRole,
-            role: newRole,
-            pastoralAssistant: false,
-        });
-        console.log(`Role for ${uid} updated to ${newRole}`);
-    } catch (error) {
-        alert('Error updating permission level: ' + error.message);
-    }
-}
-
-// --- ADMIN: LINK USER <-> DIRECTORY PERSON ---
-let linkTargetUid = null;
-
-function openLinkModal(uid, email) {
-    linkTargetUid = uid;
-    const modal = document.getElementById('link-modal');
-    const subtitle = document.getElementById('link-modal-subtitle');
-    const search = document.getElementById('link-search');
-    if (subtitle) subtitle.textContent = email || '';
-    if (search) search.value = '';
-    renderLinkPeopleList('');
-    if (modal) modal.classList.remove('hidden');
-    if (search) search.focus();
-}
-
-function closeLinkModal() {
-    linkTargetUid = null;
-    const modal = document.getElementById('link-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-function renderLinkPeopleList(query) {
-    const list = document.getElementById('link-people-list');
-    if (!list) return;
-    const q = (query || '').toLowerCase().trim();
-    const matches = peopleCache.filter(p =>
-        !q || p.name.toLowerCase().includes(q) || (p.email && p.email.toLowerCase().includes(q))
-    );
-
-    if (matches.length === 0) {
-        list.innerHTML = '<div class="p-4 text-sm text-on-surface-variant italic text-center">No matching people.</div>';
-        return;
-    }
-
-    list.innerHTML = matches.map(p => {
-        const takenByOther = p.userId && p.userId !== linkTargetUid;
-        return `
-            <button onclick="selectPersonForLink('${p.id}')"
-                    class="w-full text-left px-4 py-2.5 hover:bg-primary-fixed transition-colors flex items-center justify-between gap-2 border-b border-surface-container/50">
-                <span class="flex flex-col">
-                    <span class="text-sm text-on-surface">${p.name}</span>
-                    ${p.email ? `<span class="text-[10px] text-on-surface-variant">${p.email}</span>` : ''}
-                </span>
-                ${takenByOther ? '<span class="text-[9px] font-label-md uppercase tracking-widest text-error/70 whitespace-nowrap">Linked elsewhere</span>' : ''}
-            </button>
-        `;
-    }).join('');
-}
-
-async function selectPersonForLink(personId) {
-    if (!linkTargetUid) return;
-    const uid = linkTargetUid;
-    try {
-        await setUserPersonLink(uid, personId);
-        closeLinkModal();
-        await loadUsersList();
-    } catch (error) {
-        console.error('Error linking person:', error);
-        alert('Error linking person: ' + error.message);
-    }
-}
-
-async function unlinkPerson(uid) {
-    if (!confirm('Unlink this account from its directory person? Existing member tags/roles are left as-is.')) return;
-    try {
-        await setUserPersonLink(uid, '');
-        await loadUsersList();
-    } catch (error) {
-        console.error('Error unlinking person:', error);
-        alert('Error unlinking person: ' + error.message);
-    }
-}
-
-/**
- * Writes the reciprocal users/{uid}.personId <-> people/{personId}.userId link,
- * clearing any prior link on either side first. The Cloud Functions triggers
- * then reconcile the member tag / role from these writes.
- */
-async function setUserPersonLink(uid, personId) {
-    const del = firebase.firestore.FieldValue.delete();
-    const userRef = db.collection('users').doc(uid);
-    const userSnap = await userRef.get(FRESH_READ);
-    const oldPersonId = userSnap.exists ? (userSnap.data().personId || null) : null;
-
-    const batch = db.batch();
-
-    // Clear the back-reference on the person this user used to point at.
-    if (oldPersonId && oldPersonId !== personId) {
-        const oldPersonSnap = await db.collection('people').doc(oldPersonId).get(FRESH_READ);
-        if (oldPersonSnap.exists) {
-            batch.update(db.collection('people').doc(oldPersonId), { userId: del });
-        }
-    }
-
-    if (personId) {
-        const personRef = db.collection('people').doc(personId);
-        const personSnap = await personRef.get(FRESH_READ);
-        if (!personSnap.exists) throw new Error('Selected person no longer exists.');
-
-        // If that person was already linked to a different user, clear that user's link.
-        const priorUserId = personSnap.data().userId || null;
-        if (priorUserId && priorUserId !== uid) {
-            batch.update(db.collection('users').doc(priorUserId), { personId: del });
-        }
-
-        batch.update(userRef, { personId });
-        batch.update(personRef, { userId: uid });
-    } else {
-        batch.update(userRef, { personId: del });
-    }
-
-    await batch.commit();
-    // The link just moved, and `userId` is one of the four fields the directory
-    // cache keeps. Whoever redraws next must read it again.
-    forgetPeopleCache();
-}
-
-async function deleteUser(uid, email) {
-    if (!confirm(`Are you sure you want to delete ${email}? This action cannot be undone.`)) return;
-    
-    try {
-        const deleteUserFunc = firebase.functions().httpsCallable('deleteUser');
-        await deleteUserFunc({ uid });
-        loadUsersList();
-    } catch (error) {
-        alert('Error deleting user: ' + error.message);
-    }
-}
-
-async function updateUserPasswordAdmin(uid) {
-    const newPasswordInput = document.getElementById(`newpass-${uid}`);
-    const newPassword = newPasswordInput.value;
-    
-    if (!newPassword) {
-        alert('Please enter a new password.');
-        return;
-    }
-
-    try {
-        const updatePasswordFunc = firebase.functions().httpsCallable('updateUserPasswordAdmin');
-        await updatePasswordFunc({ uid, newPassword });
-        newPasswordInput.value = '';
-        alert('Password updated successfully.');
-        loadUsersList(); // Reload to see the new password in the input
-    } catch (error) {
-        alert('Error updating password: ' + error.message);
-    }
-}
-
 // --- PASTORAL PRAYER ASK CARD (MS-516) ---
 // One door: answerLink read with no token. Only subjects with an open ask see it.
 
@@ -1432,24 +1112,7 @@ async function loadPrayerAskCard() {
     }
 }
 
-// --- UTILITIES ---
-//
-// copyToClipboard and togglePasswordVisibility used to live here. They existed
-// solely for the "Password Visibility" panel on the admin user list — an eye
-// icon that revealed any user's password in cleartext and a button that
-// copied it. Both went with the stored password (MS-241). Nothing else called
-// either of them; hymn-details.js has its own copy helper.
-
 // Global scope for handlers
-window.updateUserRole = updateUserRole;
-window.updateUserPastoralAssistant = updateUserPastoralAssistant;
-window.openLinkModal = openLinkModal;
-window.closeLinkModal = closeLinkModal;
-window.renderLinkPeopleList = renderLinkPeopleList;
-window.selectPersonForLink = selectPersonForLink;
-window.unlinkPerson = unlinkPerson;
-window.deleteUser = deleteUser;
-window.updateUserPasswordAdmin = updateUserPasswordAdmin;
 window.chooseLinkPerson = chooseLinkPerson;
 window.askFamilyChange = askFamilyChange;
 window.askFamilyChangeFromPicker = askFamilyChangeFromPicker;

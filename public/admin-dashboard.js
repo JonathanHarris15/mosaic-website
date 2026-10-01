@@ -162,7 +162,9 @@ document.addEventListener('alpine:init', () => {
                 this.loadReplies();
                 this.loadPrayerMessages();
                 this.loadEventAnnouncementWording();
-                if (window.location.hash === '#push') this.selectTab('push');
+                const hash = (window.location.hash || '').replace(/^#/, '');
+                if (hash === 'push') this.selectTab('push');
+                else if (hash === 'accounts') this.selectTab('accounts');
             });
         },
 
@@ -174,6 +176,9 @@ document.addEventListener('alpine:init', () => {
                 window.history.replaceState(null, '', tab === 'tools' ? '#' : '#' + tab);
             }
             if (tab === 'push' && !this.pushLoaded) this.loadPush();
+            if (tab === 'accounts' && typeof window.initAdminAccountsTab === 'function') {
+                window.initAdminAccountsTab();
+            }
         },
 
         // Null while loading, and null when the registry is being shown
