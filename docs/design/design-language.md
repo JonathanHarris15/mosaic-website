@@ -44,6 +44,8 @@ A page that draws its own button, its own sticky `top`, or its own 10px tracked 
 
 11. **Chrome is the header, once.** Back link, the place or the record, up to three actions, the account. Tools (the service builder, the printable editor, the guide editor) may fill the window, and they still use these controls. They do not invent a second button language.
 
+12. **The two desks do not match.** Home is the congregation's door. Shepherd is the elders' blotter. They share the header, the type, and the tokens, and they do not share a layout. Home (`m-page m-page--app m-dense`) is reorderable place cards that fill the window, with Sunday as a column that stays (`#sunday-glance` inside `.m-with-side`). The shepherd desk is one even band of place cards — five across from 1100px, two across below that, so a leftover card stays one cell — then a to-do ledger the full width of that band. Saved views of people live on the People page. The blotter ground is `--surface-container`. Home stays on `--background`.
+
 ## Pick a recipe
 
 Every page is `<body class="m-page">` plus at most one modifier, then `<header class="m-header">`, then `<main class="m-page__body">`.
@@ -55,7 +57,7 @@ Every page is `<body class="m-page">` plus at most one modifier, then `<header c
 | Reading | `m-page m-page--reading` | Settings, a policy, commitments, the sign-in card’s quieter cousins. Column is 720px. |
 | Tool | `m-page m-page--tool` and header `m-header--tool` | The page fills the window and scrolls inside its own panes. |
 | Door | `m-page m-page--door` | One card, centred. Sign-in. |
-| Home | `m-page m-page--app m-dense` | The dashboard only. The current tiles are what is shipped. A replacement is waiting on a choice between the three prototypes in `docs/design/prototypes/home-dashboard-arena.html`. |
+| Home | `m-page m-page--app m-dense` | The congregation's door only. Reorderable place cards fill the window. Sunday is a column that stays. |
 
 The gutter is `--space-margin` (32px), the same inset as the header. Do not set a page width with `max-w-6xl`, `max-w-7xl`, `max-w-[760px]`, or an inline `max-width`.
 

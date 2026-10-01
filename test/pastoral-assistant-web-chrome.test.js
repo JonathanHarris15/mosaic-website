@@ -104,13 +104,13 @@ test('the tags page hides create / rename / merge / delete / hide unless canDeci
     }
 });
 
-test('the dashboard hides Filtered View delete unless canDecide', () => {
-    const html = read('shepherding-dashboard.html');
-    const header = between(html, '<!-- View Header', '<!-- People Table');
-    assert.match(header, /deleteView\(view\.id\)/);
-    assert.match(header, /x-show="canDecide"/);
-    const src = read('shepherding-dashboard.js');
-    const del = src.slice(src.indexOf('async deleteView'), src.indexOf('async deleteView') + 120);
+test('the people page hides saved-view delete unless canDecide', () => {
+    const html = read('shepherding-people.html');
+    const saved = between(html, '<!-- Saved Views', '<!-- Filter by Tags');
+    assert.match(saved, /deleteFilterView\(view\.id\)/);
+    assert.match(saved, /x-show="canDecide"/);
+    const src = read('shepherding-people.js');
+    const del = src.slice(src.indexOf('async deleteFilterView'), src.indexOf('async deleteFilterView') + 160);
     assert.match(del, /if\s*\(\s*!this\.canDecide\s*\)\s*return/);
 });
 

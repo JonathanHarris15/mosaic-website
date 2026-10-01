@@ -353,6 +353,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteFilterView(id) {
+            if (!this.canDecide) return;
+            if (!confirm('Delete this saved view?')) return;
             try {
                 await db.collection('shepherding_views').doc(id).delete();
                 this.filterViews = this.filterViews.filter(v => v.id !== id);
