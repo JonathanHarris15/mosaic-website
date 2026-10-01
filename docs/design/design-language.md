@@ -1,32 +1,46 @@
 # Mosaic page language
 
-The token sync names colours and classes. It does not decide how a page behaves. This document is those decisions. A new page inherits them. It does not re-state them in a `<style>` block.
+The token sync names colours and classes. This document is the design: how a page reads, how a person is shown, how a control behaves. A new page inherits it. It does not re-state it in a `<style>` block.
 
-The look stays Modern Liturgy: parchment, navy ink, Cinzel for a place, EB Garamond for a record, Libre Franklin for chrome. The step above is how things move and how much of the screen they are allowed to occupy.
+The look stays Modern Liturgy: parchment, navy ink, Cinzel for a place, EB Garamond for a record, Libre Franklin for chrome. The step above is craft. Type is large enough to read, words are sentence case, a person is a name before they are a label, and a control moves when it can be pressed.
 
-Classes that carry the decisions live in `build/design-components.mjs` and ship in `public/mosaic.css`.
+Classes live in `build/design-components.mjs` and ship in `public/mosaic.css`. A restyle of a page that already exists lands on that page, on a test branch. A lightweight HTML prototype is only for a feature that has no page yet.
+
+## Where this came from
+
+Mobbin does not carry Planning Center, Subsplash, Pushpay, or Church Center. These five are the closest jobs, and the structure is what transferred. Their grey canvases, black sidebars, and purple accents did not.
+
+1. [Workable — People directory](https://mobbin.com/screens/d1b37b21-53ef-4518-b344-854c0bf7639e). The name is the headline of the row. The role is the second line. Mail and phone sit quietly beside. Filters are ordinary controls, and the active one is a chip you can clear.
+2. [folk — a person](https://mobbin.com/screens/0154da86-4bbd-44fb-a38e-455f6d0e1a22). The record opens with the name, a short row of actions, then labelled facts. Notes are the work, not a panel of identical inputs.
+3. [Fresha — a week and a person](https://mobbin.com/screens/8efc25e9-bef8-4514-b874-e5d62a83f6b3). The calendar is the page. The selected person is a column of a few facts with icons. Services are a grouped list you can search.
+4. [HoneyBook — a list of services](https://mobbin.com/screens/a01c45ac-97dc-422f-bf2e-9be5d27fbf89). One sentence under the title says what the page is for. Each row is a name, a quiet description, and an overflow. One primary action.
+5. [Squarespace — funds](https://mobbin.com/screens/ae6d6939-d97a-4ac6-add9-9359ce214eae). A church-admin table: sentence-case headers, air, one solid primary, a sidebar that does not compete with the list.
 
 ## Decisions
 
-These are the choices. They are already true of `.m-btn`, `.m-icon-btn`, and `.m-side`. A page that draws its own button or its own sticky `top` has left the language.
+A page that draws its own button, its own sticky `top`, or its own 10px tracked label has left the language.
 
-1. **A control that can be pressed lifts.** Hover raises a button or an icon button by 1px and shifts its colour, over 200ms, on the standard ease. Pressing settles it. There is no bounce and no scale. `prefers-reduced-motion` keeps the colour and drops the lift. A row you can open does not lift — it tints — so a list does not bob. If a control does not do this, it is not finished: use `.m-btn` or `.m-icon-btn`.
+1. **Words are sentence case.** Buttons, field labels, section names, crumbs, and status say “Save my info”, not “SAVE MY INFO”. `.m-label` is 13px and untracked. A hand-rolled control that still carries `uppercase` or `tracking-widest` is quieted by `.m-craft` until it is rebuilt as `.m-btn`. Nothing on a page is 8px or 9px.
 
-2. **A side card stays on screen.** Facts beside the work — Sunday at a glance, who you are, the frame a form is written in — are `.m-side` inside `.m-with-side`. From 1024px the card sticks under the header, never grows taller than the viewport, and scrolls inside itself. The title stays put; `.m-side__scroll` is the part that moves. The card holds a title and a short set of facts, about six, not a second copy of the page. Below 1024px it stacks under the work. A side column that cannot stay in view is not a side column.
+2. **A control that can be pressed lifts.** Hover raises a button or an icon button by 1px and shifts its colour, over 200ms, on the standard ease. Pressing settles it. There is no bounce and no scale. `prefers-reduced-motion` keeps the colour and drops the lift. A row you can open does not lift — it tints. A finished control is `.m-btn` or `.m-icon-btn`, at least 36px tall, 14px type.
 
-3. **One primary action.** It is `.m-btn.m-btn--primary`, and it lives in the header when the page has one. Everything else is quieter. A destructive action is an outline until deleting is the whole screen.
+3. **A person is a name, then how to reach them.** `.m-person`: face, name in EB Garamond, one line of role or household, then mail and phone in the quiet colour. A stage such as Member is `.m-status`, a short tinted word beside the name, never a stamp in place of it.
 
-4. **One group is one surface.** The name sits above the card (`.m-section`), not inside a stack of cards that all say the same thing. Rows that belong together share one `.m-card-list`.
+4. **A page says what it is for, once.** The header title names the place. `.m-header__sub` or `.m-lede` is one sentence and does not repeat the title. The body does not open with an eyebrow and a fading rule.
 
-5. **Chrome is the header, once.** Back link, the place or the record, up to three actions, the account. The body does not repeat the title and does not open with an eyebrow and a fading rule.
+5. **One primary action.** It is `.m-btn.m-btn--primary`, and it lives in the header when the page has one. Everything else is quieter. A destructive action is an outline until deleting is the whole screen.
 
-6. **Type has a job.** Cinzel names a place. EB Garamond names a record, including a person. Libre Franklin is every control, label, and meta line. Nothing else. Work Sans and Noto Serif are not chrome.
+6. **One group is one surface.** The name sits above the card (`.m-section`), not inside a stack of cards that all say the same thing. Rows that belong together share one `.m-card-list`. A setting is `.m-setting`: the name and one sentence of help, the control on the right. A list with real columns is `.m-table`, headers in sentence case, rows tall enough for a name.
 
-7. **Flat and warm.** A hairline, not a shadow, except the primary button. No gradient washes, no corner rings, no photographic heroes.
+7. **A side card stays on screen.** Facts beside the work are `.m-side` inside `.m-with-side`. From 1024px the card sticks under the header, never grows taller than the viewport, and scrolls inside itself. The title stays; `.m-side__scroll` moves. The card holds a title and about six facts. Below 1024px it stacks.
 
-8. **Empty, waiting, and failed are components.** `.m-empty` says what to do. `.m-spinner` waits. `.m-notice` says what failed, without an apology.
+8. **Type has a job.** Cinzel names a place. EB Garamond names a record, including a person. Libre Franklin is every control, label, and meta line. Nothing else. Work Sans and Noto Serif are not chrome.
 
-Comparable lists and settings ([GoPay](https://mobbin.com/screens/afec092d-2620-488d-a489-9d7707a748f0), [monday.com](https://mobbin.com/screens/14483d5b-e7d8-42ae-9d1b-95260e55574b), [Devin](https://mobbin.com/screens/3a534135-db62-4fcd-8df3-b974c2c880ed), [Aboard](https://mobbin.com/screens/ae9e27ea-e5ec-4ce8-8585-1056c78151ca)) are where the grouping and the single column came from. Their grey canvases, shadows, and pills are not part of this.
+9. **Flat and warm.** A hairline, not a shadow, except the primary button. No gradient washes, no corner rings, no photographic heroes. Colour comes from parchment, navy, and one tint for status.
+
+10. **Empty, waiting, and failed are components.** `.m-empty` says what to do. `.m-spinner` waits. `.m-notice` says what failed, without an apology. A filter that is on is a chip you can clear, not a second copy of the sidebar.
+
+11. **Chrome is the header, once.** Back link, the place or the record, up to three actions, the account. Tools (the service builder, the printable editor, the guide editor) may fill the window, and they still use these controls. They do not invent a second button language.
 
 ## Pick a recipe
 

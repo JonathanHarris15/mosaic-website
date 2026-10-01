@@ -116,6 +116,7 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">Manage Tags and Relationships</h1>
+                    <span class="m-header__sub">The words elders use for people, and how people are tied together.</span>
                 </div>
             </div>
             <div class="m-header__rule"></div>
@@ -354,9 +355,9 @@
                             <span class="font-sans text-[11px] font-semibold uppercase tracking-[.14em] text-on-surface-variant">Types</span>
                             <span class="font-sans text-[11px] font-semibold text-on-surface-variant bg-surface-container-high px-[7px] rounded-sm" x-text="relTypes.length"></span>
                         </div>
-                        <button x-show="canDecide" @click="startNewType()"
-                            class="inline-flex items-center gap-[4px] bg-primary text-on-primary rounded-[9px] px-[11px] py-[7px] font-sans text-[11px] font-semibold uppercase tracking-[.08em] shadow-xs hover:bg-primary/90 active:scale-[.98] transition-all">
-                            <span class="material-symbols-outlined text-[17px]">add</span>New
+                        <button type="button" x-show="canDecide" @click="startNewType()"
+                            class="m-btn m-btn--primary m-btn--sm">
+                            <span class="material-symbols-outlined">add</span>New
                         </button>
                     </div>
 

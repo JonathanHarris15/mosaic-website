@@ -65,6 +65,7 @@
                 </a>
                 <div class="m-header__titles">
                     <h1 class="m-header__title">Shepherd Dashboard</h1>
+                    <span class="m-header__sub">The elder's desk: people, papers, and what is still to do.</span>
                     <span class="m-header__sub">Elder-only tools for member care.</span>
                 </div>
             </div>
@@ -138,10 +139,10 @@
             <section class="flex-1 min-w-0 flex flex-col gap-md">
                 <div class="flex items-center justify-between">
                     <h2 class="font-headline-md text-headline-md text-primary">Filtered Views</h2>
-                    <button x-show="canDecide" @click="editingViewId = null; newView = blankView(); showViewModal = true"
-                        class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        New View
+                    <button type="button" x-show="canDecide" @click="editingViewId = null; newView = blankView(); showViewModal = true"
+                        class="m-btn m-btn--primary m-btn--sm">
+                        <span class="material-symbols-outlined">add</span>
+                        New view
                     </button>
                 </div>
 

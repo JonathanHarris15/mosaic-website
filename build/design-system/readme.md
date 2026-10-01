@@ -96,6 +96,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 **Core**
 - **Button** `.m-btn` — The standard action.
 - **IconButton** `.m-icon-btn` — A square button holding one Material Symbol.
+- **Craft** `.m-craft` — The site still has hand-rolled controls that shout in 10px tracked capitals.
 
 **Forms**
 - **Input** `.m-input` — A single-line text field, its label, and its error.
@@ -113,7 +114,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 **Display**
 - **Tally** `.f-tally` — What came back from a form — a labelled bar per option, and free-text answers as quotes.
 - **LinkRow** `.f-linkrow` — A URL you are meant to copy, with the button to copy it.
-- **SectionLabel** `.m-label` — The tracked-caps overline above a group of things.
+- **SectionLabel** `.m-label` — The quiet name of a group or a field.
 - **SerifHead** `.m-serif-head` — An EB Garamond heading for the things a person reads rather than operates — a hymn name, a role, a one-line summary.
 - **Card** `.m-card` — A flat container with a warm hairline.
 - **NavCard** `.m-nav-card` — The dashboard tile: a medallion, a title, one line of description.
@@ -132,6 +133,10 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **MonthStrip** `.m-strip` — The phone's month: seven columns of day numbers, each carrying up to three dots.
 - **Settled** `.m-settled` — Where something cannot change because it is settled, the sentence is the control.
 - **Prose** `.m-prose` — A reading column: a policy, a letter.
+- **Lede** `.m-lede` — The one sentence under a page title that says what the page is for.
+- **Status** `.m-status` — A short fact about a person or a row: Member, Away, Draft.
+- **PersonRow** `.m-person` — How a person is shown: a face, their name in the reading face, then how to reach them.
+- **DataTable** `.m-table` — A list with columns.
 
 **Feedback**
 - **Spinner** `.m-spinner` — The page's waiting state.
@@ -155,6 +160,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Section** `.m-section` — One labelled group.
 - **Side** `.m-side` — Facts that stay beside the work: a glance, an identity, the frame a form is written inside.
 - **Toolbar** `.m-toolbar` — The row above a list: search on the left, filters and a quiet count on the right.
+- **SettingRow** `.m-setting` — One setting: what it is and a sentence of help on the left, the control on the right.
 
 <!-- @generated:end -->
 
