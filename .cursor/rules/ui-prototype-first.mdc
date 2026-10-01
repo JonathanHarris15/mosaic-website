@@ -1,18 +1,21 @@
 ---
-description: Standalone HTML prototypes in docs/design/prototypes before look/layout UI work; draft PR and stop for approval.
+description: Restyles land on the real site and a test branch. A lightweight HTML prototype is only for a brand-new feature with no page yet.
 alwaysApply: true
 ---
 
-# UI prototype first (Mosaic)
+# Design changes (Mosaic)
 
-Any ticket that **changes a page's look or layout** must produce a **standalone HTML prototype** before implementation lands in `public/`.
+## Updating a design that already exists
 
-## Where prototypes live
+Change the real pages under `public/` (and the shared `m-*` components they inherit). Put the work on a test branch and show it on a Firebase Hosting preview URL. Do not make a standalone HTML prototype for a restyle, a style sweep, or a layout change to a page that already ships.
 
-- Path: `docs/design/prototypes/<ms-key>-<slug>.html` (e.g. `MS-400-settings-cards.html`).
-- **Never** under `public/` and never behind Hosting.
+If the preview is wrong, it is not merged. Rejection is leaving the branch unmerged. Do not stop and wait for a prototype approval before editing `public/`.
 
-## How prototypes are built
+## A brand-new feature that needs a new design
+
+When the feature has no existing page to put the design on, a lightweight HTML prototype comes first, then implementation. Path: `docs/design/prototypes/<ms-key>-<slug>.html` (e.g. `MS-400-settings-cards.html`). Never under `public/` and never behind Hosting except the preview workflow's temporary `/prototypes/` copy.
+
+### How prototypes are built
 
 - Link the real stylesheets by **relative path** from the prototype file:
   - **Desktop:** `../../../public/fonts.css` and `../../../public/mosaic.css`
@@ -24,19 +27,19 @@ Any ticket that **changes a page's look or layout** must produce a **standalone 
 - Show **empty**, **one**, **many**, and **error** states on the same page (labelled sections).
 - When there is a real design choice, show **2–3 structurally different variants** labelled **A / B / C** (not colour-only tweaks).
 
-## Review passes (before the draft PR)
+### Review passes (before the draft prototype PR)
 
 1. **`frontend-design`** — layout, hierarchy, copy, critique pass (Mosaic override: design system is the brief).
 2. **`web-interface-guidelines`** — run against the prototype file per `.cursor/skills/web-interface-guidelines/SKILL.md`.
 
-## Draft PR workflow
+### Draft prototype PR
 
 1. Commit **only** the prototype (and any docs tied to it).
 2. Open a **draft** PR titled `[Prototype] MS-XXX` (not the implementation PR).
 3. Attach screenshots at **390×844** and **1280×800**.
 4. Post the view link (primary — use the format that loads relative CSS; see below) with a **3-line summary** of what changed and what you want feedback on.
 5. Open the link yourself and confirm Mosaic CSS loaded (fonts, cream background, token-driven styles) **and that icons render as glyphs, not as their ligature names** — check the rendered pixels or the icon's computed `font-family`, because the stylesheet applying does not mean the font file arrived.
-6. **Stop** until Jonathan approves. Implementation PR follows in a separate branch/PR.
+6. **Stop** until Jonathan approves. Implementation follows in a separate branch/PR.
 
 ### View links
 
@@ -45,19 +48,17 @@ Use the commit SHA that contains the prototype file.
 - **Primary:** `https://htmlpreview.github.io/?https://github.com/JonathanHarris15/mosaic-website/blob/<commitSHA>/docs/design/prototypes/<file>.html`
 - **Backup:** `https://raw.githack.com/JonathanHarris15/mosaic-website/<commitSHA>/docs/design/prototypes/<file>.html` (click through the githack interstitial once; relative `../../../public/*.css` links resolve via raw.githack)
 
-Both formats were verified to load `fonts.css` and `mosaic.css` and apply the cream background and Cinzel/Libre Franklin stack when the prototype uses the relative paths above.
+## When a prototype is the wrong tool
 
-## When to skip (state the reason in the PR)
-
+- The page already exists and the task is to restyle it, clean it up, or bring it in line with the design language
 - Pure bug fix with no layout change
 - Copy-only change
 - Style fix of **10 lines or fewer** with no layout change
-- Jonathan explicitly says no prototype
 
 ## Smoke test
 
-Prototype-only commits **skip** the jev smoke test. The **implementation** PR that follows still runs jev in full per `.cursor/rules/smoke-test.mdc`.
+Prototype-only commits **skip** the jev smoke test. Any PR that changes `public/` still runs jev in full per `.cursor/rules/smoke-test.mdc`.
 
 ## Supersedes in-app `?variant=` prototypes
 
-This rule supersedes the `?variant=` on-route approach in `.cursor/skills/prototype/UI.md` and related prototype docs **unless Jonathan asks for in-app variants**. Point new look/layout work here instead.
+This rule supersedes the `?variant=` on-route approach in `.cursor/skills/prototype/UI.md` and related prototype docs **unless Jonathan asks for in-app variants**. A restyle still lands on the real page. A new feature's prototype lives in `docs/design/prototypes/`.
