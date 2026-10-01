@@ -79,6 +79,13 @@
             Object.keys(node.bind).forEach(prop => {
                 const bind = node.bind[prop];
                 if (!bind) return;
+                if (bind.scope === 'asset' && bind.apply === 'font' && prop === 'text') {
+                    const r = data.valueFor ? data.valueFor(bind, row, node) : { ok: false, why: 'No data loaded.' };
+                    if (r && r.ok && r.value) {
+                        node.style = Object.assign({}, node.style, { 'font-family': '"' + String(r.value).replace(/"/g, '') + ', sans-serif' });
+                    }
+                    return;
+                }
                 const r = data.valueFor ? data.valueFor(bind, row, node) : { ok: false, why: 'No data loaded.' };
                 if (r && r.ok && r.value !== '' && r.value != null) {
                     if (prop === 'src') { node.attrs = Object.assign({}, node.attrs, { src: String(r.value) }); }

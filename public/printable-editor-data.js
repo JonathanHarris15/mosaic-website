@@ -161,6 +161,7 @@
                 warnings: [],
                 picking: false,        // choosing a list for the selected element
                 typed: { date: '', draft: emptyTypedDraft(), saving: false, status: '' },
+                assetUploadError: '',
             },
             layout: [],                // what the canvas draws: stored pages, overflow continuations included
             dragField: null,           // the chip in the air
@@ -174,6 +175,11 @@
 
             async initData() {
                 if (!this.project) return;
+                if (!Array.isArray(this.project.assets)) this.project.assets = [];
+                ['insert_date', 'insert_page_number'].forEach(key => {
+                    const src = Data.sourceByKey(key);
+                    if (src && !this.data.params[key]) this.data.params[key] = Data.defaultParams(src);
+                });
                 this.data.loading = true;
                 try {
                     this.data.options = await global.PrintableDataStore.loadOptions(db, this.viewer());
@@ -300,6 +306,7 @@
                 const byRegion = {};
                 const order = [];
                 sources.forEach(s => {
+                    if (s.scalar) return;
                     if (!byRegion[s.region]) { byRegion[s.region] = []; order.push(s.region); }
                     byRegion[s.region].push(s);
                 });
@@ -383,6 +390,200 @@
             // element, make it iterated, then the query builder opens.
             get showCatalog() {
                 return false;
+            },
+
+            get showScalarInserts() {
+                return this.canEdit && !this.data.picking;
+            },
+
+            get currentPageIndex() {
+                const page = this.currentPage;
+                if (!page) return -1;
+                return this.pages.findIndex(p => p.id === page.id);
+            },
+
+            get brandAssets() {
+                return (this.project && this.project.assets) || [];
+            },
+
+            scalarParams(key) {
+                const src = Data.sourceByKey(key);
+                if (!src) return {};
+                if (!this.data.params[key]) this.data.params[key] = Data.defaultParams(src);
+                return this.data.params[key];
+            },
+
+            scalarDateMode() {
+                const p = Data.scalarDateParams(this.scalarParams('insert_date'));
+                return p.mode;
+            },
+
+            setScalarDateMode(mode) {
+                const p = this.scalarParams('insert_date');
+                p.mode = mode;
+                if (mode === 'today') p.offsetDays = 0;
+                this.renderAll();
+            },
+
+            setScalarOffsetDays(n) {
+                const p = this.scalarParams('insert_date');
+                p.mode = 'offset';
+                p.offsetDays = Math.round(Number(n) || 0);
+                this.renderAll();
+            },
+
+            setScalarFixedDate(dateStr) {
+                const p = this.scalarParams('insert_date');
+                p.mode = 'fixed';
+                p.fixed = dateStr || '';
+                this.renderAll();
+            },
+
+            setScalarThisSunday() {
+                const today = Data.toDateStr(new Date());
+                const sunday = Data.sundayOnOrAfter(today);
+                const a = today.split('-').map(Number);
+                const b = sunday.split('-').map(Number);
+                const d0 = new Date(a[0], a[1] - 1, a[2]);
+                const d1 = new Date(b[0], b[1] - 1, b[2]);
+                const days = Math.round((d1 - d0) / 86400000);
+                const p = this.scalarParams('insert_date');
+                p.mode = 'offset';
+                p.offsetDays = days;
+                this.renderAll();
+            },
+
+            scalarDatePreview() {
+                const row = Data.resolve('insert_date', this.scalarParams('insert_date'), {}, { today: Data.toDateStr(new Date()) }).rows[0];
+                return row ? row.value : '';
+            },
+
+            setScalarPageStart(n) {
+                const p = this.scalarParams('insert_page_number');
+                p.startAt = Math.max(1, Math.round(Number(n) || 1));
+                this.renderAll();
+            },
+
+            scalarPagePreview() {
+                const idx = this.currentPageIndex;
+                if (idx < 0) return '—';
+                const n = Data.insertPageNumberDisplay(idx, this.scalarParams('insert_page_number').startAt);
+                return n == null ? 'Before numbering' : ('This page → ' + n);
+            },
+
+            assetChipKey(assetId) {
+                return 'asset|' + assetId;
+            },
+
+            assetKindIcon(kind) {
+                return kind === 'font' ? 'font_download' : 'image';
+            },
+
+            formatAssetSize(bytes) {
+                const n = Number(bytes) || 0;
+                if (n < 1024) return n + ' B';
+                if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+                return (n / (1024 * 1024)).toFixed(1) + ' MB';
+            },
+
+            onScalarChipDragStart(e, sourceKey, fieldKey) {
+                const src = Data.sourceByKey(sourceKey);
+                if (!src) return;
+                const field = src.fields.find(f => f.key === fieldKey);
+                if (!field) return;
+                const params = JSON.parse(JSON.stringify(this.scalarParams(sourceKey)));
+                this.dragField = {
+                    scope: 'global',
+                    source: sourceKey,
+                    field: fieldKey,
+                    kind: field.kind,
+                    params: params,
+                    label: field.label,
+                };
+                this.dropTarget = null;
+                try { e.dataTransfer.setData('text/plain', fieldKey); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
+                const chip = e.currentTarget;
+                this.dragWire = { from: this.pointOf(chip), to: this.pointOf(chip) };
+                this.refreshWires();
+            },
+
+            onAssetChipDragStart(e, asset) {
+                if (!asset) return;
+                const kind = asset.kind === 'font' ? 'text' : 'image';
+                this.dragField = {
+                    scope: 'asset',
+                    assetId: asset.id,
+                    kind: kind,
+                    apply: asset.kind === 'font' ? 'font' : 'image',
+                    label: asset.name,
+                };
+                this.dropTarget = null;
+                try { e.dataTransfer.setData('text/plain', asset.id); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
+                const chip = e.currentTarget;
+                this.dragWire = { from: this.pointOf(chip), to: this.pointOf(chip) };
+                this.refreshWires();
+            },
+
+            ensurePrintableFontFace(page, asset) {
+                if (!page || !asset || asset.kind !== 'font') return page;
+                const fam = String(asset.fontFamily || asset.name.replace(/\.[^.]+$/, '')).replace(/"/g, '');
+                const token = '/* asset-font-' + asset.id + ' */';
+                let css = page.css || '';
+                if (css.indexOf(token) !== -1) return page;
+                const rule = '@font-face { font-family: "' + fam + '"; src: url("' + asset.url + '"); font-display: swap; }';
+                return Object.assign({}, page, { css: (css + '\n' + token + '\n' + rule + '\n').trim() + '\n' });
+            },
+
+            async uploadBrandAsset(event) {
+                const file = event.target.files && event.target.files[0];
+                if (event.target) event.target.value = '';
+                this.data.assetUploadError = '';
+                if (!file || !this.project) return;
+                const isFont = /\.(woff2?|ttf|otf)$/i.test(file.name) || (file.type && /font|woff|ttf|otf/i.test(file.type));
+                const intake = global.ImageIntake;
+                const heic = intake && intake.isHeic(file);
+                const isImage = file.type && /^image\//.test(file.type);
+                if (!isFont && !isImage && !heic) {
+                    this.data.assetUploadError = 'Upload an image or font file.';
+                    return;
+                }
+                const cap = 8 * 1024 * 1024 - 1;
+                let upload = file;
+                if (isImage && intake && intake.needsWork(file, cap)) {
+                    this.notice = intake.COMPRESSING_MESSAGE;
+                    try {
+                        upload = await intake.prepare(file, { maxBytes: cap });
+                    } catch (err) {
+                        this.data.assetUploadError = (err && err.message) || 'Could not read that file.';
+                        return;
+                    } finally {
+                        this.notice = '';
+                    }
+                } else if (upload.size > cap) {
+                    this.data.assetUploadError = 'Files up to 8 MB, please.';
+                    return;
+                }
+                try {
+                    const Core = global.PrintableCore;
+                    const fileId = (Core && Core.newId ? Core.newId('brand') : String(Date.now())) + '_' + upload.name.replace(/[^\w.-]+/g, '_');
+                    const ref = firebase.storage().ref('printable_assets/' + this.project.id + '/' + fileId);
+                    await ref.put(upload, { contentType: upload.type || (isFont ? 'font/woff2' : 'image/jpeg') });
+                    const url = await ref.getDownloadURL();
+                    const asset = {
+                        id: fileId,
+                        name: upload.name,
+                        url: url,
+                        kind: isFont ? 'font' : 'image',
+                        fontFamily: isFont ? upload.name.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_') : '',
+                        bytes: upload.size,
+                    };
+                    this.project.assets = (this.project.assets || []).concat([asset]);
+                    this.commit();
+                    this.flash('Uploaded ' + asset.name + '. Drag it onto the page.');
+                } catch (ex) {
+                    console.error(ex);
+                    this.data.assetUploadError = 'That file did not upload.';
+                }
             },
 
             get hasOwnRepeat() {
@@ -530,6 +731,10 @@
             // An item chip may only land inside its own list; a global chip
             // may land anywhere its kind fits.
             mayBind(node, field) {
+                if (field.scope === 'asset') {
+                    if (field.apply === 'font') return Core.kindOf(node) === 'text';
+                    return Core.kindOf(node) === 'image';
+                }
                 if (!Data.accepts(Core.kindOf(node), field.kind)) return false;
                 if (field.scope !== 'item') return true;
                 const page = this.pageOfNode(node.id);
@@ -550,18 +755,32 @@
 
             bindField(pageId, nodeId, field) {
                 const page = this.pages.find(p => p.id === pageId);
-                const node = page && Core.findNode(page, nodeId);
+                let node = page && Core.findNode(page, nodeId);
                 if (!node) return;
-                const prop = Data.propFor(field.kind);
+                const prop = field.scope === 'asset'
+                    ? (field.apply === 'font' ? 'text' : 'src')
+                    : Data.propFor(field.kind);
                 const bind = Object.assign({}, node.bind || {});
-                bind[prop] = field.scope === 'item'
-                    ? { scope: 'item', field: field.field }
-                    : { scope: 'global', source: field.source, params: field.params || {}, field: field.field };
-                this.replacePage(Core.updateNode(page, nodeId, { bind: bind }));
+                if (field.scope === 'asset') {
+                    bind[prop] = { scope: 'asset', assetId: field.assetId, apply: field.apply || 'image' };
+                    let nextPage = page;
+                    if (field.apply === 'font') {
+                        const asset = (this.project.assets || []).find(a => a.id === field.assetId);
+                        nextPage = this.ensurePrintableFontFace(page, asset);
+                    }
+                    this.replacePage(Core.updateNode(nextPage, nodeId, { bind: bind }));
+                } else {
+                    bind[prop] = field.scope === 'item'
+                        ? { scope: 'item', field: field.field }
+                        : { scope: 'global', source: field.source, params: field.params || {}, field: field.field };
+                    this.replacePage(Core.updateNode(page, nodeId, { bind: bind }));
+                }
                 this.commit();
-                // A row field reads from data already loaded; a global field
-                // may name a source nothing has fetched yet.
-                if (field.scope === 'item') { this.rebindData(); this.renderAll(); }
+                if (field.scope === 'item' || field.scope === 'asset') { this.rebindData(); this.renderAll(); }
+                else if (field.source === 'insert_date' || field.source === 'insert_page_number') {
+                    this.rebindData();
+                    this.renderAll();
+                }
                 else this.refreshData();
                 this.select(pageId, nodeId);
                 this.flash('Wired ' + (node.name || this.tagLabel(node)) + ' to ' + field.label + '.');
@@ -586,7 +805,10 @@
                 return Object.keys(node.bind).map(prop => {
                     const b = node.bind[prop];
                     let label;
-                    if (b.scope === 'item') {
+                    if (b.scope === 'asset') {
+                        const a = (this.project.assets || []).find(x => x.id === b.assetId);
+                        label = (a ? a.name : 'File') + (b.apply === 'font' ? ' › Font' : ' › Picture');
+                    } else if (b.scope === 'item') {
                         const src = this.repeatSource;
                         const f = src && Data.fieldsFor(src, this.repeatContext.repeat.params, this.data.options).find(x => x.key === b.field);
                         label = 'Each row › ' + (f ? f.label : b.field);
@@ -632,7 +854,10 @@
                 if (main && node && node.bind && !this.dragWire) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
-                        const key = b.scope === 'item' ? this.chipKey('item', this.repeatContext ? this.repeatContext.repeat.source : '', b.field) : this.chipKey('global', b.source, b.field);
+                        let key;
+                        if (b.scope === 'asset') key = this.assetChipKey(b.assetId);
+                        else if (b.scope === 'item') key = this.chipKey('item', this.repeatContext ? this.repeatContext.repeat.source : '', b.field);
+                        else key = this.chipKey('global', b.source, b.field);
                         const chip = document.querySelector('[data-chip="' + key + '"]');
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!chip || !el) return;

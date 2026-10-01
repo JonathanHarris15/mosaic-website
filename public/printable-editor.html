@@ -648,6 +648,93 @@
                     </template>
                 </section>
 
+                <section class="pe-drawer__section pe-scalars" x-show="showScalarInserts" aria-label="Single values for the page">
+                    <div class="pe-scalars-divider">Single values</div>
+                    <div class="pe-typecards">
+                        <article class="pe-typecard">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                                <strong>Date</strong>
+                            </div>
+                            <div class="pe-f"><span>Mode</span>
+                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Date mode">
+                                    <button type="button" :aria-pressed="scalarDateMode() === 'today'" @click="setScalarDateMode('today')">Today</button>
+                                    <button type="button" :aria-pressed="scalarDateMode() === 'offset'" @click="setScalarDateMode('offset')">Offset</button>
+                                    <button type="button" :aria-pressed="scalarDateMode() === 'fixed'" @click="setScalarDateMode('fixed')">Set date</button>
+                                </span>
+                            </div>
+                            <div class="pe-f" x-show="scalarDateMode() === 'offset'"><span>Offset</span>
+                                <input class="pe-in" type="number" min="-365" max="365" step="1"
+                                       :value="scalarParams('insert_date').offsetDays"
+                                       @change="setScalarOffsetDays($event.target.value)" inputmode="numeric" autocomplete="off" aria-label="Day offset" />
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="setScalarThisSunday()">This Sunday</button>
+                            </div>
+                            <label class="pe-f" x-show="scalarDateMode() === 'fixed'"><span>Fixed</span>
+                                <input class="pe-in pe-in--date" type="date"
+                                       :value="scalarParams('insert_date').fixed || ''"
+                                       @change="setScalarFixedDate($event.target.value)" autocomplete="off" aria-label="Fixed date" />
+                            </label>
+                            <div class="pe-typecard__foot">
+                                <span class="pe-typecard__live" x-text="'Prints: ' + scalarDatePreview()"></span>
+                                <span class="pe-chip" draggable="true" tabindex="0"
+                                      :data-chip="chipKey('global', 'insert_date', 'value')"
+                                      @dragstart="onScalarChipDragStart($event, 'insert_date', 'value')" @dragend="onChipDragEnd()">
+                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
+                                </span>
+                            </div>
+                        </article>
+                        <article class="pe-typecard">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">numbers</span>
+                                <strong>Page number</strong>
+                            </div>
+                            <label class="pe-f"><span>Start numbering at</span>
+                                <input class="pe-in" type="number" min="1" step="1" inputmode="numeric" autocomplete="off"
+                                       :value="scalarParams('insert_page_number').startAt"
+                                       @change="setScalarPageStart($event.target.value)" aria-label="First numbered page" />
+                            </label>
+                            <p class="pe-hint">Page 3 of this booklet prints as “1” when start is 3.</p>
+                            <div class="pe-typecard__foot">
+                                <span class="pe-typecard__live" x-text="scalarPagePreview()"></span>
+                                <span class="pe-chip" draggable="true" tabindex="0"
+                                      :data-chip="chipKey('global', 'insert_page_number', 'number')"
+                                      @dragstart="onScalarChipDragStart($event, 'insert_page_number', 'number')" @dragend="onChipDragEnd()">
+                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
+                                </span>
+                            </div>
+                        </article>
+                        <article class="pe-typecard">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>
+                                <strong>Brand assets</strong>
+                            </div>
+                            <label class="m-btn m-btn--secondary m-btn--sm pe-upload pe-typecard__upload">
+                                <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+                                <span class="m-btn__label">Upload image or font…</span>
+                                <input type="file" accept="image/*,.woff2,.woff,.ttf,.otf" aria-label="Upload brand asset" @change="uploadBrandAsset($event)" />
+                            </label>
+                            <p class="pe-drawer__error" x-show="data.assetUploadError" x-text="data.assetUploadError"></p>
+                            <p class="pe-empty" x-show="!brandAssets.length">No files yet. Upload a logo, rule, or font for this printable.</p>
+                            <template x-for="asset in brandAssets" :key="'asset-row-' + asset.id">
+                                <div class="pe-asset-row">
+                                    <div class="pe-asset-row__icon" aria-hidden="true">
+                                        <span class="material-symbols-outlined" x-text="assetKindIcon(asset.kind)"></span>
+                                    </div>
+                                    <div class="pe-asset-row__meta">
+                                        <strong x-text="asset.name"></strong>
+                                        <span x-text="(asset.kind === 'font' ? 'Font' : 'Image') + ' · ' + formatAssetSize(asset.bytes)"></span>
+                                    </div>
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="assetChipKey(asset.id)"
+                                          @dragstart="onAssetChipDragStart($event, asset)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Use
+                                    </span>
+                                </div>
+                            </template>
+                        </article>
+                    </div>
+                </section>
+
                 <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
                     <button type="button" class="pe-drawer__title pe-drawer__title--toggle"
                             :aria-expanded="data.warningsOpen"
@@ -1102,6 +1189,40 @@
         .pe-chip .material-symbols-outlined { font-size: 15px; color: var(--tertiary); }
         .pe-chip--inert { cursor: default; opacity: .7; }
         .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
+        .pe-scalars-divider {
+            margin: 8px 0 6px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        .pe-typecards { display: flex; flex-direction: column; gap: 6px; }
+        .pe-typecard {
+            padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container-lowest);
+        }
+        .pe-typecard__head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .pe-typecard__head .material-symbols-outlined { font-size: 18px; color: var(--primary); }
+        .pe-typecard__head strong { font-size: 12px; color: var(--on-surface); flex: 1; }
+        .pe-typecard__foot {
+            display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px;
+            padding-top: 6px; border-top: 1px solid var(--outline-variant);
+        }
+        .pe-typecard__live { font-size: 10px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; text-align: left; flex: 1; min-width: 0; }
+        .pe-typecard__upload { width: 100%; justify-content: center; margin-bottom: 4px; }
+        .pe-empty {
+            padding: 10px; text-align: center; border: 1px dashed var(--outline-variant); border-radius: var(--radius-sm);
+            font-size: 11px; color: var(--on-surface-variant); margin: 4px 0;
+        }
+        .pe-asset-row {
+            display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin-bottom: 4px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest);
+        }
+        .pe-asset-row__icon {
+            width: 28px; height: 28px; border-radius: 4px; background: var(--surface-container);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .pe-asset-row__icon .material-symbols-outlined { font-size: 18px; color: var(--tertiary); }
+        .pe-asset-row__meta { flex: 1; min-width: 0; }
+        .pe-asset-row__meta strong { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pe-asset-row__meta span { font-size: 10px; color: var(--on-surface-variant); }
         .pe-warn { display: flex; flex-direction: column; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-left: 3px solid var(--warning); background: var(--surface-container-lowest); margin-bottom: 4px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font: inherit; color: inherit; cursor: default; }
         .pe-warn--element { cursor: pointer; }
         .pe-warn--element:hover { background: var(--surface-container); }

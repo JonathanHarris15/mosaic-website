@@ -172,3 +172,7 @@ Every list and every reading page has four states, using the same components:
 - **Error** — `.m-notice.m-notice--error` with a sentence and, when a retry exists, the button.
 
 Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px grey.
+
+## Printable editor — scalar inserts (MS-689)
+
+Below the **Query** block in the data drawer, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Date**, **Page number**, and **Brand assets**. Each card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
