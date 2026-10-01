@@ -480,6 +480,23 @@
             ],
             dynamicFields: true,
         },
+        {
+            key: 'insert_date', region: 'Insert', label: 'Date', shape: 'single', scalar: true, minLevel: 'viewer',
+            blurb: 'A live date on the page — today, a day offset, or a fixed calendar date. Not a list.',
+            params: [
+                { key: 'mode', label: 'Mode', kind: 'text', default: 'today' },
+                { key: 'offsetDays', label: 'Offset days', kind: 'text', default: 0 },
+                { key: 'fixed', label: 'Fixed date', kind: 'text', default: '' },
+                { key: 'format', label: 'Format', kind: 'text', default: 'long' },
+            ],
+            fields: [{ key: 'value', label: 'Date', kind: 'date' }],
+        },
+        {
+            key: 'insert_page_number', region: 'Insert', label: 'Page number', shape: 'single', scalar: true, minLevel: 'viewer',
+            blurb: 'The number of this page in the booklet, with an optional custom start page.',
+            params: [{ key: 'startAt', label: 'Start numbering at', kind: 'text', default: 1 }],
+            fields: [{ key: 'number', label: 'Page number', kind: 'number' }],
+        },
     ];
 
     function sourceByKey(key) {
@@ -1173,6 +1190,50 @@
         return value.url || value.dataUrl || '';
     }
 
+    function scalarDateParams(params) {
+        const p = Object.assign({ mode: 'today', offsetDays: 0, fixed: '', format: 'long' }, params || {});
+        p.offsetDays = Math.round(Number(p.offsetDays));
+        if (!Number.isFinite(p.offsetDays)) p.offsetDays = 0;
+        if (p.mode !== 'today' && p.mode !== 'offset' && p.mode !== 'fixed') p.mode = 'today';
+        return p;
+    }
+
+    function resolveInsertDate(params, data, ctx) {
+        const p = scalarDateParams(params);
+        const today = (ctx && ctx.today) || toDateStr(new Date());
+        let dateStr = today;
+        if (p.mode === 'fixed' && isDateStr(p.fixed)) dateStr = p.fixed;
+        else if (p.mode === 'offset') dateStr = addDays(today, p.offsetDays);
+        const fmt = p.format || 'long';
+        const style = fmt === 'long' ? undefined : fmt;
+        const formatted = formatDate(dateStr, style);
+        return { rows: [{ _id: 'date', value: formatted, date: dateStr }], warnings: [] };
+    }
+
+    function resolveInsertPageNumber() {
+        return { rows: [{ _id: 'page', number: '1' }], warnings: [] };
+    }
+
+    // What prints on a physical page (1-based page index in the project).
+    function insertPageNumberDisplay(pageIndex, startAt) {
+        const start = Math.max(1, Math.round(Number(startAt)) || 1);
+        const physical = Math.round(Number(pageIndex)) + 1;
+        if (!Number.isFinite(physical) || physical < 1) return null;
+        if (physical < start) return null;
+        return physical - start + 1;
+    }
+
+    function describeInsertDate(params) {
+        const p = scalarDateParams(params);
+        if (p.mode === 'fixed' && isDateStr(p.fixed)) return 'fixed ' + formatDate(p.fixed, 'medium');
+        if (p.mode === 'offset') {
+            if (!p.offsetDays) return 'today';
+            const sign = p.offsetDays > 0 ? '+' : '';
+            return 'today ' + sign + p.offsetDays + ' day' + (Math.abs(p.offsetDays) === 1 ? '' : 's');
+        }
+        return 'today';
+    }
+
     function resolveFormAnswers(params, data, ctx) {
         const p = Object.assign(defaultParams('form_answers'), params || {});
         const form = (data.forms || []).find(f => f && f.id === p.formId);
@@ -1206,6 +1267,8 @@
         event_dates: resolveEventDates,
         role_holder: resolveRoleHolder,
         form_answers: resolveFormAnswers,
+        insert_date: resolveInsertDate,
+        insert_page_number: resolveInsertPageNumber,
     };
 
     // Rows for a source, for this viewer. A source above the viewer's level
@@ -1253,6 +1316,7 @@
                 return { series: true, roles: true, people: true, occurrenceRange: { from: from, to: addDays(from, 120) }, rosters: p.seriesId || true };
             }
             case 'form_answers': return { forms: true, responses: p.formId || true };
+            case 'insert_date': case 'insert_page_number': return {};
             default: return {};
         }
     }
@@ -1269,6 +1333,11 @@
         const s = sourceByKey(sourceKey);
         const p = Object.assign(defaultParams(sourceKey), params || {});
         if (!s) return '';
+        if (sourceKey === 'insert_date') return describeInsertDate(p);
+        if (sourceKey === 'insert_page_number') {
+            const start = Math.max(1, Math.round(Number(p.startAt)) || 1);
+            return 'numbering from page ' + start;
+        }
         const bits = [];
         (s.params || []).forEach(param => {
             const v = p[param.key];
@@ -1324,6 +1393,9 @@
         needsFor,
         describeParams,
         roleLabel,
+        insertPageNumberDisplay,
+        describeInsertDate,
+        scalarDateParams,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

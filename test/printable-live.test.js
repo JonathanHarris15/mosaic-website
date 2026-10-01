@@ -273,3 +273,20 @@ test('a nested children list is of the household card it sits in', () => {
     assert.equal(homes[0].children[0].text, 'The Baker household');
     assert.equal(homes[0].children[1].children[0].children[0].text, 'Eve Baker');
 });
+
+test('MS-689: page-number bindings read the project page index and custom start', () => {
+    const p = Core.buildPrintable({
+        name: 'Booklet',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [
+            { id: 'pg1', nodes: [{ id: 'n1', tag: 'p', text: '1', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
+            { id: 'pg2', nodes: [{ id: 'n2', tag: 'p', text: '2', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
+            { id: 'pg3', nodes: [{ id: 'n3', tag: 'p', text: '3', bind: { text: { scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' } } }] },
+        ],
+    });
+    const res = Live.resolver(p, {}, { today: '2026-09-03', level: 'viewer' });
+    assert.deepEqual(res.valueFor({ scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' }, null, null, { pageIndex: 0 }), { ok: false, why: 'This page is before numbering starts.' });
+    assert.deepEqual(res.valueFor({ scope: 'global', source: 'insert_page_number', params: { startAt: 3 }, field: 'number' }, null, null, { pageIndex: 2 }), { ok: true, value: '1' });
+    const pages = Live.layoutPages(p, res, null);
+    assert.equal(pages[2].nodes[0].text, '1');
+});

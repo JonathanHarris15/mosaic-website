@@ -350,6 +350,14 @@
             bookletExport: s.bookletExport === true,
             template: template,
             pages: Array.isArray(s.pages) ? s.pages.map(p => buildPage(template, p)) : [],
+            assets: Array.isArray(s.assets) ? s.assets.map(a => ({
+                id: String(a.id || ''),
+                name: String(a.name || ''),
+                url: String(a.url || ''),
+                kind: a.kind === 'font' ? 'font' : 'image',
+                fontFamily: a.fontFamily ? String(a.fontFamily) : '',
+                bytes: Number(a.bytes) > 0 ? Number(a.bytes) : 0,
+            })).filter(a => a.id && a.url) : [],
         };
     }
 
@@ -364,6 +372,7 @@
             bookletExport: p.bookletExport === true,
             template: p.template || null,
             pages: p.pages || [],
+            assets: p.assets || [],
         });
     }
 

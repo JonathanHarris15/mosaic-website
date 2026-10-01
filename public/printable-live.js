@@ -38,6 +38,7 @@
             Object.keys(node.bind || {}).forEach(prop => {
                 const b = node.bind[prop];
                 if (b && b.scope === 'global' && b.source) uses[keyOf(b.source, b.params)] = { source: b.source, params: b.params || {} };
+                if (b && b.scope === 'asset' && b.assetId) uses['asset|' + b.assetId] = { assetId: b.assetId };
             });
         }));
         return Object.keys(uses).map(k => uses[k]);
@@ -77,8 +78,26 @@
             return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
         }
 
-        function valueFor(bind, row) {
+        function valueFor(bind, row, node, pageCtx) {
             if (!bind) return { ok: false, why: 'Not wired.' };
+            if (bind.scope === 'asset') {
+                const assets = (pageCtx && pageCtx.assets) || [];
+                const a = assets.find(x => x && x.id === bind.assetId);
+                if (!a) return { ok: false, why: 'That file is not on this printable.' };
+                if (bind.apply === 'font') {
+                    const fam = a.fontFamily || a.name || 'BrandFont';
+                    return { ok: true, value: fam };
+                }
+                if (a.kind === 'font') return { ok: false, why: 'Drag this font onto text, not a picture.' };
+                return { ok: true, value: a.url || '' };
+            }
+            if (bind.source === 'insert_page_number') {
+                const idx = pageCtx && pageCtx.pageIndex != null ? pageCtx.pageIndex : -1;
+                if (idx < 0) return { ok: false, why: 'No page.' };
+                const n = Data.insertPageNumberDisplay(idx, (bind.params || {}).startAt);
+                if (n == null) return { ok: false, why: 'This page is before numbering starts.' };
+                return { ok: true, value: String(n) };
+            }
             if (bind.scope === 'item') {
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
@@ -125,6 +144,15 @@
 
     const STAND_INS = { rowsFor: () => null, valueFor: () => ({ ok: false, why: '' }) };
 
+    function dataForPage(res, pageIndex, assets) {
+        if (!res) return STAND_INS;
+        const ctx = { pageIndex: pageIndex, assets: assets || [] };
+        return {
+            rowsFor: (node, parentRow) => res.rowsFor(node, parentRow),
+            valueFor: (bind, row, node) => res.valueFor(bind, row, node, ctx),
+        };
+    }
+
     function overflowingRepeatOn(page) {
         return Render.overflowingRepeats(page)[0] || null;
     }
@@ -153,17 +181,18 @@
 
     // Slice the *origin* list onto this page's iterated element, so a
     // continuation page that was redesigned still reads the same live rows.
-    function sliceFrom(res, originRepeat, pageRepeatId, start, end) {
+    function sliceFrom(res, originRepeat, pageRepeatId, start, end, pageIndex, assets) {
+        const base = dataForPage(res, pageIndex, assets);
         return {
             rowsFor: (node, parentRow) => {
-                if (!node.repeat) return res.rowsFor(node, parentRow);
+                if (!node.repeat) return base.rowsFor(node, parentRow);
                 if (node.id === pageRepeatId || node.id === originRepeat.id) {
                     const rows = res.rowsFor(originRepeat, parentRow);
                     return rows ? rows.slice(start, end) : rows;
                 }
-                return res.rowsFor(node, parentRow);
+                return base.rowsFor(node, parentRow);
             },
-            valueFor: res.valueFor,
+            valueFor: base.valueFor,
         };
     }
 
@@ -184,8 +213,8 @@
         };
     }
 
-    function emptySlice(res, originRepeat, pageRepeatId) {
-        return sliceFrom(res, originRepeat, pageRepeatId, 0, 0);
+    function emptySlice(res, originRepeat, pageRepeatId, pageIndex, assets) {
+        return sliceFrom(res, originRepeat, pageRepeatId, 0, 0, pageIndex, assets);
     }
 
     // The pages to draw. `res` null means stand-ins everywhere.
@@ -196,22 +225,24 @@
         const out = [];
         const claimed = {};
         const pages = project.pages || [];
+        const assets = project.assets || [];
         const canPaginate = !!(res && (host || o.fitsOn));
 
         function emitEmptyContinuations(chain, originRepeat, pageIndex, data) {
             chain.slice(1).forEach((pg, i) => {
                 claimed[pg.id] = true;
                 const r = overflowingRepeatOn(pg);
+                const pgIndex = pages.findIndex(p => p.id === pg.id);
                 const expanded = Render.expandPage(pg, (res && originRepeat && r)
-                    ? emptySlice(res, originRepeat, r.id)
-                    : data);
+                    ? emptySlice(res, originRepeat, r.id, pgIndex, assets)
+                    : dataForPage(res, pgIndex, assets));
                 out.push(entryOf(pg, expanded, { originId: chain[0].id, pageIndex: pageIndex, continuation: i + 1, rowsFrom: 0, rowsTo: 0 }));
             });
         }
 
         pages.forEach((page, pageIndex) => {
             if (claimed[page.id]) return;
-            const data = res || STAND_INS;
+            const data = dataForPage(res, pageIndex, assets);
 
             // Not in the contiguous chain: a page sits between this one and
             // the start, or the start is gone. The start's own pagination
@@ -221,7 +252,7 @@
                 const originRepeat = origin ? overflowingRepeatOn(origin) : null;
                 const mine = overflowingRepeatOn(page);
                 const sliced = (res && mine)
-                    ? emptySlice(res, originRepeat || mine, mine.id)
+                    ? emptySlice(res, originRepeat || mine, mine.id, pageIndex, assets)
                     : STAND_INS;
                 const expanded = Render.expandPage(page, sliced);
                 out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
@@ -255,7 +286,7 @@
                 const bg = pageAt(i);
                 const r = repeatAt(i);
                 if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
-                const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n));
+                const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, pageIndex, assets));
                 return fits(host, template, bg, probe.nodes, r.id);
             };
 
@@ -269,7 +300,7 @@
                     chain.push(bg);
                 }
                 const r = overflowingRepeatOn(bg) || repeat;
-                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end), { warnEveryRow: false, copyStart: slice.start });
+                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, pageIndex, assets), { warnEveryRow: false, copyStart: slice.start, pageIndex: pageIndex });
                 out.push(entryOf(bg, expanded, {
                     needsPersist: needsPersist,
                     originId: page.id,
@@ -283,7 +314,7 @@
             for (let i = plan.length; i < chain.length; i++) {
                 const bg = chain[i];
                 const r = overflowingRepeatOn(bg);
-                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id) : data, { warnEveryRow: false });
+                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id, pageIndex, assets) : data, { warnEveryRow: false, pageIndex: pageIndex });
                 out.push(entryOf(bg, expanded, {
                     originId: page.id,
                     pageIndex: pageIndex,

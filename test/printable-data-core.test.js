@@ -918,3 +918,22 @@ test('params read back as a sentence for the element panel', () => {
     assert.equal(Data.describeParams('sunday', { when: { mode: 'next' } }), 'next Sunday');
     assert.match(Data.describeParams('event_dates', {}), /from today to 14 days from now/);
 });
+
+// MS-689 — scalar inserts below the query (date, page number)
+
+test('insert_date resolves today, offset, and fixed dates without fetching', () => {
+    const today = Data.resolve('insert_date', { mode: 'today' }, {}, { today: TODAY });
+    assert.match(today.rows[0].value, /September 2026/);
+    const offset = Data.resolve('insert_date', { mode: 'offset', offsetDays: 7 }, {}, { today: TODAY });
+    assert.equal(offset.rows[0].date, Data.addDays(TODAY, 7));
+    const fixed = Data.resolve('insert_date', { mode: 'fixed', fixed: '2026-12-25' }, {}, { today: TODAY });
+    assert.match(fixed.rows[0].value, /December 2026/);
+    assert.deepEqual(Data.needsFor('insert_date', {}, TODAY), {});
+});
+
+test('page numbering respects a custom start page in the project order', () => {
+    assert.equal(Data.insertPageNumberDisplay(0, 1), 1);
+    assert.equal(Data.insertPageNumberDisplay(2, 3), 1);
+    assert.equal(Data.insertPageNumberDisplay(1, 3), null);
+    assert.equal(Data.describeParams('insert_page_number', { startAt: 3 }), 'numbering from page 3');
+});
