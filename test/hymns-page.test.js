@@ -63,10 +63,12 @@ test('a member may read the hymn book and may not change it', () => {
         assert.equal(HymnsPage.canEditHymnBook({ permissionLevel: level }), false, level);
     });
     assert.equal(HymnsPage.canEditHymnBook(null), false);
-    // A Pastoral Assistant can open the old manager. The rules still refuse the write.
     assert.equal(HymnsPage.canEditHymnBook({
         permissionLevel: 'member', pastoralAssistant: true,
-    }), false);
+    }), true);
+    assert.equal(HymnsPage.canEditHymnBook({
+        permissionLevel: 'pastoral_assistant',
+    }), true);
     ['editor', 'admin', 'elder', 'super_admin'].forEach(function (level) {
         assert.equal(HymnsPage.canEditHymnBook({ permissionLevel: level }), true, level);
     });

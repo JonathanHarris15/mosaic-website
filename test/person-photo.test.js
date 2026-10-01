@@ -143,7 +143,7 @@ test('an unlinked account may set nobody\'s', () => {
 });
 
 test('editors and above may set anyone\'s', () => {
-    for (const level of ['editor', 'elder', 'admin', 'super_admin']) {
+    for (const level of ['editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant']) {
         assert.ok(Photo.canManagePhoto(level, null, 'p2'), level);
         assert.ok(Photo.canManagePhoto(level, 'p1', 'p2'), level);
     }

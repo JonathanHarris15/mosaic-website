@@ -243,9 +243,10 @@ test('removing a child does not ask, and the other children stay', () => {
     assert.equal(after.find((f) => f.id === 'west').wifeId, 'ada');
 });
 
-test('a member and a Pastoral Assistant are not offered the controls, and Edit Mode off offers none', () => {
+test('a member is not offered the controls; a Pastoral Assistant is, and Edit Mode off offers none', () => {
     assert.equal(Fam.offerControls(member, true), false);
-    assert.equal(Fam.offerControls(assistant, true), false);
+    assert.equal(Fam.offerControls(assistant, true), true);
+    assert.equal(Fam.offerControls({ permissionLevel: 'pastoral_assistant' }, true), true);
     assert.equal(Fam.offerControls(editor, false), false);
     for (const user of [editor, admin, elder, superAdmin]) {
         assert.equal(Fam.offerControls(user, true), true, user.permissionLevel);
@@ -288,7 +289,7 @@ test('joining two Families is refused in the planner\'s words and writes nothing
 
 test('the editor is withheld until sex is saved, and only while the controls are offered', () => {
     assert.deepStrictEqual(Fam.familyEditor(member, true, adam), { show: false, sentence: null });
-    assert.deepStrictEqual(Fam.familyEditor(assistant, true, adam), { show: false, sentence: null });
+    assert.deepStrictEqual(Fam.familyEditor(assistant, true, adam), { show: true, sentence: null });
     assert.deepStrictEqual(Fam.familyEditor(editor, false, adam), { show: false, sentence: null });
     assert.deepStrictEqual(Fam.familyEditor(editor, true, una), { show: false, sentence: SEX_UNSET });
     assert.deepStrictEqual(Fam.familyEditor(editor, true, adam), { show: true, sentence: null });

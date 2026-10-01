@@ -115,7 +115,7 @@ test('only elders can read Shepherding presence', () => {
 
 test('nobody can write somebody else\'s Shepherding presence', () => {
     const b = block('shepherding_presence');
-    assert.match(b, /allow write, delete: if isElder\(\) && request\.auth\.uid == uid;/);
+    assert.match(b, /allow write, delete: if readsAsElder\(\) && request\.auth\.uid == uid;/);
 });
 
 test('the Order of Service presence rule is unchanged', () => {

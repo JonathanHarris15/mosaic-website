@@ -68,13 +68,14 @@ service firebase.storage {
     // is decided against the occurrence's own list of Person ids.
     function rankOrParticipantSees(occ, u) {
       return (stampedVisibility(occ) == 'member'
-              && (levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin']
+              && (levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
                   || u.pastoralAssistant == true))
         || (stampedVisibility(occ) in ['member', 'participant', 'editor']
-              && (levelOf(u) in ['editor', 'admin', 'elder', 'super_admin']
+              && (levelOf(u) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
                   || u.pastoralAssistant == true))
         || (stampedVisibility(occ) == 'elder'
               && (levelOf(u) in ['elder', 'super_admin']
+                  || levelOf(u) == 'pastoral_assistant'
                   || u.pastoralAssistant == true))
         || (stampedVisibility(occ) == 'participant'
               && ('personId' in u) && ('participantIds' in occ)
@@ -95,8 +96,10 @@ service firebase.storage {
     }
 
     function isEditorAccount() {
-      return isSignedIn()
-        && levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin'];
+      return isSignedIn() && (
+        levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || isPastoralAssistantAccount()
+      );
     }
 
     // ⚠ AN ADMIN IS NOT AN ELDER. The tier list reads editor → elder → admin,
@@ -107,10 +110,14 @@ service firebase.storage {
       return isSignedIn() && levelOf(myUserDoc()) in ['elder', 'super_admin'];
     }
 
-    // Pastoral Assistant grant, restated from AccessCore (MS-426, ADR-0065).
-    // Fail closed: a missing flag is not a grant.
+    // Pastoral Assistant is the permission level, restated from AccessCore
+    // (ADR-0076). The old flag still counts. Fail closed: neither is a grant
+    // when the user doc is missing. Not an elder.
     function isPastoralAssistantAccount() {
-      return isSignedIn() && myUserDoc().pastoralAssistant == true;
+      return isSignedIn() && (
+        levelOf(myUserDoc()) == 'pastoral_assistant'
+        || myUserDoc().pastoralAssistant == true
+      );
     }
 
     function readsAsElderAccount() {

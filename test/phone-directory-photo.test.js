@@ -61,9 +61,10 @@ test('a member is not offered a photo control, including on their own page', () 
     assert.equal(Plan.planRemoval(member, own, true, true).write, false);
 });
 
-test('a Pastoral Assistant is not offered a photo control', () => {
-    assert.equal(Plan.offerControls(assistant, true), false);
-    assert.equal(Plan.planChosenFile(assistant, ada, true, jpeg).write, false);
+test('a Pastoral Assistant is offered a photo control in Edit Mode', () => {
+    assert.equal(Plan.offerControls(assistant, true), true);
+    assert.equal(Plan.offerControls({ permissionLevel: 'pastoral_assistant' }, true), true);
+    assert.equal(Plan.planChosenFile(assistant, ada, true, jpeg).write, true);
 });
 
 test('an editor, admin, elder, or super admin is offered a photo control only in Edit Mode', () => {

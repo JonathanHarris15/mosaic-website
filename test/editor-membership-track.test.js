@@ -52,11 +52,15 @@ test('AccessCore: member has neither Track flag', () => {
     assert.equal(member.canDecide, false);
 });
 
-test('AccessCore: PA decides and still does not write as editor', () => {
+test('AccessCore: PA decides and writes as editor, and is not an elder', () => {
     const pa = flagsOf('member', true);
     assert.equal(pa.canDecide, true);
-    assert.equal(pa.canWriteEditor, false);
+    assert.equal(pa.canWriteEditor, true);
     assert.equal(Access.isAnElder(PA), false);
+    const role = flagsOf('pastoral_assistant', false);
+    assert.equal(role.canDecide, true);
+    assert.equal(role.canWriteEditor, true);
+    assert.equal(Access.isAnElder({ permissionLevel: 'pastoral_assistant' }), false);
 });
 
 test('AccessCore: elder decides and writes as editor', () => {

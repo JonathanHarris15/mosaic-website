@@ -26,7 +26,7 @@ const Core = require('../public/shepherding-core.js');
 // Track disagreed about the same human. These pin the new behaviour.
 
 test('isMemberOrHigher recognises member and every higher level', () => {
-    for (const r of ['member', 'editor', 'elder', 'admin', 'super_admin']) {
+    for (const r of ['member', 'editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant']) {
         assert.strictEqual(isMemberOrHigher(r), true, r);
     }
     for (const r of ['viewer', 'guest', undefined, null, '']) {
@@ -69,7 +69,7 @@ test('a member+ login places a Person who has no stage at all', () => {
 });
 
 test('every level from member up advances; nothing below does', () => {
-    for (const level of ['member', 'editor', 'elder', 'admin', 'super_admin']) {
+    for (const level of ['member', 'editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant']) {
         assert.strictEqual(
             shouldAdvanceToMember(level, { stage: 'visitor' }), true, level);
     }
@@ -193,7 +193,7 @@ test('shouldPromoteToMember: below member → promote', () => {
 });
 
 test('shouldPromoteToMember: already member+ → never demote, skip', () => {
-    for (const r of ['member', 'editor', 'elder', 'admin', 'super_admin']) {
+    for (const r of ['member', 'editor', 'elder', 'admin', 'super_admin', 'pastoral_assistant']) {
         assert.strictEqual(shouldPromoteToMember(r), false, r);
     }
 });

@@ -147,7 +147,7 @@ describe('directory details an assistant may change', () => {
         assert.equal(db.store.people['person-sarah'].name, 'Sarah Chen');
     });
 
-    test('a Pastoral Assistant may set a phone and may not set sex', async () => {
+    test('a Pastoral Assistant may set a phone and sex, the same as an editor', async () => {
         const db = dbWithSarah();
         const result = await Writes.updatePersonDetails(db, {
             personId: 'person-sarah',
@@ -158,21 +158,20 @@ describe('directory details an assistant may change', () => {
             account: PA,
         });
         assert.equal(result.ok, true);
-        assert.deepEqual(result.updated, ['phone']);
-        assert.deepEqual(result.refused.map((r) => r.field).sort(), ['kid', 'sex']);
-        assert.equal(db.store.people['person-sarah'].sex, 'female');
-        assert.equal(db.store.people['person-sarah'].kid, undefined);
-        assert.match(result.refused[0].why, /editor/);
+        assert.deepEqual(result.updated.sort(), ['kid', 'phone', 'sex']);
+        assert.deepEqual(result.refused, []);
+        assert.equal(db.store.people['person-sarah'].sex, 'male');
+        assert.equal(db.store.people['person-sarah'].kid, true);
     });
 
-    test('sex alone, from a Pastoral Assistant, writes nothing', async () => {
+    test('sex alone, from a Pastoral Assistant, is an editorial write', async () => {
         const db = dbWithSarah();
         const result = await Writes.updatePersonDetails(db, {
             personId: 'person-sarah', sex: 'male', actor: ACTOR, account: PA,
         });
-        assert.equal(result.ok, false);
-        assert.equal(db.store.people['person-sarah'].updatedByName, undefined);
-        assert.equal(db.store.people['person-sarah'].sex, 'female');
+        assert.equal(result.ok, true);
+        assert.deepEqual(result.updated, ['sex']);
+        assert.equal(db.store.people['person-sarah'].sex, 'male');
     });
 
     test('an editor may set sex and the kid mark', async () => {

@@ -59,10 +59,13 @@ test('isElderUser is true only for the elder role', () => {
     assert.strictEqual(Core.isElderUser(undefined), false);
 });
 
-test('a Pastoral Assistant grant does not project the Elder Tag', () => {
+test('a Pastoral Assistant does not project the Elder Tag', () => {
     const pa = {permissionLevel: 'member', pastoralAssistant: true};
     assert.strictEqual(Core.isElderUser(pa), false);
     assert.deepStrictEqual(Core.applyElderTag(['Member'], Core.isElderUser(pa)), ['Member']);
+    const role = {permissionLevel: 'pastoral_assistant'};
+    assert.strictEqual(Core.isElderUser(role), false);
+    assert.deepStrictEqual(Core.applyElderTag(['Member', 'Elder'], Core.isElderUser(role)), ['Member']);
 });
 
 // ── applyElderTag — the pure projection ─────────────────────────────────────

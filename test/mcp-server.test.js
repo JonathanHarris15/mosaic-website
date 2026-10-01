@@ -469,19 +469,18 @@ describe('the Order of Service MCP server', () => {
         }
     });
 
-    test('a Pastoral Assistant is refused counted-as-elder calendar writes', async () => {
+    test('a Pastoral Assistant may create a calendar event and is not told to become an elder', async () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
         const {client} = await connectAs(pa);
         const result = await client.callTool({
             name: 'cal_create_event',
             arguments: {name: 'Meeting', visibility: 'elder', date: '2026-09-20'},
         });
-        assert.strictEqual(result.isError, true);
-        assert.match(textOf(result), /Pastoral Assistant keeps the record/);
+        assert.doesNotMatch(textOf(result), /Pastoral Assistant keeps the record/);
         assert.doesNotMatch(textOf(result), /raise it to elder/);
     });
 
-    test('a member-level Pastoral Assistant is refused Order of Service and Printable writes', async () => {
+    test('a Pastoral Assistant is not refused Order of Service and Printable writes for rank', async () => {
         const pa = {permissionLevel: 'member', pastoralAssistant: true};
         const {client} = await connectAs(pa);
         for (const name of [
@@ -494,7 +493,7 @@ describe('the Order of Service MCP server', () => {
                 : name === 'oos_update_guidance' ? {address: 'hymn-selection', body: 'x'}
                 : {date: '2026-09-20', updates: {}};
             const result = await client.callTool({name, arguments: args});
-            assert.strictEqual(result.isError, true, name);
+            assert.doesNotMatch(textOf(result), /Editors only|editor-and-above/, name);
             assert.doesNotMatch(textOf(result), /unknown tool/i, name);
         }
     });

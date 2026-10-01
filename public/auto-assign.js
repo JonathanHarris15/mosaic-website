@@ -38,7 +38,7 @@
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
-    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin'];
+    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'];
 
     // Four, eight and twelve occurrences — a month, half a term, a term. Named
     // in OCCURRENCES rather than weeks, because a fortnightly Event's twelve is

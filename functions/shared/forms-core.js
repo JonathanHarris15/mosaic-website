@@ -562,11 +562,14 @@
 
     function mayShutToElders(rank) {
         const Access = access();
-        if (Access) return Access.isAnElder(rank);
+        // Shutting a form to elders is an elder's permission. A Pastoral
+        // Assistant holds that permission and is still not counted as an elder.
+        if (Access) return Access.canDecide(rank);
         const level = rank && typeof rank === 'object'
             ? (rank.permissionLevel || rank.role || '')
             : rank;
-        return ELDER_RANKS.indexOf(String(level || '')) !== -1;
+        return ELDER_RANKS.indexOf(String(level || '')) !== -1
+            || level === 'pastoral_assistant';
     }
 
     function isElderOnly(form) {
@@ -578,7 +581,7 @@
         if (mayShutToElders(rank)) {
             return {
                 available: true,
-                why: 'Only elders and super admins can open this form, change it, or read what it collects.',
+                why: 'Only an elder, a pastoral assistant, or a super admin can open this form, change it, or read what it collects.',
             };
         }
         return {

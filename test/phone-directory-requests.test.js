@@ -68,8 +68,8 @@ const family = {
     createdAt: { seconds: 40 },
 };
 
-test('a member and a Pastoral Assistant are not offered the queue or the disconnect', () => {
-    for (const user of [member, assistant, null, { permissionLevel: 'viewer' }]) {
+test('a member is not offered the queue or the disconnect; a Pastoral Assistant is', () => {
+    for (const user of [member, null, { permissionLevel: 'viewer' }]) {
         assert.equal(Plan.offerQueue(user, false), false);
         assert.equal(Plan.offerQueue(user, true), false);
         assert.equal(Plan.offerAccount(user, true, { userId: 'acct' }), false);
@@ -77,7 +77,7 @@ test('a member and a Pastoral Assistant are not offered the queue or the disconn
 });
 
 test('an editor is offered the queue with Edit Mode off, and the disconnect only in Edit Mode when the person has a login', () => {
-    for (const user of [editor, admin, elder, superAdmin]) {
+    for (const user of [editor, admin, elder, superAdmin, assistant, { permissionLevel: 'pastoral_assistant' }]) {
         assert.equal(Plan.offerQueue(user, false), true);
         assert.equal(Plan.offerQueue(user, true), true);
         assert.equal(Plan.showQueue(user, false, [connect]), true);

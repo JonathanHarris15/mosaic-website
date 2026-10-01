@@ -54,7 +54,7 @@
     async function fetch(db, needs, viewer) {
         const n = needs || {};
         const v = viewer || {};
-        const isEditor = ['editor', 'admin', 'elder', 'super_admin'].includes(v.level);
+        const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
         const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [], printedEventsBySunday: {} };
         const jobs = [];
 
@@ -136,7 +136,7 @@
     // forms.
     async function loadOptions(db, viewer) {
         const v = viewer || {};
-        const isEditor = ['editor', 'admin', 'elder', 'super_admin'].includes(v.level);
+        const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
         const ES = global.EventsStore;
         const [series, roles, forms] = await Promise.all([
             ES ? safely(ES.loadVisibleSeries(db, { rank: v.level || null, personId: v.personId || null }), []) : [],

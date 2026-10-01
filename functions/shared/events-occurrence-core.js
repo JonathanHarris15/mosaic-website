@@ -112,6 +112,7 @@
         admin: ['public', 'member', 'participant', 'editor'],
         elder: ['public', 'member', 'participant', 'editor', 'elder'],
         super_admin: ['public', 'member', 'participant', 'editor', 'elder'],
+        pastoral_assistant: ['public', 'member', 'participant', 'editor', 'elder'],
     });
 
     function access() {

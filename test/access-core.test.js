@@ -8,7 +8,7 @@ const Access = require('../public/access-core.js');
 // answers. Written first; the module fills the table in.
 
 const LEVELS = [
-    'viewer', 'member', 'editor', 'elder', 'admin', 'super_admin', 'kiosk',
+    'viewer', 'member', 'editor', 'pastoral_assistant', 'elder', 'admin', 'super_admin', 'kiosk',
 ];
 
 const ALL_RUNGS = ['public', 'member', 'participant', 'editor', 'elder'];
@@ -28,6 +28,11 @@ const TODAY = {
         readsAsElder: false, readsAsEditor: true, writesTheRecord: false,
         canDecide: false, isAnElder: false, writesAsEditor: true,
         rungs: ['public', 'member', 'participant', 'editor'], liftsHidden: false,
+    },
+    pastoral_assistant: {
+        readsAsElder: true, readsAsEditor: true, writesTheRecord: true,
+        canDecide: true, isAnElder: false, writesAsEditor: true,
+        rungs: ALL_RUNGS, liftsHidden: true,
     },
     elder: {
         readsAsElder: true, readsAsEditor: true, writesTheRecord: true,
@@ -108,25 +113,35 @@ test('every Permission Level with the grant reads as elder and editor and writes
             writesTheRecord: true,
             canDecide: true,
             isAnElder: today.isAnElder,
-            writesAsEditor: today.writesAsEditor,
+            writesAsEditor: true,
             rungs: ALL_RUNGS,
             liftsHidden: true,
         }, ask(acc), level + ' + grant');
         assert.equal(Access.isPastoralAssistant(acc), true, level + ' isPastoralAssistant');
-        assert.equal(Access.badgeLabel(acc), 'Pastoral Assistant');
+        const expectedBadge = level === 'pastoral_assistant' ? '' : 'Pastoral Assistant';
+        assert.equal(Access.badgeLabel(acc), expectedBadge, level + ' badge');
     });
 });
 
-test('a member-level Pastoral Assistant reads as elder and editor, writes the record, is not an elder, and does not write as editor', () => {
+test('a member-level Pastoral Assistant has an elder\'s access, including editorial writes, and is not an elder', () => {
     const acc = account('member', true);
     assert.equal(Access.readsAsElder(acc), true);
     assert.equal(Access.readsAsEditor(acc), true);
     assert.equal(Access.writesTheRecord(acc), true);
     assert.equal(Access.canDecide(acc), true);
     assert.equal(Access.isAnElder(acc), false);
-    assert.equal(Access.writesAsEditor(acc), false);
+    assert.equal(Access.writesAsEditor(acc), true);
     assert.deepEqual(Access.eventRungsFor(acc), ALL_RUNGS);
     assert.equal(Access.liftsHidden(acc), true);
+});
+
+test('the pastoral_assistant Permission Level is an elder for access and not an elder', () => {
+    const acc = account('pastoral_assistant', false);
+    answers(TODAY.pastoral_assistant, ask(acc), 'pastoral_assistant');
+    assert.equal(Access.isPastoralAssistant(acc), true);
+    assert.equal(Access.isPastoralAssistant('pastoral_assistant'), true);
+    assert.equal(Access.badgeLabel(acc), '');
+    assert.equal(Access.isAnElder(acc), false);
 });
 
 test('an editor with the grant still writes as editor', () => {
@@ -159,10 +174,11 @@ test('the legacy role field is the Permission Level fallback', () => {
     assert.equal(Access.permissionLevelOf({ permissionLevel: 'editor', role: 'viewer' }), 'editor');
 });
 
-test('the badge label is empty unless the grant is on', () => {
+test('the badge label is the old flag on another level, not the role itself', () => {
     assert.equal(Access.badgeLabel(account('elder', false)), '');
     assert.equal(Access.badgeLabel(account('member', false)), '');
     assert.equal(Access.badgeLabel(account('member', true)), 'Pastoral Assistant');
+    assert.equal(Access.badgeLabel(account('pastoral_assistant', false)), '');
     assert.equal(Access.PASTORAL_ASSISTANT_LABEL, 'Pastoral Assistant');
 });
 
@@ -176,7 +192,7 @@ test('the existing shared cores keep today\'s answers for a string rank', () => 
     LEVELS.forEach(level => {
         assert.deepEqual(Events.rungsFor(level), TODAY[level].rungs, 'events rungsFor ' + level);
         assert.equal(Roles.seesHidden(level), TODAY[level].liftsHidden, 'roles seesHidden ' + level);
-        assert.equal(Forms.mayShutToElders(level), TODAY[level].isAnElder, 'forms mayShutToElders ' + level);
+        assert.equal(Forms.mayShutToElders(level), TODAY[level].canDecide, 'forms mayShutToElders ' + level);
         assert.equal(Directory.canResolve(level), TODAY[level].writesAsEditor, 'directory canResolve ' + level);
     });
 
@@ -196,14 +212,14 @@ test('the existing shared cores honour the grant when handed an account', () => 
     const memberPa = account('member', true);
     assert.deepEqual(Events.rungsFor(memberPa), ALL_RUNGS);
     assert.equal(Roles.seesHidden(memberPa), true);
-    assert.equal(Forms.mayShutToElders(memberPa), false);
-    assert.equal(Directory.canResolve(memberPa), false);
+    assert.equal(Forms.mayShutToElders(memberPa), true);
+    assert.equal(Directory.canResolve(memberPa), true);
     assert.equal(Printable.mayRead(memberPa, 'editor'), true);
     assert.equal(Printable.mayRead(memberPa, 'elder'), true);
     assert.equal(Printable.mayRead(memberPa, 'super_admin'), false);
 
     const editorPa = account('editor', true);
-    assert.equal(Forms.mayShutToElders(editorPa), false);
+    assert.equal(Forms.mayShutToElders(editorPa), true);
     assert.equal(Directory.canResolve(editorPa), true);
     assert.equal(Printable.mayRead(editorPa, 'editor'), true);
 });
@@ -214,7 +230,7 @@ test('pageFlags is the one object a surface stores after reading the account', (
     assert.equal(flags.canReadEditor, true);
     assert.equal(flags.canWriteRecord, true);
     assert.equal(flags.canDecide, true);
-    assert.equal(flags.canWriteEditor, false);
+    assert.equal(flags.canWriteEditor, true);
     assert.equal(flags.pastoralAssistant, true);
     assert.equal(flags.currentPermissionLevel, 'member');
 });

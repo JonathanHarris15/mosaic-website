@@ -67,12 +67,18 @@ test('a missing account is unauthenticated', async () => {
     );
 });
 
-test('reachability is a directory-editor write', async () => {
+test('reachability is a directory-editor write, and a Pastoral Assistant has it', async () => {
     const editor = fakeDb({'uid-1': {permissionLevel: 'editor'}});
     await assertWritesAsEditor(editor, {uid: 'uid-1'});
+    await assertWritesAsEditor(
+        fakeDb({'uid-1': {permissionLevel: 'pastoral_assistant'}}),
+        {uid: 'uid-1'});
+    await assertWritesAsEditor(
+        fakeDb({'uid-1': {permissionLevel: 'member', pastoralAssistant: true}}),
+        {uid: 'uid-1'});
     await assert.rejects(
         () => assertWritesAsEditor(
-            fakeDb({'uid-1': {permissionLevel: 'member', pastoralAssistant: true}}),
+            fakeDb({'uid-1': {permissionLevel: 'member'}}),
             {uid: 'uid-1'}),
         (err) => err && err.code === 'permission-denied'
     );

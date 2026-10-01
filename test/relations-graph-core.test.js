@@ -24,6 +24,15 @@ const relationships = [{ id: 'r1', fromId: 'e', toId: 'm', typeId: 't1' }];
 
 function edgeKey(e) { return [e.a, e.b].sort().join('~') + ':' + e.type; }
 
+test('a person without the Elder tag is not an elder node on the Relations Viewer', () => {
+    const g = Graph.buildGraph({
+        people: [{ id: 'pa', name: 'Pat Assistant', tags: ['Member'], membership: { stage: 'member' } }],
+    });
+    assert.strictEqual(g.nodes[0].elder, false);
+    assert.strictEqual(Graph.isElderNode({ id: 'pa', tags: ['Member'] }), false);
+    assert.strictEqual(Elder.isElderPermissionLevel('pastoral_assistant'), false);
+});
+
 test('buildGraph makes one node per Person with derived stage/inactive/elder', () => {
     const g = Graph.buildGraph({ people, families, relationships, relationshipTypes });
     assert.strictEqual(g.nodes.length, 6);

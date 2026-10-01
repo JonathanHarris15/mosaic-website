@@ -412,7 +412,7 @@
     // `hidePeople: true`. Elders and super admins are who those tags hide people
     // FROM everyone else for, so they still see them. A Pastoral Assistant
     // reads as an elder, so they see them too (MS-426).
-    const SEES_HIDDEN = Object.freeze(['elder', 'super_admin']);
+    const SEES_HIDDEN = Object.freeze(['elder', 'super_admin', 'pastoral_assistant']);
 
     function access() {
         if (typeof AccessCore !== 'undefined') return AccessCore;

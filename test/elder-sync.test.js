@@ -8,12 +8,13 @@ const Elder = require('../functions/elder-sync.js');
 // these are the rules it wraps. Sibling of functions/member-sync.js, but the
 // Elder Tag syncs BOTH ways (add and remove) because it is a Projected Tag.
 
-test('a Pastoral Assistant grant is not an elder Permission Level and never projects the Elder Tag', () => {
-    // The tag still reads only the `elder` level (MS-426). A member holding
-    // the grant is a secretary, not an officer.
+test('a Pastoral Assistant is not an elder Permission Level and never projects the Elder Tag', () => {
+    assert.strictEqual(Elder.isElderPermissionLevel('pastoral_assistant'), false);
+    assert.strictEqual(Elder.shouldAddElderTag('pastoral_assistant', []), false);
+    assert.strictEqual(Elder.shouldAddElderTag('pastoral_assistant', ['Member']), false);
+    assert.strictEqual(Elder.shouldRemoveElderTag('pastoral_assistant', ['Elder']), true);
     assert.strictEqual(Elder.isElderPermissionLevel('member'), false);
     assert.strictEqual(Elder.shouldAddElderTag('member', []), false);
-    assert.strictEqual(Elder.shouldAddElderTag('member', ['Member']), false);
     assert.strictEqual(Elder.shouldAddElderTag('editor', []), false);
 });
 

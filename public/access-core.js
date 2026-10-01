@@ -1,26 +1,21 @@
 // Access Core — who may read as an elder, write the record, decide in
-// software, or count as an elder (MS-426, ADR-0065, MS-594).
+// software, write as an editor, or count as an elder (ADR-0076).
 //
-// Pastoral Assistant is a boolean grant on the User account
-// (`users.pastoralAssistant`), stacked on Permission Level, not a new level.
-// Every surface that used to ask its own rank list asks here instead, so a
-// grant cannot be remembered in one place and forgotten in another.
-//
-// Five questions, from `permissionLevel` (legacy `role` fallback) plus the
-// grant:
+// Pastoral Assistant is a Permission Level (`pastoral_assistant`), chosen
+// the same way as editor, elder, admin, and super admin. It is not a
+// checkbox. A leftover `users.pastoralAssistant` flag still counts, so an
+// account granted the old way keeps the doors until an admin sets the role.
 //
 //   reads as elder     — elder / super admin, or Pastoral Assistant
 //   reads as editor    — the editor ladder, or Pastoral Assistant
+//   writes as editor   — the editor ladder, or Pastoral Assistant
+//                        (the same editorial permissions an elder has)
 //   writes the record  — elder / super admin, or Pastoral Assistant
-//                        (Elder Documents, Folders, Shepherding Notes, Tasks)
 //   can decide         — elder / super admin, or Pastoral Assistant
-//                        (shepherding decision/write actions in software;
-//                        MS-594 overrides the MS-426 denial)
 //   is an elder        — elder / super admin only (counted as an elder:
-//                        Elder Tag, pickers, Elder Digest)
+//                        Elder Tag, pickers, Elder Digest, Relations Viewer)
 //
-// writes as editor stays the existing editor ladder; the grant adds nothing
-// to it. Event visibility rungs and hidden-tag lifting follow reads-as-elder.
+// Event visibility rungs and hidden-tag lifting follow reads-as-elder.
 //
 // Loaded as a classic <script> (window.AccessCore) and exported for Node.
 // Firestore / Storage cannot import this file; they restate the helpers and
@@ -29,10 +24,11 @@
 (function (global) {
     'use strict';
 
+    const PASTORAL_ASSISTANT_LEVEL = 'pastoral_assistant';
     const PASTORAL_ASSISTANT_LABEL = 'Pastoral Assistant';
 
     const EDITOR_WRITE_LEVELS = Object.freeze([
-        'editor', 'admin', 'elder', 'super_admin',
+        'editor', 'admin', 'elder', 'super_admin', PASTORAL_ASSISTANT_LEVEL,
     ]);
 
     const ELDER_LEVELS = Object.freeze(['elder', 'super_admin']);
@@ -52,6 +48,7 @@
         admin: ['public', 'member', 'participant', 'editor'],
         elder: ['public', 'member', 'participant', 'editor', 'elder'],
         super_admin: ['public', 'member', 'participant', 'editor', 'elder'],
+        pastoral_assistant: ['public', 'member', 'participant', 'editor', 'elder'],
     });
 
     function accountOf(value) {
@@ -70,7 +67,9 @@
     }
 
     function isPastoralAssistant(value) {
-        return accountOf(value).pastoralAssistant === true;
+        const account = accountOf(value);
+        return account.permissionLevel === PASTORAL_ASSISTANT_LEVEL
+            || account.pastoralAssistant === true;
     }
 
     function isAnElder(value) {
@@ -78,7 +77,8 @@
     }
 
     function writesAsEditor(value) {
-        return EDITOR_WRITE_LEVELS.indexOf(permissionLevelOf(value)) !== -1;
+        return EDITOR_WRITE_LEVELS.indexOf(permissionLevelOf(value)) !== -1
+            || isPastoralAssistant(value);
     }
 
     function readsAsElder(value) {
@@ -109,8 +109,12 @@
         return readsAsElder(value);
     }
 
+    // The role's own name is Pastoral Assistant. The badge is only for an
+    // account that still carries the old flag on some other level.
     function badgeLabel(value) {
-        return isPastoralAssistant(value) ? PASTORAL_ASSISTANT_LABEL : '';
+        const account = accountOf(value);
+        if (account.permissionLevel === PASTORAL_ASSISTANT_LEVEL) return '';
+        return account.pastoralAssistant === true ? PASTORAL_ASSISTANT_LABEL : '';
     }
 
     // What a page stores after reading users/{uid}. One object so sixty
@@ -130,6 +134,7 @@
     }
 
     const AccessCore = {
+        PASTORAL_ASSISTANT_LEVEL,
         PASTORAL_ASSISTANT_LABEL,
         EDITOR_WRITE_LEVELS,
         ELDER_LEVELS,

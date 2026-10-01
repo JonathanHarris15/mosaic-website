@@ -456,7 +456,8 @@ test('Merge is offered in Edit Mode to an editor, admin, elder, or super admin, 
         assert.equal(Merge.offerMerge(user, true), true, user.permissionLevel);
     }
     assert.equal(Merge.offerMerge(member, true), false);
-    assert.equal(Merge.offerMerge(assistant, true), false);
+    assert.equal(Merge.offerMerge(assistant, true), true);
+    assert.equal(Merge.offerMerge({ permissionLevel: 'pastoral_assistant' }, true), true);
     assert.equal(Merge.offerMerge(editor, false), false);
     assert.equal(Merge.offerMerge(null, true), false);
 });

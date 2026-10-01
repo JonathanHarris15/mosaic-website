@@ -93,7 +93,7 @@ const CARD_HTML =
 
 describe('the rank an assistant must hold to lay out a page', () => {
     test('an editor and everyone above may build a Printable', () => {
-        ['editor', 'admin', 'elder', 'super_admin'].forEach((level) => {
+        ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].forEach((level) => {
             assert.strictEqual(Actor.isEditor(level), true, level);
         });
     });
@@ -109,7 +109,7 @@ describe('the rank an assistant must hold to lay out a page', () => {
     test('the levels match isEditor() in firestore.rules exactly', () => {
         assert.deepStrictEqual(
             Actor.EDITOR_LEVELS.slice().sort(),
-            ['admin', 'editor', 'elder', 'super_admin'],
+            ['admin', 'editor', 'elder', 'pastoral_assistant', 'super_admin'],
         );
     });
 

@@ -66,7 +66,12 @@ function formPage() {
         // admin and nobody else — an editor who could set it could clear it
         // again, which is the same as not having it. The rules are what
         // actually refuse; this decides whether the switch is drawn.
-        get elderOnlySetting() { return FormsCore.elderOnlyFor(this.currentPermissionLevel); },
+        get elderOnlySetting() {
+            return FormsCore.elderOnlyFor({
+                permissionLevel: this.currentPermissionLevel,
+                pastoralAssistant: this.pastoralAssistant,
+            });
+        },
 
         // A personal shepherding document (MS-405): an interview ABOUT
         // somebody, filed on their Shepherding Profile. Its first question is
