@@ -111,26 +111,37 @@
             align-content: stretch;
         }
 
-        /* A place card. The name is Cinzel and large. A short row stays the
-           height of its type; a longer set of cards fills the window and
-           scrolls inside the grid, so three tiles never become blank posters. */
+        /* A place card. The name is Cinzel. It wraps inside the card, at a
+           space, and it must not widen the row: a grid item's min-width is
+           the width of its longest word, and "Registrations" at display size
+           is wider than a third of this pane. The size is a fraction of the
+           card, capped so the longest word still fits. */
+        .dash-tiles { min-width: 0; overflow-x: hidden; }
         .dash-tiles > .m-nav-card {
             align-items: flex-start;
             justify-content: flex-start;
             text-align: left;
             gap: var(--space-md);
+            min-width: 0;
             min-height: 0;
             padding: var(--space-lg);
             border-top: 3px solid var(--primary);
+            container-type: inline-size;
         }
         .dash-tiles > .m-nav-card .m-medallion { margin-bottom: 0; }
-        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; min-width: 0; }
         .dash-tiles > .m-nav-card .m-nav-card__title {
             font-family: var(--font-display);
-            font-size: clamp(32px, 3vw, 44px);
-            line-height: 1.05;
+            /* 13cqi of the card's text box. "Registrations" is the longest
+               word, and at this fraction it stays inside the card from a
+               1024px window up. The floor is the size that still fits there. */
+            font-size: clamp(18px, 13cqi, 28px);
+            line-height: 1.15;
             color: var(--primary);
-            text-wrap: balance;
+            max-width: 100%;
+            overflow-wrap: normal;
+            word-break: normal;
+            text-wrap: pretty;
         }
         .dash-tiles > .m-nav-card .m-nav-card__desc {
             display: block;
