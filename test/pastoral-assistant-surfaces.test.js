@@ -15,7 +15,7 @@ const SHEPHERD_JS = [
     'shepherding-documents.js',
     'shepherding-document.js',
     'shepherding-care-list.js',
-    'shepherding-tags.js',
+    'shepherding-families.js',
     'shepherding-tasks.js',
     'analytics.js',
     'peoples-page.js',

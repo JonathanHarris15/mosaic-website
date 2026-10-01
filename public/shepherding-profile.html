@@ -389,9 +389,9 @@
 
                     <!-- ── Quick-assign (MS-104, ADR-0014) ────────────────────────
                          This card APPLIES vocabulary; it never creates it. A new
-                         Relationship Type or named group is made in Manage Tags and
-                         Relationships, and only there. Family lives on the Household
-                         card above (MS-709). -->
+                         Relationship Type or named group is made on the Relations
+                         viewer, under Relationships, and only there. Families are
+                         the Families tab on that same viewer (MS-709). -->
                     <div x-show="!qaMode" class="grid grid-cols-2 gap-xs pt-sm border-t border-outline-variant">
                         <button @click="qaOpen('pairwise')"
                                 class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
@@ -416,7 +416,7 @@
                         </select>
 
                         <p x-show="qaPairwiseTypes.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
-                            No relationship types defined yet. Create one in Manage Tags and Relationships.
+                            No relationship types defined yet. Create one on the Relations viewer, under Relationships.
                         </p>
 
                         <!-- Which side does THIS Person hold? Only a Prioritized type has sides. -->
@@ -460,7 +460,7 @@
                         </select>
 
                         <p x-show="qaJoinableGroups.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
-                            No groups left to join. New groups are created in Manage Tags and Relationships.
+                            No groups left to join. New groups are created on the Relations viewer, under Relationships.
                         </p>
 
                         <!-- The leader seat is only offered on a Prioritized group that has none. -->

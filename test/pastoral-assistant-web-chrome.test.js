@@ -88,8 +88,8 @@ test('inline triggers stay silent when canDecide is false', () => {
 
 // ── MS-571 — tags / dashboard / relations / service-builder ────────────────
 
-test('the tags page hides create / rename / merge / delete / hide unless canDecide', () => {
-    const html = read('shepherding-tags.html');
+test('the People side panel hides create / rename / merge / delete / hide unless canDecide', () => {
+    const html = read('shepherding-people.html');
     const create = between(html, '<!-- Create new tag', '<!-- Tag list');
     assert.match(create, /x-show="canDecide"/);
     assert.match(html, /x-show="canDecide && !tag\.locked"/);
@@ -182,7 +182,7 @@ test('the profile Membership Track is canDecide || canEditMembership', () => {
 });
 
 test('the Relationships tab hides type New / Edit / Delete unless canDecide', () => {
-    const html = read('shepherding-tags.html');
+    const html = read('relations-viewer.html');
     const types = between(html, '<!-- ═══ LEFT: the vocabulary', '<!-- kind + priority');
     assert.match(types, /startNewType\(\)/);
     assert.match(types, /x-show="canDecide"/);

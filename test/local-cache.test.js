@@ -212,10 +212,11 @@ test('every read that decides a write asks the server', () => {
 });
 
 test('FRESH_READ is declared with var, because these pages share a global scope', () => {
-    // shepherding-tags.html loads shepherding-tags.js AND
-    // shepherding-relationships.js, neither of which is wrapped in a function.
-    // Two `const FRESH_READ` declarations in that shared scope is not a subtle
-    // bug — it is a SyntaxError that stops the whole page dead.
+    // The tag manager and the Relationships tab each declare FRESH_READ at
+    // global scope, and neither file is wrapped in a function. Two `const`
+    // declarations in one page is a SyntaxError that stops the page dead.
+    // They live on different pages now; the declaration stays `var` so putting
+    // them back on one page cannot throw.
     for (const file of ['shepherding-tags.js', 'shepherding-relationships.js']) {
         assert.ok(!/(const|let) FRESH_READ/.test(read(file)),
             `${file}: a block-scoped FRESH_READ collides with the other script on the page`);

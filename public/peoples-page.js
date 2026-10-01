@@ -336,7 +336,7 @@ document.addEventListener('alpine:init', () => {
                 toast: (message, kind) => this.showToast(message, kind),
                 headingLevel: 3,
                 treeHref: this.canReadElder
-                    ? id => 'shepherding-tags.html?tab=families&household=' + encodeURIComponent(id)
+                    ? id => 'relations-viewer.html?tab=families&household=' + encodeURIComponent(id)
                     : null,
                 treeNewTab: true,
             });
