@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shepherd — three directions</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        .arena-nav {
+            position: sticky; top: 0; z-index: 30;
+            display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+            padding: 12px var(--space-margin);
+            background: var(--surface-container);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .arena-nav a {
+            font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+            color: var(--primary); text-decoration: none;
+        }
+        .arena-nav a:hover { text-decoration: underline; }
+        .intro, .cap, .states {
+            max-width: 1100px; margin: 0 auto;
+            padding-left: var(--space-margin); padding-right: var(--space-margin);
+        }
+        .intro { padding-top: var(--space-lg); padding-bottom: var(--space-md); }
+        .intro h1 {
+            margin: 0 0 8px;
+            font-family: var(--font-serif); font-size: 36px; font-weight: 500;
+            color: var(--on-surface); text-wrap: balance;
+        }
+        .intro p { margin: 0; max-width: 62ch; font-size: 16px; line-height: 1.5; color: var(--on-surface-variant); text-wrap: pretty; }
+        .variant { scroll-margin-top: 64px; border-top: 1px solid var(--outline-variant); padding-top: var(--space-lg); }
+        .cap h2 {
+            margin: 0;
+            font-family: var(--font-display); font-size: 22px; font-weight: 600;
+            color: var(--primary); text-wrap: balance;
+        }
+        .cap p { margin: 6px 0 0; max-width: 68ch; font-size: 15px; line-height: 1.5; color: var(--on-surface-variant); text-wrap: pretty; }
+        .cap a { color: var(--primary); }
+        .sheet {
+            max-width: 1100px; margin: var(--space-md) auto var(--space-lg);
+            background: var(--background);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .sheet .m-header { background: var(--surface-container-lowest); }
+        .sheet .m-page__body { padding-top: var(--space-sm); padding-bottom: var(--space-lg); gap: var(--space-sm); }
+        a.m-row, a.rail__link, a.tools a { text-decoration: none; color: inherit; }
+        .m-row__main { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+        .m-row__title, .m-row__sub, .m-person__name { display: block; white-space: normal; }
+        a:focus-visible, button:focus-visible, input:focus-visible {
+            outline: 2px solid var(--primary); outline-offset: 2px;
+        }
+        label.task { cursor: pointer; }
+        label.task input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--primary); }
+
+        /* A — the work first. Tools are a line of words. */
+        .tools {
+            display: flex; flex-wrap: wrap; gap: 6px 18px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--outline-variant);
+        }
+        .tools a {
+            font-size: 14px; font-weight: 600; color: var(--primary);
+        }
+        .tools a:hover { text-decoration: underline; }
+        .block-label {
+            margin: var(--space-md) 0 8px;
+            display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+            font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--primary);
+        }
+        .block-label span { font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--on-surface-variant); }
+
+        /* B — a warm rail, then the people. */
+        .desk { display: grid; grid-template-columns: 232px 1fr; min-height: 520px; }
+        .rail {
+            background: var(--surface-container);
+            border-right: 1px solid var(--outline-variant);
+            padding: var(--space-md) var(--space-sm);
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .rail__link {
+            display: flex; align-items: center; gap: 10px;
+            min-height: 40px; padding: 6px 10px; border-radius: var(--radius);
+            font-size: 15px; font-weight: 600; color: var(--on-surface);
+        }
+        .rail__link:hover, .rail__link[aria-current="page"] { background: var(--surface-container-lowest); color: var(--primary); }
+        .rail__link .material-symbols-outlined { font-size: 20px; color: var(--primary); }
+        .rail__foot { margin-top: auto; padding-top: var(--space-md); }
+        .rail__foot p {
+            margin: 0 0 8px; font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--primary);
+        }
+        .rail__foot li {
+            margin: 0; padding: 6px 0; border-top: 1px solid var(--outline-variant);
+            font-size: 13px; line-height: 1.35; color: var(--on-surface); list-style: none;
+        }
+        .rail__foot ul { margin: 0; padding: 0; }
+        .who { padding: var(--space-md) var(--space-md) var(--space-lg); }
+        .who h3 {
+            margin: 0 0 4px;
+            font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--primary);
+        }
+        .who > p { margin: 0 0 12px; font-size: 14px; color: var(--on-surface-variant); }
+
+        /* C — three columns of work. Tools are header actions. */
+        .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); align-items: start; }
+        .col h3 {
+            margin: 0 0 8px;
+            font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--primary);
+        }
+        .col .m-card-list { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+
+        .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-md); padding-bottom: 48px; }
+        .state {
+            background: var(--background);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-md); min-width: 0;
+        }
+        .state h3 {
+            margin: 0 0 10px; font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+            color: var(--on-surface-variant);
+        }
+        .mini-name {
+            margin: 0 0 4px; font-family: var(--font-serif); font-size: 22px; font-weight: 500; color: var(--on-surface);
+        }
+        .mini-line { margin: 0; font-size: 14px; line-height: 1.4; color: var(--on-surface-variant); text-wrap: pretty; }
+
+        @media (max-width: 800px) {
+            .desk, .cols, .states { grid-template-columns: 1fr; }
+            .rail { border-right: 0; border-bottom: 1px solid var(--outline-variant); }
+            .rail__foot { margin-top: var(--space-md); }
+        }
+    </style>
+</head>
+<body class="m-page">
+    <nav class="arena-nav" aria-label="Variants">
+        <a href="home-dashboard-arena.html">Home</a>
+        <a href="#a">A · The agenda</a>
+        <a href="#b">B · Who needs you</a>
+        <a href="#c">C · Three columns</a>
+    </nav>
+
+    <header class="intro">
+        <h1>Shepherd, three ways</h1>
+        <p>Same church, a denser desk than home. The five equal cards are gone. Pick a letter, and say what to pull from the other two. None of this is on the site yet. Names are fictional.</p>
+    </header>
+
+    <!-- A -->
+    <section class="variant" id="a">
+        <div class="cap">
+            <h2>A · The agenda</h2>
+            <p>From <a href="https://mobbin.com/screens/7823758d-1e86-436c-b4f1-e88b55099117">Charma</a>: what is still to do comes first, then the people that view is about. Documents, tags, and the graph are a line of words, not a second dashboard. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="home-dashboard-arena.html">
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                            <span class="m-back__label">Home</span>
+                        </a>
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Shepherd</p>
+                        </div>
+                    </div>
+                    <div class="m-header__actions">
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm">New view</button>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <nav class="tools" aria-label="Shepherd tools">
+                    <a href="#a">Documents</a>
+                    <a href="#a">People</a>
+                    <a href="#a">Tags</a>
+                    <a href="#a">Tasks</a>
+                    <a href="#a">Relations</a>
+                </nav>
+                <h3 class="block-label">Still to do <span>3</span></h3>
+                <div class="m-card-list">
+                    <label class="m-row task">
+                        <input type="checkbox" name="visit-ada" />
+                        <span class="m-row__main">
+                            <span class="m-row__title">Visit Ada Lowell</span>
+                            <span class="m-row__sub">Before Sunday. No visit in six weeks.</span>
+                        </span>
+                    </label>
+                    <label class="m-row task">
+                        <input type="checkbox" name="note-sam" />
+                        <span class="m-row__main">
+                            <span class="m-row__title">Finish the note on Sam Keene</span>
+                            <span class="m-row__sub">Started Tuesday. The visit is written up to the door, not past it.</span>
+                        </span>
+                    </label>
+                    <label class="m-row task">
+                        <input type="checkbox" name="jules" />
+                        <span class="m-row__main">
+                            <span class="m-row__title">Answer Jules Hart</span>
+                            <span class="m-row__sub">Asked about the baptism class. No one has replied.</span>
+                        </span>
+                    </label>
+                </div>
+                <h3 class="block-label">Visiting this month <span>Open view</span></h3>
+                <div class="m-card-list">
+                    <a class="m-row m-row--interactive" href="#a">
+                        <span class="m-avatar" aria-hidden="true">AL</span>
+                        <span class="m-row__main">
+                            <span class="m-person__name">Ada Lowell</span>
+                            <span class="m-row__sub">Member · last note 18 August</span>
+                        </span>
+                        <span class="m-status m-status--warn">Needs a visit</span>
+                    </a>
+                    <a class="m-row m-row--interactive" href="#a">
+                        <span class="m-avatar" aria-hidden="true">SK</span>
+                        <span class="m-row__main">
+                            <span class="m-person__name">Sam Keene</span>
+                            <span class="m-row__sub">Member · note unfinished</span>
+                        </span>
+                        <span class="m-status m-status--info">Writing</span>
+                    </a>
+                    <a class="m-row m-row--interactive" href="#a">
+                        <span class="m-avatar" aria-hidden="true">JH</span>
+                        <span class="m-row__main">
+                            <span class="m-person__name">Jules Hart</span>
+                            <span class="m-row__sub">Inquirer · asked 12 September</span>
+                        </span>
+                        <span class="m-status">Waiting</span>
+                    </a>
+                </div>
+            </main>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                    <p>Nothing outstanding, and no view is open. The tools stay on the line above.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Ada Lowell</p>
+                <p class="mini-line">One task: visit her before Sunday. The open view has only her name.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">The desk did not load</span>
+                        <span class="m-notice__text">Tasks and the open view failed. Documents, people, and tags are still on the line above.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- B -->
+    <section class="variant" id="b">
+        <div class="cap">
+            <h2>B · Who needs you</h2>
+            <p>From <a href="https://mobbin.com/screens/0154da86-4bbd-44fb-a38e-455f6d0e1a22">folk</a> and <a href="https://mobbin.com/screens/d1b37b21-53ef-4518-b344-854c0bf7639e">Workable</a>: the name is the page. Tools sit in a warm rail, not a black sidebar. Three tasks live at the foot of that rail, so they never compete with the people. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="home-dashboard-arena.html">
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                            <span class="m-back__label">Home</span>
+                        </a>
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Shepherd</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div class="desk">
+                <nav class="rail" aria-label="Shepherd tools">
+                    <a class="rail__link" href="#b" aria-current="page"><span class="material-symbols-outlined" aria-hidden="true">group</span>People</a>
+                    <a class="rail__link" href="#b"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span>Documents</a>
+                    <a class="rail__link" href="#b"><span class="material-symbols-outlined" aria-hidden="true">label</span>Tags</a>
+                    <a class="rail__link" href="#b"><span class="material-symbols-outlined" aria-hidden="true">checklist</span>Tasks</a>
+                    <a class="rail__link" href="#b"><span class="material-symbols-outlined" aria-hidden="true">hub</span>Relations</a>
+                    <div class="rail__foot">
+                        <p>Still to do</p>
+                        <ul>
+                            <li>Visit Ada Lowell</li>
+                            <li>Finish Sam Keene’s note</li>
+                            <li>Answer Jules Hart</li>
+                        </ul>
+                    </div>
+                </nav>
+                <main class="who">
+                    <h3>Who needs you</h3>
+                    <p>Four people. The reason is the second line.</p>
+                    <div class="m-card-list">
+                        <a class="m-row m-row--interactive" href="#b">
+                            <span class="m-avatar" aria-hidden="true">AL</span>
+                            <span class="m-row__main">
+                                <span class="m-person__name">Ada Lowell</span>
+                                <span class="m-row__sub">No visit in six weeks. You are her elder.</span>
+                            </span>
+                        </a>
+                        <a class="m-row m-row--interactive" href="#b">
+                            <span class="m-avatar" aria-hidden="true">SK</span>
+                            <span class="m-row__main">
+                                <span class="m-person__name">Sam Keene</span>
+                                <span class="m-row__sub">Note started Tuesday, not finished.</span>
+                            </span>
+                        </a>
+                        <a class="m-row m-row--interactive" href="#b">
+                            <span class="m-avatar" aria-hidden="true">JH</span>
+                            <span class="m-row__main">
+                                <span class="m-person__name">Jules Hart</span>
+                                <span class="m-row__sub">Asked about baptism. No one has answered.</span>
+                            </span>
+                        </a>
+                        <a class="m-row m-row--interactive" href="#b">
+                            <span class="m-avatar" aria-hidden="true">RP</span>
+                            <span class="m-row__main">
+                                <span class="m-person__name">Ruth Pell</span>
+                                <span class="m-row__sub">Away until November. A card is enough.</span>
+                            </span>
+                        </a>
+                    </div>
+                </main>
+            </div>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">group</span>
+                    <p>No one is waiting. The rail is still there when you need a document or the graph.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Ada Lowell</p>
+                <p class="mini-line">No visit in six weeks. The rail’s foot has that one task and nothing else.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">People did not load</span>
+                        <span class="m-notice__text">The rail is still usable. The list of who needs you is not.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- C -->
+    <section class="variant" id="c">
+        <div class="cap">
+            <h2>C · Three columns</h2>
+            <p>From <a href="https://mobbin.com/screens/35e0efc4-d40d-4a33-86fd-5dd6330ca776">Wrike</a>: the desk is the work, split into visit, write, and your own tasks. Documents, people, tags, and the graph move into the header, so there is no card grid at all. The sheet below is the many state.</p>
+        </div>
+        <div class="sheet">
+            <header class="m-header">
+                <div class="m-header__inner">
+                    <div class="m-header__lead">
+                        <a class="m-back" href="home-dashboard-arena.html">
+                            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                            <span class="m-back__label">Home</span>
+                        </a>
+                        <div class="m-header__titles">
+                            <p class="m-header__title">Shepherd</p>
+                        </div>
+                    </div>
+                    <div class="m-header__actions">
+                        <a class="m-btn m-btn--quiet m-btn--sm" href="#c"><span class="m-btn__label">Documents</span></a>
+                        <a class="m-btn m-btn--quiet m-btn--sm" href="#c"><span class="m-btn__label">People</span></a>
+                        <a class="m-btn m-btn--quiet m-btn--sm" href="#c"><span class="m-btn__label">Tags</span></a>
+                        <a class="m-btn m-btn--quiet m-btn--sm" href="#c"><span class="m-btn__label">Relations</span></a>
+                    </div>
+                </div>
+            </header>
+            <main class="m-page__body">
+                <div class="cols">
+                    <section class="col">
+                        <h3>To visit</h3>
+                        <div class="m-card-list">
+                            <a class="m-row m-row--interactive" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-person__name">Ada Lowell</span>
+                                    <span class="m-row__sub">Before Sunday · six weeks</span>
+                                </span>
+                            </a>
+                            <a class="m-row m-row--interactive" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-person__name">Ruth Pell</span>
+                                    <span class="m-row__sub">A card, before November</span>
+                                </span>
+                            </a>
+                        </div>
+                    </section>
+                    <section class="col">
+                        <h3>To write</h3>
+                        <div class="m-card-list">
+                            <a class="m-row m-row--interactive" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-person__name">Sam Keene</span>
+                                    <span class="m-row__sub">Note started Tuesday</span>
+                                </span>
+                            </a>
+                            <a class="m-row m-row--interactive" href="#c">
+                                <span class="m-row__main">
+                                    <span class="m-person__name">Jules Hart</span>
+                                    <span class="m-row__sub">Baptism class, unanswered</span>
+                                </span>
+                            </a>
+                        </div>
+                    </section>
+                    <section class="col">
+                        <h3>Your tasks</h3>
+                        <div class="m-card-list">
+                            <label class="m-row task">
+                                <input type="checkbox" name="c-ada" />
+                                <span class="m-row__main"><span class="m-row__title">Visit Ada Lowell</span></span>
+                            </label>
+                            <label class="m-row task">
+                                <input type="checkbox" name="c-sam" />
+                                <span class="m-row__main"><span class="m-row__title">Finish Sam’s note</span></span>
+                            </label>
+                            <label class="m-row task">
+                                <input type="checkbox" name="c-jules" />
+                                <span class="m-row__main"><span class="m-row__title">Answer Jules Hart</span></span>
+                            </label>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+        <div class="states">
+            <div class="state">
+                <h3>Empty</h3>
+                <div class="m-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+                    <p>Nothing to visit, nothing to write, and no task with your name on it.</p>
+                </div>
+            </div>
+            <div class="state">
+                <h3>One</h3>
+                <p class="mini-name">Ada Lowell</p>
+                <p class="mini-line">She is the only name, under To visit. To write is empty. Your tasks has the one visit.</p>
+            </div>
+            <div class="state">
+                <h3>Could not load</h3>
+                <div class="m-notice m-notice--error" role="alert">
+                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">The three lists did not load</span>
+                        <span class="m-notice__text">Documents, people, tags, and relations are still in the header.</span>
+                    </div>
+                    <div class="m-notice__acts">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm">Try again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>
