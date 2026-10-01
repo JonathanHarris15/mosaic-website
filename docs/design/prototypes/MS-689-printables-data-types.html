@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-689 — Printables scalar inserts &amp; brand assets (prototype)</title>
+
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
+        .proto-body {
+            margin: 0;
+            background: var(--surface-container-highest);
+            color: var(--on-background);
+            font-family: var(--font-sans);
+            font-size: 14px;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: color-mix(in srgb, var(--tertiary) 24%, transparent);
+        }
+        .proto-skip {
+            position: absolute; left: var(--space-sm); top: -3rem; z-index: 100;
+            padding: var(--space-base) var(--space-sm); border-radius: var(--radius);
+            background: var(--primary); color: var(--on-primary); font-weight: 600; text-decoration: none;
+        }
+        .proto-skip:focus-visible { top: var(--space-sm); outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar__title {
+            margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size);
+            line-height: var(--headline-md-line); font-weight: var(--headline-md-weight); text-wrap: balance;
+        }
+        .proto-bar__sub { margin: 4px 0 0; color: var(--primary-fixed-dim); font-size: 13px; max-width: 72ch; }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: var(--space-base); margin-top: var(--space-sm); }
+        .proto-jump a {
+            padding: 5px 11px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 12px; font-weight: 600; text-decoration: none;
+        }
+        .proto-jump a:hover { background: var(--primary-fixed); color: var(--primary); }
+        .proto-jump a:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        @media (min-width: 900px) { .proto-main { padding-left: var(--space-md); padding-right: var(--space-md); } }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: var(--space-md); }
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: var(--headline-lg-size);
+            color: var(--primary); text-wrap: balance;
+        }
+        .proto-note { max-width: 70ch; margin: 0 0 var(--space-sm); font-size: 14px; color: var(--on-surface-variant); text-wrap: pretty; }
+        .proto-note strong { color: var(--on-surface); }
+        .proto-variant { margin-top: var(--space-md); }
+        .proto-variant > h3 {
+            margin: 0 0 var(--space-xs); font-size: var(--title-sm-size, 15px); font-weight: 700; color: var(--on-surface);
+        }
+        .proto-variant > p { margin: 0 0 var(--space-sm); font-size: 13px; color: var(--on-surface-variant); max-width: 68ch; }
+        .proto-stage {
+            background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-sm); overflow: hidden;
+        }
+        .proto-stage__row {
+            display: grid; gap: var(--space-sm); align-items: start;
+        }
+        @media (min-width: 720px) {
+            .proto-stage__row--drawer { grid-template-columns: 1fr min(320px, 42vw); }
+        }
+        .proto-canvas-mock {
+            min-height: 200px; border: 1px dashed var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container);
+            background-image: radial-gradient(var(--outline-variant) 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex; align-items: center; justify-content: center;
+            padding: var(--space-md); color: var(--on-surface-variant); font-size: 12px; text-align: center;
+        }
+        .proto-states { display: grid; gap: var(--space-sm); }
+        @media (min-width: 600px) { .proto-states { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1000px) { .proto-states { grid-template-columns: repeat(4, 1fr); } }
+        .proto-state h4 { margin: 0 0 var(--space-xs); font-size: 12px; font-weight: 700; color: var(--on-surface); }
+        .proto-ask { margin: var(--space-md) 0 0; padding-left: 1.2rem; max-width: 72ch; }
+        .proto-ask li { margin-bottom: 6px; line-height: 1.5; font-size: 14px; }
+
+        /* ── Printable editor drawer (subset of shipped pe-* rules) ── */
+        .pe-drawer {
+            display: flex; flex-direction: column; max-width: 100%;
+            background: var(--surface-container-lowest); border: 1px solid var(--outline-variant);
+            border-radius: var(--radius); font-size: 12px;
+        }
+        .pe-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px 4px; }
+        .pe-drawer__head .pe-h { margin: 0; flex: 1; }
+        .pe-drawer__body { padding: 6px 10px 12px; }
+        .pe-h { margin: 0 0 6px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-hint { margin: 4px 0; font-size: 11.5px; line-height: 1.4; color: var(--on-surface-variant); }
+        .pe-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 5px; font-size: 11.5px; color: var(--on-surface-variant); }
+        .pe-f > span:first-child { flex: 0 1 88px; min-width: 48px; }
+        .pe-f > .pe-in, .pe-f > .pe-seg, .pe-f > .pe-upload { flex: 1 1 120px; min-width: 0; }
+        .pe-in {
+            width: 100%; height: 26px; padding: 0 7px; border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: var(--on-surface);
+            font: 12px var(--font-sans); box-sizing: border-box;
+        }
+        .pe-in:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; border-color: var(--tertiary); }
+        .pe-in--date { flex: 1 1 92px; width: auto; min-width: 92px; height: 24px; font-size: 11px; }
+        .pe-seg {
+            display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px;
+            background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+        }
+        .pe-seg button {
+            border: 0; background: transparent; border-radius: 4px; padding: 3px 7px;
+            color: var(--on-surface-variant); cursor: pointer; font: 600 10px var(--font-sans);
+            letter-spacing: .06em; text-transform: uppercase;
+        }
+        .pe-seg button:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; }
+        .pe-seg button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+        .pe-seg--tiny button { padding: 3px 6px; min-height: 0; font-size: 10px; }
+        .pe-drawer__section { margin-bottom: 10px; }
+        .pe-query {
+            padding: 7px 9px; border: 1px solid var(--tertiary); border-radius: var(--radius);
+            background: var(--surface-container-lowest);
+        }
+        .pe-drawer__title {
+            display: flex; align-items: center; gap: 5px; margin: 0 0 5px;
+            font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+        .pe-drawer__title .material-symbols-outlined { font-size: 15px; }
+        .pe-query__count { margin: 6px 0 2px; font: 600 11px var(--font-sans); color: var(--on-surface); }
+        .pe-query__preview { margin: 0 0 6px; padding-left: 14px; color: var(--on-surface-variant); font-size: 11px; line-height: 1.35; }
+        .pe-chips { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 3px; }
+        .pe-chip {
+            display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px 3px 5px;
+            border: 1px solid var(--outline-variant); border-radius: 999px;
+            background: var(--surface-container-lowest); font: 500 11px var(--font-sans); color: var(--on-surface);
+            cursor: grab; user-select: none;
+        }
+        .pe-chip:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .pe-chip .material-symbols-outlined { font-size: 14px; color: var(--tertiary); }
+        .pe-chip--inert { cursor: default; opacity: .65; }
+        .pe-chip--inert:hover { border-color: var(--outline-variant); }
+        .pe-upload { position: relative; overflow: hidden; cursor: pointer; }
+        .pe-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .pe-drawer__error { color: var(--error); font-size: 11px; margin: 0 0 6px; }
+        .pe-scalars-divider {
+            display: flex; align-items: center; gap: 8px; margin: 10px 0 8px;
+            font: 600 10px var(--font-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+        .pe-scalars-divider::after { content: ''; flex: 1; height: 1px; background: var(--outline-variant); }
+
+        /* Variant A — accordion inserts */
+        .pe-acc { border: 1px solid var(--outline-variant); border-radius: var(--radius); overflow: hidden; }
+        .pe-acc details { border-top: 1px solid var(--outline-variant); }
+        .pe-acc details:first-child { border-top: 0; }
+        .pe-acc summary {
+            display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: pointer; list-style: none;
+            font: 600 12px var(--font-sans); color: var(--on-surface); background: var(--surface-container-lowest);
+        }
+        .pe-acc summary::-webkit-details-marker { display: none; }
+        .pe-acc summary::before {
+            content: 'expand_more'; font-family: 'Material Symbols Outlined'; font-size: 18px;
+            color: var(--on-surface-variant); transition: transform var(--duration) var(--ease-standard);
+        }
+        .pe-acc details[open] summary::before { transform: rotate(180deg); }
+        .pe-acc summary:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+        .pe-acc__body { padding: 6px 9px 9px; background: var(--surface-container-low); }
+        .pe-acc__preview { font-size: 11px; color: var(--on-surface-variant); margin: 0 0 6px; }
+        .pe-acc__preview strong { color: var(--on-surface); font-weight: 600; }
+
+        /* Variant B — chip rail + asset strip */
+        .pe-rail {
+            padding: 8px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container-low);
+        }
+        .pe-rail__chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+        .pe-rail__chip {
+            display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+            padding: 5px 8px; min-width: 72px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+            background: var(--surface-container-lowest); cursor: grab; font-size: 11px;
+        }
+        .pe-rail__chip:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .pe-rail__chip strong { font-size: 11px; color: var(--on-surface); }
+        .pe-rail__chip span { font-size: 10px; color: var(--on-surface-variant); }
+        .pe-rail__chip .material-symbols-outlined { font-size: 16px; color: var(--tertiary); }
+        .pe-drop {
+            display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px;
+            min-height: 44px; padding: 6px 10px; border: 1px dashed var(--outline); border-radius: var(--radius-sm);
+            background: var(--surface-container-lowest); font: inherit; font-size: 11px; color: var(--on-surface-variant);
+            cursor: pointer;
+        }
+        .pe-drop:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .pe-assets-scroll {
+            display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; overscroll-behavior-x: contain;
+        }
+        .pe-asset-tile {
+            flex: 0 0 88px; display: flex; flex-direction: column; gap: 4px; padding: 5px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest);
+        }
+        .pe-asset-tile__thumb {
+            height: 40px; border-radius: 4px; background: var(--surface-container);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pe-asset-tile__thumb .material-symbols-outlined { font-size: 22px; color: var(--primary); }
+        .pe-asset-tile__name { font-size: 10px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pe-asset-tile button {
+            border: 0; background: var(--surface-container); border-radius: 4px; padding: 3px 4px;
+            font: 600 10px var(--font-sans); color: var(--primary); cursor: pointer; width: 100%;
+        }
+        .pe-asset-tile button:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; }
+
+        /* Variant C — stacked type cards */
+        .pe-typecards { display: flex; flex-direction: column; gap: 6px; }
+        .pe-typecard {
+            padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container-lowest);
+        }
+        .pe-typecard__head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .pe-typecard__head .material-symbols-outlined { font-size: 18px; color: var(--primary); }
+        .pe-typecard__head strong { font-size: 12px; color: var(--on-surface); flex: 1; }
+        .pe-typecard__foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--outline-variant); }
+        .pe-typecard__live { font-size: 10px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }
+
+        .pe-empty {
+            padding: 10px; text-align: center; border: 1px dashed var(--outline-variant); border-radius: var(--radius-sm);
+            font-size: 11px; color: var(--on-surface-variant);
+        }
+        .pe-asset-row {
+            display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin-bottom: 4px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest);
+        }
+        .pe-asset-row__icon { width: 28px; height: 28px; border-radius: 4px; background: var(--surface-container); display: flex; align-items: center; justify-content: center; }
+        .pe-asset-row__icon .material-symbols-outlined { font-size: 18px; color: var(--tertiary); }
+        .pe-asset-row__meta { flex: 1; min-width: 0; }
+        .pe-asset-row__meta strong { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pe-asset-row__meta span { font-size: 10px; color: var(--on-surface-variant); }
+        .pe-asset-row--error { border-color: var(--error); background: color-mix(in srgb, var(--error) 6%, var(--surface-container-lowest)); }
+
+        .m-icon-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+    </style>
+</head>
+
+<body class="proto-body">
+    <a class="proto-skip" href="#main">Skip to the prototype</a>
+
+    <header class="proto-bar">
+        <h1 class="proto-bar__title">Printables — date, page number &amp; brand assets below the query</h1>
+        <p class="proto-bar__sub">MS-689 prototype. Fictional uploads only. Mosaic has no brand-constants catalog — editors upload images, fonts, and similar files for this printable, then drag them onto the page.</p>
+        <nav class="proto-jump" aria-label="Sections">
+            <a href="#context">Context</a>
+            <a href="#variant-a">Variant A</a>
+            <a href="#variant-b">Variant B</a>
+            <a href="#variant-c">Variant C</a>
+            <a href="#states">States</a>
+            <a href="#decide">Feedback</a>
+        </nav>
+    </header>
+
+    <main class="proto-main" id="main">
+
+        <section class="proto-section" id="context" aria-labelledby="context-h">
+            <h2 id="context-h">What sits below the query</h2>
+            <p class="proto-note">
+                Iteration stays in the <strong>Query</strong> block (lists of people, Sundays, events). Under it, the drawer offers
+                <strong>shape: single</strong> inserts: a live <strong>date</strong> (today, offset, or fixed), the
+                <strong>page number</strong> (optional custom start), and <strong>brand assets</strong> — upload images or fonts
+                for this printable, see what is on file, drag onto the canvas. Not <code>data-repeat</code>.
+            </p>
+        </section>
+
+        <!-- ═══ Variant A — accordion ═══ -->
+        <section class="proto-section proto-variant" id="variant-a" aria-labelledby="va-h">
+            <h2 id="va-h">Layout variants</h2>
+            <h3>Variant A — Accordion sections</h3>
+            <p>Date, page number, and brand assets each collapse behind a summary row. Upload lives inside the assets panel with a short list beneath.</p>
+            <div class="proto-stage">
+                <div class="proto-stage__row proto-stage__row--drawer">
+                    <div class="proto-canvas-mock" aria-hidden="true">Canvas (not in scope) — selected text element highlighted</div>
+                    <aside class="pe-drawer" aria-label="Data drawer, variant A">
+                        <div class="pe-drawer__head">
+                            <h2 class="pe-h">Data</h2>
+                            <span class="pe-seg pe-seg--tiny pe-seg--text" role="group" aria-label="Data mode">
+                                <button type="button" aria-pressed="true">Live</button>
+                                <button type="button" aria-pressed="false">Stand-ins</button>
+                            </span>
+                        </div>
+                        <div class="pe-drawer__body">
+                            <section class="pe-drawer__section pe-query" aria-labelledby="va-query">
+                                <h3 class="pe-drawer__title" id="va-query"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Query</h3>
+                                <p class="pe-hint">Directory — members and regular attenders.</p>
+                                <p class="pe-query__count">42 rows today</p>
+                                <ul class="pe-query__preview">
+                                    <li>Mara Finch</li>
+                                    <li>Owen Hale</li>
+                                    <li>Priya Noland</li>
+                                </ul>
+                                <p class="pe-hint">Drag a field onto an element inside the iterated box.</p>
+                                <div class="pe-chips">
+                                    <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">title</span>Full name</span>
+                                    <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">image</span>Photo</span>
+                                </div>
+                            </section>
+
+                            <div class="pe-scalars-divider">Insert on the page</div>
+                            <div class="pe-acc" role="region" aria-label="Scalar inserts">
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>Date</summary>
+                                    <div class="pe-acc__body">
+                                        <p class="pe-acc__preview">Live preview: <strong>Sunday 5 October 2026</strong></p>
+                                        <div class="pe-f"><span>Mode</span>
+                                            <span class="pe-seg pe-seg--tiny pe-seg--text" role="group" aria-label="Date mode">
+                                                <button type="button" aria-pressed="true">Today</button>
+                                                <button type="button" aria-pressed="false">Offset</button>
+                                                <button type="button" aria-pressed="false">Set date</button>
+                                            </span>
+                                        </div>
+                                        <span class="pe-chip" tabindex="0" draggable="true" aria-label="Drag date onto page"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Date</span>
+                                    </div>
+                                </details>
+                                <details>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">numbers</span>Page number</summary>
+                                    <div class="pe-acc__body">
+                                        <label class="pe-f"><span>Start at</span>
+                                            <input class="pe-in" type="number" name="page-start-a" min="1" value="1" autocomplete="off" inputmode="numeric" />
+                                        </label>
+                                        <p class="pe-hint">Page 3 of this booklet prints as “1” when start is 3.</p>
+                                        <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Page number</span>
+                                    </div>
+                                </details>
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>Brand assets</summary>
+                                    <div class="pe-acc__body">
+                                        <label class="m-btn m-btn--secondary m-btn--sm pe-upload">
+                                            <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+                                            <span class="m-btn__label">Upload image or font…</span>
+                                            <input type="file" accept="image/*,.woff2,.woff,.ttf" aria-label="Upload brand asset" />
+                                        </label>
+                                        <div class="pe-asset-row">
+                                            <div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">image</span></div>
+                                            <div class="pe-asset-row__meta"><strong>crest-mark.png</strong><span>Image · 24&nbsp;KB</span></div>
+                                            <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Use</span>
+                                        </div>
+                                        <div class="pe-asset-row">
+                                            <div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">font_download</span></div>
+                                            <div class="pe-asset-row__meta"><strong>bulletin-serif.woff2</strong><span>Font · 156&nbsp;KB</span></div>
+                                            <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Use</span>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ Variant B — chip rail ═══ -->
+        <section class="proto-variant" id="variant-b" aria-labelledby="vb-h">
+            <h3 id="vb-h">Variant B — Chip rail + asset filmstrip</h3>
+            <p>Scalars appear as compact draggable tiles in one row; uploads drop into a dashed zone with thumbnails in a horizontal strip.</p>
+            <div class="proto-stage">
+                <div class="proto-stage__row proto-stage__row--drawer">
+                    <div class="proto-canvas-mock" aria-hidden="true">Canvas mock</div>
+                    <aside class="pe-drawer" aria-label="Data drawer, variant B">
+                        <div class="pe-drawer__head"><h2 class="pe-h">Data</h2></div>
+                        <div class="pe-drawer__body">
+                            <section class="pe-drawer__section pe-query">
+                                <h3 class="pe-drawer__title"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Query</h3>
+                                <p class="pe-hint">This Sunday — typed content for 2026-10-05.</p>
+                                <div class="pe-chips">
+                                    <span class="pe-chip pe-chip--inert"><span class="material-symbols-outlined" aria-hidden="true">title</span>Prayer country</span>
+                                </div>
+                            </section>
+                            <div class="pe-scalars-divider">Drag onto the page</div>
+                            <div class="pe-rail">
+                                <div class="pe-rail__chips">
+                                    <div class="pe-rail__chip" tabindex="0" draggable="true" role="button" aria-label="Drag date, offset plus 7 days">
+                                        <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                                        <strong>Date</strong>
+                                        <span>Today + 7&nbsp;days</span>
+                                    </div>
+                                    <div class="pe-rail__chip" tabindex="0" draggable="true" role="button" aria-label="Drag page number">
+                                        <span class="material-symbols-outlined" aria-hidden="true">numbers</span>
+                                        <strong>Page #</strong>
+                                        <span>Start 1 · shows 2 here</span>
+                                    </div>
+                                    <button type="button" class="pe-drop" aria-label="Upload brand asset">
+                                        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+                                        Upload…
+                                    </button>
+                                </div>
+                                <p class="pe-hint" style="margin-top:8px">Tap a tile to edit mode before dragging.</p>
+                                <div class="pe-assets-scroll" aria-label="Uploaded assets">
+                                    <div class="pe-asset-tile">
+                                        <div class="pe-asset-tile__thumb"><span class="material-symbols-outlined" aria-hidden="true">image</span></div>
+                                        <span class="pe-asset-tile__name">crest-mark.png</span>
+                                        <button type="button">Insert</button>
+                                    </div>
+                                    <div class="pe-asset-tile">
+                                        <div class="pe-asset-tile__thumb"><span class="material-symbols-outlined" aria-hidden="true">font_download</span></div>
+                                        <span class="pe-asset-tile__name">bulletin-serif.woff2</span>
+                                        <button type="button">Insert</button>
+                                    </div>
+                                    <div class="pe-asset-tile">
+                                        <div class="pe-asset-tile__thumb"><span class="material-symbols-outlined" aria-hidden="true">image</span></div>
+                                        <span class="pe-asset-tile__name">footer-rule.svg</span>
+                                        <button type="button">Insert</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pe-f" style="margin-top:8px"><span>Date mode</span>
+                                <span class="pe-seg pe-seg--tiny pe-seg--text" role="group" aria-label="Date mode">
+                                    <button type="button" aria-pressed="false">Today</button>
+                                    <button type="button" aria-pressed="true">Offset</button>
+                                    <button type="button" aria-pressed="false">Set date</button>
+                                </span>
+                            </div>
+                            <div class="pe-f"><span>Offset</span>
+                                <input class="pe-in" type="number" name="offset-days-b" value="7" min="-365" max="365" autocomplete="off" inputmode="numeric" aria-label="Day offset" />
+                                <span class="pe-hint" style="flex:1 1 100%;margin-left:0">or</span>
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm">This Sunday</button>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ Variant C — stacked cards ═══ -->
+        <section class="proto-variant" id="variant-c" aria-labelledby="vc-h">
+            <h3 id="vc-h">Variant C — Stacked type cards</h3>
+            <p>Each insert type is its own card with inline configuration and a single drag target at the bottom — upload is a card like the others.</p>
+            <div class="proto-stage">
+                <div class="proto-stage__row proto-stage__row--drawer">
+                    <div class="proto-canvas-mock" aria-hidden="true">Canvas mock</div>
+                    <aside class="pe-drawer" aria-label="Data drawer, variant C">
+                        <div class="pe-drawer__head"><h2 class="pe-h">Data</h2></div>
+                        <div class="pe-drawer__body">
+                            <section class="pe-drawer__section pe-query">
+                                <h3 class="pe-drawer__title"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Query</h3>
+                                <p class="pe-hint">Events in the next two weeks — 6 rows.</p>
+                            </section>
+                            <div class="pe-scalars-divider">Single values</div>
+                            <div class="pe-typecards">
+                                <article class="pe-typecard" aria-labelledby="vc-date">
+                                    <div class="pe-typecard__head">
+                                        <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                                        <strong id="vc-date">Date</strong>
+                                    </div>
+                                    <div class="pe-f"><span>Mode</span>
+                                        <span class="pe-seg pe-seg--tiny pe-seg--text" role="group" aria-label="Date mode">
+                                            <button type="button" aria-pressed="false">Today</button>
+                                            <button type="button" aria-pressed="false">Offset</button>
+                                            <button type="button" aria-pressed="true">Set date</button>
+                                        </span>
+                                    </div>
+                                    <label class="pe-f"><span>Fixed</span>
+                                        <input class="pe-in pe-in--date" type="date" name="fixed-date-c" value="2026-12-25" autocomplete="off" aria-label="Fixed date" />
+                                    </label>
+                                    <div class="pe-typecard__foot">
+                                        <span class="pe-typecard__live">Prints: Thursday 25 December 2026</span>
+                                        <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag</span>
+                                    </div>
+                                </article>
+                                <article class="pe-typecard">
+                                    <div class="pe-typecard__head">
+                                        <span class="material-symbols-outlined" aria-hidden="true">numbers</span>
+                                        <strong>Page number</strong>
+                                    </div>
+                                    <label class="pe-f"><span>Start numbering at</span>
+                                        <input class="pe-in" type="number" name="page-start-c" min="1" value="3" autocomplete="off" inputmode="numeric" />
+                                    </label>
+                                    <div class="pe-typecard__foot">
+                                        <span class="pe-typecard__live">This page → 1</span>
+                                        <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag</span>
+                                    </div>
+                                </article>
+                                <article class="pe-typecard">
+                                    <div class="pe-typecard__head">
+                                        <span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>
+                                        <strong>Brand assets</strong>
+                                    </div>
+                                    <label class="m-btn m-btn--secondary m-btn--sm pe-upload" style="width:100%;justify-content:center">
+                                        <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+                                        <span class="m-btn__label">Upload…</span>
+                                        <input type="file" accept="image/*,.woff2,.woff,.ttf" aria-label="Upload brand asset" />
+                                    </label>
+                                    <ul class="pe-hint" style="margin:6px 0 0;padding-left:1rem">
+                                        <li>crest-mark.png — on canvas</li>
+                                        <li>bulletin-serif.woff2</li>
+                                    </ul>
+                                    <div class="pe-typecard__foot">
+                                        <span class="pe-typecard__live">2 files</span>
+                                        <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">image</span>crest-mark.png</span>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ States ═══ -->
+        <section class="proto-section" id="states" aria-labelledby="states-h">
+            <h2 id="states-h">States (brand assets block)</h2>
+            <p class="proto-note">Same accordion pattern as variant A; only the assets section changes.</p>
+            <div class="proto-states">
+                <div class="proto-state">
+                    <h4>Empty</h4>
+                    <div class="pe-drawer">
+                        <div class="pe-drawer__body">
+                            <div class="pe-acc">
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>Brand assets</summary>
+                                    <div class="pe-acc__body">
+                                        <label class="m-btn m-btn--secondary m-btn--sm pe-upload">
+                                            <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+                                            <span class="m-btn__label">Upload image or font…</span>
+                                            <input type="file" accept="image/*,.woff2,.woff,.ttf" aria-label="Upload brand asset" />
+                                        </label>
+                                        <p class="pe-empty">No files yet. Upload a logo, rule, or font for this printable.</p>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="proto-state">
+                    <h4>One</h4>
+                    <div class="pe-drawer">
+                        <div class="pe-drawer__body">
+                            <div class="pe-acc">
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>Brand assets</summary>
+                                    <div class="pe-acc__body">
+                                        <div class="pe-asset-row">
+                                            <div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">image</span></div>
+                                            <div class="pe-asset-row__meta"><strong>crest-mark.png</strong><span>Image</span></div>
+                                            <span class="pe-chip" tabindex="0" draggable="true"><span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Use</span>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="proto-state">
+                    <h4>Many</h4>
+                    <div class="pe-drawer">
+                        <div class="pe-drawer__body">
+                            <div class="pe-acc">
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>Brand assets <span class="pe-warn__n" style="margin-left:4px;font-size:10px;padding:0 5px;border-radius:999px;background:var(--surface-container)">4</span></summary>
+                                    <div class="pe-acc__body">
+                                        <div class="pe-asset-row"><div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">image</span></div><div class="pe-asset-row__meta"><strong>crest-mark.png</strong><span>Image</span></div><span class="pe-chip" tabindex="0" draggable="true">Use</span></div>
+                                        <div class="pe-asset-row"><div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">image</span></div><div class="pe-asset-row__meta"><strong>footer-rule.svg</strong><span>Image</span></div><span class="pe-chip" tabindex="0" draggable="true">Use</span></div>
+                                        <div class="pe-asset-row"><div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">font_download</span></div><div class="pe-asset-row__meta"><strong>bulletin-serif.woff2</strong><span>Font</span></div><span class="pe-chip" tabindex="0" draggable="true">Use</span></div>
+                                        <div class="pe-asset-row"><div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">font_download</span></div><div class="pe-asset-row__meta"><strong>small-caps.otf</strong><span>Font</span></div><span class="pe-chip" tabindex="0" draggable="true">Use</span></div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="proto-state">
+                    <h4>Error</h4>
+                    <div class="pe-drawer">
+                        <div class="pe-drawer__body">
+                            <p class="pe-drawer__error" role="alert"><span class="material-symbols-outlined" aria-hidden="true" style="font-size:14px;vertical-align:-2px">error</span> Upload failed — file is larger than 2&nbsp;MB.</p>
+                            <div class="pe-acc">
+                                <details open>
+                                    <summary><span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>Brand assets</summary>
+                                    <div class="pe-acc__body">
+                                        <div class="pe-asset-row pe-asset-row--error">
+                                            <div class="pe-asset-row__icon" aria-hidden="true"><span class="material-symbols-outlined">broken_image</span></div>
+                                            <div class="pe-asset-row__meta"><strong>missing-on-canvas.png</strong><span>File not found — re-upload or remove binding</span></div>
+                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm">Fix</button>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section" id="decide" aria-labelledby="decide-h">
+            <h2 id="decide-h">What I need from you</h2>
+            <ul class="proto-ask">
+                <li>Which layout (A accordion, B chip rail, C stacked cards) fits a dense editor drawer at ~320px?</li>
+                <li>Should date/page config live inline with the drag chip (B/C) or tucked in collapsed sections (A)?</li>
+                <li>Is upload + per-file “Use” enough, or do assets need rename/delete in this drawer?</li>
+            </ul>
+        </section>
+    </main>
+</body>
+
+</html>
