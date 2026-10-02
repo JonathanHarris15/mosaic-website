@@ -49,14 +49,25 @@ function initAdminAccountsTab() {
                 e.preventDefault();
                 const email = document.getElementById('new-user-email').value;
                 const password = document.getElementById('new-user-password').value;
-                const permissionLevel = document.getElementById('new-user-role').value;
+                const accountLevelId = document.getElementById('new-user-role').value;
+                const level = (typeof accountLevelsForSelect === 'function'
+                    ? accountLevelsForSelect().find(l => l.id === accountLevelId) : null);
+                const permissionLevel = level && level.presetKey
+                    ? level.presetKey
+                    : accountLevelId;
 
                 createUserStatus.textContent = 'Provisioning account...';
                 createUserStatus.className = 'mt-xs text-xs font-body-md text-primary animate-pulse';
 
                 try {
                     const createUserFunc = firebase.functions().httpsCallable('createUser');
-                    await createUserFunc({ email, password, role: permissionLevel });
+                    await createUserFunc({
+                        email,
+                        password,
+                        role: permissionLevel,
+                        permissionLevel,
+                        accountLevelId,
+                    });
 
                     createUserStatus.textContent = 'Account successfully authorized.';
                     createUserStatus.className = 'mt-xs text-xs font-body-md text-green-600';
@@ -81,7 +92,11 @@ function initAdminAccountsTab() {
         }
     }
 
-    loadUsersList();
+    if (typeof refreshAccountLevelsPanel === 'function') {
+        refreshAccountLevelsPanel().then(() => loadUsersList());
+    } else {
+        loadUsersList();
+    }
 }
 
 async function loadUsersList() {
@@ -103,22 +118,15 @@ async function loadUsersList() {
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            const permissionLevel = data.permissionLevel || data.role || 'viewer';
-            const pastoralAssistant = data.pastoralAssistant === true;
-            const roleLabels = {
-                'admin': 'Admin',
-                'super_admin': 'Super Admin',
-                'elder': 'Elder',
-                'pastoral_assistant': 'Pastoral Assistant',
-                'editor': 'Editor',
-                'member': 'Member',
-                'viewer': 'Viewer',
-                'kiosk': 'Kiosk'
-            };
-            const shownLevel = (permissionLevel === 'pastoral_assistant' || pastoralAssistant)
-                ? 'pastoral_assistant'
-                : permissionLevel;
-            const roleLabel = roleLabels[shownLevel] || shownLevel.charAt(0).toUpperCase() + shownLevel.slice(1);
+            const accountLevelId = typeof resolveAccountLevelIdForUser === 'function'
+                ? resolveAccountLevelIdForUser(data)
+                : (data.accountLevelId || data.permissionLevel || data.role || 'viewer');
+            const levels = typeof accountLevelsForSelect === 'function' ? accountLevelsForSelect() : [];
+            const levelMatch = levels.find(l => l.id === accountLevelId);
+            const roleLabel = levelMatch
+                ? (levelMatch.name || levelMatch.presetKey)
+                : (data.permissionLevel || data.role || 'viewer');
+            const shownLevel = data.permissionLevel || data.role || 'viewer';
             const isSelf = doc.id === adminCurrentUserUid;
 
             const linkedPerson = data.personId ? peopleCache.find(p => p.id === data.personId) : null;
@@ -144,16 +152,12 @@ async function loadUsersList() {
                     </div>
                     <div class="flex gap-2 items-center flex-shrink-0">
                         <div class="relative">
-                            <select onchange="updateUserRole('${doc.id}', this.value)"
-                                    class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                                <option value="viewer" ${shownLevel === 'viewer' ? 'selected' : ''}>Viewer</option>
-                                <option value="member" ${shownLevel === 'member' ? 'selected' : ''}>Member</option>
-                                <option value="editor" ${shownLevel === 'editor' ? 'selected' : ''}>Editor</option>
-                                <option value="pastoral_assistant" ${shownLevel === 'pastoral_assistant' ? 'selected' : ''}>Pastoral Assistant</option>
-                                <option value="elder" ${shownLevel === 'elder' ? 'selected' : ''}>Elder</option>
-                                <option value="admin" ${shownLevel === 'admin' ? 'selected' : ''}>Admin</option>
-                                <option value="super_admin" ${shownLevel === 'super_admin' ? 'selected' : ''}>Super Admin</option>
-                                <option value="kiosk" ${shownLevel === 'kiosk' ? 'selected' : ''}>Kiosk</option>
+                            <select onchange="updateUserAccountLevel('${doc.id}', this.value)"
+                                    class="text-[11px] font-label-md tracking-wide py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer"
+                                    aria-label="Account level for ${data.email || 'account'}">
+                                ${(levels.length ? levels : [{ id: accountLevelId, name: roleLabel }]).map(l =>
+        `<option value="${l.id}" ${l.id === accountLevelId ? 'selected' : ''}>${l.name || l.presetKey || l.id}</option>`
+    ).join('')}
                             </select>
                             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
                         </div>
@@ -194,16 +198,22 @@ async function loadUsersList() {
     }
 }
 
-async function updateUserRole(uid, newRole) {
+async function updateUserAccountLevel(uid, accountLevelId) {
     try {
-        await db.collection('users').doc(uid).update({
-            permissionLevel: newRole,
-            role: newRole,
-            pastoralAssistant: false,
-        });
-        console.log(`Role for ${uid} updated to ${newRole}`);
+        if (typeof assignUserAccountLevel === 'function') {
+            await assignUserAccountLevel(uid, accountLevelId);
+        } else {
+            await db.collection('users').doc(uid).update({
+                permissionLevel: accountLevelId,
+                role: accountLevelId,
+                pastoralAssistant: false,
+            });
+        }
+        await countUsersPerLevel?.();
+        renderLevelsList?.();
+        console.log(`Account level for ${uid} updated to ${accountLevelId}`);
     } catch (error) {
-        alert('Error updating permission level: ' + error.message);
+        alert('Error updating account level: ' + error.message);
     }
 }
 
@@ -347,7 +357,8 @@ async function updateUserPasswordAdmin(uid) {
 }
 
 window.initAdminAccountsTab = initAdminAccountsTab;
-window.updateUserRole = updateUserRole;
+window.updateUserRole = updateUserAccountLevel;
+window.updateUserAccountLevel = updateUserAccountLevel;
 window.openLinkModal = openLinkModal;
 window.closeLinkModal = closeLinkModal;
 window.renderLinkPeopleList = renderLinkPeopleList;

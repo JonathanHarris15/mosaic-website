@@ -247,7 +247,7 @@ exports.createUser = onCall({
     throw new Error("Only admins can create new users.");
   }
 
-  const {email, password, role, permissionLevel} = request.data;
+  const {email, password, role, permissionLevel, accountLevelId} = request.data;
   // Accept either during the MS-119 migration.
   const level = permissionLevel || role;
 
@@ -255,6 +255,12 @@ exports.createUser = onCall({
     throw new Error(
         "Missing required fields: email, password, or permission level.");
   }
+
+  const AccountLevels = require("./shared/account-levels-core.js");
+  const presetKey = AccountLevels.presetKeyFromPermissionLevel(level);
+  const resolvedLevelId = accountLevelId ||
+      AccountLevels.accountLevelIdForPreset(presetKey);
+  const permissions = AccountLevels.buildPresetPermissions(presetKey);
 
   try {
     // 2. Create the user in Firebase Auth
@@ -276,6 +282,9 @@ exports.createUser = onCall({
       email: email,
       permissionLevel: level,
       role: level,
+      accountLevelId: resolvedLevelId,
+      permissions: permissions,
+      pastoralAssistant: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
