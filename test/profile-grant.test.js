@@ -33,25 +33,26 @@ test('the phone drawer names the role, and still badges the old flag', () => {
         Destinations.roleLabel('member'));
 });
 
-test('setting a permission level writes the role and clears the old flag', () => {
+test('assigning an account level delegates to account levels core', () => {
     assert.doesNotMatch(ADMIN_ACCOUNTS, /function updateUserPastoralAssistant/);
     assert.doesNotMatch(ADMIN_ACCOUNTS, /type="checkbox"/);
-    const fn = ADMIN_ACCOUNTS.match(/async function updateUserRole[\s\S]*?\n\}/);
-    assert.ok(fn, 'updateUserRole is gone');
-    assert.match(fn[0], /permissionLevel: newRole/);
-    assert.match(fn[0], /role: newRole/);
-    assert.match(fn[0], /pastoralAssistant: false/);
-});
-
-test('the account list offers Pastoral Assistant in the same select as Elder', () => {
-    assert.match(ADMIN_ACCOUNTS, /value="pastoral_assistant"/);
-    assert.match(ADMIN_DASHBOARD_HTML, /value="pastoral_assistant"/);
-    assert.match(ADMIN_ACCOUNTS, /Pastoral Assistant/);
+    const fn = ADMIN_ACCOUNTS.match(/async function updateUserAccountLevel[\s\S]*?\n\}/);
+    assert.ok(fn, 'updateUserAccountLevel missing');
+    assert.match(fn[0], /assignUserAccountLevel/);
     assert.doesNotMatch(ADMIN_ACCOUNTS, /updateUserPastoralAssistant\(/);
 });
 
-test('createUser does not set the old flag', () => {
+test('the account directory assigns account levels from Firestore', () => {
+    assert.match(ADMIN_ACCOUNTS, /updateUserAccountLevel/);
+    assert.match(ADMIN_ACCOUNTS, /accountLevelsForSelect/);
+    assert.match(ADMIN_DASHBOARD_HTML, /perm-split/);
+    assert.match(ADMIN_DASHBOARD_HTML, /admin-account-levels\.js/);
+});
+
+test('createUser writes accountLevelId and clears the old grant flag', () => {
     const set = INDEX.match(/exports\.createUser[\s\S]*?\.set\(\{[\s\S]*?\}\)/);
-    assert.ok(set, 'createUser set() is gone');
-    assert.doesNotMatch(set[0], /pastoralAssistant/);
+    assert.ok(set, 'createUser set() missing');
+    assert.match(set[0], /accountLevelId/);
+    assert.match(set[0], /permissions:/);
+    assert.match(set[0], /pastoralAssistant: false/);
 });

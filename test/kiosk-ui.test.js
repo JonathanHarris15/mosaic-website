@@ -7,12 +7,12 @@ const vm = require('node:vm');
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = f => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
-test('the account panel offers kiosk as a permission level', () => {
-    const html = read('admin-dashboard.html');
-    const js = read('admin-accounts.js');
-    assert.match(html, /<option value="kiosk">Kiosk<\/option>/);
-    assert.match(js, /'kiosk': 'Kiosk'/);
-    assert.match(js, /<option value="kiosk"/);
+test('the account panel offers kiosk as a built-in account level', () => {
+    const levels = require('../public/account-levels-core.js');
+    const kiosk = levels.BUILTIN_LEVELS.find(l => l.presetKey === 'kiosk');
+    assert.ok(kiosk, 'kiosk preset missing');
+    assert.match(read('admin-dashboard.html'), /admin-account-levels\.js/);
+    assert.match(read('admin-accounts.js'), /accountLevelsForSelect/);
 });
 
 test('signing in as a kiosk lands on the kiosk page', () => {

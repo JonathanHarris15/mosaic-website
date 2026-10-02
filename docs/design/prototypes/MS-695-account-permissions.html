@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-695 — Account permission levels (prototype)</title>
+
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
+        .proto-body { margin: 0; background: var(--surface-container-highest); color: var(--on-background);
+            font-family: var(--font-sans); font-size: var(--body-md-size); line-height: var(--body-md-line); -webkit-font-smoothing: antialiased; }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar__title { margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size); font-weight: var(--headline-md-weight); }
+        .proto-bar__sub { margin: 4px 0 0; font-size: 14px; color: var(--primary-fixed-dim); }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: var(--space-base); margin-top: var(--space-sm); }
+        .proto-jump a { padding: 6px 12px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 13px; font-weight: 600; text-decoration: none; }
+        .proto-main { max-width: 1360px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: var(--space-md); }
+        .proto-section > h2 { margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: var(--headline-lg-size); color: var(--primary); }
+        .proto-note { max-width: 74ch; margin: 0 0 var(--space-sm); font-size: 15px; color: var(--on-surface-variant); line-height: 1.55; }
+        .proto-stage { background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: hidden; }
+        .proto-stage__label { display: block; padding: var(--space-base) var(--space-sm); font-size: var(--label-xs-size);
+            font-weight: var(--label-xs-weight); letter-spacing: var(--label-xs-spacing); color: var(--on-surface-variant);
+            background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); }
+        .proto-ask { margin: var(--space-md) 0 0; padding-left: 1.25rem; max-width: 74ch; }
+        .proto-ask li { margin-bottom: var(--space-xs); line-height: 1.5; }
+
+        .adm-shell { background: var(--background); }
+        .adm-shell__header { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+        .adm-shell__title { margin: 0; font-family: var(--font-serif); font-size: var(--headline-md-size); color: var(--primary); }
+        .adm-shell__tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: var(--space-sm) var(--space-md) 0; border-bottom: 1px solid var(--outline-variant); }
+        .adm-shell__tab { display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+            color: var(--on-surface-variant); border-radius: var(--radius-md) var(--radius-md) 0 0; }
+        .adm-shell__tab--on { background: var(--surface-container-lowest); color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+        .adm-shell__body { padding: var(--space-sm); }
+        @media (min-width: 900px) { .adm-shell__body { padding: var(--space-md); } }
+
+        .adm-acct-card { background: var(--surface-container-lowest); border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+            border-radius: var(--radius-xl); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+        .adm-acct-card__head { padding: var(--space-sm) var(--space-md); background: color-mix(in srgb, var(--surface-container-low) 50%, transparent);
+            border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 20%, transparent); }
+        .adm-acct-kicker { margin: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+        .adm-acct-kicker__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--secondary); }
+        .adm-acct-kicker__dot--muted { background: var(--outline-variant); }
+
+        .dir-scroll { flex: 1; overflow-y: auto; max-height: min(52vh, 380px); }
+        .dir-row { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px var(--space-md); border-bottom: 1px solid var(--surface-container); align-items: center; }
+        @media (min-width: 640px) { .dir-row { grid-template-columns: 1fr auto; } }
+        .dir-row__email { font-size: 13px; font-weight: 600; color: var(--on-surface); }
+        .dir-row__link { font-size: 11px; color: var(--on-surface-variant); }
+        .dir-level { min-width: 160px; padding: 6px 28px 6px 10px; font-size: 12px; border-radius: var(--radius-md);
+            border: 1px solid var(--outline-variant); background: var(--surface); color: var(--on-surface); appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23666'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center; }
+
+        .perm-split { display: flex; flex-direction: column; min-height: 320px; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            background: var(--surface-container-lowest); overflow: hidden; }
+        @media (min-width: 900px) { .perm-split { flex-direction: row; min-height: 400px; } }
+        .perm-roles { border-bottom: 1px solid var(--outline-variant); }
+        @media (min-width: 900px) { .perm-roles { width: 220px; flex-shrink: 0; border-bottom: none; border-right: 1px solid var(--outline-variant); } }
+        .perm-roles__toolbar { padding: var(--space-sm); border-bottom: 1px solid var(--outline-variant); }
+        .perm-roles__list { list-style: none; margin: 0; padding: 6px; max-height: 360px; overflow-y: auto; }
+        .perm-role { display: flex; align-items: flex-start; gap: 6px; width: 100%; padding: 8px 10px; border: none; border-radius: var(--radius-md);
+            background: transparent; text-align: left; font-family: var(--font-sans); cursor: default; }
+        .perm-role--active { background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-low)); box-shadow: inset 3px 0 0 var(--primary); }
+        .perm-role__name { font-size: 13px; font-weight: 600; }
+        .perm-role__meta { font-size: 10px; color: var(--on-surface-variant); }
+        .perm-role__badge { font-size: 8px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 5px;
+            border-radius: var(--radius-full); background: var(--surface-container); color: var(--on-surface-variant); flex-shrink: 0; margin-top: 2px; }
+        .perm-editor { flex: 1; min-width: 0; padding: var(--space-sm); overflow-y: auto; max-height: 420px; }
+        @media (min-width: 900px) { .perm-editor { padding: var(--space-md); } }
+
+        .perm-cat { margin-bottom: var(--space-md); }
+        .perm-cat__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 11px; font-weight: 700;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .perm-grid { display: grid; gap: 2px; }
+        @media (min-width: 720px) { .perm-grid { grid-template-columns: 1fr 1fr; gap: 6px; } }
+        .perm-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: 8px 10px;
+            border-radius: var(--radius-md); background: var(--surface-container-low); }
+        .perm-row__label { font-size: 13px; }
+        .perm-row__label small { display: block; font-size: 11px; color: var(--on-surface-variant); font-weight: 400; }
+        .perm-row--locked { border: 1px dashed var(--outline-variant); background: color-mix(in srgb, var(--surface-container) 80%, transparent); }
+        .perm-row--locked .perm-row__label small { color: var(--tertiary); }
+
+        .perm-toggle { position: relative; width: 40px; height: 22px; border-radius: var(--radius-full); border: none; cursor: default;
+            background: var(--outline-variant); flex-shrink: 0; }
+        .perm-toggle--on { background: var(--primary); }
+        .perm-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface-container-lowest); }
+        .perm-toggle--on::after { transform: translateX(18px); }
+        .perm-toggle:disabled { opacity: 0.5; }
+
+        .perm-callout { display: flex; gap: var(--space-sm); padding: var(--space-sm); margin-bottom: var(--space-sm);
+            border-radius: var(--radius-md); background: var(--surface-container-low); border: 1px solid var(--outline-variant); font-size: 13px; line-height: 1.45; }
+        .perm-callout .material-symbols-outlined { font-size: 20px; color: var(--tertiary); flex-shrink: 0; }
+
+        /* Variant A layout */
+        .layout-a__top { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+        @media (min-width: 900px) { .layout-a__top { flex-direction: row; } .layout-a__top > * { flex: 1; min-width: 0; } }
+
+        /* Variant B: three cards + directory */
+        .layout-b { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .layout-b__triple { display: grid; gap: var(--space-sm); }
+        @media (min-width: 1100px) { .layout-b__triple { grid-template-columns: minmax(200px, 1fr) minmax(200px, 0.9fr) minmax(280px, 1.4fr); align-items: stretch; } }
+        .layout-b__levels .perm-roles { border: none; width: 100%; }
+        .layout-b__levels .perm-roles__list { max-height: 280px; }
+
+        /* Variant C: sheet */
+        .layout-c { position: relative; min-height: 480px; }
+        .layout-c__dir { max-width: 100%; }
+        .perm-sheet-backdrop { position: absolute; inset: 0; background: color-mix(in srgb, var(--primary) 18%, transparent); backdrop-filter: blur(2px);
+            display: flex; justify-content: flex-end; align-items: stretch; z-index: 2; }
+        .perm-sheet { width: min(100%, 520px); background: var(--surface-container-lowest); border-left: 1px solid var(--outline-variant);
+            box-shadow: -8px 0 24px rgb(0 0 0 / 12%); display: flex; flex-direction: column; max-height: 100%; }
+        .perm-sheet__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); padding: var(--space-md);
+            border-bottom: 1px solid var(--outline-variant); }
+        .perm-sheet__head h3 { margin: 0; font-family: var(--font-serif); font-size: 18px; color: var(--primary); }
+        .perm-sheet__body { flex: 1; overflow-y: auto; padding: var(--space-sm); }
+        @media (min-width: 900px) { .perm-sheet__body { padding: var(--space-md); } }
+        .perm-sheet .perm-split { border: none; border-radius: 0; min-height: auto; }
+        @media (min-width: 520px) { .perm-sheet .perm-roles { width: 180px; } }
+
+        .state-row { display: grid; gap: var(--space-sm); margin-top: var(--space-sm); }
+        @media (min-width: 900px) { .state-row--4 { grid-template-columns: repeat(2, 1fr); } }
+        .state-mini { border: 1px dashed var(--outline-variant); border-radius: var(--radius-lg); padding: var(--space-sm); }
+        .state-mini h4 { margin: 0 0 var(--space-xs); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--on-surface-variant); }
+        .perm-empty, .perm-error { padding: var(--space-md); text-align: center; font-size: 13px; color: var(--on-surface-variant); }
+        .perm-error { color: var(--error); }
+    </style>
+</head>
+
+<body class="proto-body">
+    <header class="proto-bar">
+        <h1 class="proto-bar__title">MS-695 — Account permission levels</h1>
+        <p class="proto-bar__sub">Discord Server Settings → Roles, on Admin Dashboard → Accounts (MS-694 Variant B). Fictional data only.</p>
+        <nav class="proto-jump" aria-label="Jump to variant">
+            <a href="#variant-a">A — Classic split</a>
+            <a href="#variant-b">B — Three cards</a>
+            <a href="#variant-c">C — Directory + sheet</a>
+        </nav>
+    </header>
+
+    <main class="proto-main">
+        <p class="proto-note">System presets: Super admin, Elder, Pastoral Assistant, Editor, Member, Viewer, Admin, Kiosk. Pastoral Assistant keeps elder-equivalent powers but <strong>count_as_elder</strong> and <strong>be_assignee</strong> stay off and locked.</p>
+
+        <!-- VARIANT A -->
+        <section class="proto-section" id="variant-a">
+            <h2>Variant A — Discord classic</h2>
+            <p class="proto-note">Levels list left, categorized toggles right (below provision + directory). Directory rows assign a level per account.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__label">Desktop · Pastoral Assistant selected · directory assigns level</span>
+                <div class="adm-shell">
+                    <div class="adm-shell__header"><p class="adm-shell__title">Admin Dashboard</p></div>
+                    <div class="adm-shell__tabs">
+                        <span class="adm-shell__tab">System tools</span>
+                        <span class="adm-shell__tab">Push notifications</span>
+                        <span class="adm-shell__tab adm-shell__tab--on"><span class="material-symbols-outlined" style="font-size:18px">shield_person</span> Accounts</span>
+                    </div>
+                    <div class="adm-shell__body">
+                        <div class="layout-a__top">
+                            <div class="adm-acct-card">
+                                <div class="adm-acct-card__head"><p class="adm-acct-kicker"><span class="adm-acct-kicker__dot"></span> Provision</p></div>
+                                <div style="padding:12px 16px;font-size:13px;color:var(--on-surface-variant)">
+                                    <label class="m-label" for="a-prov-level">Default level on invite</label>
+                                    <select id="a-prov-level" class="dir-level" style="width:100%;margin-top:4px"><option>Member</option><option>Editor</option></select>
+                                </div>
+                            </div>
+                            <div class="adm-acct-card">
+                                <div class="adm-acct-card__head flex justify-between items-center" style="display:flex;justify-content:space-between">
+                                    <p class="adm-acct-kicker"><span class="adm-acct-kicker__dot adm-acct-kicker__dot--muted"></span> Directory</p>
+                                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--on-surface-variant)">Level per row</span>
+                                </div>
+                                <div class="dir-scroll">
+                                    <div class="dir-row">
+                                        <div><div class="dir-row__email">a.chen@example.church</div><div class="dir-row__link">Linked · Avery Chen</div></div>
+                                        <select class="dir-level" aria-label="Level for Avery Chen"><option>Pastoral Assistant</option><option>Elder</option><option>Editor</option></select>
+                                    </div>
+                                    <div class="dir-row">
+                                        <div><div class="dir-row__email">m.ellis@example.church</div><div class="dir-row__link">Linked · Morgan Ellis</div></div>
+                                        <select class="dir-level"><option selected>Elder</option></select>
+                                    </div>
+                                    <div class="dir-row">
+                                        <div><div class="dir-row__email">kiosk@example.church</div><div class="dir-row__link">Unlinked · foyer display</div></div>
+                                        <select class="dir-level"><option selected>Kiosk</option></select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="perm-split">
+                            <aside class="perm-roles">
+                                <div class="perm-roles__toolbar">
+                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm m-btn--block"><span class="material-symbols-outlined" style="font-size:18px">add</span> Custom level</button>
+                                </div>
+                                <ul class="perm-roles__list">
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Super admin</div><div class="perm-role__meta">2 accounts</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Admin</div><div class="perm-role__meta">1 account</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Elder</div><div class="perm-role__meta">4 accounts</div></div></button></li>
+                                    <li><button type="button" class="perm-role perm-role--active"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Pastoral Assistant</div><div class="perm-role__meta">1 account · locked rules</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Editor</div><div class="perm-role__meta">6 accounts</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Member</div><div class="perm-role__meta">38 accounts</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Viewer</div><div class="perm-role__meta">5 accounts</div></div></button></li>
+                                    <li><button type="button" class="perm-role"><span class="perm-role__badge">System</span><div><div class="perm-role__name">Kiosk</div><div class="perm-role__meta">2 accounts</div></div></button></li>
+                                </ul>
+                            </aside>
+                            <div class="perm-editor">
+                                <h4 style="margin:0 0 4px;font-family:var(--font-serif);font-size:20px;color:var(--primary)">Pastoral Assistant</h4>
+                                <p style="margin:0 0 12px;font-size:13px;color:var(--on-surface-variant)">System preset — elder-equivalent access; label and elder-assignment rules are fixed.</p>
+                                <div class="perm-callout"><span class="material-symbols-outlined">lock</span>
+                                    <div>Duplicate as custom if you need different toggles. <strong>count_as_elder</strong> and <strong>be_assignee</strong> cannot turn on for this preset.</div></div>
+
+                                <div class="perm-cat">
+                                    <p class="perm-cat__title"><span class="material-symbols-outlined" style="font-size:18px">diversity_3</span> Shepherding</p>
+                                    <div class="perm-grid">
+                                        <div class="perm-row"><div class="perm-row__label">View pastoral records</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                        <div class="perm-row"><div class="perm-row__label">Edit pastoral records</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                        <div class="perm-row perm-row--locked"><div class="perm-row__label">count_as_elder<small>Counts toward elder quorum / reports</small></div><button type="button" class="perm-toggle" disabled aria-label="count_as_elder locked off"><span class="material-symbols-outlined" style="font-size:16px;color:var(--on-surface-variant)">lock</span></button></div>
+                                        <div class="perm-row perm-row--locked"><div class="perm-row__label">be_assignee<small>Can be assigned as someone’s elder</small></div><button type="button" class="perm-toggle" disabled aria-label="be_assignee locked off"><span class="material-symbols-outlined" style="font-size:16px;color:var(--on-surface-variant)">lock</span></button></div>
+                                    </div>
+                                </div>
+                                <div class="perm-cat">
+                                    <p class="perm-cat__title"><span class="material-symbols-outlined" style="font-size:18px">music_note</span> Hymns</p>
+                                    <div class="perm-grid">
+                                        <div class="perm-row"><div class="perm-row__label">View hymn library</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                        <div class="perm-row"><div class="perm-row__label">Edit hymns &amp; history</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                    </div>
+                                </div>
+                                <div class="perm-cat">
+                                    <p class="perm-cat__title"><span class="material-symbols-outlined" style="font-size:18px">event</span> Calendar / Services</p>
+                                    <div class="perm-grid">
+                                        <div class="perm-row"><div class="perm-row__label">View calendar</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                        <div class="perm-row"><div class="perm-row__label">Edit services &amp; liturgy</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                    </div>
+                                </div>
+                                <div class="perm-cat">
+                                    <p class="perm-cat__title"><span class="material-symbols-outlined" style="font-size:18px">admin_panel_settings</span> Admin / Accounts</p>
+                                    <div class="perm-grid">
+                                        <div class="perm-row"><div class="perm-row__label">View accounts</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                        <div class="perm-row"><div class="perm-row__label">Provision users &amp; levels</div><button type="button" class="perm-toggle" disabled></button></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="state-row state-row--4" style="margin-top:var(--space-md)">
+                <div class="state-mini"><h4>Levels · empty custom</h4><div class="perm-empty">Only system presets until you add a custom level.</div></div>
+                <div class="state-mini"><h4>Levels · one custom</h4><ul class="perm-roles__list" style="padding:0"><li><button type="button" class="perm-role perm-role--active"><div class="perm-role__name">Greeter lead</div></button></li></ul></div>
+                <div class="state-mini"><h4>Levels · many</h4><ul class="perm-roles__list" style="max-height:100px;padding:0"><li class="perm-role"><div class="perm-role__name">Super admin</div></li><li class="perm-role"><div class="perm-role__name">Elder</div></li><li class="perm-role"><div class="perm-role__name">Pastoral Assistant</div></li><li class="perm-role"><div class="perm-role__name">Kiosk</div></li></ul></div>
+                <div class="state-mini"><h4>Levels · error</h4><div class="perm-error">Could not load levels. <button type="button" class="m-btn m-btn--quiet m-btn--sm">Retry</button></div></div>
+            </div>
+        </section>
+
+        <!-- VARIANT B -->
+        <section class="proto-section" id="variant-b">
+            <h2>Variant B — Provision | Levels | Permissions</h2>
+            <p class="proto-note">Three-card row for account work; full directory spans below. Elder selected in the middle card drives the right-hand toggle panel.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__label">Wide desktop · Elder editing · directory full width</span>
+                <div class="adm-shell">
+                    <div class="adm-shell__header"><p class="adm-shell__title">Admin Dashboard</p></div>
+                    <div class="adm-shell__tabs"><span class="adm-shell__tab adm-shell__tab--on">Accounts</span></div>
+                    <div class="adm-shell__body layout-b">
+                        <div class="layout-b__triple">
+                            <div class="adm-acct-card">
+                                <div class="adm-acct-card__head"><p class="adm-acct-kicker"><span class="adm-acct-kicker__dot"></span> Provision</p></div>
+                                <form style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+                                    <div><label class="m-label">Email</label><input type="email" class="dir-level" style="width:100%;margin-top:4px" placeholder="new@example.church" /></div>
+                                    <div><label class="m-label">Temp password</label><input type="password" class="dir-level" style="width:100%;margin-top:4px" /></div>
+                                    <div><label class="m-label">Level</label><select class="dir-level" style="width:100%;margin-top:4px"><option>Member</option><option>Editor</option><option>Viewer</option></select></div>
+                                    <button type="button" class="m-btn m-btn--primary m-btn--sm m-btn--block">Authorize user</button>
+                                </form>
+                            </div>
+                            <div class="adm-acct-card layout-b__levels">
+                                <div class="adm-acct-card__head"><p class="adm-acct-kicker"><span class="adm-acct-kicker__dot adm-acct-kicker__dot--muted"></span> Levels</p></div>
+                                <aside class="perm-roles" style="flex:1">
+                                    <ul class="perm-roles__list">
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Super admin</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Admin</div></button></li>
+                                        <li><button type="button" class="perm-role perm-role--active"><div class="perm-role__name">Elder</div><div class="perm-role__meta">System</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Pastoral Assistant</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Editor</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Member</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Viewer</div></button></li>
+                                        <li><button type="button" class="perm-role"><div class="perm-role__name">Kiosk</div></button></li>
+                                    </ul>
+                                    <div style="padding:8px"><button type="button" class="m-btn m-btn--quiet m-btn--sm m-btn--block">+ Custom level</button></div>
+                                </aside>
+                            </div>
+                            <div class="adm-acct-card">
+                                <div class="adm-acct-card__head" style="display:flex;justify-content:space-between;align-items:center">
+                                    <p class="adm-acct-kicker"><span class="adm-acct-kicker__dot"></span> Permissions</p>
+                                    <button type="button" class="m-btn m-btn--primary m-btn--sm">Save</button>
+                                </div>
+                                <div class="perm-editor" style="max-height:320px">
+                                    <p style="margin:0 0 10px;font-size:13px;color:var(--on-surface-variant)">Editing <strong>Elder</strong> — toggles apply to every account assigned this level.</p>
+                                    <div class="perm-cat">
+                                        <p class="perm-cat__title">Shepherding</p>
+                                        <div class="perm-grid">
+                                            <div class="perm-row"><div class="perm-row__label">View</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                            <div class="perm-row"><div class="perm-row__label">Edit</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                            <div class="perm-row"><div class="perm-row__label">count_as_elder</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                            <div class="perm-row"><div class="perm-row__label">be_assignee</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                        </div>
+                                    </div>
+                                    <div class="perm-cat">
+                                        <p class="perm-cat__title">Printables</p>
+                                        <div class="perm-grid">
+                                            <div class="perm-row"><div class="perm-row__label">View</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                            <div class="perm-row"><div class="perm-row__label">Edit</div><button type="button" class="perm-toggle"></button></div>
+                                        </div>
+                                    </div>
+                                    <div class="perm-cat">
+                                        <p class="perm-cat__title">Analytics</p>
+                                        <div class="perm-grid">
+                                            <div class="perm-row"><div class="perm-row__label">View</div><button type="button" class="perm-toggle perm-toggle--on"></button></div>
+                                            <div class="perm-row"><div class="perm-row__label">Export</div><button type="button" class="perm-toggle"></button></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="adm-acct-card layout-c__dir">
+                            <div class="adm-acct-card__head"><p class="adm-acct-kicker"><span class="adm-acct-kicker__dot adm-acct-kicker__dot--muted"></span> Directory</p></div>
+                            <div class="dir-scroll" style="max-height:200px">
+                                <div class="dir-row"><div><div class="dir-row__email">j.rivera@example.church</div><div class="dir-row__link">Editor</div></div><select class="dir-level"><option selected>Editor</option></select></div>
+                                <div class="dir-row"><div><div class="dir-row__email">guest@example.church</div><div class="dir-row__link">Viewer</div></div><select class="dir-level"><option selected>Viewer</option></select></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VARIANT C -->
+        <section class="proto-section" id="variant-c">
+            <h2>Variant C — Directory primary + “Manage levels…” sheet</h2>
+            <p class="proto-note">Day-to-day work stays in the directory; level design opens a Discord-style sheet from the toolbar.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__label">Sheet open · Pastoral Assistant · locked elder toggles visible</span>
+                <div class="adm-shell layout-c">
+                    <div class="adm-shell__header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                        <p class="adm-shell__title">Admin Dashboard</p>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined" style="font-size:18px">tune</span> Manage levels…</button>
+                    </div>
+                    <div class="adm-shell__tabs"><span class="adm-shell__tab adm-shell__tab--on">Accounts</span></div>
+                    <div class="adm-shell__body">
+                        <div class="adm-acct-card">
+                            <div class="adm-acct-card__head" style="display:flex;justify-content:space-between;align-items:center">
+                                <p class="adm-acct-kicker"><span class="adm-acct-kicker__dot adm-acct-kicker__dot--muted"></span> Directory</p>
+                                <span style="font-size:12px;color:var(--on-surface-variant)">Assign level · link person</span>
+                            </div>
+                            <div class="dir-scroll" style="max-height:360px">
+                                <div class="dir-row"><div><div class="dir-row__email">a.chen@example.church</div><div class="dir-row__link">Pastoral Assistant · Avery Chen</div></div><select class="dir-level"><option selected>Pastoral Assistant</option></select></div>
+                                <div class="dir-row"><div><div class="dir-row__email">s.admin@example.church</div><div class="dir-row__link">Super admin</div></div><select class="dir-level"><option selected>Super admin</option></select></div>
+                                <div class="dir-row"><div><div class="dir-row__email">foyer@example.church</div><div class="dir-row__link">Kiosk</div></div><select class="dir-level"><option selected>Kiosk</option></select></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="perm-sheet-backdrop" aria-hidden="true">
+                        <div class="perm-sheet" role="dialog" aria-label="Manage permission levels">
+                            <header class="perm-sheet__head">
+                                <div>
+                                    <h3>Manage levels</h3>
+                                    <p style="margin:4px 0 0;font-size:13px;color:var(--on-surface-variant)">Discord-style editor — does not replace directory assignment.</p>
+                                </div>
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" aria-label="Close"><span class="material-symbols-outlined">close</span></button>
+                            </header>
+                            <div class="perm-sheet__body">
+                                <div class="perm-split">
+                                    <aside class="perm-roles">
+                                        <ul class="perm-roles__list" style="max-height:none">
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Super admin</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Admin</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Elder</div></button></li>
+                                            <li><button type="button" class="perm-role perm-role--active"><div class="perm-role__name">Pastoral Assistant</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Editor</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Member</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Viewer</div></button></li>
+                                            <li><button type="button" class="perm-role"><div class="perm-role__name">Kiosk</div></button></li>
+                                        </ul>
+                                    </aside>
+                                    <div class="perm-editor">
+                                        <div class="perm-callout"><span class="material-symbols-outlined">lock</span>
+                                            <div><strong>count_as_elder</strong> and <strong>be_assignee</strong> are locked off for Pastoral Assistant (system preset).</div></div>
+                                        <div class="perm-cat">
+                                            <p class="perm-cat__title">Shepherding</p>
+                                            <div class="perm-grid">
+                                                <div class="perm-row perm-row--locked"><div class="perm-row__label">count_as_elder<small>Locked off for this preset</small></div><button type="button" class="perm-toggle" disabled></button></div>
+                                                <div class="perm-row perm-row--locked"><div class="perm-row__label">be_assignee<small>Cannot be someone’s assigned elder</small></div><button type="button" class="perm-toggle" disabled></button></div>
+                                                <div class="perm-row"><div class="perm-row__label">View records</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                                <div class="perm-row"><div class="perm-row__label">Edit records</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                            </div>
+                                        </div>
+                                        <div class="perm-cat">
+                                            <p class="perm-cat__title">Hymns · Calendar · Admin</p>
+                                            <div class="perm-grid">
+                                                <div class="perm-row"><div class="perm-row__label">Hymns view / edit</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                                <div class="perm-row"><div class="perm-row__label">Services view / edit</div><button type="button" class="perm-toggle perm-toggle--on" disabled></button></div>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="m-btn m-btn--primary m-btn--sm" style="margin-top:8px" disabled>Save level</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section">
+            <h2>Feedback ask (pick A, B, or C)</h2>
+            <ul class="proto-ask">
+                <li><strong>A</strong> — Is classic left/right under provision+directory the right default for power users?</li>
+                <li><strong>B</strong> — Does the three-card Provision | Levels | Permissions row earn its width vs. a stacked mobile collapse?</li>
+                <li><strong>C</strong> — Should level editing stay in a sheet so the directory stays primary day to day?</li>
+            </ul>
+        </section>
+    </main>
+</body>
+
+</html>
