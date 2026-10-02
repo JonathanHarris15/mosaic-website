@@ -40,6 +40,8 @@ const MODULES = [
     // lifting. Everything else that used to carry its own rank list asks
     // here, so a Pastoral Assistant cannot be remembered in one door and
     // forgotten in another. First because the modules below require it.
+    'permission-catalog.js',
+    'account-levels-core.js',
     'access-core.js',
     // MS-612. Approving a Name Fix recomposes the full name with the same
     // rule the profile used, so the server cannot store a spelling the

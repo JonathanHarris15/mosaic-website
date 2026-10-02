@@ -7,23 +7,15 @@
 // test/functions-shared-sync.test.js fails if this copy is stale.
 
 // Access Core — who may read as an elder, write the record, decide in
-// software, write as an editor, or count as an elder (ADR-0076).
+// software, write as an editor, or count as an elder (ADR-0076, MS-695).
 //
 // Pastoral Assistant is a Permission Level (`pastoral_assistant`), chosen
 // the same way as editor, elder, admin, and super admin. It is not a
 // checkbox. A leftover `users.pastoralAssistant` flag still counts, so an
 // account granted the old way keeps the doors until an admin sets the role.
 //
-//   reads as elder     — elder / super admin, or Pastoral Assistant
-//   reads as editor    — the editor ladder, or Pastoral Assistant
-//   writes as editor   — the editor ladder, or Pastoral Assistant
-//                        (the same editorial permissions an elder has)
-//   writes the record  — elder / super admin, or Pastoral Assistant
-//   can decide         — elder / super admin, or Pastoral Assistant
-//   is an elder        — elder / super admin only (counted as an elder:
-//                        Elder Tag, pickers, Elder Digest, Relations Viewer)
-//
-// Event visibility rungs and hidden-tag lifting follow reads-as-elder.
+// MS-695: helpers resolve from the permission catalog when `permissions` or
+// `accountLevelId` is present; legacy `permissionLevel` strings still work.
 //
 // Loaded as a classic <script> (window.AccessCore) and exported for Node.
 // Firestore / Storage cannot import this file; they restate the helpers and
@@ -31,6 +23,10 @@
 
 (function (global) {
     'use strict';
+
+    const Levels = (typeof require !== 'undefined')
+        ? require('./account-levels-core.js')
+        : (global.AccountLevelsCore || null);
 
     const PASTORAL_ASSISTANT_LEVEL = 'pastoral_assistant';
     const PASTORAL_ASSISTANT_LABEL = 'Pastoral Assistant';
@@ -45,10 +41,6 @@
         'public', 'member', 'participant', 'editor', 'elder',
     ]);
 
-    // Which rungs a Permission Level satisfies BY RANK, without the grant.
-    // `participant` is not answerable by rank for a member — the Calendar
-    // still runs a second query — but everyone above participant sees
-    // participant-level Events without holding a Role.
     const RUNGS_BY_LEVEL = Object.freeze({
         viewer: ['public'],
         member: ['public', 'member'],
@@ -60,13 +52,22 @@
     });
 
     function accountOf(value) {
-        if (!value || typeof value !== 'object') {
-            const level = typeof value === 'string' ? value : null;
-            return { permissionLevel: level, pastoralAssistant: false };
+        if (!Levels) {
+            if (!value || typeof value !== 'object') {
+                const level = typeof value === 'string' ? value : null;
+                return { permissionLevel: level, pastoralAssistant: false };
+            }
+            return {
+                permissionLevel: value.permissionLevel || value.role || null,
+                pastoralAssistant: value.pastoralAssistant === true,
+            };
         }
+        const norm = Levels.normalizeAccount(value);
         return {
-            permissionLevel: value.permissionLevel || value.role || null,
-            pastoralAssistant: value.pastoralAssistant === true,
+            permissionLevel: norm.permissionLevel,
+            pastoralAssistant: norm.pastoralAssistant,
+            accountLevelId: norm.accountLevelId,
+            permissions: norm.permissions,
         };
     }
 
@@ -76,21 +77,46 @@
 
     function isPastoralAssistant(value) {
         const account = accountOf(value);
-        return account.permissionLevel === PASTORAL_ASSISTANT_LEVEL
-            || account.pastoralAssistant === true;
+        if (account.permissionLevel === PASTORAL_ASSISTANT_LEVEL) return true;
+        if (account.pastoralAssistant === true) return true;
+        return false;
+    }
+
+    function legacyIsAnElder(level) {
+        return ELDER_LEVELS.indexOf(level) !== -1;
     }
 
     function isAnElder(value) {
-        return ELDER_LEVELS.indexOf(permissionLevelOf(value)) !== -1;
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'shep.count_as_elder');
+        }
+        return legacyIsAnElder(account.permissionLevel);
+    }
+
+    function legacyWritesAsEditor(level) {
+        return EDITOR_WRITE_LEVELS.indexOf(level) !== -1;
     }
 
     function writesAsEditor(value) {
-        return EDITOR_WRITE_LEVELS.indexOf(permissionLevelOf(value)) !== -1
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            if (Levels.hasPermission(account, 'directory.edit_identity')) return true;
+            if (Levels.hasPermission(account, 'printables.edit')) return true;
+            if (Levels.hasPermission(account, 'roles.manager.edit')) return true;
+            if (Levels.hasPermission(account, 'services.builder.edit')) return true;
+            return false;
+        }
+        return legacyWritesAsEditor(account.permissionLevel)
             || isPastoralAssistant(value);
     }
 
     function readsAsElder(value) {
-        return isAnElder(value) || isPastoralAssistant(value);
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'visibility.lift_hidden_tags');
+        }
+        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
     }
 
     function readsAsEditor(value) {
@@ -98,16 +124,33 @@
     }
 
     function writesTheRecord(value) {
-        return isAnElder(value) || isPastoralAssistant(value);
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'shep.notes.write');
+        }
+        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
     }
 
-    // MS-594: a Pastoral Assistant has elder software powers for shepherding
-    // decision/write actions. They still do not *count* as an elder.
     function canDecide(value) {
-        return isAnElder(value) || isPastoralAssistant(value);
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'shep.tags.manage');
+        }
+        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
     }
 
     function eventRungsFor(value) {
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            const perms = Levels.effectivePermissions(account);
+            const rungs = [];
+            if (perms['visibility.rung.public']) rungs.push('public');
+            if (perms['visibility.rung.member']) rungs.push('member');
+            if (perms['visibility.rung.participant']) rungs.push('participant');
+            if (perms['visibility.rung.editor']) rungs.push('editor');
+            if (perms['visibility.rung.elder']) rungs.push('elder');
+            return rungs.length ? rungs : ['public'];
+        }
         if (readsAsElder(value)) return VISIBILITY_RUNGS.slice();
         const listed = RUNGS_BY_LEVEL[permissionLevelOf(value)];
         return (listed || ['public']).slice();
@@ -117,16 +160,18 @@
         return readsAsElder(value);
     }
 
-    // The role's own name is Pastoral Assistant. The badge is only for an
-    // account that still carries the old flag on some other level.
     function badgeLabel(value) {
         const account = accountOf(value);
         if (account.permissionLevel === PASTORAL_ASSISTANT_LEVEL) return '';
         return account.pastoralAssistant === true ? PASTORAL_ASSISTANT_LABEL : '';
     }
 
-    // What a page stores after reading users/{uid}. One object so sixty
-    // Alpine/Preact surfaces do not each invent a different flag name.
+    function hasPermission(value, key) {
+        const account = accountOf(value);
+        if (Levels) return Levels.hasPermission(account, key);
+        return false;
+    }
+
     function pageFlags(userData) {
         const account = accountOf(userData);
         return {
@@ -159,6 +204,7 @@
         eventRungsFor,
         liftsHidden,
         badgeLabel,
+        hasPermission,
         pageFlags,
     };
 

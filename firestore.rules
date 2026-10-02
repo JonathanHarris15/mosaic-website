@@ -81,23 +81,50 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true);
     }
 
+    // MS-695: denormalized permission map on users/{uid}. When absent, fall
+    // back to the permissionLevel ladder (MS-119 / ADR-0077).
+    function signedInUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function usesPermissionMap() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && ('permissions' in signedInUserData());
+    }
+
+    function hasPermission(key) {
+      return usesPermissionMap()
+        && signedInUserData().permissions[key] == true;
+    }
+
     function readsAsElder() {
-      return isElder() || isPastoralAssistant();
+      return hasPermission('visibility.lift_hidden_tags')
+        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
     }
 
     function readsAsEditor() {
-      return isEditor() || isPastoralAssistant();
+      return hasPermission('directory.edit_identity')
+        || hasPermission('printables.edit')
+        || (!usesPermissionMap() && (isEditor() || isPastoralAssistant()));
     }
 
     function writesTheRecord() {
-      return isElder() || isPastoralAssistant();
+      return hasPermission('shep.notes.write')
+        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
     }
 
     // MS-594: shepherding decision/write actions in software. Same grant as
     // writesTheRecord; a separate name so counted-as-elder (isElder) stays
     // permission-level only.
     function canDecide() {
-      return isElder() || isPastoralAssistant();
+      return hasPermission('shep.tags.manage')
+        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
+    }
+
+    function countsAsElder() {
+      return hasPermission('shep.count_as_elder')
+        || (!usesPermissionMap() && isElder());
     }
 
     // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
@@ -1167,6 +1194,13 @@ service cloud.firestore {
     // stopped keeping the promise.
     match /form_ledger/{entryId} {
       allow read, write: if false;
+    }
+
+    // Account levels — permission presets (MS-695, ADR-0077). Admins read and
+    // manage; signed-in members do not enumerate levels from the client.
+    match /account_levels/{levelId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // Answer links (MS-247, ADR-0067). The token is never stored; the
