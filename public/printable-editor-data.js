@@ -283,9 +283,10 @@
                 return !!(Ex && Ex.isSundayBookletPath(this.project));
             },
 
-            // The pages for print: Sunday booklet path pads to ×4 for the
-            // church printer's booklet mode (MS-589 / MS-592). Other
-            // Printables print as laid out. Order is unchanged.
+            // The pages for flat print: Sunday booklet path pads to ×4 for
+            // the copier's booklet mode (MS-589 / MS-592). Other Printables
+            // print as laid out. Order is unchanged. Folio print imposes
+            // its own spreads and does not use this list.
             printPages() {
                 const entries = this.computeLayout({ persist: false });
                 const Ex = global.PrintableExportCore;

@@ -1,18 +1,20 @@
-// Printable Export Core — pad a flat Printable to a multiple of 4 (MS-589)
-// and decide whether that pad + booklet chrome apply (MS-592).
+// Printable Export Core — two print paths for the same laid-out pages.
 //
-// The church printer's booklet / saddle mode folds a stack whose leaf
-// count is a multiple of four. This module only appends blank pages so
-// the flat PDF is that length. It does not reorder, pair, or impose
-// spreads — software saddle-stitch is out of scope (MS-481 lock).
+// Flat (MS-589 / MS-592). `exportEntries` appends blank leaves so a
+// Sunday booklet is a multiple of 4. It does not reorder. A copier set
+// to Booklet / Saddle Stitch folds that stack itself. Pad and the
+// booklet banner are the Sunday booklet path only: the MS-481 binds
+// (`sunday_typed`, `sunday_hymns`) or an explicit `bookletExport` flag.
 //
-// Pad and the booklet-mode banner are the Sunday booklet path only
-// (MS-590 / MS-592). Detection is the MS-481 Sunday-booklet binds
-// (`sunday_typed`, `sunday_hymns`) or an explicit `bookletExport` flag
-// on the Printable — not a second export product.
+// Folio. `folioSpreads` is how the service guide editor prints
+// (`GuideEngine.imposeSpreads`): pad to a multiple of 4, then pair
+// pages onto landscape sheets, two pages each, saddle-stitch order.
+// Any Printable can take this path — a directory is not forced onto
+// it, and choosing it does not change the flat export. The sheet is
+// twice the page width (half letter lands on letter landscape).
 //
-// Pure: no DOM, no jsPDF. The print UI and the PDF snapshot both call
-// `exportEntries` on the layout PrintableLive already produced.
+// Pure: no DOM, no jsPDF. The print UI calls these on the layout
+// PrintableLive already produced.
 
 (function (global) {
     'use strict';
@@ -123,6 +125,65 @@
         return wantsBookletPad(project, opts) ? blankPadCount(n) : 0;
     }
 
+    function inches(n) {
+        const x = Number(n);
+        if (!isFinite(x) || x < 0) return 0;
+        return Math.round(x * 1000) / 1000;
+    }
+
+    // The physical sheet folio prints on: two pages side by side.
+    function folioSheet(template) {
+        const t = template || {};
+        const pageWidthIn = inches(t.widthIn);
+        const pageHeightIn = inches(t.heightIn);
+        return {
+            pageWidthIn: pageWidthIn,
+            pageHeightIn: pageHeightIn,
+            widthIn: inches(pageWidthIn * 2),
+            heightIn: pageHeightIn,
+        };
+    }
+
+    // Saddle-stitch spreads, the same pairing as GuideEngine.imposeSpreads.
+    // Pages are padded with blanks to a multiple of 4. For spread k the two
+    // indices sum to n-1; even spreads put the high page on the left, odd
+    // spreads flip. Blank leaves are real empty pages so a print can draw them.
+    // This always pads — folio is a folded booklet, including for a Printable
+    // that would not pad on the flat path.
+    function folioSpreads(entries) {
+        const padded = padEntries(Array.isArray(entries) ? entries : []);
+        const n = padded.length;
+        const spreads = [];
+        for (let k = 0; k < n / 2; k++) {
+            const hi = n - 1 - k;
+            const lo = k;
+            const even = (k % 2 === 0);
+            const leftIdx = even ? hi : lo;
+            const rightIdx = even ? lo : hi;
+            spreads.push({
+                left: padded[leftIdx],
+                leftIdx: leftIdx,
+                right: padded[rightIdx],
+                rightIdx: rightIdx,
+            });
+        }
+        return spreads;
+    }
+
+    // Print stylesheet for those sheets. `scale` is PrintableCore.printScale
+    // (96 / dpi) so a page laid out at 150 dpi still lands at true size.
+    function folioPrintCss(template, scale) {
+        const sheet = folioSheet(template);
+        const s = (typeof scale === 'number' && isFinite(scale) && scale > 0) ? scale : 1;
+        return '@page { size: ' + sheet.widthIn + 'in ' + sheet.heightIn + 'in; margin: 0; }'
+            + ' .pr-folio-sheet { width: ' + sheet.widthIn + 'in; height: ' + sheet.heightIn + 'in;'
+            + ' display: flex; flex-direction: row; align-items: stretch; overflow: hidden;'
+            + ' page-break-after: always; break-after: page; }'
+            + ' .pr-folio-leaf { width: ' + sheet.pageWidthIn + 'in; height: ' + sheet.pageHeightIn + 'in;'
+            + ' flex: 0 0 ' + sheet.pageWidthIn + 'in; overflow: hidden; position: relative; background: #fff; }'
+            + ' .pr-folio-leaf > .pr-page { transform: scale(' + s + '); transform-origin: 0 0; }';
+    }
+
     const PrintableExportCore = {
         MULTIPLE,
         SUNDAY_BOOKLET_SOURCES,
@@ -135,6 +196,9 @@
         exportEntries,
         exportPageCount,
         exportPadCount,
+        folioSheet,
+        folioSpreads,
+        folioPrintCss,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -36,7 +36,8 @@
                     <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
                 </button>
                 <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" :title="wantsBookletExport ? 'Prints a flat PDF padded to a multiple of 4. Use the printer\'s Booklet / Saddle mode — Mosaic does not reorder pages.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print</span></button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="printFolio()" :disabled="!entries.length" :title="folioTitle"><span class="material-symbols-outlined" aria-hidden="true">print</span><span class="m-btn__label">Print folio</span></button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span class="m-btn__label">Print</span></button>
             </div>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -59,8 +60,8 @@
         <div class="m-notice m-notice--info pv-booklet" x-show="!loading && !problem && entries.length && wantsBookletExport">
             <span class="material-symbols-outlined m-notice__icon">print</span>
             <div class="m-notice__body">
-                <span class="m-notice__title">Church printer booklet mode</span>
-                <span class="m-notice__text">Print sends a <strong>flat</strong> stack of <span x-text="printPageCount"></span> pages (a multiple of 4<span x-show="bookletPadCount" x-text="', including ' + bookletPadCount + ' blank'"></span>). On the copier, choose <strong>Booklet</strong> / <strong>Saddle Stitch</strong> / <strong>Fold &amp; Staple</strong>. Mosaic does not reorder pages — the printer folds this stack. See <code>docs/ops/ms-481-printer-booklet-mode.md</code>.</span>
+                <span class="m-notice__title">Printing this booklet</span>
+                <span class="m-notice__text"><strong>Print folio</strong> puts two pages on each landscape sheet, in the same order as the service guide (<span x-text="folioSheetCount"></span> sheets<span x-show="bookletPadCount" x-text="', ' + bookletPadCount + ' blank page' + (bookletPadCount === 1 ? '' : 's')"></span>). Fold that stack, and leave the copier’s booklet mode off. <strong>Print</strong> sends a flat stack of <span x-text="printPageCount"></span> pages for a copier set to Booklet / Saddle Stitch.</span>
             </div>
         </div>
         <div id="pv-pages" class="pv-pages" x-show="!loading && !problem"></div>

@@ -136,7 +136,52 @@
         });
     }
 
-    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, BASE_CSS };
+    // Folio print: the same sheets the service guide editor sends to the
+    // printer. Two pages per landscape sheet, saddle-stitch order from
+    // PrintableExportCore.folioSpreads. Replaces whatever the layer held.
+    function mountFolioPrint(layer, template, entries) {
+        if (!layer || !template) return [];
+        // Read at print time. A const capture of the global would bind while
+        // this file parses, and the view page loads this file first.
+        if (typeof PrintableExportCore === 'undefined' || typeof PrintableExportCore.folioSpreads !== 'function') return [];
+        const spreads = PrintableExportCore.folioSpreads(entries || []);
+        layer.innerHTML = '';
+        const style = document.createElement('style');
+        style.textContent = PrintableExportCore.folioPrintCss(template, Core.printScale(template));
+        layer.appendChild(style);
+        let blankN = 0;
+        const leaf = (entry) => {
+            const slot = document.createElement('div');
+            slot.className = 'pr-folio-leaf';
+            let page;
+            if (entry && entry.page) {
+                page = Object.assign({}, entry.page, {
+                    nodes: entry.nodes || entry.page.nodes || [],
+                });
+            } else {
+                blankN += 1;
+                page = {
+                    id: 'folio-blank-' + blankN,
+                    nodes: [],
+                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                    style: { 'background-color': '#ffffff' },
+                };
+            }
+            slot.appendChild(renderPage(page, template, { scopeId: page.id }));
+            return slot;
+        };
+        spreads.forEach(spread => {
+            const sheet = document.createElement('div');
+            sheet.className = 'pr-folio-sheet';
+            sheet.setAttribute('x-ignore', '');
+            sheet.appendChild(leaf(spread.left));
+            sheet.appendChild(leaf(spread.right));
+            layer.appendChild(sheet);
+        });
+        return spreads;
+    }
+
+    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, BASE_CSS };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableDom;

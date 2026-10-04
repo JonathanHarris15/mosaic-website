@@ -1661,6 +1661,16 @@ function printableEditor() {
         discardCode() { this.syncCode(true); },
 
         // ── Print (MS-398) ───────────────────────────────────────────────
+        // Flat: one page per sheet, Sunday booklets padded to ×4 for a
+        // copier in booklet mode. Folio: two pages per landscape sheet, the
+        // same saddle-stitch order as the service guide editor.
+
+        beginPrint(layer) {
+            document.body.classList.add('pe-printing');
+            const done = () => { document.body.classList.remove('pe-printing'); layer.innerHTML = ''; window.removeEventListener('afterprint', done); };
+            window.addEventListener('afterprint', done);
+            setTimeout(() => window.print(), 150);
+        },
 
         printPrintable() {
             this.fileMenu = false;
@@ -1683,10 +1693,19 @@ function printableEditor() {
                 sheet.appendChild(PrintableDom.renderPage(entry.page, t, { values: entry.values || null }));
                 layer.appendChild(sheet);
             });
-            document.body.classList.add('pe-printing');
-            const done = () => { document.body.classList.remove('pe-printing'); layer.innerHTML = ''; window.removeEventListener('afterprint', done); };
-            window.addEventListener('afterprint', done);
-            setTimeout(() => window.print(), 150);
+            this.beginPrint(layer);
+        },
+
+        printFolio() {
+            this.fileMenu = false;
+            if (!this.project || !this.template) return;
+            this.finishTextEdit();
+            const layer = document.getElementById('pe-print');
+            if (!layer || typeof PrintableDom.mountFolioPrint !== 'function') return;
+            const entries = this.computeLayout ? this.computeLayout({ persist: false }) : [];
+            if (!entries.length) return;
+            PrintableDom.mountFolioPrint(layer, this.template, entries);
+            this.beginPrint(layer);
         },
 
     };

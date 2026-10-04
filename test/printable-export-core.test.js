@@ -33,8 +33,7 @@ test('padEntries appends blanks and never reorders content (no imposition)', () 
     assert.deepEqual(padded.slice(0, 3).map(e => e.key), keys, 'content order is the layout order');
     assert.equal(padded[3].blank, true);
     assert.deepEqual(padded[3].nodes, []);
-    assert.ok(!Export.imposeSpreads, 'software imposition is not in this module');
-    assert.ok(!Export.saddleStitch);
+    assert.ok(!Export.imposeSpreads, 'flat export does not impose; folio is folioSpreads');
 });
 
 test('odd-length sample Sunday content pads to ×4 after bind', () => {
@@ -163,4 +162,59 @@ test('view-only booklet banner is gated on the Sunday booklet path', () => {
         'the booklet-mode banner must not show on every Printable');
     assert.doesNotMatch(html, /pv-booklet" x-show="!loading && !problem && entries\.length"/,
         'the MS-481 unscoped banner must not return');
+    assert.match(html, /printFolio\(\)/, 'the view page offers folio print');
+    const editor = fs.readFileSync(path.join(__dirname, '../public/printable-editor.html'), 'utf8');
+    assert.match(editor, /printFolio\(\)/, 'the editor File menu offers folio print');
+    const editorJs = fs.readFileSync(path.join(__dirname, '../public/printable-editor.js'), 'utf8');
+    assert.match(editorJs, /mountFolioPrint/, 'editor folio print uses the shared sheet builder');
+});
+
+test('folioSpreads matches the service guide imposition table', () => {
+    const Engine = require('../public/guide-engine.js');
+    const pages = Array.from({ length: 16 }, (_, i) => ({
+        key: 'p' + i,
+        page: { id: 'p' + i, nodes: [{ id: 't' + i, tag: 'p', text: String(i) }] },
+        nodes: [{ id: 't' + i, tag: 'p', text: String(i) }],
+    }));
+    const spreads = Export.folioSpreads(pages);
+    const guide = Engine.imposeSpreads(pages);
+    assert.equal(spreads.length, 8);
+    assert.deepEqual(spreads.map(s => [s.leftIdx, s.rightIdx]), guide.map(s => [s.leftIdx, s.rightIdx]));
+    assert.deepEqual(spreads.map(s => [s.leftIdx, s.rightIdx]), [
+        [15, 0], [1, 14], [13, 2], [3, 12], [11, 4], [5, 10], [9, 6], [7, 8],
+    ]);
+    assert.equal(spreads[0].right, pages[0], 'the cover stays the right-hand page of the outer sheet');
+    assert.equal(spreads[0].left.key, 'p15');
+});
+
+test('folioSpreads pads any Printable to a multiple of 4, including a one-page directory', () => {
+    const one = [{ key: 'only', page: { id: 'only', nodes: [] }, nodes: [{ id: 'n', tag: 'p', text: 'Ada' }] }];
+    const spreads = Export.folioSpreads(one);
+    assert.equal(spreads.length, 2, '4 leaves → 2 sheets');
+    for (const s of spreads) assert.equal(s.leftIdx + s.rightIdx, 3);
+    assert.equal(spreads[0].right.key, 'only');
+    assert.equal(spreads[0].left.blank, true);
+    assert.deepEqual(spreads[0].left.nodes, []);
+    assert.equal(Export.folioSpreads([]).length, 0);
+
+    const five = [0, 1, 2, 3, 4].map(i => ({ key: 'k' + i, page: { id: 'k' + i }, nodes: [] }));
+    const padded = Export.folioSpreads(five);
+    assert.equal(padded.length, 4, '5 pages pad to 8 leaves, 4 sheets');
+    assert.equal(padded[0].left.blank, true);
+    for (const s of padded) assert.equal(s.leftIdx + s.rightIdx, 7);
+});
+
+test('a half-letter folio sheet is letter landscape, matching the service guide @page', () => {
+    const half = { widthIn: 5.5, heightIn: 8.5, dpi: 96 };
+    const sheet = Export.folioSheet(half);
+    assert.deepEqual(sheet, { pageWidthIn: 5.5, pageHeightIn: 8.5, widthIn: 11, heightIn: 8.5 });
+    const css = Export.folioPrintCss(half, 1);
+    assert.match(css, /@page \{ size: 11in 8.5in; margin: 0; \}/);
+    assert.match(css, /\.pr-folio-leaf \{ width: 5\.5in; height: 8\.5in;/);
+    assert.match(css, /scale\(1\)/);
+    const dense = Export.folioPrintCss({ widthIn: 5.5, heightIn: 8.5 }, 96 / 150);
+    assert.match(dense, /scale\(0\.64\)/);
+    const a5 = Export.folioSheet({ widthIn: 5.83, heightIn: 8.27 });
+    assert.equal(a5.widthIn, 11.66);
+    assert.equal(a5.heightIn, 8.27);
 });

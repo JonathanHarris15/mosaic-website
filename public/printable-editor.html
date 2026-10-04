@@ -49,7 +49,8 @@
                         <span class="material-symbols-outlined">menu</span><span class="m-btn__label">File</span>
                     </button>
                     <div class="pe-menu" x-show="fileMenu" x-cloak @click.outside="fileMenu = false">
-                        <button type="button" @click="printPrintable()" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the printer\'s Booklet / Saddle mode — Mosaic does not reorder pages.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined">print</span><span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span> <kbd>Ctrl+P</kbd></button>
+                        <button type="button" @click="printPrintable()" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span> <kbd>Ctrl+P</kbd></button>
+                        <button type="button" @click="printFolio()" title="Two pages on each landscape sheet, in the same order as the service guide. Fold the stack and leave the copier booklet mode off."><span class="material-symbols-outlined" aria-hidden="true">print</span>Print folio…</button>
                         <button type="button" @click="startSaveTemplate()"><span class="material-symbols-outlined">bookmark_add</span>Save this page as a template</button>
                         <button type="button" @click="fileMenu = false; fitToView()"><span class="material-symbols-outlined">fit_screen</span>Fit page to view <kbd>Ctrl+0</kbd></button>
                         <a :href="'printable-view.html?id=' + encodeURIComponent(id)" target="_blank"><span class="material-symbols-outlined">visibility</span>Open the view-only page</a>

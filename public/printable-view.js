@@ -38,6 +38,15 @@ function printableView() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             return Ex ? Ex.exportPadCount(this.entries.length, this.project) : 0;
         },
+        get folioSheetCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioSpreads(this.entries).length : 0;
+        },
+        get folioTitle() {
+            const n = this.folioSheetCount;
+            const sheets = n + ' landscape sheet' + (n === 1 ? '' : 's');
+            return 'Two pages on each sheet (' + sheets + '), in the same order as the service guide. Fold the stack and leave the copier booklet mode off.';
+        },
 
         async init() {
             this.id = new URLSearchParams(location.search).get('id') || '';
@@ -130,6 +139,13 @@ function printableView() {
             return Ex ? Ex.exportEntries(this.entries, this.project) : this.entries;
         },
 
+        beginPrint(layer) {
+            document.body.classList.add('pv-printing');
+            const done = () => { document.body.classList.remove('pv-printing'); layer.innerHTML = ''; window.removeEventListener('afterprint', done); };
+            window.addEventListener('afterprint', done);
+            setTimeout(() => window.print(), 150);
+        },
+
         printPrintable() {
             const layer = document.getElementById('pv-print');
             if (!layer || !this.template) return;
@@ -147,10 +163,15 @@ function printableView() {
                 sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id }));
                 layer.appendChild(sheet);
             });
-            document.body.classList.add('pv-printing');
-            const done = () => { document.body.classList.remove('pv-printing'); layer.innerHTML = ''; window.removeEventListener('afterprint', done); };
-            window.addEventListener('afterprint', done);
-            setTimeout(() => window.print(), 150);
+            this.beginPrint(layer);
+        },
+
+        printFolio() {
+            const layer = document.getElementById('pv-print');
+            if (!layer || !this.template || !this.entries.length) return;
+            if (typeof PrintableDom.mountFolioPrint !== 'function') return;
+            PrintableDom.mountFolioPrint(layer, this.template, this.entries);
+            this.beginPrint(layer);
         },
     };
 }

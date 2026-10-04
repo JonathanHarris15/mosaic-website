@@ -173,6 +173,10 @@ Every list and every reading page has four states, using the same components:
 
 Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px grey.
 
+## Printable folio print
+
+**Print folio** (editor File menu, view-only header) lays two pages on one landscape sheet, the same saddle-stitch order as the service guide editor. The sheet class is `.pr-folio-sheet`; each page sits in a `.pr-folio-leaf` at the page's own inch size. A half-letter page therefore prints at letter landscape. The label is **Print folio** (with `…` inside the editor's File menu, where the other print item already uses it). Flat **Print** stays the one-page-per-sheet path. On a Sunday booklet the view page says which button folds on the copier and which one is already paired.
+
 ## Printable editor — scalar inserts (MS-689)
 
 Below the **Query** block in the data drawer, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Date**, **Page number**, and **Brand assets**. Each card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
