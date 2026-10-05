@@ -36,8 +36,11 @@ test('hidden tag and people reads stay on canReadElder so a PA still sees them',
     const load = JS.slice(JS.indexOf('async loadTags()'), JS.indexOf('async toggleTagVisibility'));
     assert.match(load, /this\.canReadElder \|\| !data\.hiddenFromOthers/);
     assert.doesNotMatch(load, /canDecide/);
+    const roster = JS.slice(JS.indexOf('directoryRoster()'), JS.indexOf('get directoryTabCounts'));
+    assert.match(roster, /if\s*\(\s*this\.canReadElder\s*\)\s*return this\.people/);
+    assert.doesNotMatch(roster, /canDecide/);
     const filtered = JS.slice(JS.indexOf('get filteredPeople()'), JS.indexOf('personMatchesDirectoryTab'));
-    assert.match(filtered, /if\s*\(\s*!this\.canReadElder\s*\)/);
+    assert.match(filtered, /directoryRoster\(\)/);
     assert.doesNotMatch(filtered, /canDecide/);
 });
 

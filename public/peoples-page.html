@@ -29,6 +29,16 @@
     
     <style>
         [x-cloak] { display: none !important; }
+        /* The size of a tab. Untracked and in the quiet colour so it sits
+           beside the label without becoming a badge. */
+        .dir-tab-count {
+            margin-left: 0.4em;
+            font-weight: 400;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0;
+            text-transform: none;
+            color: var(--on-surface-variant);
+        }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--surface-container-high); border-radius: 4px; }
@@ -247,12 +257,12 @@
                 <button @click="activeTab = 'members'"
                         :class="activeTab === 'members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
                         class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
-                    Members
+                    Members<span class="dir-tab-count" x-show="peopleLoaded" x-text="directoryTabCounts.members"></span>
                 </button>
                 <button @click="activeTab = 'non_members'"
                         :class="activeTab === 'non_members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
                         class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
-                    Non-members
+                    Non-members<span class="dir-tab-count" x-show="peopleLoaded" x-text="directoryTabCounts.non_members"></span>
                 </button>
             </div>
 

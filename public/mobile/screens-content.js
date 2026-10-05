@@ -425,6 +425,16 @@
     }
     var offered = editOn ? Track.tagsOffered(vocabulary, props.user) : [];
     var chosen = Track.chosenTagsWhen(editOn, chosenS[0]);
+    // Each tab's own size. Search and chosen tags narrow the rows; they do
+    // not fold Members and Non-members into one number.
+    var census = null;
+    if (!st.loading && Array.isArray(st.data)) {
+      var roster = people.filter(function (p) {
+        return !Track.personHiddenFrom(p, props.user, vis);
+      });
+      var editor = !!(window.AccessCore && AccessCore.writesAsEditor(props.user));
+      census = window.ShepherdingCore.directoryTabCounts(roster, editor);
+    }
     var results = people.filter(function (p) {
       return Track.visibleInDirectory(p, {
         tab: tab,
@@ -449,7 +459,10 @@
           ${seeQueue && requestsSt.error ? html`<p style=${{ margin: "0 16px 12px", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)" }}>${Req.QUEUE_FAILED}</p>` : null}
           ${Req.showQueue(props.user, editOn, pending) ? html`<${DirectoryQueue} requests=${pending} people=${people} onPeople=${function (list) { freshPeopleS[1](list); }} onRequests=${function (list) { queueOverrideS[1](list); }} />` : null}
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
-            ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
+            ${tabs.map(function (t) {
+              var n = census ? census[t[0]] : null;
+              return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}${n == null ? null : html`<span style=${{ marginLeft: 6, fontWeight: 400, fontSize: 12, fontVariantNumeric: "tabular-nums" }}>${n}</span>`}<//>`;
+            })}
           </div>
           ${offered.length ? html`<div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${offered.map(function (tag) {
@@ -460,7 +473,6 @@
             : props.user === null ? html`<${ErrorNote}>The directory is for people with an account. Sign in to see it.<//>`
             : !mayOpen ? html`<${ErrorNote}>The directory isn't available on your account yet. Ask an admin to connect you.<//>`
             : st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
-            <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} People<//></div>
             <div style=${{ padding: "8px 16px 66px" }}>
               <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
                 ${results.map(function (p, i) {

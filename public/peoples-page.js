@@ -18,6 +18,9 @@ document.addEventListener('alpine:init', () => {
         searchTerm: '',
         // Membership Directory tab: 'members' (carries Member tag) | 'non_members'.
         activeTab: 'members',
+        // The tab counts stay hidden until the roster has loaded, so they do
+        // not flash 0 while the list is still empty.
+        peopleLoaded: false,
         // Edit Mode (ADR-0012): the directory is read-only until an editor turns
         // this on, which reveals the inline People-management affordances. Off by
         // default; a plain member never sees the toggle (gated by canEdit).
@@ -287,6 +290,8 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error("Error loading people:", error);
                 this.showToast('Error loading people list', 'error');
+            } finally {
+                this.peopleLoaded = true;
             }
         },
 
@@ -1039,23 +1044,27 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        get filteredPeople() {
-            let list = [...this.people];
-            
-            // Filter out people with tags marked as hidePeople: true, or
-            // explicitly hidden by the shepherding system, unless the viewer
-            // reads as elder (PA included).
-            if (!this.canReadElder) {
-                list = list.filter(p => {
-                    const personTags = p.tags || [];
-                    return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople) && !p.shepherdingHidden;
-                });
-            }
+        // People this viewer may see at all, before the tab split, search, or
+        // tag filter. Hidden people stay hidden unless the viewer reads as elder.
+        directoryRoster() {
+            if (this.canReadElder) return this.people;
+            return this.people.filter(p => {
+                const personTags = p.tags || [];
+                return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople) && !p.shepherdingHidden;
+            });
+        },
 
+        // Members and non-members counted apart. Search and tag filters narrow
+        // the cards; they do not change how many people each tab holds.
+        get directoryTabCounts() {
+            return ShepherdingCore.directoryTabCounts(this.directoryRoster(), this.canEdit);
+        },
+
+        get filteredPeople() {
             // The Membership Directory (ADR-0012): the whole congregation browses
             // two tabs — Members (carries the Member tag) and Non-members (active,
             // no Member tag). Inactive People are hidden from non-editors on both.
-            list = list.filter(p => ShepherdingCore.personMatchesDirectoryTab(p, this.activeTab, this.canEdit));
+            let list = this.directoryRoster().filter(p => ShepherdingCore.personMatchesDirectoryTab(p, this.activeTab, this.canEdit));
 
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
