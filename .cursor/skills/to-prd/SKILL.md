@@ -8,6 +8,8 @@ Take the current conversation context and codebase understanding and produce a *
 
 Do NOT interview the user — synthesise what you already know. (If you need to interrogate an unclear Feature first, that's `grill-with-docs`; to shape a whole project, that's `create-epic`.)
 
+**Mosaic:** [MOSAIC-CONVENTIONS.md](../MOSAIC-CONVENTIONS.md) — team-lead decisions go on the ticket; only irreversible forks in **`## Open decisions`** at the top of the PRD.
+
 ## Where this sits in the workflow
 
 Tickets wait in the **`To Plan`** column carrying, at best, a loose brief. `/plan-ticket` routes each one down whichever lane clears its fog (`research` / `prototype` / `grill-with-docs` / `diagnose`) and then **always converges here**:
