@@ -78,11 +78,11 @@
         }
 
         /* ── This page's own layout ───────────────────────────────────
-           The split, the tile grid, and the Glance panel's label/value
-           lines. Layout of one page rather than a component, so it lives
-           here — but every length is a token, which is what lets the
-           m-dense class on <body> take the whole page down a step at
-           1024px without a second set of numbers written out below.
+           Sunday across the top, the place cards under it, two quiet
+           lines under those. Layout of one page rather than a component,
+           so it lives here — but every length is a token, which is what
+           lets the m-dense class on <body> take the whole page down a
+           step at 1024px without a second set of numbers written out below.
 
            ⚠ AND THAT IS WHY THESE GAPS ARE var() RATHER THAN TAILWIND.
            Tailwind's spacing utilities compile to literal pixels: gap-sm
@@ -91,62 +91,201 @@
 
         .dash-seal { width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }
 
-        .dash-main { display: flex; flex-direction: column; gap: var(--space-sm); }
-
-        .dash-split {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: var(--space-md);
-            align-items: stretch;
-            flex: 1;
-            min-height: 0;
+        .dash-main {
+            position: relative;
+            display: flex; flex-direction: column; gap: var(--space-md);
+            flex: 1 1 auto; min-height: 0; width: 100%;
+            padding: var(--space-sm) var(--space-margin) var(--space-lg);
+            overflow: auto;
         }
 
-        .dash-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; min-height: 0; }
+        /* The seal's rings, behind the page. They drift; a reader who has
+           asked for reduced motion sees them still. */
+        .dash-ambient { position: sticky; top: 0; height: 0; z-index: 0; pointer-events: none; }
+        .dash-ambient__svg {
+            position: absolute; left: 0; right: 0; top: 0;
+            width: 100%; height: 100vh; height: 100dvh;
+        }
+        .dash-ring { fill: none; stroke: var(--secondary); stroke-width: 1; }
+        .dash-ambient__drift-a,
+        .dash-ambient__drift-b,
+        .dash-ambient__spin,
+        .dash-ambient__spin-rev,
+        .dash-ambient__spin-slow { transform-box: fill-box; transform-origin: center; }
+        .dash-ambient__drift-a { animation: amb-drift-a 38s ease-in-out infinite alternate; }
+        .dash-ambient__drift-b { animation: amb-drift-b 46s ease-in-out infinite alternate; }
+        .dash-ambient__spin { animation: amb-spin 120s linear infinite; }
+        .dash-ambient__spin-rev { animation: amb-spin-rev 240s linear infinite; }
+        .dash-ambient__spin-slow { animation: amb-spin 300s linear infinite; }
+        @keyframes amb-drift-a {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(-26px, 18px) scale(1.035); }
+        }
+        @keyframes amb-drift-b {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(22px, -16px) scale(1.04); }
+        }
+        @keyframes amb-spin { to { transform: rotate(360deg); } }
+        @keyframes amb-spin-rev { to { transform: rotate(-360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            .dash-ambient, .dash-ambient * { animation: none !important; }
+        }
+
+        .dash-main > :not(.dash-ambient) { position: relative; z-index: 1; }
+
+        .dash-sunday {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .dash-sunday__when {
+            display: flex; flex-direction: column; justify-content: center; gap: 4px;
+            padding: var(--space-md) var(--space-md);
+        }
+        .dash-date {
+            margin: 0;
+            font-family: var(--font-display); font-size: 30px; font-weight: 600;
+            line-height: 1.1; color: var(--primary); text-wrap: balance;
+        }
+        .dash-sunday__theme {
+            margin: 0;
+            font-family: var(--font-serif); font-size: 16px;
+            color: var(--on-surface-variant); text-wrap: pretty;
+        }
+        .dash-sunday__theme--phone { display: none; }
+        .dash-sunday__facts {
+            display: flex; flex-direction: column; justify-content: center; gap: var(--space-sm);
+            padding: 18px var(--space-md);
+            min-width: 0;
+        }
+        .dash-pairs {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px var(--space-md);
+            margin: 0;
+        }
+        .dash-fact { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .dash-fact__k {
+            font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: 600;
+            color: var(--on-surface-variant);
+        }
+        .dash-fact__v {
+            font-family: var(--font-serif); font-size: 16px; color: var(--on-surface);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .dash-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+        .dash-sunday__act {
+            display: flex; flex-direction: column; justify-content: center; gap: 10px;
+            padding: 18px 22px;
+            background: var(--surface-container-low);
+        }
+        .dash-sunday__act[hidden] { display: none; }
+        .dash-sunday__btn { width: 100%; }
+        .dash-ready { display: flex; flex-direction: column; gap: 7px; }
+        .dash-ready__top { display: flex; justify-content: space-between; gap: var(--space-sm); font-size: 13px; }
+        .dash-ready__title { font-weight: 600; color: var(--on-warning-container); }
+        .dash-ready__frac { color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }
+        .dash-ready__track {
+            height: 5px; border-radius: var(--radius-full);
+            background: var(--surface-container-high); overflow: hidden;
+        }
+        .dash-ready__bar { height: 100%; background: var(--warning); }
+        .dash-ready__short { font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); }
+        .dash-ready--ok {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 600; color: var(--on-success-container);
+        }
+        .dash-ready--ok .material-symbols-outlined { font-size: 19px; }
+        .dash-sunday__warn {
+            display: none;
+            align-items: center; gap: 10px;
+            padding: 11px var(--space-md);
+            background: var(--warning-container); color: var(--on-warning-container);
+            font-size: 13px; text-decoration: none;
+        }
+        .dash-sunday__warn .material-symbols-outlined { font-size: 18px; flex: 0 0 auto; }
+        .dash-sunday__warn-text { flex: 1 1 auto; min-width: 0; }
+        .dash-sunday__warn-text b { font-weight: 600; }
+
+        @media (min-width: 900px) {
+            .dash-sunday { grid-template-columns: 260px minmax(0, 1fr) 300px; }
+            .dash-sunday:not(:has(.dash-sunday__act:not([hidden]))) {
+                grid-template-columns: 260px minmax(0, 1fr);
+            }
+            .dash-sunday__when { border-right: 1px solid var(--outline-variant); }
+            .dash-sunday__act { border-left: 1px solid var(--outline-variant); }
+            .dash-sunday__theme--phone { display: none !important; }
+        }
+        @media (max-width: 899px) {
+            .dash-date { font-size: 24px; }
+            .dash-sunday__facts .dash-pairs { display: none; }
+            .dash-sunday__act { display: none; }
+            .dash-sunday__theme--desk { display: none; }
+            .dash-sunday__theme--phone:not([hidden]) { display: block; }
+            .dash-sunday__warn:not([hidden]) { display: flex; }
+        }
+
+        .dash-places-head {
+            display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+        }
+        .dash-drag-hint {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 13px; color: var(--outline);
+        }
+        .dash-drag-hint .material-symbols-outlined { font-size: 15px; }
+        .dash-drag-hint[hidden] { display: none; }
 
         .dash-tiles {
             display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: var(--space-sm);
-            align-content: stretch;
-        }
-
-        /* A place card. The name is Cinzel. It wraps inside the card, at a
-           space, and it must not widen the row: a grid item's min-width is
-           the width of its longest word, and "Registrations" at display size
-           is wider than a third of a narrow pane. The size is a fraction of
-           the card. 13cqi sat on the border and the last letter crossed it. */
-        .dash-tiles { min-width: 0; }
-        .dash-tiles > .m-nav-card {
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: flex-start;
-            text-align: left;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: var(--space-sm);
             min-width: 0;
-            min-height: 0;
-            padding: var(--space-sm) var(--space-md);
-            border-top: 3px solid var(--primary);
-            container-type: inline-size;
-            overflow: hidden;
         }
+        @media (min-width: 720px) {
+            .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1100px) {
+            .dash-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
+
+        /* A place card on this page is a control in a grid, so the name is
+           Libre Franklin. Cinzel stays on the wordmark and the Sunday date. */
+        .dash-tiles > .m-nav-card {
+            position: relative;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            text-align: left;
+            gap: 12px;
+            min-width: 0;
+            min-height: 132px;
+            padding: 16px;
+            border-radius: var(--radius-xl);
+        }
+        .dash-tiles > .m-nav-card:hover {
+            border-color: var(--outline);
+            background: var(--surface-container-low);
+        }
+        .dash-tiles > .m-nav-card:focus-visible,
+        .dash-strip:focus-visible,
+        .dash-sunday__warn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
         .dash-tiles > .m-nav-card .m-medallion {
             margin-bottom: 0;
-            width: 40px;
-            height: 40px;
+            width: 36px; height: 36px;
+            border-radius: var(--radius);
+            background: var(--primary); color: var(--on-primary);
         }
+        .dash-tiles > .m-nav-card:hover .m-medallion { background: var(--primary); }
         .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 20px; }
-        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: 0; min-width: 0; max-width: 100%; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: auto; min-width: 0; max-width: 100%; }
         .dash-tiles > .m-nav-card .m-nav-card__title {
-            font-family: var(--font-display);
-            /* 10.5cqi keeps "Registrations" (~0.76em a letter in Cinzel)
-               inside the card, with room before the border. */
-            font-size: clamp(16px, 10.5cqi, 26px);
-            line-height: 1.15;
-            color: var(--primary);
-            max-width: 100%;
-            overflow-wrap: normal;
-            word-break: normal;
+            margin: 0;
+            font-family: var(--font-sans);
+            font-size: 15px; font-weight: 600; line-height: 1.25;
+            color: var(--on-surface);
             text-wrap: pretty;
         }
         .dash-tiles > .m-nav-card .m-nav-card__desc {
@@ -154,135 +293,48 @@
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
             overflow: hidden;
-            line-height: 1.35;
+            margin: 3px 0 0;
+            font-size: 13px; line-height: 1.35;
+        }
+        @media (max-width: 719px) {
+            .dash-tiles > .m-nav-card { min-height: 84px; padding: 12px; gap: 10px; }
+            .dash-tiles > .m-nav-card .m-nav-card__desc { display: none; }
+            .dash-tiles > .m-nav-card .m-medallion { width: 30px; height: 30px; border-radius: var(--radius-sm); }
+            .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 18px; }
+            .dash-tiles > .m-nav-card .m-nav-card__title { font-size: 13.5px; }
         }
 
-        @media (min-width: 640px) {
-            .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dash-strips { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
+        @media (min-width: 800px) {
+            .dash-strips--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
-
-        @media (min-width: 1024px) {
-            /* The glance is a column of a few facts. Wider than this it is
-               only a gutter, and the cards need the rest of the window. */
-            .dash-split { grid-template-columns: minmax(0, 1fr) 320px; }
-            /* The glance fills its column. .m-side is align-self: start, which
-               would shrink the panel to its text and leave a cream gutter. */
-            .dash-split > .m-with-side { min-width: 0; width: 100%; }
-            .dash-split #sunday-glance { width: 100%; align-self: stretch; }
-            .dash-tiles {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                align-content: start;
-                flex: 1;
-                min-height: 0;
-            }
-            .dash-stack { align-self: stretch; min-height: 0; }
-            /* Four or more places: the rows share the window and do not
-               scroll while the type still fits. Three or fewer stay a band
-               the height of the type, and Sunday stays that same height
-               instead of a blank column. */
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) {
-                align-items: stretch;
-            }
-            /* Rows share the window exactly. A 200px floor left four rows a
-               few pixels too tall, and the grid grew a scrollbar for that slop. */
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles {
-                grid-auto-rows: minmax(0, 1fr);
-                overflow: hidden;
-            }
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card {
-                height: 100%;
-                justify-content: center;
-                /* The row has a real height here, so the name can track it.
-                   Below 1024 the card sizes to its text, and size containment
-                   would collapse that. */
-                container-type: size;
-            }
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-tiles > .m-nav-card .m-nav-card__title {
-                font-size: clamp(15px, min(10.5cqi, 13cqh), 26px);
-            }
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) .dash-stack,
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) > .m-with-side,
-            .dash-split:has(.dash-tiles > .m-nav-card:nth-child(4)) #sunday-glance {
-                height: 100%;
-                min-height: 0;
-            }
-            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) {
-                flex: 0 0 auto;
-                align-items: stretch;
-            }
-            .dash-split:not(:has(.dash-tiles > .m-nav-card:nth-child(4))) #sunday-glance {
-                height: 100%;
-            }
+        .dash-strip {
+            display: flex; align-items: center; gap: 14px;
+            padding: 12px 18px;
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius);
+            color: var(--on-surface); text-decoration: none;
+            font-size: 13.5px;
         }
+        .dash-strip:hover { border-color: var(--outline); }
+        .dash-strip > .material-symbols-outlined { font-size: 20px; color: var(--secondary); flex: 0 0 auto; }
+        .dash-strip__text { flex: 1 1 auto; min-width: 0; }
+        .dash-strip__text b { font-weight: 600; }
+        .dash-strip__go { font-size: 13px; font-weight: 600; color: var(--primary); flex: 0 0 auto; }
 
-        .dash-caption {
-            margin: 0;
-            font-family: var(--font-sans); font-size: 13px;
-            color: var(--on-surface-variant);
-        }
-
-        /* The Glance panel's body: a label on the left, the answer on the
-           right, in the serif because it is read rather than operated. */
-        .dash-pairs { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; }
-
-        .dash-pairs > div {
-            display: flex; align-items: baseline; justify-content: space-between;
-            gap: var(--space-sm);
-        }
-
-        .dash-kicker {
-            margin: 0;
-            font-family: var(--font-sans); font-size: 13px; font-weight: 600;
-            letter-spacing: 0.01em; color: var(--on-surface-variant);
-        }
-        .dash-date {
-            margin: 2px 0 0;
-            font-family: var(--font-display); font-size: 28px; font-weight: 600;
-            line-height: 1.15; color: var(--primary); text-wrap: balance;
-        }
-
-        .dash-pairs dt {
-            flex: 0 0 auto;
-            font-family: var(--font-sans); font-size: 13px;
-            font-weight: 600; letter-spacing: 0.01em;
-            text-transform: none; color: var(--on-surface-variant);
-        }
-
-        .dash-pairs dd {
-            flex: 1 1 auto; min-width: 0; margin: 0;
-            font-family: var(--font-serif); font-size: 16px;
-            color: var(--on-surface); text-align: right; text-wrap: pretty;
-        }
-
-        .dash-hairline { margin: var(--space-sm) 0; }
-        .dash-num { font-variant-numeric: tabular-nums; }
-        .dash-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-
-        /* The panel's one action sits on its floor, wherever the reading above
-           it happened to end. */
-        .dash-glance-act { margin-top: auto; width: 100%; flex: 0 0 auto; }
-
-        /* Drag to rearrange. Only on the tile under the pointer, and always
-           once it has keyboard focus — a control you can Tab to but cannot see
-           is worse than no control. It carries the hovered tile's own surface
-           so that on a compact tile, where it sits over the end of a line, it
-           covers the text rather than muddling it. */
+        /* The handle sits in the card's corner, clear of the name, so it can
+           stay visible. Focus still draws its own outline. */
         .drag-handle {
-            position: absolute; top: 6px; right: 6px;
+            position: absolute; top: 16px; right: 12px;
             display: flex; align-items: center; justify-content: center;
             padding: 2px; border: 0; border-radius: var(--radius-sm);
-            background: var(--surface-container-low); color: var(--on-surface-variant);
-            opacity: 0; cursor: grab; touch-action: none;
-            transition: opacity var(--duration) var(--ease-standard);
+            background: transparent; color: var(--outline-variant);
+            cursor: grab; touch-action: none;
         }
-
-        .m-nav-card:hover .drag-handle { opacity: .75; }
-        .drag-handle:hover, .drag-handle:focus-visible { opacity: 1; }
         .drag-handle:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 1px; }
         .drag-handle:active { cursor: grabbing; }
         .drag-handle .material-symbols-outlined { font-size: 18px; pointer-events: none; }
-
-        .dash-tiles .drag-handle { top: 10px; right: 10px; transform: none; }
     </style>
 
     <!-- Firebase SDKs -->
@@ -311,6 +363,10 @@
     <script src="trade-core.js"></script>
     <script src="roles-core.js"></script>
     <script src="events-occurrence-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="commitments-core.js"></script>
+    <script src="home-dashboard-core.js"></script>
     <script src="trades-store.js"></script>
     <script src="trades-view.js"></script>
     <script src="swaps-notice.js"></script>
@@ -343,16 +399,66 @@
             <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
-    <main class="dash-main flex-grow w-full px-margin pb-sm pt-sm lg:min-h-0 lg:overflow-hidden">
-        <!-- The one thing that needs doing, above everything the page offers.
-             Filled in by updateDashboard() for the people who may fix it, and
-             empty — taking no room at all — for everybody else. -->
+    <main class="dash-main">
+        <div class="dash-ambient" aria-hidden="true">
+            <svg class="dash-ambient__svg" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMid slice" focusable="false">
+                <g transform="translate(1210,30)">
+                    <g data-par="a">
+                        <g class="dash-ambient__drift-a">
+                            <circle r="170" class="dash-ring" opacity=".16"></circle>
+                            <circle r="250" class="dash-ring" opacity=".2"></circle>
+                            <circle r="340" class="dash-ring" opacity=".14"></circle>
+                            <circle r="430" class="dash-ring" opacity=".1"></circle>
+                            <g class="dash-ambient__spin-rev">
+                                <circle r="300" fill="none" stroke="var(--tertiary)" stroke-width="1" stroke-dasharray="1.5 13" opacity=".32"></circle>
+                            </g>
+                            <g data-par="dot">
+                                <g class="dash-ambient__spin">
+                                    <circle cx="250" cy="0" r="3.5" fill="var(--gold)" opacity=".7"></circle>
+                                </g>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+                <g transform="translate(40,780)">
+                    <g data-par="b">
+                        <g class="dash-ambient__drift-b">
+                            <circle r="130" class="dash-ring" opacity=".16"></circle>
+                            <circle r="210" class="dash-ring" opacity=".12"></circle>
+                            <circle r="290" class="dash-ring" opacity=".08"></circle>
+                            <g class="dash-ambient__spin-slow">
+                                <polygon points="69.3,40.0 0.0,80.0 -69.3,40.0 -69.3,-40.0 0,-80.0 69.3,-40.0" fill="none" stroke="var(--gold)" stroke-width="1" opacity=".35"></polygon>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+            </svg>
+        </div>
+
+        <section class="dash-sunday" id="sunday-glance" aria-labelledby="glance-kicker">
+            <div class="dash-sunday__when">
+                <span class="m-label" id="glance-kicker">This Sunday</span>
+                <h2 class="dash-date" id="glance-date">Sunday</h2>
+                <p class="dash-sunday__theme dash-sunday__theme--desk" id="glance-theme" hidden></p>
+                <p class="dash-sunday__theme dash-sunday__theme--phone" id="glance-theme-phone" hidden></p>
+            </div>
+            <div class="dash-sunday__facts" id="glance-content" aria-live="polite"></div>
+            <div class="dash-sunday__act" id="glance-act" hidden></div>
+            <a class="dash-sunday__warn" id="glance-warn" hidden></a>
+        </section>
+
+        <!-- Swaps still land here (swaps-notice.js looks for this id). The
+             Sunday warning itself now lives in the card above. -->
         <div id="service-notice"></div>
 
-        <div class="dash-split flex-grow min-h-0">
-            <!-- Left Column -->
-            <div class="dash-stack lg:min-h-0 lg:overflow-hidden">
-                <div class="dash-tiles lg:min-h-0" id="nav-cards-grid">
+        <div class="dash-places-head">
+            <span class="m-label" id="dash-places-label">Your places</span>
+            <span class="dash-drag-hint" hidden id="dash-caption">
+                <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
+                Drag to rearrange
+            </span>
+        </div>
+        <div class="dash-tiles" id="nav-cards-grid">
                     <!-- Hymns. data-card-key stays hymn-directory: that is the
                          stored arrangement key, and renaming it would scramble
                          every saved home screen (same rule as Services). -->
@@ -398,24 +504,19 @@
 
                     <!-- Service Analytics is not on home (MS-696). Editors open it
                          from the Insights strip on the Shepherd Dashboard. -->
-                </div>
-                <!-- Said once the cards can actually be dragged, which is only
-                     when somebody is signed in to save the arrangement to. -->
-                <p class="dash-caption" hidden id="dash-caption">Your pages, in your saved order. Drag a tile to
-                    rearrange.</p>
-            </div>
+        </div>
 
-            <!-- Right Column -->
-            <div class="m-with-side flex flex-col lg:min-h-0 lg:overflow-hidden">
-                <div class="m-card m-side flex flex-col" id="sunday-glance">
-                    <p class="dash-kicker">This Sunday</p>
-                    <h2 class="dash-date shrink-0" id="glance-date">Sunday</h2>
-                    <hr class="m-divider dash-hairline shrink-0" />
-                    <div id="glance-content" class="m-side__scroll flex flex-col gap-sm pr-1">
-                        <!-- Data will be injected here -->
-                    </div>
-                </div>
-            </div>
+        <div class="dash-strips" id="dash-strips" hidden>
+            <a class="dash-strip" id="dash-commitments" hidden href="commitments.html">
+                <span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span>
+                <span class="dash-strip__text" id="dash-commitments-text"></span>
+                <span class="dash-strip__go">Commitments</span>
+            </a>
+            <a class="dash-strip" id="dash-week" hidden href="calendar.html">
+                <span class="material-symbols-outlined" aria-hidden="true">event</span>
+                <span class="dash-strip__text" id="dash-week-text"></span>
+                <span class="dash-strip__go">Calendar</span>
+            </a>
         </div>
 
         <!-- Shown only on a phone (see the #mobile-switch rule in <head>), which
@@ -491,7 +592,7 @@
                 handle.className = 'drag-handle';
                 handle.title = 'Drag to reorder';
                 handle.setAttribute('aria-label', 'Drag to reorder this card');
-                handle.innerHTML = '<span class="material-symbols-outlined">drag_indicator</span>';
+                handle.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>';
                 // The card is an <a>; keep a click on the handle from navigating.
                 handle.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
                 card.appendChild(handle);
@@ -524,42 +625,302 @@
             });
         }
 
-        // The Sunday that is not ready, said once at the top of the page. Only
-        // ever drawn for somebody who can do something about it — see the gate
-        // at the call site.
-        function showServiceNotice(when, message, href) {
-            const slot = document.getElementById('service-notice');
-            if (!slot) return;
-            const day = when.toLocaleDateString(undefined, {
-                weekday: 'long', day: 'numeric', month: 'long'
-            });
-            slot.innerHTML = `
-                <div class="m-notice m-notice--warning">
-                    <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">warning</span>
-                    <div class="m-notice__body">
-                        <span class="m-notice__title">${day} is not ready</span>
-                        <span class="m-notice__text dash-num">${message}</span>
-                    </div>
-                    <div class="m-notice__acts">
-                        <a class="m-btn m-btn--primary m-btn--sm" href="${href}">
-                            <span class="m-btn__label">Fix the blanks</span>
-                        </a>
-                    </div>
-                </div>
-            `;
+        function symbolIcon(name) {
+            const span = document.createElement('span');
+            span.className = 'material-symbols-outlined';
+            span.setAttribute('aria-hidden', 'true');
+            span.textContent = name;
+            return span;
         }
 
-        // The Glance panel's one action, pinned to the bottom of the panel
-        // whatever the reading above it came to.
-        function glanceAction(href, icon, label) {
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text != null) node.textContent = text;
+            return node;
+        }
+
+        function clearNode(node) {
+            if (!node) return;
+            while (node.firstChild) node.removeChild(node.firstChild);
+        }
+
+        function setHiddenText(node, text) {
+            if (!node) return;
+            node.textContent = text || '';
+            node.hidden = !text;
+        }
+
+        function actionLink(href, label) {
             const link = document.createElement('a');
             link.href = href;
-            link.className = 'm-btn m-btn--primary dash-glance-act';
-            link.innerHTML = `
-                <span class="material-symbols-outlined" aria-hidden="true">${icon}</span>
-                <span class="m-btn__label">${label}</span>
-            `;
+            link.className = 'm-btn m-btn--primary m-btn--sm dash-sunday__btn';
+            link.appendChild(el('span', 'm-btn__label', label));
             return link;
+        }
+
+        function emptyBlock(icon, message) {
+            const box = el('div', 'm-empty');
+            box.appendChild(symbolIcon(icon));
+            box.appendChild(el('p', null, message));
+            return box;
+        }
+
+        function refreshPlaceCount() {
+            const grid = document.getElementById('nav-cards-grid');
+            const label = document.getElementById('dash-places-label');
+            if (!grid || !label) return;
+            const n = grid.querySelectorAll('[data-card-key]').length;
+            label.textContent = 'Your places · ' + n + (n === 1 ? ' place' : ' places');
+        }
+
+        // Sunday, painted from home-dashboard-core. One action: fix the blanks,
+        // open the editor, or create the service. Viewers get the reading only.
+        function paintSunday(opts) {
+            const HD = window.HomeDashboard;
+            const facts = document.getElementById('glance-content');
+            const act = document.getElementById('glance-act');
+            const warn = document.getElementById('glance-warn');
+            const desk = document.getElementById('glance-theme');
+            const phone = document.getElementById('glance-theme-phone');
+            if (!facts || !HD) return;
+
+            clearNode(facts);
+            clearNode(act);
+            clearNode(warn);
+            if (act) act.hidden = true;
+            if (warn) { warn.hidden = true; warn.removeAttribute('href'); }
+            setHiddenText(desk, '');
+            setHiddenText(phone, '');
+
+            const canFix = !!opts.canFix;
+            const href = 'service-builder.html?date=' + encodeURIComponent(opts.dateKey || '');
+            const validateHref = href + '&validate=true';
+
+            if (opts.mode === 'error') {
+                const notice = el('div', 'm-notice m-notice--error');
+                const mark = symbolIcon('error');
+                mark.classList.add('m-notice__icon');
+                notice.appendChild(mark);
+                const body = el('div', 'm-notice__body');
+                body.appendChild(el('span', 'm-notice__title', 'This Sunday\u2019s details did not load.'));
+                notice.appendChild(body);
+                facts.appendChild(notice);
+                return;
+            }
+
+            if (opts.mode === 'missing') {
+                facts.appendChild(emptyBlock('event_busy', 'No service is on the books for this Sunday.'));
+                if (canFix && act) {
+                    act.hidden = false;
+                    act.appendChild(actionLink(href, 'Create Service'));
+                }
+                return;
+            }
+
+            const svc = HD.normalizeService(opts.svc);
+            const view = HD.glance(svc);
+            const ready = HD.readiness(svc);
+            setHiddenText(desk, view.theme);
+            setHiddenText(phone, [view.theme, view.sermon].filter(Boolean).join(' · '));
+
+            if (!view.pairs.length && !view.baptism && !view.theme) {
+                facts.appendChild(emptyBlock('event_note', 'Nothing is set for this Sunday yet.'));
+            } else if (view.pairs.length || view.baptism) {
+                if (view.pairs.length) {
+                    const grid = el('div', 'dash-pairs');
+                    view.pairs.forEach(function (pair) {
+                        const cell = el('div', 'dash-fact');
+                        cell.appendChild(el('span', 'dash-fact__k', pair.k));
+                        cell.appendChild(el('span', 'dash-fact__v', pair.v));
+                        grid.appendChild(cell);
+                    });
+                    facts.appendChild(grid);
+                }
+                if (view.baptism) {
+                    const badges = el('div', 'dash-badges');
+                    const badge = el('span', 'm-badge m-badge--tertiary');
+                    badge.appendChild(symbolIcon('water_drop'));
+                    badge.appendChild(document.createTextNode(' Baptism — ' + view.baptism));
+                    badges.appendChild(badge);
+                    facts.appendChild(badges);
+                }
+            }
+
+            if (!canFix || !act) return;
+            act.hidden = false;
+            if (ready.notReady) {
+                const block = el('div', 'dash-ready');
+                const top = el('div', 'dash-ready__top');
+                top.appendChild(el('span', 'dash-ready__title', 'Not ready'));
+                top.appendChild(el('span', 'dash-ready__frac', ready.fraction));
+                block.appendChild(top);
+                const track = el('div', 'dash-ready__track');
+                const bar = el('div', 'dash-ready__bar');
+                const pct = ready.total ? Math.round(100 * ready.set / ready.total) : 0;
+                track.setAttribute('role', 'progressbar');
+                track.setAttribute('aria-valuemin', '0');
+                track.setAttribute('aria-valuemax', String(ready.total));
+                track.setAttribute('aria-valuenow', String(ready.set));
+                track.setAttribute('aria-label', 'Order of Service');
+                bar.style.width = pct + '%';
+                track.appendChild(bar);
+                block.appendChild(track);
+                if (ready.short) block.appendChild(el('span', 'dash-ready__short', ready.short));
+                act.appendChild(block);
+                act.appendChild(actionLink(validateHref, 'Fix the blanks'));
+
+                if (warn) {
+                    warn.hidden = false;
+                    warn.href = validateHref;
+                    warn.appendChild(symbolIcon('warning'));
+                    const text = el('span', 'dash-sunday__warn-text');
+                    text.appendChild(el('b', null, 'Not ready'));
+                    text.appendChild(document.createTextNode(ready.short ? ' · ' + ready.short : ''));
+                    warn.appendChild(text);
+                    warn.appendChild(symbolIcon('chevron_right'));
+                }
+                return;
+            }
+            if (!ready.irregular) {
+                const ok = el('div', 'dash-ready--ok');
+                ok.appendChild(symbolIcon('check_circle'));
+                ok.appendChild(document.createTextNode('Every field is set'));
+                act.appendChild(ok);
+            }
+            act.appendChild(actionLink(href, 'Open in Service Editor'));
+        }
+
+        function paintStrip(link, textNode, bits, joiner) {
+            if (!link || !textNode) return;
+            clearNode(textNode);
+            if (!bits) { link.hidden = true; return; }
+            bits.forEach(function (bit, i) {
+                if (i) textNode.appendChild(document.createTextNode(joiner));
+                textNode.appendChild(el('b', null, bit.label));
+                textNode.appendChild(document.createTextNode(' ' + bit.text));
+            });
+            link.hidden = false;
+        }
+
+        // Commitments and this week. A failure here must not stop Sunday
+        // painting — same rule as the swap line.
+        async function loadHomeStrips(personId, rank) {
+            const HD = window.HomeDashboard;
+            const box = document.getElementById('dash-strips');
+            const commitments = document.getElementById('dash-commitments');
+            const week = document.getElementById('dash-week');
+            if (!HD || !box || !window.EventsStore) return;
+            const today = HD.todayKey(new Date());
+            const to = HD.addDays(today, 120);
+            try {
+                const occurrences = await window.EventsStore.loadCalendar(db, {
+                    from: today,
+                    to: to,
+                    rank: rank || 'viewer',
+                    personId: personId || null,
+                });
+                const weekView = HD.weekStrip(occurrences.map(function (o) {
+                    return {
+                        date: o.date,
+                        name: o.name || o.seriesName || 'Event',
+                        time: o.time,
+                        cancelled: o.cancelled === true,
+                        movedTo: o.movedTo || null,
+                    };
+                }), today);
+                const weekText = document.getElementById('dash-week-text');
+                if (week && weekText) {
+                    clearNode(weekText);
+                    if (!weekView) week.hidden = true;
+                    else {
+                        weekText.appendChild(el('b', null, weekView.name));
+                        let rest = ' ' + weekView.when;
+                        if (weekView.more === 1) rest += ' · 1 more this week';
+                        else if (weekView.more > 1) rest += ' · ' + weekView.more + ' more this week';
+                        weekText.appendChild(document.createTextNode(rest));
+                        week.hidden = false;
+                    }
+                }
+
+                let commitmentBits = null;
+                if (personId && window.CommitmentsCore) {
+                    let defs = [];
+                    try {
+                        const snap = await db.collection('roles').get();
+                        defs = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+                    } catch (e) { defs = []; }
+                    let services = [];
+                    try {
+                        let query = db.collection('services')
+                            .orderBy(firebase.firestore.FieldPath.documentId())
+                            .startAt(today)
+                            .endAt(to)
+                            .limit(20);
+                        // The printed guide on a service document is megabytes.
+                        // Ask only for the liturgical holder fields.
+                        if (typeof query.select === 'function') {
+                            query = query.select(
+                                'serviceLeaderId', 'musicLeaderId', 'preacherId',
+                                'prayerPraiseId', 'prayerConfessionId', 'musicHelpers', 'date'
+                            );
+                            const snap = await query.get();
+                            services = snap.docs.map(function (d) {
+                                return Object.assign({ id: d.id, date: d.id }, d.data());
+                            });
+                        }
+                    } catch (e) { services = []; }
+                    const rows = window.CommitmentsCore.commitmentsFor({
+                        personId: personId,
+                        occurrences: occurrences,
+                        services: services,
+                        today: today,
+                    }).map(function (row) {
+                        const def = window.RolesCore && window.RolesCore.roleBySlug(row.roleSlug, defs);
+                        return {
+                            label: row.label || (def && def.name) || row.roleSlug || 'Serving',
+                            date: row.date,
+                        };
+                    });
+                    commitmentBits = HD.commitmentsStrip(rows);
+                }
+                paintStrip(commitments, document.getElementById('dash-commitments-text'), commitmentBits, ' · ');
+                const showC = commitments && !commitments.hidden;
+                const showW = week && !week.hidden;
+                box.hidden = !(showC || showW);
+                box.classList.toggle('dash-strips--pair', !!(showC && showW));
+            } catch (e) {
+                console.warn('Home strips unavailable:', e);
+            }
+        }
+
+        function startAmbient() {
+            if (startAmbient.started) return;
+            startAmbient.started = true;
+            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduced) return;
+            const layers = {
+                a: document.querySelector('[data-par="a"]'),
+                dot: document.querySelector('[data-par="dot"]'),
+                b: document.querySelector('[data-par="b"]'),
+            };
+            let tx = 0, ty = 0, x = 0, y = 0, raf = 0;
+            function tick() {
+                x += (tx - x) * 0.045;
+                y += (ty - y) * 0.045;
+                const set = function (node, amt) {
+                    if (node) node.setAttribute('transform', 'translate(' + (x * amt).toFixed(2) + ',' + (y * amt).toFixed(2) + ')');
+                };
+                set(layers.a, -14);
+                set(layers.dot, -8);
+                set(layers.b, 10);
+                raf = requestAnimationFrame(tick);
+            }
+            window.addEventListener('pointermove', function (e) {
+                tx = (e.clientX / window.innerWidth - 0.5) * 2;
+                ty = (e.clientY / window.innerHeight - 0.5) * 2;
+                if (!raf) raf = requestAnimationFrame(tick);
+            });
         }
 
         async function updateDashboard() {
@@ -586,6 +947,7 @@
             let permissionLevel = 'viewer';
             let pastoralAssistant = false;
             let savedCardOrder = null;
+            let personId = null;
             // Who the drawer says you are. Stays null when nobody is signed in:
             // the drawer still lists the pages a visitor may open.
             let who = null;
@@ -597,6 +959,7 @@
                         permissionLevel = userData.permissionLevel || userData.role || 'viewer';
                         pastoralAssistant = userData.pastoralAssistant === true;
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
+                        personId = userData.personId || null;
                         if (userData.email) {
                             name = userData.email.split('@')[0];
                             name = name.charAt(0).toUpperCase() + name.slice(1);
@@ -644,6 +1007,7 @@
                 const caption = document.getElementById('dash-caption');
                 if (caption) caption.hidden = false;
             }
+            refreshPlaceCount();
 
             // The drawer, built from the tiles the grid is now showing (MS-691),
             // and after the saved arrangement has been applied so it opens in
@@ -674,198 +1038,27 @@
                 // Match project's date format (YYYY-MM-DD)
                 const dateKey = `${nextSunday.getFullYear()}-${String(nextSunday.getMonth() + 1).padStart(2, '0')}-${String(nextSunday.getDate()).padStart(2, '0')}`;
                 const glanceDate = document.getElementById('glance-date');
+                const todayKey = window.HomeDashboard ? window.HomeDashboard.todayKey(today) : dateKey;
                 if (glanceDate) {
-                    const dateOpts = { month: 'long', day: 'numeric' };
-                    if (nextSunday.getFullYear() !== today.getFullYear()) dateOpts.year = 'numeric';
-                    glanceDate.textContent = nextSunday.toLocaleDateString('en-US', dateOpts);
+                    glanceDate.textContent = window.HomeDashboard
+                        ? window.HomeDashboard.dayMonth(dateKey, todayKey)
+                        : dateKey;
                 }
-                console.log("Fetching service data for:", dateKey);
-                
+
                 const doc = await db.collection('services').doc(dateKey).get();
-                
+                const canFix = window.HomeDashboard && window.HomeDashboard.canFixService(permissionLevel);
                 if (doc.exists) {
-                    // Normalize dotted-key literal fields (e.g. 'liturgy.sermon') created by older
-                    // inline-calendar saves that used set()+merge, which stores them as top-level
-                    // field names containing a dot rather than as nested paths.
-                    const _raw = doc.data();
-                    const _norm = {};
-                    for (const [k, v] of Object.entries(_raw)) { if (!k.includes('.')) _norm[k] = v; }
-                    for (const [k, v] of Object.entries(_raw)) {
-                        if (k.includes('.')) {
-                            const parts = k.split('.');
-                            let obj = _norm;
-                            for (let i = 0; i < parts.length - 1; i++) {
-                                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                                obj = obj[parts[i]];
-                            }
-                            const leaf = parts[parts.length - 1];
-                            if (!obj[leaf]) obj[leaf] = v;
-                        }
-                    }
-                    const svc = _norm;
-                    console.log("Service data found:", svc);
-                    
-                    // Sunday at a Glance: a label, and the answer beside it. One
-                    // shape for every line rather than four hand-written ones —
-                    // the panel is a reading, not a form, so nothing in it is
-                    // styled as a field.
-                    const pairs = [];
-                    // An Irregular Service has no Order of Service behind it, so
-                    // it has nothing to be short of and says nothing here.
-                    if (!svc.isIrregular) {
-                        if (svc.theme) pairs.push(['Theme', svc.theme]);
-                        if (svc.liturgy?.sermon) pairs.push(['Sermon', svc.liturgy.sermon]);
-                        if (svc.preacher) pairs.push(['Preacher', svc.preacher]);
-                        if (svc.serviceLeader) pairs.push(['Service Leader', svc.serviceLeader]);
-                        if (svc.musicLeader) pairs.push(['Music Leader', svc.musicLeader]);
-                    }
-
-                    // Pastoral Prayer
-                    const prayers = [];
-                    if (svc.liturgy?.prayerMale?.name) prayers.push(svc.liturgy.prayerMale.name);
-                    if (svc.liturgy?.prayerFemale?.name) prayers.push(svc.liturgy.prayerFemale.name);
-                    if (prayers.length > 0) pairs.push(['Pastoral Prayer', prayers.join(', ')]);
-
-                    let glanceHtml = pairs.length
-                        ? `<dl class="dash-pairs">${pairs.map(([label, value]) =>
-                            `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`
-                        : '';
-
-                    // A Baptism is not a role and not a field: it is a thing that
-                    // is happening. A Badge says so without taking a line of the
-                    // panel's own shape.
-                    if (svc.hasBaptism) {
-                        const bap = svc.liturgy?.baptism;
-                        const baptismName = (Array.isArray(bap)
-                            ? bap.map(c => c && c.name).filter(Boolean).join(', ')
-                            : (typeof bap === 'string' ? bap : '')) || 'Name not specified';
-                        glanceHtml += `
-                            <div class="dash-badges">
-                                <span class="m-badge m-badge--tertiary">
-                                    <span class="material-symbols-outlined" aria-hidden="true">water_drop</span>
-                                    Baptism — ${baptismName}
-                                </span>
-                            </div>
-                        `;
-                    }
-
-                    if (glanceHtml) {
-                        glanceContent.innerHTML = glanceHtml;
-                    } else {
-                        glanceContent.innerHTML = `
-                            <div class="m-empty">
-                                <span class="material-symbols-outlined" aria-hidden="true">event_note</span>
-                                <p>Nothing is set for this Sunday yet.</p>
-                            </div>
-                        `;
-                    }
-
-                    // 4. Check for Incomplete Fields and Literal Hymns
-                    const liturgy = svc.liturgy || {};
-                    const missingFields = [];
-                    const literalHymns = [];
-
-                    // Check Roles
-                    if (!svc.serviceLeader) missingFields.push('Service Leader');
-                    if (!svc.musicLeader) missingFields.push('Music Leader');
-                    if (!svc.preacher) missingFields.push('Preacher');
-
-                    // Check Liturgy Text Fields
-                    const textFields = [
-                        { val: liturgy.callToWorship, label: 'Call to Worship' },
-                        { val: liturgy.callToConfession, label: 'Call to Confession' },
-                        { val: liturgy.assuranceOfPardon, label: 'Assurance of Pardon' },
-                        { val: liturgy.scriptureReading, label: 'Scripture Reading' },
-                        { val: liturgy.sermon, label: 'Sermon' },
-                        { val: liturgy.benediction, label: 'Benediction' }
-                    ];
-                    textFields.forEach(f => {
-                        if (!f.val || f.val.trim() === '') missingFields.push(f.label);
-                    });
-                    // Baptism Candidates are a Person-ref list, not text: missing when none are set.
-                    if (svc.hasBaptism) {
-                        const bap = liturgy.baptism;
-                        const candidateCount = Array.isArray(bap)
-                            ? bap.filter(c => c && c.name).length
-                            : (typeof bap === 'string' && bap.trim() ? 1 : 0);
-                        if (candidateCount === 0) missingFields.push('Baptism');
-                    }
-
-                    // Check Hymn Fields
-                    const hymnFields = [
-                        { val: liturgy.preparatoryHymn, label: 'Preparatory Hymn' },
-                        { val: liturgy.hymn1, label: 'Hymn 1' },
-                        { val: liturgy.hymnMid2, label: 'Hymn Mid 2' },
-                        { val: liturgy.hymnEnd1, label: 'Hymn End 1' },
-                        { val: liturgy.hymnEnd2, label: 'Hymn End 2' }
-                    ];
-                    if (!svc.hasBaptism) {
-                        hymnFields.push({ val: liturgy.hymn2, label: 'Hymn 2' });
-                        hymnFields.push({ val: liturgy.hymnMid1, label: 'Hymn Mid 1' });
-                    }
-
-                    hymnFields.forEach(f => {
-                        if (!f.val || !f.val.name || f.val.name.trim() === '') {
-                            missingFields.push(f.label);
-                        } else if (!f.val.id) {
-                            literalHymns.push(f.label);
-                        }
-                    });
-
-                    const totalIssues = missingFields.length + literalHymns.length;
-
-                    if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
-                        // ⚠ THE WARNING HAS LEFT THE PANEL, ON PURPOSE. It used
-                        // to sit at the bottom of Sunday at a Glance, inside a
-                        // scrolling column in the narrowest part of the page —
-                        // the one thing on the dashboard that is asking somebody
-                        // to act, in the least visible place on it. It is now the
-                        // first thing in the page, above everything the page
-                        // merely OFFERS. Same gate, same two doors: this one
-                        // lands on the validating view of the editor, the button
-                        // below on the plain one.
-                        if (!svc.isIrregular && totalIssues > 0) {
-                            let message = '';
-                            if (missingFields.length > 0 && literalHymns.length > 0) {
-                                message = `${totalIssues} items need attention — blank fields, and hymns not linked to the book.`;
-                            } else if (literalHymns.length > 0) {
-                                message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's are' : ' is'} not linked to the book.`;
-                            } else {
-                                message = `${missingFields.length} field${missingFields.length > 1 ? 's are' : ' is'} blank on the Order of Service.`;
-                            }
-                            showServiceNotice(nextSunday, message,
-                                `service-builder.html?date=${dateKey}&validate=true`);
-                        }
-
-                        glanceContent.appendChild(glanceAction(
-                            `service-builder.html?date=${dateKey}`, 'edit', 'Open in Service Editor'));
-                    }
+                    paintSunday({ mode: 'service', dateKey: dateKey, svc: doc.data(), canFix: canFix });
                 } else {
-                    console.log("No service data found for:", dateKey);
-                    glanceContent.innerHTML = `
-                        <div class="m-empty">
-                            <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
-                            <p>No service is on the books for this Sunday.</p>
-                        </div>
-                    `;
-
-                    if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
-                        glanceContent.appendChild(glanceAction(
-                            `service-builder.html?date=${dateKey}`, 'add', 'Create Service'));
-                    }
-
+                    paintSunday({ mode: 'missing', dateKey: dateKey, canFix: canFix });
                 }
             } catch (e) {
                 console.error("Error updating dashboard data:", e);
-                glanceContent.innerHTML = `
-                    <div class="m-notice m-notice--error">
-                        <span class="material-symbols-outlined m-notice__icon" aria-hidden="true">error</span>
-                        <div class="m-notice__body">
-                            <span class="m-notice__title">This Sunday's details did not load.</span>
-                        </div>
-                    </div>
-                `;
+                paintSunday({ mode: 'error', canFix: false });
             }
+
+            loadHomeStrips(personId, permissionLevel);
+            startAmbient();
         }
 
         // Initialize on load

@@ -310,42 +310,62 @@
       // meant going home to reach it. Same gate as the web's card, MS-120.
       { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
+    var HD = window.HomeDashboard;
+    var theme = svc && svc.theme && svc.theme !== "(no theme)" ? svc.theme : "";
+    var sermon = svc && svc.sermon ? svc.sermon : "";
+    var themeLine = [theme, sermon].filter(Boolean).join(" · ");
+    var dateLabel = HD && svc && svc.date ? HD.dayMonth(svc.date, HD.todayKey(new Date())) : "";
+    var ready = HD && svc ? HD.readiness(svc) : null;
+    var canFix = !!(HD && user && HD.canFixService(user.permissionLevel));
+    var notReady = !!(ready && ready.notReady && canFix);
+    var blanksHref = svc && svc.date
+      ? "service-builder.html?date=" + encodeURIComponent(svc.date) + "&validate=true&shell=mobile"
+      : "service-calendar.html";
+    function forgetServices() {
+      if (window.M.data && window.M.data.forget) window.M.data.forget("services");
+    }
+    var tileBtn = { display: "flex", flexDirection: "column", gap: 10, height: 84, padding: 12, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", color: "var(--on-surface)" };
+    var plate = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius-sm)", background: "var(--primary)", color: "var(--on-primary)" };
     return html`
-      <${Screen}>
+      <${Screen} style=${{ position: "relative" }}>
+        <svg aria-hidden="true" viewBox="0 0 390 700" preserveAspectRatio="xMidYMid slice" style=${{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+          <g class="home-ambient" transform="translate(360,20)" fill="none" stroke="var(--secondary)">
+            <circle r="90" stroke-width="1" opacity="0.16"></circle>
+            <circle r="140" stroke-width="1" opacity="0.12"></circle>
+            <circle r="190" stroke-width="1" opacity="0.08"></circle>
+          </g>
+        </svg>
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
-        <${Body} style=${{ padding: "12px 16px 16px" }}>
+        <${Body} style=${{ padding: "18px 16px 16px", position: "relative" }}>
+          <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden", marginBottom: 16 }}>
+            <div style=${{ display: "flex", flexDirection: "column", gap: 3, padding: "16px 16px 12px" }}>
+              <${Overline}>This Sunday<//>
+              <div style=${{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--primary)", lineHeight: 1.1 }}>${dateLabel || "Sunday"}</div>
+              ${themeLine ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, color: "var(--on-surface-variant)" }}>${themeLine}</div>` : null}
+              ${svcState.loading ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>Loading service…</div>` : null}
+              ${!svcState.loading && svcState.error ? html`<div style=${{ color: "var(--on-surface-variant)", fontSize: 14 }}>This Sunday\u2019s details did not load.</div>` : null}
+              ${!svcState.loading && !svcState.error && !svc ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontSize: 15 }}>No service is on the books for this Sunday.</div>` : null}
+            </div>
+            ${notReady ? html`
+              <a href=${blanksHref} onClick=${forgetServices} style=${{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", background: "var(--warning-container)", color: "var(--on-warning-container)", fontFamily: "var(--font-sans)", fontSize: 13, textAlign: "left", textDecoration: "none" }}>
+                ${Ic("triangle-alert", 18)}
+                <span style=${{ flex: 1 }}><b style=${{ fontWeight: 600 }}>Not ready</b>${ready.short ? " · " + ready.short : ""}</span>
+                ${Ic("chevron-right", 18)}
+              </a>` : null}
+            ${!svcState.loading && !svc ? html`
+              <div style=${{ padding: "0 16px 16px" }}>
+                <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)} onClick=${function () { props.nav("calendar"); }}>Open Services<//>
+              </div>` : null}
+          </div>
+
           <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
             ${tiles.map(function (t) {
               return html`
-                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 10px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
-                  <${Medallion} icon=${t.icon} size=${46} />
-                  <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", textAlign: "center", lineHeight: 1.2 }}>${t.label}</span>
+                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${tileBtn}>
+                  <span style=${plate}>${Ic(t.icon, 18)}</span>
+                  <span style=${{ marginTop: "auto", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, lineHeight: 1.2 }}>${t.label}</span>
                 </button>`;
             })}
-          </div>
-
-          <${Overline} style=${{ marginBottom: 8, paddingLeft: 2 }}>Sunday at a Glance<//>
-          <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 18 }}>
-            ${svcState.loading ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>Loading service…</div>`
-              : svc ? html`
-                <div style=${{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--primary)", lineHeight: 1.2 }}>${svc.theme}</div>
-                <div style=${{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                  ${[["Sermon", svc.sermon], ["Preacher", svc.preacher], ["Service Leader", svc.serviceLeader], ["Music Leader", svc.musicLeader]].filter(function (kv) { return kv[1]; }).map(function (kv) {
-                    return html`<div key=${kv[0]} style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${kv[0]}</span>
-                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 500, color: "var(--on-surface)", textAlign: "right" }}>${kv[1]}</span>
-                    </div>`;
-                  })}
-                </div>
-                ${svc.hasBaptism ? html`<div style=${{ display: "flex", gap: 6, marginTop: 14 }}><${Badge} tone="tertiary" icon=${Ic("droplet", 13)}>Baptism<//></div>` : null}
-                <div onClick=${function () { props.nav("serviceBuilder", { date: svc.date }); }} style=${{ marginTop: 14 }}>
-                  <${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)}>Open in Service Editor<//>
-                </div>`
-              : html`
-                <div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>No upcoming service found.</div>
-                <div onClick=${function () { props.nav("calendar"); }} style=${{ marginTop: 14 }}>
-                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)}>Open Services<//>
-                </div>`}
           </div>
 
           <${NotificationAsk} user=${user} />

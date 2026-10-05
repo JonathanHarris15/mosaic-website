@@ -347,6 +347,25 @@
   // of 205 carry a `date` field. So `d.date` below is not a fallback that never
   // fires — it is the other way round, and any query that filters or orders on
   // a `date` field matches nothing at all.
+  function litField(d, key) {
+    var nested = (d && d.liturgy) || {};
+    if (nested[key] != null && nested[key] !== "") return nested[key];
+    var dotted = d && d["liturgy." + key];
+    if (dotted != null && dotted !== "") return dotted;
+    return nested[key] != null ? nested[key] : "";
+  }
+
+  function liturgyForHome(d) {
+    var keys = [
+      "callToWorship", "callToConfession", "assuranceOfPardon", "scriptureReading",
+      "sermon", "benediction", "preparatoryHymn", "hymn1", "hymn2", "hymnMid1",
+      "hymnMid2", "hymnEnd1", "hymnEnd2", "baptism", "prayerMale", "prayerFemale",
+    ];
+    var liturgy = {};
+    keys.forEach(function (key) { liturgy[key] = litField(d, key); });
+    return liturgy;
+  }
+
   function mapService(doc) {
     var d = doc.data() || {};
     return {
@@ -360,6 +379,10 @@
       serviceLeader: d.serviceLeader || d.leader || "",
       musicLeader: d.musicLeader || "",
       hasBaptism: !!d.hasBaptism,
+      isIrregular: !!d.isIrregular,
+      // The fields the home readiness line scores. Not `guide` — that is the
+      // printed booklet and it is most of the document.
+      liturgy: liturgyForHome(d),
     };
   }
 
