@@ -91,21 +91,42 @@
 
         .dash-seal { width: 32px; height: 32px; flex: 0 0 auto; object-fit: contain; }
 
+        /* The window stays put. This page is the one that scrolls, and only
+           when the column is taller than the screen. */
+        html { height: 100%; overflow: hidden; background: var(--background); }
+        body.m-page--app { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+
         .dash-main {
-            position: relative;
+            position: relative; z-index: 1;
             display: flex; flex-direction: column; gap: var(--space-md);
             flex: 1 1 auto; min-height: 0; width: 100%;
             padding: var(--space-sm) var(--space-margin) var(--space-lg);
-            overflow: auto;
+            overflow-x: hidden; overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: var(--outline-variant) transparent;
+        }
+        .dash-main::-webkit-scrollbar { width: 10px; height: 10px; }
+        .dash-main::-webkit-scrollbar-track { background: transparent; }
+        .dash-main::-webkit-scrollbar-thumb {
+            background: var(--outline-variant);
+            border: 3px solid transparent;
+            border-radius: var(--radius-full);
+            background-clip: padding-box;
+        }
+        .dash-main::-webkit-scrollbar-thumb:hover {
+            background: var(--outline);
+            background-clip: padding-box;
         }
 
-        /* The seal's rings, behind the page. They drift; a reader who has
-           asked for reduced motion sees them still. */
-        .dash-ambient { position: sticky; top: 0; height: 0; z-index: 0; pointer-events: none; }
-        .dash-ambient__svg {
-            position: absolute; left: 0; right: 0; top: 0;
-            width: 100%; height: 100vh; height: 100dvh;
+        /* The seal's rings, on the window itself, so the page's margin does
+           not leave a plain strip between them and the screen edge. They
+           drift; a reader who has asked for reduced motion sees them still. */
+        .dash-ambient {
+            position: fixed; inset: 0; z-index: 0;
+            height: auto; pointer-events: none;
         }
+        .dash-ambient__svg { position: absolute; inset: 0; width: 100%; height: 100%; }
         .dash-ring { fill: none; stroke: var(--secondary); stroke-width: 1; }
         .dash-ambient__drift-a,
         .dash-ambient__drift-b,
@@ -131,7 +152,7 @@
             .dash-ambient, .dash-ambient * { animation: none !important; }
         }
 
-        .dash-main > :not(.dash-ambient) { position: relative; z-index: 1; }
+        .dash-main > * { position: relative; z-index: 1; }
 
         .dash-sunday {
             display: grid;
@@ -305,6 +326,7 @@
         }
 
         .dash-strips { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
+        .dash-strips[hidden] { display: none; }
         @media (min-width: 800px) {
             .dash-strips--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
@@ -317,6 +339,7 @@
             color: var(--on-surface); text-decoration: none;
             font-size: 13.5px;
         }
+        .dash-strip[hidden] { display: none; }
         .dash-strip:hover { border-color: var(--outline); }
         .dash-strip > .material-symbols-outlined { font-size: 20px; color: var(--secondary); flex: 0 0 auto; }
         .dash-strip__text { flex: 1 1 auto; min-width: 0; }
@@ -379,6 +402,40 @@
          mark you recognised before the page painted does not need a sixth of
          the fold to say so, and every pixel it gives back is a tile the reader
          can see without scrolling. -->
+    <div class="dash-ambient" aria-hidden="true">
+        <svg class="dash-ambient__svg" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMid slice" focusable="false">
+            <g transform="translate(1210,30)">
+                <g data-par="a">
+                    <g class="dash-ambient__drift-a">
+                        <circle r="170" class="dash-ring" opacity=".16"></circle>
+                        <circle r="250" class="dash-ring" opacity=".2"></circle>
+                        <circle r="340" class="dash-ring" opacity=".14"></circle>
+                        <circle r="430" class="dash-ring" opacity=".1"></circle>
+                        <g class="dash-ambient__spin-rev">
+                            <circle r="300" fill="none" stroke="var(--tertiary)" stroke-width="1" stroke-dasharray="1.5 13" opacity=".32"></circle>
+                        </g>
+                        <g data-par="dot">
+                            <g class="dash-ambient__spin">
+                                <circle cx="250" cy="0" r="3.5" fill="var(--gold)" opacity=".7"></circle>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+            </g>
+            <g transform="translate(40,780)">
+                <g data-par="b">
+                    <g class="dash-ambient__drift-b">
+                        <circle r="130" class="dash-ring" opacity=".16"></circle>
+                        <circle r="210" class="dash-ring" opacity=".12"></circle>
+                        <circle r="290" class="dash-ring" opacity=".08"></circle>
+                        <g class="dash-ambient__spin-slow">
+                            <polygon points="69.3,40.0 0.0,80.0 -69.3,40.0 -69.3,-40.0 0,-80.0 69.3,-40.0" fill="none" stroke="var(--gold)" stroke-width="1" opacity=".35"></polygon>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </svg>
+    </div>
     <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
@@ -400,41 +457,6 @@
         </div>
     </header>
     <main class="dash-main">
-        <div class="dash-ambient" aria-hidden="true">
-            <svg class="dash-ambient__svg" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMid slice" focusable="false">
-                <g transform="translate(1210,30)">
-                    <g data-par="a">
-                        <g class="dash-ambient__drift-a">
-                            <circle r="170" class="dash-ring" opacity=".16"></circle>
-                            <circle r="250" class="dash-ring" opacity=".2"></circle>
-                            <circle r="340" class="dash-ring" opacity=".14"></circle>
-                            <circle r="430" class="dash-ring" opacity=".1"></circle>
-                            <g class="dash-ambient__spin-rev">
-                                <circle r="300" fill="none" stroke="var(--tertiary)" stroke-width="1" stroke-dasharray="1.5 13" opacity=".32"></circle>
-                            </g>
-                            <g data-par="dot">
-                                <g class="dash-ambient__spin">
-                                    <circle cx="250" cy="0" r="3.5" fill="var(--gold)" opacity=".7"></circle>
-                                </g>
-                            </g>
-                        </g>
-                    </g>
-                </g>
-                <g transform="translate(40,780)">
-                    <g data-par="b">
-                        <g class="dash-ambient__drift-b">
-                            <circle r="130" class="dash-ring" opacity=".16"></circle>
-                            <circle r="210" class="dash-ring" opacity=".12"></circle>
-                            <circle r="290" class="dash-ring" opacity=".08"></circle>
-                            <g class="dash-ambient__spin-slow">
-                                <polygon points="69.3,40.0 0.0,80.0 -69.3,40.0 -69.3,-40.0 0,-80.0 69.3,-40.0" fill="none" stroke="var(--gold)" stroke-width="1" opacity=".35"></polygon>
-                            </g>
-                        </g>
-                    </g>
-                </g>
-            </svg>
-        </div>
-
         <section class="dash-sunday" id="sunday-glance" aria-labelledby="glance-kicker">
             <div class="dash-sunday__when">
                 <span class="m-label" id="glance-kicker">This Sunday</span>

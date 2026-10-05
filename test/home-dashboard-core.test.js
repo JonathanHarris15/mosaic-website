@@ -170,6 +170,9 @@ test('the home page is the Sunday-first door', () => {
     assert.match(html, /id="sunday-glance"/);
     assert.match(html, /home-dashboard-core\.js/);
     assert.match(html, /id="dash-commitments"/);
+    assert.match(html, /\.dash-strip\[hidden\] \{ display: none; \}/);
+    assert.match(html, /\.dash-strips\[hidden\] \{ display: none; \}/);
+    assert.match(html, /position: fixed; inset: 0/);
     assert.match(html, /id="dash-week"/);
     assert.match(html, /class="dash-ambient"/);
     assert.match(html, /data-card-key="hymn-directory"/);
