@@ -241,6 +241,7 @@
             justify-content: flex-start;
             gap: var(--space-md);
         }
+        .hymn-sheets--edit > .m-btn { align-self: flex-start; }
         .hymn-page {
             flex: 0 1 400px;
             max-width: 100%;
@@ -451,11 +452,13 @@
                     <span class="m-btn__label">Edit</span>
                 </button>
                 <button type="button" x-show="view === 'form'" @click="cancelForm()"
-                        class="m-btn m-btn--secondary m-btn--sm" :disabled="isSubmitting">
+                        class="m-btn m-btn--secondary m-btn--sm" :disabled="isSubmitting" aria-label="Cancel">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     <span class="m-btn__label">Cancel</span>
                 </button>
                 <button type="submit" form="hymn-form" x-show="view === 'form'"
-                        class="m-btn m-btn--primary m-btn--sm" :disabled="isSubmitting">
+                        class="m-btn m-btn--primary m-btn--sm" :disabled="isSubmitting" aria-label="Save">
+                    <span class="material-symbols-outlined" aria-hidden="true">check</span>
                     <span class="m-btn__label" x-text="isSubmitting ? 'Saving…' : 'Save'"></span>
                 </button>
             </div>
