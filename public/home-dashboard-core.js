@@ -1,12 +1,15 @@
 // Home dashboard — the readings on the Sunday-first door.
 //
-// Pure. The page paints; this decides what the sentences are, so the desktop
-// and the phone cannot disagree about the same Sunday.
+// Pure. The page paints; this decides what the sentences are. The desktop
+// home, the phone home, and the service editor's progress all call readiness,
+// so they cannot disagree about how much of a Sunday is left.
 //
-// The checklist is the one the home page already used to decide "not ready":
-// the roles, the liturgy text, baptism when the Sunday has one, and each hymn
-// slot. A hymn typed in but not linked to the book is not blank, and it is
-// not set either. An Irregular Service has no Order of Service to be short of.
+// Counted: the three leaders, the liturgy texts, baptism when the Sunday has
+// one, and each hymn still in the order. A hymn pulled out of the order is
+// not work left and not work done. A hymn typed in but not linked to the book
+// is not blank, and it is not set either. Theme, the key verse, and the
+// optional prayer leaders are not part of the tally. An Irregular Service has
+// no Order of Service to be short of.
 
 (function (global) {
     'use strict';
@@ -123,6 +126,18 @@
         return !!(value && String(value).trim());
     }
 
+    // A leader is a name on the stored document, or { name, id } in the editor.
+    // An empty object is not a person — it used to count as set just by existing.
+    function personSet(value) {
+        if (value == null) return false;
+        if (typeof value === 'string') return !!value.trim();
+        if (typeof value === 'object') {
+            const name = value.name != null && String(value.name).trim();
+            return !!(value.id || name);
+        }
+        return false;
+    }
+
     function hymnState(value) {
         const name = value && value.name && String(value.name).trim();
         if (!name) return 'blank';
@@ -134,18 +149,19 @@
         const service = svc || {};
         if (service.isIrregular) return [];
         const liturgy = service.liturgy || {};
+        const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
         const items = [];
 
-        function add(label, state) {
-            items.push({ label: label, state: state });
+        function add(key, label, state) {
+            items.push({ key: key, label: label, state: state });
         }
 
-        add('Service Leader', service.serviceLeader ? 'set' : 'blank');
-        add('Music Leader', service.musicLeader ? 'set' : 'blank');
-        add('Preacher', service.preacher ? 'set' : 'blank');
+        add('serviceLeader', 'Service Leader', personSet(service.serviceLeader) ? 'set' : 'blank');
+        add('musicLeader', 'Music Leader', personSet(service.musicLeader) ? 'set' : 'blank');
+        add('preacher', 'Preacher', personSet(service.preacher) ? 'set' : 'blank');
 
         TEXT_FIELDS.forEach(function (pair) {
-            add(pair[1], filledText(liturgy[pair[0]]) ? 'set' : 'blank');
+            add(pair[0], pair[1], filledText(liturgy[pair[0]]) ? 'set' : 'blank');
         });
 
         if (service.hasBaptism) {
@@ -153,13 +169,14 @@
             const count = Array.isArray(bap)
                 ? bap.filter(function (c) { return c && c.name; }).length
                 : (typeof bap === 'string' && bap.trim() ? 1 : 0);
-            add('Baptism', count > 0 ? 'set' : 'blank');
+            add('baptism', 'Baptism', count > 0 ? 'set' : 'blank');
         }
 
         const hymns = HYMN_FIELDS.concat(service.hasBaptism ? [] : HYMN_FIELDS_NO_BAPTISM);
         hymns.forEach(function (pair) {
+            if (removed.indexOf(pair[0]) !== -1) return;
             const state = hymnState(liturgy[pair[0]]);
-            add(pair[1], state);
+            add(pair[0], pair[1], state);
         });
 
         return items;
