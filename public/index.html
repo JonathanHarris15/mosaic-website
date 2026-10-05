@@ -451,7 +451,7 @@
             </svg>
             <div class="dash-ambient__cursor" hidden>
                 <svg class="dash-ambient__cursor-hex" viewBox="-140 -140 280 280" focusable="false">
-                    <polygon class="dash-ring" points="0,-140 121.2,-70 121.2,70 0,140 -121.2,70 -121.2,-70" opacity="0.28"></polygon>
+                    <polygon class="dash-ring" points="0,-140 121.2,-70 121.2,70 0,140 -121.2,70 -121.2,-70" opacity="0.14"></polygon>
                 </svg>
             </div>
         </div>
@@ -946,9 +946,9 @@
                 b: document.querySelector('[data-par="b"]'),
             };
             const cursor = document.querySelector('.dash-ambient__cursor');
-            // Positive amounts follow the pointer. The hexagon uses a short
-            // time constant so it is with the pointer inside a tenth of a second.
-            const shadowTau = 0.02;
+            // Positive amounts follow the pointer. The hexagon closes the
+            // gap in about 0.4 seconds (five time constants).
+            const shadowTau = 0.08;
             let tx = 0, ty = 0, x = 0, y = 0, mx = 0, my = 0, cx = 0, cy = 0, raf = 0, last = 0;
             function tick(now) {
                 const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;

@@ -176,7 +176,8 @@ test('the home page is the Sunday-first door', () => {
     assert.match(html, /id="dash-week"/);
     assert.match(html, /class="dash-ambient"/);
     assert.match(html, /class="dash-ambient__cursor-hex"/);
-    assert.match(html, /shadowTau = 0\.02/);
+    assert.match(html, /shadowTau = 0\.08/);
+    assert.match(html, /opacity="0\.14"/);
     assert.doesNotMatch(html, /dash-ambient__cursor-ring/);
     assert.match(html, /set\(layers\.a, 14\)/);
     assert.match(html, /set\(layers\.dot, 8\)/);
