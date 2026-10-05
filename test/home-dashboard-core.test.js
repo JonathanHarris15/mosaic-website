@@ -175,6 +175,10 @@ test('the home page is the Sunday-first door', () => {
     assert.match(html, /position: fixed; inset: 0/);
     assert.match(html, /id="dash-week"/);
     assert.match(html, /class="dash-ambient"/);
+    assert.match(html, /class="dash-ambient__cursor"/);
+    assert.match(html, /set\(layers\.a, 14\)/);
+    assert.match(html, /set\(layers\.dot, 8\)/);
+    assert.match(html, /\.dash-ambient__cursor \{ display: none; \}/);
     assert.match(html, /data-card-key="hymn-directory"/);
     assert.match(html, /id="nav-cards-grid"/);
     assert.match(html, /id="service-notice"/);

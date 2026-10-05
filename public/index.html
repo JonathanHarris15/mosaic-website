@@ -148,8 +148,21 @@
         }
         @keyframes amb-spin { to { transform: rotate(360deg); } }
         @keyframes amb-spin-rev { to { transform: rotate(-360deg); } }
+        /* A faint ring that shadows the pointer. It sits on the window with
+           the other rings, and it does not appear when motion is reduced. */
+        .dash-ambient__cursor { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+        .dash-ambient__cursor[hidden] { display: none; }
+        .dash-ambient__cursor-ring {
+            position: absolute;
+            width: 280px; height: 280px;
+            margin: -140px 0 0 -140px;
+            border-radius: 50%;
+            border: 1px solid var(--secondary);
+            opacity: 0.22;
+        }
         @media (prefers-reduced-motion: reduce) {
             .dash-ambient, .dash-ambient * { animation: none !important; }
+            .dash-ambient__cursor { display: none; }
         }
 
         .dash-main > * { position: relative; z-index: 1; }
@@ -434,8 +447,11 @@
                     </g>
                 </g>
             </g>
-        </svg>
-    </div>
+            </svg>
+            <div class="dash-ambient__cursor" hidden>
+                <span class="dash-ambient__cursor-ring"></span>
+            </div>
+        </div>
     <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
@@ -926,21 +942,30 @@
                 dot: document.querySelector('[data-par="dot"]'),
                 b: document.querySelector('[data-par="b"]'),
             };
-            let tx = 0, ty = 0, x = 0, y = 0, raf = 0;
+            const cursor = document.querySelector('.dash-ambient__cursor');
+            // Positive amounts follow the pointer. The top cluster used to
+            // move against it.
+            let tx = 0, ty = 0, x = 0, y = 0, mx = 0, my = 0, cx = 0, cy = 0, raf = 0;
             function tick() {
                 x += (tx - x) * 0.045;
                 y += (ty - y) * 0.045;
+                cx += (mx - cx) * 0.08;
+                cy += (my - cy) * 0.08;
                 const set = function (node, amt) {
                     if (node) node.setAttribute('transform', 'translate(' + (x * amt).toFixed(2) + ',' + (y * amt).toFixed(2) + ')');
                 };
-                set(layers.a, -14);
-                set(layers.dot, -8);
+                set(layers.a, 14);
+                set(layers.dot, 8);
                 set(layers.b, 10);
+                if (cursor) cursor.style.transform = 'translate(' + cx.toFixed(1) + 'px,' + cy.toFixed(1) + 'px)';
                 raf = requestAnimationFrame(tick);
             }
             window.addEventListener('pointermove', function (e) {
                 tx = (e.clientX / window.innerWidth - 0.5) * 2;
                 ty = (e.clientY / window.innerHeight - 0.5) * 2;
+                mx = e.clientX;
+                my = e.clientY;
+                if (cursor) cursor.hidden = false;
                 if (!raf) raf = requestAnimationFrame(tick);
             });
         }
