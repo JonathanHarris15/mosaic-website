@@ -162,6 +162,18 @@ Two pages are allowed to break the header rule, and both already say so in the f
 - A title in both the header and the body.
 - Raw hex or `rgb()`. `npm run check:design-drift` keeps that honest.
 
+## Hymn book
+
+The hymn book is a tool (`m-page m-page--tool`) with a standing header, not a tool header. The bar keeps the words on Copy attribution and Cancel. The title in that bar is the place, **Hymns**. The hymn’s own name is the record, set in the reading rail in EB Garamond.
+
+On a wide window the book is two panes that scroll on their own.
+
+- **The list.** A tag rail (220px) of checkbox rows, each with how many hymns that tag would leave in the list. Chosen tags also read “Tagged with all of” above the cards, and a tag narrows by AND. The cards are the sheets: the printing version’s first page, or a staff when the hymn has no scan, then the name and the words writer.
+- **A hymn.** The chosen version’s pages sit on the warm pane. The rail (320px) holds the name, the words and music credit, the tags, the versions, and the attribution. Picking a version changes which pages are open. Which version prints is set in the editor, with the star.
+- **The editor.** The same split. Pages and versions on the warm pane; the hymn’s fields on the rail. Delete stays on the rail, and only for a hymn that already exists.
+
+Below 1024px the reading and the editor stack, sheets first. On a phone the tag rail gives way to the tag menu, and the frame around a sheet goes so the staves get the width of the phone.
+
 ## States
 
 Every list and every reading page has four states, using the same components:

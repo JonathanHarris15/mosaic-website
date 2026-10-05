@@ -225,28 +225,30 @@ test('on a phone the hymn list filters by a tag menu instead of a pill cloud', (
     assert.match(filter, /x-for="tag in selectedTags"/);
     assert.match(cloud, /x-for="tag in allTags"/);
     assert.match(cloud, /toggleTag\(tag\)/);
-    assert.match(page, /Search by title, writer, attribution, or tag/);
+    assert.match(page, /Search the book/);
     assert.match(page, /html\.shell-mobile \.hymn-tag-cloud/);
     assert.match(page, /max-width:\s*767px/);
     assert.match(page, /\.hymn-tag-cloud\s*\{[^}]*display:\s*none\s*!important/);
     assert.match(page, /\.hymn-tag-filter\s*\{[^}]*display:\s*flex/);
 });
 
-test('on a computer the tags sit outside the central column, left of the hymn list', () => {
+test('on a computer the tags are a rail of checks beside the sheet cards', () => {
     const page = read('hymns.html');
-    const shellAt = page.indexOf('class="hymn-list-shell"');
+    const shellAt = page.indexOf('class="hymn-split"');
     const cloudAt = page.indexOf('class="hymn-tag-cloud"');
-    const columnAt = page.indexOf('class="hymn-list-column"');
-    const searchAt = page.indexOf('class="m-search w-full"');
-    assert.ok(shellAt !== -1, 'list shell');
-    assert.ok(cloudAt !== -1 && cloudAt > shellAt, 'tag card is in the shell');
-    assert.ok(columnAt !== -1 && columnAt > cloudAt, 'search and hymns sit in the central column');
-    assert.ok(searchAt !== -1 && searchAt > columnAt, 'search is inside the central column, not beside the tags');
-    assert.match(page, /class="hymn-tag-card"/);
-    assert.match(page, /class="hymn-tag-chip"/);
-    assert.match(page, /hymn-list-shell--with-tags/);
-    assert.match(page, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*64rem\)\s+minmax\(0,\s*1fr\)/);
-    assert.match(page, /justify-self:\s*end/);
+    const paneAt = page.indexOf('class="hymn-pane"');
+    const searchAt = page.indexOf('class="m-search hymn-search"');
+    assert.ok(shellAt !== -1, 'the book is a split');
+    assert.ok(cloudAt !== -1 && cloudAt > shellAt, 'tags sit in the left rail');
+    assert.ok(paneAt !== -1 && paneAt > cloudAt, 'the cards sit to the right of the tags');
+    assert.ok(searchAt !== -1 && searchAt > paneAt, 'search is in the card pane, not in the tag rail');
+    assert.match(page, /class="hymn-tag"/);
+    assert.match(page, /role="checkbox"/);
+    assert.match(page, /tagCount\(tag\)/);
+    assert.match(page, /class="hymn-grid"/);
+    assert.match(page, /class="hymn-card"/);
+    assert.match(page, /Tagged with all of/);
+    assert.doesNotMatch(page, /hymn-tag-chip/);
     assert.doesNotMatch(page, /hymn-list-layout/);
     assert.doesNotMatch(page, /hymn-tag-cloud flex flex-wrap/);
 });
@@ -259,8 +261,8 @@ test('the computer has one Hymns page and the old doors open it', () => {
     assert.match(page, /hymns-page\.js/);
     assert.match(js, /canEditHymnBook/);
     assert.doesNotMatch(js, /canReadEditor/);
-    assert.match(page, /x-show="canEdit"/);
-    assert.match(page, />Crop</);
+    assert.match(page, /x-show="canEdit/);
+    assert.match(page, /aria-label="Crop"/);
     assert.match(page, /Print this version/);
     assert.doesNotMatch(page, /group-hover:opacity-0/);
     assert.match(read('hymn-directory.html'), /HymnsPage\.legacyHref/);
@@ -278,6 +280,45 @@ test('the computer has one Hymns page and the old doors open it', () => {
     assert.doesNotMatch(read('service-builder.html'), /manager\.html\?name=/);
 });
 
+test('the open hymn shows the version that prints, and a tag count follows the filter', () => {
+    const page = hymnsComponent();
+    const hymn = {
+        id: 'abide',
+        hymn_name: 'Abide with Me',
+        lyrics_writer: 'Henry F. Lyte',
+        music_writer: 'William H. Monk',
+        attribution: 'Words: Henry F. Lyte. Music: William H. Monk.',
+        tags: ['Evening', 'Trust'],
+        versions: [
+            { name: 'Isometric', pages: ['iso.png'] },
+            { name: 'Hymnal', default: true, pages: ['hymnal.png', 'hymnal-2.png'] },
+        ],
+    };
+    page.hymns = [
+        hymn,
+        { id: 'other', hymn_name: 'Rock of Ages', lyrics_writer: 'Augustus M. Toplady', tags: ['Trust'], versions: [] },
+    ];
+    page.showHymn(hymn);
+    assert.equal(page.versionIndex, 1);
+    assert.equal(page.currentVersion.name, 'Hymnal');
+    assert.equal(page.coverOf(hymn), 'hymnal.png');
+    assert.equal(page.creditOf(hymn), 'Words — Henry F. Lyte · Music — William H. Monk');
+    assert.equal(page.pageCountLabel(page.currentVersion), '2 pages');
+    page.pickVersion(0);
+    assert.equal(page.currentVersion.name, 'Isometric');
+
+    assert.equal(page.tagCount('Evening'), 1);
+    page.selectedTags = ['Trust'];
+    assert.equal(page.tagCount('Trust'), 2);
+    assert.equal(page.tagCount('Evening'), 1);
+    page.searchQuery = 'abide';
+    page.selectedTags = ['Evening', 'Trust'];
+    assert.equal(page.emptyNote, 'No hymn carries all of those tags. Take one away to widen the list.');
+    page.selectedTags = [];
+    page.searchQuery = 'no-such-hymn';
+    assert.equal(page.emptyNote, 'No hymns match.');
+});
+
 test('opening a hymn from the list keeps that hymn, including an older sheet page', () => {
     const page = read('hymns.html');
     // The open hymn is `hymn`. A row of the same name makes Alpine write
@@ -286,7 +327,11 @@ test('opening a hymn from the list keeps that hymn, including an older sheet pag
     assert.match(page, /x-for="listedHymn in filteredHymns"/);
     assert.match(page, /showHymn\(listedHymn\)/);
     assert.match(page, /x-text="listedHymn\.hymn_name"/);
-    assert.match(page, /x-text="headerTitle"/);
+    // The bar names the place. The hymn's own name is the record, in the
+    // reading pane. The phone shell still hears headerTitle from the script.
+    assert.match(page, /<h1 class="m-header__title">Hymns<\/h1>/);
+    assert.match(page, /x-text="hymn\.hymn_name"/);
+    assert.match(read('hymns.js'), /get headerTitle\(\)/);
     assert.deepEqual(HymnsPage.sheetPages({
         name: 'SATB',
         pages: [{ url: 'sheet.png' }, 'plain.png', { src: 'legacy.png' }, ''],
@@ -316,20 +361,16 @@ test('the phone shell names the open hymn and carries the one way back', () => {
 test('a phone hymn gets the width of the phone', () => {
     const page = read('hymns.html');
 
-    // 16 on a phone, the page margin from `md` up — the same responsive gutter
-    // the other shell pages use. A flat 32 spent a sixth of a 390px screen on
-    // empty parchment.
-    assert.match(page, /<main class="[^"]*\bpx-4 md:px-margin\b/);
-    assert.doesNotMatch(page, /<main class="[^"]* px-margin /);
-    assert.match(page, /html\.shell-mobile main \{ padding-left: 1rem; padding-right: 1rem; \}/);
-
-    // The boxes between the gutter and the staves. The version card keeps a
-    // smaller padding; the frame around the sheet page goes, because the sheet
-    // already has a border of its own.
-    assert.match(page, /class="hymn-version /);
-    assert.match(page, /class="hymn-sheet /);
-    assert.match(page, /\.hymn-version \{ padding: var\(--space-sm\); \}/);
+    // The book is a tool: the panes carry their own inset, and main is not a
+    // second 32px gutter. On a phone the frame around the sheet goes, because
+    // the sheet is already the page — a second border is what used to leave
+    // the staves at 250px of a 390px screen (MS-674).
+    assert.match(page, /<main class="hymn-stage"/);
+    assert.doesNotMatch(page, /<main class="[^"]*\bpx-margin\b/);
+    assert.match(page, /class="hymn-sheet/);
+    assert.match(page, /max-width:\s*767px/);
     assert.match(page, /\.hymn-sheet \{ border: 0; padding: 0; \}/);
+    assert.match(page, /html\.shell-mobile \.hymn-sheet \{ border: 0; padding: 0; \}/);
 });
 
 test('a confirmation is said at the foot and goes away', () => {
