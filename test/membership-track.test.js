@@ -301,6 +301,34 @@ test('Inactive People are visible to an editor on the Non-members tab', () => {
     assert.strictEqual(Core.personMatchesDirectoryTab(inactive, 'members', true), false);
 });
 
+test('tab counts keep Members and Non-members apart', () => {
+    const people = [
+        personFor('member'),
+        personFor('moving_membership'),
+        personFor('visitor'),
+        personFor('regular_attender'),
+        personFor('member', true),
+    ];
+    assert.deepStrictEqual(Core.directoryTabCounts(people, false), { members: 2, non_members: 2 });
+    // An editor still does not count that Inactive person as a Member.
+    assert.deepStrictEqual(Core.directoryTabCounts(people, true), { members: 2, non_members: 3 });
+    assert.deepStrictEqual(Core.directoryTabCounts(null, false), { members: 0, non_members: 0 });
+});
+
+test('a person is never counted on both directory tabs', () => {
+    for (const stage of Core.MEMBERSHIP_STAGES) {
+        for (const inactive of [false, true]) {
+            for (const canEdit of [false, true]) {
+                const counts = Core.directoryTabCounts([personFor(stage, inactive)], canEdit);
+                assert.ok(
+                    counts.members + counts.non_members <= 1,
+                    `${stage} inactive=${inactive} editor=${canEdit} landed on both tabs`
+                );
+            }
+        }
+    }
+});
+
 test('an editor and a plain member see the same active People (Inactive aside)', () => {
     for (const stage of Core.MEMBERSHIP_STAGES) {
         for (const tab of ['members', 'non_members']) {
@@ -375,4 +403,17 @@ test('collapsePastoralRecord does not fold a membership_change into a status gro
     assert.strictEqual(out[0]._entryKind, 'status_group');
     assert.strictEqual(out[1]._entryKind, 'membership_change');
     assert.strictEqual(out[2]._entryKind, 'status_group');
+});
+
+test('each directory tab carries its own count, and the phone does not lump them', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+    const html = read('public/peoples-page.html');
+    assert.match(html, /directoryTabCounts\.members/);
+    assert.match(html, /directoryTabCounts\.non_members/);
+    assert.match(html, /class="dir-tab-count"/);
+    const phone = read('public/mobile/screens-content.js');
+    assert.match(phone, /ShepherdingCore\.directoryTabCounts/);
+    assert.equal(phone.includes('${results.length} People'), false);
 });

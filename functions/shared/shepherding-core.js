@@ -709,6 +709,21 @@
         return true;
     }
 
+    // How many people each Membership Directory tab lists. The two numbers stay
+    // apart: a person is counted on Members or on Non-members, never on both,
+    // and someone on neither tab (an Inactive person a member cannot see) is
+    // in neither number. `canEdit` is the same gate personMatchesDirectoryTab
+    // takes. Hide-from-others filtering stays with the page; pass it a roster
+    // that viewer may already see.
+    function directoryTabCounts(people, canEdit) {
+        const counts = { members: 0, non_members: 0 };
+        (people || []).forEach((person) => {
+            if (personMatchesDirectoryTab(person, 'members', canEdit)) counts.members += 1;
+            else if (personMatchesDirectoryTab(person, 'non_members', canEdit)) counts.non_members += 1;
+        });
+        return counts;
+    }
+
     // What the Membership Directory may say about a Person's place on the Track,
     // for the viewer looking at it. The Track is pastoral information: where
     // somebody sits between Visitor and Previous Member is the church's business
@@ -983,6 +998,7 @@
         buildMembershipChange,
         describeMembershipChange,
         personMatchesDirectoryTab,
+        directoryTabCounts,
         directoryMembershipLabel,
         isInactiveMembership,
         buildSelfEditUpdate,
