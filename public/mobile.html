@@ -36,6 +36,14 @@
     button { font-family: inherit; }
     ::-webkit-scrollbar { width: 0; height: 0; }
     @keyframes mspin { to { transform: rotate(360deg); } }
+    @keyframes amb-drift-a {
+      from { transform: translate(0, 0) scale(1); }
+      to { transform: translate(-18px, 12px) scale(1.03); }
+    }
+    .home-ambient { animation: amb-drift-a 38s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+    @media (prefers-reduced-motion: reduce) {
+      .home-ambient { animation: none; }
+    }
     .m-bottom-buffer {
       height: calc(24px + env(safe-area-inset-bottom, 0px));
       flex-shrink: 0;
@@ -145,6 +153,7 @@
   <script src="mobile/screens-admin.js"></script>
   <script src="hymn-versions.js"></script>
   <script src="hymns-page.js"></script>
+  <script src="home-dashboard-core.js"></script>
   <script src="mobile/app.js"></script>
 </body>
 </html>
