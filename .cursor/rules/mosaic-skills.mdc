@@ -1,0 +1,24 @@
+---
+description: Matt Pocock skills workflow, Jira MS tracker, and team-lead grilling conventions for Mosaic agents
+alwaysApply: true
+---
+
+# Mosaic agent skills
+
+Engineering + productivity skills live in `.cursor/skills/` (upstream [mattpocock/skills](https://github.com/mattpocock/skills), Mosaic overlays in [MOSAIC-CONVENTIONS.md](../skills/MOSAIC-CONVENTIONS.md) and [SOURCE.md](../skills/SOURCE.md)).
+
+## Workflow
+
+`grill-with-docs` → `to-spec` (or `plan-ticket` / `to-prd`) → `to-tickets` / `to-issues` → `implement` (+ `tdd` / `diagnosing-bugs`) → `pr` / `code-review` → **jev smoke test** on user-visible changes.
+
+UI: [ui-prototype-first](./ui-prototype-first.mdc). Deploy: never `firebase deploy` from the agent VM ([AGENTS.md](../../AGENTS.md)).
+
+## Team-lead grilling
+
+During grilling / spec / planning, **answer routine product/design questions yourself** (docs, ADRs, PRD, `CONTEXT.md`); log decisions on the ticket/spec. **Escalate** only billing, app-store publish, prod data migration/destruction, or strategy forks → `## Open decisions` on PR/spec.
+
+## Jira
+
+Project `MS`, Atlassian MCP. Agents **never** transition tickets to **Done**; stop at **In Review**. Merge PRs on **green CI** (do not wait for Jonathan to merge).
+
+Tracker detail: [docs/agents/issue-tracker.md](../../docs/agents/issue-tracker.md).

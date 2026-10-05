@@ -6,9 +6,9 @@ argument-hint: "A JIRA ticket key (PROJ-124), 'next' for the oldest ready one, o
 
 <what-to-do>
 
-You are the **executor**. `create-epic` maps the project, `plan-ticket` takes a ticket from `To Plan` and specs it (`to-prd`) and slices it (`to-issues`) — and `implement` **builds one ticket and moves it along the board as it goes**.
+You are the **executor**. `create-epic` maps the project, `plan-ticket` takes a ticket from `To Plan` and specs it (`to-prd`) and slices it (`to-issues` or upstream `to-tickets`) — and `implement` **builds one ticket and moves it along the board as it goes**.
 
-Read [BOARD.md](../plan-ticket/BOARD.md) and [JIRA.md](../plan-ticket/JIRA.md) first (Atlassian MCP on Cursor Cloud Agents). What binds you: you build **level-0 tickets** — the cards. Their **sub-tasks** are your checklist inside the card, not separate cards. You take work from **`To Do`** (ready, and the next step is buildable without the user) or **`On Deck`** (ready, but the next step needs their judgment), and you drive it `In Progress → In Review → Done`.
+Read [MOSAIC-CONVENTIONS.md](../MOSAIC-CONVENTIONS.md), [BOARD.md](../plan-ticket/BOARD.md), and [JIRA.md](../plan-ticket/JIRA.md) first (Atlassian MCP on Cursor Cloud Agents). **`CLAUDE.md` wins** over `BOARD.md` for `On Deck`. What binds you: you build **level-0 tickets** — the cards. Their **sub-tasks** are your checklist inside the card, not separate cards. You take work from **`To Do`** (ready, and the next step is buildable without the user) or **`On Deck`** (ready, but the next step needs their judgment), and you drive it `In Progress → In Review → Done`.
 
 Two responsibilities, always both:
 1. **Build the thing** — test-first at pre-agreed seams, small changesets, no regressions, docs grown. (This is the old `feature` discipline; `implement` absorbs it.)
@@ -23,8 +23,8 @@ Do not skip the JIRA transitions and do not fake the build discipline. A merged 
 ## Phase 0: Claim
 
 1. **Resolve the target.** A ticket key means that ticket. `next` (or nothing) means find the ready queue with JQL (the `To Do` / `On Deck` columns, see `<jira-mechanics>`) and take the oldest unblocked one — confirm with me before claiming, and prefer `To Do` over `On Deck`, since `On Deck` means the next step in it is mine to make. **A count or `ALL` means batch mode — go to `<batch>` instead of working these phases directly.**
-2. **Read the ticket fully** with `getJiraIssue` (include `comment`, `description`, `parent`, `issuelinks`, `status`, `labels`, `subtasks`): its PRD, acceptance criteria, sub-tasks, and its parent epic for context.
-3. **Check it's actually takeable.** If it's blocked by an open issue, stop and say so. If it has **no PRD** (no `## Problem Statement` + `## Acceptance Criteria`) it should never have left `To Plan` — **stop**, say the board was lying to you, and recommend `/plan-ticket <KEY>`. Don't build on fog, and don't quietly spec it yourself; that's how an un-reviewed guess becomes a merged PR.
+2. **Read the ticket fully** with `getJiraIssue` (include `comment`, `description`, `parent`, `issuelinks`, `status`, `labels`, `subtasks`): its PRD, acceptance criteria, sub-tasks, and its parent epic for context. If **`## Open decisions`** is non-empty, **stop** — those need Jonathan; do not guess.
+3. **Check it's actually takeable.** If it's blocked by an open issue, stop and say so. If it has **no PRD** (no `## Problem Statement` + `## Acceptance Criteria`) it should never have left `To Plan` — **stop**, say the board was lying to you, and recommend `/plan-ticket <KEY>`. Don't build on fog. Routine product gaps: team-lead mode in MOSAIC-CONVENTIONS lets you record decisions on the ticket — not silent guessing without logging.
 4. **The ticket vs its sub-tasks.** The **ticket** is the unit that rides the board. Work its **sub-tasks** one at a time (Phase 1→6 per sub-task), ticking each one Done as it lands, so the card's progress count stays true. The ticket itself moves `In Progress` once, at the start, and `In Review` once, at the end. If it has no sub-tasks, implement it directly — but say so, because `to-issues` should have made some.
 
    **If you were given a sub-task allowlist** (*"work only METH-51, METH-53, METH-54"*), that list is a hard boundary. Work exactly those, in the order given, and **stop**. The ones left out need me, and doing "just the obvious part" of one is the failure this split exists to prevent. A ticket that still has unfinished sub-tasks when you stop is **not** finished: tick what you did, **do not open a PR**, push the branch, and say plainly which sub-task you stopped on and what it needs from me.
@@ -65,11 +65,11 @@ If a test that was passing before this work began is now failing: **stop** and f
 
 ## Phase 5: Review
 
-Run the **`/review`** skill on the change. It reviews three things at once and keeps them apart: whether the code follows the repo's standards, whether it does what this ticket's PRD asked for, and whether it speaks the language in `CONTEXT.md`.
+Run **`/code-review`** (alias `/review`) on the change. Upstream runs **Standards** and **Spec** in parallel; on Mosaic also check domain vocabulary in `CONTEXT.md` when judging Spec and naming.
 
-The fixed point is the merge-base with main — the whole of this ticket's work, not the last commit. Pass it the issue key so the Spec axis measures against the real acceptance criteria.
+The fixed point is the merge-base with main — the whole of this ticket's work, not the last commit. Pass the issue key / PRD so the Spec axis measures against real acceptance criteria.
 
-Address what it surfaces before shipping. Treat a **Domain** finding as blocking — a wrong name outlives a bug, and it is cheap to fix now and expensive later. If you disagree with a finding, say why rather than quietly skipping it.
+Address what it surfaces before shipping. Wrong domain terms in `CONTEXT.md` are blocking. If you disagree with a finding, say why rather than quietly skipping it.
 
 ## Phase 6: Grow
 
@@ -81,13 +81,13 @@ Once tests pass and no regressions remain:
 
 ## Phase 7: Ship & transition
 
-1. **Commit** with the project's commit style, referencing the issue key so JIRA↔GitHub links it. A Smart Commit can also move the ticket, e.g. `PROJ-124 add recommendation ranking fn` or `PROJ-124 #comment ready for review`.
-2. **Open a PR** with the issue key in the title (e.g. `PROJ-124: recommendation ranking function`). The linked PR then shows in the issue's Development panel.
-3. **Transition to In Review** (or the project's review status). If the project has no review step, transition per its workflow.
-4. **On merge → Done.** If Smart Commits / the workflow auto-transition on merge, let them and verify. Otherwise transition the issue to Done yourself once merged. Never leave a merged issue un-transitioned.
-5. **Loop.** If the ticket has more unfinished sub-tasks, pick the next unblocked one and go again from Phase 1 (you don't re-claim — the ticket is already `In Progress`). When every sub-task is Done, transition the **ticket** to `In Review`, and to `Done` on merge. When every ticket under an epic is Done, the epic is done — tell me.
+1. **Commit** with the project's commit style, referencing the issue key so JIRA↔GitHub links it.
+2. **Open a PR** with the issue key in the title (e.g. `MS-124: …`). Use [`/pr`](../pr/SKILL.md) and `.github/PULL_REQUEST_TEMPLATE.md`. User-visible changes: complete **Smoke test** per [jev-smoke-test](../jev-smoke-test/SKILL.md).
+3. **Transition to In Review** once the PR is ready. **Never transition to `Done`.** Jonathan moves tickets to `Done` after review.
+4. **Merge on green CI** when you are the coordinating agent (Mosaic Dev): `npm test` and `npm run lint --prefix functions` must pass. Do **not** wait for Jonathan to merge. Do **not** `firebase deploy` from the agent VM.
+5. **Loop.** If the ticket has more unfinished sub-tasks, pick the next unblocked one from Phase 1 (ticket stays `In Progress`). When every sub-task is Done, transition the **ticket** to `In Review` and stop.
 
-Report at the end: the issue key(s) moved, their new statuses, the branch/PR, and what's next in the tree.
+Report at the end: issue key(s), statuses (expect **`In Review`**), branch/PR, merge result, and what's next.
 
 </phases>
 
@@ -127,7 +127,7 @@ For each ticket in turn:
 2. Build it with the normal discipline — Phases 1→6. Tests still come first, regressions still
    stop you, `CONTEXT.md` still grows. **Batch does not mean sloppy.** What batch removes is the
    conversation, not the standard.
-3. Run `/review` on that ticket's commit range, and fix what it surfaces before moving on.
+3. Run `/code-review` on that ticket's commit range, and fix what it surfaces before moving on.
 4. **Commit once**, message led by the issue key, so the ticket is one revertible unit.
 5. Transition it to In Review and post a one-line comment saying it is in the batch branch.
 6. Full test suite before the next ticket starts. A batch that breaks on ticket two and keeps

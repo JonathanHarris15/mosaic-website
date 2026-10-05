@@ -1,41 +1,71 @@
 # Cursor Cloud skills (Mosaic)
 
-Upstream `skills/` from [JonathanHarris15/claude-config](https://github.com/JonathanHarris15/claude-config), overlaid at `.cursor/skills/<skill-name>/`. See [SOURCE.md](SOURCE.md).
+Upstream: [mattpocock/skills](https://github.com/mattpocock/skills) @ pin in [SOURCE.md](SOURCE.md). Mosaic-specific overlays: [MOSAIC-CONVENTIONS.md](MOSAIC-CONVENTIONS.md), [docs/agents/](../../docs/agents/), Jira spine in `CLAUDE.md`.
 
-Jira calls use **Atlassian MCP** on Cursor Cloud Agents. Mosaic board override: `CLAUDE.md` wins over [plan-ticket/BOARD.md](plan-ticket/BOARD.md).
+**Setup:** `/setup-matt-pocock-skills` (already applied for Jira `MS` — see `docs/agents/*.md`).
 
-## Skills ported
+## Target workflow
+
+```
+grill-with-docs → to-spec (or plan-ticket → to-prd) → to-tickets / to-issues → implement (+ tdd / diagnosing-bugs) → pr / code-review → jev smoke test (user-visible)
+```
+
+Prototype-first UI: [ui-prototype-first](../rules/ui-prototype-first.mdc). Agent workflow rule: [mosaic-skills](../rules/mosaic-skills.mdc).
+
+## Engineering (mattpocock)
 
 | Skill | Role |
 | --- | --- |
-| `plan-ticket` | Front door: To Plan → PRD + sub-tasks → To Do / On Deck |
-| `create-epic` | Epic (never a board card) + sibling level-0 tickets |
-| `to-prd` | Write the PRD onto the ticket description |
-| `to-issues` | Slice a specced ticket into AFK/HITL sub-tasks |
-| `implement` | Build a ticket that has a PRD; drive the board |
-| `grill-with-docs` | Grill against CONTEXT.md, ADRs, and the code |
-| `grilling` | Interview in rounds |
-| `prototype` | Light specimen (logic / UI) |
-| `research` | Factual unknowns |
-| `diagnose` | Reproduce a bug first |
-| `review` | Code / spec / domain review |
-| `retro` | Look back |
-| `tdd` | Red-green-refactor |
-| `domain-modeling` | CONTEXT.md and ADRs |
-| `codebase-design` | Module / seam vocabulary |
+| `setup-matt-pocock-skills` | Issue tracker + triage labels + domain doc layout (Jira preconfigured) |
+| `ask-matt` | Escalation-style questions to Matt Pocock patterns |
+| `grill-with-docs` | Grill + update CONTEXT/ADRs |
+| `grilling` | Core grill rounds |
+| `to-spec` | Conversation → spec on tracker |
+| `to-tickets` | Tracer-bullet ticket graph on tracker |
+| `triage` | Triage state machine + agent briefs |
+| `implement` | Build one Jira ticket (Mosaic board discipline) |
+| `implement-spec` | Multi-ticket integration branch |
+| `tdd` | Red-green at seams |
+| `diagnosing-bugs` | Reproduce-first bug loop (`diagnose` = alias) |
+| `codebase-design` | Deep modules vocabulary |
 | `improve-codebase-architecture` | Architecture pass |
-| `design-sync` | Design system ↔ code |
-| `design-pull` | Pull design into code |
-| `design-push` | Push code into design |
-| `design-prototype` | Design-system specimen |
+| `domain-modeling` | CONTEXT.md + ADRs |
+| `prototype` | Throwaway logic/UI specimen (UI superseded by prototype-first rule) |
+| `research` | Factual unknowns |
+| `code-review` | Standards + Spec review (`review` = alias) |
+| `pr` | PR body shape |
+| `retro` | Environment retrospective |
+| `wayfinder` | Map + frontier of tickets |
+| `wizard` | Guided human script |
+
+## Productivity (mattpocock)
+
+| Skill | Role |
+| --- | --- |
+| `grill-me` | Non-code grill entry |
+| `handoff` | Session handoff |
+| `teach` | Explain while building |
+| `to-questionnaire` | Structured questions |
 | `wait-what` | Clarify a surprise |
-| `wizard` | Guided script |
-| `writing-for-agents` | Writing style |
-| `sync-config` | Sync the claude-config git remote |
-| `jev-smoke-test` | Required pre-PR UI smoke via local fastbrowse + Jev |
-| `frontend-design` | Layout, hierarchy, copy, critique (Mosaic design-system brief) |
-| `web-interface-guidelines` | Vercel guidelines review pass (offline `command.md`) |
+| `writing-for-agents` | Docs for agents |
 
-Always-applied rule: [ui-prototype-first](../rules/ui-prototype-first.mdc) — standalone HTML prototypes in `docs/design/prototypes/` before look/layout UI work.
+## Mosaic Jira spine (kept / adapted)
 
-Grok Bot’s skill library is out of scope.
+| Skill | Role |
+| --- | --- |
+| `plan-ticket` | To Plan → PRD + sub-tasks → board |
+| `create-epic` | Epic + sibling tickets |
+| `to-prd` | PRD on ticket description |
+| `to-issues` | Jira sub-tasks under a specced ticket (prefer over `to-tickets` here) |
+
+## Mosaic-only (kept)
+
+| Skill | Role |
+| --- | --- |
+| `jev-smoke-test` | Pre-PR UI smoke (fastbrowse + Jev) |
+| `frontend-design` | Mosaic design-system brief |
+| `web-interface-guidelines` | Vercel guidelines pass |
+| `design-sync` / `design-pull` / `design-push` / `design-prototype` | Claude Design bridge |
+| `sync-config` | Sync claude-config git remote (legacy) |
+
+Grok Bot's skill library is out of scope.

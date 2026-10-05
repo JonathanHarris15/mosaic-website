@@ -36,3 +36,19 @@ that carries it.
   rule is upheld at the two doors (`/plan-ticket` won't land a ticket right of
   `To Plan` without a PRD, `/implement` won't build one that has no PRD).
 <!-- /jira-config -->
+
+## Agent skills
+
+Matt Pocock engineering + productivity skills plus Mosaic overlays. See `.cursor/skills/README.md`, `MOSAIC-CONVENTIONS.md`, and `docs/agents/`.
+
+### Issue tracker
+
+Jira project **MS** on `methodllc.atlassian.net` (Atlassian MCP). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical `/triage` roles + Mosaic labels (`needs-jonathan`, `P0`–`P2`, …). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: **`CONTEXT.md`** + `docs/adr/`. See `docs/agents/domain.md`.
