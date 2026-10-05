@@ -1515,19 +1515,6 @@ function serviceForm() {
                     }
                     return;
                 }
-                const roleFields = ['serviceLeader', 'musicLeader', 'preacher'];
-                let liturgyFields = [
-                    'preparatoryHymn', 'callToWorship', 'hymn1', 
-                    'callToConfession', 'assuranceOfPardon', 'hymnMid2', 
-                    'scriptureReading', 'sermon', 'hymnEnd1', 'hymnEnd2', 'benediction'
-                ];
-
-                if (this.service.hasBaptism) {
-                    liturgyFields.push('baptism');
-                } else {
-                    liturgyFields.push('hymn2');
-                    liturgyFields.push('hymnMid1');
-                }
 
                 const highlight = (key) => {
                     const section = document.querySelector(`[data-field-key="${key}"]`);
@@ -1542,33 +1529,21 @@ function serviceForm() {
                     return false;
                 };
 
-                // 1. Check Roles
-                for (const key of roleFields) {
-                    const val = this.service[key];
-                    if (!val || !val.name) {
-                        if (highlight(key)) return;
-                    }
+                // The same slots the progress fraction counts. A hymn pulled
+                // out of the order is not in the list. A typed hymn that is
+                // not linked to the book is unfinished, same as a blank.
+                const items = window.HomeDashboard.checklist(flattenServiceForSave(this.service));
+                for (const item of items) {
+                    if (item.state === 'set') continue;
+                    if (highlight(item.key)) return;
                 }
 
-                // 2. Check Liturgy
-                for (const key of liturgyFields) {
-                    // A hymn pulled out of the order of service is intentionally blank.
-                    if (this.isHymnRemoved(key)) continue;
-                    if (key === 'baptism') {
-                        // Baptism Candidates: incomplete if there are none, or any
-                        // candidate is a literal name not yet linked to a Person.
-                        const candidates = this.service.liturgy.baptism || [];
-                        const incomplete = candidates.length === 0 || candidates.some(c => c.name && !c.id);
-                        if (incomplete && highlight(key)) return;
-                        continue;
-                    }
-                    const val = this.service.liturgy[key];
-                    const isEmpty = (val && typeof val === 'object') ? !val.name : !val;
-                    const isLiteral = (val && typeof val === 'object' && val.name && !val.id);
-
-                    if (isEmpty || isLiteral) {
-                        if (highlight(key)) return;
-                    }
+                // A baptism the tally calls set can still be a typed name with
+                // no person behind it. Fix the blanks lands on that row too.
+                if (this.service.hasBaptism) {
+                    const candidates = this.service.liturgy.baptism || [];
+                    const unlinked = candidates.some(c => c && c.name && !c.id);
+                    if (unlinked) highlight('baptism');
                 }
             });
         },
@@ -2044,44 +2019,12 @@ function serviceForm() {
                 ServiceAuthorship.decidedBy(this.service, key));
         },
 
-        // Fields beyond the liturgy grid that a fully-ready service needs: the two
-        // header references (Theme, Key Verse) and the core people roles. Person
-        // roles count as set once they have an id or a typed-in name. Optional
-        // roles (Elements, Other Involvement) are deliberately left out
-        // so the tally can still reach "complete" on a normal Sunday.
-        _readinessFields: [
-            { label: 'Theme',              get: s => s.theme,            type: 'text'   },
-            { label: 'Key Verse',          get: s => s.keyVerse,         type: 'text'   },
-            { label: 'Service Leader',     get: s => s.serviceLeader,    type: 'person' },
-            { label: 'Music Leader',       get: s => s.musicLeader,      type: 'person' },
-            { label: 'Preacher',           get: s => s.preacher,         type: 'person' },
-            { label: 'Prayer (Praise)',    get: s => s.prayerPraise,     type: 'person' },
-            { label: 'Prayer (Confession)',get: s => s.prayerConfession, type: 'person' },
-        ],
-
-        _isFieldSet(val, type) {
-            if (type === 'person') return !!(val && (val.id || (val.name || '').trim()));
-            return val != null && String(val).trim() !== '';
-        },
-
-        // "X of Y set" — a full-readiness tally: the liturgy rows currently in the
-        // order (removed hymns are intentionally blank, so they sit out) PLUS the
-        // header references and core people roles above. Catches a missing Key
-        // Verse or unassigned leader that the liturgy-only count used to miss.
+        // "X of Y set" — the same tally the home card and the phone use
+        // (home-dashboard-core). This page used to add theme, the key verse,
+        // and the optional prayer leaders, and to count a hymn name as finished
+        // before it was linked, so the two screens disagreed.
         get filledLabel() {
-            let filled = 0, total = 0;
-            for (const mv of this.movements) {
-                for (const it of mv.items) {
-                    if (it.removed) continue;
-                    total++;
-                    if (it.value) filled++;
-                }
-            }
-            for (const f of this._readinessFields) {
-                total++;
-                if (this._isFieldSet(f.get(this.service), f.type)) filled++;
-            }
-            return `${filled} of ${total} set`;
+            return window.HomeDashboard.readiness(flattenServiceForSave(this.service)).fraction;
         },
 
         // Service notes surfaced for the leader, in service order, one card each.

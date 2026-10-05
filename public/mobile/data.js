@@ -380,6 +380,8 @@
       musicLeader: d.musicLeader || "",
       hasBaptism: !!d.hasBaptism,
       isIrregular: !!d.isIrregular,
+      // A hymn pulled out of the order is not part of the readiness tally.
+      removedHymns: Array.isArray(d.removedHymns) ? d.removedHymns : [],
       // The fields the home readiness line scores. Not `guide` — that is the
       // printed booklet and it is most of the document.
       liturgy: liturgyForHome(d),
