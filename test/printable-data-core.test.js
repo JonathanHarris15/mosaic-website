@@ -937,3 +937,22 @@ test('page numbering respects a custom start page in the project order', () => {
     assert.equal(Data.insertPageNumberDisplay(1, 3), null);
     assert.equal(Data.describeParams('insert_page_number', { startAt: 3 }), 'numbering from page 3');
 });
+
+test('before a Sunday is the previous Sunday, and before any other day is yesterday', () => {
+    assert.equal(Data.viewDateBefore('2026-09-06'), '2026-08-30');
+    assert.equal(Data.viewDateBefore('2026-09-03'), '2026-09-02');
+    assert.equal(Data.sundayOnOrAfter('2026-09-05'), '2026-09-06');
+});
+
+test('the Sunday Service for the view date is pinned, and invented when nobody has opened it', () => {
+    const targets = Data.orderSnapshotTargets([
+        { id: 'members_2026-09-08', seriesId: 'members', date: '2026-09-08', name: 'Members meeting' },
+        { id: 'sunday_service_2026-09-13', seriesId: 'sunday_service', date: '2026-09-13', name: 'Sunday Service' },
+    ], '2026-09-03');
+    assert.equal(targets[0].pinned, true);
+    assert.equal(targets[0].occurrence.id, 'sunday_service_2026-09-06');
+    assert.equal(targets[0].occurrence.name, 'Sunday Service');
+    assert.equal(targets[1].occurrence.date, '2026-09-08');
+    assert.equal(targets[2].occurrence.date, '2026-09-13');
+    assert.equal(targets[1].pinned, false);
+});

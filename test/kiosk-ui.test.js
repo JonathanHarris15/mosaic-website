@@ -96,7 +96,7 @@ test('the Event page has an Attendance tab, and it is where the panel lives', ()
     // The Event's own body is the other tab, not always-on beneath it.
     assert.match(html, /cal-cols" x-show="tab === 'event'"/);
     const js = read('calendar-event.js');
-    assert.match(js, /tab: 'event',/);
+    assert.match(js, /tab: cfg\.filesOnly \? 'files' : 'event',/);
     assert.match(js, /get attendanceRows\(\)/);
 });
 

@@ -44,16 +44,29 @@
                 <button type="button" class="m-btn m-btn--secondary m-btn--sm" :aria-pressed="codeOpen" @click="toggleCode()" title="Code view: the page's HTML and CSS">
                     <span class="material-symbols-outlined">code</span><span class="m-btn__label">Code</span>
                 </button>
+                <div class="pe-asof">
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="stepViewDate(-1)" aria-label="Read this printable one week earlier" title="One week earlier">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <label class="pe-asof__label">
+                        <span>As of</span>
+                        <input type="date" name="asOf" autocomplete="off" class="pe-in pe-in--date" :value="viewDate" @change="setViewDate($event.target.value)" aria-label="View date" title="The date this printable is read as of. It is not saved on the printable." />
+                    </label>
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="stepViewDate(1)" aria-label="Read this printable one week later" title="One week later">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                    </button>
+                </div>
                 <div class="pe-filemenu">
-                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="fileMenu = !fileMenu" title="File">
+                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="fileMenu = !fileMenu" title="File" :aria-expanded="fileMenu">
                         <span class="material-symbols-outlined">menu</span><span class="m-btn__label">File</span>
                     </button>
                     <div class="pe-menu" x-show="fileMenu" x-cloak @click.outside="fileMenu = false">
                         <button type="button" @click="printPrintable()" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span> <kbd>Ctrl+P</kbd></button>
                         <button type="button" @click="printFolio()" title="Two pages on each landscape sheet, in the same order as the service guide. Fold the stack and leave the copier booklet mode off."><span class="material-symbols-outlined" aria-hidden="true">print</span>Print folio…</button>
+                        <button type="button" @click="openSendSnapshot()"><span class="material-symbols-outlined">picture_as_pdf</span>Send snapshot to…</button>
                         <button type="button" @click="startSaveTemplate()"><span class="material-symbols-outlined">bookmark_add</span>Save this page as a template</button>
                         <button type="button" @click="fileMenu = false; fitToView()"><span class="material-symbols-outlined">fit_screen</span>Fit page to view <kbd>Ctrl+0</kbd></button>
-                        <a :href="'printable-view.html?id=' + encodeURIComponent(id)" target="_blank"><span class="material-symbols-outlined">visibility</span>Open the view-only page</a>
+                        <a :href="viewHref" target="_blank"><span class="material-symbols-outlined">visibility</span>Open the view-only page</a>
                     </div>
                 </div>
                 <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)" :disabled="saving" title="Save now (Ctrl+S)">
@@ -343,7 +356,25 @@
                                                         <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'last'" @click="setBindParam(b.prop, 'when', { mode: 'last' })">Last</button>
                                                         <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'this'" @click="setBindParam(b.prop, 'when', { mode: 'this' })">This Sunday</button>
                                                         <button type="button" :aria-pressed="whenMode(b.bind.params.when) === 'next'" @click="setBindParam(b.prop, 'when', { mode: 'next' })">Next</button>
-                                                        <input type="date" class="pe-in pe-in--date" :value="b.bind.params.when && b.bind.params.when.date || ''" @change="setBindParam(b.prop, 'when', { mode: 'date', date: $event.target.value })" title="The Sunday of a date" />
+                                                        <input type="date" class="pe-in pe-in--date" :value="b.bind.params.when && b.bind.params.when.date || ''" @change="setBindParam(b.prop, 'when', { mode: 'date', date: $event.target.value })" title="The Sunday of a date" aria-label="The Sunday of a date" />
+                                                    </span>
+                                                </template>
+                                                <template x-if="isScriptureBind(b)">
+                                                    <span class="pe-passage">
+                                                        <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                            <button type="button" :aria-pressed="b.bind.reading !== 'passage'" @click="setReading(b.prop, 'citation')">Citation</button>
+                                                            <button type="button" :aria-pressed="b.bind.reading === 'passage'" @click="setReading(b.prop, 'passage')">Passage</button>
+                                                        </span>
+                                                        <span class="pe-passage__opts" x-show="b.bind.reading === 'passage'">
+                                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                                                <button type="button" :aria-pressed="passageOf(b).style !== 'plain'" @click="setPassage(b.prop, { style: 'styled' })">Styled</button>
+                                                                <button type="button" :aria-pressed="passageOf(b).style === 'plain'" @click="setPassage(b.prop, { style: 'plain' })">Plain</button>
+                                                            </span>
+                                                            <label class="pe-check"><input type="checkbox" :checked="passageOf(b).numbers" @change="setPassage(b.prop, { numbers: $event.target.checked })" /> Verse numbers</label>
+                                                            <label class="pe-check"><input type="checkbox" :checked="passageOf(b).headings" @change="setPassage(b.prop, { headings: $event.target.checked })" /> Headings</label>
+                                                            <label class="pe-check"><input type="checkbox" :checked="passageOf(b).footnotes" @change="setPassage(b.prop, { footnotes: $event.target.checked })" /> Footnotes</label>
+                                                            <label class="pe-check"><input type="checkbox" :checked="passageOf(b).citation" @change="setPassage(b.prop, { citation: $event.target.checked })" /> Citation line</label>
+                                                        </span>
                                                     </span>
                                                 </template>
                                             </span>
@@ -937,6 +968,33 @@
         </div>
     </div>
 
+    <!-- Send a PDF of this view date to an event. The Sunday of that date is pinned. -->
+    <div class="pe-scrim" x-show="sendingSnapshot" x-cloak @click.self="closeSendSnapshot()" @keydown.escape.window="closeSendSnapshot()">
+        <div class="pe-dialog" role="dialog" aria-modal="true" aria-labelledby="pe-snapshot-title">
+            <h2 id="pe-snapshot-title" class="m-headline-lg">Send snapshot to…</h2>
+            <p class="pe-hint">A PDF of this printable as of <strong x-text="viewDate"></strong>, filed on the event you pick. The Sunday Service for that week stays at the top.</p>
+            <p class="m-notice m-notice--error" x-show="snapshotTargetError" x-text="snapshotTargetError" aria-live="polite"></p>
+            <p class="pe-hint" x-show="snapshotListLoading" aria-live="polite">Loading events…</p>
+            <p class="pe-hint" x-show="snapshotSendProgress" x-text="snapshotSendProgress" aria-live="polite"></p>
+            <div class="pe-snapshot-list" x-show="snapshotTargets.length">
+                <template x-for="t in snapshotTargets" :key="t.occurrence.id">
+                    <button type="button" class="pe-snapshot-row" :class="t.pinned ? 'is-pinned' : ''" :disabled="!!snapshotSendProgress" @click="sendSnapshotTo(t)">
+                        <span class="material-symbols-outlined" aria-hidden="true" x-text="t.pinned ? 'church' : 'event'"></span>
+                        <span class="pe-snapshot-row__body">
+                            <span class="pe-snapshot-row__name" x-text="t.occurrence.name || 'Event'"></span>
+                            <span class="pe-snapshot-row__date" x-text="t.occurrence.date"></span>
+                        </span>
+                        <span class="pe-snapshot-row__pin" x-show="t.pinned">Sunday</span>
+                    </button>
+                </template>
+            </div>
+            <p class="pe-hint" x-show="!snapshotListLoading && !snapshotTargets.length && !snapshotTargetError">No events in this window.</p>
+            <div class="pe-dialog__acts">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="closeSendSnapshot()" :disabled="!!snapshotSendProgress">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Save page as template -->
     <div class="pe-scrim" x-show="savingTemplate" x-cloak @click.self="savingTemplate = false" @keydown.escape.window="savingTemplate = false">
         <div class="pe-dialog" role="dialog" aria-modal="true">
@@ -991,10 +1049,13 @@
     <script src="printed-announcement-guide.js"></script>
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
+    <script src="scripture-passage.js"></script>
+    <script src="event-attachments-core.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
     <script src="printable-live.js"></script>
     <script src="printable-export-core.js"></script>
+    <script src="printable-pdf.js"></script>
     <script src="printable-editor-data.js"></script>
     <script src="printable-editor.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
@@ -1262,6 +1323,23 @@
         .pe-main { position: relative; }
 
         /* ── Menus ─────────────────────────────────────────────────────── */
+        .pe-asof { display: flex; align-items: center; gap: 2px; }
+        .pe-asof__label { display: flex; align-items: center; gap: 6px; font: 12px var(--font-sans); color: var(--on-surface-variant); }
+        .pe-passage { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 4px; }
+        .pe-passage__opts { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+        .pe-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--on-surface); }
+        .pe-snapshot-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
+        .pe-snapshot-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); cursor: pointer; font: inherit; color: inherit; }
+        .pe-snapshot-row:hover { background: var(--surface-container); }
+        .pe-snapshot-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .pe-snapshot-row.is-pinned { border-color: var(--primary); background: var(--surface-container-low); }
+        .pe-dialog { overscroll-behavior: contain; }
+        .pe-snapshot-row:disabled { opacity: 0.6; cursor: default; }
+        .pe-snapshot-row .material-symbols-outlined { font-size: 20px; color: var(--secondary); }
+        .pe-snapshot-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .pe-snapshot-row__name { font: 600 13px var(--font-sans); color: var(--on-surface); }
+        .pe-snapshot-row__date { font-size: 11px; color: var(--on-surface-variant); }
+        .pe-snapshot-row__pin { font: 600 10px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--primary); }
         .pe-filemenu { position: relative; }
         .pe-menu { position: absolute; z-index: 60; min-width: 240px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius); box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,.18)); padding: 4px; }
         .pe-filemenu .pe-menu { right: 0; top: calc(100% + 6px); }

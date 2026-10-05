@@ -29,6 +29,8 @@
                 </div>
             </div>
             <div class="m-header__actions">
+                <span class="m-header__chip" x-show="viewDate" x-text="'As of ' + viewDate"
+                      style="font-size:13px; color:var(--on-surface-variant);"></span>
                 <span class="m-header__chip" x-show="template"
                       x-text="template ? (template.label + (entries.length ? ' · ' + entries.length + ' page' + (entries.length === 1 ? '' : 's') + (bookletPadCount ? ' · print ' + printPageCount + ' (padded ×4)' : '') : '')) : ''"
                       style="font-size:13px; color:var(--on-surface-variant); max-width:36ch; overflow:hidden; text-overflow:ellipsis;"></span>
@@ -99,6 +101,7 @@
     <script src="printed-announcement-guide.js"></script>
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
+    <script src="scripture-passage.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
     <script src="printable-live.js"></script>

@@ -175,7 +175,7 @@
             previewFullscreen: false,
             // Which pane of the Event page is open. Editors get a second one —
             // who was actually here — so it starts on the Event either way.
-            tab: 'event',
+            tab: cfg.filesOnly ? 'files' : 'event',
             people: [],
             roleDefinitions: [],
             relationships: [],
@@ -574,7 +574,7 @@
                     if (this.isEditor) await this.loadFairness();
                     // The service page hosts this same page for Roles only.
                     // It does not offer Announcements, so it does not read them.
-                    if (!cfg.rolesOnly) await this.loadAnnouncements();
+                    if (!cfg.rolesOnly && !cfg.filesOnly) await this.loadAnnouncements();
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')
@@ -2058,8 +2058,17 @@
 
             get canLinkPrintables() { return this.isEditor && !!this.series && this.printablesAvailable; },
 
-            printableHref(p, mode) {
-                return (mode === 'edit' ? 'printable-editor.html?id=' : 'printable-view.html?id=') + encodeURIComponent(p.id);
+            // `when` is 'from' (this occurrence's date) or 'before' (the
+            // previous Sunday, on a Sunday — ADR 0078).
+            printableHref(p, mode, when) {
+                const base = (mode === 'edit' ? 'printable-editor.html?id=' : 'printable-view.html?id=') + encodeURIComponent(p.id);
+                const date = this.occurrence && this.occurrence.date;
+                if (!date) return base;
+                let asOf = date;
+                if (when === 'before' && window.PrintableDataCore) {
+                    asOf = PrintableDataCore.viewDateBefore(date) || date;
+                }
+                return base + '&asOf=' + encodeURIComponent(asOf);
             },
 
             printableSub(p) {
@@ -2144,8 +2153,8 @@
                 }
             },
 
-            // The snapshot: the Printable rendered with today's data, every
-            // page, as a PDF filed as an ordinary attachment on this date —
+            // The snapshot: the Printable rendered as of this occurrence's
+            // date, every page, as a PDF filed as an ordinary attachment —
             // so it obeys the attachment rules, fetched and never linked
             // (ADR-0046), and it is the one frozen copy (ADR-0057).
             async filePrintableSnapshot(p) {
@@ -2158,8 +2167,9 @@
                     if (!record || !record.template) throw new Error('not laid out');
                     const project = Object.assign({ id: record.id }, PrintableCore.migrate(record));
                     const viewer = { level: this.rank, personId: this.personId || null };
-                    const bundle = await PrintableDataStore.fetch(db, PrintableLive.collectNeeds(project), viewer);
-                    const resolver = PrintableLive.resolver(project, bundle, { level: this.rank, canEdit: true });
+                    const clock = (this.occurrence && this.occurrence.date) || undefined;
+                    const bundle = await PrintableDataStore.fetch(db, PrintableLive.collectNeeds(project, clock), viewer);
+                    const resolver = PrintableLive.resolver(project, bundle, { level: this.rank, canEdit: true, today: clock });
                     const host = document.createElement('div');
                     host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none;';
                     document.body.appendChild(host);

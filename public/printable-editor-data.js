@@ -144,6 +144,19 @@
         };
     }
 
+    function initialViewDate() {
+        const Clock = global.PrintableDataCore || Data;
+        try {
+            const q = new URLSearchParams(global.location.search).get('asOf');
+            if (Clock && Clock.isDateStr(q)) return q;
+        } catch (e) { /* no address bar */ }
+        if (Clock && Clock.toDateStr) return Clock.toDateStr(new Date());
+        const d = new Date();
+        return d.getFullYear() + '-'
+            + String(d.getMonth() + 1).padStart(2, '0') + '-'
+            + String(d.getDate()).padStart(2, '0');
+    }
+
     function PrintableEditorData(ui) {
         return {
             // ── State ────────────────────────────────────────────────────
@@ -164,6 +177,12 @@
                 assetUploadError: '',
             },
             layout: [],                // what the canvas draws: stored pages, overflow continuations included
+            viewDate: initialViewDate(),
+            sendingSnapshot: false,
+            snapshotListLoading: false,
+            snapshotTargets: [],
+            snapshotTargetError: '',
+            snapshotSendProgress: '',
             dragField: null,           // the chip in the air
             dropTarget: null,          // the element under it, when it may take it
             wires: [],                 // [{x1,y1,x2,y2}] in main-area coordinates
@@ -211,10 +230,10 @@
                 this.data.loading = true;
                 this.data.error = '';
                 try {
-                    const needs = Live.collectNeeds(this.project);
+                    const needs = Live.collectNeeds(this.project, this.viewDate);
                     const bundle = await global.PrintableDataStore.fetch(db, needs, this.viewer());
                     ui.bundle = bundle;
-                    ui.resolver = Live.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit });
+                    ui.resolver = Live.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit, today: this.viewDate });
                     this.data.loaded = true;
                 } catch (e) {
                     console.error(e);
@@ -230,7 +249,7 @@
             // same bundle. Cheap, so every edit can call it.
             rebindData() {
                 if (!ui.bundle) return;
-                ui.resolver = Live.resolver(this.project, ui.bundle, { level: this.permissionLevel, canEdit: this.canEdit });
+                ui.resolver = Live.resolver(this.project, ui.bundle, { level: this.permissionLevel, canEdit: this.canEdit, today: this.viewDate });
             },
 
             get resolver() {
@@ -835,6 +854,133 @@
                 this.refreshData();
             },
 
+            isScriptureBind(b) {
+                const Passage = global.ScripturePassage;
+                return !!(Passage && b && b.bind && Passage.isScriptureField(b.bind.field));
+            },
+
+            passageOf(b) {
+                const Passage = global.ScripturePassage;
+                return Passage ? Passage.normalize(b && b.bind && b.bind.passage) : {};
+            },
+
+            // Citation is the reference as typed. Passage is the verses,
+            // with the presentation stored on the wire (ADR 0079).
+            setReading(prop, reading) {
+                const page = this.currentPage;
+                const node = this.selectedNode;
+                if (!page || !node || !node.bind || !node.bind[prop]) return;
+                const Passage = global.ScripturePassage;
+                const bind = JSON.parse(JSON.stringify(node.bind));
+                if (reading === 'passage') {
+                    bind[prop].reading = 'passage';
+                    bind[prop].passage = Passage ? Passage.normalize(bind[prop].passage) : {};
+                } else {
+                    delete bind[prop].reading;
+                    delete bind[prop].passage;
+                }
+                this.replacePage(Core.updateNode(page, node.id, { bind: bind }));
+                this.commit();
+                this.refreshData();
+            },
+
+            setPassage(prop, patch) {
+                const page = this.currentPage;
+                const node = this.selectedNode;
+                if (!page || !node || !node.bind || !node.bind[prop]) return;
+                const Passage = global.ScripturePassage;
+                const bind = JSON.parse(JSON.stringify(node.bind));
+                bind[prop].reading = 'passage';
+                bind[prop].passage = Passage.normalize(Object.assign({}, bind[prop].passage || {}, patch));
+                this.replacePage(Core.updateNode(page, node.id, { bind: bind }));
+                this.commit();
+                this.refreshData();
+            },
+
+            async openSendSnapshot() {
+                this.fileMenu = false;
+                this.sendingSnapshot = true;
+                this.snapshotListLoading = true;
+                this.snapshotTargetError = '';
+                this.snapshotSendProgress = '';
+                this.snapshotTargets = [];
+                try {
+                    const from = Data.addDays(this.viewDate, -7);
+                    const to = Data.addDays(this.viewDate, 28);
+                    const personId = (this.currentUserData && this.currentUserData.personId) || null;
+                    const rows = await global.EventsStore.loadCalendar(db, {
+                        from: from, to: to, rank: this.permissionLevel, personId: personId,
+                    });
+                    this.snapshotTargets = Data.orderSnapshotTargets(rows, this.viewDate);
+                } catch (e) {
+                    console.error(e);
+                    this.snapshotTargetError = 'The events did not load. Try again.';
+                } finally {
+                    this.snapshotListLoading = false;
+                }
+            },
+
+            closeSendSnapshot() {
+                if (this.snapshotSendProgress) return;
+                this.sendingSnapshot = false;
+            },
+
+            async sendSnapshotTo(target) {
+                if (!target || !target.occurrence || this.snapshotSendProgress) return;
+                const occurrence = target.occurrence;
+                this.snapshotTargetError = '';
+                this.snapshotSendProgress = 'Reading the data…';
+                try {
+                    const record = this.project;
+                    if (!record || !record.template) throw new Error('not laid out');
+                    const needs = Live.collectNeeds(record, this.viewDate);
+                    const bundle = await global.PrintableDataStore.fetch(db, needs, this.viewer());
+                    const resolver = Live.resolver(record, bundle, {
+                        level: this.permissionLevel, canEdit: true, today: this.viewDate,
+                    });
+                    const host = document.createElement('div');
+                    host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none;';
+                    document.body.appendChild(host);
+                    let entries;
+                    try { entries = Live.layoutPages(record, resolver, host); }
+                    finally { host.remove(); }
+                    const Ex = global.PrintableExportCore;
+                    const booklet = !!(Ex && Ex.isSundayBookletPath(record));
+                    const printCount = Ex ? Ex.exportPageCount(entries.length, record) : entries.length;
+                    this.snapshotSendProgress = 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + (booklet ? '…' : '…');
+                    const blob = await global.PrintablePdf.render(record, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => { this.snapshotSendProgress = 'Drawing page ' + done + ' of ' + total + '…'; },
+                    });
+                    this.snapshotSendProgress = 'Filing…';
+                    const Store = global.EventsStore;
+                    const Attachments = global.EventAttachmentsCore;
+                    await Store.ensureOccurrenceDocument(db, occurrence);
+                    const name = global.PrintablePdf.fileName(record, occurrence.date);
+                    const attachmentId = Store.newAttachmentId(db, occurrence.id);
+                    const path = Attachments.storagePath(occurrence.id, attachmentId, name);
+                    await firebase.storage().ref().child(path).put(blob, { contentType: 'application/pdf' });
+                    const personId = (this.currentUserData && this.currentUserData.personId) || null;
+                    const attachment = Attachments.buildAttachmentRecord({
+                        name: name,
+                        contentType: 'application/pdf',
+                        size: blob.size,
+                        storagePath: path,
+                        uploadedBy: this.currentUser && this.currentUser.uid,
+                        uploadedByName: personId ? null : (this.currentUserData && (this.currentUserData.displayName || this.currentUserData.name)) || null,
+                        uploadedAt: new Date().toISOString(),
+                    });
+                    await Store.saveAttachment(db, occurrence.id, attachmentId, attachment);
+                    this.snapshotSendProgress = '';
+                    this.sendingSnapshot = false;
+                    if (this.flash) this.flash('Filed on ' + (occurrence.name || 'the event') + ' · ' + occurrence.date + '.');
+                } catch (e) {
+                    console.error(e);
+                    this.snapshotSendProgress = '';
+                    this.snapshotTargetError = 'That snapshot could not be filed. Try again.';
+                }
+            },
+
             // ── Wires drawn on screen ────────────────────────────────────
 
             pointOf(el) {
@@ -1089,8 +1235,30 @@
 
             typedSundayDate() {
                 const src = Data.sourceByKey('sunday_typed');
-                if (!src) return Data.toDateStr(new Date());
-                return Data.resolveWhen(this.sourceParams(src).when, Data.toDateStr(new Date()));
+                const clock = this.viewDate || Data.toDateStr(new Date());
+                if (!src) return clock;
+                return Data.resolveWhen(this.sourceParams(src).when, clock);
+            },
+
+            setViewDate(date) {
+                if (!Data.isDateStr(date) || date === this.viewDate) return;
+                this.viewDate = date;
+                try {
+                    const url = new URL(global.location.href);
+                    url.searchParams.set('asOf', date);
+                    global.history.replaceState(null, '', url);
+                } catch (e) { /* keep the clock even if the address cannot change */ }
+                this.refreshData();
+                if (this.loadTypedDraft) this.loadTypedDraft();
+            },
+
+            stepViewDate(direction) {
+                this.setViewDate(Data.addDays(this.viewDate, direction < 0 ? -7 : 7));
+            },
+
+            get viewHref() {
+                const id = this.id || '';
+                return 'printable-view.html?id=' + encodeURIComponent(id) + '&asOf=' + encodeURIComponent(this.viewDate || '');
             },
 
             async loadTypedDraft() {

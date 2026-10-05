@@ -290,3 +290,40 @@ test('MS-689: page-number bindings read the project page index and custom start'
     const pages = Live.layoutPages(p, res, null);
     assert.equal(pages[2].nodes[0].text, '1');
 });
+
+test('a scripture wire stays a citation until it asks for the passage', () => {
+    const Passage = require('../public/scripture-passage.js');
+    const cite = { scope: 'global', source: 'sunday', params: { when: { mode: 'this' } }, field: 'sermon' };
+    const passage = Object.assign({}, cite, {
+        reading: 'passage',
+        passage: { style: 'styled', numbers: true, headings: false, footnotes: false, citation: true },
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [{ id: 'pg1', nodes: [
+            { id: 'cite', tag: 'p', text: 'ref', bind: { text: cite } },
+            { id: 'pass', tag: 'p', text: 'verses', bind: { text: passage } },
+        ] }],
+    });
+    const needs = Live.collectNeeds(p, '2026-09-03');
+    assert.equal(needs.passages.length, 1);
+    assert.equal(needs.passages[0].field, 'sermon');
+    assert.equal(needs.passages[0].today, '2026-09-03');
+    const raw = 'John 3:16\n\n[16] For God so loved the world.';
+    const bundle = {
+        services: { '2026-09-06': { liturgy: { sermon: 'John 3:16' } } },
+        passages: { [Passage.cacheKey('John 3:16', passage.passage)]: raw },
+    };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'editor' });
+    assert.deepEqual(res.valueFor(cite, null), { ok: true, value: 'John 3:16' });
+    const got = res.valueFor(passage, null);
+    assert.equal(got.ok, true);
+    assert.match(got.html, /m-scripture__n/);
+    assert.doesNotMatch(got.html, /<script/);
+    const pages = Live.layoutPages(p, res, null);
+    const drawn = pages[0].nodes.find(n => n.id === 'pass');
+    assert.match(drawn.passageHtml, /m-scripture__line/);
+    const cited = pages[0].nodes.find(n => n.id === 'cite');
+    assert.equal(cited.passageHtml, undefined);
+});

@@ -24,6 +24,7 @@
     const Core = isNode ? require('./printable-core.js') : global.PrintableCore;
     const Data = isNode ? require('./printable-data-core.js') : global.PrintableDataCore;
     const Render = isNode ? require('./printable-render-core.js') : global.PrintableRenderCore;
+    if (isNode) require('./scripture-passage.js');
 
     function keyOf(source, params) {
         return source + '|' + JSON.stringify(params || {});
@@ -44,8 +45,40 @@
         return Object.keys(uses).map(k => uses[k]);
     }
 
+    // A passage wire needs the citation's verses, not a new source. The
+    // store fetches them after the Sunday is loaded (ADR 0079).
+    function passageRequests(project) {
+        const Passage = global.ScripturePassage;
+        if (!Passage) return [];
+        const out = [];
+        const seen = {};
+        function walk(nodes, parentRepeat) {
+            (nodes || []).forEach(node => {
+                Object.keys(node.bind || {}).forEach(prop => {
+                    const b = node.bind[prop];
+                    if (!b || b.reading !== 'passage' || !Passage.isScriptureField(b.field)) return;
+                    const source = b.scope === 'item' ? (parentRepeat && parentRepeat.source) : b.source;
+                    const params = b.scope === 'item' ? (parentRepeat && parentRepeat.params) : (b.params || {});
+                    if (!source) return;
+                    const presentation = Passage.normalize(b.passage);
+                    const key = source + '|' + JSON.stringify(params || {}) + '|' + b.field + '|' + Passage.cacheKey('', presentation);
+                    if (seen[key]) return;
+                    seen[key] = true;
+                    out.push({ source: source, params: params || {}, field: b.field, presentation: presentation });
+                });
+                if (node.children) walk(node.children, node.repeat || parentRepeat);
+            });
+        }
+        (project.pages || []).forEach(page => walk(page.nodes, null));
+        return out;
+    }
+
     function collectNeeds(project, today) {
-        return usesOf(project).reduce((acc, u) => mergeNeeds(acc, Data.needsFor(u.source, u.params, today)), {});
+        const needs = usesOf(project).reduce((acc, u) => mergeNeeds(acc, Data.needsFor(u.source, u.params, today)), {});
+        const clock = today || Data.toDateStr(new Date());
+        const passages = passageRequests(project).map(p => Object.assign({ today: clock }, p));
+        if (passages.length) needs.passages = passages;
+        return needs;
     }
 
     function mergeNeeds(a, b) {
@@ -103,7 +136,7 @@
                 const v = row[bind.field];
                 if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
                 if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + rowName(row) + '.' };
-                return { ok: true, value: v };
+                return passageOrValue(bind, v);
             }
             if (!bind.source) return { ok: false, why: 'Not wired.' };
             const r = resolved(bind.source, bind.params);
@@ -111,7 +144,21 @@
             if (!one) return { ok: false, why: r.warnings[0] || 'Nothing to show.' };
             const v = one[bind.field];
             if (v === '' || v == null) return { ok: false, why: r.warnings[0] || ('No ' + fieldName(bind) + ' to show.') };
-            return { ok: true, value: v };
+            return passageOrValue(bind, v);
+        }
+
+        // A citation wire returns the reference. A passage wire returns the
+        // verses fetched for that reference and this presentation.
+        function passageOrValue(bind, citation) {
+            if (bind.reading !== 'passage') return { ok: true, value: citation };
+            const Passage = global.ScripturePassage;
+            if (!Passage) return { ok: false, why: 'Passages are not available.' };
+            const key = Passage.cacheKey(citation, bind.passage);
+            const raw = bundle && bundle.passages && bundle.passages[key];
+            if (!raw) return { ok: false, why: 'The passage for ' + citation + ' did not load.' };
+            const formatted = Passage.format(raw, bind.passage);
+            if (!formatted.text) return { ok: false, why: 'No passage text for ' + citation + '.' };
+            return { ok: true, value: formatted.text, html: formatted.html || '' };
         }
 
         // An event's dates share its name, so a dated row says which date.

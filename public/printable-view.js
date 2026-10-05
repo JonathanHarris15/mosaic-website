@@ -1,5 +1,6 @@
-// The view-only page for a Printable (MS-398): the project resolved with
-// today's data, laid out page by page, read-only, with a Print button.
+// The view-only page for a Printable (MS-398): the project resolved as of
+// its view date (ADR 0078), laid out page by page, read-only, with a Print
+// button. No asOf in the address means today.
 //
 // The same renderer the editor uses — PrintableLive lays out, PrintableDom
 // draws — on a plain page, so what a member sees is exactly what the editor
@@ -13,6 +14,7 @@ function printableView() {
     const ui = { resolver: null };
     return {
         id: '',
+        viewDate: '',
         loading: true,
         problem: '',
         project: null,
@@ -25,7 +27,11 @@ function printableView() {
 
         get template() { return this.project ? this.project.template : null; },
         get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
-        get editorHref() { return 'printable-editor.html?id=' + encodeURIComponent(this.id); },
+        get editorHref() {
+            let href = 'printable-editor.html?id=' + encodeURIComponent(this.id);
+            if (this.viewDate) href += '&asOf=' + encodeURIComponent(this.viewDate);
+            return href;
+        },
         get wantsBookletExport() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             return !!(Ex && Ex.isSundayBookletPath(this.project));
@@ -49,7 +55,11 @@ function printableView() {
         },
 
         async init() {
-            this.id = new URLSearchParams(location.search).get('id') || '';
+            const params = new URLSearchParams(location.search);
+            this.id = params.get('id') || '';
+            const asOf = params.get('asOf') || '';
+            const Data = window.PrintableDataCore;
+            this.viewDate = (Data && Data.isDateStr(asOf)) ? asOf : (Data ? Data.toDateStr(new Date()) : '');
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
@@ -84,9 +94,10 @@ function printableView() {
         async resolveAndDraw() {
             const viewer = { level: this.permissionLevel, personId: (this.currentUserData && this.currentUserData.personId) || null };
             try {
-                const needs = PrintableLive.collectNeeds(this.project);
+                const today = this.viewDate || undefined;
+                const needs = PrintableLive.collectNeeds(this.project, today);
                 const bundle = await PrintableDataStore.fetch(db, needs, viewer);
-                ui.resolver = PrintableLive.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit });
+                ui.resolver = PrintableLive.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit, today: today });
             } catch (e) {
                 console.error(e);
                 ui.resolver = null;

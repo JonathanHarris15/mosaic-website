@@ -574,6 +574,7 @@ function serviceForm() {
         // opens it, and nothing is re-fetched for somebody who switches back and
         // forth. Switching tabs after that is only a matter of what is shown.
         rolesOpened: false,
+        filesOpened: false,
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -935,6 +936,7 @@ function serviceForm() {
             // template simply waits for it rather than building a panel pointed
             // at no Sunday.
             if (key === 'roles') this.rolesOpened = true;
+            if (key === 'files') this.filesOpened = true;
         },
 
         // The shell's back arrow, answered by the page (MS-16). A tab is not a

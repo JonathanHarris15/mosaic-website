@@ -138,6 +138,35 @@
         return addDays(dateStr, delta);
     }
 
+    // The clock "before this date" on a Sunday's Files tab (ADR 0078).
+    // A Sunday's day-before still resolves as that same Sunday, so before
+    // a Sunday is the previous Sunday. Any other date steps back one day.
+    function viewDateBefore(dateStr) {
+        if (!isDateStr(dateStr)) return null;
+        if (sundayOnOrAfter(dateStr) === dateStr) return addDays(dateStr, -7);
+        return addDays(dateStr, -1);
+    }
+
+    // Send-snapshot list. The Sunday Service for the Sunday of the view
+    // date is pinned first, even when that date has no occurrence document
+    // yet. Everything else follows by date, then name.
+    function orderSnapshotTargets(occurrences, viewDate) {
+        const sunday = isDateStr(viewDate) ? sundayOnOrAfter(viewDate) : null;
+        const pinnedId = sunday ? 'sunday_service_' + sunday : null;
+        const rows = Array.isArray(occurrences) ? occurrences.filter(o => o && o.id && isDateStr(o.date)) : [];
+        let pinned = pinnedId ? rows.find(o => o.id === pinnedId) : null;
+        if (!pinned && sunday) {
+            pinned = { id: pinnedId, seriesId: 'sunday_service', date: sunday, name: 'Sunday Service' };
+        }
+        const rest = rows.filter(o => !pinned || o.id !== pinned.id);
+        rest.sort((a, b) => String(a.date).localeCompare(String(b.date))
+            || String(a.name || '').localeCompare(String(b.name || '')));
+        const out = [];
+        if (pinned) out.push({ pinned: true, occurrence: pinned });
+        rest.forEach(o => out.push({ pinned: false, occurrence: o }));
+        return out;
+    }
+
     // Which Sunday a `when` names. "This Sunday" is the one coming (today, if
     // today is a Sunday); "next Sunday" is the one after that; a date is that
     // date's Sunday.
@@ -1378,6 +1407,8 @@
         addDays,
         formatDate,
         sundayOnOrAfter,
+        viewDateBefore,
+        orderSnapshotTargets,
         resolveWhen,
         describeWhen,
         resolveRange,

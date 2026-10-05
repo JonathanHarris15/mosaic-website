@@ -128,7 +128,53 @@
         }
 
         await Promise.all(jobs);
+        if (n.passages && n.passages.length) await fetchPassages(bundle, n.passages);
         return bundle;
+    }
+
+    // Verses for passage wires, after the Sundays they cite are in the
+    // bundle. A missing passage stays absent; the resolver says so.
+    async function fetchPassages(bundle, requests) {
+        const Passage = global.ScripturePassage;
+        if (!Passage) return;
+        bundle.passages = bundle.passages || {};
+        const wanted = [];
+        (requests || []).forEach(req => {
+            const today = req.today || Data.toDateStr(new Date());
+            let rows = [];
+            try {
+                rows = (Data.resolve(req.source, req.params, bundle, { today: today, level: 'editor' }).rows) || [];
+            } catch (e) {
+                rows = [];
+            }
+            rows.forEach(row => {
+                const citation = row && row[req.field];
+                if (!citation || typeof citation !== 'string' || !citation.trim()) return;
+                const key = Passage.cacheKey(citation, req.presentation);
+                if (bundle.passages[key] || wanted.some(w => w.key === key)) return;
+                wanted.push({ key: key, citation: citation.trim(), presentation: req.presentation });
+            });
+        });
+        await Promise.all(wanted.map(async w => {
+            const text = await fetchEsv(w.citation, w.presentation);
+            if (text) bundle.passages[w.key] = text;
+        }));
+    }
+
+    async function fetchEsv(reference, presentation) {
+        const Passage = global.ScripturePassage;
+        if (!Passage || typeof fetch !== 'function') return '';
+        const key = Passage.apiKey();
+        if (!key) return '';
+        const url = 'https://api.esv.org/v3/passage/text/?' + Passage.query(reference, presentation);
+        try {
+            const res = await fetch(url, { headers: { Authorization: 'Token ' + key } });
+            if (!res.ok) return '';
+            const data = await res.json();
+            return ((data.passages && data.passages[0]) || '').trim();
+        } catch (e) {
+            return '';
+        }
     }
 
     // What the drawer's pickers offer: the events and roles (any signed-in
