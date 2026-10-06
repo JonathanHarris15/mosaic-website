@@ -157,6 +157,29 @@
             + String(d.getDate()).padStart(2, '0');
     }
 
+    function initialOccurrenceId() {
+        try {
+            const q = new URLSearchParams(global.location.search).get('occurrence') || '';
+            return /^[A-Za-z0-9_-]{1,160}$/.test(q) ? q : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    const SCRIPTURE_LABELS = {
+        keyVerse: 'Key verse',
+        callToWorship: 'Call to worship',
+        callToConfession: 'Call to confession',
+        assuranceOfPardon: 'Assurance of pardon',
+        scriptureReading: 'Scripture reading',
+        sermon: 'Sermon passage',
+        benediction: 'Benediction',
+    };
+
+    function linkFields() {
+        return global.PrintableLinkCore || null;
+    }
+
     function PrintableEditorData(ui) {
         return {
             // ── State ────────────────────────────────────────────────────
@@ -178,6 +201,7 @@
             },
             layout: [],                // what the canvas draws: stored pages, overflow continuations included
             viewDate: initialViewDate(),
+            occurrenceId: initialOccurrenceId(),
             sendingSnapshot: false,
             snapshotListLoading: false,
             snapshotTargets: [],
@@ -230,7 +254,7 @@
                 this.data.loading = true;
                 this.data.error = '';
                 try {
-                    const needs = Live.collectNeeds(this.project, this.viewDate);
+                    const needs = Live.collectNeeds(this.project, this.viewDate, { occurrenceId: this.occurrenceId });
                     const bundle = await global.PrintableDataStore.fetch(db, needs, this.viewer());
                     ui.bundle = bundle;
                     ui.resolver = Live.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit, today: this.viewDate });
@@ -661,6 +685,11 @@
             get itemFields() {
                 const r = this.repeatContext;
                 if (!r || !r.repeat.source) return [];
+                if (r.repeat.source === 'event_list') {
+                    const Link = linkFields();
+                    const input = Link && Link.inputById(this.project, r.repeat.params && r.repeat.params.inputId);
+                    return (input && input.fields || []).map(f => ({ key: f.id, label: f.label, kind: f.kind }));
+                }
                 return Data.fieldsFor(r.repeat.source, r.repeat.params, this.data.options)
                     .filter(f => !f.minLevel || Data.mayRead(this.permissionLevel, f.minLevel));
             },
@@ -790,9 +819,15 @@
                     }
                     this.replacePage(Core.updateNode(nextPage, nodeId, { bind: bind }));
                 } else {
-                    bind[prop] = field.scope === 'item'
+                    const wire = field.scope === 'item'
                         ? { scope: 'item', field: field.field }
                         : { scope: 'global', source: field.source, params: field.params || {}, field: field.field };
+                    if (field.reading === 'passage') {
+                        const Passage = global.ScripturePassage;
+                        wire.reading = 'passage';
+                        wire.passage = Passage ? Passage.normalize(field.passage) : (field.passage || {});
+                    }
+                    bind[prop] = wire;
                     this.replacePage(Core.updateNode(page, nodeId, { bind: bind }));
                 }
                 this.commit();
@@ -830,8 +865,15 @@
                         label = (a ? a.name : 'File') + (b.apply === 'font' ? ' › Font' : ' › Picture');
                     } else if (b.scope === 'item') {
                         const src = this.repeatSource;
-                        const f = src && Data.fieldsFor(src, this.repeatContext.repeat.params, this.data.options).find(x => x.key === b.field);
+                        const eventCol = this.repeatContext && this.repeatContext.repeat && this.repeatContext.repeat.source === 'event_list'
+                            ? this.itemFields.find(x => x.key === b.field)
+                            : null;
+                        const f = eventCol || (src && Data.fieldsFor(src, this.repeatContext.repeat.params, this.data.options).find(x => x.key === b.field));
                         label = 'Each row › ' + (f ? f.label : b.field);
+                    } else if (b.source === 'event_field') {
+                        const Link = linkFields();
+                        const input = Link && Link.inputById(this.project, b.field);
+                        label = 'Filled on the event › ' + (input ? input.label : b.field);
                     } else {
                         const src = Data.sourceByKey(b.source);
                         const f = src && Data.fieldsFor(src, b.params, this.data.options).find(x => x.key === b.field);
@@ -933,10 +975,11 @@
                 try {
                     const record = this.project;
                     if (!record || !record.template) throw new Error('not laid out');
-                    const needs = Live.collectNeeds(record, this.viewDate);
+                    const clock = occurrence.date || this.viewDate;
+                    const needs = Live.collectNeeds(record, clock, { occurrenceId: occurrence.id });
                     const bundle = await global.PrintableDataStore.fetch(db, needs, this.viewer());
                     const resolver = Live.resolver(record, bundle, {
-                        level: this.permissionLevel, canEdit: true, today: this.viewDate,
+                        level: this.permissionLevel, canEdit: true, today: clock,
                     });
                     const host = document.createElement('div');
                     host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none;';
@@ -1004,6 +1047,9 @@
                         let key;
                         if (b.scope === 'asset') key = this.assetChipKey(b.assetId);
                         else if (b.scope === 'item') key = this.chipKey('item', this.repeatContext ? this.repeatContext.repeat.source : '', b.field);
+                        else if (b.source === 'sunday' && global.ScripturePassage && global.ScripturePassage.isScriptureField(b.field)) {
+                            key = this.chipKey('global', b.source, b.field + (b.reading === 'passage' ? '#passage' : '#citation'));
+                        }
                         else key = this.chipKey('global', b.source, b.field);
                         const chip = document.querySelector('[data-chip="' + key + '"]');
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
@@ -1258,7 +1304,205 @@
 
             get viewHref() {
                 const id = this.id || '';
-                return 'printable-view.html?id=' + encodeURIComponent(id) + '&asOf=' + encodeURIComponent(this.viewDate || '');
+                let href = 'printable-view.html?id=' + encodeURIComponent(id) + '&asOf=' + encodeURIComponent(this.viewDate || '');
+                if (this.occurrenceId) href += '&occurrence=' + encodeURIComponent(this.occurrenceId);
+                return href;
+            },
+
+            // ── Scripture references (this Sunday, as chips) ─────────────
+
+            get scriptureRefs() {
+                const Passage = global.ScripturePassage;
+                if (!Passage) return [];
+                let row = {};
+                if (ui.bundle && Data) {
+                    try {
+                        const res = Data.resolve('sunday', { when: { mode: 'this' } }, ui.bundle, {
+                            today: this.viewDate,
+                            level: this.permissionLevel || 'editor',
+                        });
+                        row = (res.rows && res.rows[0]) || {};
+                    } catch (e) { row = {}; }
+                }
+                return Passage.FIELDS.map(key => ({
+                    key: key,
+                    label: SCRIPTURE_LABELS[key] || key,
+                    citation: row[key] ? String(row[key]) : '',
+                }));
+            },
+
+            onScriptureChipDragStart(e, ref, mode) {
+                const Passage = global.ScripturePassage;
+                const field = {
+                    scope: 'global',
+                    source: 'sunday',
+                    field: ref.key,
+                    kind: 'text',
+                    params: { when: { mode: 'this' } },
+                    label: ref.label + (mode === 'passage' ? ' (words)' : ' (reference)'),
+                };
+                if (mode === 'passage' && Passage) {
+                    field.reading = 'passage';
+                    field.passage = Passage.normalize(null);
+                }
+                this.dragField = field;
+                this.dropTarget = null;
+                try { e.dataTransfer.setData('text/plain', ref.key); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
+                const chip = e.currentTarget;
+                this.dragWire = { from: this.pointOf(chip), to: this.pointOf(chip) };
+                this.refreshWires();
+            },
+
+            scriptureChipKey(ref, mode) {
+                return this.chipKey('global', 'sunday', ref.key + (mode === 'passage' ? '#passage' : '#citation'));
+            },
+
+            // ── Filled on the event ──────────────────────────────────────
+
+            get eventInputs() {
+                const Link = linkFields();
+                return Link ? Link.normalizeInputs(this.project && this.project.inputs) : [];
+            },
+
+            eventKindLabel(kind) {
+                const Link = linkFields();
+                return Link ? Link.kindLabel(kind) : kind;
+            },
+
+            addEventInput(kind) {
+                const Link = linkFields();
+                if (!Link || !this.project || !this.canEdit) return;
+                const n = (this.project.inputs || []).length + 1;
+                const names = { text: 'Text', image: 'Image', number: 'Number', date: 'Date', list: 'List' };
+                const input = Link.newInput(kind, (names[kind] || 'Field') + ' ' + n, Core.newId('in'));
+                if (!input) return;
+                if (input.kind === 'list') {
+                    input.fields = [Link.newColumn('text', 'Name', Core.newId('col'))].filter(Boolean);
+                }
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).concat([input]));
+                this.commit();
+            },
+
+            renameEventInput(id, label) {
+                const Link = linkFields();
+                if (!Link || !this.project) return;
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).map(input => {
+                    if (input.id !== id) return input;
+                    return Object.assign({}, input, { label: label });
+                }));
+                this.commit();
+            },
+
+            addEventColumn(inputId) {
+                const Link = linkFields();
+                if (!Link || !this.project) return;
+                const col = Link.newColumn('text', 'Column', Core.newId('col'));
+                if (!col) return;
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).map(input => {
+                    if (input.id !== inputId || input.kind !== 'list') return input;
+                    return Object.assign({}, input, { fields: (input.fields || []).concat([col]) });
+                }));
+                this.commit();
+            },
+
+            renameEventColumn(inputId, columnId, label) {
+                const Link = linkFields();
+                if (!Link || !this.project) return;
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).map(input => {
+                    if (input.id !== inputId || input.kind !== 'list') return input;
+                    return Object.assign({}, input, {
+                        fields: (input.fields || []).map(col => col.id === columnId ? Object.assign({}, col, { label: label }) : col),
+                    });
+                }));
+                this.commit();
+            },
+
+            removeEventColumn(inputId, columnId) {
+                const Link = linkFields();
+                if (!Link || !this.project) return;
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).map(input => {
+                    if (input.id !== inputId || input.kind !== 'list') return input;
+                    return Object.assign({}, input, { fields: (input.fields || []).filter(col => col.id !== columnId) });
+                }));
+                this.commit();
+            },
+
+            removeEventInput(id) {
+                const Link = linkFields();
+                if (!Link || !this.project) return;
+                this.project.inputs = Link.normalizeInputs((this.project.inputs || []).filter(input => input.id !== id));
+                (this.project.pages || []).forEach(page => {
+                    let next = page;
+                    Core.walk(page.nodes, node => {
+                        if (node.repeat && node.repeat.source === 'event_list' && node.repeat.params && node.repeat.params.inputId === id) {
+                            next = Core.updateNode(next, node.id, { repeat: null });
+                        }
+                        if (!node.bind) return;
+                        const kept = {};
+                        Object.keys(node.bind).forEach(prop => {
+                            const b = node.bind[prop];
+                            if (b && b.source === 'event_field' && b.field === id) return;
+                            kept[prop] = b;
+                        });
+                        if (Object.keys(kept).length !== Object.keys(node.bind).length) {
+                            next = Core.updateNode(next, node.id, { bind: Object.keys(kept).length ? kept : null });
+                        }
+                    });
+                    if (next !== page) this.replacePage(next);
+                });
+                this.commit();
+                this.refreshData();
+            },
+
+            onEventChipDragStart(e, input) {
+                if (!input || input.kind === 'list') return;
+                this.dragField = {
+                    scope: 'global',
+                    source: 'event_field',
+                    field: input.id,
+                    kind: input.kind,
+                    params: {},
+                    label: input.label,
+                };
+                this.dropTarget = null;
+                try { e.dataTransfer.setData('text/plain', input.id); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
+                const chip = e.currentTarget;
+                this.dragWire = { from: this.pointOf(chip), to: this.pointOf(chip) };
+                this.refreshWires();
+            },
+
+            onEventColumnDragStart(e, input, col) {
+                this.dragField = {
+                    scope: 'item',
+                    source: 'event_list',
+                    field: col.id,
+                    kind: col.kind,
+                    params: { inputId: input.id },
+                    label: (input.label || 'List') + ' › ' + col.label,
+                };
+                this.dropTarget = null;
+                try { e.dataTransfer.setData('text/plain', col.id); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
+                const chip = e.currentTarget;
+                this.dragWire = { from: this.pointOf(chip), to: this.pointOf(chip) };
+                this.refreshWires();
+            },
+
+            useEventList(input) {
+                const node = this.selectedNode;
+                if (!node || Core.kindOf(node) !== 'box') {
+                    this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
+                    return;
+                }
+                const page = this.currentPage;
+                if (!page) return;
+                const repeat = Object.assign({}, node.repeat || { layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' }, {
+                    source: 'event_list',
+                    params: { inputId: input.id },
+                });
+                this.replacePage(Core.updateNode(page, node.id, { repeat: repeat }));
+                this.commit();
+                this.readProps();
+                this.refreshData();
             },
 
             async loadTypedDraft() {

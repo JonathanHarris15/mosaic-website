@@ -139,6 +139,18 @@
             // Printables linked to this event's series (MS-400): the service
             // guide on a Sunday, the directory on a members' meeting.
             printables: [],
+            linkFill: {
+                loading: false,
+                saving: false,
+                error: '',
+                status: '',
+                hasFields: false,
+                sections: [],
+                sundayGroups: [],
+                sundayFields: [],
+                drafts: {},
+                sundayDraft: {},
+            },
             linkingPrintable: false,
             libraryPrintables: [],
             libraryFolders: [],
@@ -2058,6 +2070,162 @@
                 } catch (e) {
                     this.printables = [];
                 }
+                await this.loadLinkFill();
+            },
+
+            async loadLinkFill() {
+                const Link = typeof PrintableLinkCore !== 'undefined' ? PrintableLinkCore : null;
+                const blank = {
+                    loading: false, saving: false, error: '', status: '',
+                    hasFields: false, sections: [], sundayGroups: [], sundayFields: [],
+                    drafts: {}, sundayDraft: {},
+                };
+                if (!Link || !this.isEditor) { this.linkFill = blank; return; }
+                const spec = Link.formFor(this.printables || []);
+                if (!this.isSunday) {
+                    spec.sundayFields = [];
+                    spec.sundayGroups = [];
+                    spec.hasFields = spec.sections.length > 0;
+                }
+                const stored = (this.occurrence && this.occurrence.printableInputs) || {};
+                const drafts = {};
+                spec.sections.forEach(section => {
+                    drafts[section.printableId] = Link.draftFromStored(section.inputs, stored[section.printableId]);
+                });
+                const sundayDraft = {};
+                if (spec.sundayFields.length && this.occurrence && this.occurrence.date) {
+                    const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
+                    if (Typed) {
+                        let service = null;
+                        try {
+                            const doc = await db.collection('services').doc(this.occurrence.date).get();
+                            if (doc && doc.exists) service = doc.data();
+                        } catch (e) { service = null; }
+                        const full = Typed.toDraft(Typed.fromService(service));
+                        spec.sundayFields.forEach(f => { sundayDraft[f.key] = full[f.key] || ''; });
+                    }
+                }
+                this.linkFill = {
+                    loading: false, saving: false, error: '', status: '',
+                    hasFields: spec.hasFields,
+                    sections: spec.sections,
+                    sundayGroups: spec.sundayGroups,
+                    sundayFields: spec.sundayFields,
+                    drafts: drafts,
+                    sundayDraft: sundayDraft,
+                };
+            },
+
+            addLinkRow(printableId, inputId) {
+                const Link = typeof PrintableLinkCore !== 'undefined' ? PrintableLinkCore : null;
+                const section = (this.linkFill.sections || []).find(s => s.printableId === printableId);
+                const input = section && section.inputs.find(i => i.id === inputId);
+                if (!Link || !input || input.kind !== 'list') return;
+                const rows = this.linkFill.drafts[printableId][inputId];
+                rows.push(Link.blankRow(input));
+            },
+
+            removeLinkRow(printableId, inputId, index) {
+                const rows = this.linkFill.drafts[printableId] && this.linkFill.drafts[printableId][inputId];
+                if (!rows) return;
+                rows.splice(index, 1);
+            },
+
+            async uploadLinkImage(printableId, inputId, event) {
+                const file = event.target.files && event.target.files[0];
+                if (event.target) event.target.value = '';
+                if (!file || !this.isEditor) return;
+                const id = (typeof PrintableCore !== 'undefined' && PrintableCore.newId)
+                    ? PrintableCore.newId('img') : String(Date.now());
+                const safe = String(file.name || 'image').replace(/[^\w.-]+/g, '_');
+                const url = await this.putLinkImage(file, 'printable_assets/' + printableId + '/' + id + '_' + safe);
+                if (url) this.linkFill.drafts[printableId][inputId] = url;
+            },
+
+            async uploadSundayFieldImage(key, event) {
+                const file = event.target.files && event.target.files[0];
+                if (event.target) event.target.value = '';
+                if (!file || !this.isEditor || !this.occurrence) return;
+                const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
+                if (Typed && Typed.fileUploadError(file)) {
+                    this.linkFill.error = Typed.fileUploadError(file);
+                    return;
+                }
+                const fileId = (typeof PrintableCore !== 'undefined' && PrintableCore.newId)
+                    ? PrintableCore.newId('map') : String(Date.now());
+                const safe = String(file.name || 'map').replace(/[^\w.-]+/g, '_');
+                const path = Typed
+                    ? Typed.countryMapStoragePath(this.occurrence.date, fileId + '_' + safe)
+                    : ('printable_assets/sunday/' + fileId + '_' + safe);
+                const url = await this.putLinkImage(file, path);
+                if (url) this.linkFill.sundayDraft[key] = url;
+            },
+
+            async putLinkImage(file, path) {
+                const Store = typeof PrintableLinkStore !== 'undefined' ? PrintableLinkStore : null;
+                if (!Store) {
+                    this.linkFill.error = 'Image upload is not available.';
+                    return '';
+                }
+                this.linkFill.status = 'Uploading…';
+                this.linkFill.error = '';
+                const result = await Store.uploadImage(file, path);
+                if (!result || !result.url) {
+                    this.linkFill.status = '';
+                    this.linkFill.error = (result && result.error) || 'That image did not upload.';
+                    return '';
+                }
+                this.linkFill.status = 'Image uploaded. Save to keep it on this date.';
+                return result.url;
+            },
+
+            async saveLinkFill() {
+                const Link = typeof PrintableLinkCore !== 'undefined' ? PrintableLinkCore : null;
+                if (!Link || !this.isEditor || !this.occurrence || this.linkFill.saving) return;
+                this.linkFill.saving = true;
+                this.linkFill.error = '';
+                this.linkFill.status = '';
+                try {
+                    const Store = typeof EventsStore !== 'undefined' ? EventsStore : null;
+                    if (Store && Store.ensureOccurrenceDocument) {
+                        await Store.ensureOccurrenceDocument(db, this.occurrence);
+                    }
+                    const existing = (this.occurrence.printableInputs && typeof this.occurrence.printableInputs === 'object')
+                        ? this.occurrence.printableInputs : {};
+                    let next = existing;
+                    (this.linkFill.sections || []).forEach(section => {
+                        const draft = this.linkFill.drafts[section.printableId] || {};
+                        const values = JSON.parse(JSON.stringify(draft));
+                        next = Link.mergePrintableInputs(next, section.printableId, values);
+                    });
+                    if ((this.linkFill.sections || []).length) {
+                        await db.collection('event_occurrences').doc(this.occurrence.id).set({
+                            printableInputs: JSON.parse(JSON.stringify(next)),
+                        }, { merge: true });
+                        this.occurrence.printableInputs = next;
+                    }
+                    if (this.isSunday && (this.linkFill.sundayFields || []).length) {
+                        const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
+                        if (!Typed) throw new Error('booklet text unavailable');
+                        const date = this.occurrence.date;
+                        const doc = await db.collection('services').doc(date).get();
+                        const service = doc && doc.exists ? doc.data() : null;
+                        const patch = JSON.parse(JSON.stringify(this.linkFill.sundayDraft || {}));
+                        if (Typed.assertCountryImageWritable && patch.prayerCountryImage) {
+                            Typed.assertCountryImageWritable(patch.prayerCountryImage);
+                        }
+                        const content = Link.mergeSundayContent(
+                            Typed, service, patch, this.linkFill.sundayFields.map(f => f.key)
+                        );
+                        await db.collection('services').doc(date).set({ typedContent: content }, { merge: true });
+                    }
+                    this.linkFill.status = 'Saved. The printable reads it for this date.';
+                } catch (e) {
+                    console.error(e);
+                    this.linkFill.error = (e && e.message) || 'That did not save. Try again.';
+                } finally {
+                    this.linkFill.saving = false;
+                }
             },
 
             get canLinkPrintables() { return this.isEditor && !!this.series && this.printablesAvailable; },
@@ -2072,7 +2240,13 @@
                 if (when === 'before' && window.PrintableDataCore) {
                     asOf = PrintableDataCore.viewDateBefore(date) || date;
                 }
-                return base + '&asOf=' + encodeURIComponent(asOf);
+                let href = base + '&asOf=' + encodeURIComponent(asOf);
+                // "Before this date" is a different Sunday. Passing this
+                // occurrence would fill last week's guide with this week's words.
+                if (when !== 'before' && this.occurrence && this.occurrence.id) {
+                    href += '&occurrence=' + encodeURIComponent(this.occurrence.id);
+                }
+                return href;
             },
 
             printableSub(p) {
@@ -2142,6 +2316,7 @@
                     await PrintableStore.linkToSeries(db, this.series.id, ids);
                     this.series.printables = ids;
                     this.printables = this.printables.filter(x => x.id !== p.id);
+                    await this.loadLinkFill();
                 } catch (e) {
                     this.printableError = 'That change did not save. Try again.';
                 }
@@ -2172,7 +2347,9 @@
                     const project = Object.assign({ id: record.id }, PrintableCore.migrate(record));
                     const viewer = { level: this.rank, personId: this.personId || null };
                     const clock = (this.occurrence && this.occurrence.date) || undefined;
-                    const bundle = await PrintableDataStore.fetch(db, PrintableLive.collectNeeds(project, clock), viewer);
+                    const bundle = await PrintableDataStore.fetch(db, PrintableLive.collectNeeds(project, clock, {
+                        occurrenceId: this.occurrence && this.occurrence.id,
+                    }), viewer);
                     const resolver = PrintableLive.resolver(project, bundle, { level: this.rank, canEdit: true, today: clock });
                     const host = document.createElement('div');
                     host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none;';

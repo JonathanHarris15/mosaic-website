@@ -1461,6 +1461,64 @@
                             </div>
                         </template>
                     </div>
+                    <section class="m-card mb-sm" x-show="isEditor && linkFill.hasFields" aria-label="Filled on this date">
+                        <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">For the linked printable</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mb-sm">What this Sunday adds. Mosaic Kids and the prayer country are typed here. The layout stays on the printable.</p>
+                        <template x-for="group in linkFill.sundayGroups" :key="'sun-' + group.name">
+                            <div class="mb-sm">
+                                <h4 class="font-display text-[16px] text-primary" x-text="group.name"></h4>
+                                <template x-for="field in group.fields" :key="field.key">
+                                    <label class="m-field mt-sm">
+                                        <span class="m-label" x-text="field.label"></span>
+                                        <textarea x-show="field.multiline" class="m-input" rows="3" x-model="linkFill.sundayDraft[field.key]"></textarea>
+                                        <input x-show="!field.multiline && field.kind !== 'image'" class="m-input" type="text" x-model="linkFill.sundayDraft[field.key]" />
+                                        <input x-show="field.kind === 'image'" class="m-input" type="url" inputmode="url" placeholder="https://…" x-model="linkFill.sundayDraft[field.key]" />
+                                        <input x-show="field.kind === 'image'" class="mt-1 text-[12px]" type="file" accept="image/*" :aria-label="'Upload ' + field.label" @change="uploadSundayFieldImage(field.key, $event)" />
+                                    </label>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-for="section in linkFill.sections" :key="'sec-' + section.printableId">
+                            <div class="mb-sm">
+                                <h4 class="font-display text-[16px] text-primary" x-text="section.name"></h4>
+                                <template x-for="input in section.inputs" :key="section.printableId + '-' + input.id">
+                                    <div class="mt-sm">
+                                        <label class="m-field" x-show="input.kind !== 'list'">
+                                            <span class="m-label" x-text="input.label"></span>
+                                            <input x-show="input.kind === 'text'" class="m-input" type="text" x-model="linkFill.drafts[section.printableId][input.id]" />
+                                            <input x-show="input.kind === 'number'" class="m-input" type="text" inputmode="decimal" x-model="linkFill.drafts[section.printableId][input.id]" />
+                                            <input x-show="input.kind === 'date'" class="m-input" type="date" x-model="linkFill.drafts[section.printableId][input.id]" />
+                                            <input x-show="input.kind === 'image'" class="m-input" type="url" inputmode="url" placeholder="https://…" x-model="linkFill.drafts[section.printableId][input.id]" />
+                                            <input x-show="input.kind === 'image'" class="mt-1 text-[12px]" type="file" accept="image/*" :aria-label="'Upload ' + input.label" @change="uploadLinkImage(section.printableId, input.id, $event)" />
+                                        </label>
+                                        <div x-show="input.kind === 'list'">
+                                            <span class="m-label" x-text="input.label"></span>
+                                            <p class="text-[12.5px] text-on-surface-variant" x-show="!input.fields.length">Add columns to this list in the printable, then come back.</p>
+                                            <template x-for="(row, ri) in linkFill.drafts[section.printableId][input.id]" :key="input.id + '-' + ri">
+                                                <div class="m-card mt-sm">
+                                                    <template x-for="col in input.fields" :key="col.id">
+                                                        <label class="m-field mt-sm">
+                                                            <span class="m-label" x-text="col.label"></span>
+                                                            <input x-show="col.kind !== 'image' && col.kind !== 'date'" class="m-input" type="text" x-model="row[col.id]" />
+                                                            <input x-show="col.kind === 'date'" class="m-input" type="date" x-model="row[col.id]" />
+                                                            <input x-show="col.kind === 'image'" class="m-input" type="url" inputmode="url" placeholder="https://…" x-model="row[col.id]" />
+                                                        </label>
+                                                    </template>
+                                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm mt-sm" @click="removeLinkRow(section.printableId, input.id, ri)">Remove</button>
+                                                </div>
+                                            </template>
+                                            <button type="button" class="m-btn m-btn--secondary m-btn--sm mt-sm" @click="addLinkRow(section.printableId, input.id)">Add a row</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="saveLinkFill()" :disabled="linkFill.saving">
+                            <span class="m-btn__label" x-text="linkFill.saving ? 'Saving…' : 'Save for this date'"></span>
+                        </button>
+                        <p class="text-[12.5px] text-on-surface-variant mt-2" x-show="linkFill.status" x-text="linkFill.status"></p>
+                        <p class="text-[12.5px] text-error mt-2" x-show="linkFill.error" x-text="linkFill.error"></p>
+                    </section>
                     <div x-show="attachments.length" class="m-card-list">
                         <template x-for="a in attachments" :key="a.id">
                             <div class="m-row">
@@ -1818,6 +1876,8 @@
     <script src="printable-store.js"></script>
     <script src="sunday-typed-core.js"></script>
     <script src="printable-data-core.js"></script>
+    <script src="printable-link-core.js"></script>
+    <script src="printable-link-store.js"></script>
     <script src="scripture-passage.js"></script>
     <script src="printed-announcement-guide.js"></script>
     <script src="printable-data-store.js"></script>

@@ -15,6 +15,7 @@ function printableView() {
     return {
         id: '',
         viewDate: '',
+        occurrenceId: '',
         loading: true,
         problem: '',
         project: null,
@@ -58,8 +59,10 @@ function printableView() {
             const params = new URLSearchParams(location.search);
             this.id = params.get('id') || '';
             const asOf = params.get('asOf') || '';
+            const occurrence = params.get('occurrence') || '';
             const Data = window.PrintableDataCore;
             this.viewDate = (Data && Data.isDateStr(asOf)) ? asOf : (Data ? Data.toDateStr(new Date()) : '');
+            this.occurrenceId = /^[A-Za-z0-9_-]{1,160}$/.test(occurrence) ? occurrence : '';
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
@@ -95,7 +98,8 @@ function printableView() {
             const viewer = { level: this.permissionLevel, personId: (this.currentUserData && this.currentUserData.personId) || null };
             try {
                 const today = this.viewDate || undefined;
-                const needs = PrintableLive.collectNeeds(this.project, today);
+                const occurrenceId = this.occurrenceId || '';
+                const needs = PrintableLive.collectNeeds(this.project, today, { occurrenceId: occurrenceId });
                 const bundle = await PrintableDataStore.fetch(db, needs, viewer);
                 ui.resolver = PrintableLive.resolver(this.project, bundle, { level: this.permissionLevel, canEdit: this.canEdit, today: today });
             } catch (e) {

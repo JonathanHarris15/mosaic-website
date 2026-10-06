@@ -191,13 +191,25 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 ## Printable editor — scalar inserts (MS-689)
 
-Below the **Query** block in the data drawer, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Date**, **Page number**, and **Brand assets**. Each card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
+Below the **Query** block in the data drawer, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Scripture references**, **Filled on the event**, **Date**, **Page number**, and **Brand assets**. Each card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
+
+**Scripture references** lists this Sunday's citations (key verse, calls, reading, sermon, benediction). Each row is **`.pe-scripture-row`** with the live reference and two chips: **Reference** (the citation) and **Words** (the verses, styled, citation line on, short copyright on). Plain text, verse numbers, and copyright off stay on the element panel after the wire lands.
+
+**Filled on the event** is a blank the occurrence supplies. Add **Text**, **Image**, **Number**, **Date**, or **List**. A scalar chip drags onto an element. A list iterates the selected box; its columns are **`.pe-event-col`** chips dragged inside that box. The names live on the printable. The values live on the occurrence for that date.
 
 ## View date
 
 The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The view-only page names the same date in the header. **Send snapshot to…** stays in the File menu, next to Print.
 
-On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, and citation-line checks.
+On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, citation-line, and copyright-line checks. The same Reference and Words chips live on the **Scripture references** card in the data drawer.
+
+## Filled on the event
+
+Where a printable is linked — a Sunday's Files tab, or any other event's Files tab — an editor fills the blanks that printable asked for. The card is **`.m-card`**, heading **For the linked printable**, fields are **`.m-field`** / **`.m-input`**, and one button reads **Save for this date**.
+
+Author-defined fields (text, image, number, date, list) are stored on that occurrence and read back into the printable for that date. A list is one card per row, with **Add a row** and **Remove**.
+
+A Sunday guide that binds Mosaic Kids or the prayer-country facts shows those fields here, grouped **Prayer** and **Mosaic Kids**, saved on the Sunday's booklet text. Announcements stay on the Announcements tab. Any other event shows the blanks defined on the printables linked to it.
 
 ## Sunday announcements
 
