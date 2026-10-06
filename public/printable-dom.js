@@ -24,6 +24,11 @@
         '.pr-page { font-family: "EB Garamond", Georgia, serif; color: #000; background: #fff; }',
         '.pr-page * { box-sizing: border-box; }',
         '.pr-page img { display: block; }',
+        '.pr-page .m-scripture { line-height: 1.45; }',
+        '.pr-page .m-scripture__line { display: block; }',
+        '.pr-page .m-scripture__line--poetry { padding-left: 1.25em; }',
+        '.pr-page .m-scripture__gap { display: block; height: 0.6em; }',
+        '.pr-page .m-scripture__n { font-size: 0.65em; line-height: 0; margin-right: 0.2em; }',
     ].join('\n');
 
     function ensureBaseStyles() {
@@ -82,6 +87,9 @@
                 if (o.skip && o.skip(child)) return;
                 el.appendChild(renderNode(child, o));
             });
+        } else if (node.passageHtml) {
+            el.classList.add('m-scripture');
+            el.innerHTML = node.passageHtml;
         } else {
             const text = (values && typeof values.text === 'string') ? values.text : (node.text || '');
             el.textContent = text;

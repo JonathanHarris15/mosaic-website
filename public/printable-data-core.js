@@ -116,6 +116,7 @@
     function formatDate(dateStr, style) {
         if (!isDateStr(dateStr)) return String(dateStr || '');
         const d = parseDate(dateStr);
+        if (style === 'longUs') return DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
         if (style === 'short') return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3);
         if (style === 'monthDay') return MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
         if (style === 'weekday') return DAYS[d.getDay()];
@@ -128,6 +129,35 @@
         const d = parseDate(dateStr);
         const delta = (7 - d.getDay()) % 7;
         return addDays(dateStr, delta);
+    }
+
+    // The clock "before this date" on a Sunday's Files tab (ADR 0078).
+    // A Sunday's day-before still resolves as that same Sunday, so before
+    // a Sunday is the previous Sunday. Any other date steps back one day.
+    function viewDateBefore(dateStr) {
+        if (!isDateStr(dateStr)) return null;
+        if (sundayOnOrAfter(dateStr) === dateStr) return addDays(dateStr, -7);
+        return addDays(dateStr, -1);
+    }
+
+    // Send-snapshot list. The Sunday Service for the Sunday of the view
+    // date is pinned first, even when that date has no occurrence document
+    // yet. Everything else follows by date, then name.
+    function orderSnapshotTargets(occurrences, viewDate) {
+        const sunday = isDateStr(viewDate) ? sundayOnOrAfter(viewDate) : null;
+        const pinnedId = sunday ? 'sunday_service_' + sunday : null;
+        const rows = Array.isArray(occurrences) ? occurrences.filter(o => o && o.id && isDateStr(o.date)) : [];
+        let pinned = pinnedId ? rows.find(o => o.id === pinnedId) : null;
+        if (!pinned && sunday) {
+            pinned = { id: pinnedId, seriesId: 'sunday_service', date: sunday, name: 'Sunday Service' };
+        }
+        const rest = rows.filter(o => !pinned || o.id !== pinned.id);
+        rest.sort((a, b) => String(a.date).localeCompare(String(b.date))
+            || String(a.name || '').localeCompare(String(b.name || '')));
+        const out = [];
+        if (pinned) out.push({ pinned: true, occurrence: pinned });
+        rest.forEach(o => out.push({ pinned: false, occurrence: o }));
+        return out;
     }
 
     // Which Sunday a `when` names. "This Sunday" is the one coming (today, if
@@ -260,12 +290,14 @@
     // first: that is the preaching schedule.
     const SUNDAY_FIELDS = [
         { key: 'date', label: 'Date', kind: 'date' },
+        { key: 'longDate', label: 'Date (Sunday, June 14, 2026)', kind: 'date' },
         { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
         { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
         { key: 'preacher', label: 'Preacher', kind: 'text' },
         { key: 'sermon', label: 'Sermon passage', kind: 'text' },
         { key: 'theme', label: 'Theme', kind: 'text' },
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
+        { key: 'prayerLabel', label: 'Prayer heading', kind: 'text' },
         { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
         { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
@@ -392,6 +424,8 @@
                 { key: 'page', label: 'Page number', kind: 'number' },
                 { key: 'pageCount', label: 'Pages in this hymn', kind: 'number' },
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
+                { key: 'sheetTitle', label: 'Title on the first sheet', kind: 'text' },
+                { key: 'sheetCredit', label: 'Credit on the last sheet', kind: 'text' },
             ],
             filters: [
                 { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', options: [{ value: '', label: 'Every hymn' }]
@@ -417,7 +451,19 @@
                 { key: 'title', label: 'Title', kind: 'text' },
                 { key: 'content', label: 'Body', kind: 'text' },
                 { key: 'text', label: 'Title and body', kind: 'text' },
+                { key: 'label', label: 'Title as printed', kind: 'text' },
+                { key: 'plain', label: 'Body as printed', kind: 'text' },
+                { key: 'fitClass', label: 'Size class for the week', kind: 'text' },
                 { key: 'number', label: 'Announcement number', kind: 'number' },
+            ],
+        },
+        {
+            key: 'sunday_kids_questions', region: 'Sunday', label: 'Mosaic Kids questions', shape: 'list', minLevel: 'viewer',
+            blurb: 'One row per review question on the Mosaic Kids page of this Sunday.',
+            params: [WHEN_PARAM],
+            fields: [
+                { key: 'text', label: 'Question', kind: 'text' },
+                { key: 'number', label: 'Number', kind: 'number' },
             ],
         },
         {
@@ -495,7 +541,10 @@
             key: 'insert_page_number', region: 'Insert', label: 'Page number', shape: 'single', scalar: true, minLevel: 'viewer',
             blurb: 'The number of this page in the booklet, with an optional custom start page.',
             params: [{ key: 'startAt', label: 'Start numbering at', kind: 'text', default: 1 }],
-            fields: [{ key: 'number', label: 'Page number', kind: 'number' }],
+            fields: [
+                { key: 'number', label: 'Page number', kind: 'number' },
+                { key: 'edgeClass', label: 'Outer edge', kind: 'text' },
+            ],
         },
     ];
 
@@ -857,6 +906,7 @@
         const row = {
             _id: date,
             date: formatDate(date),
+            longDate: formatDate(date, 'longUs'),
             shortDate: formatDate(date, 'monthDay'),
             dateShort: formatDate(date, 'short'),
             theme: slotText(s && s.theme),
@@ -872,6 +922,7 @@
             scriptureReading: slotText(lit.scriptureReading),
             sermon: slotText(lit.sermon) || slotText(s && s.sermon),
             benediction: slotText(lit.benediction),
+            prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
             baptism: slotText(lit.baptism),
         };
         HYMN_SLOTS.forEach(k => { row[k] = dropped.indexOf(k) !== -1 ? '' : slotText(lit[k]); });
@@ -936,6 +987,7 @@
             // One row per real page. A hymn with nothing to show still gets
             // one blank row so the slot is not silently dropped.
             const images = pages.length ? pages : [''];
+            const credit = (hymn && hymn.attribution) || '';
             images.forEach((image, i) => {
                 rows.push({
                     _id: slot + '~' + i,
@@ -944,7 +996,11 @@
                     image: image,
                     page: i + 1,
                     pageCount: images.length,
-                    attribution: (hymn && hymn.attribution) || '',
+                    attribution: credit,
+                    // The designed booklet prints the title on the first sheet
+                    // and the credit on the last. A one-page hymn prints both.
+                    sheetTitle: i === 0 ? name : '',
+                    sheetCredit: i === images.length - 1 ? credit : '',
                     number: rows.length + 1,
                 });
             });
@@ -992,15 +1048,20 @@
         const announcements = Lines
             ? Lines.bookletAnnouncements(typed.announcements, printed)
             : (typed.announcements || []);
+        const fitClass = announcementFitClass(announcements);
         const rows = announcements.map((item, i) => {
             const title = String((item && item.title) || '').trim();
             const content = String((item && item.content) || '').trim();
+            const plain = announcementPlain(content);
             return {
                 _id: date + '~' + i,
                 date: formatDate(date),
                 title: title,
                 content: content,
                 text: title && content ? title + '\n' + content : title || content,
+                label: title ? title + ': ' : '',
+                plain: plain,
+                fitClass: fitClass,
                 number: i + 1,
             };
         });
@@ -1008,6 +1069,83 @@
         if (!rows.length) {
             warnings.push(service
                 ? 'No announcements have been entered for ' + formatDate(date, 'medium') + '.'
+                : 'Nothing is planned yet for ' + formatDate(date) + '.');
+        }
+        return { rows: rows, warnings: warnings, date: date };
+    }
+
+    // The back cover shrinks announcement type the same way the designed
+    // booklet does (guide-components announcementsSizePt): a box of about
+    // nine lines at 10pt, stepping down by half a point to 7pt, then clipping.
+    const ANNC_BASE_PT = 10;
+    const ANNC_MIN_PT = 7;
+    const ANNC_STEP_PT = 0.5;
+    const ANNC_LINE = 1.375;
+    const ANNC_GAP_EM = 0.6;
+    const ANNC_CHARS_PER_LINE = 85;
+    const ANNC_FIT_LINES = 9;
+
+    function announcementPlain(content) {
+        return String(content || '')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+            .replace(/&[a-z]+;/gi, ' ')
+            .replace(/[ \t]+\n/g, '\n')
+            .trim();
+    }
+
+    function announcementSegments(item) {
+        const title = String((item && item.title) || '');
+        const lines = announcementPlain(item && item.content).split('\n');
+        const bodyLines = lines.length ? lines : [''];
+        const first = (title ? title.length + 2 : 0) + bodyLines[0].length;
+        return [first].concat(bodyLines.slice(1).map(line => line.length));
+    }
+
+    function announcementFitPt(items) {
+        const list = items || [];
+        if (!list.length) return ANNC_BASE_PT;
+        const capacity = ANNC_FIT_LINES * ANNC_LINE * ANNC_BASE_PT;
+        const gaps = Math.max(0, list.length - 1) * ANNC_GAP_EM;
+        for (let pt = ANNC_BASE_PT; pt > ANNC_MIN_PT; pt -= ANNC_STEP_PT) {
+            const perLine = ANNC_CHARS_PER_LINE * (ANNC_BASE_PT / pt);
+            let textLines = 0;
+            list.forEach(item => {
+                announcementSegments(item).forEach(len => {
+                    textLines += Math.max(1, Math.ceil((len || 0) / perLine));
+                });
+            });
+            if ((textLines * ANNC_LINE + gaps) * pt <= capacity) return pt;
+        }
+        return ANNC_MIN_PT;
+    }
+
+    function announcementFitClass(items) {
+        return 'm-ann m-fit-' + Math.round(announcementFitPt(items) * 10);
+    }
+
+    function resolveSundayKidsQuestions(params, data, ctx) {
+        const Typed = typedCore();
+        const p = Object.assign(defaultParams('sunday_kids_questions'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const service = serviceAt(data, date);
+        const stored = Typed ? Typed.fromService(service) : { mosaicKids: { questions: [] } };
+        const questions = (stored.mosaicKids && stored.mosaicKids.questions) || [];
+        const rows = [];
+        questions.forEach((question, i) => {
+            const text = String(question || '').trim();
+            if (!text) return;
+            rows.push({ _id: date + '~q~' + i, text: text, number: rows.length + 1 });
+        });
+        const warnings = [];
+        if (!rows.length) {
+            warnings.push(service
+                ? 'No Mosaic Kids questions for ' + formatDate(date) + '.'
                 : 'Nothing is planned yet for ' + formatDate(date) + '.');
         }
         return { rows: rows, warnings: warnings, date: date };
@@ -1263,6 +1401,7 @@
         sunday_hymns: resolveSundayHymns,
         sunday_typed: resolveSundayTyped,
         sunday_announcements: resolveSundayAnnouncements,
+        sunday_kids_questions: resolveSundayKidsQuestions,
         sundays: resolveSundays,
         event_dates: resolveEventDates,
         role_holder: resolveRoleHolder,
@@ -1304,6 +1443,7 @@
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
             case 'sunday_typed':
             case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
+            case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
             case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to } }; }
             case 'event_dates': {
@@ -1370,6 +1510,8 @@
         addDays,
         formatDate,
         sundayOnOrAfter,
+        viewDateBefore,
+        orderSnapshotTargets,
         resolveWhen,
         describeWhen,
         resolveRange,

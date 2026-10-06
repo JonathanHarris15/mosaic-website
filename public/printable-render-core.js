@@ -93,9 +93,13 @@
                         node.text = String(r.value);
                         delete node.children;
                         node.children = [];
+                        if (r.html) node.passageHtml = r.html;
+                        else delete node.passageHtml;
                         // Bound prose keeps its line breaks. The field is
                         // plain text, and a line break is not markup.
-                        if (node.text.indexOf('\n') !== -1) {
+                        // A styled passage draws its own lines, so it does
+                        // not also turn the element into pre-line.
+                        if (!r.html && node.text.indexOf('\n') !== -1) {
                             node.style = Object.assign({}, node.style, { 'white-space': 'pre-line' });
                         }
                     }
@@ -111,6 +115,7 @@
                         } else if (prop === 'text') {
                             node.text = '';
                             node.children = [];
+                            delete node.passageHtml;
                         } else {
                             node.attrs = Object.assign({}, node.attrs, { [prop]: '' });
                         }

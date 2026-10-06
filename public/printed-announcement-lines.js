@@ -105,7 +105,7 @@
         return { dates: dates, run: false };
     }
 
-    function linesOnSunday(sunday, paired) {
+    function placedOnSunday(sunday, paired) {
         if (!isDate(sunday)) return [];
         const rows = [];
         const seen = {};
@@ -126,6 +126,8 @@
                 sortDate: item.run ? dates[0] : qualifying[0],
                 startTime: clock(item.startTime),
                 eventName: item.eventName || '',
+                seriesId: item.seriesId || '',
+                occurrenceId: item.occurrenceId || '',
                 order: Number.isFinite(item.order) ? item.order : 0,
             });
         });
@@ -138,7 +140,30 @@
             if (a.order !== b.order) return a.order - b.order;
             return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
         });
-        return rows.map(row => ({ id: row.id, title: row.title, prose: row.prose }));
+        return rows;
+    }
+
+    // The selector's public line is the title and the prose. Where the words
+    // live is for the Sunday tab, not for the booklet text.
+    function linesOnSunday(sunday, paired) {
+        return placedOnSunday(sunday, paired).map(row => ({
+            id: row.id,
+            title: row.title,
+            prose: row.prose,
+        }));
+    }
+
+    // Where those words are edited. A repeating event keeps them on the
+    // series. A one-off keeps them on the occurrence. The Sunday page links
+    // there; it does not copy the words onto the Sunday.
+    function editHref(row) {
+        if (row && row.seriesId) {
+            return 'recurring-events.html?series=' + encodeURIComponent(row.seriesId) + '&tab=announcements';
+        }
+        if (row && row.occurrenceId) {
+            return 'calendar-event.html?id=' + encodeURIComponent(row.occurrenceId) + '&tab=announcements';
+        }
+        return '';
     }
 
     // The handed-out guide. A public event contributes. So does the Sunday
@@ -177,7 +202,50 @@
                 });
             });
         });
-        return linesOnSunday(sunday, paired);
+        return linesOnSunday(sunday, paired).map(line => ({
+            id: line.id,
+            title: line.title,
+            prose: line.prose,
+        }));
+    }
+
+    // The Sunday's Announcements tab. Same window and the same events as the
+    // handed-out guide — every public event, and the Sunday Service — with
+    // the name of the event and where its words are edited.
+    function sourcesForSunday(sunday, events) {
+        const paired = [];
+        (events || []).forEach(event => {
+            if (!mayBeHandedOut(event)) return;
+            (event.announcements || []).forEach(announcement => {
+                if (!announcement || announcement.way !== PRINTED) return;
+                const weeks = wholeWeeks(announcement.weeks);
+                if (weeks == null || !isDate(sunday)) return;
+                const happened = event.rule
+                    ? datesTheEventHappens(event, sunday, addDays(sunday, weeks * 7))
+                    : datesTheEventHappens({ occurrence: event.occurrence || {} });
+                paired.push({
+                    id: announcement.id,
+                    title: announcement.title,
+                    prose: announcement.prose,
+                    way: announcement.way,
+                    weeks: announcement.weeks,
+                    order: announcement.order,
+                    eventName: event.name || '',
+                    startTime: event.startTime || '',
+                    dates: happened.dates,
+                    run: happened.run,
+                    seriesId: event.seriesId || '',
+                    occurrenceId: event.seriesId ? '' : (event.id || ''),
+                });
+            });
+        });
+        return placedOnSunday(sunday, paired).map(line => ({
+            id: line.id,
+            title: line.title,
+            prose: line.prose,
+            eventName: line.eventName,
+            href: editHref(line),
+        }));
     }
 
     function filledTyped(items) {
@@ -237,6 +305,7 @@
         datesTheEventHappens,
         mayBeHandedOut,
         linesForHandedOutGuide,
+        sourcesForSunday,
         bookletAnnouncements,
         renderedGuideValues,
         pageItems,

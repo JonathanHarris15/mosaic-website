@@ -325,6 +325,18 @@ test('a comment in the code is skipped rather than becoming an element', () => {
     assert.equal(back.nodes.length, 1);
 });
 
+test('a list can ask to be left out when it has no rows', () => {
+    const kept = Core.buildNode({ tag: 'div', repeat: { source: 'people', overflow: 'new-page' } });
+    assert.equal(kept.repeat.omitWhenEmpty, false);
+    const html = '<div data-repeat=\'{"source":"sunday_hymns","params":{"slot":"hymn2"},"overflow":"new-page","omitWhenEmpty":true}\'></div>';
+    const back = Core.htmlToNodes(html);
+    assert.equal(back.ok, true, (back.problems || []).join(' '));
+    assert.equal(back.nodes[0].repeat.omitWhenEmpty, true);
+    assert.equal(back.nodes[0].repeat.overflow, 'new-page');
+    const round = Core.htmlToNodes(Core.pageToHtml(Core.buildPage(Core.buildTemplate({}), { nodes: back.nodes })));
+    assert.equal(round.nodes[0].repeat.omitWhenEmpty, true);
+});
+
 // ── The record ───────────────────────────────────────────────────────────────
 
 test('a printable rebuilds its pages through the model, so every page has margins and a stylesheet', () => {

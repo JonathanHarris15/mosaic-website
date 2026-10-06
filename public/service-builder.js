@@ -574,6 +574,15 @@ function serviceForm() {
         // opens it, and nothing is re-fetched for somebody who switches back and
         // forth. Switching tabs after that is only a matter of what is shown.
         rolesOpened: false,
+        filesOpened: false,
+        announcementsOpened: false,
+        announcementsSeen: false,
+        typedAnnouncements: [],
+        printedSources: [],
+        announcementsLoading: false,
+        announcementsSaving: false,
+        announcementsError: '',
+        announcementsStatus: '',
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -935,6 +944,75 @@ function serviceForm() {
             // template simply waits for it rather than building a panel pointed
             // at no Sunday.
             if (key === 'roles') this.rolesOpened = true;
+            if (key === 'files') this.filesOpened = true;
+            if (key === 'announcements') {
+                this.announcementsOpened = true;
+                if (!this.announcementsSeen) {
+                    this.announcementsSeen = true;
+                    this.loadSundayAnnouncements();
+                }
+            }
+        },
+
+        // Typed lines belong to this Sunday. Printed lines belong to whatever
+        // event wrote them — a class, a one-off, the Sunday Service — and this
+        // tab only shows the ones the handed-out guide would print.
+        async loadSundayAnnouncements() {
+            if (!this.date || !window.SundayTypedCore || !window.PrintedAnnouncementGuide || !window.PrintedAnnouncementLines) return;
+            this.announcementsLoading = true;
+            this.announcementsError = '';
+            try {
+                const snap = await db.collection('services').doc(this.date).get();
+                const service = snap.exists ? snap.data() : null;
+                const items = window.SundayTypedCore.fromService(service).announcements || [];
+                this.typedAnnouncements = items.map(item => ({
+                    title: item.title || '',
+                    content: item.content || '',
+                }));
+                const events = await window.PrintedAnnouncementGuide.eventsForSunday(db, this.date, {
+                    level: this.currentPermissionLevel,
+                    personId: this.me && this.me.id,
+                });
+                this.printedSources = window.PrintedAnnouncementLines.sourcesForSunday(this.date, events);
+            } catch (e) {
+                this.announcementsError = 'These announcements could not be read.';
+                this.printedSources = [];
+            } finally {
+                this.announcementsLoading = false;
+            }
+        },
+
+        addTypedAnnouncement() {
+            this.typedAnnouncements.push({ title: '', content: '' });
+            this.announcementsStatus = '';
+        },
+
+        removeTypedAnnouncement(index) {
+            this.typedAnnouncements.splice(index, 1);
+            this.announcementsStatus = '';
+        },
+
+        async saveSundayAnnouncements() {
+            if (!this.canEdit || !this.date || !window.SundayTypedCore || this.announcementsSaving) return;
+            this.announcementsSaving = true;
+            this.announcementsStatus = '';
+            try {
+                const ref = db.collection('services').doc(this.date);
+                const snap = await ref.get();
+                const data = snap.exists ? snap.data() : {};
+                const stored = window.SundayTypedCore.normalise(data.typedContent);
+                stored.announcements = window.SundayTypedCore.asAnnouncements(this.typedAnnouncements);
+                await ref.set({ typedContent: stored }, { merge: true });
+                this.typedAnnouncements = stored.announcements.map(item => ({
+                    title: item.title,
+                    content: item.content,
+                }));
+                this.announcementsStatus = 'Saved.';
+            } catch (e) {
+                this.announcementsStatus = 'Could not save these announcements.';
+            } finally {
+                this.announcementsSaving = false;
+            }
         },
 
         // The shell's back arrow, answered by the page (MS-16). A tab is not a
@@ -1025,7 +1103,10 @@ function serviceForm() {
             // it, and loadPeopleRegistry REPLACES that array rather than filling
             // it. Latch the tab any earlier and the panel keeps the empty list
             // it was born with: a Roles tab you cannot put anybody into.
-            if (urlParams.get('tab') === 'roles') this.openTab('roles');
+            const askedTab = urlParams.get('tab');
+            if (askedTab === 'roles' || askedTab === 'files' || askedTab === 'announcements') {
+                this.openTab(askedTab);
+            }
             await this.loadPrayerRequests();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();

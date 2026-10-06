@@ -24,6 +24,7 @@
     const Core = isNode ? require('./printable-core.js') : global.PrintableCore;
     const Data = isNode ? require('./printable-data-core.js') : global.PrintableDataCore;
     const Render = isNode ? require('./printable-render-core.js') : global.PrintableRenderCore;
+    if (isNode) require('./scripture-passage.js');
 
     function keyOf(source, params) {
         return source + '|' + JSON.stringify(params || {});
@@ -44,8 +45,40 @@
         return Object.keys(uses).map(k => uses[k]);
     }
 
+    // A passage wire needs the citation's verses, not a new source. The
+    // store fetches them after the Sunday is loaded (ADR 0079).
+    function passageRequests(project) {
+        const Passage = global.ScripturePassage;
+        if (!Passage) return [];
+        const out = [];
+        const seen = {};
+        function walk(nodes, parentRepeat) {
+            (nodes || []).forEach(node => {
+                Object.keys(node.bind || {}).forEach(prop => {
+                    const b = node.bind[prop];
+                    if (!b || b.reading !== 'passage' || !Passage.isScriptureField(b.field)) return;
+                    const source = b.scope === 'item' ? (parentRepeat && parentRepeat.source) : b.source;
+                    const params = b.scope === 'item' ? (parentRepeat && parentRepeat.params) : (b.params || {});
+                    if (!source) return;
+                    const presentation = Passage.normalize(b.passage);
+                    const key = source + '|' + JSON.stringify(params || {}) + '|' + b.field + '|' + Passage.cacheKey('', presentation);
+                    if (seen[key]) return;
+                    seen[key] = true;
+                    out.push({ source: source, params: params || {}, field: b.field, presentation: presentation });
+                });
+                if (node.children) walk(node.children, node.repeat || parentRepeat);
+            });
+        }
+        (project.pages || []).forEach(page => walk(page.nodes, null));
+        return out;
+    }
+
     function collectNeeds(project, today) {
-        return usesOf(project).reduce((acc, u) => mergeNeeds(acc, Data.needsFor(u.source, u.params, today)), {});
+        const needs = usesOf(project).reduce((acc, u) => mergeNeeds(acc, Data.needsFor(u.source, u.params, today)), {});
+        const clock = today || Data.toDateStr(new Date());
+        const passages = passageRequests(project).map(p => Object.assign({ today: clock }, p));
+        if (passages.length) needs.passages = passages;
+        return needs;
     }
 
     function mergeNeeds(a, b) {
@@ -94,6 +127,12 @@
             if (bind.source === 'insert_page_number') {
                 const idx = pageCtx && pageCtx.pageIndex != null ? pageCtx.pageIndex : -1;
                 if (idx < 0) return { ok: false, why: 'No page.' };
+                // The designed booklet puts the number in the outer margin:
+                // an odd physical page (even index) sits on the right.
+                if (bind.field === 'edgeClass') {
+                    const edge = idx % 2 === 1 ? 'left' : 'right';
+                    return { ok: true, value: 'm-pagenum m-pagenum--' + edge };
+                }
                 const n = Data.insertPageNumberDisplay(idx, (bind.params || {}).startAt);
                 if (n == null) return { ok: false, why: 'This page is before numbering starts.' };
                 return { ok: true, value: String(n) };
@@ -103,7 +142,7 @@
                 const v = row[bind.field];
                 if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
                 if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + rowName(row) + '.' };
-                return { ok: true, value: v };
+                return passageOrValue(bind, v);
             }
             if (!bind.source) return { ok: false, why: 'Not wired.' };
             const r = resolved(bind.source, bind.params);
@@ -111,7 +150,21 @@
             if (!one) return { ok: false, why: r.warnings[0] || 'Nothing to show.' };
             const v = one[bind.field];
             if (v === '' || v == null) return { ok: false, why: r.warnings[0] || ('No ' + fieldName(bind) + ' to show.') };
-            return { ok: true, value: v };
+            return passageOrValue(bind, v);
+        }
+
+        // A citation wire returns the reference. A passage wire returns the
+        // verses fetched for that reference and this presentation.
+        function passageOrValue(bind, citation) {
+            if (bind.reading !== 'passage') return { ok: true, value: citation };
+            const Passage = global.ScripturePassage;
+            if (!Passage) return { ok: false, why: 'Passages are not available.' };
+            const key = Passage.cacheKey(citation, bind.passage);
+            const raw = bundle && bundle.passages && bundle.passages[key];
+            if (!raw) return { ok: false, why: 'The passage for ' + citation + ' did not load.' };
+            const formatted = Passage.format(raw, bind.passage);
+            if (!formatted.text) return { ok: false, why: 'No passage text for ' + citation + '.' };
+            return { ok: true, value: formatted.text, html: formatted.html || '' };
         }
 
         // An event's dates share its name, so a dated row says which date.
@@ -181,8 +234,8 @@
 
     // Slice the *origin* list onto this page's iterated element, so a
     // continuation page that was redesigned still reads the same live rows.
-    function sliceFrom(res, originRepeat, pageRepeatId, start, end, pageIndex, assets) {
-        const base = dataForPage(res, pageIndex, assets);
+    function sliceFrom(res, originRepeat, pageRepeatId, start, end, displayIndex, assets) {
+        const base = dataForPage(res, displayIndex, assets);
         return {
             rowsFor: (node, parentRow) => {
                 if (!node.repeat) return base.rowsFor(node, parentRow);
@@ -213,8 +266,8 @@
         };
     }
 
-    function emptySlice(res, originRepeat, pageRepeatId, pageIndex, assets) {
-        return sliceFrom(res, originRepeat, pageRepeatId, 0, 0, pageIndex, assets);
+    function emptySlice(res, originRepeat, pageRepeatId, displayIndex, assets) {
+        return sliceFrom(res, originRepeat, pageRepeatId, 0, 0, displayIndex, assets);
     }
 
     // The pages to draw. `res` null means stand-ins everywhere.
@@ -232,17 +285,18 @@
             chain.slice(1).forEach((pg, i) => {
                 claimed[pg.id] = true;
                 const r = overflowingRepeatOn(pg);
-                const pgIndex = pages.findIndex(p => p.id === pg.id);
                 const expanded = Render.expandPage(pg, (res && originRepeat && r)
-                    ? emptySlice(res, originRepeat, r.id, pgIndex, assets)
-                    : dataForPage(res, pgIndex, assets));
+                    ? emptySlice(res, originRepeat, r.id, out.length, assets)
+                    : dataForPage(res, out.length, assets));
                 out.push(entryOf(pg, expanded, { originId: chain[0].id, pageIndex: pageIndex, continuation: i + 1, rowsFrom: 0, rowsTo: 0 }));
             });
         }
 
         pages.forEach((page, pageIndex) => {
             if (claimed[page.id]) return;
-            const data = dataForPage(res, pageIndex, assets);
+            // Page numbers follow the sheet about to be drawn, not the stored
+            // page. A hymn that spills keeps the next sheet's own number.
+            const data = dataForPage(res, out.length, assets);
 
             // Not in the contiguous chain: a page sits between this one and
             // the start, or the start is gone. The start's own pagination
@@ -252,7 +306,7 @@
                 const originRepeat = origin ? overflowingRepeatOn(origin) : null;
                 const mine = overflowingRepeatOn(page);
                 const sliced = (res && mine)
-                    ? emptySlice(res, originRepeat || mine, mine.id, pageIndex, assets)
+                    ? emptySlice(res, originRepeat || mine, mine.id, out.length, assets)
                     : STAND_INS;
                 const expanded = Render.expandPage(page, sliced);
                 out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
@@ -263,6 +317,15 @@
             const repeat = overflowing[0] || null;
             const rows = repeat ? res.rowsFor(repeat) : null;
             const chain = continuationChain(project, page);
+
+            // A hymn with no name, or a slot the Sunday dropped, is not a
+            // blank sheet. The page asks to be left out, and so do the
+            // continuation pages that belong to it. Page numbers that follow
+            // close up, because they count sheets drawn, not sheets stored.
+            if (repeat && rows && rows.length === 0 && repeat.repeat.omitWhenEmpty) {
+                chain.forEach(p => { claimed[p.id] = true; });
+                return;
+            }
 
             if (!repeat || !rows || !rows.length || !canPaginate) {
                 const expanded = Render.expandPage(page, data);
@@ -286,7 +349,7 @@
                 const bg = pageAt(i);
                 const r = repeatAt(i);
                 if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
-                const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, pageIndex, assets));
+                const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, out.length, assets));
                 return fits(host, template, bg, probe.nodes, r.id);
             };
 
@@ -300,7 +363,7 @@
                     chain.push(bg);
                 }
                 const r = overflowingRepeatOn(bg) || repeat;
-                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, pageIndex, assets), { warnEveryRow: false, copyStart: slice.start, pageIndex: pageIndex });
+                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, out.length, assets), { warnEveryRow: false, copyStart: slice.start, pageIndex: pageIndex });
                 out.push(entryOf(bg, expanded, {
                     needsPersist: needsPersist,
                     originId: page.id,
@@ -314,7 +377,7 @@
             for (let i = plan.length; i < chain.length; i++) {
                 const bg = chain[i];
                 const r = overflowingRepeatOn(bg);
-                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id, pageIndex, assets) : data, { warnEveryRow: false, pageIndex: pageIndex });
+                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id, out.length, assets) : dataForPage(res, out.length, assets), { warnEveryRow: false, pageIndex: pageIndex });
                 out.push(entryOf(bg, expanded, {
                     originId: page.id,
                     pageIndex: pageIndex,

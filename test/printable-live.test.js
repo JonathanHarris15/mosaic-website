@@ -290,3 +290,117 @@ test('MS-689: page-number bindings read the project page index and custom start'
     const pages = Live.layoutPages(p, res, null);
     assert.equal(pages[2].nodes[0].text, '1');
 });
+
+test('a list that spills numbers each physical sheet, not the stored page again', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const num = {
+        scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number',
+    };
+    const edge = Object.assign({}, num, { field: 'edgeClass' });
+    const p = Core.buildPrintable({
+        name: 'Hymn',
+        template: t,
+        pages: [
+            Core.buildPage(t, { id: 'cover', nodes: [{ id: 'c', tag: 'p', text: 'Cover' }] }),
+            Core.buildPage(t, { id: 'hymn', nodes: [
+                { id: 'card', tag: 'div', repeat: {
+                    source: 'people', params: { membership: 'members' },
+                    layout: { maxPerPage: 1 }, overflow: 'new-page',
+                }, children: [
+                    { id: 'nm', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+                { id: 'pg', tag: 'p', text: '', bind: { text: num, class: edge } },
+            ] }),
+        ],
+    });
+    const res = Live.resolver(p, peopleBundle(3), { today: '2026-09-03', level: 'editor' });
+    const pages = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    const folio = (entry) => entry.nodes.find(n => n.tag === 'p' && /^\d+$/.test(n.text || ''));
+    assert.equal(pages.length, 4);
+    assert.equal(folio(pages[1]).text, '2');
+    assert.equal(folio(pages[2]).text, '3');
+    assert.equal(folio(pages[3]).text, '4');
+    assert.match(folio(pages[1]).attrs.class, /m-pagenum--left/);
+    assert.match(folio(pages[2]).attrs.class, /m-pagenum--right/);
+});
+
+test('a hymn slot with nothing planned is left out, and the next sheet keeps the number', () => {
+    const t = Core.buildTemplate({ paper: 'half_letter', dpi: 150 });
+    const num = { scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number' };
+    const hymn = (id, slot, omit) => Core.buildPage(t, {
+        id: id,
+        nodes: [{
+            id: id + '-card', tag: 'div',
+            repeat: {
+                source: 'sunday_hymns',
+                params: { when: { mode: 'this' }, slot: slot },
+                layout: { maxPerPage: 1 },
+                overflow: 'new-page',
+                omitWhenEmpty: omit,
+            },
+            children: [{ id: id + '-t', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } }],
+        }],
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: t,
+        pages: [
+            Core.buildPage(t, { id: 'cover', nodes: [{ id: 'c', tag: 'p', text: 'Cover' }] }),
+            hymn('h2', 'hymn2', true),
+            Core.buildPage(t, { id: 'after', nodes: [{ id: 'a', tag: 'p', text: '', bind: { text: num } }] }),
+        ],
+    });
+    const res = Live.resolver(p, { services: { '2026-09-06': { liturgy: { hymn1: { name: 'Amazing Grace' } } } } }, { today: '2026-09-03', level: 'editor' });
+    const pages = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    assert.equal(pages.length, 2);
+    assert.equal(pages[0].page.id, 'cover');
+    assert.equal(pages[1].nodes[0].text, '2');
+    const kept = Live.layoutPages(Core.buildPrintable({
+        name: 'Guide',
+        template: t,
+        pages: [
+            Core.buildPage(t, { id: 'cover', nodes: [{ id: 'c', tag: 'p', text: 'Cover' }] }),
+            hymn('h2', 'hymn2', false),
+        ],
+    }), res, true, { fitsOn: () => true });
+    assert.equal(kept.length, 2, 'without the mark, the empty slot still holds its page');
+    const stand = Live.layoutPages(p, null, null);
+    assert.equal(stand.length, 3, 'the editor still shows the slot before any Sunday is loaded');
+});
+
+test('a scripture wire stays a citation until it asks for the passage', () => {
+    const Passage = require('../public/scripture-passage.js');
+    const cite = { scope: 'global', source: 'sunday', params: { when: { mode: 'this' } }, field: 'sermon' };
+    const passage = Object.assign({}, cite, {
+        reading: 'passage',
+        passage: { style: 'styled', numbers: true, headings: false, footnotes: false, citation: true },
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [{ id: 'pg1', nodes: [
+            { id: 'cite', tag: 'p', text: 'ref', bind: { text: cite } },
+            { id: 'pass', tag: 'p', text: 'verses', bind: { text: passage } },
+        ] }],
+    });
+    const needs = Live.collectNeeds(p, '2026-09-03');
+    assert.equal(needs.passages.length, 1);
+    assert.equal(needs.passages[0].field, 'sermon');
+    assert.equal(needs.passages[0].today, '2026-09-03');
+    const raw = 'John 3:16\n\n[16] For God so loved the world.';
+    const bundle = {
+        services: { '2026-09-06': { liturgy: { sermon: 'John 3:16' } } },
+        passages: { [Passage.cacheKey('John 3:16', passage.passage)]: raw },
+    };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'editor' });
+    assert.deepEqual(res.valueFor(cite, null), { ok: true, value: 'John 3:16' });
+    const got = res.valueFor(passage, null);
+    assert.equal(got.ok, true);
+    assert.match(got.html, /m-scripture__n/);
+    assert.doesNotMatch(got.html, /<script/);
+    const pages = Live.layoutPages(p, res, null);
+    const drawn = pages[0].nodes.find(n => n.id === 'pass');
+    assert.match(drawn.passageHtml, /m-scripture__line/);
+    const cited = pages[0].nodes.find(n => n.id === 'cite');
+    assert.equal(cited.passageHtml, undefined);
+});

@@ -74,6 +74,7 @@
     <script src="sunday-typed-core.js"></script>
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
+    <script src="scripture-passage.js"></script>
     <script src="printed-announcement-lines.js"></script>
     <script src="event-tell-core.js"></script>
     <script src="event-announcement-panel.js"></script>
@@ -661,7 +662,7 @@
                         <template x-for="p in printables" :key="p.id">
                             <div class="m-row cal-printable">
                                 <span class="material-symbols-outlined text-[19px] text-secondary shrink-0">print</span>
-                                <a :href="printableHref(p, 'view')" class="m-row__main text-left cal-focus">
+                                <a :href="printableHref(p, 'view', 'from')" class="m-row__main text-left cal-focus">
                                     <span class="m-row__title" x-text="p.name"></span>
                                     <span class="m-row__sub" x-text="snapshotBusy === p.id ? snapshotProgress : printableSub(p)"></span>
                                 </a>
@@ -669,7 +670,9 @@
                                     <input type="checkbox" :checked="p.memberVisible" @change="setMembersMayView(p, $event.target.checked)" />
                                     <span>Members may view</span>
                                 </label>
-                                <a x-show="isEditor" :href="printableHref(p, 'edit')" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" :aria-label="'Open ' + p.name + ' in the editor'" title="Open in the editor">
+                                <a x-show="isEditor && isSunday" :href="printableHref(p, 'edit', 'from')" class="m-btn m-btn--quiet m-btn--sm" :aria-label="'Open ' + p.name + ' from this date'" title="Open the printable as of this Sunday">From this date</a>
+                                <a x-show="isEditor && isSunday" :href="printableHref(p, 'edit', 'before')" class="m-btn m-btn--quiet m-btn--sm" :aria-label="'Open ' + p.name + ' before this date'" title="Open the printable as of the Sunday before. The day before this Sunday would still read as this Sunday.">Before this date</a>
+                                <a x-show="isEditor && !isSunday" :href="printableHref(p, 'edit', 'from')" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" :aria-label="'Open ' + p.name + ' in the editor'" title="Open in the editor, as of this date">
                                     <span class="material-symbols-outlined text-[18px]">edit</span>
                                 </a>
                                 <button type="button" x-show="canManageAttachments" @click="filePrintableSnapshot(p)"

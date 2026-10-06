@@ -369,12 +369,14 @@ test('a Sunday resolves its people, theme and every slot for this Sunday', () =>
     const r = Data.resolve('sunday', { when: { mode: 'this' } }, SUNDAYS(), { today: TODAY });
     const row = r.rows[0];
     assert.equal(row.date, 'Sunday 6 September 2026');
+    assert.equal(row.longDate, 'Sunday, September 6, 2026');
     assert.equal(row.theme, 'Grace');
     assert.equal(row.preacher, 'Pastor Sam');
     assert.equal(row.preparatoryHymn, 'Amazing Grace');
     assert.equal(row.hymn1, 'A Literal Hymn');
     assert.equal(row.sermon, 'Romans 8');
     assert.equal(row.prayerMale, 'Tom');
+    assert.equal(row.prayerLabel, 'Pastoral Prayer');
     assert.equal(row.hymnEnd2, '', 'a hymn the Sunday has dropped does not print');
     assert.equal(r.warnings.length, 0);
 });
@@ -405,6 +407,10 @@ test('the hymns of a Sunday return every sheet-music page, in slot then page ord
     assert.deepEqual(r.rows.map(x => x.page), [1, 2, 1]);
     assert.equal(r.rows[0].pageCount, 2);
     assert.equal(r.rows[0].attribution, 'Newton');
+    assert.equal(r.rows[0].sheetTitle, 'Amazing Grace');
+    assert.equal(r.rows[1].sheetTitle, '');
+    assert.equal(r.rows[0].sheetCredit, '');
+    assert.equal(r.rows[1].sheetCredit, 'Newton');
     assert.equal(r.rows[0]._id, 'preparatoryHymn~0');
     assert.equal(r.rows[1]._id, 'preparatoryHymn~1');
     assert.match(r.warnings[0], /A Literal Hymn.*no sheet music/);
@@ -591,6 +597,10 @@ test('announcements of a Sunday are an iterable list — typed first, then print
     assert.deepEqual(r.rows.map(x => x.content), ['Bring a plate', 'Bring gloves']);
     assert.deepEqual(r.rows.map(x => x.number), [1, 2]);
     assert.equal(r.rows[1].text, 'Work day\nBring gloves');
+    assert.equal(r.rows[0].label, 'Picnic: ');
+    assert.equal(r.rows[0].plain, 'Bring a plate');
+    assert.equal(r.rows[0].fitClass, r.rows[1].fitClass);
+    assert.match(r.rows[0].fitClass, /^m-ann m-fit-\d+$/);
     assert.deepEqual(r.warnings, []);
     assert.deepEqual(Data.needsFor('sunday_announcements', {}, TODAY), {
         services: [date],
@@ -599,6 +609,31 @@ test('announcements of a Sunday are an iterable list — typed first, then print
     const empty = Data.resolve('sunday_announcements', {}, { services: {} }, { today: TODAY });
     assert.equal(empty.rows.length, 0);
     assert.match(empty.warnings[0], /Nothing is planned yet/);
+});
+
+test('Mosaic Kids questions are one row each, in the order they were typed', () => {
+    const data = SUNDAYS();
+    data.services['2026-09-06'].typedContent = {
+        mosaicKids: { questions: ['Who is the shepherd?', '', 'What did he leave?'] },
+    };
+    const r = Data.resolve('sunday_kids_questions', {}, data, { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.text), ['Who is the shepherd?', 'What did he leave?']);
+    assert.deepEqual(r.rows.map(x => x.number), [1, 2]);
+    assert.deepEqual(Data.needsFor('sunday_kids_questions', {}, TODAY), { services: ['2026-09-06'] });
+});
+
+test('a long announcement week prints smaller, and markup is not part of the line', () => {
+    const data = SUNDAYS();
+    const long = 'word '.repeat(400);
+    data.services['2026-09-06'].typedContent = {
+        announcements: [
+            { title: 'One', content: long },
+            { title: 'Two', content: 'Meet at <b>noon</b>.<br>Bring a chair.' },
+        ],
+    };
+    const r = Data.resolve('sunday_announcements', {}, data, { today: TODAY });
+    assert.equal(r.rows[1].plain, 'Meet at noon.\nBring a chair.');
+    assert.ok(r.rows[0].fitClass !== 'm-ann m-fit-100', 'a week that overflows nine lines steps down');
 });
 
 test('a Printable bound to Sunday booklet text reads the typed fields', () => {
@@ -936,4 +971,23 @@ test('page numbering respects a custom start page in the project order', () => {
     assert.equal(Data.insertPageNumberDisplay(2, 3), 1);
     assert.equal(Data.insertPageNumberDisplay(1, 3), null);
     assert.equal(Data.describeParams('insert_page_number', { startAt: 3 }), 'numbering from page 3');
+});
+
+test('before a Sunday is the previous Sunday, and before any other day is yesterday', () => {
+    assert.equal(Data.viewDateBefore('2026-09-06'), '2026-08-30');
+    assert.equal(Data.viewDateBefore('2026-09-03'), '2026-09-02');
+    assert.equal(Data.sundayOnOrAfter('2026-09-05'), '2026-09-06');
+});
+
+test('the Sunday Service for the view date is pinned, and invented when nobody has opened it', () => {
+    const targets = Data.orderSnapshotTargets([
+        { id: 'members_2026-09-08', seriesId: 'members', date: '2026-09-08', name: 'Members meeting' },
+        { id: 'sunday_service_2026-09-13', seriesId: 'sunday_service', date: '2026-09-13', name: 'Sunday Service' },
+    ], '2026-09-03');
+    assert.equal(targets[0].pinned, true);
+    assert.equal(targets[0].occurrence.id, 'sunday_service_2026-09-06');
+    assert.equal(targets[0].occurrence.name, 'Sunday Service');
+    assert.equal(targets[1].occurrence.date, '2026-09-08');
+    assert.equal(targets[2].occurrence.date, '2026-09-13');
+    assert.equal(targets[1].pinned, false);
 });
