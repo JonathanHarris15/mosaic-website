@@ -299,8 +299,14 @@ test('the Roles pane is built on first use and then kept', () => {
     const html = read('service-builder.html');
     assert.match(html, /<template x-if="rolesOpened && date">/,
         'the pane is not gated on a latch, so it rebuilds or mounts too early');
-    assert.match(html, /<div x-show="tab === 'roles'"\s*\n\s*x-data="eventDetailPage/,
+    assert.match(html, /<div x-show="tab === 'roles'">\s*<div\s+x-data="eventDetailPage/,
         'visibility is not x-show, so switching tabs tears the panel down');
+    assert.doesNotMatch(html, /x-show="tab === 'roles'"[^>]{0,80}x-data="eventDetailPage/,
+        'the show sits on eventDetailPage, whose own tab hides Roles');
+    assert.match(html, /<div x-show="tab === 'files'">\s*<div\s+x-data="eventDetailPage/,
+        'Files stays on the Sunday tab that asked for it');
+    assert.doesNotMatch(html, /x-show="tab === 'files'"[^>]{0,80}x-data="eventDetailPage/,
+        'the show sits on eventDetailPage, whose own tab is files, so the panel stays up on every tab');
 });
 
 test('opening the Roles tab latches it open', () => {

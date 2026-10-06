@@ -1369,10 +1369,14 @@
 
              `rolesOpened` latches instead. Nothing is fetched for somebody who
              never opens the tab, and nothing is fetched twice for somebody who
-             does. Visibility is then just x-show. -->
+             does. Visibility is then just x-show.
+
+             That x-show has to sit on a parent of eventDetailPage. The event
+             page has its own `tab`, and a show on the same element reads that
+             one — Roles would stay hidden, and Files would stay on every tab. -->
         <template x-if="rolesOpened && date">
-            <div x-show="tab === 'roles'"
-                 x-data="eventDetailPage({
+            <div x-show="tab === 'roles'">
+            <div x-data="eventDetailPage({
                      occurrenceId: sundayOccurrenceId,
                      rolesOnly: true,
                      people: peopleRegistry
@@ -1410,13 +1414,16 @@
 
                 <div data-roles-panel="picker"></div>
             </div>
+            </div>
         </template>
 
         <!-- Files (the same occurrence the Roles tab mounts). Built on first
-             visit and kept, for the same reason as Roles. -->
+             visit and kept, for the same reason as Roles. The show sits on
+             the Sunday's tab, not on eventDetailPage, which keeps its own
+             tab set to files. -->
         <template x-if="filesOpened && date">
-            <div x-show="tab === 'files'"
-                 x-data="eventDetailPage({
+            <div x-show="tab === 'files'">
+            <div x-data="eventDetailPage({
                      occurrenceId: sundayOccurrenceId,
                      filesOnly: true,
                      people: peopleRegistry
@@ -1673,6 +1680,7 @@
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </template>
 
