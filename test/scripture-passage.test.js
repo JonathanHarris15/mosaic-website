@@ -26,7 +26,7 @@ test('the default passage is styled, without verse numbers, with its citation', 
     assert.equal(p.footnotes, false);
 });
 
-test('the query asks the API for the switches the wire chose, and always the short copyright', () => {
+test('the query asks the API for the switches the wire chose, and keeps the short copyright unless told not to', () => {
     const q = new URLSearchParams(Passage.query('John 3:16', {
         style: 'plain', numbers: true, headings: true, footnotes: false, citation: false,
     }));
@@ -36,6 +36,14 @@ test('the query asks the API for the switches the wire chose, and always the sho
     assert.equal(q.get('include-passage-references'), 'false');
     assert.equal(q.get('include-footnotes'), 'false');
     assert.equal(q.get('include-short-copyright'), 'true');
+    const cover = new URLSearchParams(Passage.query('John 3:16', {
+        style: 'plain', numbers: false, citation: false, copyright: false,
+    }));
+    assert.equal(cover.get('include-short-copyright'), 'false');
+    assert.notEqual(
+        Passage.cacheKey('John 3:16', { style: 'plain', copyright: false }),
+        Passage.cacheKey('John 3:16', { style: 'plain' }),
+    );
 });
 
 test('plain is one run, and styled keeps lines without taking the publisher\'s markup', () => {

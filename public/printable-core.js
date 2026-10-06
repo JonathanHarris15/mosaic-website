@@ -187,6 +187,9 @@
             },
             overflow: s.overflow === 'new-page' ? 'new-page' : 'clip',
             continueWith: s.continueWith || null,
+            // An empty list leaves the page out, the way an unnamed hymn slot
+            // contributes no sheet. Anything else still draws the page.
+            omitWhenEmpty: s.omitWhenEmpty === true,
         };
     }
 

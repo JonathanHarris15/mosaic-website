@@ -42,6 +42,10 @@
             headings: p.headings === true,
             footnotes: p.footnotes === true,
             citation: p.citation !== false,
+            // A passage keeps the short copyright. The key verse on the
+            // service-guide cover is the one place the old booklet asks
+            // for the words without it.
+            copyright: p.copyright !== false,
         };
     }
 
@@ -55,6 +59,7 @@
             p.headings ? 'h' : '-',
             p.footnotes ? 'f' : '-',
             p.citation ? 'c' : '-',
+            p.copyright ? 'y' : 'n',
         ].join('|');
     }
 
@@ -69,7 +74,7 @@
         q.set('include-footnotes', p.footnotes ? 'true' : 'false');
         q.set('include-footnote-body', p.footnotes ? 'true' : 'false');
         q.set('include-headings', p.headings ? 'true' : 'false');
-        q.set('include-short-copyright', 'true');
+        q.set('include-short-copyright', p.copyright ? 'true' : 'false');
         q.set('include-copyright', 'false');
         q.set('indent-poetry', 'true');
         return q.toString();
