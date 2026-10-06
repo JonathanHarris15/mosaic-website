@@ -354,6 +354,29 @@ test('a printable rebuilds its pages through the model, so every page has margin
     assert.equal(p.bookletExport, false, 'a directory is not a Sunday booklet unless flagged');
 });
 
+test('event fields survive build and duplicate', () => {
+    const p = Core.buildPrintable({
+        name: 'Pickup',
+        template: { paper: 'letter' },
+        pages: [],
+        inputs: [
+            { id: 'in1', label: '  Home team  ', kind: 'text' },
+            { id: 'in2', label: 'Players', kind: 'list', fields: [
+                { id: 'c1', label: 'Name', kind: 'text' },
+                { id: '', label: 'Dropped', kind: 'text' },
+            ] },
+            { id: 'in1', label: 'Duplicate id', kind: 'image' },
+        ],
+    });
+    assert.equal(p.inputs.length, 2);
+    assert.equal(p.inputs[0].label, 'Home team');
+    assert.equal(p.inputs[1].fields.length, 1);
+    assert.equal(p.inputs[1].fields[0].id, 'c1');
+    const copy = Core.duplicatePrintable(p, ['Pickup']);
+    assert.equal(copy.inputs[0].id, 'in1');
+    assert.equal(copy.inputs[1].kind, 'list');
+});
+
 test('bookletExport survives build and duplicate', () => {
     const p = Core.buildPrintable({
         name: 'Sunday booklet',

@@ -127,9 +127,51 @@
             })());
         }
 
+        if (n.eventInputs && n.eventInputs.printableId) {
+            jobs.push(loadEventInputs(db, n.eventInputs, v).then(bag => { bundle.eventInputs = bag; }));
+        }
+
         await Promise.all(jobs);
         if (n.passages && n.passages.length) await fetchPassages(bundle, n.passages);
         return bundle;
+    }
+
+    // Values typed on the event this Printable is linked to, for this date.
+    // The occurrence id wins when the page opened from that date. Otherwise
+    // the series that links the Printable, and the occurrence on this date.
+    async function loadEventInputs(db, spec, viewer) {
+        const printableId = spec && spec.printableId;
+        if (!printableId) return {};
+        const fromDoc = data => {
+            const all = (data && data.printableInputs) || {};
+            return all[printableId] || {};
+        };
+        if (spec.occurrenceId) {
+            const doc = await safely(db.collection('event_occurrences').doc(spec.occurrenceId).get(), null);
+            if (doc && doc.exists) return fromDoc(doc.data());
+        }
+        if (!spec.date) return {};
+        const ES = global.EventsStore;
+        const occurrences = (ES && ES.loadCalendar)
+            ? await safely(ES.loadCalendar(db, {
+                from: spec.date,
+                to: spec.date,
+                rank: (viewer && viewer.level) || null,
+                personId: (viewer && viewer.personId) || null,
+            }), [])
+            : [];
+        const seriesSnap = await safely(
+            db.collection('events').where('printables', 'array-contains', printableId).get(),
+            null
+        );
+        const seriesIds = {};
+        if (seriesSnap) seriesSnap.docs.forEach(d => { seriesIds[d.id] = true; });
+        const hit = (occurrences || []).find(o => o && o.date === spec.date && seriesIds[o.seriesId]);
+        if (!hit) return {};
+        if (hit.printableInputs) return fromDoc(hit);
+        if (!hit.id) return {};
+        const doc = await safely(db.collection('event_occurrences').doc(hit.id).get(), null);
+        return (doc && doc.exists) ? fromDoc(doc.data()) : {};
     }
 
     // Verses for passage wires, after the Sundays they cite are in the
@@ -163,12 +205,16 @@
 
     async function fetchEsv(reference, presentation) {
         const Passage = global.ScripturePassage;
-        if (!Passage || typeof fetch !== 'function') return '';
+        // `fetch` above is this module's bundle loader. The ESV call has to
+        // reach the platform fetch, or the verses never land in the bundle
+        // and every passage wire warns that it did not load.
+        const http = global.fetch;
+        if (!Passage || typeof http !== 'function') return '';
         const key = Passage.apiKey();
         if (!key) return '';
         const url = 'https://api.esv.org/v3/passage/text/?' + Passage.query(reference, presentation);
         try {
-            const res = await fetch(url, { headers: { Authorization: 'Token ' + key } });
+            const res = await http(url, { headers: { Authorization: 'Token ' + key } });
             if (!res.ok) return '';
             const data = await res.json();
             return ((data.passages && data.passages[0]) || '').trim();

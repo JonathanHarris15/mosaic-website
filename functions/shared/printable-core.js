@@ -369,7 +369,19 @@
                 fontFamily: a.fontFamily ? String(a.fontFamily) : '',
                 bytes: Number(a.bytes) > 0 ? Number(a.bytes) : 0,
             })).filter(a => a.id && a.url) : [],
+            // Blanks filled on the event this Printable is linked to. The
+            // values live on the occurrence; the names live here.
+            inputs: linkedInputs(s.inputs),
         };
+    }
+
+    function linkedInputs(list) {
+        let Link = null;
+        if (typeof require === 'function') {
+            try { Link = require('./printable-link-core.js'); } catch (e) { Link = null; }
+        }
+        if (!Link && typeof globalThis !== 'undefined') Link = globalThis.PrintableLinkCore;
+        return Link ? Link.normalizeInputs(list) : [];
     }
 
     // A copy for the library's Duplicate: the same paper, the same pages, the
@@ -384,6 +396,7 @@
             template: p.template || null,
             pages: p.pages || [],
             assets: p.assets || [],
+            inputs: p.inputs || [],
         });
     }
 

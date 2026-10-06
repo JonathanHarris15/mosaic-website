@@ -96,6 +96,9 @@ const MODULES = [
     'note-markdown-core.js',
     'shepherding-core.js',
     'shepherding-documents-core.js',
+    // Blanks a Printable asks an event to fill. printable-core.js normalises
+    // them on every save, so the copy has to sit beside it.
+    'printable-link-core.js',
     // The Printables tools. printable-core.js carries the whole record shape
     // and, more to the point, the HTML parser: an assistant writes a page as
     // markup and the SAME strict parser the code view uses turns it into

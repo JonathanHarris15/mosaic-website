@@ -401,7 +401,12 @@ function printableEditor() {
 
         // ── Undo ─────────────────────────────────────────────────────────
 
-        snapshot() { return JSON.stringify(this.project ? this.project.pages : []); },
+        snapshot() {
+            return JSON.stringify({
+                pages: this.project ? this.project.pages : [],
+                inputs: this.project ? (this.project.inputs || []) : [],
+            });
+        },
 
         commit() {
             const s = this.snapshot();
@@ -427,7 +432,13 @@ function printableEditor() {
         },
 
         restore(s) {
-            this.project.pages = JSON.parse(s);
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) {
+                this.project.pages = parsed;
+            } else {
+                this.project.pages = parsed.pages || [];
+                this.project.inputs = parsed.inputs || [];
+            }
             if (!this.pages.find(p => p.id === this.selection.pageId)) this.selection.pageId = this.pages[0] ? this.pages[0].id : null;
             if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
             this.renderAll();

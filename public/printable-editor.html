@@ -374,6 +374,7 @@
                                                             <label class="pe-check"><input type="checkbox" :checked="passageOf(b).headings" @change="setPassage(b.prop, { headings: $event.target.checked })" /> Headings</label>
                                                             <label class="pe-check"><input type="checkbox" :checked="passageOf(b).footnotes" @change="setPassage(b.prop, { footnotes: $event.target.checked })" /> Footnotes</label>
                                                             <label class="pe-check"><input type="checkbox" :checked="passageOf(b).citation" @change="setPassage(b.prop, { citation: $event.target.checked })" /> Citation line</label>
+                                                            <label class="pe-check"><input type="checkbox" :checked="passageOf(b).copyright" @change="setPassage(b.prop, { copyright: $event.target.checked })" /> Copyright line</label>
                                                         </span>
                                                     </span>
                                                 </template>
@@ -683,6 +684,91 @@
                 <section class="pe-drawer__section pe-scalars" x-show="showScalarInserts" aria-label="Single values for the page">
                     <div class="pe-scalars-divider">Single values</div>
                     <div class="pe-typecards">
+                        <article class="pe-typecard">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <strong>Scripture references</strong>
+                            </div>
+                            <p class="pe-hint">This Sunday's references. Reference is the citation. Words are the verses, styled, with the citation line and the short copyright.</p>
+                            <template x-for="ref in scriptureRefs" :key="'scr-' + ref.key">
+                                <div class="pe-scripture-row">
+                                    <div class="pe-scripture-row__meta">
+                                        <strong x-text="ref.label"></strong>
+                                        <span class="pe-typecard__live" x-text="ref.citation || 'Nothing entered'"></span>
+                                    </div>
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="scriptureChipKey(ref, 'citation')"
+                                          @dragstart="onScriptureChipDragStart($event, ref, 'citation')" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Reference
+                                    </span>
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="scriptureChipKey(ref, 'passage')"
+                                          @dragstart="onScriptureChipDragStart($event, ref, 'passage')" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Words
+                                    </span>
+                                </div>
+                            </template>
+                        </article>
+                        <article class="pe-typecard">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                                <strong>Filled on the event</strong>
+                            </div>
+                            <p class="pe-hint">A blank the event fills in for that date. Drag it onto the page. The words, the picture, or the list are typed where this printable is linked.</p>
+                            <div class="pe-f"><span>Add</span>
+                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Add a field filled on the event">
+                                    <button type="button" @click="addEventInput('text')">Text</button>
+                                    <button type="button" @click="addEventInput('image')">Image</button>
+                                    <button type="button" @click="addEventInput('number')">Number</button>
+                                    <button type="button" @click="addEventInput('date')">Date</button>
+                                    <button type="button" @click="addEventInput('list')">List</button>
+                                </span>
+                            </div>
+                            <p class="pe-empty" x-show="!eventInputs.length">No fields yet. A text, an image, or a list of players — whatever this date should supply.</p>
+                            <template x-for="input in eventInputs" :key="'ev-' + input.id">
+                                <div class="pe-event-field">
+                                    <label class="pe-f"><span x-text="eventKindLabel(input.kind)"></span>
+                                        <input class="pe-in" :value="input.label" @change="renameEventInput(input.id, $event.target.value)" :aria-label="'Name of ' + eventKindLabel(input.kind)" />
+                                    </label>
+                                    <div class="pe-typecard__foot" x-show="input.kind !== 'list'">
+                                        <span class="pe-typecard__live">Filled on the event</span>
+                                        <span class="pe-chip" draggable="true" tabindex="0"
+                                              :data-chip="chipKey('global', 'event_field', input.id)"
+                                              @dragstart="onEventChipDragStart($event, input)" @dragend="onChipDragEnd()">
+                                            <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
+                                        </span>
+                                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :aria-label="'Remove ' + input.label" @click="removeEventInput(input.id)">
+                                            <span class="material-symbols-outlined">delete</span>
+                                        </button>
+                                    </div>
+                                    <div x-show="input.kind === 'list'">
+                                        <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" @click="useEventList(input)">
+                                            <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Iterate the selected box over this</span>
+                                        </button>
+                                        <p class="pe-hint">Columns of one row. Drag a column onto an element inside the iterated box.</p>
+                                        <template x-for="col in input.fields" :key="input.id + '-' + col.id">
+                                            <div class="pe-event-col">
+                                                <input class="pe-in" :value="col.label" @change="renameEventColumn(input.id, col.id, $event.target.value)" :aria-label="'Column name'" />
+                                                <span class="pe-chip" draggable="true" tabindex="0"
+                                                      :data-chip="chipKey('item', 'event_list', col.id)"
+                                                      @dragstart="onEventColumnDragStart($event, input, col)" @dragend="onChipDragEnd()">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
+                                                </span>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :aria-label="'Remove ' + col.label" @click="removeEventColumn(input.id, col.id)">
+                                                    <span class="material-symbols-outlined">delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <div class="pe-typecard__foot">
+                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="addEventColumn(input.id)">Add a column</button>
+                                            <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :aria-label="'Remove ' + input.label" @click="removeEventInput(input.id)">
+                                                <span class="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </article>
                         <article class="pe-typecard">
                             <div class="pe-typecard__head">
                                 <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
@@ -1050,6 +1136,7 @@
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="scripture-passage.js"></script>
+    <script src="printable-link-core.js"></script>
     <script src="event-attachments-core.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
@@ -1271,6 +1358,12 @@
         }
         .pe-typecard__live { font-size: 10px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; text-align: left; flex: 1; min-width: 0; }
         .pe-typecard__upload { width: 100%; justify-content: center; margin-bottom: 4px; }
+        .pe-scripture-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid var(--outline-variant); }
+        .pe-scripture-row__meta { flex: 1 1 100%; min-width: 0; }
+        .pe-scripture-row__meta strong { display: block; font-size: 12px; color: var(--on-surface); }
+        .pe-event-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--outline-variant); }
+        .pe-event-col { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+        .pe-event-col .pe-in { flex: 1; min-width: 0; }
         .pe-empty {
             padding: 10px; text-align: center; border: 1px dashed var(--outline-variant); border-radius: var(--radius-sm);
             font-size: 11px; color: var(--on-surface-variant); margin: 4px 0;

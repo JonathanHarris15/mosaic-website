@@ -30,6 +30,12 @@
         return source + '|' + JSON.stringify(params || {});
     }
 
+    // Call time, not load time: a page that has not loaded the link module
+    // still resolves catalog sources. Event fields need the module.
+    function linkCore() {
+        return (typeof global !== 'undefined' && global.PrintableLinkCore) || null;
+    }
+
     // Every source a project reads, as { source, params } pairs — one per
     // distinct choice of params.
     function usesOf(project) {
@@ -73,11 +79,20 @@
         return out;
     }
 
-    function collectNeeds(project, today) {
+    function collectNeeds(project, today, opts) {
         const needs = usesOf(project).reduce((acc, u) => mergeNeeds(acc, Data.needsFor(u.source, u.params, today)), {});
         const clock = today || Data.toDateStr(new Date());
         const passages = passageRequests(project).map(p => Object.assign({ today: clock }, p));
         if (passages.length) needs.passages = passages;
+        const Link = linkCore();
+        const wantsEvent = Link ? Link.readsEventInputs(project) : !!(project && project.inputs && project.inputs.length);
+        if (wantsEvent && project && project.id) {
+            needs.eventInputs = {
+                printableId: project.id,
+                date: clock,
+                occurrenceId: (opts && opts.occurrenceId) || '',
+            };
+        }
         return needs;
     }
 
@@ -99,15 +114,43 @@
             const pid = (src && src.of && parent && parent._id) ? String(parent._id) : '';
             const k = keyOf(source, params) + '|' + pid;
             if (!cache[k]) {
-                cache[k] = Data.resolve(source, params, bundle || {}, Object.assign({}, c, {
-                    parent: pid ? parent : null,
-                }));
+                // Filled on the event. Not a catalog source — the rows are
+                // the occurrence's own list, and a scalar is read in valueFor.
+                if (source === 'event_field' || source === 'event_list') {
+                    cache[k] = { rows: [], warnings: [] };
+                } else {
+                    cache[k] = Data.resolve(source, params, bundle || {}, Object.assign({}, c, {
+                        parent: pid ? parent : null,
+                    }));
+                }
             }
             return cache[k];
         }
 
+        function eventBag() {
+            return (bundle && bundle.eventInputs) || {};
+        }
+
+        function eventInput(id) {
+            const Link = linkCore();
+            return Link ? Link.inputById(project, id) : null;
+        }
+
         function rowsFor(node, parentRow) {
             if (!node.repeat || !node.repeat.source) return null;
+            if (node.repeat.source === 'event_list') {
+                const id = node.repeat.params && node.repeat.params.inputId;
+                const input = eventInput(id);
+                const raw = eventBag()[id];
+                const rows = Array.isArray(raw) ? raw : [];
+                return rows.map((row, i) => {
+                    const out = { _id: id + '~' + i, number: i + 1 };
+                    (input && input.fields || []).forEach(col => {
+                        out[col.id] = row && row[col.id] != null ? String(row[col.id]) : '';
+                    });
+                    return out;
+                });
+            }
             return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
         }
 
@@ -143,6 +186,15 @@
                 if (v === undefined) return { ok: false, why: 'The "' + bind.field + '" field is not visible to you.' };
                 if (v === '' || v == null) return { ok: false, why: 'No ' + bind.field + ' for ' + rowName(row) + '.' };
                 return passageOrValue(bind, v);
+            }
+            if (bind.source === 'event_field') {
+                const input = eventInput(bind.field);
+                const name = input ? input.label : 'this field';
+                const v = eventBag()[bind.field];
+                if (v == null || v === '') {
+                    return { ok: false, why: 'Nothing has been entered for ' + name + ' yet. Fill it in on the event.' };
+                }
+                return { ok: true, value: String(v) };
             }
             if (!bind.source) return { ok: false, why: 'Not wired.' };
             const r = resolved(bind.source, bind.params);

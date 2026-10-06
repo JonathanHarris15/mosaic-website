@@ -404,3 +404,39 @@ test('a scripture wire stays a citation until it asks for the passage', () => {
     const cited = pages[0].nodes.find(n => n.id === 'cite');
     assert.equal(cited.passageHtml, undefined);
 });
+
+test('a field filled on the event reads that occurrence, and a list reads its rows', () => {
+    require('../public/printable-link-core.js');
+    const p = Core.buildPrintable({
+        name: '3x3',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        inputs: [
+            { id: 'home', label: 'Home logo', kind: 'image' },
+            { id: 'players', label: 'Players', kind: 'list', fields: [
+                { id: 'name', label: 'Name', kind: 'text' },
+            ] },
+        ],
+        pages: [{ id: 'pg', nodes: [
+            { id: 'logo', tag: 'img', bind: { src: { scope: 'global', source: 'event_field', field: 'home', params: {} } } },
+            { id: 'row', tag: 'div', repeat: { source: 'event_list', params: { inputId: 'players' } }, children: [
+                { id: 'nm', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+        ] }],
+    });
+    p.id = 'ball';
+    const needs = Live.collectNeeds(p, '2026-10-08', { occurrenceId: 'ball_2026-10-08' });
+    assert.equal(needs.eventInputs.printableId, 'ball');
+    assert.equal(needs.eventInputs.occurrenceId, 'ball_2026-10-08');
+    const empty = Live.resolver(p, { eventInputs: {} }, { today: '2026-10-08', level: 'editor' });
+    const missing = empty.valueFor(p.pages[0].nodes[0].bind.src, null);
+    assert.equal(missing.ok, false);
+    assert.match(missing.why, /Home logo/);
+    const res = Live.resolver(p, {
+        eventInputs: { home: 'https://example.test/home.png', players: [{ name: 'Ada' }, { name: 'Lin' }] },
+    }, { today: '2026-10-08', level: 'editor' });
+    assert.deepEqual(res.valueFor(p.pages[0].nodes[0].bind.src, null), { ok: true, value: 'https://example.test/home.png' });
+    const rows = res.rowsFor(p.pages[0].nodes[1]);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[1].name, 'Lin');
+    assert.equal(res.sourceWarnings().length, 0);
+});
