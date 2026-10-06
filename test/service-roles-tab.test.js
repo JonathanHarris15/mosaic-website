@@ -602,6 +602,15 @@ test('the service page hands its registry to the panel', () => {
         'the panel is mounted without the directory the page already read');
 });
 
+test('the Sunday Files tab can remove a file the way an event can', () => {
+    const html = read('service-builder.html');
+    assert.match(html, /askRemoveAttachment\(a\)/);
+    assert.match(html, /confirmRemoveAttachment\(\)/);
+    assert.match(html, /Nobody is told\. Anyone who could see this file loses it immediately\./);
+    assert.match(html, /Remove it/);
+    assert.match(html, /Keep it/);
+});
+
 test('a dropped read offers a way to try again', () => {
     const html = read('service-builder.html');
     assert.match(html, /@click="retry\(\)"/,
