@@ -1438,9 +1438,17 @@
                     <p class="text-[12.5px] text-on-surface-variant mb-sm">
                         Files for this Sunday. A service guide is a printable opened from this date, or from the Sunday before it.
                     </p>
+                    <div class="flex items-center justify-between gap-sm mb-2">
+                        <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">Printables</h3>
+                        <button type="button" x-show="canLinkPrintables" @click="startLinkPrintable()"
+                                class="m-btn m-btn--quiet m-btn--sm">
+                            <span class="material-symbols-outlined">add_link</span>
+                            <span class="m-btn__label">Link a printable</span>
+                        </button>
+                    </div>
                     <p x-show="printableError" class="text-[12.5px] text-error mb-2" x-text="printableError"></p>
                     <p x-show="!printables.length && canLinkPrintables" class="text-[12.5px] text-on-surface-variant mb-sm">
-                        No printable is linked to the Sunday Service yet. Link one from the Sunday Service event page.
+                        Nothing linked yet. A linked printable opens from every Sunday. This tab is where that week's words are filled in.
                     </p>
                     <div x-show="printables.length" class="m-card-list mb-sm">
                         <template x-for="p in printables" :key="p.id">
@@ -1457,6 +1465,11 @@
                                         :aria-label="'File a PDF snapshot of ' + p.name">
                                     <span class="material-symbols-outlined text-[18px]" :class="snapshotBusy === p.id ? 'm-spinner' : ''"
                                           x-text="snapshotBusy === p.id ? 'progress_activity' : 'picture_as_pdf'"></span>
+                                </button>
+                                <button type="button" x-show="canLinkPrintables" @click="unlinkPrintable(p)"
+                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                        :aria-label="'Unlink ' + p.name" title="Unlink (the printable itself is kept)">
+                                    <span class="material-symbols-outlined text-[18px]">link_off</span>
                                 </button>
                             </div>
                         </template>
@@ -1536,6 +1549,32 @@
                         </template>
                     </div>
                     <p x-show="!printables.length && !attachments.length && !loading" class="text-[12.5px] text-on-surface-variant">Nothing filed on this Sunday yet.</p>
+                </div>
+
+                <div x-show="linkingPrintable" x-cloak
+                     class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+                     @click.self="linkingPrintable = false" @keydown.escape.window="linkingPrintable = false">
+                    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md"
+                         role="dialog" aria-modal="true" aria-label="Link a printable">
+                        <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
+                        <p class="font-body-md text-on-surface-variant">It will open from every Sunday. Members can open it once you switch that on from the event.</p>
+                        <div class="m-loading" x-show="libraryLoading"><span class="m-spinner"></span></div>
+                        <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkable.length">Every laid-out printable in the library is already linked, or there are none yet.</p>
+                        <div class="flex flex-col gap-xs max-h-72 overflow-y-auto" x-show="!libraryLoading">
+                            <template x-for="p in linkable" :key="p.id">
+                                <button type="button" class="m-row m-row--interactive text-left" @click="linkPrintable(p)">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">print</span>
+                                    <span class="m-row__main">
+                                        <span class="m-row__title" x-text="p.name"></span>
+                                        <span class="m-row__sub" x-text="printablePath(p) + ' · ' + (p.template ? p.template.label : '')"></span>
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                        <div class="flex justify-end gap-sm">
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="linkingPrintable = false">Cancel</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div x-show="preview" role="dialog" aria-modal="true" aria-label="File"

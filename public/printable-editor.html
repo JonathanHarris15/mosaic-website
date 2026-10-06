@@ -530,6 +530,23 @@
             <div class="pe-drawer__body" :class="data.queryMenuOpen ? 'is-menu-open' : ''">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
 
+                <section class="pe-drawer__section pe-drawer__section--wired" x-show="connectedChips.length" aria-label="Wired to this element">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">cable</span>Wired to this element</h3>
+                    <p class="pe-hint">The line lands here. This is the field that fills the selection.</p>
+                    <template x-for="chip in connectedChips" :key="chip.prop + '|' + chip.key">
+                        <div class="pe-scripture-row">
+                            <div class="pe-scripture-row__meta">
+                                <strong x-text="chip.label"></strong>
+                            </div>
+                            <span class="pe-chip pe-chip--land" draggable="true" tabindex="0"
+                                  :data-chip="chip.key"
+                                  @dragstart="onConnectedChipDragStart($event, chip)" @dragend="onChipDragEnd()">
+                                <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
+                            </span>
+                        </div>
+                    </template>
+                </section>
+
                 <section class="pe-drawer__section pe-drawer__cta" x-show="canStartIteration">
                     <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startIteration()">
                         <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Make this element iterated</span>
@@ -1338,6 +1355,7 @@
         .pe-chip:hover { border-color: var(--tertiary); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
         .pe-chip:active { cursor: grabbing; }
         .pe-chip .material-symbols-outlined { font-size: 15px; color: var(--tertiary); }
+        .pe-chip--land { border-color: var(--tertiary); }
         .pe-chip--inert { cursor: default; opacity: .7; }
         .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
         .pe-scalars-divider {

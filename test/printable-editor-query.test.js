@@ -110,6 +110,23 @@ test('what could not be pulled stays in the drawer while the catalog is hidden',
     assert.ok(okAt < catalogAt, 'nor is the all-clear');
 });
 
+test('a wire lands on a chip that has a box, never on a hidden catalog chip', () => {
+    require('../public/scripture-passage.js');
+    const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
+    const hidden = { key: 'global|sunday|hymn2', rect: { width: 0, height: 0 } };
+    const shown = { key: 'global|sunday|hymn2', rect: { width: 48, height: 22 } };
+    assert.equal(Wires.firstLaidOutChip([hidden, shown], 'global|sunday|hymn2'), shown);
+    assert.equal(Wires.firstLaidOutChip([hidden], 'global|sunday|hymn2'), null);
+    assert.equal(Wires.wireKey({ source: 'sunday', field: 'keyVerse', reading: 'passage' }), 'global|sunday|keyVerse#passage');
+    assert.equal(Wires.drawerScrollDelta(
+        { top: 100, bottom: 400 },
+        { top: 20, bottom: 48 }
+    ) < 0, true, 'a chip above the drawer scrolls up');
+    assert.match(html, /Wired to this element/);
+    assert.match(html, /pe-chip--land/);
+    assert.match(js, /laidOutChip/);
+});
+
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires
         || globalThis.PrintableEditorWires;

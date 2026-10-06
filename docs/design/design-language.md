@@ -197,6 +197,8 @@ Below the **Query** block in the data drawer, **single values** use stacked **`.
 
 **Filled on the event** is a blank the occurrence supplies. Add **Text**, **Image**, **Number**, **Date**, or **List**. A scalar chip drags onto an element. A list iterates the selected box; its columns are **`.pe-event-col`** chips dragged inside that box. The names live on the printable. The values live on the occurrence for that date.
 
+**Wired to this element** (`.pe-drawer__section--wired`) sits at the top of the data drawer whenever the selection is bound. The connector lands on that chip (`.pe-chip--land`). A hymn name, a Sunday date, or a country map whose catalog card is hidden still has a chip here, so the line stays in the drawer.
+
 ## View date
 
 The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The view-only page names the same date in the header. **Send snapshot to…** stays in the File menu, next to Print.
@@ -204,6 +206,8 @@ The clock a printable is read as of sits in the editor header, always visible: a
 On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, citation-line, and copyright-line checks. The same Reference and Words chips live on the **Scripture references** card in the data drawer.
 
 ## Filled on the event
+
+A printable is linked from the recurring event's **Printables** tab, and from a Sunday's **Files** tab. The button is **Link a printable**. The link is stored on the series, so every date of that event opens it. The same button stays on a single date's page.
 
 Where a printable is linked — a Sunday's Files tab, or any other event's Files tab — an editor fills the blanks that printable asked for. The card is **`.m-card`**, heading **For the linked printable**, fields are **`.m-field`** / **`.m-input`**, and one button reads **Save for this date**.
 

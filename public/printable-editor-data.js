@@ -112,6 +112,44 @@
         });
     }
 
+    // The key a wire looks up. Scripture words and the citation are two
+    // chips of one Sunday field, so the reading is part of the key.
+    function wireKey(bind, repeatSource) {
+        const b = bind || {};
+        if (b.scope === 'asset') return 'asset|' + (b.assetId || '');
+        if (b.scope === 'item') return 'item|' + (repeatSource || b.source || '') + '|' + (b.field || '');
+        let field = b.field || '';
+        const Passage = global.ScripturePassage;
+        if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
+            field += (b.reading === 'passage' ? '#passage' : '#citation');
+        }
+        return 'global|' + (b.source || '') + '|' + field;
+    }
+
+    // A chip inside a closed catalog section is still in the document, at
+    // no size. A wire to that point runs to the corner of the editor.
+    // The first chip with this key that actually has a box is the one on screen.
+    function firstLaidOutChip(chips, key) {
+        const list = chips || [];
+        for (let i = 0; i < list.length; i++) {
+            const chip = list[i];
+            if (!chip || chip.key !== key) continue;
+            const r = chip.rect || {};
+            if ((r.width || 0) > 0 && (r.height || 0) > 0) return chip;
+        }
+        return null;
+    }
+
+    // How far to move the drawer so the chip sits inside it. Positive
+    // scrolls down. Zero when the chip is already in view.
+    function drawerScrollDelta(bodyRect, chipRect) {
+        if (!bodyRect || !chipRect) return 0;
+        const pad = 8;
+        if (chipRect.top < bodyRect.top + pad) return chipRect.top - bodyRect.top - pad;
+        if (chipRect.bottom > bodyRect.bottom - pad) return chipRect.bottom - bodyRect.bottom + pad;
+        return 0;
+    }
+
     const PrintableEditorWires = {
         elementOnCanvas(elRect, viewRect) {
             if (!elRect || !viewRect) return false;
@@ -120,6 +158,9 @@
                 && elRect.bottom > viewRect.top
                 && elRect.top < viewRect.bottom;
         },
+        wireKey: wireKey,
+        firstLaidOutChip: firstLaidOutChip,
+        drawerScrollDelta: drawerScrollDelta,
         groupQueryLists: groupQueryLists,
         previewName: previewName,
         syncWirePaths: syncWirePaths,
@@ -1034,6 +1075,29 @@
                 return { x: r.left - m.left, y: r.top - m.top + r.height / 2, w: r.width, h: r.height };
             },
 
+            // The chip the wire lands on. A hidden catalog chip has the same
+            // key and no box; the one in "Wired to this element" is on screen.
+            laidOutChip(key) {
+                const nodes = document.querySelectorAll('[data-chip]');
+                const chips = [];
+                for (let i = 0; i < nodes.length; i++) {
+                    const el = nodes[i];
+                    const r = el.getBoundingClientRect();
+                    chips.push({ key: el.getAttribute('data-chip'), rect: r, el: el });
+                }
+                const hit = PrintableEditorWires.firstLaidOutChip(chips, key);
+                return hit ? hit.el : null;
+            },
+
+            scrollChipIntoDrawer(chip) {
+                const body = document.querySelector('.pe-drawer__body');
+                if (!body || !chip) return;
+                const delta = PrintableEditorWires.drawerScrollDelta(
+                    body.getBoundingClientRect(), chip.getBoundingClientRect()
+                );
+                if (delta) body.scrollTop += delta;
+            },
+
             refreshWires() {
                 const wires = [];
                 const main = document.querySelector('.pe-main');
@@ -1041,20 +1105,17 @@
                 const node = this.selectedNode;
                 const prev = this._wireKeys || {};
                 const nextKeys = {};
+                const repeatSource = this.repeatContext && this.repeatContext.repeat
+                    ? this.repeatContext.repeat.source : '';
                 if (main && node && node.bind && !this.dragWire) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
-                        let key;
-                        if (b.scope === 'asset') key = this.assetChipKey(b.assetId);
-                        else if (b.scope === 'item') key = this.chipKey('item', this.repeatContext ? this.repeatContext.repeat.source : '', b.field);
-                        else if (b.source === 'sunday' && global.ScripturePassage && global.ScripturePassage.isScriptureField(b.field)) {
-                            key = this.chipKey('global', b.source, b.field + (b.reading === 'passage' ? '#passage' : '#citation'));
-                        }
-                        else key = this.chipKey('global', b.source, b.field);
-                        const chip = document.querySelector('[data-chip="' + key + '"]');
+                        const key = PrintableEditorWires.wireKey(b, repeatSource);
+                        const chip = this.laidOutChip(key);
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!chip || !el) return;
                         if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
+                        this.scrollChipIntoDrawer(chip);
                         const a = this.pointOf(el);
                         const c = this.pointOf(chip);
                         const enter = !prev[key];
@@ -1354,7 +1415,77 @@
             },
 
             scriptureChipKey(ref, mode) {
-                return this.chipKey('global', 'sunday', ref.key + (mode === 'passage' ? '#passage' : '#citation'));
+                return PrintableEditorWires.wireKey({
+                    scope: 'global', source: 'sunday', field: ref.key,
+                    reading: mode === 'passage' ? 'passage' : '',
+                }, '');
+            },
+
+            // The chips the selection is actually wired to. They sit at the
+            // top of the drawer so the connector has a chip on screen even
+            // when that field's catalog card is hidden.
+            get connectedChips() {
+                const node = this.selectedNode;
+                if (!node || !node.bind) return [];
+                const repeatSource = this.repeatContext && this.repeatContext.repeat
+                    ? this.repeatContext.repeat.source : '';
+                return Object.keys(node.bind).map(prop => {
+                    const b = node.bind[prop];
+                    return {
+                        prop: prop,
+                        key: PrintableEditorWires.wireKey(b, repeatSource),
+                        label: this.connectedChipLabel(b),
+                        kind: this.connectedChipKind(b),
+                        bind: b,
+                    };
+                });
+            },
+
+            connectedChipLabel(b) {
+                if (!b) return '';
+                if (b.scope === 'asset') return 'Brand asset';
+                const Passage = global.ScripturePassage;
+                if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
+                    const name = SCRIPTURE_LABELS[b.field] || b.field;
+                    return name + (b.reading === 'passage' ? ' · Words' : ' · Reference');
+                }
+                const src = b.source ? Data.sourceByKey(b.source) : null;
+                const field = src && (src.fields || []).find(f => f.key === b.field);
+                if (b.scope === 'item') return (field && field.label) || b.field || 'This row';
+                const sourceLabel = (src && src.label) || b.source || '';
+                const fieldLabel = (field && field.label) || b.field || '';
+                return sourceLabel && fieldLabel ? sourceLabel + ' · ' + fieldLabel : (fieldLabel || sourceLabel);
+            },
+
+            connectedChipKind(b) {
+                if (!b) return 'text';
+                if (b.scope === 'asset') return 'image';
+                if (b.source === 'event_field') {
+                    const input = (this.eventInputs || []).find(i => i.id === b.field);
+                    return (input && input.kind) || 'text';
+                }
+                const src = b.source ? Data.sourceByKey(b.source) : null;
+                const field = src && (src.fields || []).find(f => f.key === b.field);
+                return (field && field.kind) || 'text';
+            },
+
+            onConnectedChipDragStart(e, chip) {
+                const b = chip && chip.bind;
+                if (!b) return;
+                const Passage = global.ScripturePassage;
+                if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
+                    this.onScriptureChipDragStart(e, { key: b.field, label: chip.label }, b.reading === 'passage' ? 'passage' : 'citation');
+                    return;
+                }
+                if (b.scope === 'asset') return;
+                const repeatSource = this.repeatContext && this.repeatContext.repeat
+                    ? this.repeatContext.repeat.source : '';
+                const source = b.scope === 'item'
+                    ? { key: repeatSource || b.source || '' }
+                    : (Data.sourceByKey(b.source) || { key: b.source });
+                this.onChipDragStart(e, b.scope === 'item' ? 'item' : 'global', source, {
+                    key: b.field, kind: chip.kind || 'text', label: chip.label,
+                });
             },
 
             // ── Filled on the event ──────────────────────────────────────

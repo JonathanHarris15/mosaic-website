@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 
 const Link = require('../public/printable-link-core.js');
 const Typed = require('../public/sunday-typed-core.js');
@@ -69,4 +71,15 @@ test('saving kids and prayer leaves announcements on the Sunday', () => {
     assert.deepEqual(content.mosaicKids.questions, ['Who sowed?', 'What grew?']);
     assert.equal(content.announcements[0].title, 'Potluck');
     assert.equal(content.announcements[0].content, 'After the service');
+});
+
+test('a printable is linked from the recurring event and from a Sunday Files tab', () => {
+    const read = name => fs.readFileSync(path.join(__dirname, '../public', name), 'utf8');
+    const recurring = read('recurring-events.html');
+    const sunday = read('service-builder.html');
+    assert.match(recurring, /tab === 'printables'/);
+    assert.match(recurring, /printable-store\.js/);
+    assert.match(recurring, /Link a printable/);
+    assert.match(sunday, /Link a printable/);
+    assert.doesNotMatch(sunday, /Link one from the Sunday Service event page/);
 });
