@@ -547,11 +547,25 @@
                     </template>
                 </section>
 
-                <section class="pe-drawer__section pe-drawer__cta" x-show="canStartIteration">
-                    <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startIteration()">
-                        <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Make this element iterated</span>
-                    </button>
-                    <p class="pe-hint">This box will be drawn once per row of a list. The query builder opens next — who is in the list, and which filters you may use.</p>
+                <section class="pe-drawer__section pe-drawer__cta" x-show="showRepeatOffer" aria-label="Repeat a box">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">repeat</span>Repeat a box</h3>
+                    <template x-if="canStartIteration">
+                        <div>
+                            <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startIteration()">
+                                <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Make this element iterated</span>
+                            </button>
+                            <p class="pe-hint">This box is drawn once per row. Pick a list below and the query builder opens with its filters.</p>
+                        </div>
+                    </template>
+                    <p class="pe-hint" x-show="!canStartIteration">Select the box that should repeat. A text takes one field from This Sunday. The query builder opens once the box is repeating.</p>
+                    <div class="pe-quick" role="group" aria-label="Lists to repeat">
+                        <template x-for="list in sundayQuickLists" :key="'quick-' + list.key">
+                            <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="startQuickList(list.key)">
+                                <span class="m-btn__label" x-text="list.label"></span>
+                            </button>
+                        </template>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startIteration()">All lists…</button>
+                    </div>
                 </section>
 
                 <section class="pe-drawer__section pe-drawer__cta" x-show="canStartSubIteration">
@@ -698,14 +712,76 @@
                     </template>
                 </section>
 
+                <section class="pe-drawer__section" x-show="showScalarInserts" aria-label="This Sunday">
+                    <article class="pe-typecard pe-sunday">
+                        <div class="pe-typecard__head">
+                            <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                            <strong>This Sunday</strong>
+                        </div>
+                        <p class="pe-hint" x-show="selectedKind === 'text' || selectedKind === 'image'">Drag a field onto this element. It reads the Sunday in the header.</p>
+                        <p class="pe-hint" x-show="selectedKind === 'box'">Drag a field onto a text inside this box. A hymn name, the theme, and who is leading are here.</p>
+                        <p class="pe-hint" x-show="!selectedKind">Select a text, then drag a field onto it.</p>
+                        <div class="pe-sun__group">
+                            <p class="pe-sun__label">Service</p>
+                            <div class="pe-chips">
+                                <template x-for="f in sundayServiceChips" :key="'sun-' + f.key">
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="chipKey('global', 'sunday', f.key)"
+                                          :title="f.value || f.label"
+                                          @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
+                                        <span class="pe-chip__name" x-text="f.label"></span>
+                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="pe-sun__group">
+                            <p class="pe-sun__label">Hymns</p>
+                            <div class="pe-chips">
+                                <template x-for="f in sundayHymnChips" :key="'hymn-' + f.key">
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="chipKey('global', 'sunday', f.key)"
+                                          :title="f.value || f.label"
+                                          @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" aria-hidden="true">music_note</span>
+                                        <span class="pe-chip__name" x-text="f.label"></span>
+                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+                        <template x-for="group in sundayTypedGroups" :key="'typed-group-' + group.name">
+                            <div class="pe-sun__group">
+                                <p class="pe-sun__label" x-text="group.name"></p>
+                                <p class="pe-hint" x-show="group.name === 'Prayer'">Typed on the Sunday's Files tab for this date.</p>
+                                <div class="pe-chips">
+                                    <template x-for="f in group.fields" :key="'typed-' + f.key">
+                                        <span class="pe-chip" draggable="true" tabindex="0"
+                                              :data-chip="chipKey('global', 'sunday_typed', f.key)"
+                                              :title="f.value || f.label"
+                                              @dragstart="onSundayChipDragStart($event, 'sunday_typed', f)" @dragend="onChipDragEnd()">
+                                            <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
+                                            <span class="pe-chip__name" x-text="f.label"></span>
+                                            <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </article>
+                </section>
+
                 <section class="pe-drawer__section pe-scalars" x-show="showScalarInserts" aria-label="Single values for the page">
                     <div class="pe-scalars-divider">Single values</div>
                     <div class="pe-typecards">
-                        <article class="pe-typecard">
-                            <div class="pe-typecard__head">
+                        <details class="pe-fold">
+                            <summary class="pe-typecard__head">
                                 <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
                                 <strong>Scripture references</strong>
-                            </div>
+                                <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="pe-fold__body">
                             <p class="pe-hint">This Sunday's references. Reference is the citation. Words are the verses, styled, with the citation line and the short copyright.</p>
                             <template x-for="ref in scriptureRefs" :key="'scr-' + ref.key">
                                 <div class="pe-scripture-row">
@@ -725,7 +801,8 @@
                                     </span>
                                 </div>
                             </template>
-                        </article>
+                            </div>
+                        </details>
                         <article class="pe-typecard">
                             <div class="pe-typecard__head">
                                 <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
@@ -786,6 +863,13 @@
                                 </div>
                             </template>
                         </article>
+                        <details class="pe-fold">
+                            <summary class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+                                <strong>Date, page, and files</strong>
+                                <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="pe-fold__body pe-typecards">
                         <article class="pe-typecard">
                             <div class="pe-typecard__head">
                                 <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
@@ -867,6 +951,8 @@
                                 </div>
                             </template>
                         </article>
+                            </div>
+                        </details>
                     </div>
                 </section>
 
@@ -1351,12 +1437,28 @@
         .pe-src--pick:hover { border-color: var(--primary); background: var(--surface-container); }
         .pe-src--pick > .material-symbols-outlined { color: var(--primary); }
         .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
-        .pe-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 6px; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container-lowest); font: 500 12px var(--font-sans); color: var(--on-surface); cursor: grab; user-select: none; }
+        .pe-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 8px 4px 6px; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container-lowest); font: 500 12px var(--font-sans); color: var(--on-surface); cursor: grab; user-select: none; }
         .pe-chip:hover { border-color: var(--tertiary); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
         .pe-chip:active { cursor: grabbing; }
         .pe-chip .material-symbols-outlined { font-size: 15px; color: var(--tertiary); }
         .pe-chip--land { border-color: var(--tertiary); }
+        .pe-chip__name { flex: 0 0 auto; white-space: nowrap; }
+        .pe-chip__val { flex: 1 1 auto; min-width: 0; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--on-surface-variant); }
         .pe-chip--inert { cursor: default; opacity: .7; }
+        .pe-sun__group { margin-top: 8px; }
+        .pe-sun__label { margin: 0 0 4px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .pe-fold {
+            padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container-lowest);
+        }
+        .pe-fold > summary { cursor: pointer; list-style: none; margin-bottom: 0; }
+        .pe-fold[open] > summary { margin-bottom: 5px; }
+        .pe-fold > summary::-webkit-details-marker { display: none; }
+        .pe-fold > summary .pe-src__chev { margin-left: auto; transition: transform var(--duration) var(--ease-standard); }
+        .pe-fold[open] > summary .pe-src__chev { transform: rotate(180deg); }
+        .pe-fold > summary:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .pe-fold__body { margin-top: 6px; }
         .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
         .pe-scalars-divider {
             margin: 8px 0 6px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase;

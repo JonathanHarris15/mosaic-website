@@ -150,6 +150,47 @@
         return 0;
     }
 
+    // Lists a Sunday guide repeats, offered before the full query builder.
+    // Picking one iterates the selected box and opens the builder on it.
+    const SUNDAY_QUICK_LISTS = [
+        { key: 'sunday_announcements', label: 'Announcements' },
+        { key: 'sunday_hymns', label: 'Hymn pages' },
+        { key: 'sunday_rows', label: 'Order of service' },
+        { key: 'sunday_kids_questions', label: 'Kids questions' },
+        { key: 'sundays', label: 'Sundays' },
+    ];
+
+    // What "This Sunday" shows as chips. Scripture stays on its own card.
+    // Extra date formats stay off — longDate is the one the guide prints.
+    // `fillFields` is the typed-on-the-Sunday set (prayer, Mosaic Kids).
+    function sundayDrawerFields(Data, Passage, fillFields) {
+        const scripture = (Passage && Passage.FIELDS) || [];
+        const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
+        const skip = { date: true, shortDate: true, dateShort: true };
+        const shortLabel = { longDate: 'Date' };
+        const src = Data && Data.sourceByKey ? Data.sourceByKey('sunday') : null;
+        const service = [];
+        const hymns = [];
+        ((src && src.fields) || []).forEach(f => {
+            if (!f || scripture.indexOf(f.key) !== -1 || skip[f.key]) return;
+            const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
+            if (hymnSlots.indexOf(f.key) !== -1) hymns.push(chip);
+            else service.push(chip);
+        });
+        const typedSkip = { announcements: true, announcementCount: true };
+        const typed = (fillFields || []).filter(f => f && !typedSkip[f.key]);
+        return { service: service, hymns: hymns, typed: typed };
+    }
+
+    function chipPreview(kind, raw) {
+        if (raw == null || raw === '') return '';
+        if (kind === 'image') return 'Picture set';
+        if (typeof raw === 'object') return '';
+        const s = String(raw).replace(/\s+/g, ' ').trim();
+        if (!s) return '';
+        return s.length > 48 ? s.slice(0, 47) + '…' : s;
+    }
+
     const PrintableEditorWires = {
         elementOnCanvas(elRect, viewRect) {
             if (!elRect || !viewRect) return false;
@@ -164,6 +205,9 @@
         groupQueryLists: groupQueryLists,
         previewName: previewName,
         syncWirePaths: syncWirePaths,
+        SUNDAY_QUICK_LISTS: SUNDAY_QUICK_LISTS,
+        sundayDrawerFields: sundayDrawerFields,
+        chipPreview: chipPreview,
     };
     global.PrintableEditorWires = PrintableEditorWires;
 
@@ -678,6 +722,11 @@
 
             // A box with no Repeat of its own: the drawer offers one
             // button, not the old list of sources.
+            get showRepeatOffer() {
+                if (!this.canEdit || this.data.picking || this.showQueryBuilder || this.canStartSubIteration) return false;
+                return true;
+            },
+
             get canStartIteration() {
                 const n = this.selectedNode;
                 if (!n || Core.kindOf(n) !== 'box' || n.repeat || this.data.picking) return false;
@@ -1143,6 +1192,19 @@
                 this.makeIterated();
             },
 
+            // A Sunday list, without opening the whole catalog first.
+            // The query builder then holds the filters for that list.
+            startQuickList(key) {
+                const src = Data.sourceByKey(key);
+                const node = this.selectedNode;
+                if (!src || !node || Core.kindOf(node) !== 'box') {
+                    this.flash('Select the box that should repeat. Right-click the words and choose Wrap in a box.');
+                    return;
+                }
+                if (!node.repeat) this.makeIterated();
+                this.chooseList(src);
+            },
+
             startSubIteration() {
                 this.makeIterated();
             },
@@ -1372,19 +1434,75 @@
 
             // ── Scripture references (this Sunday, as chips) ─────────────
 
+            resolvedSundayRow(sourceKey) {
+                if (!ui.bundle || !Data) return {};
+                try {
+                    const res = Data.resolve(sourceKey, { when: { mode: 'this' } }, ui.bundle, {
+                        today: this.viewDate,
+                        level: this.permissionLevel || 'editor',
+                    });
+                    return (res.rows && res.rows[0]) || {};
+                } catch (e) {
+                    return {};
+                }
+            },
+
+            sundayDrawer() {
+                const Link = linkFields();
+                const fill = (Link && Link.SUNDAY_FILL)
+                    || ((global.SundayTypedCore && global.SundayTypedCore.FIELDS) || []);
+                return PrintableEditorWires.sundayDrawerFields(Data, global.ScripturePassage, fill);
+            },
+
+            sundayChips(fields, row) {
+                return (fields || []).map(f => ({
+                    key: f.key,
+                    label: f.label,
+                    kind: f.kind,
+                    value: PrintableEditorWires.chipPreview(f.kind, row && row[f.key]),
+                }));
+            },
+
+            get sundayServiceChips() {
+                return this.sundayChips(this.sundayDrawer().service, this.resolvedSundayRow('sunday'));
+            },
+
+            get sundayHymnChips() {
+                return this.sundayChips(this.sundayDrawer().hymns, this.resolvedSundayRow('sunday'));
+            },
+
+            get sundayTypedGroups() {
+                const row = this.resolvedSundayRow('sunday_typed');
+                const groups = [];
+                const byName = {};
+                this.sundayDrawer().typed.forEach(f => {
+                    const name = f.group || 'Filled on the Sunday';
+                    if (!byName[name]) {
+                        byName[name] = { name: name, fields: [] };
+                        groups.push(byName[name]);
+                    }
+                    byName[name].fields.push(this.sundayChips([f], row)[0]);
+                });
+                return groups;
+            },
+
+            get sundayQuickLists() {
+                return PrintableEditorWires.SUNDAY_QUICK_LISTS.filter(item => {
+                    const src = Data.sourceByKey(item.key);
+                    return src && (!src.minLevel || Data.mayRead(this.permissionLevel, src.minLevel));
+                });
+            },
+
+            onSundayChipDragStart(e, sourceKey, field) {
+                const src = Data.sourceByKey(sourceKey);
+                if (!src || !field) return;
+                this.onChipDragStart(e, 'global', src, field);
+            },
+
             get scriptureRefs() {
                 const Passage = global.ScripturePassage;
                 if (!Passage) return [];
-                let row = {};
-                if (ui.bundle && Data) {
-                    try {
-                        const res = Data.resolve('sunday', { when: { mode: 'this' } }, ui.bundle, {
-                            today: this.viewDate,
-                            level: this.permissionLevel || 'editor',
-                        });
-                        row = (res.rows && res.rows[0]) || {};
-                    } catch (e) { row = {}; }
-                }
+                const row = this.resolvedSundayRow('sunday');
                 return Passage.FIELDS.map(key => ({
                     key: key,
                     label: SCRIPTURE_LABELS[key] || key,

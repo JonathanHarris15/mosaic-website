@@ -140,3 +140,36 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.match(js, /syncWirePaths/, 'redrawing does not throw the path away');
     assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });
+
+test('This Sunday and Repeat a box are in the drawer, and scripture is folded', () => {
+    const Data = require('../public/printable-data-core.js');
+    const Link = require('../public/printable-link-core.js');
+    require('../public/scripture-passage.js');
+    const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
+    const drawer = Wires.sundayDrawerFields(Data, global.ScripturePassage, Link.SUNDAY_FILL);
+    assert.ok(drawer.hymns.some(f => f.key === 'hymn2'), 'a hymn name is a Sunday chip');
+    assert.equal(drawer.service.find(f => f.key === 'longDate').label, 'Date');
+    assert.ok(drawer.service.some(f => f.key === 'theme'));
+    assert.ok(drawer.service.some(f => f.key === 'preacher'));
+    assert.ok(!drawer.service.some(f => f.key === 'keyVerse'), 'scripture stays on its own card');
+    assert.ok(!drawer.service.some(f => f.key === 'sermon'));
+    assert.ok(!drawer.hymns.some(f => f.key === 'date'));
+    assert.ok(drawer.typed.some(f => f.key === 'prayerNation'));
+    assert.ok(drawer.typed.some(f => f.key === 'kidsLessonTitle'));
+    assert.ok(!drawer.typed.some(f => f.key === 'announcements'));
+    assert.deepEqual(Wires.SUNDAY_QUICK_LISTS.map(x => x.key), [
+        'sunday_announcements', 'sunday_hymns', 'sunday_rows', 'sunday_kids_questions', 'sundays',
+    ]);
+    assert.equal(Wires.chipPreview('text', 'How Rich a Treasure We Possess'), 'How Rich a Treasure We Possess');
+    assert.equal(Wires.chipPreview('image', 'https://example.test/map.png'), 'Picture set');
+    assert.match(html, /aria-label="This Sunday"/);
+    assert.match(html, /sundayHymnChips/);
+    assert.match(html, /onSundayChipDragStart\(\$event, 'sunday', f\)/);
+    assert.match(html, /aria-label="Repeat a box"/);
+    assert.match(html, /startQuickList\(list\.key\)/);
+    assert.match(html, /All lists…/);
+    assert.match(html, /<details class="pe-fold">/);
+    assert.match(html, /Date, page, and files/);
+    assert.match(js, /get showRepeatOffer\(/);
+    assert.match(js, /get showCatalog\(\)[\s\S]*return false/);
+});
