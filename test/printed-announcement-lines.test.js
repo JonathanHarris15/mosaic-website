@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 
 const Lines = require('../public/printed-announcement-lines.js');
 
@@ -245,4 +247,67 @@ test('the line is the title and the prose, and the Sunday list is not written ba
         prose: 'Meets in the hall after the service.',
     }]);
     assert.deepEqual(paired[0].dates, ['2026-10-21']);
+});
+
+test('the Sunday tab lists every public event the guide prints, and links to where the words live', () => {
+    const printed = {
+        id: 'note',
+        title: 'Come',
+        prose: 'Bring a chair.',
+        way: 'printed',
+        weeks: 1,
+        order: 0,
+    };
+    const events = [
+        {
+            id: 'class',
+            seriesId: 'class',
+            name: 'Wednesday Class',
+            visibility: 'public',
+            rule: { freq: 'weekly', weekday: 3, startDate: '2026-01-07', time: '19:00' },
+            startTime: '19:00',
+            stored: [],
+            announcements: [Object.assign({}, printed, { id: 'class-note', title: 'Class' })],
+        },
+        {
+            id: 'picnic-id',
+            name: 'Church Picnic',
+            visibility: 'public',
+            startTime: '11:00',
+            occurrence: { date: '2026-10-18' },
+            announcements: [Object.assign({}, printed, { id: 'picnic-note', title: 'Picnic' })],
+        },
+        {
+            id: 'sunday_service',
+            seriesId: 'sunday_service',
+            name: 'Sunday Service',
+            visibility: 'member',
+            rule: { freq: 'weekly', weekday: 0, startDate: '2023-01-01', time: '10:00' },
+            startTime: '10:00',
+            stored: [],
+            announcements: [Object.assign({}, printed, { id: 'sunday-note', title: 'From Sunday' })],
+        },
+        {
+            id: 'elders',
+            seriesId: 'elders',
+            name: 'Elders',
+            visibility: 'elder',
+            occurrence: { date: '2026-10-21' },
+            announcements: [Object.assign({}, printed, { id: 'elder-note', title: 'Elders only' })],
+        },
+    ];
+    const rows = Lines.sourcesForSunday('2026-10-18', events);
+    assert.deepEqual(rows.map(row => row.title), ['From Sunday', 'Picnic', 'Class']);
+    assert.equal(rows[0].href, 'recurring-events.html?series=sunday_service&tab=announcements');
+    assert.equal(rows[1].href, 'calendar-event.html?id=picnic-id&tab=announcements');
+    assert.equal(rows[1].eventName, 'Church Picnic');
+    assert.equal(rows[2].href, 'recurring-events.html?series=class&tab=announcements');
+    assert.ok(!rows.some(row => row.title === 'Elders only'));
+});
+
+test('the Sunday page has an Announcements tab for that gathered list', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../public/service-builder.html'), 'utf8');
+    assert.match(html, /key: 'announcements', label: 'Announcements'/);
+    assert.match(html, /From events/);
+    assert.match(html, /sourcesForSunday|printedSources/);
 });

@@ -206,6 +206,10 @@
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
+                const asked = new URLSearchParams(window.location.search).get('tab');
+                if (!cfg.filesOnly && !cfg.rolesOnly && asked === 'announcements') {
+                    this.tab = 'announcements';
+                }
                 await this.resolveViewer();
                 await this.load();
                 // After the page, never before it. A picker cannot be opened

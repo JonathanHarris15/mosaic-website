@@ -125,14 +125,21 @@
         }
 
         /* ── The tab strip on a phone ─────────────────────────────────────────
-           Two tabs on 390px, and "Order of Service" is the long one. Left to
-           itself the pair sits at its natural width against the left edge, which
-           reads as one tab and a spare rather than a choice between two. So they
-           split the width evenly and the glyphs go: the labels already say what
-           these are, and the icons are what pushes "Order of Service" onto a
-           second line. */
+           Four tabs on 390px, and "Order of Service" is the long one. Left to
+           themselves they sit at their natural width against the left edge,
+           which reads as one tab and a spare. So they split the width evenly,
+           the glyphs go, and a label may wrap to a second line. */
         body.shell-mobile #service-tabs { gap: 0; }
-        body.shell-mobile #service-tabs button { flex: 1 1 0; padding-left: 0; padding-right: 0; justify-content: center; }
+        body.shell-mobile #service-tabs button {
+            flex: 1 1 0;
+            padding-left: 2px;
+            padding-right: 2px;
+            justify-content: center;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.15;
+            white-space: normal;
+        }
         body.shell-mobile #service-tabs .material-symbols-outlined { display: none; }
     </style>
     <!-- Firebase SDKs -->
@@ -629,18 +636,21 @@
             </div>
         </div>
 
-        <!-- ── Order of Service, Roles, Files ─────────────────────────────────
-             Three ways into the same Sunday, under the same header (MS-16).
+        <!-- ── Order of Service, Roles, Files, Announcements ──────────────────
+             Four ways into the same Sunday, under the same header (MS-16).
              The card above stays put: the date, the theme, and who is leading,
              preaching and playing. Roles is the welcome team and the sound
              desk. Files is the Printables and the snapshots filed on this date.
+             Announcements is what this Sunday's guide hands out: words typed
+             for this date, and printed announcements from every public event.
 
              Only an editor gets the strip. For everyone else there is one tab. -->
         <div id="service-tabs" x-show="canEdit" class="flex flex-wrap items-center gap-1 mb-6 border-b border-outline-variant">
             <template x-for="pane in [
                 { key: 'order', label: 'Order of Service', icon: 'list_alt' },
                 { key: 'roles', label: 'Roles', icon: 'groups' },
-                { key: 'files', label: 'Files', icon: 'attach_file' }
+                { key: 'files', label: 'Files', icon: 'attach_file' },
+                { key: 'announcements', label: 'Announcements', icon: 'campaign' }
             ]" :key="pane.key">
                 <button @click="openTab(pane.key)"
                         :class="tab === pane.key
@@ -1532,6 +1542,84 @@
                             </template>
                         </div>
                     </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Announcements for this Sunday's handed-out guide. Typed words are
+             saved on the Sunday. Printed words stay on the event that wrote
+             them — any public event, not only the Sunday Service — and this
+             list is the ones whose dates fall in this Sunday's window. -->
+        <template x-if="announcementsOpened && date">
+            <div x-show="tab === 'announcements'" class="max-w-[640px]">
+                <h3 class="font-display text-[18px] text-primary">Announcements</h3>
+                <p class="text-[12.5px] text-on-surface-variant mb-sm">
+                    What this Sunday's guide hands out. Words you type here belong to this Sunday. A printed announcement stays on its event, and it appears here when that event falls in this Sunday's window.
+                </p>
+
+                <div x-show="announcementsLoading" class="m-loading">
+                    <span class="material-symbols-outlined m-spinner">progress_activity</span>
+                </div>
+
+                <div x-show="announcementsError && !announcementsLoading" class="m-notice m-notice--error mb-sm">
+                    <p x-text="announcementsError"></p>
+                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="announcementsSeen = false; openTab('announcements')">Try again</button>
+                </div>
+
+                <div x-show="!announcementsLoading && !announcementsError">
+                    <h4 class="font-label-md text-[12px] uppercase tracking-wider text-secondary mb-sm">This Sunday</h4>
+                    <div x-show="!typedAnnouncements.length" class="m-empty mb-sm">
+                        <span class="material-symbols-outlined">campaign</span>
+                        <h3 class="font-display text-[18px] text-primary">Nothing typed for this Sunday.</h3>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="canEdit" @click="addTypedAnnouncement()">Add an announcement</button>
+                    </div>
+                    <template x-for="(item, index) in typedAnnouncements" :key="'typed-ann-' + index">
+                        <article class="m-card mb-sm">
+                            <template x-if="canEdit">
+                                <div>
+                                    <label class="m-field">
+                                        <span class="m-label">Title</span>
+                                        <input type="text" class="m-input" maxlength="120" x-model="item.title" />
+                                    </label>
+                                    <label class="m-field mt-sm">
+                                        <span class="m-label">Body</span>
+                                        <textarea class="m-input" rows="3" maxlength="2000" x-model="item.content"></textarea>
+                                    </label>
+                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm mt-sm" @click="removeTypedAnnouncement(index)">Remove</button>
+                                </div>
+                            </template>
+                            <template x-if="!canEdit">
+                                <div>
+                                    <h4 class="text-[16px] text-on-surface" x-text="item.title"></h4>
+                                    <p class="text-[14px] whitespace-pre-wrap mt-1" x-text="item.content"></p>
+                                </div>
+                            </template>
+                        </article>
+                    </template>
+                    <div class="flex flex-wrap gap-sm mb-md" x-show="canEdit">
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="typedAnnouncements.length" @click="addTypedAnnouncement()">Add an announcement</button>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="saveSundayAnnouncements()" :disabled="announcementsSaving">
+                            <span class="m-btn__label" x-text="announcementsSaving ? 'Saving…' : 'Save'"></span>
+                        </button>
+                    </div>
+                    <p class="text-[12.5px] text-on-surface-variant mb-md" x-show="announcementsStatus" x-text="announcementsStatus"></p>
+
+                    <h4 class="font-label-md text-[12px] uppercase tracking-wider text-secondary mb-sm">From events</h4>
+                    <div x-show="!printedSources.length" class="m-empty">
+                        <span class="material-symbols-outlined">event</span>
+                        <h3 class="font-display text-[18px] text-primary">No printed announcement falls on this Sunday.</h3>
+                        <p class="max-w-[46ch]">A public event's printed announcement shows up here when one of its dates is inside this Sunday's window.</p>
+                    </div>
+                    <template x-for="item in printedSources" :key="item.id">
+                        <article class="m-card mb-sm">
+                            <h4 class="text-[16px] text-on-surface" x-text="item.title"></h4>
+                            <p class="text-[14px] whitespace-pre-wrap mt-1" x-text="item.prose"></p>
+                            <p class="text-[12.5px] text-on-surface-variant mt-1" x-text="item.eventName"></p>
+                            <p class="mt-sm" x-show="item.href">
+                                <a class="m-btn m-btn--secondary m-btn--sm" :href="item.href">Edit on the event</a>
+                            </p>
+                        </article>
+                    </template>
                 </div>
             </div>
         </template>

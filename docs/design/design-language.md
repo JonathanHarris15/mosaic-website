@@ -186,3 +186,7 @@ Below the **Query** block in the data drawer, **single values** use stacked **`.
 The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The view-only page names the same date in the header. **Send snapshot to…** stays in the File menu, next to Print.
 
 On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, and citation-line checks.
+
+## Sunday announcements
+
+The Announcements tab on a Sunday (`service-builder.html`) is two lists. **This Sunday** is what an editor types for that date and saves on the Sunday. **From events** is every printed announcement the handed-out guide would include — any public event, and the Sunday Service — each card linking to the event where those words are edited. The printed lines are not copied onto the Sunday. Empty uses `.m-empty`. One card and many cards are the same `.m-card`. A failed read is `.m-notice.m-notice--error` with **Try again**.
