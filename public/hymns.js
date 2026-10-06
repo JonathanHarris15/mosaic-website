@@ -10,6 +10,7 @@ document.addEventListener('alpine:init', () => {
         allTags: [],
         searchQuery: '',
         selectedTags: [],
+        versionIndex: 0,
         hymn: null,
         missing: false,
         form: null,
@@ -72,7 +73,7 @@ document.addEventListener('alpine:init', () => {
                 DesktopHeaderLead.mount({
                     currentHref: 'hymns.html',
                     mode: this.view === 'list' ? 'drawer' : 'back',
-                    back: { href: 'hymns.html', label: 'Hymns' },
+                    back: { href: 'hymns.html', label: 'All hymns' },
                 });
             };
             this.$watch('view', syncDesktopLead);
@@ -156,6 +157,66 @@ document.addEventListener('alpine:init', () => {
             this.selectedTags = HymnsPage.chooseTag(this.selectedTags, tag);
         },
 
+        // How many hymns the list would show if this tag joined the filter.
+        // A tag already on shows the list as it stands, so the counts on the
+        // chosen tags agree with the number above the cards.
+        tagCount(tag) {
+            const tags = this.selectedTags.includes(tag)
+                ? this.selectedTags
+                : this.selectedTags.concat([tag]);
+            return this.hymns.filter((hymn) => HymnsPage.hymnMatches(hymn, this.searchQuery, tags)).length;
+        },
+
+        versionIndexOf(hymn) {
+            const versions = (hymn && hymn.versions) || [];
+            const starred = versions.findIndex((version) => version && version.default === true);
+            return starred >= 0 ? starred : 0;
+        },
+
+        get currentVersion() {
+            const versions = (this.hymn && this.hymn.versions) || [];
+            if (!versions.length) return null;
+            const index = this.versionIndex >= 0 && this.versionIndex < versions.length
+                ? this.versionIndex
+                : 0;
+            return versions[index];
+        },
+
+        pickVersion(index) {
+            this.versionIndex = index;
+        },
+
+        coverOf(hymn) {
+            const versions = (hymn && hymn.versions) || [];
+            const printing = versions.find((version) => version && version.default === true) || versions[0];
+            const pages = HymnsPage.sheetPages(printing);
+            return pages[0] || '';
+        },
+
+        creditOf(hymn) {
+            if (!hymn) return '';
+            const parts = [];
+            if (hymn.lyrics_writer) parts.push('Words — ' + hymn.lyrics_writer);
+            if (hymn.music_writer) parts.push('Music — ' + hymn.music_writer);
+            return parts.join(' · ');
+        },
+
+        pageCountLabel(version) {
+            const count = HymnsPage.sheetPages(version).length;
+            return count + (count === 1 ? ' page' : ' pages');
+        },
+
+        get emptyNote() {
+            if (this.selectedTags.length) {
+                return 'No hymn carries all of those tags. Take one away to widen the list.';
+            }
+            return 'No hymns match.';
+        },
+
+        get editLabel() {
+            return this.creating ? 'New hymn' : 'Editing';
+        },
+
         // ⚠ A CONFIRMATION IS NOT CONTENT. This used to be a bare grey line at
         // the top of `main`, above everything, and it never went away — so on
         // a phone "Attribution copied." sat under the shell's title looking
@@ -188,6 +249,7 @@ document.addEventListener('alpine:init', () => {
             this.hymn = hymn;
             this.missing = false;
             this.form = null;
+            this.versionIndex = this.versionIndexOf(hymn);
             this.view = 'hymn';
         },
 
@@ -292,6 +354,26 @@ document.addEventListener('alpine:init', () => {
                 url: null,
                 file: null,
             });
+        },
+
+        async addPageFile(vIndex, file) {
+            if (!file || !this.form || !this.form.versions[vIndex]) return;
+            this.addPage(vIndex);
+            const pIndex = this.form.versions[vIndex].pages.length - 1;
+            await this.handleFileChange({ target: { files: [file] } }, vIndex, pIndex);
+        },
+
+        async pickPageFile(event, vIndex) {
+            const file = event.target && event.target.files && event.target.files[0];
+            if (event.target) event.target.value = '';
+            if (!file) return;
+            await this.addPageFile(vIndex, file);
+        },
+
+        async dropPageFile(event, vIndex) {
+            const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+            if (!file) return;
+            await this.addPageFile(vIndex, file);
         },
 
         removePage(vIndex, pIndex) {

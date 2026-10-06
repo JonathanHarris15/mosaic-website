@@ -33,173 +33,433 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        .hymn-tag-filter { display: none; }
-        .hymn-list-shell {
+
+        /* The book fills the window. Each view is a pair of panes that scroll
+           on their own. Below 1024px the window scrolls instead, because a
+           side column that cannot stay in view is a second page. */
+        .hymn-stage {
+            flex: 1 1 auto;
+            min-height: 0;
             display: flex;
             flex-direction: column;
-            gap: var(--space-md);
-            width: 100%;
         }
-        .hymn-list-column {
+        .hymn-split {
+            flex: 1 1 auto;
+            min-height: 0;
             display: flex;
-            flex-direction: column;
-            gap: var(--space-md);
-            width: 100%;
+            align-items: stretch;
+        }
+        .hymn-rail,
+        .hymn-tag-cloud {
+            flex: 0 0 220px;
             min-width: 0;
-        }
-        .hymn-tag-card {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
-            padding: 16px;
-            background: var(--surface-container-lowest);
-            border: 1px solid var(--outline-variant);
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-xs);
+            gap: 2px;
+            padding: var(--space-md) var(--space-sm) var(--space-md) var(--space-margin);
         }
-        .hymn-tag-card__head {
+        .hymn-rail__head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 0.5rem;
-            padding: 0 0.25rem;
+            gap: var(--space-base);
+            min-height: 26px;
+            padding: 0 var(--space-xs) var(--space-base) var(--space-sm);
         }
-        .hymn-tag-card__title {
-            margin: 0;
-            font-family: var(--font-sans);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
+        .hymn-rail--facts {
+            flex-basis: 320px;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            border-left: 1px solid var(--outline-variant);
+            background: var(--surface-container-lowest);
+        }
+        .hymn-pane,
+        .hymn-sheets {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        .hymn-pane {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            padding: var(--space-md) var(--space-margin) var(--space-margin) var(--space-base);
+        }
+        .hymn-pane__bar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        .hymn-search { flex: 1 1 auto; max-width: 460px; }
+        .hymn-count {
+            font-size: 13px;
             color: var(--on-surface-variant);
+            font-variant-numeric: tabular-nums;
         }
-        .hymn-tag-card__clear {
+        .hymn-chosen {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-base);
+        }
+        .hymn-chosen__lead { font-size: 13px; color: var(--on-surface-variant); }
+
+        .hymn-tag-filter { display: none; }
+        .hymn-tag {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            height: 34px;
+            padding: 0 10px;
+            border: 0;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--on-surface);
+            font: 500 13.5px var(--font-sans);
+            text-align: left;
+            cursor: pointer;
+        }
+        .hymn-tag:hover { background: var(--surface-container); }
+        .hymn-tag.is-on { background: var(--surface-container-high); color: var(--primary); }
+        .hymn-tag.is-empty { color: var(--outline); }
+        .hymn-tag__box { font-size: 19px; color: var(--outline); }
+        .hymn-tag.is-on .hymn-tag__box {
+            color: var(--primary);
+            font-variation-settings: "FILL" 1;
+        }
+        .hymn-tag__name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .hymn-tag__n {
+            font-size: 12px;
+            opacity: .7;
+            font-variant-numeric: tabular-nums;
+        }
+        .hymn-tag:focus-visible,
+        .hymn-card:focus-visible,
+        .hymn-version-card:focus-visible,
+        .hymn-add-page:focus-within {
+            outline: 2px solid var(--tertiary);
+            outline-offset: 2px;
+        }
+
+        .hymn-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: var(--space-md) var(--space-sm);
+        }
+        .hymn-card {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+            padding: 0;
             border: 0;
             background: none;
-            padding: 0;
+            text-align: left;
             cursor: pointer;
             font-family: var(--font-sans);
+            color: inherit;
+        }
+        .hymn-card__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .hymn-card__name {
+            font-family: var(--font-serif);
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+            color: var(--on-surface);
+            text-wrap: pretty;
+        }
+        .hymn-card__sub {
+            font-size: 12px;
+            color: var(--on-surface-variant);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .hymn-sheet {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 8%;
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-sm);
+            aspect-ratio: 8.5 / 11;
+            padding: 14% 11% 12%;
+            overflow: hidden;
+        }
+        .hymn-card__sheet { gap: 8%; }
+        .hymn-sheet__title {
+            text-align: center;
+            font-family: var(--font-serif);
+            font-size: 11.5px;
+            line-height: 1.2;
+            color: var(--on-surface-variant);
+        }
+        .hymn-sheet__img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: var(--surface-container-lowest);
+        }
+        .hymn-staff {
+            flex: 1 1 auto;
+            min-height: 0;
+            background-image:
+                repeating-linear-gradient(to bottom, transparent 0 15px, var(--surface-container-lowest) 15px 30px),
+                repeating-linear-gradient(to bottom, transparent 0 2px, var(--outline-variant) 2px 3px);
+        }
+
+        .hymn-sheets {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: flex-start;
+            gap: 20px;
+            padding: var(--space-md) var(--space-margin);
+            background: var(--surface-container-low);
+        }
+        .hymn-sheets .m-empty { flex: 1 0 100%; }
+        .hymn-sheets--edit {
+            flex-direction: column;
+            flex-wrap: nowrap;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: var(--space-md);
+        }
+        .hymn-sheets--edit > .m-btn { align-self: flex-start; }
+        .hymn-page {
+            flex: 0 1 400px;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-base);
+            min-width: 0;
+        }
+        .hymn-page .hymn-sheet { padding: 9% 8%; gap: 5%; }
+        .hymn-page .hymn-sheet__title { font-size: 15px; }
+        .hymn-page__foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-base);
+            font-size: 12.5px;
+            color: var(--on-surface-variant);
+        }
+        .hymn-read__head { display: flex; flex-direction: column; gap: 6px; }
+        .hymn-name {
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: 28px;
+            font-weight: 600;
+            line-height: 1.15;
+            text-wrap: balance;
+        }
+        .hymn-credit {
+            margin: 0;
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: var(--on-surface-variant);
+        }
+        .hymn-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+        .hymn-versions { display: flex; flex-direction: column; gap: var(--space-base); }
+        .hymn-version-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius);
+            background: var(--surface-container-lowest);
+            text-align: left;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            color: inherit;
+        }
+        .hymn-version-card.is-on {
+            border-color: var(--primary);
+            background: var(--surface-container-low);
+        }
+        .hymn-version-card__main {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .hymn-version-card__name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--on-surface);
+        }
+        .hymn-version-card__meta { font-size: 12px; color: var(--on-surface-variant); }
+        .hymn-prints {
+            display: flex;
+            align-items: center;
+            gap: 4px;
             font-size: 12px;
             font-weight: 600;
             color: var(--primary);
+            white-space: nowrap;
         }
-        .hymn-tag-card__clear:hover { text-decoration: underline; }
-        .hymn-tag-card__list {
+        .hymn-prints .material-symbols-outlined {
+            font-size: 16px;
+            color: var(--gold);
+            font-variation-settings: "FILL" 1;
+        }
+        .hymn-attr { margin: 0; font-size: 13.5px; line-height: 1.5; }
+
+        .hymn-draft { display: flex; flex-direction: column; gap: var(--space-sm); }
+        .hymn-draft__head {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.375rem;
-        }
-        .hymn-tag-chip {
-            display: inline-flex;
             align-items: center;
-            width: auto;
-            max-width: 100%;
-            text-align: left;
-            padding: 0.35rem 0.7rem;
-            border-radius: var(--radius-full);
-            border: 1px solid var(--outline-variant);
-            background: var(--surface-container-low);
-            color: var(--on-surface);
-            font-family: var(--font-sans);
-            font-size: 13px;
-            font-weight: 500;
-            line-height: 1.3;
+            gap: var(--space-base);
+        }
+        .hymn-version-name { width: min(260px, 100%); flex: 0 1 260px; }
+        .hymn-draft__remove { margin-left: auto; }
+        .hymn-draft__pages { display: flex; flex-wrap: wrap; gap: 14px; }
+        .hymn-page--draft { flex: 0 0 170px; width: 170px; position: relative; }
+        .hymn-page--draft .hymn-sheet { padding: 12% 10%; gap: 6%; }
+        .hymn-page--draft .hymn-sheet__title { font-size: 10.5px; }
+        .hymn-page__tools {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            display: flex;
+            gap: 4px;
+        }
+        .hymn-page--draft .hymn-page__foot { justify-content: flex-start; }
+        .hymn-star { color: var(--outline); }
+        .hymn-star.is-on { color: var(--gold); }
+        .hymn-star.is-on .material-symbols-outlined { font-variation-settings: "FILL" 1; }
+        .hymn-add-page {
+            position: relative;
+            width: 170px;
+            aspect-ratio: 8.5 / 11;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border: 1px dashed var(--outline);
+            border-radius: var(--radius-sm);
+            background: var(--surface-container-lowest);
+            color: var(--on-surface-variant);
+            font: 600 12.5px var(--font-sans);
             cursor: pointer;
-            transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+            text-align: center;
         }
-        .hymn-tag-chip:hover { border-color: var(--primary); }
-        .hymn-tag-chip.is-on {
-            background: var(--primary);
-            color: var(--on-primary);
-            border-color: var(--primary);
+        .hymn-add-page__hint { font-weight: 400; font-size: 11.5px; }
+        .hymn-add-page__input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+            border: 0;
         }
-        @media (min-width: 768px) {
-            /* The hymn list keeps the page's centered column. Tags live
-               in the left gutter, offset to the right so they rest
-               against that column instead of sitting in the list. */
-            .hymn-list-shell--with-tags {
-                display: grid;
-                grid-template-columns: minmax(0, 1fr) minmax(0, 64rem) minmax(0, 1fr);
-                align-items: start;
-                column-gap: var(--space-md);
+        .hymn-contents { display: contents; }
+        .hymn-attribution { min-height: 72px; }
+        .hymn-delete { align-self: flex-start; }
+        @media (max-width: 767px) {
+            .hymn-pane > .hymn-chosen { display: none !important; }
+        }
+        html.shell-mobile .hymn-pane > .hymn-chosen { display: none !important; }
+
+        @media (max-width: 1023px) {
+            .hymn-book.m-page--tool {
+                height: auto;
+                min-height: 100vh;
+                min-height: 100dvh;
+                overflow: visible;
             }
-            .hymn-list-shell--with-tags .hymn-tag-cloud {
-                justify-self: end;
-                width: min(15rem, 100%);
+            .hymn-split--read,
+            .hymn-split--edit { flex-direction: column; overflow: visible; }
+            .hymn-split--read .hymn-rail,
+            .hymn-split--edit .hymn-rail,
+            .hymn-split--read .hymn-sheets,
+            .hymn-split--edit .hymn-sheets {
+                flex: none;
+                overflow: visible;
             }
-            .hymn-list-shell--with-tags .hymn-list-column {
-                grid-column: 2;
-            }
-            .hymn-tag-cloud {
-                position: sticky;
-                top: calc(64px + var(--space-md));
-                max-height: calc(100vh - 64px - var(--space-lg));
-            }
-            .hymn-tag-card { max-height: inherit; }
-            .hymn-tag-card__list {
-                overflow-y: auto;
-                padding-right: 2px;
-            }
-            .hymn-list-column {
-                max-width: 64rem;
-                margin-inline: auto;
-            }
-            .hymn-list-main {
-                display: flex;
-                flex-direction: column;
-                gap: var(--space-sm);
-            }
+            .hymn-rail--facts { border-left: 0; border-top: 1px solid var(--outline-variant); }
         }
         @media (max-width: 767px) {
             .hymn-tag-cloud { display: none !important; }
             .hymn-tag-filter { display: flex; flex-direction: column; gap: 0.5rem; }
+            .hymn-pane { padding: var(--space-sm); }
+            .hymn-sheets { padding: var(--space-sm); }
+            .hymn-page:not(.hymn-page--draft) { flex-basis: 100%; }
+            /* The sheet is already the page. A second frame around it is what
+               used to steal the phone's width from the staves (MS-674). */
+            .hymn-sheet { border: 0; padding: 0; }
         }
         html.shell-mobile .hymn-tag-cloud { display: none !important; }
         html.shell-mobile .hymn-tag-filter { display: flex; flex-direction: column; gap: 0.5rem; }
-
-        /* ---- The sheet, on a phone ------------------------------------------
-           A hymn IS its sheet music, and on a phone every box it sits inside is
-           charged to the width of the staves. The page gutter, the version
-           card's padding and the frame around the page were 32 + 24 + 12 a side
-           — 140px of the 390 a phone has, so the sheet drew at 250 and the
-           words under the notes could not be read (MS-674).
-
-           The card keeps its padding, because a card with none stops reading as
-           one. The frame around the page does not: the sheet is already a white
-           rectangle with its own hairline, so that frame was drawing a second
-           border a hair outside the first. It goes, and the sheet gets the
-           width back. */
-        @media (max-width: 767px) {
-            .hymn-version { padding: var(--space-sm); }
-            .hymn-sheet { border: 0; padding: 0; }
-        }
-        html.shell-mobile main { padding-left: 1rem; padding-right: 1rem; }
-        html.shell-mobile .hymn-version { padding: var(--space-sm); }
         html.shell-mobile .hymn-sheet { border: 0; padding: 0; }
     </style>
 </head>
-<body class="m-page"
+<body class="m-page m-page--tool hymn-book"
       x-data="hymnsPage()" x-cloak>
-    <header class="m-header m-header--sticky">
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a x-show="view === 'list'" :href="homeHref" class="m-back">
-                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
                     <span class="m-back__label">Home</span>
                 </a>
                 <button type="button" x-show="view !== 'list'" @click="leaveView()" class="m-back">
-                    <span class="material-symbols-outlined">chevron_left</span>
-                    <span class="m-back__label">Hymns</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                    <span class="m-back__label">All hymns</span>
                 </button>
                 <div class="m-header__titles">
-                    <h1 class="m-header__title" x-text="headerTitle"></h1>
+                    <h1 class="m-header__title">Hymns</h1>
                 </div>
             </div>
             <div class="m-header__actions">
                 <button type="button" x-show="canEdit && view === 'list'" @click="startCreate()"
                         class="m-btn m-btn--primary m-btn--sm">
-                    <span class="material-symbols-outlined">add</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
                     <span class="m-btn__label">Add hymn</span>
+                </button>
+                <button type="button" x-show="view === 'hymn' && hymn" @click="copyAttribution()"
+                        class="m-btn m-btn--secondary m-btn--sm">
+                    <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                    <span class="m-btn__label">Copy attribution</span>
+                </button>
+                <button type="button" x-show="canEdit && view === 'hymn'" @click="startEdit(hymn)"
+                        class="m-btn m-btn--primary m-btn--sm">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    <span class="m-btn__label">Edit</span>
+                </button>
+                <button type="button" x-show="view === 'form'" @click="cancelForm()"
+                        class="m-btn m-btn--secondary m-btn--sm" :disabled="isSubmitting" aria-label="Cancel">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    <span class="m-btn__label">Cancel</span>
+                </button>
+                <button type="submit" form="hymn-form" x-show="view === 'form'"
+                        class="m-btn m-btn--primary m-btn--sm" :disabled="isSubmitting" aria-label="Save">
+                    <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                    <span class="m-btn__label" x-text="isSubmitting ? 'Saving…' : 'Save'"></span>
                 </button>
             </div>
             <div class="m-header__rule"></div>
@@ -207,32 +467,49 @@
         </div>
     </header>
 
-    <main class="flex-grow w-full px-4 md:px-margin py-md flex flex-col gap-md">
-        <section x-show="view === 'list'" class="hymn-list-shell"
-                 :class="allTags.length ? 'hymn-list-shell--with-tags' : ''">
-            <aside class="hymn-tag-cloud" x-show="allTags.length" aria-label="Filter by tag">
-                <div class="hymn-tag-card">
-                    <div class="hymn-tag-card__head">
-                        <h2 class="hymn-tag-card__title">Tags</h2>
-                        <button type="button" class="hymn-tag-card__clear" x-show="selectedTags.length"
-                                @click="selectedTags = []">Clear</button>
-                    </div>
-                    <div class="hymn-tag-card__list">
-                        <template x-for="tag in allTags" :key="tag">
-                            <button type="button" @click="toggleTag(tag)"
-                                    class="hymn-tag-chip"
-                                    :class="selectedTags.includes(tag) ? 'is-on' : ''"
-                                    :aria-pressed="selectedTags.includes(tag)"
-                                    x-text="tag"></button>
-                        </template>
-                    </div>
+    <main class="hymn-stage">
+        <section x-show="view === 'list'" class="hymn-split" aria-label="Hymn book">
+            <aside class="hymn-tag-cloud" x-show="allTags.length" aria-label="Tags">
+                <div class="hymn-rail__head">
+                    <span class="m-label m-label--sm">Tags</span>
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="selectedTags.length"
+                            @click="selectedTags = []">Clear</button>
                 </div>
+                <template x-for="tag in allTags" :key="tag">
+                    <button type="button" @click="toggleTag(tag)"
+                            class="hymn-tag"
+                            :class="selectedTags.includes(tag) ? 'is-on' : (tagCount(tag) ? '' : 'is-empty')"
+                            role="checkbox"
+                            :aria-checked="selectedTags.includes(tag)">
+                        <span class="material-symbols-outlined hymn-tag__box" aria-hidden="true"
+                              x-text="selectedTags.includes(tag) ? 'check_box' : 'check_box_outline_blank'"></span>
+                        <span class="hymn-tag__name" x-text="tag"></span>
+                        <span class="hymn-tag__n" x-text="tagCount(tag)"></span>
+                    </button>
+                </template>
             </aside>
-            <div class="hymn-list-column">
-                <label class="m-search w-full">
-                    <span class="material-symbols-outlined">search</span>
-                    <input type="text" x-model="searchQuery" placeholder="Search by title, writer, attribution, or tag">
-                </label>
+            <div class="hymn-pane">
+                <div class="hymn-pane__bar">
+                    <label class="m-search hymn-search">
+                        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                        <input type="search" x-model="searchQuery" placeholder="Search the book"
+                               aria-label="Search the book" autocomplete="off">
+                    </label>
+                    <span class="hymn-count"
+                          x-text="filteredHymns.length + (filteredHymns.length === 1 ? ' hymn' : ' hymns')"></span>
+                </div>
+                <div class="hymn-chosen" x-show="selectedTags.length" x-cloak>
+                    <span class="hymn-chosen__lead">Tagged with all of</span>
+                    <template x-for="tag in selectedTags" :key="'desk-' + tag">
+                        <span class="m-token">
+                            <span x-text="tag"></span>
+                            <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                    @click="toggleTag(tag)" :aria-label="'Remove tag ' + tag">
+                                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                            </button>
+                        </span>
+                    </template>
+                </div>
                 <div class="hymn-tag-filter" x-show="allTags.length">
                     <div class="m-select-wrap">
                         <select class="m-select" aria-label="Filter by tag" @change="chooseTag($event)">
@@ -242,171 +519,226 @@
                             </template>
                         </select>
                     </div>
-                    <div class="flex flex-wrap gap-2" x-show="selectedTags.length">
+                    <div class="hymn-chosen" x-show="selectedTags.length">
                         <template x-for="tag in selectedTags" :key="tag">
-                            <button type="button" @click="toggleTag(tag)"
-                                    class="px-3 py-1.5 rounded-full border font-label-md text-label-md bg-primary text-on-primary border-primary"
-                                    :aria-label="'Remove tag ' + tag">
+                            <span class="m-token">
                                 <span x-text="tag"></span>
-                                <span aria-hidden="true"> ×</span>
-                            </button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                        @click="toggleTag(tag)" :aria-label="'Remove tag ' + tag">
+                                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                </button>
+                            </span>
                         </template>
                     </div>
                 </div>
-                <div class="hymn-list-main">
-                    <p class="font-label-md text-label-md text-on-surface-variant"
-                       x-text="filteredHymns.length + (filteredHymns.length === 1 ? ' hymn' : ' hymns')"></p>
-                    <div class="flex flex-col gap-sm">
-                        <!-- listedHymn, not hymn: Alpine writes this.hymn onto a loop
-                             variable of that name, and the detail then renders blank. -->
-                        <template x-for="listedHymn in filteredHymns" :key="listedHymn.id">
-                            <button type="button" @click="showHymn(listedHymn)"
-                                    class="text-left bg-surface-container-lowest border border-outline-variant rounded-xl p-md hover:border-primary transition-colors">
-                                <span class="block font-headline-md text-headline-md text-on-surface" x-text="listedHymn.hymn_name"></span>
-                                <span class="block font-body-md text-body-md text-on-surface-variant mt-1"
-                                      x-text="[listedHymn.lyrics_writer, listedHymn.music_writer].filter(Boolean).join(' · ')"></span>
-                            </button>
-                        </template>
-                        <p x-show="filteredHymns.length === 0" class="font-body-md text-on-surface-variant">No hymns match.</p>
-                    </div>
+                <div class="m-empty" x-show="filteredHymns.length === 0">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <p x-text="emptyNote"></p>
+                </div>
+                <div class="hymn-grid">
+                    <!-- listedHymn, not hymn: Alpine writes this.hymn onto a loop
+                         variable of that name, and the detail then renders blank. -->
+                    <template x-for="listedHymn in filteredHymns" :key="listedHymn.id">
+                        <button type="button" @click="showHymn(listedHymn)" class="hymn-card">
+                            <span class="hymn-sheet hymn-card__sheet">
+                                <img x-show="coverOf(listedHymn)" :src="coverOf(listedHymn)" alt=""
+                                     width="850" height="1100" loading="lazy" class="hymn-sheet__img">
+                                <span x-show="!coverOf(listedHymn)" class="hymn-sheet__title" x-text="listedHymn.hymn_name"></span>
+                                <span x-show="!coverOf(listedHymn)" class="hymn-staff" aria-hidden="true"></span>
+                            </span>
+                            <span class="hymn-card__text">
+                                <span class="hymn-card__name" x-text="listedHymn.hymn_name"></span>
+                                <span class="hymn-card__sub" x-text="listedHymn.lyrics_writer"></span>
+                            </span>
+                        </button>
+                    </template>
                 </div>
             </div>
         </section>
 
-        <section x-show="view === 'hymn'" class="flex flex-col gap-md max-w-5xl mx-auto w-full">
-            <p x-show="missing" class="font-body-md">That hymn is not in the book.</p>
-            <template x-if="hymn">
-                <div class="flex flex-col gap-md">
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" @click="copyAttribution()" class="m-btn m-btn--secondary m-btn--sm">
-                            <span class="m-btn__label">Copy attribution</span>
-                        </button>
-                        <button type="button" x-show="canEdit" @click="startEdit(hymn)" class="m-btn m-btn--secondary m-btn--sm">
-                            <span class="m-btn__label">Edit</span>
-                        </button>
-                        <button type="button" x-show="canEdit" @click="deleteHymn()" class="m-btn m-btn--secondary m-btn--sm">
-                            <span class="m-btn__label">Delete</span>
-                        </button>
-                    </div>
-                    <p class="font-body-md text-on-surface-variant"
-                       x-text="[hymn.lyrics_writer ? 'Words: ' + hymn.lyrics_writer : '', hymn.music_writer ? 'Music: ' + hymn.music_writer : ''].filter(Boolean).join(' · ')"></p>
-                    <p class="font-body-md" x-show="hymn.attribution" x-text="hymn.attribution"></p>
-                    <template x-for="(version, vIndex) in (hymn.versions || [])" :key="vIndex">
-                        <article class="hymn-version bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="font-headline-md text-headline-md text-primary" x-text="version.name || 'Version'"></h2>
-                                <span x-show="prints(vIndex)" class="font-label-md text-label-md text-primary">This version prints</span>
-                                <button type="button" x-show="canEdit && !prints(vIndex)" @click="starVersion(vIndex)"
-                                        class="m-btn m-btn--secondary m-btn--sm">
-                                    <span class="m-btn__label">Print this version</span>
-                                </button>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-                                <template x-for="(pageUrl, pIndex) in pagesOf(version)" :key="pageUrl + pIndex">
-                                    <div class="hymn-sheet flex flex-col gap-sm border border-outline-variant rounded-lg p-sm">
-                                        <img :src="pageUrl" :alt="(version.name || 'Version') + ' page ' + (pIndex + 1)"
-                                             class="w-full object-contain bg-white border border-surface-variant" style="max-height: 70vh;">
-                                        <button type="button" class="m-btn m-btn--secondary m-btn--sm"
-                                                @click="downloadPage(pageUrl, version.name, pIndex + 1)">
-                                            <span class="m-btn__label">Download</span>
-                                        </button>
-                                    </div>
-                                </template>
-                            </div>
-                        </article>
-                    </template>
-                    <p x-show="!(hymn.versions || []).length" class="font-body-md text-on-surface-variant">This hymn has no versions yet.</p>
+        <section x-show="view === 'hymn'" class="hymn-split hymn-split--read" aria-label="Hymn">
+            <div class="hymn-sheets">
+                <div class="m-empty" x-show="missing">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <p>That hymn is not in the book.</p>
                 </div>
-            </template>
-        </section>
-
-        <template x-if="view === 'form' && form">
-            <form @submit.prevent="handleSubmit" class="flex flex-col gap-md max-w-5xl mx-auto w-full">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-label-md text-label-md text-on-surface-variant">Hymn name</span>
-                        <input type="text" x-model="form.hymn_name" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
-                    </label>
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-label-md text-label-md text-on-surface-variant">Music writer</span>
-                        <input type="text" x-model="form.music_writer" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
-                    </label>
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-label-md text-label-md text-on-surface-variant">Lyrics writer</span>
-                        <input type="text" x-model="form.lyrics_writer" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
-                    </label>
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-label-md text-label-md text-on-surface-variant">Attribution</span>
-                        <input type="text" x-model="form.attribution" required class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
-                    </label>
-                </div>
-                <div class="flex flex-col gap-xs">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Tags</span>
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="tag in form.tags" :key="tag">
-                            <button type="button" @click="removeTag(tag)" class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md">
-                                <span x-text="tag"></span> ×
-                            </button>
-                        </template>
-                    </div>
-                    <input type="text" x-model="tagInput" @input="updateSuggestions" @keydown.enter.prevent="addTag" @keydown.backspace="handleBackspace"
-                           placeholder="Type a tag and press enter" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg">
-                    <div x-show="suggestions.length" class="border border-outline-variant rounded-lg bg-surface-container-lowest">
-                        <template x-for="suggestion in suggestions" :key="suggestion">
-                            <button type="button" @click="addTagFromSuggestion(suggestion)" class="block w-full text-left px-4 py-2 hover:bg-surface-container-low" x-text="suggestion"></button>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-between gap-md">
-                    <h2 class="font-headline-md text-headline-md text-primary">Versions</h2>
-                    <button type="button" @click="addVersion()" class="m-btn m-btn--secondary m-btn--sm">
-                        <span class="m-btn__label">Add version</span>
-                    </button>
-                </div>
-                <template x-for="(version, vIndex) in form.versions" :key="version.id">
-                    <div class="border border-outline-variant rounded-xl p-md flex flex-col gap-md">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <input type="text" x-model="version.name" required placeholder="Version name"
-                                   class="flex-1 py-2 px-3 bg-surface-container-low border border-outline-variant rounded-lg">
-                            <span x-show="draftPrints(vIndex)" class="font-label-md text-primary">This version prints</span>
-                            <button type="button" x-show="!draftPrints(vIndex)" @click="starDraft(vIndex)" class="m-btn m-btn--secondary m-btn--sm">
-                                <span class="m-btn__label">Print this version</span>
-                            </button>
-                            <button type="button" @click="removeVersion(vIndex)" class="m-btn m-btn--secondary m-btn--sm">
-                                <span class="m-btn__label">Remove version</span>
-                            </button>
+                <template x-if="hymn">
+                    <div class="hymn-contents">
+                        <div class="m-empty" x-show="!(hymn.versions || []).length">
+                            <span class="material-symbols-outlined" aria-hidden="true">music_off</span>
+                            <p>This hymn has no versions yet.</p>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
-                            <template x-for="(page, pIndex) in version.pages" :key="page.id">
-                                <div class="border border-outline-variant rounded-lg p-sm flex flex-col gap-sm">
-                                    <div class="flex justify-between items-center">
-                                        <span class="font-label-md" x-text="'Page ' + (pIndex + 1)"></span>
-                                        <button type="button" @click="removePage(vIndex, pIndex)" class="m-btn m-btn--secondary m-btn--sm">
-                                            <span class="m-btn__label">Remove page</span>
-                                        </button>
-                                    </div>
-                                    <img x-show="page.url" :src="page.url" alt="" class="w-full object-contain bg-white max-h-80">
-                                    <button type="button" x-show="page.url" @click="openCropper(vIndex, pIndex)" class="m-btn m-btn--secondary m-btn--sm">
-                                        <span class="m-btn__label">Crop</span>
-                                    </button>
-                                    <input type="file" accept="image/*,.heic,.heif" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
+                        <template x-for="(pageUrl, pIndex) in pagesOf(currentVersion)" :key="pageUrl + pIndex">
+                            <div class="hymn-page">
+                                <div class="hymn-sheet">
+                                    <img :src="pageUrl" width="850" height="1100" loading="lazy" class="hymn-sheet__img"
+                                         :alt="(currentVersion.name || 'Version') + ', page ' + (pIndex + 1)">
                                 </div>
+                                <div class="hymn-page__foot">
+                                    <span x-text="'Page ' + (pIndex + 1)"></span>
+                                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                            @click="downloadPage(pageUrl, currentVersion.name, pIndex + 1)"
+                                            :aria-label="'Download page ' + (pIndex + 1)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <aside class="hymn-rail hymn-rail--facts" x-show="hymn" aria-label="About this hymn">
+                <template x-if="hymn">
+                    <div class="hymn-contents">
+                        <div class="hymn-read__head">
+                            <h2 class="hymn-name" x-text="hymn.hymn_name"></h2>
+                            <p class="hymn-credit" x-show="creditOf(hymn)" x-text="creditOf(hymn)"></p>
+                        </div>
+                        <div class="hymn-badges" x-show="(hymn.tags || []).length">
+                            <template x-for="tag in hymn.tags" :key="tag">
+                                <span class="m-badge m-badge--neutral" x-text="tag"></span>
                             </template>
-                            <button type="button" @click="addPage(vIndex)" class="border border-dashed border-outline-variant rounded-lg p-md font-label-md">
-                                Add page
-                            </button>
+                        </div>
+                        <div class="hymn-versions" x-show="(hymn.versions || []).length">
+                            <span class="m-label m-label--sm">Versions</span>
+                            <template x-for="(version, vIndex) in hymn.versions" :key="vIndex">
+                                <button type="button" class="hymn-version-card"
+                                        :class="versionIndex === vIndex ? 'is-on' : ''"
+                                        :aria-pressed="versionIndex === vIndex"
+                                        @click="pickVersion(vIndex)">
+                                    <span class="hymn-version-card__main">
+                                        <span class="hymn-version-card__name" x-text="version.name || 'Version'"></span>
+                                        <span class="hymn-version-card__meta" x-text="pageCountLabel(version)"></span>
+                                    </span>
+                                    <span class="hymn-prints" x-show="prints(vIndex)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                                        Prints
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                        <div x-show="hymn.attribution" class="hymn-read__head">
+                            <span class="m-label m-label--sm">Attribution</span>
+                            <p class="hymn-attr" x-text="hymn.attribution"></p>
                         </div>
                     </div>
                 </template>
-                <div class="flex justify-end gap-md">
-                    <button type="button" @click="cancelForm()" class="m-btn m-btn--secondary" :disabled="isSubmitting">Cancel</button>
-                    <button type="submit" class="m-btn m-btn--primary" :disabled="isSubmitting">
-                        <span class="m-btn__label" x-text="isSubmitting ? 'Saving…' : 'Save'"></span>
-                    </button>
+            </aside>
+        </section>
+
+        <form id="hymn-form" x-show="view === 'form' && form" x-cloak @submit.prevent="handleSubmit"
+              class="hymn-split hymn-split--edit">
+            <template x-if="form">
+                <div class="contents">
+                    <div class="hymn-sheets hymn-sheets--edit">
+                        <template x-for="(version, vIndex) in form.versions" :key="version.id">
+                            <div class="hymn-draft">
+                                <div class="hymn-draft__head">
+                                    <button type="button" class="m-icon-btn m-icon-btn--ghost hymn-star"
+                                            :class="draftPrints(vIndex) ? 'is-on' : ''"
+                                            @click="starDraft(vIndex)" aria-label="Print this version">
+                                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                                    </button>
+                                    <input class="m-input hymn-version-name" type="text" x-model="version.name" required
+                                           autocomplete="off" :aria-label="'Version ' + (vIndex + 1) + ' name'">
+                                    <span class="hymn-prints" x-show="draftPrints(vIndex)">Prints</span>
+                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm hymn-draft__remove"
+                                            @click="removeVersion(vIndex)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                        <span class="m-btn__label">Remove version</span>
+                                    </button>
+                                </div>
+                                <div class="hymn-draft__pages">
+                                    <template x-for="(page, pIndex) in version.pages" :key="page.id">
+                                        <div class="hymn-page hymn-page--draft">
+                                            <div class="hymn-sheet">
+                                                <img x-show="page.url" :src="page.url" alt="" width="850" height="1100" class="hymn-sheet__img">
+                                                <span x-show="!page.url" class="hymn-sheet__title" x-text="form.hymn_name || 'New hymn'"></span>
+                                                <span x-show="!page.url" class="hymn-staff" aria-hidden="true"></span>
+                                            </div>
+                                            <div class="hymn-page__tools">
+                                                <button type="button" x-show="page.url" @click="openCropper(vIndex, pIndex)"
+                                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--outline" aria-label="Crop">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">crop</span>
+                                                </button>
+                                                <button type="button" @click="removePage(vIndex, pIndex)"
+                                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--outline" aria-label="Remove page">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                                </button>
+                                            </div>
+                                            <span class="hymn-page__foot">
+                                                <span x-text="'Page ' + (pIndex + 1)"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <label class="hymn-add-page"
+                                           @dragover.prevent
+                                           @drop.prevent="dropPageFile($event, vIndex)">
+                                        <input class="hymn-add-page__input" type="file" accept="image/*,.heic,.heif"
+                                               :aria-label="'Add a page to version ' + (vIndex + 1)"
+                                               @change="pickPageFile($event, vIndex)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+                                        Add page
+                                        <span class="hymn-add-page__hint">or drop a scan</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </template>
+                        <button type="button" @click="addVersion()" class="m-btn m-btn--secondary m-btn--sm">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                            <span class="m-btn__label">Add version</span>
+                        </button>
+                    </div>
+                    <aside class="hymn-rail hymn-rail--facts" aria-label="Hymn details">
+                        <span class="m-label m-label--sm" x-text="editLabel"></span>
+                        <label class="m-field">
+                            <span class="m-label m-label--sm">Hymn name</span>
+                            <input class="m-input" type="text" name="hymn_name" autocomplete="off" required x-model="form.hymn_name">
+                        </label>
+                        <label class="m-field">
+                            <span class="m-label m-label--sm">Words</span>
+                            <input class="m-input" type="text" name="lyrics_writer" autocomplete="off" required x-model="form.lyrics_writer">
+                        </label>
+                        <label class="m-field">
+                            <span class="m-label m-label--sm">Music</span>
+                            <input class="m-input" type="text" name="music_writer" autocomplete="off" required x-model="form.music_writer">
+                        </label>
+                        <label class="m-field">
+                            <span class="m-label m-label--sm">Attribution</span>
+                            <textarea class="m-input hymn-attribution" name="attribution" autocomplete="off" required x-model="form.attribution"></textarea>
+                        </label>
+                        <div class="m-field">
+                            <span class="m-label m-label--sm">Tags</span>
+                            <div class="hymn-chosen">
+                                <template x-for="tag in form.tags" :key="tag">
+                                    <span class="m-token">
+                                        <span x-text="tag"></span>
+                                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                                @click="removeTag(tag)" :aria-label="'Remove tag ' + tag">
+                                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                        </button>
+                                    </span>
+                                </template>
+                            </div>
+                            <input class="m-input" type="text" x-model="tagInput" autocomplete="off"
+                                   @input="updateSuggestions" @keydown.enter.prevent="addTag" @keydown.backspace="handleBackspace"
+                                   placeholder="Type a tag and press enter" aria-label="Add a tag">
+                            <div x-show="suggestions.length" class="border border-outline-variant rounded-lg bg-surface-container-lowest">
+                                <template x-for="suggestion in suggestions" :key="suggestion">
+                                    <button type="button" @click="addTagFromSuggestion(suggestion)"
+                                            class="block w-full text-left px-4 py-2 hover:bg-surface-container-low" x-text="suggestion"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <button type="button" x-show="canEdit && !creating" @click="deleteHymn()"
+                                class="m-btn m-btn--danger-outline m-btn--sm hymn-delete">
+                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            <span class="m-btn__label">Delete hymn</span>
+                        </button>
+                    </aside>
                 </div>
-            </form>
-        </template>
+            </template>
+        </form>
     </main>
 
     <!-- Said at the foot and gone in a moment, not written into the top of the
@@ -418,14 +750,16 @@
 
     <div x-show="cropModal.open" x-cloak @click.stop
          class="fixed inset-0 bg-primary/20 z-[110] flex items-center justify-center p-md">
-        <div class="bg-surface-container-lowest rounded-xl shadow-2xl p-md flex flex-col gap-md max-w-[90vw]">
+        <div class="bg-surface-container-lowest rounded-xl shadow-2xl p-md flex flex-col gap-md max-w-[90vw]" role="dialog" aria-modal="true" aria-labelledby="crop-title">
             <div class="flex justify-between items-center">
-                <h3 class="font-headline-md text-primary">Crop sheet page</h3>
-                <button type="button" @click="cancelCrop()">Cancel</button>
+                <h3 id="crop-title" class="font-headline-md text-primary">Crop sheet page</h3>
+                <button type="button" @click="cancelCrop()" class="m-icon-btn m-icon-btn--ghost" aria-label="Cancel crop">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
             </div>
             <p class="font-body-md text-on-surface-variant">Drag a handle to trim an edge, or drag inside the box to move it. Cancel leaves the page as it was.</p>
             <div class="relative inline-block select-none" @mousemove.window="cropDragMove($event)" @mouseup.window="cropDragEnd()">
-                <img id="crop-target-img" :src="cropModal.imgSrc" @load="cropImageLoaded($event)" draggable="false" class="block max-w-[80vw] max-h-[65vh]">
+                <img id="crop-target-img" :src="cropModal.imgSrc" @load="cropImageLoaded($event)" draggable="false" alt="Sheet page to crop" class="block max-w-[80vw] max-h-[65vh]">
                 <template x-if="cropModal.rect">
                     <div class="absolute inset-0">
                         <div class="absolute bg-black/60 pointer-events-none"
