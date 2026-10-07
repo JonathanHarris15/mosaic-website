@@ -59,11 +59,17 @@
       // start their real query immediately instead of each re-asking who you
       // are and waiting a round trip for an answer that never changes.
       .then(function (data) {
-        if (Cache) Cache.writeIdentity(user.uid, {
-          personId: data.personId || null,
-          permissionLevel: data.permissionLevel || data.role || "viewer",
-          pastoralAssistant: data.pastoralAssistant === true,
-        });
+        var flags = window.AccessCore ? window.AccessCore.pageFlags(data) : null;
+        var account = flags ? flags.account : null;
+        if (Cache) {
+          Cache.writeIdentity(user.uid, {
+            personId: data.personId || null,
+            permissionLevel: flags ? flags.currentPermissionLevel : (data.permissionLevel || data.role || "viewer"),
+            pastoralAssistant: flags ? flags.pastoralAssistant : (data.pastoralAssistant === true),
+            accountLevelId: account && account.accountLevelId,
+            permissions: account && account.permissions,
+          });
+        }
         return data;
       })
       .then(function (data) {
@@ -80,23 +86,27 @@
         var data = both.data;
         var person = both.person || {};
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
-        var permissionLevel = data.permissionLevel || data.role || "viewer";
-        var pastoralAssistant = data.pastoralAssistant === true;
-        return {
+        var flags = window.AccessCore ? window.AccessCore.pageFlags(data) : null;
+        var account = flags ? flags.account : {
+          permissionLevel: data.permissionLevel || data.role || "viewer",
+          pastoralAssistant: data.pastoralAssistant === true,
+        };
+        var permissionLevel = flags ? flags.currentPermissionLevel : account.permissionLevel;
+        var pastoralAssistant = flags ? flags.pastoralAssistant : account.pastoralAssistant;
+        return Object.assign({
           uid: user.uid,
           email: user.email || "",
           name: name,
           first: String(name).trim().split(/\s+/)[0],
           permissionLevel: permissionLevel,
           pastoralAssistant: pastoralAssistant,
-          roleLabel: Destinations.accountLabel({
-            permissionLevel: permissionLevel,
-            pastoralAssistant: pastoralAssistant,
-          }),
+          accountLevelId: account.accountLevelId || null,
+          permissions: account.permissions || null,
+          roleLabel: Destinations.accountLabel(account),
           personId: data.personId || null,
           photoUrl: person.photoUrl || null,
           photoCrop: person.photoCrop || null,
-        };
+        });
       });
   }
 

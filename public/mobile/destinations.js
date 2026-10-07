@@ -113,6 +113,9 @@
         // native port, so there is one library rather than two to keep in step
         // — the same trade the Calendar and the Roles Manager already make.
         forms: 'forms.html',
+        // Full admin dashboard (SMS, push wording, accounts / MS-694) — one
+        // screen with the web, not a second native copy that drifts.
+        admin: 'admin-dashboard.html',
         // Tasks & Reminders (MS-79) the same way. A task list is phone-shaped
         // work — an elder ticks these off in a car park — but it is one list
         // with one editor, and a native port would be a second place every
@@ -144,15 +147,15 @@
     function canSee(item, user) {
         if (!item || !item.permissionLevels) return true;
         if (!user) return false;
-        if (isAdminOnlyGate(item.permissionLevels)) {
-            return item.permissionLevels.indexOf(user.permissionLevel) >= 0;
-        }
-        if (item.permissionLevels.indexOf(user.permissionLevel) >= 0) return true;
         const Access = accessCore();
         if (!Access) return false;
+        if (isAdminOnlyGate(item.permissionLevels)) {
+            return Access.accessesAdminDashboard(user);
+        }
+        if (item.permissionLevels.indexOf(user.permissionLevel) >= 0) return true;
         if (item.permissionLevels.indexOf('elder') !== -1 && Access.readsAsElder(user)) return true;
         if (item.permissionLevels.indexOf('editor') !== -1 && Access.readsAsEditor(user)) return true;
-        if (item.permissionLevels.indexOf('member') !== -1 && Access.readsAsElder(user)) return true;
+        if (item.permissionLevels.indexOf('member') !== -1 && Access.canViewDirectory(user)) return true;
         return false;
     }
 

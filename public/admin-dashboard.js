@@ -151,8 +151,8 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
-                if (!['admin', 'super_admin'].includes(this.currentPermissionLevel)) {
+                Object.assign(this, AccessCore.pageFlags(userData));
+                if (!AccessCore.accessesAdminDashboard(userData)) {
                     window.location.href = 'index.html';
                     return;
                 }
