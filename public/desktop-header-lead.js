@@ -126,29 +126,15 @@
         let permissionLevel = 'viewer';
         let pastoralAssistant = false;
         let savedOrder = null;
-        let name = 'Friend';
+        let userData = null;
         try {
             if (typeof getUserData === 'function') {
-                const userData = await getUserData(user.uid);
+                userData = await getUserData(user.uid);
                 if (userData) {
                     permissionLevel = userData.permissionLevel || userData.role || 'viewer';
                     pastoralAssistant = userData.pastoralAssistant === true;
                     savedOrder = Array.isArray(userData.dashboardCardOrder)
                         ? userData.dashboardCardOrder : null;
-                    if (userData.email) {
-                        name = userData.email.split('@')[0];
-                        name = name.charAt(0).toUpperCase() + name.slice(1);
-                    }
-                    if (userData.personId && db) {
-                        try {
-                            const personDoc = await db.collection('people').doc(userData.personId).get();
-                            const personName = personDoc.exists
-                                ? (personDoc.data().name || '').trim() : '';
-                            if (personName) name = personName.split(/\s+/)[0];
-                        } catch (pe) {
-                            console.error('Error fetching linked person:', pe);
-                        }
-                    }
                 }
             }
         } catch (e) {
@@ -157,10 +143,17 @@
         const account = DashboardNav.accountOf({
             permissionLevel, pastoralAssistant,
         });
+        const DrawerWho = global && global.DrawerWho;
+        let who;
+        if (DrawerWho && typeof DrawerWho.fromSession === 'function') {
+            who = await DrawerWho.fromSession(user, userData, db);
+        } else {
+            who = resolveWho(account, 'Friend', true);
+        }
         return {
             account,
             savedOrder,
-            who: resolveWho(account, name, true),
+            who,
         };
     }
 

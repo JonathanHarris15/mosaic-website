@@ -179,14 +179,21 @@
       // Your Directory Photo when you have one, your initials when you do not
       // (ADR-0029) — the same choice the phone app's drawer makes, so the two
       // renderings of this one drawer keep agreeing.
-      if (user && user.photoUrl && window.PersonPhotoCore) {
+      if (window.PersonPhotoCore && window.PersonPhotoCore.writeDrawerAvatar) {
+        window.PersonPhotoCore.writeDrawerAvatar(avatar, {
+          name: name,
+          initials: D.initials(name),
+          photoUrl: user && user.photoUrl,
+          photoCrop: user && user.photoCrop,
+        });
+      } else if (user && user.photoUrl) {
         avatar.textContent = "";
         avatar.style.overflow = "hidden";
         var img = document.createElement("img");
         img.src = user.photoUrl;
         img.alt = "";
         img.style.cssText = "width:100%;height:100%;" +
-          window.PersonPhotoCore.frameStyle(user.photoCrop);
+          (window.PersonPhotoCore ? window.PersonPhotoCore.frameStyle(user.photoCrop) : "object-fit:cover");
         avatar.appendChild(img);
       } else {
         avatar.textContent = D.initials(name);
