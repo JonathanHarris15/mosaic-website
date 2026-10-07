@@ -67,6 +67,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.GuideStore = require('../public/guide-store.js');
+    sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     Object.assign(sandbox, overrides || {});
 
     vm.createContext(sandbox);

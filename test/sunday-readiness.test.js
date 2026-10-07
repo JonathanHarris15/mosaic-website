@@ -69,6 +69,7 @@ function editorForm(service) {
         firebase: { firestore: { FieldValue: {} } },
         navigator: { userAgent: '' },
         HomeDashboard: Home,
+        LiturgyOrderCore: require('../public/liturgy-order-core.js'),
     };
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
@@ -91,7 +92,8 @@ test('the reported Sunday is one tally on the door and in the editor', () => {
     assert.equal(door.fraction, '4 of 13 set');
     assert.equal(editor, door.fraction);
     assert.equal(door.notReady, true);
-    assert.deepEqual(door.blanks.slice(0, 2), ['Call to Worship', 'Call to Confession']);
+    // Blanks are named in the order the Sunday follows (ADR-0080).
+    assert.deepEqual(door.blanks.slice(0, 2), ['Preparatory Hymn', 'Call to Worship']);
 });
 
 test('a hymn pulled out of the order is not work left and not work done', () => {
@@ -104,8 +106,8 @@ test('a hymn pulled out of the order is not work left and not work done', () => 
         removedHymns: ['hymnEnd2'],
         liturgy: { hymnEnd2: hymn('G', '7') },
     }).map(function (item) { return item.label; });
-    assert.ok(labels.indexOf('Hymn End 2') === -1);
-    assert.ok(ready.blanks.indexOf('Hymn End 2') === -1);
+    assert.ok(labels.indexOf('Final Hymn') === -1);
+    assert.ok(ready.blanks.indexOf('Final Hymn') === -1);
     assert.equal(ready.set, 2);
 });
 
@@ -133,9 +135,9 @@ test('fix the blanks lands on the first slot the tally still calls unfinished', 
     };
     loaded.form.validateForm();
     assert.deepEqual(asked.slice(0, 3), [
+        '[data-field-key="preparatoryHymn"]',
         '[data-field-key="callToWorship"]',
         '[data-field-key="callToConfession"]',
-        '[data-field-key="assuranceOfPardon"]',
     ]);
 });
 

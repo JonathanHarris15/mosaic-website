@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const Home = require('../public/home-dashboard-core.js');
+const Liturgy = require('../public/liturgy-order-core.js');
 
 function hymn(name, id) {
     return { name: name, id: id || '' };
@@ -55,37 +56,51 @@ test('blank fields are named, and an unlinked hymn is not called blank', () => {
     });
     assert.equal(ready.notReady, true);
     assert.ok(ready.blanks.indexOf('Benediction') !== -1);
-    assert.ok(ready.blanks.indexOf('Hymn End 2') !== -1);
+    assert.ok(ready.blanks.indexOf('Final Hymn') !== -1);
     assert.deepEqual(ready.literals, ['Hymn 1']);
-    assert.match(ready.short, /Benediction and Hymn End 2 are blank/);
+    assert.match(ready.short, /Final Hymn and Benediction are blank/);
     assert.match(ready.short, /1 hymn is not linked to the book/);
     assert.equal(ready.set, ready.total - ready.blanks.length - ready.literals.length);
 });
 
-test('a Sunday with a baptism does not also require the two hymns it replaces', () => {
-    const withBaptism = Home.checklist({
-        hasBaptism: true,
-        liturgy: { baptism: [{ name: 'Ada' }] },
-    });
+test('a people element counts once somebody is on it; the order says which hymns are asked', () => {
+    const withBaptism = Home.checklist({ liturgy: { baptism: [{ name: 'Ada' }] } });
     const labels = withBaptism.map(function (item) { return item.label; });
     assert.ok(labels.indexOf('Baptism') !== -1);
-    assert.ok(labels.indexOf('Hymn 2') === -1);
-    assert.ok(labels.indexOf('Hymn Mid 1') === -1);
+    assert.ok(labels.indexOf('Hymn 2') !== -1, 'Standard still asks for Hymn 2');
 
     const without = Home.checklist({ liturgy: {} });
     const plain = without.map(function (item) { return item.label; });
     assert.ok(plain.indexOf('Hymn 2') !== -1);
-    assert.ok(plain.indexOf('Baptism') === -1);
+    assert.ok(plain.indexOf('Baptism') === -1, 'a Sunday with nobody to baptise is not short of a baptism');
+
+    const catalog = Liturgy.addOrder(Liturgy.standardCatalog(), { name: 'Baptism Sunday', copyFrom: 'standard' });
+    const trimmed = Liturgy.removeFromOrder(Liturgy.removeFromOrder(catalog.catalog, catalog.order.id, 'hymn2'), catalog.order.id, 'hymnMid1');
+    const baptismSunday = Home.checklist({ liturgyOrderId: catalog.order.id, liturgy: { baptism: [{ name: 'Ada' }] } }, trimmed);
+    const asked = baptismSunday.map(function (item) { return item.label; });
+    assert.ok(asked.indexOf('Hymn 2') === -1);
+    assert.ok(asked.indexOf('Hymn 3') === -1);
+    assert.ok(asked.indexOf('Baptism') !== -1);
 });
 
-test('an irregular service is not scored', () => {
-    const ready = Home.readiness({ isIrregular: true, preacher: '' });
-    assert.equal(ready.irregular, true);
-    assert.equal(ready.notReady, false);
-    assert.equal(ready.total, 0);
-    assert.deepEqual(Home.glance({ isIrregular: true, theme: 'Hidden' }), {
-        theme: '', sermon: '', pairs: [], baptism: '',
-    });
+test('an element that carries a person is unfinished until the person is named', () => {
+    const made = Liturgy.addElement(Liturgy.standardCatalog(), { name: 'Scripture Reading', primitive: 'scripture', hasRole: true, hasNote: false });
+    const catalog = Liturgy.addToOrder(made.catalog, 'standard', made.element.id);
+    const id = made.element.id;
+    const lit = fullLiturgy({ [id]: 'Isaiah 40:1-11' });
+    const blank = Home.checklist({ liturgy: lit }, catalog).find(function (item) { return item.key === id; });
+    assert.equal(blank.state, 'blank');
+    const carried = Home.checklist({ liturgy: lit, carriedBy: { [id]: { name: 'A Reader', id: 'p1' } } }, catalog)
+        .find(function (item) { return item.key === id; });
+    assert.equal(carried.state, 'set');
+});
+
+test('an old irregular Sunday is read against its order and does not crash', () => {
+    const svc = { isIrregular: true, irregularElements: [{ key: 'Litany', type: 'text', value: 'x' }], preacher: '', theme: 'Shown' };
+    const ready = Home.readiness(svc);
+    assert.equal(ready.notReady, true);
+    assert.ok(ready.total > 0);
+    assert.equal(Home.glance(svc).theme, 'Shown');
 });
 
 test('dotted liturgy keys fold into the nested liturgy', () => {
