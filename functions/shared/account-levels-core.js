@@ -181,7 +181,78 @@
     function presetKeyFromPermissionLevel(level) {
         if (!level) return PRESET_VIEWER;
         if (BUILTIN_PRESET_KEYS.includes(level)) return level;
+        // A dropdown used to write the account-level id (`level_pastoral_assistant`)
+        // into permissionLevel. That string is not a rung, so member-sync treated
+        // it as below member and put the account back to Member.
+        const fromId = presetKeyFromAccountLevelId(level);
+        if (fromId) return fromId;
         return PRESET_VIEWER;
+    }
+
+    // How much software access a builtin rung carries. Admin is operational,
+    // not pastoral, so it sits with editor. Pastoral Assistant sits above
+    // editor and below elder: same doors as an elder, not counted as one.
+    const PRESET_RANK = Object.freeze({
+        [PRESET_VIEWER]: 0,
+        [PRESET_KIOSK]: 0,
+        [PRESET_MEMBER]: 1,
+        [PRESET_EDITOR]: 2,
+        [PRESET_ADMIN]: 2,
+        [PRESET_PASTORAL_ASSISTANT]: 3,
+        [PRESET_ELDER]: 4,
+        [PRESET_SUPER_ADMIN]: 5,
+    });
+
+    function higherBuiltin(a, b) {
+        const ra = PRESET_RANK[a];
+        const rb = PRESET_RANK[b];
+        if (ra == null) return b || PRESET_VIEWER;
+        if (rb == null) return a;
+        return rb > ra ? b : a;
+    }
+
+    /**
+     * The permission level a map actually grants. Used so a custom level, or a
+     * denormalized map left behind after permissionLevel was overwritten, is
+     * not labeled Member when it opens an elder's doors.
+     * @param {object} perms
+     * @return {string}
+     */
+    function levelMatchingPermissions(perms) {
+        if (!perms) return PRESET_VIEWER;
+        if (perms['system.kiosk'] === true) return PRESET_KIOSK;
+        if (perms['system.super_admin'] === true) return PRESET_SUPER_ADMIN;
+        if (perms['shep.count_as_elder'] === true) return PRESET_ELDER;
+        // Elder's software access, without being counted as an elder.
+        if (perms['visibility.lift_hidden_tags'] === true) return PRESET_PASTORAL_ASSISTANT;
+        if (perms['admin.dashboard.access'] === true) return PRESET_ADMIN;
+        if (perms['directory.edit_identity'] === true
+            || perms['services.builder.edit'] === true
+            || perms['printables.edit'] === true) {
+            return PRESET_EDITOR;
+        }
+        if (perms['directory.view'] === true) return PRESET_MEMBER;
+        return PRESET_VIEWER;
+    }
+
+    /**
+     * The rung an account should be treated as. A builtin accountLevelId wins
+     * over a stale permissionLevel of `member`. A permissions map that grants
+     * an elder's doors wins over a permissionLevel member-sync wrote back.
+     * @param {object|string|null} user
+     * @return {string}
+     */
+    function canonicalPermissionLevel(user) {
+        if (!user || typeof user !== 'object') {
+            return presetKeyFromPermissionLevel(typeof user === 'string' ? user : null);
+        }
+        const fromId = presetKeyFromAccountLevelId(user.accountLevelId);
+        const fromLevel = presetKeyFromPermissionLevel(user.permissionLevel || user.role);
+        if (fromId) return higherBuiltin(fromId, fromLevel);
+        if (user.permissions && typeof user.permissions === 'object') {
+            return higherBuiltin(fromLevel, levelMatchingPermissions(user.permissions));
+        }
+        return fromLevel || PRESET_VIEWER;
     }
 
     function accountLevelIdForPreset(presetKey) {
@@ -216,31 +287,55 @@
     }
 
     function normalizeAccount(value) {
+        let base;
         if (!value || typeof value !== 'object') {
             const level = typeof value === 'string' ? value : null;
-            return migrateLegacyUser({ permissionLevel: level });
-        }
-        if (value.permissions && typeof value.permissions === 'object') {
-            return {
-                accountLevelId: value.accountLevelId || accountLevelIdForPreset(
-                    presetKeyFromPermissionLevel(value.permissionLevel || value.role)),
+            base = migrateLegacyUser({ permissionLevel: level });
+        } else if (value.permissions && typeof value.permissions === 'object') {
+            base = {
+                accountLevelId: value.accountLevelId || null,
                 permissions: Object.assign(Catalog.emptyPermissions(), value.permissions),
                 permissionLevel: value.permissionLevel || value.role || PRESET_VIEWER,
                 pastoralAssistant: value.pastoralAssistant === true,
             };
+        } else {
+            base = migrateLegacyUser(value);
         }
-        return migrateLegacyUser(value);
+        // Resolve from the assignment and the map, not from a permissionLevel
+        // member-sync may have written back to "member".
+        const permissionLevel = canonicalPermissionLevel({
+            permissionLevel: base.permissionLevel,
+            accountLevelId: value && value.accountLevelId,
+            permissions: base.permissions,
+        });
+        if (!base.accountLevelId && permissionLevel) {
+            base.accountLevelId = accountLevelIdForPreset(permissionLevel);
+        }
+        base.permissionLevel = permissionLevel;
+        return base;
     }
 
     function effectivePermissions(account) {
         const norm = normalizeAccount(account);
-        if (norm.pastoralAssistant) {
-            const baseLevel = norm.permissionLevel || PRESET_VIEWER;
-            if (baseLevel === PRESET_ELDER || baseLevel === PRESET_SUPER_ADMIN) {
-                return norm.permissions;
-            }
+        const custom = !!(norm.accountLevelId
+            && !presetKeyFromAccountLevelId(norm.accountLevelId));
+        let perms;
+        if (!custom && BUILTIN_PRESET_KEYS.includes(norm.permissionLevel)) {
+            // A builtin rung's doors come from the preset. A stale denormalized
+            // map (the Member map left on someone moved to Pastoral Assistant)
+            // must not take those doors away.
+            perms = buildPresetPermissions(norm.permissionLevel);
+        } else if (norm.permissions && norm.permissions['system.super_admin']) {
+            perms = Catalog.allOn();
+        } else {
+            perms = norm.permissions;
+        }
+        if (norm.pastoralAssistant
+            && norm.permissionLevel !== PRESET_ELDER
+            && norm.permissionLevel !== PRESET_SUPER_ADMIN
+            && norm.permissionLevel !== PRESET_PASTORAL_ASSISTANT) {
             const grant = buildPresetPermissions(PRESET_PASTORAL_ASSISTANT);
-            const merged = Object.assign({}, norm.permissions);
+            const merged = Object.assign({}, perms);
             Catalog.PERMISSION_KEYS.forEach(k => {
                 if (grant[k]) merged[k] = true;
             });
@@ -248,10 +343,7 @@
             merged['shep.elder_assignment.be_assignee'] = false;
             return merged;
         }
-        if (norm.permissions['system.super_admin']) {
-            return Catalog.allOn();
-        }
-        return norm.permissions;
+        return perms;
     }
 
     function hasPermission(account, key) {
@@ -274,11 +366,19 @@
     }
 
     function userWriteFromLevel(levelId, levelDoc) {
-        const presetKey = levelDoc && levelDoc.presetKey
-            ? levelDoc.presetKey
-            : presetKeyFromAccountLevelId(levelId);
-        const permissions = permissionsForLevelDoc(levelDoc || { presetKey });
-        const permissionLevel = presetKey || PRESET_VIEWER;
+        // A builtin id is that rung even when the stored level doc says
+        // otherwise (presetKey left as `member`, or `custom: true` on a seed).
+        const fromId = presetKeyFromAccountLevelId(levelId);
+        const docPreset = levelDoc && levelDoc.presetKey;
+        const custom = !!(levelDoc && levelDoc.custom) && !fromId;
+        const presetKey = fromId || docPreset;
+        const permissions = custom
+            ? permissionsForLevelDoc(levelDoc)
+            : buildPresetPermissions(presetKey || PRESET_VIEWER);
+        const permissionLevel = fromId
+            || levelMatchingPermissions(permissions)
+            || presetKey
+            || PRESET_VIEWER;
         return {
             accountLevelId: levelId,
             permissions,
@@ -332,6 +432,8 @@
         accountLevelIdForPreset,
         presetKeyFromAccountLevelId,
         presetKeyFromPermissionLevel,
+        levelMatchingPermissions,
+        canonicalPermissionLevel,
         migrateLegacyUser,
         normalizeAccount,
         effectivePermissions,

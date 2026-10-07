@@ -98,20 +98,28 @@ service cloud.firestore {
         && signedInUserData().permissions[key] == true;
     }
 
+    // isPastoralAssistant() is consulted even when a permissions map is
+    // present. Assigning Pastoral Assistant used to leave a Member map (or
+    // member-sync wrote permissionLevel back to member while the map was
+    // right). The rung itself still opens an elder's doors. countsAsElder
+    // does not: a Pastoral Assistant is never an elder.
     function readsAsElder() {
       return hasPermission('visibility.lift_hidden_tags')
-        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
+        || isPastoralAssistant()
+        || (!usesPermissionMap() && isElder());
     }
 
     function readsAsEditor() {
       return hasPermission('directory.edit_identity')
         || hasPermission('printables.edit')
-        || (!usesPermissionMap() && (isEditor() || isPastoralAssistant()));
+        || isPastoralAssistant()
+        || (!usesPermissionMap() && isEditor());
     }
 
     function writesTheRecord() {
       return hasPermission('shep.notes.write')
-        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
+        || isPastoralAssistant()
+        || (!usesPermissionMap() && isElder());
     }
 
     // MS-594: shepherding decision/write actions in software. Same grant as
@@ -119,7 +127,8 @@ service cloud.firestore {
     // permission-level only.
     function canDecide() {
       return hasPermission('shep.tags.manage')
-        || (!usesPermissionMap() && (isElder() || isPastoralAssistant()));
+        || isPastoralAssistant()
+        || (!usesPermissionMap() && isElder());
     }
 
     function countsAsElder() {

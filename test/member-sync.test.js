@@ -198,6 +198,19 @@ test('shouldPromoteToMember: already member+ → never demote, skip', () => {
     }
 });
 
+test('shouldPromoteToMember does not turn a Pastoral Assistant back into a member', () => {
+    assert.strictEqual(isMemberOrHigher('level_pastoral_assistant'), true);
+    assert.strictEqual(shouldPromoteToMember('level_pastoral_assistant'), false);
+    assert.strictEqual(shouldPromoteToMember('member', {
+        permissionLevel: 'member',
+        accountLevelId: 'level_pastoral_assistant',
+    }), false);
+    assert.strictEqual(shouldPromoteToMember('member', {
+        permissionLevel: 'member',
+        permissions: { 'visibility.lift_hidden_tags': true, 'shep.tags.manage': true },
+    }), false);
+});
+
 // ── The two directions must not loop into each other ─────────────────────────
 
 test('once in sync, neither direction wants to write again', () => {

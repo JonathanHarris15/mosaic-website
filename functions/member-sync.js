@@ -14,6 +14,7 @@
 // lets the projection write the tag.
 
 const track = require("./membership-track");
+const AccountLevels = require("./shared/account-levels-core");
 
 const MEMBER_OR_HIGHER = [
   "member", "editor", "elder", "admin", "super_admin", "pastoral_assistant",
@@ -37,7 +38,11 @@ const MEMBER_PERMISSION_LEVEL = "member";
  * @return {boolean} True for member and above.
  */
 function isMemberOrHigher(permissionLevel) {
-  return MEMBER_OR_HIGHER.includes(permissionLevel);
+  // `level_pastoral_assistant` is the account-level id, not a rung. Resolving
+  // it keeps member-sync from treating a Pastoral Assistant as below member
+  // and writing permissionLevel back to "member".
+  const resolved = AccountLevels.presetKeyFromPermissionLevel(permissionLevel);
+  return MEMBER_OR_HIGHER.includes(resolved);
 }
 
 /**
@@ -151,9 +156,17 @@ function buildMemberAdvanceRecord(previous, permissionLevel) {
  * reached, which carry a hand-applied Member tag and no stage.
  *
  * @param {?string} currentPermissionLevel The linked user's level.
+ * @param {?Object} user The whole user document, when the caller has it.
+ *   accountLevelId and a denormalized permissions map count: a Pastoral
+ *   Assistant whose permissionLevel string was overwritten must not be
+ *   "promoted" to member.
  * @return {boolean} True when the user should be promoted to member.
  */
-function shouldPromoteToMember(currentPermissionLevel) {
+function shouldPromoteToMember(currentPermissionLevel, user) {
+  if (user && typeof user === "object") {
+    const resolved = AccountLevels.canonicalPermissionLevel(user);
+    if (isMemberOrHigher(resolved)) return false;
+  }
   return !isMemberOrHigher(currentPermissionLevel);
 }
 

@@ -202,6 +202,11 @@ async function updateUserAccountLevel(uid, accountLevelId) {
     try {
         if (typeof assignUserAccountLevel === 'function') {
             await assignUserAccountLevel(uid, accountLevelId);
+        } else if (typeof AccountLevelsCore !== 'undefined') {
+            const write = AccountLevelsCore.userWriteFromLevel(accountLevelId, {
+                presetKey: AccountLevelsCore.presetKeyFromAccountLevelId(accountLevelId),
+            });
+            await db.collection('users').doc(uid).update(write);
         } else {
             await db.collection('users').doc(uid).update({
                 permissionLevel: accountLevelId,

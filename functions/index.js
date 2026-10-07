@@ -260,7 +260,14 @@ exports.createUser = onCall({
   const presetKey = AccountLevels.presetKeyFromPermissionLevel(level);
   const resolvedLevelId = accountLevelId ||
       AccountLevels.accountLevelIdForPreset(presetKey);
-  const permissions = AccountLevels.buildPresetPermissions(presetKey);
+  // Builtin ids win over a stale presetKey. `level_pastoral_assistant`
+  // stores permissionLevel `pastoral_assistant` and the elder-equivalent map,
+  // not the raw id and not the Member preset.
+  const write = AccountLevels.userWriteFromLevel(resolvedLevelId, {
+    presetKey: AccountLevels.presetKeyFromAccountLevelId(resolvedLevelId) ||
+        presetKey,
+    custom: false,
+  });
 
   try {
     // 2. Create the user in Firebase Auth
@@ -280,10 +287,10 @@ exports.createUser = onCall({
     // anything.
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
-      permissionLevel: level,
-      role: level,
-      accountLevelId: resolvedLevelId,
-      permissions: permissions,
+      permissionLevel: write.permissionLevel,
+      role: write.role,
+      accountLevelId: write.accountLevelId,
+      permissions: write.permissions,
       pastoralAssistant: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -1997,16 +2004,26 @@ exports.syncMemberTagToRole = onDocumentWritten(
       const userSnap = await userRef.get();
       if (!userSnap.exists) return;
 
-      const permissionLevel = userSnap.data().permissionLevel ||
-          userSnap.data().role || "viewer";
-      // Already member+ — never demote, and skip write to avoid a loop.
-      if (!shouldPromoteToMember(permissionLevel)) return;
-
-      await userRef.update({
-        permissionLevel: MEMBER_PERMISSION_LEVEL,
-        role: MEMBER_PERMISSION_LEVEL,
+      // Transaction so a Pastoral Assistant assignment that lands while this
+      // trigger is in flight is not overwritten with "member". The retry
+      // re-reads the user doc.
+      const promotedFrom = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) return null;
+        const data = snap.data();
+        const permissionLevel = data.permissionLevel || data.role || "viewer";
+        // Already member+ — never demote, and skip write to avoid a loop.
+        // accountLevelId and the permissions map count, so a Pastoral
+        // Assistant whose permissionLevel string is stale is not "promoted".
+        if (!shouldPromoteToMember(permissionLevel, data)) return null;
+        tx.update(userRef, {
+          permissionLevel: MEMBER_PERMISSION_LEVEL,
+          role: MEMBER_PERMISSION_LEVEL,
+        });
+        return permissionLevel;
       });
-      log(`Promoted user ${userId} from '${permissionLevel}' to ` +
+      if (!promotedFrom) return;
+      log(`Promoted user ${userId} from '${promotedFrom}' to ` +
           `'${MEMBER_PERMISSION_LEVEL}' ` +
           `(linked person has the member tag).`);
     },

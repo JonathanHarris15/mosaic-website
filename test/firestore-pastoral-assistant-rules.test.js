@@ -71,9 +71,10 @@ test('readsAsElder, writesTheRecord and canDecide are isElder or the grant; isAn
     const writes = fnBody(firestore, 'writesTheRecord');
     const decide = fnBody(firestore, 'canDecide');
     const isElder = fnBody(firestore, 'isElder');
-    assert.match(reads, /isElder\(\) \|\| isPastoralAssistant\(\)/);
-    assert.match(writes, /isElder\(\) \|\| isPastoralAssistant\(\)/);
-    assert.match(decide, /isElder\(\) \|\| isPastoralAssistant\(\)/);
+    assert.match(reads, /isPastoralAssistant\(\)/);
+    assert.match(writes, /isPastoralAssistant\(\)/);
+    assert.match(decide, /isPastoralAssistant\(\)/);
+    assert.doesNotMatch(reads, /!usesPermissionMap\(\) && \(isElder\(\) \|\| isPastoralAssistant\(\)\)/);
     assert.match(isElder, /permissionLevel\(\) in \['elder', 'super_admin'\]/);
     assert.doesNotMatch(isElder, /isPastoralAssistant/);
 });
@@ -81,7 +82,8 @@ test('readsAsElder, writesTheRecord and canDecide are isElder or the grant; isAn
 test('readsAsEditor is isEditor or the role; isEditor includes pastoral_assistant and the old flag', () => {
     const reads = fnBody(firestore, 'readsAsEditor');
     const isEditor = fnBody(firestore, 'isEditor');
-    assert.match(reads, /isEditor\(\) \|\| isPastoralAssistant\(\)/);
+    assert.match(reads, /isPastoralAssistant\(\)/);
+    assert.match(reads, /!usesPermissionMap\(\) && isEditor\(\)/);
     assert.match(isEditor, /'pastoral_assistant'/);
     assert.match(isEditor, /isPastoralAssistant\(\)/);
 });
@@ -94,9 +96,9 @@ test('the helper composition matches AccessCore for a member Pastoral Assistant'
     assert.equal(Access.canDecide(memberPa), true);
     assert.equal(Access.isAnElder(memberPa), false);
     assert.equal(Access.writesAsEditor(memberPa), true);
-    assert.match(fnBody(firestore, 'readsAsElder'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
-    assert.match(fnBody(firestore, 'writesTheRecord'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
-    assert.match(fnBody(firestore, 'canDecide'), /isElder\(\) \|\| isPastoralAssistant\(\)/);
+    assert.match(fnBody(firestore, 'readsAsElder'), /isPastoralAssistant\(\)/);
+    assert.match(fnBody(firestore, 'writesTheRecord'), /isPastoralAssistant\(\)/);
+    assert.match(fnBody(firestore, 'canDecide'), /isPastoralAssistant\(\)/);
     assert.doesNotMatch(fnBody(firestore, 'isElder'), /pastoralAssistant/);
     assert.match(fnBody(firestore, 'isEditor'), /isPastoralAssistant\(\)/);
 });

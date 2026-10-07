@@ -277,8 +277,28 @@ function forgetUserDoc() {
 // worth interrupting somebody for; a change to their rank or their Person is.
 function identityMoved(before, after) {
     const rank = d => (d && (d.permissionLevel || d.role)) || null;
+    const levelId = d => (d && d.accountLevelId) || null;
     const person = d => (d && d.personId) || null;
-    return rank(before) !== rank(after) || person(before) !== person(after);
+    return rank(before) !== rank(after)
+        || levelId(before) !== levelId(after)
+        || person(before) !== person(after);
+}
+
+// Pages read permissionLevel off this object. A Pastoral Assistant whose
+// stored string is still "member" (the assignment wrote the level id, or
+// member-sync put the string back) would otherwise be shown and gated as a
+// Member. Resolve once, here, so every page sees the rung the assignment
+// actually granted.
+function withResolvedLevel(data) {
+    const Levels = typeof AccountLevelsCore !== 'undefined' ? AccountLevelsCore : null;
+    if (!data || !Levels || typeof Levels.normalizeAccount !== 'function') return data;
+    const account = Levels.normalizeAccount(data);
+    const permissions = Levels.effectivePermissions(data);
+    return Object.assign({}, data, {
+        permissionLevel: account.permissionLevel,
+        role: account.permissionLevel,
+        permissions: permissions,
+    });
 }
 
 async function fetchUserData(uid) {
@@ -286,7 +306,7 @@ async function fetchUserData(uid) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             const doc = await db.collection('users').doc(uid).get();
-            return doc.exists ? doc.data() : null;
+            return doc.exists ? withResolvedLevel(doc.data()) : null;
         } catch (e) {
             lastError = e;
             if (!RETRYABLE.includes(e && e.code)) throw e;
