@@ -1852,7 +1852,7 @@ function serviceForm() {
                 status = value.trim() ? 'set' : 'empty';
                 emptyLabel = 'Add text…';
             } else {
-                value = lit[key] || '';
+                value = typeof lit[key] === 'string' ? lit[key] : '';
                 status = value ? 'set' : 'empty';
                 emptyLabel = 'Add a reference…';
             }

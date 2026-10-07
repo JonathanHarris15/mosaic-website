@@ -875,23 +875,23 @@
                          the order below is what the page edits now. -->
                     <template x-if="irregularRows.length">
                         <div id="irregular-elements-notice" class="m-notice m-notice--info mb-4">
-                            <span class="material-symbols-outlined">history</span>
-                            <div class="min-w-0">
-                                <div class="font-label-md text-[11px] font-semibold uppercase tracking-wider">This Sunday kept its own list</div>
-                                <ul class="mt-1 text-sm">
+                            <span class="material-symbols-outlined m-notice__icon">history</span>
+                            <div class="m-notice__body">
+                                <span class="m-notice__title">This Sunday kept its own list</span>
+                                <ul class="m-notice__text">
                                     <template x-for="r in irregularRows" :key="r.key">
-                                        <li><span class="font-semibold" x-text="r.label"></span><span x-show="r.value" x-text="' · ' + r.value"></span></li>
+                                        <li><span x-text="r.label"></span><span x-show="r.value" x-text="' · ' + r.value"></span></li>
                                     </template>
                                 </ul>
-                                <div class="text-xs mt-1">Pick or make a Liturgy Order to plan it the new way. Nothing on the list is deleted.</div>
+                                <span class="m-notice__text">The rows below are its Liturgy Order. Pick or make an order to plan it that way. Nothing on the list is deleted.</span>
                             </div>
                         </div>
                     </template>
 
                     <template x-if="!rows.length">
-                        <div class="m-empty bg-white border border-outline-variant rounded-2xl">
+                        <div class="m-empty bg-white">
                             <span class="material-symbols-outlined">list_alt</span>
-                            <div>This Liturgy Order has no elements yet.</div>
+                            <p>This Liturgy Order has no elements yet.</p>
                             <a x-show="canEdit" :href="'liturgy-orders.html?date=' + encodeURIComponent(date)" class="m-btn m-btn--secondary m-btn--sm">Add elements</a>
                         </div>
                     </template>
