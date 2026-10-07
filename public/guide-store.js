@@ -192,24 +192,12 @@
         return builderSections(snapshot, catalog).includes('baptism');
     }
 
-    // Which Service Guide system a week uses. An explicit per-week `guideSystem`
-    // wins; otherwise a pre-existing legacy `elements` blob falls back to legacy;
-    // everything else (incl. a brand-new week) defaults to the new v2 system.
-    function guideSystemOf(service) {
-        const s = service || {};
-        if (s.guideSystem === 'legacy') return 'legacy';
-        if (s.guideSystem === 'v2') return 'v2';
-        if (isLegacyGuide(s.guide)) return 'legacy';
-        return 'v2';
-    }
-
-    // The single routing rule shared by the Services page and the Order of
-    // Service editor's "Generate Service Guide" action, so the two never drift.
+    // Where "Generate Service Guide" goes, from the Services page and the
+    // Order of Service alike, so the two never drift. Always the template
+    // editor: a week whose guide predates it is offered a rebuild there, and
+    // the old generator is no longer a destination (ADR-0080).
     function guideHref(service, date) {
-        const enc = encodeURIComponent(date);
-        return guideSystemOf(service) === 'legacy'
-            ? `service-guide.html?date=${enc}`
-            : `service-guide-editor.html?date=${enc}`;
+        return `service-guide-editor.html?date=${encodeURIComponent(date)}`;
     }
 
     // Merge a surface's filled values into the week's shared values map without
@@ -492,7 +480,7 @@
         buildGuideRecord, preserveValues, isV2Guide, isLegacyGuide,
         isEntryFieldFilled, tasksRemaining, nextTaskPageIndex,
         partitionEntryFields, builderSections, templateIncludesBaptism,
-        guideSystemOf, guideHref, mergeValues,
+        guideHref, mergeValues,
         // adapter
         resolveServiceContext, loadCatalog, seedAll, seedIfEmpty, saveStylePreset,
         savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,

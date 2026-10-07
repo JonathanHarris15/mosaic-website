@@ -17,7 +17,7 @@
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
-    serviceGuide: { title: "Service Guide", page: "service-guide.html" },
+    serviceGuide: { title: "Service Guide", page: "service-guide-editor.html" },
   };
 
   function currentRoute() {

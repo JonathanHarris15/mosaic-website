@@ -1715,9 +1715,8 @@
     <script src="service-involvement-core.js"></script>
     <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>
-    <!-- Service Guide engine/catalog/seed/store: the Order of Service editor picks
-         the week's Service Guide Template (or toggles legacy) and gates its
-         template-driven Builder sections (ADR-0010). -->
+    <!-- Service Guide store: "Generate Service Guide" routes through the same
+         GuideStore.guideHref the Services page uses. -->
     <!-- Mobile-only save bar. Hidden on desktop by CSS; shown when the page runs
          inside the WebView shell. Mirrors the header button's state so there is
          still exactly one way to save, just docked where a thumb can reach it. -->
