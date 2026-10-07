@@ -48,6 +48,14 @@
         try { return await promise; } catch (e) { console.warn('Printable data read failed', e); return fallback; }
     }
 
+    // The congregation's Liturgy Elements and Orders (ADR-0080), read like
+    // the guide templates: world-readable. A page that did not load the store
+    // reads null, and the resolvers fall back to Standard.
+    async function loadLiturgy(db) {
+        const Store = global.LiturgyOrderStore;
+        return Store ? safely(Store.loadCatalog(db), null) : null;
+    }
+
     // `viewer` is { level, personId }. Every read below is one the viewer
     // may make; a read the rules refuse degrades to an empty set and the
     // resolvers say so, rather than the page failing.
@@ -55,8 +63,11 @@
         const n = needs || {};
         const v = viewer || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
-        const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [], printedEventsBySunday: {} };
+        const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [], printedEventsBySunday: {}, liturgy: null };
         const jobs = [];
+
+        const liturgy = (n.liturgy || n.hymns) ? loadLiturgy(db) : Promise.resolve(null);
+        jobs.push(liturgy.then(c => { bundle.liturgy = c; }));
 
         if (n.people) jobs.push(safely(db.collection('people').get().then(docsOf), []).then(r => { bundle.people = r; }));
         if (n.families) jobs.push(safely(db.collection('families').get().then(docsOf), []).then(r => { bundle.families = r; }));
@@ -79,10 +90,11 @@
                 }
             }
             if (n.hymns) {
+                const songs = Data.hymnSlotOptions(await liturgy).map(o => o.value);
                 const ids = new Set();
                 Object.keys(bundle.services).forEach(date => {
                     const s = Data.normaliseService(bundle.services[date]);
-                    Data.HYMN_SLOTS.forEach(slot => { const h = (s.liturgy || {})[slot]; if (h && h.id) ids.add(h.id); });
+                    songs.forEach(slot => { const h = (s.liturgy || {})[slot]; if (h && h.id) ids.add(h.id); });
                 });
                 await Promise.all(Array.from(ids).map(async id => {
                     const doc = await safely(db.collection('hymns').doc(id).get(), null);
@@ -230,12 +242,14 @@
         const v = viewer || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
         const ES = global.EventsStore;
-        const [series, roles, forms] = await Promise.all([
+        const [series, roles, forms, liturgy] = await Promise.all([
             ES ? safely(ES.loadVisibleSeries(db, { rank: v.level || null, personId: v.personId || null }), []) : [],
             safely(db.collection('roles').get().then(docsOf), []),
             isEditor ? safely(db.collection('forms').get().then(docsOf), []) : [],
+            loadLiturgy(db),
         ]);
         return {
+            liturgy: liturgy,
             series: series.map(s => ({ id: s.id, name: s.name || s.id, roleSlugs: s.roleSlugs || [] })).sort((a, b) => a.name.localeCompare(b.name)),
             roles: roles.map(r => ({ id: r.id, slug: r.slug || r.id, name: r.name || r.slug || r.id })).sort((a, b) => a.name.localeCompare(b.name)),
             forms: forms.map(f => ({ id: f.id, title: f.title || 'Untitled form', questions: f.questions || [] })).sort((a, b) => a.title.localeCompare(b.title)),

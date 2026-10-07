@@ -406,8 +406,10 @@ describe('what a Printable may be told, and by whom', () => {
     });
 
     test('nothing elder-only is offered at any level', () => {
+        // "Pastoral Prayer" is a Liturgy Element — the slot in the service
+        // every bulletin prints (ADR-0080) — not the pastoral record.
         const all = JSON.stringify(Printables.dataCatalog('super_admin', {}));
-        assert.doesNotMatch(all, /shepherding|prayer request|pastoral/i);
+        assert.doesNotMatch(all, /shepherding|prayer request|pastoral(?! prayer)/i);
     });
 
     test('it explains how to wire a field and how to repeat a box', () => {
