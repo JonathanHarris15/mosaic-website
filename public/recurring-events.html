@@ -192,6 +192,9 @@
     <script src="commitments-core.js"></script>
     <script src="calendar-view.js"></script>
     <script src="recurring-roster-core.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-store.js"></script>
     <script src="recurring-events.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -830,6 +833,51 @@
                         </div>
                         </template>
 
+                        <!-- ══ Printables ═════════════════════════════════════
+                             The link lives on the series, so every date of this
+                             event opens the same printable. Filling in that
+                             week's words happens on the date. -->
+                        <template x-if="tab === 'printables'">
+                        <div class="re-stack" style="gap:var(--space-md)">
+                            <section class="m-card">
+                                <div class="flex items-center justify-between gap-sm">
+                                    <h3 class="re-cardhead">Printables</h3>
+                                    <button type="button" x-show="isEditor" @click="startLinkPrintable()"
+                                            class="m-btn m-btn--secondary m-btn--sm re-focus">
+                                        <span class="material-symbols-outlined">add_link</span>
+                                        <span class="m-btn__label">Link a printable</span>
+                                    </button>
+                                </div>
+                                <p class="re-standfirst">True of every date of this event. Open a date to fill in that week's words.</p>
+                                <p class="text-[13px] text-error mt-sm" x-show="printableError" x-text="printableError"></p>
+                                <div x-show="!linkedPrintables.length" class="m-empty" style="margin-top:var(--space-sm)">
+                                    <span class="material-symbols-outlined">print</span>
+                                    <p>Nothing linked yet.</p>
+                                </div>
+                                <div x-show="linkedPrintables.length" class="m-card-list" style="margin-top:var(--space-sm)">
+                                    <template x-for="p in linkedPrintables" :key="p.id">
+                                        <div class="m-row">
+                                            <span class="material-symbols-outlined text-[19px] text-secondary shrink-0">print</span>
+                                            <a :href="printableOpenHref(p)" class="m-row__main re-focus">
+                                                <span class="m-row__title" x-text="p.name"></span>
+                                                <span class="m-row__sub" x-text="p.memberVisible ? 'Members may view' : 'Editors only'"></span>
+                                            </a>
+                                            <label x-show="isEditor" class="m-check" title="Members may view">
+                                                <input type="checkbox" :checked="p.memberVisible" @change="setSeriesPrintableMembers(p, $event.target.checked)" />
+                                                <span>Members may view</span>
+                                            </label>
+                                            <button type="button" x-show="isEditor" @click="unlinkSeriesPrintable(p)"
+                                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
+                                                    :aria-label="'Unlink ' + p.name">
+                                                <span class="material-symbols-outlined text-[18px]">link_off</span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </section>
+                        </div>
+                        </template>
+
                         <!-- ══ The event ══════════════════════════════════════ -->
                         <template x-if="tab === 'event'">
                         <div class="re-pane__two">
@@ -1270,6 +1318,32 @@
                         class="m-btn m-btn--danger m-btn--sm re-motion re-press re-focus">
                     <span class="m-btn__label">Take it off</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="linkingPrintable" x-cloak
+         class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+         @click.self="linkingPrintable = false" @keydown.escape.window="linkingPrintable = false">
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md"
+             role="dialog" aria-modal="true" aria-label="Link a printable">
+            <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
+            <p class="font-body-md text-on-surface-variant">It will open from every date of this event. Members can open it once you switch that on.</p>
+            <div class="m-loading" x-show="libraryLoading"><span class="m-spinner"></span></div>
+            <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkablePrintables.length">Every laid-out printable in the library is already linked, or there are none yet.</p>
+            <div class="flex flex-col gap-xs max-h-72 overflow-y-auto" x-show="!libraryLoading">
+                <template x-for="p in linkablePrintables" :key="p.id">
+                    <button type="button" class="m-row m-row--interactive text-left" @click="linkSeriesPrintable(p)">
+                        <span class="material-symbols-outlined text-[18px] text-secondary">print</span>
+                        <span class="m-row__main">
+                            <span class="m-row__title" x-text="p.name"></span>
+                            <span class="m-row__sub" x-text="printablePath(p) + ' · ' + (p.template ? p.template.label : '')"></span>
+                        </span>
+                    </button>
+                </template>
+            </div>
+            <div class="flex justify-end gap-sm">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="linkingPrintable = false">Cancel</button>
             </div>
         </div>
     </div>

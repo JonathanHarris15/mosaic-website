@@ -138,6 +138,15 @@
             // name is half-typed for most of the time somebody is typing it.
             seriesDraft: { name: '', location: '', description: '' },
 
+            // Printables linked to this series. The link is true of every
+            // date, so it lives here rather than on one Sunday's files.
+            linkedPrintables: [],
+            linkingPrintable: false,
+            libraryLoading: false,
+            libraryPrintables: [],
+            libraryFolders: [],
+            printableError: '',
+
             // Changing the pattern, and the confrontation it raises over dates
             // that already have people on them.
             pattern: { open: false, rule: null, stored: [], orphans: [], choices: {} },
@@ -170,7 +179,7 @@
                 // answers "what's next" without a grid to read first.
                 this.tab = 'dates';
                 const askedTab = new URLSearchParams(window.location.search).get('tab');
-                if (askedTab === 'announcements') this.tab = 'announcements';
+                if (askedTab === 'announcements' || askedTab === 'printables') this.tab = askedTab;
 
                 try {
                     // The directory is the GRID's ingredient — names for the
@@ -347,6 +356,90 @@
                 // page, which no longer exists.
                 if (this.isEditor && id === Core.SUNDAY_SERVICE_ID) await this.reconcileSunday();
                 await this.loadAnnouncements();
+                await this.loadLinkedPrintables();
+            },
+
+            async loadLinkedPrintables() {
+                this.printableError = '';
+                if (typeof PrintableStore === 'undefined') { this.linkedPrintables = []; return; }
+                const ids = (this.chosen && Array.isArray(this.chosen.printables)) ? this.chosen.printables : [];
+                if (!ids.length) { this.linkedPrintables = []; return; }
+                try {
+                    this.linkedPrintables = await PrintableStore.loadLinked(db, ids);
+                } catch (e) {
+                    this.linkedPrintables = [];
+                    this.printableError = 'The linked printables could not be read.';
+                }
+            },
+
+            async startLinkPrintable() {
+                if (!this.isEditor || !this.chosen) return;
+                this.linkingPrintable = true;
+                this.libraryLoading = true;
+                this.printableError = '';
+                try {
+                    const [printables, folders] = await Promise.all([
+                        PrintableStore.listPrintables(db),
+                        PrintableStore.listFolders(db).catch(() => []),
+                    ]);
+                    this.libraryPrintables = printables;
+                    this.libraryFolders = folders;
+                } catch (e) {
+                    this.printableError = 'The library did not load. Try again.';
+                    this.linkingPrintable = false;
+                } finally {
+                    this.libraryLoading = false;
+                }
+            },
+
+            printablePath(p) {
+                const crumbs = FilingCore.breadcrumbFor(this.libraryFolders, p && p.folderId);
+                return crumbs.length ? crumbs.map(c => c.name).join(' / ') : 'Printables';
+            },
+
+            get linkablePrintables() {
+                const linked = new Set((this.linkedPrintables || []).map(p => p.id));
+                return (this.libraryPrintables || []).filter(p => p.template && !linked.has(p.id));
+            },
+
+            printableOpenHref(p) {
+                const page = this.isEditor ? 'printable-editor.html?id=' : 'printable-view.html?id=';
+                return page + encodeURIComponent(p.id);
+            },
+
+            async linkSeriesPrintable(p) {
+                if (!this.isEditor || !this.chosen || !p) return;
+                const ids = PrintableCore.linkPrintable(this.chosen.printables || [], p.id);
+                try {
+                    await PrintableStore.linkToSeries(db, this.chosen.id, ids);
+                    this.patchSeries({ printables: ids });
+                    this.linkingPrintable = false;
+                    await this.loadLinkedPrintables();
+                } catch (e) {
+                    this.printableError = 'That link did not save. Try again.';
+                }
+            },
+
+            async unlinkSeriesPrintable(p) {
+                if (!this.isEditor || !this.chosen || !p) return;
+                const ids = PrintableCore.unlinkPrintable(this.chosen.printables || [], p.id);
+                try {
+                    await PrintableStore.linkToSeries(db, this.chosen.id, ids);
+                    this.patchSeries({ printables: ids });
+                    this.linkedPrintables = this.linkedPrintables.filter(x => x.id !== p.id);
+                } catch (e) {
+                    this.printableError = 'That change did not save. Try again.';
+                }
+            },
+
+            async setSeriesPrintableMembers(p, on) {
+                if (!this.isEditor || !p) return;
+                try {
+                    await PrintableStore.setMemberVisible(db, firebase, firebase.auth().currentUser, p.id, on);
+                    p.memberVisible = on === true;
+                } catch (e) {
+                    this.printableError = 'That change did not save. Try again.';
+                }
             },
 
             // Never fatal. A church whose Sunday drifted still gets to read the
@@ -399,6 +492,7 @@
                 const all = [
                     { id: 'dates', label: 'Dates', editorOnly: false },
                     { id: 'event', label: 'The event', editorOnly: false },
+                    { id: 'printables', label: 'Printables', editorOnly: false },
                     { id: 'announcements', label: 'Announcements', editorOnly: false },
                     { id: 'rota', label: 'Rota', editorOnly: true },
                     { id: 'roles', label: 'Roles & rules', editorOnly: true },

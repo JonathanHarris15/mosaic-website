@@ -7079,11 +7079,11 @@ test('a member reaches Dates and a read-only Event, never a tab that writes', ()
     // deepEqual against a loadComponent page.
     // Announcements is shared, the way The event is: a member reads the title
     // and the prose, and the write controls sit behind announcementTab().editable.
-    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'announcements'],
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'printables', 'announcements'],
         'a member is offered a tab that writes');
 
     page.rank = 'editor';
-    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'announcements', 'rota', 'roles', 'who']);
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'printables', 'announcements', 'rota', 'roles', 'who']);
 });
 
 test('the browse lane offers nothing that writes', () => {
