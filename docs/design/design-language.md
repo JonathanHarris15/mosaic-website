@@ -8,6 +8,8 @@ Classes live in `build/design-components.mjs` and ship in `public/mosaic.css`. A
 
 This file grows with the site. When a page update settles a choice another page could follow — spacing, a type role, how a person is shown, how a control moves, what stays on screen, empty and error — that convention is added here in the same change, and the class that carries it is named. A one-off wording change is not a convention.
 
+Every convention here also passes the another-church test in `AGENTS.md`. It works for another case of the same kind, and for another church within ordinary variation. A heading, a field list, or a workflow that only fits this congregation is not a convention.
+
 ## Where this came from
 
 Mobbin does not carry Planning Center, Subsplash, Pushpay, or Church Center. These five are the closest jobs, and the structure is what transferred. Their grey canvases, black sidebars, and purple accents did not.
@@ -193,7 +195,7 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 The data drawer opens on two jobs. **Repeat a box** (`.pe-drawer__cta`, heading “Repeat a box”) is always there until a box is already repeating. A selected box gets **Make this element iterated**. Quick lists — Announcements, Hymn pages, Order of service, Kids questions, Sundays — call the same path and open the **Query** builder on that list. **All lists…** opens the builder with every iterable list. A text or a picture tells you to select the box around it; the query builder stays shut until that box repeats.
 
-**This Sunday** (`.pe-sunday`) sits above the single-value cards. Chips are grouped **Service**, **Hymns**, then the typed groups **Prayer** and **Mosaic Kids**. Drag a chip onto a text. A hymn name is the hymn slot (Second hymn, Closing hymn). Prayer and Mosaic Kids are typed on the Sunday's Files tab. Scripture citations are not in this card.
+**This Sunday** (`.pe-sunday`) sits above the single-value cards. Chips are grouped **Service**, **Hymns**, and **Booklet text**. Drag a chip onto a text. A hymn name is the hymn slot (Second hymn, Closing hymn). Booklet text is one list of the Sunday booklet fields. It does not split into a heading per pamphlet. Scripture citations are not in this card.
 
 Below that, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Scripture references**, **Filled on the event**, then **Date, page, and files**. Scripture and the date group are **`.pe-fold`** (`<details>`), shut until opened, so they do not fill the drawer. Each open card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
 
@@ -215,9 +217,9 @@ A printable is linked from the recurring event's **Printables** tab, and from a 
 
 Where a printable is linked — a Sunday's Files tab, or any other event's Files tab — an editor fills the blanks that printable asked for. The card is **`.m-card`**, heading **For the linked printable**, fields are **`.m-field`** / **`.m-input`**, and one button reads **Save for this date**.
 
-Author-defined fields (text, image, number, date, list) are stored on that occurrence and read back into the printable for that date. A list is one card per row, with **Add a row** and **Remove**.
+Author-defined fields (text, image, number, date, list) are stored on that occurrence and read back into the printable for that date. A list is one card per row, with **Add a row** and **Remove**. The section heading is the printable's name.
 
-A Sunday guide that binds Mosaic Kids or the prayer-country facts shows those fields here, grouped **Prayer** and **Mosaic Kids**, saved on the Sunday's booklet text. Announcements stay on the Announcements tab. Any other event shows the blanks defined on the printables linked to it.
+A wire to Sunday booklet text, or to any other source, does not add a field or a group heading here. Prayer country and Mosaic Kids are not a form. The same card, on a Sunday and on any other event, shows only the blanks that printable's author named.
 
 ## Sunday announcements
 

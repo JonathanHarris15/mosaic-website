@@ -751,24 +751,21 @@
                                 </template>
                             </div>
                         </div>
-                        <template x-for="group in sundayTypedGroups" :key="'typed-group-' + group.name">
-                            <div class="pe-sun__group">
-                                <p class="pe-sun__label" x-text="group.name"></p>
-                                <p class="pe-hint" x-show="group.name === 'Prayer'">Typed on the Sunday's Files tab for this date.</p>
-                                <div class="pe-chips">
-                                    <template x-for="f in group.fields" :key="'typed-' + f.key">
-                                        <span class="pe-chip" draggable="true" tabindex="0"
-                                              :data-chip="chipKey('global', 'sunday_typed', f.key)"
-                                              :title="f.value || f.label"
-                                              @dragstart="onSundayChipDragStart($event, 'sunday_typed', f)" @dragend="onChipDragEnd()">
-                                            <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
-                                            <span class="pe-chip__name" x-text="f.label"></span>
-                                            <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                        </span>
-                                    </template>
-                                </div>
+                        <div class="pe-sun__group" x-show="sundayTypedChips.length">
+                            <p class="pe-sun__label">Booklet text</p>
+                            <div class="pe-chips">
+                                <template x-for="f in sundayTypedChips" :key="'typed-' + f.key">
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="chipKey('global', 'sunday_typed', f.key)"
+                                          :title="f.value || f.label"
+                                          @dragstart="onSundayChipDragStart($event, 'sunday_typed', f)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
+                                        <span class="pe-chip__name" x-text="f.label"></span>
+                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                    </span>
+                                </template>
                             </div>
-                        </template>
+                        </div>
                     </article>
                 </section>
 

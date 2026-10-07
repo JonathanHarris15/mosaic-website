@@ -143,10 +143,10 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
 
 test('This Sunday and Repeat a box are in the drawer, and scripture is folded', () => {
     const Data = require('../public/printable-data-core.js');
-    const Link = require('../public/printable-link-core.js');
+    const Typed = require('../public/sunday-typed-core.js');
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
-    const drawer = Wires.sundayDrawerFields(Data, global.ScripturePassage, Link.SUNDAY_FILL);
+    const drawer = Wires.sundayDrawerFields(Data, global.ScripturePassage, Typed.FIELDS);
     assert.ok(drawer.hymns.some(f => f.key === 'hymn2'), 'a hymn name is a Sunday chip');
     assert.equal(drawer.service.find(f => f.key === 'longDate').label, 'Date');
     assert.ok(drawer.service.some(f => f.key === 'theme'));
@@ -163,6 +163,9 @@ test('This Sunday and Repeat a box are in the drawer, and scripture is folded', 
     assert.equal(Wires.chipPreview('text', 'How Rich a Treasure We Possess'), 'How Rich a Treasure We Possess');
     assert.equal(Wires.chipPreview('image', 'https://example.test/map.png'), 'Picture set');
     assert.match(html, /aria-label="This Sunday"/);
+    assert.match(html, /sundayTypedChips/);
+    assert.doesNotMatch(html, /sundayTypedGroups/);
+    assert.doesNotMatch(html, /Typed on the Sunday's Files tab/);
     assert.match(html, /sundayHymnChips/);
     assert.match(html, /onSundayChipDragStart\(\$event, 'sunday', f\)/);
     assert.match(html, /aria-label="Repeat a box"/);
