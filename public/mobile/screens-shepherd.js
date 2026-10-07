@@ -165,6 +165,7 @@
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
     var canWriteRecord = !!(flags && flags.canWriteRecord);
+    var canReadEditor = !!(flags && flags.canReadEditor);
 
     // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
     useEffect(function () {
@@ -270,6 +271,16 @@
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 24, fontWeight: 600, color: "var(--primary)" }}>Shepherd Dashboard</div>
             <p style=${{ margin: "4px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Elder-only tools for member care.</p>
           </div>
+
+          ${canReadEditor ? html`<a href="analytics.html?shell=mobile" style=${{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: 14, textDecoration: "none", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+            <span style=${{ width: 44, height: 44, borderRadius: "var(--radius-full)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tertiary-container)", color: "var(--on-tertiary-container)" }}>${Ic("bar-chart-3", 22)}</span>
+            <span style=${{ flex: 1, minWidth: 0 }}>
+              <span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>Insights</span>
+              <span style=${{ display: "block", marginTop: 2, fontFamily: "var(--font-display)", fontSize: 16, color: "var(--primary)" }}>Service Analytics</span>
+              <span style=${{ display: "block", marginTop: 2, fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.4, color: "var(--on-surface-variant)" }}>Who has served, how often, and when they last did.</span>
+            </span>
+            <span style=${{ flexShrink: 0, fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--primary)" }}>Open ${Ic("chevron-right", 16)}</span>
+          </a>` : null}
 
           <div style=${{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             ${navCards.map(function (c) {

@@ -282,5 +282,5 @@
       </${Screen}>`;
   }
 
-  M.SCREENS = Object.assign(M.SCREENS || {}, { admin: AdminScreen });
+  // Admin route opens admin-dashboard.html in the shell (destinations SHELL_PAGES).
 })();

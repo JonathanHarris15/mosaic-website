@@ -61,12 +61,19 @@
         firebase.firestore().collection("users").doc(user.uid).get()
           .then(function (doc) {
             var d = (doc.exists && doc.data()) || {};
+            var flags = window.AccessCore ? window.AccessCore.pageFlags(d) : null;
+            var account = flags ? flags.account : {
+              permissionLevel: d.permissionLevel || d.role || "viewer",
+              pastoralAssistant: d.pastoralAssistant === true,
+            };
             var who = {
               // Same fallback chain as the app's own profile loader, so the two
               // drawers cannot end up calling one person two different things.
               name: d.name || d.displayName || user.displayName || (user.email || "").split("@")[0] || "Friend",
-              permissionLevel: d.permissionLevel || d.role || "viewer",
-              pastoralAssistant: d.pastoralAssistant === true,
+              permissionLevel: flags ? flags.currentPermissionLevel : account.permissionLevel,
+              pastoralAssistant: flags ? flags.pastoralAssistant : account.pastoralAssistant,
+              accountLevelId: account.accountLevelId || null,
+              permissions: account.permissions || null,
             };
             // Your Directory Photo for the drawer's avatar. Only when you are a
             // Linked User, and never at the cost of the drawer itself: a refused

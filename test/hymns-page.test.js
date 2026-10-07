@@ -542,7 +542,7 @@ test('the phone opens the Hymns page and keeps the stored home key', () => {
     assert.match(app, /if \(route === "hymnManager"\) \{\s*\n\s*if \(data\.forget\) data\.forget\("hymns"\);/);
     assert.match(app, /HymnsPage\.phoneShellHref/);
     assert.doesNotMatch(app, /manager\.html/);
-    assert.match(app, /redirectOldHymnRoute/);
+    assert.match(app, /redirectShellOnlyRoute/);
     assert.doesNotMatch(screens, /HymnDirectoryScreen/);
     assert.doesNotMatch(screens, /HymnDetailsScreen/);
     assert.doesNotMatch(screens, /Hymn Directory/);

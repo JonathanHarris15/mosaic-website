@@ -316,7 +316,7 @@
     var themeLine = [theme, sermon].filter(Boolean).join(" · ");
     var dateLabel = HD && svc && svc.date ? HD.dayMonth(svc.date, HD.todayKey(new Date())) : "";
     var ready = HD && svc ? HD.readiness(svc) : null;
-    var canFix = !!(HD && user && HD.canFixService(user.permissionLevel));
+    var canFix = !!(user && window.AccessCore && window.AccessCore.canFixSundayService(user));
     var notReady = !!(ready && ready.notReady && canFix);
     var blanksHref = svc && svc.date
       ? "service-builder.html?date=" + encodeURIComponent(svc.date) + "&validate=true&shell=mobile"
@@ -383,7 +383,7 @@
   // Profile is shell-adapted (see SHELL_PAGES below): the real profile.html
   // (password change, account management) runs inside the WebView with
   // ?shell=mobile so the mobile app inherits every feature. The Admin Dashboard
-  // is now a native screen (screens-admin.js, route "admin").
+  // opens admin-dashboard.html in the shell (see SHELL_PAGES in destinations.js).
 
   // Merge app-level screens with the content screens from screens-content.js.
   M.SCREENS = Object.assign(M.SCREENS || {}, { login: LoginScreen, home: HomeScreen });
@@ -567,7 +567,7 @@
     });
     useEffect(function () {
       function onHash() {
-        if (redirectOldHymnRoute()) return;
+        if (redirectShellOnlyRoute()) return;
         routeState[1](currentRoute());
         menuState[1](false);
       }
@@ -612,21 +612,24 @@
   // #/hymnDirectory, #/hymnDetails and #/hymnManager are old screens. The
   // drawer goes through nav(), which already opens hymns.html. A pasted hash
   // does not, so the shell sends it on before the missing screen can paint.
-  function oldHymnHref() {
+  function shellOnlyHref() {
     var route = currentRoute();
+    if (route === "admin" && SHELL_PAGES.admin) {
+      return SHELL_PAGES.admin + "?shell=mobile";
+    }
     if (route !== "hymnDirectory" && route !== "hymnDetails" && route !== "hymnManager") return "";
     var fromHash = currentHashParams();
     return HymnsPage.phoneShellHref(route, Object.assign({}, M.navParams || {}, fromHash));
   }
-  function redirectOldHymnRoute() {
-    var href = oldHymnHref();
+  function redirectShellOnlyRoute() {
+    var href = shellOnlyHref();
     if (!href) return false;
     window.location.replace(href);
     return true;
   }
 
   function mount() {
-    if (redirectOldHymnRoute()) return;
+    if (redirectShellOnlyRoute()) return;
     var root = typeof document !== "undefined" && document.getElementById("app");
     if (!root) return;
     if (!location.hash && history.replaceState) history.replaceState(null, "", location.pathname + location.search + "#/home");
