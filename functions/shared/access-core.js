@@ -172,6 +172,34 @@
         return false;
     }
 
+    function accessesAdminDashboard(value) {
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'admin.dashboard.access');
+        }
+        const level = account.permissionLevel;
+        return level === 'admin' || level === 'super_admin';
+    }
+
+    function canViewDirectory(value) {
+        const account = accountOf(value);
+        if (Levels && account.permissions) {
+            return Levels.hasPermission(account, 'directory.view');
+        }
+        const level = account.permissionLevel || 'viewer';
+        return [
+            'member', 'editor', 'elder', 'admin', 'super_admin',
+            PASTORAL_ASSISTANT_LEVEL,
+        ].indexOf(level) !== -1;
+    }
+
+    function canFixSundayService(value) {
+        if (Levels && accountOf(value).permissions) {
+            return hasPermission(value, 'services.builder.edit');
+        }
+        return legacyWritesAsEditor(permissionLevelOf(value));
+    }
+
     function pageFlags(userData) {
         const account = accountOf(userData);
         return {
@@ -205,6 +233,9 @@
         liftsHidden,
         badgeLabel,
         hasPermission,
+        accessesAdminDashboard,
+        canViewDirectory,
+        canFixSundayService,
         pageFlags,
     };
 
