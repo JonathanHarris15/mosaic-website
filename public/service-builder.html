@@ -472,7 +472,7 @@
                          on their own page, one tap away. -->
                     <div class="flex items-center md:justify-end gap-2 mt-4 w-full md:w-auto min-w-0 max-w-full">
                         <label class="font-label-md text-[11px] text-secondary shrink-0" for="liturgy-order-select">Liturgy order</label>
-                        <select id="liturgy-order-select" :value="selectedOrderId" @change="changeLiturgyOrder($event.target.value)" :disabled="!canEdit" class="rounded-lg border-outline-variant bg-surface-container-low text-xs py-1 pl-2 pr-7 disabled:opacity-50 min-w-0 max-w-full flex-1 md:flex-none truncate">
+                        <select id="liturgy-order-select" :value="selectedOrderId" @change="changeLiturgyOrder($event.target.value)" :disabled="!canEdit" class="rounded-lg border-outline-variant bg-surface-container-low text-xs py-1 pl-2 pr-9 disabled:opacity-50 min-w-0 max-w-full flex-1 md:flex-none truncate">
                             <template x-for="o in liturgyOrders" :key="o.id">
                                 <option :value="o.id" :selected="o.id === selectedOrderId" x-text="orderLabel(o)"></option>
                             </template>
