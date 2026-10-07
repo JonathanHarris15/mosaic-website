@@ -215,11 +215,11 @@ On a Sunday's Files tab, a linked printable offers two text buttons, **From this
 
 A printable is linked from the recurring event's **Printables** tab, and from a Sunday's **Files** tab. The button is **Link a printable**. The link is stored on the series, so every date of that event opens it. The same button stays on a single date's page.
 
-Where a printable is linked — a Sunday's Files tab, or any other event's Files tab — an editor fills the blanks that printable asked for. The card is **`.m-card`**, heading **For the linked printable**, fields are **`.m-field`** / **`.m-input`**, and one button reads **Save for this date**.
+Where a printable is linked, the row opens the preview. An editor — and anyone who writes as an editor — types on that preview, in the spot the blank already occupies. Below editor the same page is static: no boxes and no count. Print and folio stay static either way.
 
-Author-defined fields (text, image, number, date, list) are stored on that occurrence and read back into the printable for that date. A list is one card per row, with **Add a row** and **Remove**. The section heading is the printable's name.
+A blank is a value a person supplies. That is a field filled on the event (text, image, number, date, or one cell of a list) and Sunday booklet text the page is wired to: prayer-country facts and Mosaic Kids. A live Sunday, a hymn, scripture, and announcements are not blanks. Announcements stay on the Announcements tab. The same blank placed twice is one blank. An empty list that drew no rows is one blank, with **Add a row** or **Add a question** on the list itself.
 
-A wire to Sunday booklet text, or to any other source, does not add a field or a group heading here. Prayer country and Mosaic Kids are not a form. The same card, on a Sunday and on any other event, shows only the blanks that printable's author named.
+A small box on the preview, `role="status"`, reads **3 left to fill**, **1 left to fill**, or **Nothing left to fill**. It is hidden when the page has no blanks. Typing saves when the box loses focus. The words for the event stay on that occurrence. Sunday booklet text stays on that Sunday, so every printable bound to it reads the same words. The Files tab does not list the blanks again.
 
 ## Sunday announcements
 
