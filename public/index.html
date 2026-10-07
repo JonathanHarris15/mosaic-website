@@ -392,6 +392,8 @@
          permission level is written — the drawer says "Elder", not "elder". -->
     <script src="mobile/destinations.js"></script>
     <script src="dashboard-nav.js"></script>
+    <script src="person-photo-core.js"></script>
+    <script src="drawer-who.js"></script>
     <script src="desktop-drawer.js"></script>
 
     <!-- One line, one count, landing on the Commitments page (MS-215). Built as
@@ -1010,30 +1012,14 @@
             // the drawer still lists the pages a visitor may open.
             let who = null;
             if (user) {
-                let name = 'Friend';
+                let userData = null;
                 try {
-                    const userData = await getUserData(user.uid);
+                    userData = await getUserData(user.uid);
                     if (userData) {
                         permissionLevel = userData.permissionLevel || userData.role || 'viewer';
                         pastoralAssistant = userData.pastoralAssistant === true;
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         personId = userData.personId || null;
-                        if (userData.email) {
-                            name = userData.email.split('@')[0];
-                            name = name.charAt(0).toUpperCase() + name.slice(1);
-                        }
-                        // Prefer the linked directory person's first name, if one is linked.
-                        if (userData.personId) {
-                            try {
-                                const personDoc = await db.collection('people').doc(userData.personId).get();
-                                const personName = personDoc.exists ? (personDoc.data().name || '').trim() : '';
-                                if (personName) {
-                                    name = personName.split(/\s+/)[0];
-                                }
-                            } catch (pe) {
-                                console.error("Error fetching linked person:", pe);
-                            }
-                        }
                     }
                 } catch (e) {
                     console.error("Error fetching user data:", e);
@@ -1043,13 +1029,9 @@
                     ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
                     : { permissionLevel, pastoralAssistant: false };
 
-                const Destinations = window.MosaicDestinations;
-                who = {
-                    name,
-                    role: Destinations ? Destinations.accountLabel(account) : '',
-                    initials: Destinations ? Destinations.initials(name) : '',
-                    href: 'profile.html',
-                };
+                if (typeof DrawerWho !== 'undefined') {
+                    who = await DrawerWho.fromSession(user, userData, db);
+                }
 
                 // Gated cards — one registry (dashboard-nav.js), same gates the
                 // drawer reads on every other page (MS-697).

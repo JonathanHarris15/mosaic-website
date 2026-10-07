@@ -196,6 +196,38 @@
         return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     }
 
+    // Directory Photo when present, initials when not — shared by every drawer
+    // head so a broken image URL cannot leave an empty circle (MS-714).
+    function drawerAvatarLetters(who) {
+        const w = who || {};
+        const fromWho = String(w.initials || '').trim();
+        if (fromWho) return fromWho;
+        return initialsOf(w.name);
+    }
+
+    function writeDrawerAvatar(el, who, doc) {
+        if (!el) return;
+        const letters = drawerAvatarLetters(who) || '?';
+        const url = who && who.photoUrl && String(who.photoUrl).trim();
+        const documentRef = doc || (typeof document !== 'undefined' ? document : null);
+        while (el.firstChild) el.removeChild(el.firstChild);
+        el.textContent = '';
+        if (!url || !documentRef) {
+            el.textContent = letters;
+            return;
+        }
+        const img = documentRef.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.style.cssText = 'width:100%;height:100%;' + frameStyle(who.photoCrop);
+        img.addEventListener('error', function onErr() {
+            img.removeEventListener('error', onErr);
+            if (img.parentNode === el) el.removeChild(img);
+            el.textContent = letters;
+        });
+        el.appendChild(img);
+    }
+
     function buildCropUpdate(crop) {
         return { photoCrop: normalizeCrop(crop) };
     }
@@ -314,6 +346,8 @@
         frameStyle,
         frameStyleObject,
         initialsOf,
+        drawerAvatarLetters,
+        writeDrawerAvatar,
         buildCropUpdate,
         panCrop,
         // browser-only

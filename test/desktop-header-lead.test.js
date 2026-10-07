@@ -19,6 +19,15 @@ test('drawer pages load the shared desktop nav scripts', () => {
     }
 });
 
+test('every drawer destination loads drawer-who and person-photo-core (MS-714)', () => {
+    const destinations = Array.from(DashboardNav.DRAWER_HREFS);
+    for (const file of destinations) {
+        const html = read(file);
+        assert.match(html, /drawer-who\.js/, file + ' is missing drawer-who.js');
+        assert.match(html, /person-photo-core\.js/, file + ' is missing person-photo-core.js');
+    }
+});
+
 test('every drawer destination loads access-core so gated tiles can appear (MS-698)', () => {
     // Without AccessCore, editor/elder gates are false and a signed-in
     // super_admin only sees Hymns, Calendar, Services, Directory, and Admin.

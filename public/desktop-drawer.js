@@ -86,8 +86,14 @@
         if (who && who.name) {
             const link = el('a', 'm-drawer__who');
             link.href = who.href || 'profile.html';
-            const avatar = el('span', 'm-avatar', who.initials || '?');
+            const avatar = el('span', 'm-avatar');
             avatar.setAttribute('aria-hidden', 'true');
+            const Photo = global && global.PersonPhotoCore;
+            if (Photo && typeof Photo.writeDrawerAvatar === 'function') {
+                Photo.writeDrawerAvatar(avatar, who);
+            } else {
+                avatar.textContent = (who.initials || '?');
+            }
             const main = el('span', 'm-drawer__who-main');
             main.appendChild(el('span', 'm-drawer__name', who.name));
             if (who.role) main.appendChild(el('span', 'm-drawer__role', who.role));
