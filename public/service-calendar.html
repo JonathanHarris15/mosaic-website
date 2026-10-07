@@ -160,17 +160,32 @@
             background-color: inherit;
         }
 
-        /* ── Planning view (MS-245) ──────────────────────────────────────────
-           The liturgy columns are always in the markup and hidden by default,
-           so turning the Planning view on is a class rather than a re-render.
-           A re-render would take away the box somebody was mid-way through
-           typing into. */
-        .planning-col { display: none; }
-        .planning-mode .planning-col { display: table-cell; }
+        /* ── Liturgy order toggles (ADR-0080) ────────────────────────────────
+           Every order, a check each. The ones on are the table's liturgy
+           columns. Managing the orders is an editor's job, so the link to it
+           waits for the page to know who you are. */
+        .cal-orders {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-xs) var(--space-md);
+            padding-bottom: var(--space-sm);
+        }
+        .cal-orders__label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        body:not(.can-edit) .cal-orders__manage { display: none; }
 
-        /* Things that appear inside an existing cell in the Planning view, so
-           they cannot use .planning-col — a table-cell inside a td is not a
-           thing. The Assigned badge is the only one so far. */
+        /* ── Planning view (MS-245) ──────────────────────────────────────────
+           The table given the whole width, the Directory folded to a rail, and
+           who is writing each Sunday at the front of its row. Turning it on is
+           a class rather than a re-render — a re-render would take away the
+           box somebody was mid-way through typing into. The Assigned badge
+           sits inside an existing cell, so it is shown, not a column. */
         .planning-only { display: none; }
         .planning-mode .planning-only { display: flex; }
 
@@ -720,6 +735,21 @@
                 <div x-show="view === 'table'" x-cloak id="table-view"
                      :class="planning ? 'planning-mode' : ''"
                      class="flex-grow overflow-hidden flex flex-col">
+                    <!-- The orders whose elements are the liturgy columns. A
+                         shared element is one column, Standard's come first. -->
+                    <div id="table-orders" class="cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
+                        <span id="table-orders-label" class="cal-orders__label">Liturgy orders</span>
+                        <template x-for="o in liturgyOrders" :key="o.id">
+                            <label class="m-check">
+                                <input type="checkbox" :value="o.id" :checked="isTableOrderOn(o.id)" @change="toggleTableOrder(o.id)" />
+                                <span x-text="o.name"></span>
+                            </label>
+                        </template>
+                        <a href="liturgy-orders.html" class="cal-orders__manage m-btn m-btn--quiet m-btn--sm">
+                            <span class="material-symbols-outlined">tune</span>
+                            <span class="m-btn__label">Manage orders</span>
+                        </a>
+                    </div>
                     <div id="calendar-table-container" class="flex-grow overflow-hidden flex flex-col">
                         <!-- Table will be injected here -->
                     </div>
@@ -727,12 +757,12 @@
             </div>
         </div>
 
-        <!-- The way into the Planning view: the table opened out to every
-             liturgy slot, for writing many Sundays in one sitting. Only
-             offered on the table, which is the only view it changes. -->
+        <!-- The way into the Planning view: the table given the whole width,
+             for writing many Sundays in one sitting. Only offered on the
+             table, which is the only view it changes. -->
         <button x-show="view === 'table'" x-cloak
                 @click="planning = !planning"
-                :title="planning ? 'Back to the ordinary table' : 'Open every liturgy column'"
+                :title="planning ? 'Back to the ordinary table' : 'Give the table the whole width'"
                 :class="planning ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-primary'"
                 class="fixed bottom-6 right-6 z-40 flex items-center gap-2 pl-4 pr-5 py-3 rounded-full border border-outline-variant shadow-lg hover:shadow-xl transition-all font-label-md text-sm">
             <span class="material-symbols-outlined text-[20px]" x-text="planning ? 'close_fullscreen' : 'open_in_full'"></span>
@@ -830,6 +860,10 @@
          (MS-152); without these it would silently lose the week's roster. -->
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <!-- The congregation's Liturgy Elements and Orders: the table's liturgy
+         columns (ADR-0080). -->
+    <script src="liturgy-order-core.js"></script>
+    <script src="liturgy-order-store.js"></script>
     <script src="service-calendar.js"></script>
 </body>
 

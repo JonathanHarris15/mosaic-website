@@ -86,6 +86,8 @@ function load(overrides) {
     const presence = require('../public/service-presence.js');
     sandbox.ServicePresence = presence.ServicePresence;
     sandbox.PresenceStore = presence.PresenceStore;
+    sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
+    sandbox.LiturgyOrderStore = require('../public/liturgy-order-store.js');
     Object.assign(sandbox, overrides || {});
 
     vm.createContext(sandbox);
@@ -137,11 +139,13 @@ test('the first snapshot is what the initial load waits for', async () => {
     assert.strictEqual(settled, true, 'the first snapshot should settle the load');
 });
 
-// A rendered row, near enough for injectServiceData to walk.
-function row(dateKey, cells) {
+// A rendered row, near enough for injectServiceData to walk. `liturgy` is the
+// row's liturgy cells, one per element column.
+function row(dateKey, cells, liturgy = []) {
     return {
         dataset: { serviceDate: dateKey },
         querySelector(sel) { return cells[sel] || null; },
+        querySelectorAll(sel) { return sel === '.liturgy-cell' ? liturgy : []; },
     };
 }
 
@@ -179,13 +183,12 @@ test('a Sunday emptied upstream goes back to a dash', async () => {
 test('a live snapshot does not reach into the box you are typing in', async () => {
     // The cell is hidden because its editor is open — see setupInlineEdit.
     const busy = cell({ textContent: 'Grace', style: { display: 'none' } });
-    const idle = cell({ textContent: '—' });
+    const idle = cell({ textContent: '—', dataset: { element: 'sermon' } });
     const db = fakeDb();
     const sb = load({ db });
     sb.document.querySelectorAll = () => [row('2026-08-16', {
         '.theme-cell': busy,
-        '.sermon-cell': idle,
-    })];
+    }, [idle])];
 
     const pending = sb.loadServiceData();
     db.emit({ '2026-08-16': { theme: 'Mercy', liturgy: { sermon: 'Romans 8' } } });

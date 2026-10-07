@@ -38,6 +38,43 @@ function calendarPage() {
             return this.planning && this.view === 'table';
         },
 
+        // Every Liturgy Order, each with a toggle over the table. The orders
+        // toggled on are the table's liturgy columns (ADR-0080); which ones
+        // are on is remembered on this device, like the view itself.
+        liturgyOrders: [],
+        tableOrderIds: [],
+
+        isTableOrderOn(id) {
+            return this.tableOrderIds.includes(id);
+        },
+
+        toggleTableOrder(id) {
+            const ids = this.isTableOrderOn(id)
+                ? this.tableOrderIds.filter(x => x !== id)
+                : this.tableOrderIds.concat([id]);
+            setTableOrderIds(ids);
+            this.tableOrderIds = currentTableOrderIds().slice();
+            if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
+        },
+
+        syncTableOrders() {
+            const catalog = currentCatalog();
+            const all = catalog.orders.map(o => o.id);
+            this.liturgyOrders = LiturgyOrderCore.toggledOrders(catalog, all)
+                .map(o => ({ id: o.id, name: o.name }));
+            this.tableOrderIds = currentTableOrderIds().slice();
+        },
+
+        // Public read, like the guide templates, so a signed-out visitor
+        // gets the congregation's orders too. A failed read is Standard.
+        async loadLiturgyOrders() {
+            this.syncTableOrders();
+            if (typeof db === 'undefined') return;
+            setLiturgyCatalog(await LiturgyOrderStore.loadCatalog(db));
+            this.syncTableOrders();
+            if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
+        },
+
         peopleRegistry: [],
         peopleFuse: null,
 
@@ -417,6 +454,7 @@ function calendarPage() {
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
+            this.loadLiturgyOrders();
             await this.loadPeopleRegistry();
         },
 
@@ -1150,17 +1188,11 @@ window.navigateToGuide = function(date) {
     const guide = svc && svc.guide;
     const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
 
-    // Which Service Guide system this week uses — the explicit per-week toggle set
-    // in the Order of Service editor, else a legacy `elements` blob, else v2
-    // (ADR-0010). One shared rule (GuideStore) so the calendar and the editor's
+    // One shared rule (GuideStore) so the calendar and the editor's
     // "Generate" button never drift.
-    const system = window.GuideStore
-        ? GuideStore.guideSystemOf(svc || {})
-        : ((guide && guide.format !== 'v2' && Array.isArray(guide.elements)) ? 'legacy' : 'v2');
-    const isLegacy = system === 'legacy';
     const target = window.GuideStore
         ? GuideStore.guideHref(svc || {}, date)
-        : (isLegacy ? `service-guide.html?date=${date}` : `service-guide-editor.html?date=${date}`);
+        : `service-guide-editor.html?date=${encodeURIComponent(date)}`;
 
     if (!isViewer && svc) {
         let incomplete = false;
@@ -1176,16 +1208,9 @@ window.navigateToGuide = function(date) {
                 const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && (a.title || a.content));
                 incomplete = (!v.pp_nation || !v.pp_capital) || (!v.kids_lesson_title || !v.kids_lesson_verse) || !annFilled;
             }
-        } else if (guide && guide.elements) {
-            const prayer = guide.elements.find(el => el.type === 'pastoral_prayer');
-            const kids = guide.elements.find(el => el.type === 'kids_section');
-            const announcements = guide.elements.find(el => el.type === 'announcements');
-
-            if (prayer && prayer.enabled && (!prayer.nation || !prayer.capital)) incomplete = true;
-            if (kids && kids.enabled && (!kids.lessonTitle || !kids.lessonVerse)) incomplete = true;
-            if (announcements && announcements.enabled && (!announcements.items || announcements.items.length === 0 || !announcements.items[0].title)) incomplete = true;
         } else {
-            // No guide config yet - definitely incomplete
+            // No template guide yet (none at all, or one from before the
+            // template system that the editor will offer to rebuild).
             incomplete = true;
         }
 
@@ -1274,49 +1299,67 @@ function renderList(grouped) {
     });
 }
 
-// The liturgy columns the Planning view adds (MS-245).
+// The table's liturgy columns (ADR-0080).
 //
-// One list, read three times — the header, the cell, and the editor that opens
-// when the cell is clicked. Adding a slot to the order of service means adding
-// a line here and nothing else; three hand-kept lists is how a column ends up
-// with a heading and no way to type into it.
+// The congregation's Liturgy Elements and Orders, read once. The orders
+// toggled on above the table decide the columns: the union of their elements,
+// Standard first, the rest by name, each element where it is first seen
+// (LiturgyOrderCore.tableColumns). One element is one column however many
+// orders share it, because a shared element is the same id and so the same
+// `liturgy.<id>` on the Sunday.
 //
-// The existing Pastoral Prayer column carries the two PEOPLE prayed for. The
-// one added here is its scripture REFERENCE, which is a different thing and a
-// different field.
-//
-// ⚠ That reference is stored as `liturgy.scriptureReading`. The name is a
-// leftover — the Order of Service labels the very same field "Pastoral Prayer"
-// (service-builder.js `_MOVEMENTS`), and CANONICAL_MAPPING has both 'Scripture
-// Reading' and 'Pastoral Prayer' pointing at it. The heading here follows what
-// the Order of Service calls it, because that is what the room calls it.
-//
-// The hymn names are the ones the code stores (hymnMid1, hymnEnd1 …) rather
-// than the Hymn 3/4/5/6 people say in the room. Jonathan's call — the fields
-// keep their names, so the headings match what is underneath them.
-//
-// In liturgical order, so reading left to right reads the service.
-const PLANNING_COLUMNS = [
-    { label: 'Preparatory',           cell: 'prep-hymn-cell',       field: 'preparatoryHymn',   type: 'hymn'  },
-    { label: 'Call to Worship',       cell: 'call-worship-cell',    field: 'callToWorship',     type: 'verse' },
-    { label: 'Hymn 1',                cell: 'hymn1-cell',           field: 'hymn1',             type: 'hymn'  },
-    { label: 'Hymn 2',                cell: 'hymn2-cell',           field: 'hymn2',             type: 'hymn'  },
-    { label: 'Call to Confession',    cell: 'call-confession-cell', field: 'callToConfession',  type: 'verse' },
-    { label: 'Assurance of Pardon',   cell: 'assurance-cell',       field: 'assuranceOfPardon', type: 'verse' },
-    { label: 'Hymn Mid 1',            cell: 'hymn-mid1-cell',       field: 'hymnMid1',          type: 'hymn'  },
-    { label: 'Hymn Mid 2',            cell: 'hymn-mid2-cell',       field: 'hymnMid2',          type: 'hymn'  },
-    { label: 'Pastoral Prayer Ref',   cell: 'prayer-ref-cell',      field: 'scriptureReading',  type: 'verse' },
-    { label: 'Hymn End 1',            cell: 'hymn-end1-cell',       field: 'hymnEnd1',          type: 'hymn'  },
-    { label: 'Hymn End 2',            cell: 'hymn-end2-cell',       field: 'hymnEnd2',          type: 'hymn'  },
-    { label: 'Benediction',           cell: 'benediction-cell',     field: 'benediction',       type: 'verse' },
-];
+// Until the stored catalog arrives this is the seed, which is what an empty
+// collection reads as anyway, so the first draw already has Standard.
+const TABLE_ORDERS_KEY = 'calendarLiturgyOrders';
+let liturgyCatalog = null;
+let tableOrderIds = null;
 
-// Liturgy fields edited with the scripture picker rather than a plain box.
-const LITURGY_VERSE_FIELDS = ['sermon'].concat(
-    PLANNING_COLUMNS.filter(c => c.type === 'verse').map(c => c.field));
+function currentCatalog() {
+    if (!liturgyCatalog) liturgyCatalog = LiturgyOrderCore.standardCatalog();
+    return liturgyCatalog;
+}
 
-const LITURGY_HYMN_FIELDS = PLANNING_COLUMNS
-    .filter(c => c.type === 'hymn').map(c => c.field);
+function rememberedTableOrders() {
+    try {
+        return JSON.parse(localStorage.getItem(TABLE_ORDERS_KEY));
+    } catch (e) {
+        return null;
+    }
+}
+
+function currentTableOrderIds() {
+    if (!tableOrderIds) {
+        tableOrderIds = LiturgyOrderCore.readToggles(rememberedTableOrders(), currentCatalog());
+    }
+    return tableOrderIds;
+}
+
+function setLiturgyCatalog(catalog) {
+    liturgyCatalog = catalog;
+    tableOrderIds = LiturgyOrderCore.readToggles(rememberedTableOrders(), catalog);
+}
+
+function setTableOrderIds(ids) {
+    tableOrderIds = ids.slice();
+    localStorage.setItem(TABLE_ORDERS_KEY, JSON.stringify(tableOrderIds));
+}
+
+function liturgyColumns() {
+    return LiturgyOrderCore.tableColumns(currentCatalog(), currentTableOrderIds());
+}
+
+// The element a cell's field names, or null for an identity field (theme,
+// preacher, …). Element ids never collide with those: the reserved list in
+// liturgy-order-core keeps a new element off them.
+function liturgyElementFor(field) {
+    return LiturgyOrderCore.elementById(currentCatalog(), field);
+}
+
+// How one element's value reads in its cell.
+function liturgyCellText(element, value) {
+    if (element.primitive === 'song') return hymnCellText(value);
+    return LiturgyOrderCore.displayValue(element.primitive, value) || '—';
+}
 
 // Who is down to WRITE this Sunday's order of service.
 //
@@ -1369,6 +1412,12 @@ function hymnCellText(slot) {
     return slot.name || '—';
 }
 
+// The fixed columns other than Date, whose cell holds the month band's label:
+// Theme, Leader, Preacher, Music, Prayers, Prayed For, and Actions. The band's
+// filler spans these plus every liturgy column, so it reaches the far edge
+// however many orders are on.
+const IDENTITY_COLUMN_COUNT = 7;
+
 function renderTable(grouped) {
     const container = document.getElementById('calendar-table-container');
     container.innerHTML = '';
@@ -1379,22 +1428,22 @@ function renderTable(grouped) {
     const table = document.createElement('table');
     table.className = 'w-full text-left border-collapse min-w-[1000px] relative';
     
-    // Sticky Header
+    // Sticky Header. The identity columns are fixed; the liturgy columns are
+    // whatever the toggled orders hold.
+    const columns = liturgyColumns();
     const thead = document.createElement('thead');
     thead.className = 'sticky-header font-label-md text-label-md text-primary';
     thead.innerHTML = `
         <tr>
             <th class="px-md py-sm border-b border-outline-variant sticky-col-left">Date</th>
-            <th class="px-md py-sm border-b border-outline-variant">Sermon</th>
             <th class="px-md py-sm border-b border-outline-variant">Theme</th>
             <th class="px-md py-sm border-b border-outline-variant">Leader</th>
             <th class="px-md py-sm border-b border-outline-variant">Preacher</th>
-            <th class="px-md py-sm border-b border-outline-variant">Baptism</th>
             <th class="px-md py-sm border-b border-outline-variant">Music</th>
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
-            <th class="px-md py-sm border-b border-outline-variant">Pastoral Prayer</th>
-            ${PLANNING_COLUMNS.map(c =>
-                `<th class="px-md py-sm border-b border-outline-variant planning-col whitespace-nowrap">${c.label}</th>`
+            <th class="px-md py-sm border-b border-outline-variant whitespace-nowrap" title="The two people the pastoral prayer is for">Prayed For</th>
+            ${columns.map(c =>
+                `<th class="px-md py-sm border-b border-outline-variant whitespace-nowrap" data-element="${escapeHtml(c.id)}">${escapeHtml(c.name)}</th>`
             ).join('')}
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
         </tr>
@@ -1419,7 +1468,7 @@ function renderTable(grouped) {
                     <td class="px-md py-2 sticky-col-left bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
-                    <td colspan="${9 + PLANNING_COLUMNS.length}" class="px-md py-2 bg-surface-container-low/90 backdrop-blur-sm" aria-hidden="true"></td>
+                    <td colspan="${IDENTITY_COLUMN_COUNT + columns.length}" class="px-md py-2 bg-surface-container-low/90 backdrop-blur-sm" aria-hidden="true"></td>
                 `;
                 tbody.appendChild(separatorRow);
 
@@ -1438,9 +1487,6 @@ function renderTable(grouped) {
                                 <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                             </div>
                         </td>
-                        <td class="px-md py-md min-w-[160px]">
-                            <div class="sermon-cell font-body-md text-primary text-sm">—</div>
-                        </td>
                         <td class="px-md py-md min-w-[200px]">
                             <div class="theme-cell font-body-md text-on-surface-variant text-sm line-clamp-2">—</div>
                         </td>
@@ -1451,9 +1497,6 @@ function renderTable(grouped) {
                             <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
-                            <div class="baptism-cell font-body-md text-on-surface-variant text-sm">—</div>
-                        </td>
-                        <td class="px-md py-md whitespace-nowrap">
                             <div class="music-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
@@ -1462,9 +1505,10 @@ function renderTable(grouped) {
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="pastoral-prayer-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
                         </td>
-                        ${PLANNING_COLUMNS.map(c => `
-                        <td class="px-md py-md planning-col min-w-[150px] relative">
-                            <div class="${c.cell} font-body-md text-on-surface-variant text-sm">—</div>
+                        ${columns.map(c => `
+                        <td class="px-md py-md min-w-[150px] relative">
+                            <div class="liturgy-cell font-body-md text-on-surface-variant text-sm" data-element="${escapeHtml(c.id)}">—</div>
+                            ${c.hasRole ? `<div class="liturgy-carrier text-[11px] text-on-surface-variant/70" data-element="${escapeHtml(c.id)}"></div>` : ''}
                         </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
@@ -1705,12 +1749,6 @@ function injectServiceData(serviceMap) {
             }
         }
 
-        const sermonCell = el.querySelector('.sermon-cell');
-        if (sermonCell) {
-            setCellText(sermonCell, (svc.liturgy && svc.liturgy.sermon) || '—');
-            if (canEdit) setupInlineEdit(sermonCell, dateKey, 'sermon');
-        }
-
         const themeCell = el.querySelector('.theme-cell');
         if (themeCell) {
             setCellText(themeCell, svc.theme || '—');
@@ -1731,16 +1769,6 @@ function injectServiceData(serviceMap) {
                 preacherCell.setAttribute('data-person-id', svc.preacherId || '');
             }
             if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
-        }
-
-        const baptismCell = el.querySelector('.baptism-cell');
-        if (baptismCell) {
-            // Baptism Candidates are linked to People and managed in the Order of
-            // Service Builder, so the calendar shows them read-only. Gate on
-            // hasBaptism so a stale candidate left in liturgy.baptism (e.g. after
-            // the flag was toggled/derived off) isn't shown as an upcoming
-            // baptism here when every other view hides it.
-            setCellText(baptismCell, (svc.hasBaptism && baptismCandidateNames(svc)) || '—');
         }
 
         const musicCell = el.querySelector('.music-cell');
@@ -1819,19 +1847,22 @@ function injectServiceData(serviceMap) {
             }
         }
 
-        // The Planning view's liturgy columns (MS-245). Present in the markup
-        // whether or not the Planning view is on, so turning it on is a class
-        // on the table rather than a re-render — a re-render would take away
-        // the box somebody was typing in.
-        const liturgy = svc.liturgy || {};
-        PLANNING_COLUMNS.forEach(col => {
-            const cell = el.querySelector('.' + col.cell);
-            if (!cell) return;
-            const value = col.type === 'hymn'
-                ? hymnCellText(liturgy[col.field])
-                : (liturgy[col.field] || '—');
-            setCellText(cell, value);
-            if (canEdit) setupInlineEdit(cell, dateKey, col.field);
+        // The liturgy columns: one per element of the toggled orders. A value
+        // shows whatever order this Sunday follows — a column is an element,
+        // and the value under `liturgy.<id>` is there or it is not. People
+        // (a baptism's candidates) are read-only here: naming one writes the
+        // candidate's own record too (ADR-0006), and that lives on the Order
+        // of Service.
+        el.querySelectorAll('.liturgy-cell').forEach(cell => {
+            const element = liturgyElementFor(cell.dataset.element);
+            if (!element) return;
+            setCellText(cell, liturgyCellText(element, LiturgyOrderCore.valueOf(svc, element)));
+            if (canEdit && element.primitive !== 'people') setupInlineEdit(cell, dateKey, element.id);
+        });
+        el.querySelectorAll('.liturgy-carrier').forEach(cell => {
+            const element = liturgyElementFor(cell.dataset.element);
+            const carrier = element && LiturgyOrderCore.carrierOf(svc, element);
+            setCellText(cell, carrier ? carrier.name : '');
         });
 
         const prayersCell = el.querySelector('.prayers-cell');
@@ -2127,9 +2158,7 @@ function openPersonCellEditor(el, dateKey, field, current) {
 // box for the same element — a hymn locked on one is locked on the other,
 // which is the entire point of locking it.
 function presenceKeyFor(field) {
-    return LITURGY_HYMN_FIELDS.includes(field) || LITURGY_VERSE_FIELDS.includes(field)
-        ? 'liturgy.' + field
-        : field;
+    return liturgyElementFor(field) ? 'liturgy.' + field : field;
 }
 
 // Mark a cell somebody else is in: a face, a name, and no way in. Drawn on the
@@ -2156,6 +2185,38 @@ function markIfHeld(el, dateKey, field) {
     return holder;
 }
 
+// Write one top-level field typed into the table (theme, or a name typed
+// over a person cell), and keep the page's copy of the Sunday in step.
+async function writeServiceField(dateKey, field, newVal) {
+    // Map display field to ID field if applicable
+    const idFieldMap = {
+        'serviceLeader': 'serviceLeaderId',
+        'musicLeader': 'musicLeaderId',
+        'preacher': 'preacherId',
+        'prayerPraiseName': 'prayerPraiseId',
+        'prayerConfessionName': 'prayerConfessionId'
+    };
+
+    const updates = {
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    updates[field] = newVal;
+
+    // Clear ID if we're updating a name field, as it's now a literal string
+    if (idFieldMap[field]) {
+        updates[idFieldMap[field]] = null;
+    }
+
+    // set() with merge is correct for top-level fields (creates the doc if needed).
+    await db.collection('services').doc(dateKey).set(updates, { merge: true });
+
+    // Update global map to keep views in sync if they toggle
+    if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+    serviceDataMap[dateKey][field] = newVal;
+    if (idFieldMap[field]) serviceDataMap[dateKey][idFieldMap[field]] = null;
+}
+
 function setupInlineEdit(el, dateKey, field) {
     // A cell somebody else is in gets a face instead of an editor. Checked
     // before the handler is attached, so the cell is not merely refusing
@@ -2172,6 +2233,7 @@ function setupInlineEdit(el, dateKey, field) {
 
     // Check if it's a Person field
     const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
+    const element = liturgyElementFor(field);
 
     el.onclick = (e) => {
         e.stopPropagation();
@@ -2187,12 +2249,12 @@ function setupInlineEdit(el, dateKey, field) {
             return;
         }
 
-        if (LITURGY_HYMN_FIELDS.includes(field)) {
+        if (element && element.primitive === 'song') {
             openHymnEditor(el, dateKey, field);
             return;
         }
 
-        if (LITURGY_VERSE_FIELDS.includes(field)) {
+        if (element && element.primitive === 'scripture') {
             const currentVal = el.textContent === '—' ? '' : el.textContent;
 
             // Fix flicker by checking if already editing this cell
@@ -2422,52 +2484,12 @@ function setupInlineEdit(el, dateKey, field) {
                 el.classList.add('saving-pulse', 'text-secondary/50');
                 
                 try {
-                    // Map display field to ID field if applicable
-                    const idFieldMap = {
-                        'serviceLeader': 'serviceLeaderId',
-                        'musicLeader': 'musicLeaderId',
-                        'preacher': 'preacherId',
-                        'prayerPraiseName': 'prayerPraiseId',
-                        'prayerConfessionName': 'prayerConfessionId'
-                    };
-
-                    const updates = {
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-
-                    if (field === 'baptism') {
-                        updates.hasBaptism = newVal !== '';
+                    if (element) {
+                        await writeLiturgyField(dateKey, field, newVal);
                     } else {
-                        updates[field] = newVal;
+                        await writeServiceField(dateKey, field, newVal);
                     }
 
-                    // Clear ID if we're updating a name field, as it's now a literal string
-                    if (idFieldMap[field]) {
-                        updates[idFieldMap[field]] = null;
-                    }
-
-                    // set() with merge is correct for top-level fields (creates the doc if needed).
-                    await db.collection('services').doc(dateKey).set(updates, { merge: true });
-
-                    // Baptism also writes into the nested liturgy map — must use update() so
-                    // dot notation is interpreted as a field path, not a literal key name.
-                    if (field === 'baptism') {
-                        await db.collection('services').doc(dateKey).update({
-                            'liturgy.baptism': newVal
-                        });
-                    }
-                    
-                    // Update global map to keep views in sync if they toggle
-                    if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
-                    if (field === 'baptism') {
-                        serviceDataMap[dateKey].hasBaptism = updates.hasBaptism;
-                        if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
-                        serviceDataMap[dateKey].liturgy.baptism = newVal;
-                    } else {
-                        serviceDataMap[dateKey][field] = newVal;
-                        if (idFieldMap[field]) serviceDataMap[dateKey][idFieldMap[field]] = null;
-                    }
-                    
                     // Trigger a re-injection to update all views (List and Table)
                     injectServiceData(serviceDataMap);
                 } catch (err) {
@@ -2790,7 +2812,9 @@ function escapeHtml(str) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen,
-        PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText,
+        liturgyColumns, liturgyElementFor, liturgyCellText, setLiturgyCatalog,
+        currentTableOrderIds, setTableOrderIds, TABLE_ORDERS_KEY, IDENTITY_COLUMN_COUNT,
+        renderTable, injectServiceData, hymnCellText,
         ASSIGNED_FIELD, assignedBadgeHtml, firstNameOf, escapeHtml,
         presenceKeyFor, setupInlineEdit, markIfHeld
     };
