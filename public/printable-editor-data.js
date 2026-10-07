@@ -1448,9 +1448,7 @@
             },
 
             sundayDrawer() {
-                const Link = linkFields();
-                const fill = (Link && Link.SUNDAY_FILL)
-                    || ((global.SundayTypedCore && global.SundayTypedCore.FIELDS) || []);
+                const fill = (global.SundayTypedCore && global.SundayTypedCore.FIELDS) || [];
                 return PrintableEditorWires.sundayDrawerFields(Data, global.ScripturePassage, fill);
             },
 
@@ -1471,19 +1469,8 @@
                 return this.sundayChips(this.sundayDrawer().hymns, this.resolvedSundayRow('sunday'));
             },
 
-            get sundayTypedGroups() {
-                const row = this.resolvedSundayRow('sunday_typed');
-                const groups = [];
-                const byName = {};
-                this.sundayDrawer().typed.forEach(f => {
-                    const name = f.group || 'Filled on the Sunday';
-                    if (!byName[name]) {
-                        byName[name] = { name: name, fields: [] };
-                        groups.push(byName[name]);
-                    }
-                    byName[name].fields.push(this.sundayChips([f], row)[0]);
-                });
-                return groups;
+            get sundayTypedChips() {
+                return this.sundayChips(this.sundayDrawer().typed, this.resolvedSundayRow('sunday_typed'));
             },
 
             get sundayQuickLists() {

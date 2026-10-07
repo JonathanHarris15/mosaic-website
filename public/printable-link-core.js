@@ -7,11 +7,11 @@
 // linked to holds the values, and the Printable reads them when it is
 // opened from that date.
 //
-// The Sunday service guide already wires Mosaic Kids and the prayer-country
-// facts through sunday_typed. Those are the same kind of blank — typed once
-// for the week, read by the guide — so a linked guide asks the Sunday for
-// whichever of those fields it actually uses. Announcements stay on the
-// Sunday's Announcements tab; this module never offers them.
+// A wire to Sunday booklet text is not a blank. Prayer country, Mosaic Kids,
+// and any other church's pamphlet fields are data the printable binds. They
+// do not become a form here, and this module does not name groups for them.
+// Every printable, on a Sunday or any other event, fills only the blanks its
+// author named.
 //
 // Pure. No Firestore, no DOM. The event page draws the form; the store
 // fetches the values; Printable Live reads them.
@@ -22,27 +22,6 @@
     const KINDS = ['text', 'image', 'number', 'date', 'list'];
     const SCALAR_KINDS = ['text', 'image', 'number', 'date'];
     const MAX_LABEL = 80;
-
-    // Booklet text a guide may already bind. Order is the order the form
-    // shows. Announcements are absent on purpose.
-    const SUNDAY_FILL = [
-        { key: 'prayerNation', label: 'Prayer country', kind: 'text', group: 'Prayer' },
-        { key: 'prayerContinent', label: 'Continent', kind: 'text', group: 'Prayer' },
-        { key: 'prayerCapital', label: 'Capital', kind: 'text', group: 'Prayer' },
-        { key: 'prayerPopulation', label: 'Population', kind: 'text', group: 'Prayer' },
-        { key: 'prayerLanguage', label: 'Official language', kind: 'text', group: 'Prayer' },
-        { key: 'prayerTotalLanguages', label: 'Total languages', kind: 'text', group: 'Prayer' },
-        { key: 'prayerLiteracy', label: 'Literacy', kind: 'text', group: 'Prayer' },
-        { key: 'prayerChristian', label: 'Christian', kind: 'text', group: 'Prayer' },
-        { key: 'prayerEvangelical', label: 'Evangelical', kind: 'text', group: 'Prayer' },
-        { key: 'prayerUnevangelized', label: 'Un-evangelized', kind: 'text', group: 'Prayer' },
-        { key: 'prayerPrompts', label: 'Prayer prompts', kind: 'text', group: 'Prayer', multiline: true },
-        { key: 'prayerCountryImage', label: 'Country map', kind: 'image', group: 'Prayer' },
-        { key: 'kidsLessonTitle', label: 'Mosaic Kids lesson', kind: 'text', group: 'Mosaic Kids' },
-        { key: 'kidsLessonVerse', label: 'Mosaic Kids verse', kind: 'text', group: 'Mosaic Kids' },
-        { key: 'kidsSummary', label: 'Mosaic Kids summary', kind: 'text', group: 'Mosaic Kids', multiline: true },
-        { key: 'kidsQuestions', label: 'Mosaic Kids questions', kind: 'text', group: 'Mosaic Kids', multiline: true },
-    ];
 
     const KIND_LABELS = {
         text: 'Text', image: 'Image', number: 'Number', date: 'Date', list: 'List',
@@ -146,30 +125,11 @@
         return found;
     }
 
-    // sunday_typed wires, plus the kids-question list, minus announcements.
-    function sundayFieldsUsed(project) {
-        const used = {};
-        eachNode(project, (node, parentRepeat) => {
-            if (node.repeat && node.repeat.source === 'sunday_kids_questions') used.kidsQuestions = true;
-            Object.keys(node.bind || {}).forEach(prop => {
-                const b = node.bind[prop];
-                if (!b) return;
-                if (b.scope === 'global' && b.source === 'sunday_typed' && b.field) used[b.field] = true;
-                if (b.scope === 'item' && parentRepeat && parentRepeat.source === 'sunday_kids_questions') {
-                    used.kidsQuestions = true;
-                }
-            });
-        });
-        return SUNDAY_FILL.filter(f => used[f.key]);
-    }
-
-    // One form for every Printable linked to the event. Author fields stay
-    // with their Printable. Sunday booklet fields are one shared set — every
-    // guide reads the same Sunday record.
+    // One form for every Printable linked to the event. Each section is the
+    // blanks that printable's author named. A Sunday booklet wire does not
+    // add a section, and nothing here invents a group name.
     function formFor(printables) {
         const sections = [];
-        const seen = {};
-        const sundayFields = [];
         (printables || []).forEach(p => {
             if (!p) return;
             const inputs = normalizeInputs(p.inputs);
@@ -180,22 +140,10 @@
                     inputs: inputs,
                 });
             }
-            sundayFieldsUsed(p).forEach(f => {
-                if (seen[f.key]) return;
-                seen[f.key] = true;
-                sundayFields.push(f);
-            });
-        });
-        const sundayGroups = [];
-        ['Prayer', 'Mosaic Kids'].forEach(name => {
-            const fields = sundayFields.filter(f => f.group === name);
-            if (fields.length) sundayGroups.push({ name: name, fields: fields });
         });
         return {
             sections: sections,
-            sundayFields: sundayFields,
-            sundayGroups: sundayGroups,
-            hasFields: sections.length > 0 || sundayFields.length > 0,
+            hasFields: sections.length > 0,
         };
     }
 
@@ -236,19 +184,6 @@
         return base;
     }
 
-    // Overlay the fields the form showed onto the Sunday's booklet text.
-    // Announcements are never in `keys`, and a key that is not in the patch
-    // is left as it was stored.
-    function mergeSundayContent(typed, service, patch, keys) {
-        if (!typed) return null;
-        const draft = typed.toDraft(typed.fromService(service));
-        (keys || []).forEach(key => {
-            if (key === 'announcements' || key === 'announcementCount') return;
-            if (patch && Object.prototype.hasOwnProperty.call(patch, key)) draft[key] = patch[key];
-        });
-        return typed.normalise(typed.fromDraft(draft));
-    }
-
     function kindLabel(kind) {
         return KIND_LABELS[kind] || 'Text';
     }
@@ -256,19 +191,16 @@
     const PrintableLinkCore = {
         KINDS,
         SCALAR_KINDS,
-        SUNDAY_FILL,
         normalizeInputs,
         normalizeInput,
         newInput,
         newColumn,
         inputById,
         readsEventInputs,
-        sundayFieldsUsed,
         formFor,
         blankRow,
         draftFromStored,
         mergePrintableInputs,
-        mergeSundayContent,
         kindLabel,
     };
 

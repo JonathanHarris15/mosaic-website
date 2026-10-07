@@ -146,10 +146,7 @@
                 status: '',
                 hasFields: false,
                 sections: [],
-                sundayGroups: [],
-                sundayFields: [],
                 drafts: {},
-                sundayDraft: {},
             },
             linkingPrintable: false,
             libraryPrintables: [],
@@ -2077,42 +2074,20 @@
                 const Link = typeof PrintableLinkCore !== 'undefined' ? PrintableLinkCore : null;
                 const blank = {
                     loading: false, saving: false, error: '', status: '',
-                    hasFields: false, sections: [], sundayGroups: [], sundayFields: [],
-                    drafts: {}, sundayDraft: {},
+                    hasFields: false, sections: [], drafts: {},
                 };
                 if (!Link || !this.isEditor) { this.linkFill = blank; return; }
                 const spec = Link.formFor(this.printables || []);
-                if (!this.isSunday) {
-                    spec.sundayFields = [];
-                    spec.sundayGroups = [];
-                    spec.hasFields = spec.sections.length > 0;
-                }
                 const stored = (this.occurrence && this.occurrence.printableInputs) || {};
                 const drafts = {};
                 spec.sections.forEach(section => {
                     drafts[section.printableId] = Link.draftFromStored(section.inputs, stored[section.printableId]);
                 });
-                const sundayDraft = {};
-                if (spec.sundayFields.length && this.occurrence && this.occurrence.date) {
-                    const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
-                    if (Typed) {
-                        let service = null;
-                        try {
-                            const doc = await db.collection('services').doc(this.occurrence.date).get();
-                            if (doc && doc.exists) service = doc.data();
-                        } catch (e) { service = null; }
-                        const full = Typed.toDraft(Typed.fromService(service));
-                        spec.sundayFields.forEach(f => { sundayDraft[f.key] = full[f.key] || ''; });
-                    }
-                }
                 this.linkFill = {
                     loading: false, saving: false, error: '', status: '',
                     hasFields: spec.hasFields,
                     sections: spec.sections,
-                    sundayGroups: spec.sundayGroups,
-                    sundayFields: spec.sundayFields,
                     drafts: drafts,
-                    sundayDraft: sundayDraft,
                 };
             },
 
@@ -2140,25 +2115,6 @@
                 const safe = String(file.name || 'image').replace(/[^\w.-]+/g, '_');
                 const url = await this.putLinkImage(file, 'printable_assets/' + printableId + '/' + id + '_' + safe);
                 if (url) this.linkFill.drafts[printableId][inputId] = url;
-            },
-
-            async uploadSundayFieldImage(key, event) {
-                const file = event.target.files && event.target.files[0];
-                if (event.target) event.target.value = '';
-                if (!file || !this.isEditor || !this.occurrence) return;
-                const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
-                if (Typed && Typed.fileUploadError(file)) {
-                    this.linkFill.error = Typed.fileUploadError(file);
-                    return;
-                }
-                const fileId = (typeof PrintableCore !== 'undefined' && PrintableCore.newId)
-                    ? PrintableCore.newId('map') : String(Date.now());
-                const safe = String(file.name || 'map').replace(/[^\w.-]+/g, '_');
-                const path = Typed
-                    ? Typed.countryMapStoragePath(this.occurrence.date, fileId + '_' + safe)
-                    : ('printable_assets/sunday/' + fileId + '_' + safe);
-                const url = await this.putLinkImage(file, path);
-                if (url) this.linkFill.sundayDraft[key] = url;
             },
 
             async putLinkImage(file, path) {
@@ -2203,21 +2159,6 @@
                             printableInputs: JSON.parse(JSON.stringify(next)),
                         }, { merge: true });
                         this.occurrence.printableInputs = next;
-                    }
-                    if (this.isSunday && (this.linkFill.sundayFields || []).length) {
-                        const Typed = typeof SundayTypedCore !== 'undefined' ? SundayTypedCore : null;
-                        if (!Typed) throw new Error('booklet text unavailable');
-                        const date = this.occurrence.date;
-                        const doc = await db.collection('services').doc(date).get();
-                        const service = doc && doc.exists ? doc.data() : null;
-                        const patch = JSON.parse(JSON.stringify(this.linkFill.sundayDraft || {}));
-                        if (Typed.assertCountryImageWritable && patch.prayerCountryImage) {
-                            Typed.assertCountryImageWritable(patch.prayerCountryImage);
-                        }
-                        const content = Link.mergeSundayContent(
-                            Typed, service, patch, this.linkFill.sundayFields.map(f => f.key)
-                        );
-                        await db.collection('services').doc(date).set({ typedContent: content }, { merge: true });
                     }
                     this.linkFill.status = 'Saved. The printable reads it for this date.';
                 } catch (e) {
