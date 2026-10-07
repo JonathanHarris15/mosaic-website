@@ -512,7 +512,7 @@ A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-D
   - `liturgy.<elementId>`: The value of each [[Liturgy Element]], in that element's [[Primitive]]'s shape. Kept whatever the order: a value the Sunday's order no longer carries is hidden, not deleted.
   - `notes.<elementId>`: The per-slot note, for an element with `hasNote`.
   - `carriedBy.<elementId>`: The one person who carries an element with `hasRole` this Sunday — `{ id, name }`.
-  - `isIrregular`, `irregularElements`: An Irregular Service from before Liturgy Orders. Still read and shown, read-only, under the Order of Service; nothing creates a new one ([ADR 0080](docs/adr/0080-liturgy-orders.md)).
+  - `isIrregular`, `irregularElements`: An Irregular Service from before Liturgy Orders. Still read and shown, read-only, under the Order of Service; nothing creates a new one ([ADR 0080](docs/adr/0080-liturgy-orders.md)). Until that Sunday is given a `liturgyOrderId`, the home tally does not score it — it is not a blank Standard — and the editor's progress says Custom order.
   - `serviceLeader`: Reference to a Person (historically a string).
   - `preacher`: Reference to a Person (historically a string).
   - `musicLeader`: Reference to a Person (historically a string).

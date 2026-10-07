@@ -1901,8 +1901,11 @@ function serviceForm() {
         // and the optional prayer leaders, and to count a hymn name as finished
         // before it was linked, so the two screens disagreed.
         get filledLabel() {
-            return window.HomeDashboard.readiness(
-                flattenServiceForSave(this.service), this.liturgyCatalog).fraction;
+            const ready = window.HomeDashboard.readiness(
+                flattenServiceForSave(this.service), this.liturgyCatalog);
+            // An old irregular Sunday has not been given an order yet. The
+            // fraction would score it as a blank Standard, which it is not.
+            return ready.irregular ? 'Custom order' : ready.fraction;
         },
 
         // Service notes surfaced for the leader, in service order, one card

@@ -95,12 +95,25 @@ test('an element that carries a person is unfinished until the person is named',
     assert.equal(carried.state, 'set');
 });
 
-test('an old irregular Sunday is read against its order and does not crash', () => {
-    const svc = { isIrregular: true, irregularElements: [{ key: 'Litany', type: 'text', value: 'x' }], preacher: '', theme: 'Shown' };
+test('an old irregular Sunday is not scored until it is given an order', () => {
+    const svc = {
+        isIrregular: true,
+        irregularElements: [{ key: 'Litany', type: 'text', value: 'x' }],
+        preacher: '',
+        theme: 'Hidden',
+    };
     const ready = Home.readiness(svc);
-    assert.equal(ready.notReady, true);
-    assert.ok(ready.total > 0);
-    assert.equal(Home.glance(svc).theme, 'Shown');
+    assert.equal(ready.irregular, true);
+    assert.equal(ready.notReady, false);
+    assert.equal(ready.total, 0);
+    assert.equal(ready.fraction, '');
+    assert.deepEqual(Home.checklist(svc), []);
+    assert.deepEqual(Home.glance(svc), { theme: '', sermon: '', pairs: [], baptism: '' });
+
+    const chosen = Home.readiness(Object.assign({}, svc, { liturgyOrderId: 'standard', preacher: 'Ada' }));
+    assert.equal(chosen.irregular, false);
+    assert.ok(chosen.total > 0);
+    assert.equal(Home.glance(Object.assign({}, svc, { liturgyOrderId: 'standard', theme: 'Shown' })).theme, 'Shown');
 });
 
 test('dotted liturgy keys fold into the nested liturgy', () => {
