@@ -41,15 +41,15 @@
         return `Used ${times} · last ${date}`;
     }
 
-    // Field name on the Order of Service (as personPicker/CANONICAL_MAPPING
-    // name it) → the key its stats are cached under. `prayerMale`/
+    // Field name on the Order of Service (as personPicker names it) → the
+    // key its stats are cached under. `prayerMale`/
     // `prayerFemale` aren't serving roles (service-involvement-core.js
     // excludes them deliberately) — they read from the separate pastoral
     // prayer cache instead.
     const PASTORAL_PRAYER_FIELDS = Object.freeze(['prayerMale', 'prayerFemale']);
 
-    // service-builder.js names these fields `prayerPraise`/`prayerConfession`
-    // (CANONICAL_MAPPING); service-calendar.js's table view names the same
+    // service-builder.js names these fields `prayerPraise`/`prayerConfession`;
+    // service-calendar.js's table view names the same
     // two fields `prayerPraiseName`/`prayerConfessionName` (personFields).
     // Both spellings are kept here rather than normalized at the call site,
     // so each picker can pass whatever it already calls its own field.

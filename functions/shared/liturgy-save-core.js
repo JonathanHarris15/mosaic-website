@@ -14,27 +14,26 @@
 // deploys as its own bundle and cannot require across into public/ — see
 // scripts/sync-shared-to-functions.js) and driven by a test with no mocks.
 //
-// The allowlist and path shape mirror the two liturgy-field writers that
-// already exist: service-builder.js's CANONICAL_MAPPING (`liturgy: true`
-// entries) and service-calendar.js's writeLiturgyField(), which both store
-// hymn and scripture/text slots nested under `liturgy.{slot}` rather than as
-// top-level fields. theme/keyVerse are the two liturgy-adjacent fields that
-// ARE top-level.
+// The allowlist is the Standard seed's song and scripture elements
+// (liturgy-order-core.js, ADR-0080) and the path shape mirrors the pages'
+// writers (service-builder.js and service-calendar.js's writeLiturgyField()),
+// which store every element nested under `liturgy.{elementId}` rather than as
+// a top-level field. theme/keyVerse are the two liturgy-adjacent fields that
+// ARE top-level. An element a congregation adds is not writable here until
+// this list says so — widening an assistant's write is its own decision.
 (function (global) {
     'use strict';
 
     const TOP_LEVEL_FIELDS = Object.freeze(['theme', 'keyVerse']);
 
-    // The `type: 'hymn'` liturgy slots in service-builder.js's CANONICAL_MAPPING.
-    // Each stores `{ id, name }` — id is null for a freehand name never matched
-    // to a hymn registry doc.
+    // The Standard seed's song elements. Each stores `{ id, name }` — id is
+    // null for a freehand name never matched to a hymn registry doc.
     const HYMN_FIELDS = Object.freeze([
         'preparatoryHymn', 'hymn1', 'hymn2',
         'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2',
     ]);
 
-    // The liturgy slots edited as free text (service-calendar.js's
-    // LITURGY_VERSE_FIELDS).
+    // The Standard seed's scripture elements, stored as free text.
     const TEXT_FIELDS = Object.freeze([
         'callToWorship', 'callToConfession', 'assuranceOfPardon',
         'scriptureReading', 'sermon', 'benediction',

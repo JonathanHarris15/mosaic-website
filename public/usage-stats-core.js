@@ -19,15 +19,15 @@
 (function (global) {
     'use strict';
 
-    // The `type: 'hymn'` fields in service-builder.js's CANONICAL_MAPPING.
-    // Each stores `{ id, name }`.
+    // The Standard seed's song elements (liturgy-order-core.js). Each stores
+    // `{ id, name }`.
     const HYMN_FIELDS = Object.freeze([
         'preparatoryHymn', 'hymn1', 'hymn2',
         'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2',
     ]);
 
-    // The fields service-calendar.js's LITURGY_VERSE_FIELDS edits with the
-    // scripture picker. Each stores a free-text reference string.
+    // Standard scripture elements counted for usage. Each stores a free-text
+    // reference string.
     const SCRIPTURE_FIELDS = Object.freeze([
         'sermon', 'callToConfession', 'assuranceOfPardon',
         'scriptureReading', 'benediction',
