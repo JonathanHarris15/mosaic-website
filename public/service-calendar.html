@@ -164,20 +164,7 @@
            Every order, a check each. The ones on are the table's liturgy
            columns. Managing the orders is an editor's job, so the link to it
            waits for the page to know who you are. */
-        .cal-orders {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: var(--space-xs) var(--space-md);
-            padding-bottom: var(--space-sm);
-        }
-        .cal-orders__label {
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: .06em;
-            text-transform: uppercase;
-            color: var(--on-surface-variant);
-        }
+        .cal-orders { padding-bottom: var(--space-sm); }
         body:not(.can-edit) .cal-orders__manage { display: none; }
 
         /* ── Planning view (MS-245) ──────────────────────────────────────────
@@ -737,14 +724,16 @@
                      class="flex-grow overflow-hidden flex flex-col">
                     <!-- The orders whose elements are the liturgy columns. A
                          shared element is one column, Standard's come first. -->
-                    <div id="table-orders" class="cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
-                        <span id="table-orders-label" class="cal-orders__label">Liturgy orders</span>
-                        <template x-for="o in liturgyOrders" :key="o.id">
-                            <label class="m-check">
-                                <input type="checkbox" :value="o.id" :checked="isTableOrderOn(o.id)" @change="toggleTableOrder(o.id)" />
-                                <span x-text="o.name"></span>
-                            </label>
-                        </template>
+                    <div id="table-orders" class="m-toolbar cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
+                        <div class="m-toolbar__cluster">
+                            <span id="table-orders-label" class="m-label">Liturgy orders</span>
+                            <template x-for="o in liturgyOrders" :key="o.id">
+                                <label class="m-check">
+                                    <input type="checkbox" :value="o.id" :checked="isTableOrderOn(o.id)" @change="toggleTableOrder(o.id)" />
+                                    <span x-text="o.name"></span>
+                                </label>
+                            </template>
+                        </div>
                         <a href="liturgy-orders.html" class="cal-orders__manage m-btn m-btn--quiet m-btn--sm">
                             <span class="material-symbols-outlined">tune</span>
                             <span class="m-btn__label">Manage orders</span>

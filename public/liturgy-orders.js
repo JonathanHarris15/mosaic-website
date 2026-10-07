@@ -184,7 +184,7 @@ function liturgyOrdersPage() {
             if (!list) return;
             this._sortable = Sortable.create(list, {
                 animation: 150,
-                handle: '.lo-handle',
+                handle: '.m-row__handle',
                 draggable: '[data-order-row]',
                 onEnd: (evt) => {
                     const from = evt.oldDraggableIndex;

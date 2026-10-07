@@ -138,8 +138,8 @@
 
                     <div class="m-card-list" id="order-elements" x-show="orderElements.length">
                         <template x-for="(el, index) in orderElements" :key="el.id">
-                            <div class="m-row lo-row" :data-order-row="el.id">
-                                <span class="material-symbols-outlined lo-handle" x-show="canEdit" title="Drag to move" aria-hidden="true">drag_indicator</span>
+                            <div class="m-row" :data-order-row="el.id">
+                                <span class="material-symbols-outlined m-row__handle" x-show="canEdit" title="Drag to move" aria-hidden="true">drag_indicator</span>
                                 <span class="lo-num" x-text="index + 1"></span>
                                 <span class="m-row__main">
                                     <span class="m-row__title" x-text="el.name"></span>
@@ -287,12 +287,8 @@
         .lo-form--row .lo-grow { flex: 2 1 240px; }
         .lo-form > .m-btn { align-self: flex-start; }
         .lo-form--row > .m-btn { align-self: flex-end; }
-        .m-card-list .m-row { display: flex; align-items: center; gap: var(--space-sm); width: 100%; border-bottom: 1px solid var(--outline-variant); }
-        .m-card-list .m-row:last-child { border-bottom: 0; }
-        .m-row__main { display: block; min-width: 0; }
-        .m-row__title, .m-row__sub { display: block; }
-        .lo-handle { color: var(--outline); cursor: grab; flex: 0 0 auto; }
-        .lo-handle:active { cursor: grabbing; }
+        .lo-stack .m-row__main, .lo-stack .m-row__title, .lo-stack .m-row__sub { display: block; }
+        .lo-stack .m-card-list > .m-row:last-of-type { border-bottom: 0; }
         .lo-num { flex: 0 0 1.5rem; text-align: right; font-size: 13px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }
         .lo-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
         .lo-element { flex-wrap: wrap; }
