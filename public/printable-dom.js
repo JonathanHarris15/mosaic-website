@@ -66,6 +66,11 @@
             if (node.repeat) el.setAttribute('data-repeat', '1');
         }
         const values = (o.values && o.values[node.id]) || null;
+        const fill = typeof o.fillFor === 'function' ? o.fillFor(node) : null;
+
+        if (fill && (node.tag === 'img' || fill.kind === 'image')) {
+            return renderFillImage(node, fill);
+        }
 
         if (node.tag === 'img') {
             const src = (values && values.src) || (node.attrs && node.attrs.src) || '';
@@ -87,6 +92,8 @@
                 if (o.skip && o.skip(child)) return;
                 el.appendChild(renderNode(child, o));
             });
+        } else if (fill) {
+            el.appendChild(renderFillControl(fill));
         } else if (node.passageHtml) {
             el.classList.add('m-scripture');
             el.innerHTML = node.passageHtml;
@@ -104,6 +111,54 @@
             if (o.editing && !text && Core.kindOf(node) === 'text') el.classList.add('pe-text-empty');
         }
         return el;
+    }
+
+    // An editor's blank, drawn in the element's own box. Output and print
+    // never pass fillFor, so a member's page and the printed sheet stay static.
+    function renderFillControl(fill) {
+        const input = document.createElement(fill.multiline ? 'textarea' : 'input');
+        input.className = 'pv-fill';
+        input.name = fill.id;
+        input.setAttribute('data-fill-id', fill.id);
+        input.setAttribute('aria-label', fill.label || 'Fill in');
+        input.autocomplete = 'off';
+        if (fill.multiline) {
+            input.rows = 3;
+        } else if (fill.kind === 'date') {
+            input.type = 'date';
+        } else {
+            input.type = 'text';
+            if (fill.kind === 'number') input.setAttribute('inputmode', 'decimal');
+        }
+        input.value = fill.value == null ? '' : String(fill.value);
+        if (!input.value) input.placeholder = fill.label || '';
+        return input;
+    }
+
+    function renderFillImage(node, fill) {
+        const lab = document.createElement('label');
+        lab.className = 'pv-fill-img';
+        applyStyle(lab, node.style);
+        if (!lab.style.position) lab.style.position = 'relative';
+        const img = document.createElement('img');
+        const src = fill.value || (node.attrs && node.attrs.src) || '';
+        if (src) img.src = src;
+        img.alt = '';
+        const file = document.createElement('input');
+        file.type = 'file';
+        file.accept = 'image/*';
+        file.name = fill.id;
+        file.className = 'pv-fill-file';
+        file.setAttribute('data-fill-id', fill.id);
+        file.setAttribute('aria-label', fill.label || 'Upload image');
+        file.autocomplete = 'off';
+        const cap = document.createElement('span');
+        cap.className = 'pv-fill-img__btn';
+        cap.textContent = src ? 'Replace image' : 'Upload image';
+        lab.appendChild(img);
+        lab.appendChild(cap);
+        lab.appendChild(file);
+        return lab;
     }
 
     // A page: sized, padded by its margins, carrying its stylesheet scoped

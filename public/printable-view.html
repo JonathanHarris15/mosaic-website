@@ -29,6 +29,10 @@
                 </div>
             </div>
             <div class="m-header__actions">
+                <span class="pv-left" x-show="canFill && fillTotal" role="status" aria-live="polite">
+                    <span x-text="fillLeftText"></span>
+                    <span class="pv-left__note" x-show="fillNote" x-text="fillNote"></span>
+                </span>
                 <span class="m-header__chip" x-show="viewDate" x-text="'As of ' + viewDate"
                       style="font-size:13px; color:var(--on-surface-variant);"></span>
                 <span class="m-header__chip" x-show="template"
@@ -75,6 +79,7 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <script src="local-cache.js"></script>
     <script src="firebase-config.js"></script>
     <script src="auth.js"></script>
@@ -103,6 +108,9 @@
     <script src="hymn-versions.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="printable-link-core.js"></script>
+    <script src="printable-fill-core.js"></script>
+    <script src="image-intake.js"></script>
+    <script src="printable-link-store.js"></script>
     <script src="scripture-passage.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
@@ -121,6 +129,83 @@
         /* The page's own base rules come from PrintableDom.ensureBaseStyles. */
         .pv-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
         .pv-print { display: none; }
+        .pv-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 6px 10px;
+            background: var(--surface-container-lowest);
+            color: var(--primary);
+            border: 1px solid var(--outline-variant);
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.3;
+        }
+        .pv-left__note { color: var(--on-surface-variant); font-size: 12px; }
+        .pv-fill {
+            display: block;
+            width: 100%;
+            min-height: 1.15em;
+            margin: 0;
+            padding: 0 3px;
+            font: inherit;
+            line-height: inherit;
+            color: inherit;
+            background: rgba(255, 248, 220, .72);
+            border: 1px dashed rgba(14, 28, 54, .45);
+            border-radius: 2px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .pv-fill:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 1px;
+            background: #fff;
+        }
+        .pv-fill-img:focus-within { outline: 2px solid var(--primary); outline-offset: 1px; }
+        .pv-fill-img {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-end;
+            gap: 4px;
+            box-sizing: border-box;
+            min-height: 1.5em;
+            cursor: pointer;
+            border: 1px dashed rgba(14, 28, 54, .45);
+            background: rgba(255, 248, 220, .72);
+        }
+        .pv-fill-img img { width: 100%; height: 100%; object-fit: contain; flex: 1 1 auto; }
+        .pv-fill-img__btn {
+            font-family: inherit;
+            font-size: 11px;
+            line-height: 1.2;
+            text-align: center;
+            padding: 2px 4px;
+        }
+        .pv-fill-file {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .pv-fill-add {
+            align-self: flex-start;
+            margin-top: 4px;
+            padding: 2px 8px;
+            font: 12px/1.3 "Source Sans 3", sans-serif;
+            color: var(--primary);
+            background: #fff;
+            border: 1px solid var(--outline-variant);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .pv-fill-add:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
         @media print {
             body.pv-printing > *:not(.pv-print) { display: none !important; }
             .pv-print { display: block; }
