@@ -624,7 +624,8 @@
     function fieldsFor(source, params, options) {
         const s = typeof source === 'string' ? sourceByKey(source) : source;
         if (!s) return [];
-        if (s.fields === SUNDAY_FIELDS && options && options.liturgy) return sundayFieldsFor(options.liturgy);
+        const registered = sourceByKey(s.key);
+        if (registered && registered.fields === SUNDAY_FIELDS && options && options.liturgy) return sundayFieldsFor(options.liturgy);
         const base = s.fields.slice();
         if (s.key === 'form_answers') {
             const form = ((options && options.forms) || []).find(f => f.id === (params && params.formId));

@@ -39,6 +39,7 @@ const {jsonResult, refuse} = require("./mcp-result.js");
 
 const Printables = require("./printable-writes.js");
 const Guidance = require("./shared/printable-guidance.js");
+const {loadLiturgyCatalog} = require("./liturgy-catalog.js");
 
 const printableId = z.string().min(1).describe(
     "The Printable's id, from printable_list. Never a name, never guessed.");
@@ -176,7 +177,8 @@ function register(server, deps) {
           .describe("One source key to expand. Omit for all of them."),
     },
     annotations: read,
-  }, (a, _actor, level) => Printables.dataCatalog(level, a));
+  }, async (a, _actor, level) =>
+    Printables.dataCatalog(level, a, await loadLiturgyCatalog(db)));
 
   // ── Building one ─────────────────────────────────────────────────────────
 

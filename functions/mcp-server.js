@@ -457,9 +457,10 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
   server.registerTool("oos_get_service", {
     title: "Read a Sunday's Order of Service",
     description:
-      "What is currently planned for a Sunday: theme, key verse, every " +
-      "liturgy slot in the order the service actually runs, who chose each " +
-      "one, and who is preaching, leading and on music. Read this BEFORE " +
+      "What is currently planned for a Sunday: theme, key verse, which " +
+      "Liturgy Order it follows and every element of that order in the " +
+      "order the service actually runs, who chose each one, and who is " +
+      "preaching, leading, on music and being prayed for. Read this BEFORE " +
       "proposing changes, so you know what is already there and do not " +
       "offer to replace something that was deliberately chosen. Give one " +
       "date, or add 'through' to read a span of Sundays at once. Dates are " +

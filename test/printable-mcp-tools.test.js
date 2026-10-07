@@ -424,6 +424,25 @@ describe('what a Printable may be told, and by whom', () => {
         assert.throws(() => Printables.dataCatalog('editor', {source: 'nope'}),
             /No source is called "nope"/);
     });
+
+    // ADR-0080: a congregation's own element is a field an assistant can bind.
+    test("a Sunday's fields are the congregation's Liturgy Elements", () => {
+        const liturgy = {
+            elements: [
+                {id: 'callToWorship', name: 'Call to Worship', primitive: 'scripture'},
+                {id: 'offertory', name: 'Offertory', primitive: 'song'},
+            ],
+            orders: [{id: 'standard', name: 'Standard', elementIds: ['callToWorship', 'offertory']}],
+        };
+        const sunday = Printables.dataCatalog('editor', {source: 'sunday'}, liturgy).sources[0];
+        const keys = sunday.fields.map((f) => f.key);
+        assert.ok(keys.includes('preacher'), 'the identity fields stay');
+        assert.ok(keys.includes('offertory'));
+        assert.ok(!keys.includes('hymn1'), 'an element the congregation does not have is not offered');
+
+        const seeded = Printables.dataCatalog('editor', {source: 'sunday'}).sources[0];
+        assert.ok(seeded.fields.some((f) => f.key === 'hymn1'), 'no catalog reads as Standard');
+    });
 });
 
 describe('publishing to members', () => {
