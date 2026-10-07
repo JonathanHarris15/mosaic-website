@@ -8,6 +8,12 @@ The ghost is the one exception, and only through `.github/workflows/firebase-dep
 
 **ghost-main (design sandbox):** UI redesign and experimental work targets **`ghost-main` PRs only** — branch off `ghost-main`, merge into `ghost-main`, never merge `ghost-main` into `main`. Production changes still land via normal MS-* PRs to `main`. On the ghost site use **fictional data only**. See `docs/ops/ghost-main.md` (live app: https://mosaic-manager-ghost.web.app ).
 
+## Another church
+
+Build the tool another church can use, and another case of the same kind. Ordinary variation is the test: a different pamphlet, a different event, a different congregation. This church is one use of the tool. A path that only fits the case in front of you is the wrong shape. Name the general thing, and let this church be one example of it.
+
+The same test applies to every convention in `docs/design/design-language.md`. A heading, a field list, or a workflow that another page or another church would have to special-case is not a convention.
+
 ## Cursor Cloud
 
 Cloud agents start from a checkout of this repo. Dependencies are **not** in git. There are two npm packages, each with its own lockfile:

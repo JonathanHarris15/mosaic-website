@@ -39,6 +39,7 @@ Facts (code, docs, Jira fields) are still looked up, never invented.
 
 - **Glossary:** `CONTEXT.md` (not `GLOSSARY.md`). ADRs: `docs/adr/`.
 - **Desktop UI:** dense, professional-tool scale (`docs/design/design-language.md`).
+- **Another church:** build the tool another church can use, and another case of the same kind. Ordinary variation is in scope. The rule is in `AGENTS.md`.
 
 ## Skill name aliases
 
