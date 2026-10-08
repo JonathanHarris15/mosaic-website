@@ -48,8 +48,9 @@ test('a catalog that failed to load is not saved from the Sunday page', async ()
     assert.equal(form.liturgyCatalog.orders[0].id, 'standard');
 });
 
-// A row opens only when its panel has a field. A prayer's people already sit
-// under the row, and a name that is only on the order has nothing to enter.
+// A row opens only when its panel has a field. A prayer that asks for people
+// opens so those people can be named there. A name that is only on the order
+// has nothing to enter.
 function catalogWithQuietRows() {
     let catalog = Core.standardCatalog();
     const place = (kind, fields) => {
@@ -74,7 +75,10 @@ test('a row with nothing to enter does not open', () => {
 
     const byKey = Object.fromEntries(form.displayRows.map(row => [row.key, row]));
     assert.equal(form.rowOpens(byKey[made.praise]), false);
-    assert.equal(form.rowOpens(byKey[made.asked]), false);
+    assert.equal(form.rowOpens(byKey[made.asked]), true);
+    form.toggleRow(made.asked);
+    assert.equal(form.openKey, made.asked);
+    form.closeRow();
     assert.equal(form.rowOpens(byKey[made.other]), false);
     assert.equal(form.rowOpens(byKey[made.noted]), true);
     assert.equal(form.rowOpens(byKey[made.hymn]), true);

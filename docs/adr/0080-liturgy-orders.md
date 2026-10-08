@@ -73,9 +73,9 @@ What reads the order:
    read, the page shows Standard and does not write it back. The progress
    is the same tally as the home card: the leaders, then each element of
    the order that asks for something on the Sunday. A prayer's leader and
-   the people it prays for sit under that row. The older praise leader,
-   confession leader, and pastoral ask sit under the rows the order already
-   uses for those moments.
+   the people it prays for are filled in that row's panel. The older praise
+   leader, confession leader, and pastoral ask are filled in the panel of
+   the row the order already uses for that moment.
 2. **The Liturgy Orders page** (`liturgy-orders.html`) places the five kinds
    into an order, names the ones that take a name, and sets a prayer's
    requests, including how many days ahead those people are told. The kinds

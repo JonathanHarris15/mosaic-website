@@ -2108,14 +2108,15 @@ function serviceForm() {
         },
         get noteCount() { return this.notesList.length; },
 
-        // A row opens only when the panel under it has a field. A hymn, a
-        // scripture, a line of text, or a person is entered there. A prayer's
-        // people and its leader already sit under the row, and a prayer or an
-        // Other that is only a name on the order has nothing to enter, so it
-        // stays closed. A note, or a person who carries the element, is a field.
+        // A row opens only when its panel has a field. A hymn, a scripture, a
+        // line of text, or a person is entered there. So is a prayer's people
+        // and its leader, and the older praise, confession, and pastoral
+        // fields that belong to this row. A prayer or an Other that is only a
+        // name on the order has nothing to enter, so it stays closed.
         rowOpens(item) {
             if (!item || item.removed || item.type === 'legacy') return false;
-            if (item.noteOn || item.hasRole) return true;
+            if (item.noteOn || item.hasRole || item.requests || item.prayedByOther) return true;
+            if (this.showsPraise(item) || this.showsConfession(item) || this.showsPastoral(item)) return true;
             return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
                 || item.type === 'people' || item.type === 'person';
         },

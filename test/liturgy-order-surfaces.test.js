@@ -74,6 +74,12 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /station-quiet/);
     assert.doesNotMatch(html, /Nothing to enter/);
     assert.match(html, /x-show="rowOpens\(item\) && !heldBy\(item\.key\)"/);
+    const panel = html.indexOf("openKey === item.key || item.type === 'legacy'");
+    assert.ok(panel !== -1, 'the row panel is the dropdown');
+    assert.ok(panel < html.indexOf('Prayer Leader (Confession)'), 'the confession leader is inside the dropdown');
+    assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
+    assert.ok(panel < html.indexOf('>Pastoral Prayer<'), 'the pastoral fields are inside the dropdown');
+    assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
 });
 
 test('the Liturgy Orders page drags the collection into the selected order', () => {
