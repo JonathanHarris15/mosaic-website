@@ -73,55 +73,47 @@
 
             <div class="lo-grid">
 
-                <!-- ── Orders ──────────────────────────────────────────── -->
-                <section class="m-section" aria-labelledby="orders-title">
+                <!-- ── Elements: the five kinds, to the left of the order ── -->
+                <section class="m-section" aria-labelledby="elements-title">
                     <div class="m-section__head">
-                        <h2 class="m-section__title" id="orders-title">Orders</h2>
-                        <p class="m-section__hint">A Sunday follows one order. Standard is the default.</p>
+                        <h2 class="m-section__title" id="elements-title">Elements</h2>
                     </div>
-                    <div class="m-card-list" id="order-list">
-                        <template x-for="o in orders" :key="o.id">
-                            <button type="button" class="m-row m-row--interactive text-left"
-                                    :class="o.id === selectedOrder.id ? 'm-row--current' : ''"
-                                    :aria-current="o.id === selectedOrder.id ? 'true' : 'false'"
-                                    @click="selectOrder(o.id)">
+
+                    <div class="m-card-list" id="element-library" :class="editing ? 'lo-library--drag' : ''">
+                        <template x-for="kind in kinds" :key="kind">
+                            <div class="m-row" data-library-item :data-kind="kind">
+                                <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag into the order" aria-hidden="true">drag_indicator</span>
                                 <span class="m-row__main">
-                                    <span class="m-row__title" x-text="o.name"></span>
-                                    <span class="m-row__sub" x-text="orderSummary(o) + (o.id === 'standard' ? ' · default' : '')"></span>
+                                    <span class="m-row__title" x-text="kindLabel(kind)"></span>
+                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A scripture reference, on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
                                 </span>
-                                <span class="material-symbols-outlined m-row__chevron">chevron_right</span>
-                            </button>
+                                <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing" @click="placeKind(kind)"
+                                        :aria-label="'Add ' + kindLabel(kind) + ' to ' + selectedOrder.name">
+                                    <span class="m-btn__label">Add</span>
+                                </button>
+                            </div>
                         </template>
                     </div>
-
-                    <form class="m-card lo-form" x-show="editing" @submit.prevent="createOrder()">
-                        <label class="m-field">
-                            <span class="m-label">New order</span>
-                            <input id="new-order-name" class="m-input" type="text" maxlength="60" x-model="newOrder.name" placeholder="Name it — Communion Sunday" />
-                        </label>
-                        <label class="m-field">
-                            <span class="m-label">Start from</span>
-                            <span class="m-select-wrap">
-                                <select class="m-select" x-model="newOrder.copyFrom">
-                                    <option value="">Nothing</option>
-                                    <template x-for="o in orders" :key="o.id">
-                                        <option :value="o.id" x-text="o.name" :selected="o.id === newOrder.copyFrom"></option>
-                                    </template>
-                                </select>
-                            </span>
-                        </label>
-                        <button type="submit" class="m-btn m-btn--secondary m-btn--sm" :disabled="!newOrder.name.trim()">
-                            <span class="material-symbols-outlined">add</span>
-                            <span class="m-btn__label">Add order</span>
-                        </button>
-                    </form>
                 </section>
 
-                <!-- ── The selected order ──────────────────────────────── -->
+                <!-- ── The order being edited ──────────────────────────── -->
                 <section class="m-section" aria-labelledby="order-title">
                     <div class="m-section__head">
-                        <h2 class="m-section__title" id="order-title" x-text="selectedOrder.name"></h2>
-                        <p class="m-section__hint" x-show="editing">Drag a row, or use its arrows, to change the order. Sundays see it once it is saved.</p>
+                        <h2 class="m-section__title" id="order-title">Order</h2>
+                    </div>
+
+                    <div class="lo-order-bar">
+                        <span class="m-select-wrap">
+                            <select id="order-picker" class="m-select" aria-labelledby="order-title"
+                                    :value="selectedOrderId" @change="selectOrder($event.target.value)">
+                                <template x-for="o in orders" :key="o.id">
+                                    <option :value="o.id" x-text="o.id === 'standard' ? o.name + ' (default)' : o.name"></option>
+                                </template>
+                            </select>
+                        </span>
+                        <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--outline" x-show="editing" @click="addOrder()" aria-label="New order">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                        </button>
                     </div>
 
                     <div class="m-card lo-form">
@@ -131,20 +123,54 @@
                         </label>
                     </div>
 
-                    <div class="m-empty" x-show="!orderElements.length">
-                        <span class="material-symbols-outlined">list_alt</span>
-                        <p>No elements in this order yet. Add one below.</p>
-                    </div>
-
-                    <div class="m-card-list" id="order-elements" x-show="orderElements.length">
+                    <div class="m-card-list" id="order-elements">
+                        <div class="m-empty" x-show="!orderElements.length">
+                            <span class="material-symbols-outlined">list_alt</span>
+                            <p>Drag an element here, or add one.</p>
+                        </div>
                         <template x-for="(el, index) in orderElements" :key="el.id">
-                            <div class="m-row" :data-order-row="el.id">
+                            <div class="m-row" :data-order-row="el.id" :data-element-id="el.id">
                                 <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag to move" aria-hidden="true">drag_indicator</span>
                                 <span class="lo-num" x-text="index + 1"></span>
                                 <span class="m-row__main">
-                                    <span class="m-row__title" x-text="el.name"></span>
-                                    <span class="m-row__sub" x-text="primitiveLabel(el.primitive) + (el.hasRole ? ' · carried by a person' : '') + (el.hasNote ? ' · note' : '')"></span>
+                                    <template x-if="takesName(el.kind)">
+                                        <input class="m-input lo-element__name" type="text" maxlength="60" :value="el.name"
+                                               :aria-label="'Name of this ' + kindLabel(el.kind)" :disabled="!editing"
+                                               @change="renameElement(el.id, $event)" @keydown.enter.prevent="$el.blur()" />
+                                    </template>
+                                    <span class="m-row__title" x-show="!takesName(el.kind)" x-text="el.name"></span>
+                                    <span class="m-row__sub" x-text="kindLabel(el.kind) + (el.hasNote ? ' · note' : '')"></span>
+                                    <label class="m-check" x-show="editing && el.kind === 'prayer'">
+                                        <input type="checkbox" :checked="!!el.requests" @change="updateElement(el.id, { requests: $event.target.checked ? { count: 1, who: 'either' } : null })" />
+                                        <span>Send prayer requests</span>
+                                    </label>
+                                    <template x-if="editing && el.kind === 'prayer' && el.requests">
+                                        <span class="lo-prayer">
+                                            <label class="m-field">
+                                                <span class="m-label">How many</span>
+                                                <input class="m-input" type="number" min="1" max="12"
+                                                       :aria-label="'How many people for ' + el.name"
+                                                       x-model.number="el.requests.count" @change="clampRequests(el)" />
+                                            </label>
+                                            <label class="m-field">
+                                                <span class="m-label">Who</span>
+                                                <span class="m-select-wrap">
+                                                    <select class="m-select" :aria-label="'Who ' + el.name + ' asks'"
+                                                        :value="el.requests.who"
+                                                        @change="updateElement(el.id, { requests: { count: el.requests.count, who: $event.target.value } })">
+                                                    <option value="either">Either</option>
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                </select>
+                                                </span>
+                                            </label>
+                                        </span>
+                                    </template>
                                 </span>
+                                <label class="m-check" x-show="editing">
+                                    <input type="checkbox" :checked="el.hasNote" @change="updateElement(el.id, { hasNote: $event.target.checked })" />
+                                    <span>Note</span>
+                                </label>
                                 <span class="lo-acts" x-show="editing">
                                     <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" data-move="up"
                                             :disabled="index === 0" @click="move(index, -1, $event)"
@@ -165,24 +191,6 @@
                         </template>
                     </div>
 
-                    <form class="m-card lo-form lo-form--row" x-show="editing" @submit.prevent="addToOrder()">
-                        <label class="m-field">
-                            <span class="m-label">Add an element</span>
-                            <span class="m-select-wrap">
-                                <select id="add-element-select" class="m-select" x-model="addElementId" :disabled="!addable.length">
-                                    <option value="" x-text="addable.length ? 'Choose an element' : 'Every element is in this order'"></option>
-                                    <template x-for="el in addable" :key="el.id">
-                                        <option :value="el.id" x-text="el.name + ' (' + primitiveLabel(el.primitive) + ')'" :selected="el.id === addElementId"></option>
-                                    </template>
-                                </select>
-                            </span>
-                        </label>
-                        <button type="submit" class="m-btn m-btn--secondary m-btn--sm" :disabled="!addElementId">
-                            <span class="material-symbols-outlined">add</span>
-                            <span class="m-btn__label">Add to order</span>
-                        </button>
-                    </form>
-
                     <div x-show="editing && !isStandard">
                         <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="deleteOrder()">
                             <span class="material-symbols-outlined">delete</span>
@@ -192,68 +200,6 @@
                 </section>
             </div>
 
-            <!-- ── Elements ────────────────────────────────────────────── -->
-            <section class="m-section" aria-labelledby="elements-title">
-                <div class="m-section__head">
-                    <h2 class="m-section__title" id="elements-title">Elements</h2>
-                    <p class="m-section__hint">Every slot an order can use. The kind is fixed once made. Deleting one takes it out of every order; what Sundays already hold under it stays.</p>
-                </div>
-
-                <div class="m-empty" x-show="!catalog.elements.length">
-                    <span class="material-symbols-outlined">widgets</span>
-                    <p>No elements yet. Add the first one below.</p>
-                </div>
-
-                <div class="m-card-list" id="element-list" x-show="catalog.elements.length">
-                    <template x-for="el in catalog.elements" :key="el.id">
-                        <div class="m-row lo-element" :data-element-row="el.id">
-                            <span class="m-row__main lo-element__main">
-                                <input class="m-input lo-element__name" type="text" maxlength="60" :value="el.name"
-                                       :aria-label="'Name of ' + el.name" :disabled="!editing"
-                                       @change="renameElement(el.id, $event)" @keydown.enter.prevent="$el.blur()" />
-                                <span class="m-row__sub" x-text="primitiveLabel(el.primitive) + ' · ' + usedBy(el.id)"></span>
-                            </span>
-                            <span class="lo-element__flags">
-                                <label class="m-check">
-                                    <input type="checkbox" :checked="el.hasRole" :disabled="!editing" @change="updateElement(el.id, { hasRole: $event.target.checked })" />
-                                    <span>Carried by a person</span>
-                                </label>
-                                <label class="m-check">
-                                    <input type="checkbox" :checked="el.hasNote" :disabled="!editing" @change="updateElement(el.id, { hasNote: $event.target.checked })" />
-                                    <span>Takes a note</span>
-                                </label>
-                                <button type="button" class="m-icon-btn m-icon-btn--ghost" x-show="editing" @click="deleteElement(el.id)"
-                                        :aria-label="'Delete ' + el.name" title="Delete element">
-                                    <span class="material-symbols-outlined">delete</span>
-                                </button>
-                            </span>
-                        </div>
-                    </template>
-                </div>
-
-                <form class="m-card lo-form lo-form--row" x-show="editing" @submit.prevent="createElement()">
-                    <label class="m-field lo-grow">
-                        <span class="m-label">New element</span>
-                        <input id="new-element-name" class="m-input" type="text" maxlength="60" x-model="newElement.name" placeholder="Name it — Offertory" />
-                    </label>
-                    <label class="m-field">
-                        <span class="m-label">Kind</span>
-                        <span class="m-select-wrap">
-                            <select id="new-element-primitive" class="m-select" x-model="newElement.primitive">
-                                <template x-for="p in primitives" :key="p">
-                                    <option :value="p" x-text="primitiveLabel(p)" :selected="p === newElement.primitive"></option>
-                                </template>
-                            </select>
-                        </span>
-                    </label>
-                    <label class="m-check"><input type="checkbox" x-model="newElement.hasRole" /><span>Carried by a person</span></label>
-                    <label class="m-check"><input type="checkbox" x-model="newElement.hasNote" /><span>Takes a note</span></label>
-                    <button type="submit" class="m-btn m-btn--secondary m-btn--sm" :disabled="!newElement.name.trim()">
-                        <span class="material-symbols-outlined">add</span>
-                        <span class="m-btn__label">Add element</span>
-                    </button>
-                </form>
-            </section>
         </div>
 
         <div class="m-toast" role="status" x-show="toast" x-transition x-text="toast"></div>
@@ -280,13 +226,19 @@
     <style>
         .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
         .lo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
-        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 340px minmax(0, 1fr); } }
+        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 280px minmax(0, 1fr); } }
+        .lo-order-bar { display: flex; align-items: flex-end; gap: var(--space-sm); }
+        .lo-order-bar > .m-select-wrap { flex: 1 1 auto; min-width: 0; }
+        .lo-library--drag [data-library-item] { cursor: grab; }
+        .lo-library--drag [data-library-item]:active { cursor: grabbing; }
         .lo-form { display: flex; flex-direction: column; gap: var(--space-sm); }
         .lo-form--row { flex-direction: row; flex-wrap: wrap; align-items: flex-end; }
         .lo-form--row .m-field { flex: 1 1 200px; }
         .lo-form--row .lo-grow { flex: 2 1 240px; }
         .lo-form > .m-btn { align-self: flex-start; }
         .lo-form--row > .m-btn { align-self: flex-end; }
+        .lo-prayer { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-xs); }
+        .lo-prayer .m-field { flex: 1 1 8rem; }
         .lo-stack .m-row__main, .lo-stack .m-row__title, .lo-stack .m-row__sub { display: block; }
         .lo-stack .m-card-list > .m-row:last-of-type { border-bottom: 0; }
         .lo-num { flex: 0 0 1.5rem; text-align: right; font-size: 13px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }

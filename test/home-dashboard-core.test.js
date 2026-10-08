@@ -83,16 +83,25 @@ test('a people element counts once somebody is on it; the order says which hymns
     assert.ok(asked.indexOf('Baptism') !== -1);
 });
 
-test('an element that carries a person is unfinished until the person is named', () => {
-    const made = Liturgy.addElement(Liturgy.standardCatalog(), { name: 'Scripture Reading', primitive: 'scripture', hasRole: true, hasNote: false });
-    const catalog = Liturgy.addToOrder(made.catalog, 'standard', made.element.id);
+test('a scripture reading is set when the reference is filled', () => {
+    const made = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'scripture', 0);
     const id = made.element.id;
-    const lit = fullLiturgy({ [id]: 'Isaiah 40:1-11' });
-    const blank = Home.checklist({ liturgy: lit }, catalog).find(function (item) { return item.key === id; });
+    const blank = Home.checklist({ liturgy: {} }, made.catalog).find(function (item) { return item.key === id; });
     assert.equal(blank.state, 'blank');
-    const carried = Home.checklist({ liturgy: lit, carriedBy: { [id]: { name: 'A Reader', id: 'p1' } } }, catalog)
+    const set = Home.checklist({ liturgy: { [id]: 'Isaiah 40:1-11' } }, made.catalog)
         .find(function (item) { return item.key === id; });
-    assert.equal(carried.state, 'set');
+    assert.equal(set.state, 'set');
+});
+
+test('a person event is unfinished until the person is named', () => {
+    const made = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'person', 0, { name: 'Reader' });
+    const id = made.element.id;
+    const blank = Home.checklist({ liturgy: {} }, made.catalog).find(function (item) { return item.key === id; });
+    assert.equal(blank.state, 'blank');
+    const named = Home.checklist({ liturgy: { [id]: { id: 'p1', name: 'A Reader' } } }, made.catalog)
+        .find(function (item) { return item.key === id; });
+    assert.equal(named.state, 'set');
+    assert.equal(named.label, 'Reader');
 });
 
 test('an old irregular Sunday is not scored until it is given an order', () => {

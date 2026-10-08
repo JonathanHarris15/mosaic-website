@@ -1,15 +1,15 @@
-// Liturgy Order Core — the congregation's Liturgy Elements and the Liturgy
-// Orders made of them (ADR-0080).
+// Liturgy Order Core — the congregation's Liturgy Orders (ADR-0080).
 //
-// A Liturgy Element is one slot a Sunday can carry: a stable id, a name, and
-// a primitive (song, scripture, text, people). A Liturgy Order is a named,
-// ordered list of element ids. A Sunday names its order with `liturgyOrderId`
-// and keeps its values where they always were — `liturgy.<elementId>` and
-// `notes[elementId]` — so changing the order hides values, never deletes them.
+// The elements are five kinds, hardcoded. An order is a combination of them,
+// in a sequence. A kind brings its own fields: a hymn is chosen on the Sunday,
+// a scripture reading is a reference, a prayer is named on the order and may
+// send prayer requests, a person event is named on the order and picked on the
+// Sunday, and other is a name and nothing on the Sunday. Each one can take a
+// note. There is no separate element record and no primitive to pick.
 //
-// The Standard order below is DATA, not a special case. It is what an empty
-// collection reads as, and nothing downstream checks for its ids; another
-// church adds an element by saving one, with no code change.
+// A Sunday names its order with `liturgyOrderId` and keeps values at
+// `liturgy.<elementId>` and notes at `notes[elementId]`. Changing the order
+// hides values. It does not delete them.
 //
 // Pure. Loaded as a classic <script> (window.LiturgyOrderCore) on the pages,
 // required under node:test, and copied into functions/shared by
@@ -17,14 +17,29 @@
 (function (global) {
     'use strict';
 
-    const PRIMITIVES = Object.freeze(['song', 'scripture', 'text', 'people']);
+    const KINDS = Object.freeze(['hymn', 'scripture', 'prayer', 'person', 'other']);
 
-    const PRIMITIVE_LABELS = Object.freeze({
-        song: 'Song',
-        scripture: 'Scripture',
-        text: 'Text',
-        people: 'People',
+    const KIND_LABELS = Object.freeze({
+        hymn: 'Hymn',
+        scripture: 'Scripture Reading',
+        prayer: 'Prayer',
+        person: 'Person Event',
+        other: 'Other',
     });
+
+    // What older documents called a primitive, read back as a kind.
+    const KIND_FROM_PRIMITIVE = Object.freeze({
+        song: 'hymn',
+        scripture: 'scripture',
+        text: 'other',
+        people: 'person',
+        hymn: 'hymn',
+        prayer: 'prayer',
+        person: 'person',
+        other: 'other',
+    });
+
+    const REQUEST_WHO = Object.freeze(['male', 'female', 'either']);
 
     const STANDARD_ORDER_ID = 'standard';
 
@@ -33,9 +48,8 @@
         orders: 'liturgy_orders',
     });
 
-    // A new element's id becomes a key under `liturgy`, `notes`, and
-    // `carriedBy` on every Sunday, and a printable field name. These names are
-    // already spoken for on the Sunday or in the printable catalog.
+    // A placed element's id becomes a key under `liturgy` and `notes` on the
+    // Sunday, and a printable field name. These names are already spoken for.
     const RESERVED_IDS = Object.freeze([
         'prayerMale', 'prayerFemale', 'prayerLabel',
         'date', 'theme', 'keyVerse', 'keyVerseText',
@@ -46,124 +60,188 @@
         'constructor', 'prototype', '__proto__', 'toString', 'hasOwnProperty',
     ]);
 
-    function seedElement(id, name, primitive) {
-        return Object.freeze({ id: id, name: name, primitive: primitive, hasRole: false, hasNote: true });
+    function seedElement(id, name, kind) {
+        return decorate({ id: id, name: name, kind: kind, hasNote: true, requests: null });
     }
 
+    // The fourteen slots every Sunday had, expressed as the five kinds. The
+    // ids stay, so a Sunday and a printable already bound to `hymn1` or
+    // `sermon` still resolve. Baptism stays the one person-event whose Sunday
+    // value is the candidates list (ADR-0006).
     const STANDARD_ELEMENTS = Object.freeze([
-        seedElement('preparatoryHymn', 'Preparatory Hymn', 'song'),
+        seedElement('preparatoryHymn', 'Preparatory Hymn', 'hymn'),
         seedElement('callToWorship', 'Call to Worship', 'scripture'),
-        seedElement('hymn1', 'Hymn 1', 'song'),
-        seedElement('hymn2', 'Hymn 2', 'song'),
+        seedElement('hymn1', 'Hymn 1', 'hymn'),
+        seedElement('hymn2', 'Hymn 2', 'hymn'),
         seedElement('callToConfession', 'Call to Confession', 'scripture'),
         seedElement('assuranceOfPardon', 'Assurance of Pardon', 'scripture'),
-        seedElement('hymnMid1', 'Hymn 3', 'song'),
-        seedElement('hymnMid2', 'Hymn 4', 'song'),
+        seedElement('hymnMid1', 'Hymn 3', 'hymn'),
+        seedElement('hymnMid2', 'Hymn 4', 'hymn'),
         seedElement('scriptureReading', 'Pastoral Prayer', 'scripture'),
         seedElement('sermon', 'Sermon', 'scripture'),
-        seedElement('baptism', 'Baptism', 'people'),
-        seedElement('hymnEnd1', 'Closing Hymn', 'song'),
-        seedElement('hymnEnd2', 'Final Hymn', 'song'),
+        seedElement('baptism', 'Baptism', 'person'),
+        seedElement('hymnEnd1', 'Closing Hymn', 'hymn'),
+        seedElement('hymnEnd2', 'Final Hymn', 'hymn'),
         seedElement('benediction', 'Benediction', 'scripture'),
     ]);
 
     const STANDARD_ORDER = Object.freeze({
         id: STANDARD_ORDER_ID,
         name: 'Standard',
+        elements: Object.freeze(STANDARD_ELEMENTS.map(copyElement)),
         elementIds: Object.freeze(STANDARD_ELEMENTS.map(function (el) { return el.id; })),
     });
 
-    // ── shape ──────────────────────────────────────────────────────────────
+    function isKind(value) {
+        return KINDS.indexOf(value) !== -1;
+    }
 
-    function isPrimitive(value) {
-        return PRIMITIVES.indexOf(value) !== -1;
+    function kindTakesName(kind) {
+        return kind === 'prayer' || kind === 'person' || kind === 'other';
     }
 
     function cleanName(value) {
         return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
     }
 
-    // A stored element, or null when it cannot be one (no id, unknown primitive).
-    function normaliseElement(raw, fallbackId) {
-        const src = raw || {};
-        const id = cleanName(src.id != null ? src.id : fallbackId);
-        if (!id || !isPrimitive(src.primitive)) return null;
-        return {
-            id: id,
-            name: cleanName(src.name) || id,
-            primitive: src.primitive,
-            hasRole: src.hasRole === true,
+    // The shape older pages still branch on. Derived, never stored.
+    function primitiveOf(el) {
+        if (!el) return 'other';
+        if (el.kind === 'hymn') return 'song';
+        if (el.kind === 'scripture') return 'scripture';
+        if (el.kind === 'prayer') return 'prayer';
+        if (el.kind === 'person') return el.id === 'baptism' ? 'people' : 'person';
+        return 'other';
+    }
+
+    function normaliseRequests(kind, raw) {
+        if (kind !== 'prayer' || !raw || typeof raw !== 'object') return null;
+        const who = REQUEST_WHO.indexOf(raw.who) === -1 ? 'either' : raw.who;
+        let count = parseInt(raw.count, 10);
+        if (!count || count < 1) count = 1;
+        if (count > 12) count = 12;
+        return { count: count, who: who };
+    }
+
+    function decorate(src) {
+        const kind = src.kind;
+        const el = {
+            id: src.id,
+            kind: kind,
+            name: src.name,
             hasNote: src.hasNote !== false,
+            requests: normaliseRequests(kind, src.requests),
+            hasRole: false,
+        };
+        el.primitive = primitiveOf(el);
+        return el;
+    }
+
+    function copyElement(el) {
+        return decorate(el);
+    }
+
+    function copyOrder(order) {
+        const elements = (order.elements || []).map(copyElement);
+        return {
+            id: order.id,
+            name: order.name,
+            elements: elements,
+            elementIds: elements.map(function (el) { return el.id; }),
         };
     }
 
-    // A stored order. An element appears at most once; the first stays.
-    function normaliseOrder(raw, fallbackId) {
+    function kindOf(raw) {
+        const src = raw || {};
+        if (isKind(src.kind)) return src.kind;
+        if (src.primitive && KIND_FROM_PRIMITIVE[src.primitive]) return KIND_FROM_PRIMITIVE[src.primitive];
+        return null;
+    }
+
+    function normaliseElement(raw, fallbackId) {
+        const src = raw || {};
+        const id = cleanName(src.id != null ? src.id : fallbackId);
+        const kind = kindOf(src);
+        if (!id || !kind) return null;
+        const name = cleanName(src.name) || KIND_LABELS[kind];
+        return decorate({ id: id, kind: kind, name: name, hasNote: src.hasNote, requests: src.requests });
+    }
+
+    function normaliseOrder(raw, fallbackId, looseById) {
         const src = raw || {};
         const id = cleanName(src.id != null ? src.id : fallbackId);
         if (!id) return null;
         const seen = new Set();
-        const elementIds = [];
-        (Array.isArray(src.elementIds) ? src.elementIds : []).forEach(function (value) {
-            const elId = cleanName(value);
-            if (!elId || seen.has(elId)) return;
-            seen.add(elId);
-            elementIds.push(elId);
-        });
-        return { id: id, name: cleanName(src.name) || id, elementIds: elementIds };
+        const elements = [];
+        const push = function (el) {
+            if (!el || seen.has(el.id)) return;
+            seen.add(el.id);
+            elements.push(el);
+        };
+        if (Array.isArray(src.elements)) {
+            src.elements.forEach(function (rawEl) { push(normaliseElement(rawEl)); });
+        } else {
+            (Array.isArray(src.elementIds) ? src.elementIds : []).forEach(function (value) {
+                const elId = cleanName(value);
+                push(elId && looseById ? looseById.get(elId) : null);
+            });
+        }
+        return { id: id, name: cleanName(src.name) || id, elements: elements, elementIds: elements.map(function (el) { return el.id; }) };
     }
 
-    function copyElement(el) {
-        return { id: el.id, name: el.name, primitive: el.primitive, hasRole: el.hasRole, hasNote: el.hasNote };
-    }
-
-    function copyOrder(order) {
-        return { id: order.id, name: order.name, elementIds: order.elementIds.slice() };
+    function poolFrom(orders, loose) {
+        const seen = new Set();
+        const elements = [];
+        const push = function (el) {
+            if (!el || seen.has(el.id)) return;
+            seen.add(el.id);
+            elements.push(copyElement(el));
+        };
+        (orders || []).forEach(function (order) { (order.elements || []).forEach(push); });
+        (loose || []).forEach(push);
+        return elements;
     }
 
     function standardCatalog() {
-        return {
-            elements: STANDARD_ELEMENTS.map(copyElement),
-            orders: [copyOrder(STANDARD_ORDER)],
-        };
+        const order = copyOrder(STANDARD_ORDER);
+        return { elements: order.elements.map(copyElement), orders: [order] };
     }
 
-    // What the pages read. Each collection that is empty reads as the seed,
-    // so a congregation that has never opened the management page still has
-    // Standard. The Standard order is always present: it is what a Sunday with
-    // no `liturgyOrderId` means.
+    // What the pages read. An order carries its elements. An older document
+    // that stored elements apart from the order is joined back on read.
+    // Empty reads as the Standard seed. Standard is always present.
     function catalogFrom(input) {
         const src = input || {};
         const rawElements = Array.isArray(src.elements) ? src.elements : [];
         const rawOrders = Array.isArray(src.orders) ? src.orders : [];
+        if (!rawElements.length && !rawOrders.length) return standardCatalog();
 
-        const elements = [];
-        const seenEl = new Set();
+        const loose = [];
+        const looseById = new Map();
         rawElements.forEach(function (raw) {
             const el = normaliseElement(raw);
-            if (!el || seenEl.has(el.id)) return;
-            seenEl.add(el.id);
-            elements.push(el);
+            if (!el || looseById.has(el.id)) return;
+            looseById.set(el.id, el);
+            loose.push(el);
         });
 
         const orders = [];
         const seenOrder = new Set();
         rawOrders.forEach(function (raw) {
-            const order = normaliseOrder(raw);
+            const order = normaliseOrder(raw, null, looseById);
             if (!order || seenOrder.has(order.id)) return;
             seenOrder.add(order.id);
             orders.push(order);
         });
 
-        const seed = standardCatalog();
-        const out = {
-            elements: elements.length ? elements : seed.elements,
-            orders: orders.length ? orders : seed.orders,
-        };
-        if (!out.orders.some(function (o) { return o.id === STANDARD_ORDER_ID; })) {
-            out.orders.unshift(copyOrder(STANDARD_ORDER));
+        if (!orders.length) {
+            const seed = copyOrder(STANDARD_ORDER);
+            return { elements: loose.length ? loose.map(copyElement) : seed.elements.map(copyElement), orders: [seed] };
         }
-        return out;
+        if (!orders.some(function (o) { return o.id === STANDARD_ORDER_ID; })) {
+            orders.unshift(copyOrder(STANDARD_ORDER));
+        }
+        return { elements: poolFrom(orders, loose), orders: orders };
     }
 
     function elementById(catalog, id) {
@@ -183,45 +261,31 @@
         return id || STANDARD_ORDER_ID;
     }
 
-    // The order a Sunday follows. A missing id means Standard; an id whose
-    // order has since been deleted also reads as Standard rather than as an
-    // empty Sunday.
     function orderFor(service, catalog) {
         return orderById(catalog, orderIdOf(service)) ||
             orderById(catalog, STANDARD_ORDER_ID) ||
             STANDARD_ORDER;
     }
 
-    // An order's elements, in its order. An id with no element (deleted, or
-    // a stale write) is skipped rather than shown as a blank slot.
-    function elementsOf(order, catalog) {
-        const ids = (order && order.elementIds) || [];
-        const out = [];
-        ids.forEach(function (id) {
-            const el = elementById(catalog, id);
-            if (el) out.push(el);
-        });
-        return out;
+    function elementsOf(order) {
+        if (order && Array.isArray(order.elements) && order.elements.length) return order.elements.slice();
+        return [];
     }
 
     function elementsFor(service, catalog) {
-        return elementsOf(orderFor(service, catalog), catalog);
+        return elementsOf(orderFor(service, catalog));
     }
 
-    function songIdsOf(order, catalog) {
-        return elementsOf(order, catalog)
-            .filter(function (el) { return el.primitive === 'song'; })
+    function songIdsOf(order) {
+        return elementsOf(order)
+            .filter(function (el) { return el.kind === 'hymn'; })
             .map(function (el) { return el.id; });
     }
 
-    // Every song element the congregation has, in catalog order — what a
-    // reader that does not know the Sunday's order yet must be ready for.
     function allSongIds(catalog) {
         const list = (catalog && catalog.elements) || STANDARD_ELEMENTS;
-        return list.filter(function (el) { return el.primitive === 'song'; }).map(function (el) { return el.id; });
+        return list.filter(function (el) { return el.kind === 'hymn'; }).map(function (el) { return el.id; });
     }
-
-    // ── table mode ─────────────────────────────────────────────────────────
 
     function byName(a, b) {
         const an = a.name.toLowerCase();
@@ -230,8 +294,6 @@
         return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
     }
 
-    // The toggled orders in column order: Standard first when it is on, then
-    // the rest by name. Ids that no longer name an order drop out.
     function toggledOrders(catalog, toggledIds) {
         const wanted = new Set(Array.isArray(toggledIds) ? toggledIds : []);
         const orders = ((catalog && catalog.orders) || []).filter(function (o) { return wanted.has(o.id); });
@@ -240,14 +302,11 @@
         return standard.concat(rest);
     }
 
-    // One column per element across the toggled orders, each element at the
-    // first place it is seen. A shared element is the same id, so it is one
-    // column however many orders carry it.
     function tableColumns(catalog, toggledIds) {
         const seen = new Set();
         const out = [];
         toggledOrders(catalog, toggledIds).forEach(function (order) {
-            elementsOf(order, catalog).forEach(function (el) {
+            elementsOf(order).forEach(function (el) {
                 if (seen.has(el.id)) return;
                 seen.add(el.id);
                 out.push(el);
@@ -260,17 +319,12 @@
         return [STANDARD_ORDER_ID];
     }
 
-    // What the page remembered, minus orders that have since gone. Nothing
-    // remembered, or only orders that are gone, is the default: Standard
-    // alone. An empty list remembered on purpose stays empty.
     function readToggles(stored, catalog) {
         if (!Array.isArray(stored)) return defaultToggles();
         const ids = new Set(((catalog && catalog.orders) || []).map(function (o) { return o.id; }));
         const kept = stored.filter(function (id) { return typeof id === 'string' && ids.has(id); });
         return kept.length || !stored.length ? kept : defaultToggles();
     }
-
-    // ── values on a Sunday ─────────────────────────────────────────────────
 
     function valueOf(service, el) {
         const liturgy = (service && service.liturgy) || {};
@@ -286,42 +340,47 @@
         return { id: ref.id || null, name: name };
     }
 
-    // A value as one line of text, whatever its primitive.
-    function displayValue(primitive, value) {
-        if (value == null) return '';
-        if (primitive === 'song') {
+    function displayValue(kindOrPrimitive, value) {
+        const kind = isKind(kindOrPrimitive) ? kindOrPrimitive : (KIND_FROM_PRIMITIVE[kindOrPrimitive] || 'other');
+        if (value == null || kind === 'other') return '';
+        if (kind === 'hymn') {
             if (typeof value === 'string') return value.trim();
             return cleanName(value.name);
         }
-        if (primitive === 'people') {
+        if (kind === 'person' || kind === 'prayer') {
             if (typeof value === 'string') return value.trim();
-            if (!Array.isArray(value)) return '';
-            return value.map(function (p) { return p && cleanName(p.name); }).filter(Boolean).join(', ');
+            if (Array.isArray(value)) {
+                return value.map(function (p) { return p && cleanName(p.name); }).filter(Boolean).join(', ');
+            }
+            if (typeof value === 'object') return cleanName(value.name);
+            return '';
         }
         return typeof value === 'string' ? value.trim() : '';
     }
 
-    function emptyValue(primitive) {
-        if (primitive === 'song') return { name: '', id: null };
-        if (primitive === 'people') return [];
+    function emptyValue(kindOrPrimitive) {
+        const kind = isKind(kindOrPrimitive) ? kindOrPrimitive : (KIND_FROM_PRIMITIVE[kindOrPrimitive] || null);
+        if (kindOrPrimitive === 'people' || kind === 'prayer') return [];
+        if (kind === 'hymn' || kind === 'person') return { name: '', id: null };
+        if (kind === 'other') return null;
         return '';
     }
 
-    // ── editing (the management page) ──────────────────────────────────────
-    //
-    // Every edit returns a NEW catalog. The page holds the draft and saves it
-    // whole; nothing here touches a Sunday.
-
     function cloneCatalog(catalog) {
         const src = catalog || standardCatalog();
-        return {
-            elements: (src.elements || []).map(copyElement),
-            orders: (src.orders || []).map(copyOrder),
-        };
+        const orders = (src.orders || []).map(copyOrder);
+        const loose = (src.elements || []).map(copyElement);
+        return { elements: poolFrom(orders, loose), orders: orders };
     }
 
-    // "Offertory Prayer" → "offertoryPrayer". Stable once made: renaming the
-    // element later keeps the id, because Sundays and printables hold it.
+    function syncPool(catalog) {
+        catalog.elements = poolFrom(catalog.orders, catalog.elements);
+        catalog.orders.forEach(function (order) {
+            order.elementIds = (order.elements || []).map(function (el) { return el.id; });
+        });
+        return catalog;
+    }
+
     function slugFor(name) {
         const words = cleanName(name)
             .normalize('NFKD')
@@ -350,48 +409,99 @@
         return id;
     }
 
-    function addElement(catalog, fields) {
+    function takenIds(catalog) {
+        const taken = new Set();
+        (catalog.elements || []).forEach(function (el) { taken.add(el.id); });
+        (catalog.orders || []).forEach(function (order) {
+            (order.elements || []).forEach(function (el) { taken.add(el.id); });
+        });
+        return taken;
+    }
+
+    // Place one of the five kinds on an order. The instance is born here:
+    // the kind is fixed, and the order holds it.
+    function placeKind(catalog, orderId, kind, index, fields) {
+        if (!isKind(kind)) throw new Error('That is not one of the elements.');
         const next = cloneCatalog(catalog);
+        const order = next.orders.find(function (o) { return o.id === orderId; });
+        if (!order) throw new Error('That order is gone.');
         const src = fields || {};
+        const name = cleanName(src.name) || KIND_LABELS[kind];
+        if (kindTakesName(kind) && !name) throw new Error('An element needs a name.');
+        const element = decorate({
+            id: freshId(slugFor(name), takenIds(next)),
+            kind: kind,
+            name: name,
+            hasNote: src.hasNote !== false,
+            requests: kind === 'prayer' ? src.requests : null,
+        });
+        if (!order.elements) order.elements = [];
+        const at = typeof index === 'number' && index >= 0 && index <= order.elements.length
+            ? index : order.elements.length;
+        order.elements.splice(at, 0, element);
+        next.elements.push(copyElement(element));
+        syncPool(next);
+        return { catalog: next, element: copyElement(element) };
+    }
+
+    // Older call: a primitive plus a name. It becomes a kind, held in the
+    // collection until an order takes it.
+    function addElement(catalog, fields) {
+        const src = fields || {};
+        const kind = kindOf(src);
         const name = cleanName(src.name);
         if (!name) throw new Error('An element needs a name.');
-        if (!isPrimitive(src.primitive)) throw new Error('Choose song, scripture, text, or people.');
-        const taken = new Set(next.elements.map(function (el) { return el.id; }));
-        const element = {
-            id: freshId(slugFor(name), taken),
+        if (!kind) throw new Error('Choose hymn, scripture, prayer, person, or other.');
+        const next = cloneCatalog(catalog);
+        const element = decorate({
+            id: freshId(slugFor(name), takenIds(next)),
+            kind: kind,
             name: name,
-            primitive: src.primitive,
-            hasRole: src.hasRole === true,
             hasNote: src.hasNote !== false,
-        };
+            requests: kind === 'prayer' ? src.requests : null,
+        });
         next.elements.push(element);
         return { catalog: next, element: copyElement(element) };
     }
 
-    // Name, hasRole, and hasNote change in place. The primitive is fixed once
-    // made: Sundays already hold values in that primitive's shape.
     function updateElement(catalog, id, patch) {
         const next = cloneCatalog(catalog);
-        const el = next.elements.find(function (e) { return e.id === id; });
-        if (!el) throw new Error('That element is gone.');
         const src = patch || {};
-        if (src.name !== undefined) {
-            const name = cleanName(src.name);
-            if (!name) throw new Error('An element needs a name.');
-            el.name = name;
-        }
-        if (src.hasRole !== undefined) el.hasRole = src.hasRole === true;
-        if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
+        const apply = function (el) {
+            if (src.name !== undefined && kindTakesName(el.kind)) {
+                const name = cleanName(src.name);
+                if (!name) throw new Error('An element needs a name.');
+                el.name = name;
+            }
+            if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
+            if (el.kind === 'prayer' && src.requests !== undefined) {
+                el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
+            }
+            el.primitive = primitiveOf(el);
+        };
+        let found = false;
+        next.elements.forEach(function (el) {
+            if (el.id !== id) return;
+            found = true;
+            apply(el);
+        });
+        next.orders.forEach(function (order) {
+            (order.elements || []).forEach(function (el) {
+                if (el.id !== id) return;
+                found = true;
+                apply(el);
+            });
+        });
+        if (!found) throw new Error('That element is gone.');
         return next;
     }
 
-    // Gone from the catalog and from every order. Sunday values under its id
-    // are left exactly where they are.
     function deleteElement(catalog, id) {
         const next = cloneCatalog(catalog);
         next.elements = next.elements.filter(function (e) { return e.id !== id; });
-        next.orders.forEach(function (o) {
-            o.elementIds = o.elementIds.filter(function (elId) { return elId !== id; });
+        next.orders.forEach(function (order) {
+            order.elements = (order.elements || []).filter(function (el) { return el.id !== id; });
+            order.elementIds = order.elements.map(function (el) { return el.id; });
         });
         return next;
     }
@@ -402,13 +512,19 @@
         const name = cleanName(src.name);
         if (!name) throw new Error('An order needs a name.');
         const taken = new Set(next.orders.map(function (o) { return o.id; }));
-        let elementIds = [];
+        let elements = [];
         if (src.copyFrom) {
             const from = next.orders.find(function (o) { return o.id === src.copyFrom; });
-            if (from) elementIds = from.elementIds.slice();
+            if (from) elements = (from.elements || []).map(copyElement);
         }
-        const order = { id: freshId(slugFor(name), taken), name: name, elementIds: elementIds };
+        const order = {
+            id: freshId(slugFor(name), taken),
+            name: name,
+            elements: elements,
+            elementIds: elements.map(function (el) { return el.id; }),
+        };
         next.orders.push(order);
+        syncPool(next);
         return { catalog: next, order: copyOrder(order) };
     }
 
@@ -422,8 +538,6 @@
         return next;
     }
 
-    // Standard cannot go: it is what every Sunday without an order reads as.
-    // A Sunday naming a deleted order reads as Standard (orderFor).
     function deleteOrder(catalog, id) {
         if (id === STANDARD_ORDER_ID) throw new Error('Standard is the default order and stays.');
         const next = cloneCatalog(catalog);
@@ -435,11 +549,17 @@
         const next = cloneCatalog(catalog);
         const order = next.orders.find(function (o) { return o.id === orderId; });
         if (!order) throw new Error('That order is gone.');
-        if (!next.elements.some(function (e) { return e.id === elementId; })) throw new Error('That element is gone.');
-        if (order.elementIds.indexOf(elementId) !== -1) return next;
-        const at = typeof index === 'number' && index >= 0 && index <= order.elementIds.length
-            ? index : order.elementIds.length;
-        order.elementIds.splice(at, 0, elementId);
+        const element = elementById(next, elementId);
+        if (!element) throw new Error('That element is gone.');
+        if (!order.elements) order.elements = [];
+        if (order.elements.some(function (el) { return el.id === elementId; })) {
+            order.elementIds = order.elements.map(function (el) { return el.id; });
+            return next;
+        }
+        const at = typeof index === 'number' && index >= 0 && index <= order.elements.length
+            ? index : order.elements.length;
+        order.elements.splice(at, 0, copyElement(element));
+        order.elementIds = order.elements.map(function (el) { return el.id; });
         return next;
     }
 
@@ -447,7 +567,12 @@
         const next = cloneCatalog(catalog);
         const order = next.orders.find(function (o) { return o.id === orderId; });
         if (!order) throw new Error('That order is gone.');
-        order.elementIds = order.elementIds.filter(function (id) { return id !== elementId; });
+        order.elements = (order.elements || []).filter(function (el) { return el.id !== elementId; });
+        order.elementIds = order.elements.map(function (el) { return el.id; });
+        const still = next.orders.some(function (o) {
+            return (o.elements || []).some(function (el) { return el.id === elementId; });
+        });
+        if (!still) next.elements = next.elements.filter(function (el) { return el.id !== elementId; });
         return next;
     }
 
@@ -455,29 +580,27 @@
         const next = cloneCatalog(catalog);
         const order = next.orders.find(function (o) { return o.id === orderId; });
         if (!order) throw new Error('That order is gone.');
-        const ids = order.elementIds;
-        if (from < 0 || from >= ids.length) return next;
-        const target = Math.max(0, Math.min(ids.length - 1, to));
+        const elements = order.elements || [];
+        if (from < 0 || from >= elements.length) return next;
+        const target = Math.max(0, Math.min(elements.length - 1, to));
         if (target === from) return next;
-        const moved = ids.splice(from, 1)[0];
-        ids.splice(target, 0, moved);
+        const moved = elements.splice(from, 1)[0];
+        elements.splice(target, 0, moved);
+        order.elementIds = elements.map(function (el) { return el.id; });
         return next;
     }
 
-    // What would stop a save. Empty means the catalog is sound.
     function validateCatalog(catalog) {
         const problems = [];
         const src = catalog || {};
         const ids = new Set();
-        // An empty collection reads as the seed, so saving none would bring
-        // the deleted Standard elements back.
         if (!(src.elements || []).length) problems.push('Keep at least one element.');
         (src.elements || []).forEach(function (el) {
             if (!el || !el.id) { problems.push('An element has no id.'); return; }
             if (ids.has(el.id)) problems.push('Two elements share the id "' + el.id + '".');
             ids.add(el.id);
             if (!cleanName(el.name)) problems.push('An element has no name.');
-            if (!isPrimitive(el.primitive)) problems.push('"' + (el.name || el.id) + '" has no primitive.');
+            if (!isKind(el.kind) && !kindOf(el)) problems.push('"' + (el.name || el.id) + '" is not one of the elements.');
         });
         const orderIds = new Set();
         (src.orders || []).forEach(function (order) {
@@ -486,7 +609,11 @@
             orderIds.add(order.id);
             if (!cleanName(order.name)) problems.push('An order has no name.');
             const seen = new Set();
+            const list = (order.elements || []).map(function (el) { return el.id; });
             (order.elementIds || []).forEach(function (id) {
+                if (list.indexOf(id) === -1) list.push(id);
+            });
+            list.forEach(function (id) {
                 if (seen.has(id)) problems.push('"' + order.name + '" lists an element twice.');
                 seen.add(id);
                 if (!ids.has(id)) problems.push('"' + order.name + '" lists an element that is gone.');
@@ -497,14 +624,24 @@
     }
 
     const LiturgyOrderCore = {
-        PRIMITIVES: PRIMITIVES,
-        PRIMITIVE_LABELS: PRIMITIVE_LABELS,
+        KINDS: KINDS,
+        KIND_LABELS: KIND_LABELS,
+        REQUEST_WHO: REQUEST_WHO,
+        PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
+        PRIMITIVE_LABELS: Object.freeze({
+            song: 'Hymn',
+            scripture: 'Scripture Reading',
+            text: 'Other',
+            people: 'Person Event',
+        }),
         STANDARD_ORDER_ID: STANDARD_ORDER_ID,
         STANDARD_ELEMENTS: STANDARD_ELEMENTS,
         STANDARD_ORDER: STANDARD_ORDER,
         COLLECTIONS: COLLECTIONS,
         RESERVED_IDS: RESERVED_IDS,
-        isPrimitive: isPrimitive,
+        isKind: isKind,
+        kindTakesName: kindTakesName,
+        isPrimitive: function (value) { return !!KIND_FROM_PRIMITIVE[value]; },
         normaliseElement: normaliseElement,
         normaliseOrder: normaliseOrder,
         standardCatalog: standardCatalog,
@@ -526,6 +663,7 @@
         displayValue: displayValue,
         emptyValue: emptyValue,
         slugFor: slugFor,
+        placeKind: placeKind,
         addElement: addElement,
         updateElement: updateElement,
         deleteElement: deleteElement,

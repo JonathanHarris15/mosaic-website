@@ -320,7 +320,7 @@
 
     function sundayFieldsFor(catalog) {
         return SUNDAY_IDENTITY_FIELDS.concat(catalogOrSeed(catalog).elements.map(el => ({
-            key: el.id, label: el.name, kind: 'text', element: el.primitive,
+            key: el.id, label: el.name, kind: 'text', element: el.kind || el.primitive,
         })));
     }
 
@@ -329,7 +329,7 @@
     // "Which hymn" on the hymn sheets: every song element, by its name.
     function hymnSlotOptions(catalog) {
         return catalogOrSeed(catalog).elements
-            .filter(el => el.primitive === 'song')
+            .filter(el => el.kind === 'hymn' || el.primitive === 'song')
             .map(el => ({ value: el.id, label: el.name }));
     }
 
@@ -953,9 +953,12 @@
         };
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
         cat.elements.forEach(el => {
-            const dropsOut = el.primitive === 'song' && dropped.indexOf(el.id) !== -1;
-            row[el.id] = dropsOut ? '' : slotText(lit[el.id]);
-            if (el.primitive !== 'people' && !dropsOut) textKeys.push(el.id);
+            const dropsOut = (el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1;
+            // Other has no Sunday field. A value already stored (an older text
+            // element) still prints; otherwise the row is the name.
+            const stored = slotText(lit[el.id]);
+            row[el.id] = dropsOut ? '' : (el.kind === 'other' ? (stored || el.name) : stored);
+            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) textKeys.push(el.id);
         });
         if (!row.sermon && s && s.sermon) row.sermon = slotText(s.sermon);
         const fill = typeof notPlanned === 'string' ? notPlanned.trim() : '';
@@ -989,10 +992,11 @@
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
         const rows = [];
         Liturgy.elementsFor(s, cat).forEach(el => {
-            if (el.primitive === 'song' && removed.indexOf(el.id) !== -1) return;
-            const value = slotText(Liturgy.valueOf(s, el));
+            if ((el.kind === 'hymn' || el.primitive === 'song') && removed.indexOf(el.id) !== -1) return;
+            const stored = slotText(Liturgy.valueOf(s, el));
+            const value = el.kind === 'other' ? (stored || el.name) : stored;
             if (!value) return;
-            const carrier = el.hasRole ? Liturgy.carrierOf(s, el) : null;
+            const carrier = Liturgy.carrierOf(s, el);
             rows.push({ _id: el.id, label: el.name, value: value, carriedBy: carrier ? carrier.name : '', number: rows.length + 1 });
         });
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };

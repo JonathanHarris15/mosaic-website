@@ -50,6 +50,30 @@ test('a failed read does not save the stand-in over the congregation\'s orders',
     assert.equal(saved, false);
 });
 
+test('placing a kind inserts one instance of that kind', async () => {
+    const catalog = Core.standardCatalog();
+    const page = pageWith(async () => ({
+        catalog: catalog,
+        stored: {
+            elementIds: catalog.elements.map(el => el.id),
+            orderIds: catalog.orders.map(o => o.id),
+        },
+    }));
+    await page.load();
+    const before = page.selectedOrder.elementIds.length;
+    page.placeKind('other', 0);
+    const id = page.selectedOrder.elementIds[0];
+    const el = Core.elementById(page.catalog, id);
+    assert.equal(el.kind, 'other');
+    assert.equal(el.name, 'Other');
+    assert.equal(page.catalog.elements.filter(item => item.id === id).length, 1);
+    assert.equal(page.selectedOrder.elementIds.length, before + 1);
+    page.placeKind('prayer');
+    const prayer = Core.elementById(page.catalog, page.selectedOrder.elementIds[page.selectedOrder.elementIds.length - 1]);
+    assert.equal(prayer.kind, 'prayer');
+    assert.equal(prayer.requests, null);
+});
+
 test('a successful read clears the problem and can be saved', async () => {
     const catalog = Core.standardCatalog();
     const page = pageWith(async () => ({

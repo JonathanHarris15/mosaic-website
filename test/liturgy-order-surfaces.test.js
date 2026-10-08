@@ -46,6 +46,44 @@ test('a failed read keeps the orders on screen and does not treat Standard as a 
     assert.match(js, /this\.baseline = JSON\.stringify\(catalog\)/);
 });
 
+test('the Order of Service composes its order from the element collection', () => {
+    const html = read('service-builder.html');
+    const js = read('service-builder.js');
+    assert.match(html, /id="element-library"/);
+    assert.match(html, /sortable-1\.15\.0\.min\.js/);
+    assert.match(html, /placeKind\(kind\)/);
+    assert.match(html, /moveOrderRow\(item\.key/);
+    assert.match(html, /takeFromOrder\(item\.key\)/);
+    assert.match(html, /item\.type === 'prayer'/);
+    assert.match(html, /item\.type === 'person'/);
+    assert.match(html, /item\.type === 'other'/);
+    assert.match(js, /LiturgyOrderStore\.load\(db\)/);
+    assert.match(js, /LiturgyOrderStore\.save\(db, snapshot, stored\)/);
+    assert.match(js, /addToOrder/);
+    assert.match(js, /liturgyCatalogLoaded = false/);
+    assert.doesNotMatch(js, /Rows do not drag/);
+});
+
+test('the Liturgy Orders page drags the collection into the selected order', () => {
+    const html = read('liturgy-orders.html');
+    const js = read('liturgy-orders.js');
+    const grid = html.indexOf('class="lo-grid"');
+    const library = html.indexOf('id="element-library"');
+    const order = html.indexOf('id="order-elements"');
+    assert.ok(grid !== -1 && library > grid && library < order, 'the kinds are the left panel of the order');
+    assert.match(html, /id="order-picker"/);
+    assert.match(html, /selectOrder\(\$event\.target\.value\)/);
+    assert.match(html, /aria-label="New order"/);
+    assert.match(html, /addOrder\(\)/);
+    assert.match(html, /placeKind\(kind\)/);
+    assert.match(html, /Send prayer requests/);
+    const librarySortable = js.slice(js.indexOf("getElementById('element-library')"), js.indexOf("getElementById('order-elements')"));
+    assert.match(librarySortable, /pull: 'clone'/);
+    assert.match(librarySortable, /preventOnFilter: false/);
+    assert.doesNotMatch(librarySortable, /handle:/, 'the kind row itself drags');
+    assert.match(js, /placeKind\(kind, to\)/);
+});
+
 test('the management page loads the order core before its own script', () => {
     const html = read('liturgy-orders.html');
     const core = html.indexOf('src="liturgy-order-core.js"');

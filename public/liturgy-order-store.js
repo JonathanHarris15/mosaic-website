@@ -1,11 +1,13 @@
-// Liturgy Order Store — reads and writes the congregation's Liturgy Elements
-// and Liturgy Orders (`liturgy_elements`, `liturgy_orders`; ADR-0080).
+// Liturgy Order Store — reads and writes Liturgy Orders (`liturgy_orders`;
+// ADR-0080). Each order holds its elements. The five kinds are code, not a
+// second collection. An older `liturgy_elements` collection is still read, so
+// a document from before the kinds can be joined, and the next save deletes
+// those loose documents once they live on the order.
 //
 // Public read, editor write, the same as `guide_templates`. An empty
 // collection reads as the Standard seed (LiturgyOrderCore.catalogFrom), so the
 // pages work before anybody has opened the management page. The management
-// page saves the whole draft: every element and order is written, and the
-// ones the draft no longer holds are deleted. Nothing here writes a Sunday.
+// page saves the whole draft. Nothing here writes a Sunday.
 //
 // `planSave` is pure and is the test surface; `load` and `save` take an
 // injected Firestore so they never run under Node.
@@ -14,23 +16,35 @@
 
     const Core = (typeof require !== 'undefined') ? require('./liturgy-order-core.js') : global.LiturgyOrderCore;
 
+    // The element lives on the order. `kind` is one of the five. A prayer's
+    // request setup is the only extra field. Nothing here is a primitive.
     function elementDoc(el) {
-        return { id: el.id, name: el.name, primitive: el.primitive, hasRole: !!el.hasRole, hasNote: !!el.hasNote };
+        const doc = { id: el.id, kind: el.kind, name: el.name, hasNote: !!el.hasNote };
+        if (el.kind === 'prayer' && el.requests) doc.requests = { count: el.requests.count, who: el.requests.who };
+        return doc;
     }
 
     function orderDoc(order) {
-        return { id: order.id, name: order.name, elementIds: order.elementIds.slice() };
+        const elements = (order.elements || []).map(elementDoc);
+        return {
+            id: order.id,
+            name: order.name,
+            elements: elements,
+            elementIds: elements.map(function (el) { return el.id; }),
+        };
     }
 
     // What a save writes and deletes, given the ids already stored.
+    // Elements are written on the order. Ids previously stored in the
+    // separate elements collection are deleted, so that collection does not
+    // stay on as a second copy.
     function planSave(catalog, stored) {
         const before = stored || {};
-        const elementIds = new Set(catalog.elements.map(function (el) { return el.id; }));
         const orderIds = new Set(catalog.orders.map(function (o) { return o.id; }));
         return {
-            setElements: catalog.elements.map(elementDoc),
+            setElements: [],
             setOrders: catalog.orders.map(orderDoc),
-            deleteElements: (before.elementIds || []).filter(function (id) { return !elementIds.has(id); }),
+            deleteElements: (before.elementIds || []).slice(),
             deleteOrders: (before.orderIds || []).filter(function (id) { return !orderIds.has(id); }),
         };
     }
