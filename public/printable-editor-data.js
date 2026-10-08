@@ -1284,7 +1284,7 @@
             get repeatParamSpecs() {
                 const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 if (!r || !r.repeat.source || this.queryLocked) return [];
-                return Data.querySpecsFor(r.repeat.source, this.permissionLevel);
+                return Data.querySpecsFor(r.repeat.source, this.permissionLevel, this.data && this.data.options);
             },
 
             repeatParam(key) {
@@ -1301,7 +1301,7 @@
                 const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
                 const page = this.pageOfNode(r && r.id);
                 if (!r || !page || this.queryLocked) return;
-                if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel).some(s => s.key === key)) return;
+                if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel, this.data && this.data.options).some(s => s.key === key)) return;
                 const params = Object.assign({}, r.repeat.params || {}, { [key]: value });
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { params: params }) }));
                 this.commit();

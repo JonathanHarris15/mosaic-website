@@ -308,9 +308,33 @@ The callable reads `TYPESAFE_API_KEY` through `defineSecret` and ships in
 the standing deploy set. A missing answer — the call fails, or the secret
 value is empty — still translates by kind and position.
 
-The MCP read of that Sunday includes `leftovers`, the same drawer. The
-write allowlist stays the Standard seed. An open Order of Service takes a
-switch, a leftover, or an assistant's write through the live listener
-(`live-read.js`), including the phone's re-read when the stream stays
-silent. A Standard element the Sunday's order does not include is stored
-and stays hidden.
+The MCP read of that Sunday includes `leftovers`, the same drawer. An open
+Order of Service takes a switch, a leftover, or an assistant's write through
+the live listener (`live-read.js`), including the phone's re-read when the
+stream stays silent. (The write allowlist was originally left on the
+Standard seed; superseded by the MS-715 amendment below.)
+
+## Amendment (MS-715, 2026-10-08) — an assistant writes the Sunday's own order
+
+The MCP write tools (`oos_update_liturgy`, `oos_update_note`, and the
+`oosUpdateLiturgy` callable) were left on the Standard seed's ids when the
+read moved to the order. After the church re-composed its Standard order
+(`hymn`, `hymn2`–`hymn7`, `prayer`…), every live id was stripped by a closed
+schema or refused, and the one reused id, `hymn2`, meant a different moment.
+
+**A write is checked against the order THAT Sunday follows**
+(`liturgyOrderId` → catalog → elements, read fresh on every call):
+
+- Hymn elements take `{id, name}`, scripture elements take text, and theme and
+  keyVerse stay top-level. Prayer, person and other elements hold people or no
+  value, so they stay out of reach, the same as Preacher.
+- A note goes on any element of the order whose `hasNote` is on.
+- **The live order's ids win.** Seed ids are not aliases. A key the order
+  doesn't have is refused by name, with the ids and names it does have, and
+  nothing in that call is written. A seed id the order reuses means the
+  order's element, and the result names that element.
+- **A value already there is not written.** No `updatedAt` and no
+  `decidedBy` stamp, so repeating a call is a true no-op.
+
+The fixed lists (`LiturgySaveCore.HYMN_FIELDS`/`TEXT_FIELDS`,
+`ServiceNoteCore.NOTE_KEYS`) remain only as what a Sunday with no catalog has.

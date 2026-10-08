@@ -142,9 +142,41 @@ suite('oos_update_liturgy writes', () => {
 
     test('an update with nothing allowed to change is a no-op, not a write', async () => {
         const result = await updateLiturgy(db, args({}));
-        assert.deepStrictEqual(result, {ok: true, updated: {}});
+        assert.strictEqual(result.ok, true);
+        assert.deepStrictEqual(result.updated, {});
+        assert.deepStrictEqual(result.written, []);
 
         const doc = await db.collection('services').doc(DATE).get();
         assert.strictEqual(doc.exists, false);
+    });
+    // MS-715 — the write follows the Sunday's own Liturgy Order.
+    test('a congregation order\'s ids are written, the seed\'s are refused, and a repeat writes nothing', async () => {
+        await db.collection('liturgy_orders').doc('standard').set({
+            id: 'standard', name: 'Standard',
+            elements: [
+                {id: 'hymn', kind: 'hymn', name: 'Preparatory Hymn', hasNote: true},
+                {id: 'hymn6', kind: 'hymn', name: 'Hymn 6', hasNote: true},
+                {id: 'scripture', kind: 'scripture', name: 'Sermon', hasNote: true},
+            ],
+            elementIds: ['hymn', 'hymn6', 'scripture'],
+        });
+
+        const ok = await updateLiturgy(db, args({hymn6: {id: 'h-6', name: 'Be Thou My Vision'}}));
+        assert.strictEqual(ok.ok, true);
+        let doc = (await db.collection('services').doc(DATE).get()).data();
+        assert.deepStrictEqual(doc.liturgy.hymn6, {id: 'h-6', name: 'Be Thou My Vision'});
+        const firstStamp = doc.decidedBy.hymn6.at;
+
+        const seed = await updateLiturgy(db, args({hymn1: {id: 'h-1', name: 'X'}}));
+        assert.strictEqual(seed.ok, false);
+        assert.deepStrictEqual(seed.rejectedFields, ['hymn1']);
+        assert.match(seed.message, /hymn6 = Hymn 6/);
+
+        const again = await updateLiturgy(db, args({hymn6: {id: 'h-6', name: 'Be Thou My Vision'}}));
+        assert.strictEqual(again.ok, true);
+        assert.deepStrictEqual(again.unchanged, ['hymn6']);
+        doc = (await db.collection('services').doc(DATE).get()).data();
+        assert.strictEqual(doc.liturgy.hymn1, undefined);
+        assert.deepStrictEqual(doc.decidedBy.hymn6.at, firstStamp, 'a repeat moves no stamp');
     });
 });

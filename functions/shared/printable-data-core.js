@@ -605,10 +605,26 @@
 
     // Params and filters this level may put on a query. A stored query may
     // still carry keys that are not in this list.
-    function querySpecsFor(source, level) {
+    // A source's filters for this congregation. "Which hymn" on the hymn
+    // sheets lists the song elements of the congregation's own Liturgy
+    // Orders (MS-715) — the same catalog fieldsFor() reads — rather than the
+    // Standard seed it was built from when the source was defined. Without a
+    // catalog it stays the seed, which is what an empty catalog means.
+    function filtersFor(source, options) {
+        const s = typeof source === 'string' ? sourceByKey(source) : source;
+        if (!s) return [];
+        const filters = s.filters || [];
+        const liturgy = options && options.liturgy;
+        if (s.key !== 'sunday_hymns' || !liturgy) return filters;
+        return filters.map(f => f.key !== 'slot' ? f : Object.assign({}, f, {
+            options: [{ value: '', label: 'Every hymn' }].concat(hymnSlotOptions(liturgy)),
+        }));
+    }
+
+    function querySpecsFor(source, level, options) {
         const s = typeof source === 'string' ? sourceByKey(source) : source;
         if (!s || !mayRead(level, s.minLevel)) return [];
-        return visibleSpecs((s.params || []).concat(s.filters || []), level);
+        return visibleSpecs((s.params || []).concat(filtersFor(s, options)), level);
     }
 
     // Lists this level may iterate. A related list (`of`) is only offered
@@ -1526,7 +1542,7 @@
             else if (param.kind === 'role') { if (v) bits.push(roleLabel(v, { roles: (options && options.roles) || [] })); }
             else if (param.kind === 'form') { const f = ((options && options.forms) || []).find(x => x.id === v); if (f) bits.push('"' + f.title + '"'); }
         });
-        (s.filters || []).forEach(f => {
+        filtersFor(s, options).forEach(f => {
             const v = p[f.key];
             if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(f.verbatim ? o.label : lowerFirst(o.label)); }
             else if (f.kind === 'text' && v && v !== f.default) bits.push(lowerFirst(f.label) + ' "' + v + '"');
@@ -1559,6 +1575,7 @@
         sourcesFor,
         mayQuery,
         querySpecsFor,
+        filtersFor,
         listSourcesFor,
         relatedSourcesFor,
         fieldsFor,

@@ -1531,8 +1531,9 @@ exports.scoreTheme = onCall(
 );
 
 /**
- * MS-262 — merges a partial set of liturgy fields (theme, keyVerse, the 7
- * hymn slots, the 6 scripture/text slots) into one Sunday's
+ * MS-262 — merges a partial set of liturgy fields (theme, keyVerse, and the
+ * hymn and scripture elements of the Sunday's own Liturgy Order — MS-715)
+ * into one Sunday's
  * `services/{dateKey}` document, for the oos_update_liturgy MCP tool.
  *
  * Editor+ only, same floor as scoreTheme and every other liturgy write.
@@ -1579,12 +1580,15 @@ exports.oosUpdateLiturgy = onCall(
       });
 
       if (!result.ok) {
-        throw new HttpsError("invalid-argument",
+        throw new HttpsError("invalid-argument", result.message ||
             "Fields not allowed: " +
             result.rejectedFields.concat(result.invalidFields).join(", "));
       }
 
-      return {updated: Object.keys(fields)};
+      return {
+        updated: Object.keys(result.updated || {}),
+        unchanged: result.unchanged || [],
+      };
     },
 );
 

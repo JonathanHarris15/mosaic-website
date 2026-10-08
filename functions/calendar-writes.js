@@ -43,6 +43,12 @@ const {refuse} = require("./shepherding-writes.js");
 // be hidden from the elder who connected it.
 const RANK = "elder";
 
+// What a date of a series may leave to its series, and cal_get_event reads
+// from the series when the date's own document is silent (MS-715).
+const INHERITED = [
+  "name", "time", "location", "description", "visibility", "endDate",
+];
+
 /**
  * events-store throws plain Errors; an assistant should get a refusal.
  * @param {Function} work the store call
@@ -112,6 +118,32 @@ async function getEvent(db, {eventId}) {
         `No Event occurrence with id "${eventId}". A date computed from a ` +
         "pattern has no document until something is written on it — use " +
         "cal_list_events over a date range to see what is actually there.");
+  }
+
+  // ⚠ A DATE OF A SERIES INHERITS ITS NAME AND TIME (MS-715). The stored
+  // occurrence of a series date carries neither — `occurrencePayload` strips
+  // the time on purpose, and the name lives on the series — so the raw
+  // document read as `name: ''`, `time: null` while cal_list_events showed
+  // "Sunday Service, 10:00". Read the date through the same merge the list
+  // uses and take from it what the document is SILENT on. What the date
+  // itself says (a per-date time or place set with cal_update_event) still
+  // wins — filling a gap is not overriding an answer.
+  if (occurrence.seriesId && occurrence.date) {
+    const day = await pass(() => Store.loadCalendar(db, {
+      from: occurrence.date, to: occurrence.date, rank: RANK,
+    }));
+    const merged = (day || []).find((o) => o.id === occurrence.id);
+    if (merged) {
+      const filled = Object.assign({}, occurrence);
+      INHERITED.forEach((key) => {
+        const own = filled[key];
+        if ((own === undefined || own === null || own === "") &&
+            merged[key] !== undefined && merged[key] !== null) {
+          filled[key] = merged[key];
+        }
+      });
+      return eventRow(filled);
+    }
   }
   return eventRow(occurrence);
 }

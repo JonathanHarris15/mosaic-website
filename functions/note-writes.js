@@ -26,16 +26,37 @@
  */
 
 const NoteCore = require("./shared/service-note-core.js");
+const {sundayInOrder} = require("./liturgy-writes.js");
 
 const SERVICES = "services";
 
 /**
+ * The elements of this Sunday's order that carry a note, in service order:
+ * [{element, name}].
+ * @param {Array<object>} elements the order's elements
+ * @return {Array<object>} the note-carrying elements
+ */
+function noteElementsOf(elements) {
+  return (elements || [])
+      .filter((el) => el && el.hasNote)
+      .map((el) => ({element: el.id, name: el.name || el.id}));
+}
+
+/**
  * Set or clear one element's note.
+ *
+ * ⚠ CHECKED AGAINST THAT SUNDAY'S OWN ORDER (MS-715). The element is one of
+ * the Liturgy Order the Sunday follows — the `field` ids oos_get_service
+ * returns — and only one whose element carries a note. Anything else is
+ * refused by name with the elements that do carry one.
  *
  * An empty or whitespace-only note DELETES the key rather than storing an
  * empty string, matching what the website's own editor does — the page tests
  * `notes[key]` for truthiness to decide whether to show a bubble at all, so
  * an empty string would leave an empty bubble hanging on the element.
+ *
+ * A note identical to the one already stored (or clearing one that is not
+ * there) writes nothing — not even `updatedAt`.
  *
  * @param {object} db the Firestore handle
  * @param {object} args
@@ -44,17 +65,33 @@ const SERVICES = "services";
  * @param {?string} args.text the note as plain text, or null/'' to clear it
  * @param {*} args.serverTimestamp a server timestamp value
  * @param {*} args.deleteField a field-delete sentinel
- * @return {Promise<object>} {ok, action, element, html} or {ok:false, reason}
+ * @return {Promise<object>} {ok, action, element, name, html} or
+ *   {ok:false, reason, element, accepts, order}
  */
 async function updateNote(db, {
   dateKey, element, text, serverTimestamp, deleteField,
 }) {
-  if (!NoteCore.isNoteKey(element)) {
-    return {ok: false, reason: "unknown-element", element};
+  const sunday = await sundayInOrder(db, dateKey);
+  const order = {id: sunday.order.id, name: sunday.order.name};
+  const accepts = noteElementsOf(sunday.elements);
+  const target = accepts.find((a) => a.element === element);
+  if (!target) {
+    return {ok: false, reason: "unknown-element", element, accepts, order};
   }
 
   const html = NoteCore.textToNoteHtml(text);
   const clearing = html === "";
+  const current = ((sunday.doc && sunday.doc.notes) || {})[element] || "";
+  if (current === html) {
+    return {
+      ok: true,
+      action: "unchanged",
+      element,
+      name: target.name,
+      html: clearing ? null : html,
+    };
+  }
+
   const path = `notes.${element}`;
   const ref = db.collection(SERVICES).doc(dateKey);
 
@@ -70,7 +107,10 @@ async function updateNote(db, {
     // not exist is a no-op rather than a reason to create one — an empty
     // Sunday carrying nothing but a deleted note would be a lie on the
     // calendar.
-    if (clearing) return {ok: true, action: "cleared", element, html: null};
+    if (clearing) {
+      return {ok: true, action: "unchanged", element, name: target.name,
+        html: null};
+    }
 
     await ref.set({
       notes: {[element]: html},
@@ -82,8 +122,9 @@ async function updateNote(db, {
     ok: true,
     action: clearing ? "cleared" : "written",
     element,
+    name: target.name,
     html: clearing ? null : html,
   };
 }
 
-module.exports = {updateNote};
+module.exports = {updateNote, noteElementsOf};

@@ -120,21 +120,56 @@ const hymnSlot = z.object({
   name: z.string().describe("Hymn name as it should appear"),
 }).nullable().describe("The hymn for this slot, or null to clear it");
 
+// The same pair, as the open liturgy schema takes it: `id` may be left out
+// for a freehand name. The server, not the schema, decides which keys are
+// hymns on this Sunday.
+const hymnSlotLoose = z.object({
+  id: z.string().nullable().optional()
+      .describe("Hymn registry id, or null/omitted if freehand"),
+  name: z.string().describe("Hymn name as it should appear"),
+});
+
 const textSlot = z.string().nullable()
     .describe("Scripture reference or text, or null to clear it");
 
 /**
- * The liturgy fields oos_update_liturgy accepts, built from the same
- * allowlist the write itself enforces (shared/liturgy-save-core.js) so the
- * schema an assistant sees and the rule the server applies cannot drift.
- * @return {object} a zod raw shape
+ * The liturgy fields oos_update_liturgy accepts.
+ *
+ * ⚠ OPEN, NOT A FIXED LIST (MS-715). Which elements a Sunday has depends on
+ * the Liturgy Order it follows (ADR-0080), so no schema built once can name
+ * them. A closed zod object STRIPS every key it does not list — that is how
+ * `hymn6` on a live order arrived as `{}` and was answered "No fields given".
+ * So theme and keyVerse are described, every other key passes through, and
+ * liturgy-writes.js checks each one against that Sunday's own order and
+ * refuses the rest by name.
+ * @return {object} a zod schema for `fields`
  */
-function liturgyFieldsShape() {
-  const shape = {
+function liturgyFieldsSchema() {
+  return z.object({
     theme: z.string().nullable().optional()
         .describe("The Sunday's theme, e.g. 'The God Who Rescues'"),
     keyVerse: z.string().nullable().optional()
         .describe("The key verse reference, e.g. 'Exodus 14:14'"),
+  }).catchall(z.union([hymnSlotLoose, z.string(), z.null()]))
+      .describe(
+          "The fields to write, keyed by the element `field` ids " +
+          "oos_get_service returns for THIS Sunday (they differ between " +
+          "Liturgy Orders — never guess them, and never use another " +
+          "order's ids). A hymn element takes {id, name} (id from " +
+          "oos_lookup_hymns, or null for a freehand name); a scripture " +
+          "element takes text. null clears. Prayer and person elements " +
+          "cannot be set here. Omit what should not change.");
+}
+
+/**
+ * The seed-era fixed shape, kept for anything that still imports it. The
+ * tool itself uses liturgyFieldsSchema().
+ * @return {object} a zod raw shape
+ */
+function liturgyFieldsShape() {
+  const shape = {
+    theme: z.string().nullable().optional(),
+    keyVerse: z.string().nullable().optional(),
   };
   LiturgySaveCore.HYMN_FIELDS.forEach((f) => {
     shape[f] = hymnSlot.optional();
@@ -581,8 +616,10 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     inputSchema: {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday, YYYY-MM-DD"),
-      element: z.enum(NoteCore.NOTE_KEYS)
-          .describe("Which element the note belongs to"),
+      element: z.string().min(1).describe(
+          "Which element the note belongs to: one of the `field` ids " +
+          "oos_get_service returns for THIS Sunday. They differ between " +
+          "Liturgy Orders, so read the Sunday first."),
       note: z.string().nullable().optional().describe(
           "The note as plain text. Omit, or send an empty string, to " +
           "remove the note entirely."),
@@ -600,12 +637,20 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       deleteField: fieldValues.deleteField(),
     });
     if (!result.ok) {
+      const order = result.order && result.order.name ?
+        `the "${result.order.name}" liturgy order this Sunday follows` :
+        "this Sunday's liturgy order";
+      const accepts = (result.accepts || [])
+          .map((a) => `${a.element} (${a.name})`).join(", ");
       return refuse(
-          `"${result.element}" is not an element that carries a note. ` +
-          `Notes can go on: ${NoteCore.NOTE_KEYS.join(", ")}.`);
+          `"${result.element}" is not an element of ${order} that ` +
+          "carries a note, so nothing was written. Notes can go on: " +
+          (accepts || "no element of this order") +
+          ". Use the `field` ids oos_get_service returns for this date.");
     }
     return jsonResult({
       element: result.element,
+      elementName: result.name || null,
       action: result.action,
       date,
       note: result.html ? NoteCore.noteHtmlToText(result.html) : null,
@@ -617,15 +662,18 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     description:
       "Writes the given liturgy fields to one Sunday's Order of Service. " +
       "Only send fields the editor has explicitly agreed to — this changes " +
-      "the live record the church runs its service from. Fields you leave " +
-      "out are untouched; send null to clear a field. Person assignments " +
-      "(Preacher, Service Leader, prayer leaders) cannot be set here.",
+      "the live record the church runs its service from. Keys are the " +
+      "`field` ids oos_get_service returns for THAT Sunday: each Sunday " +
+      "follows a Liturgy Order and the ids belong to the order, so read the " +
+      "Sunday first. A key the order does not have is refused by name and " +
+      "nothing is written. Fields you leave out are untouched; send null to " +
+      "clear a field; a value that is already there is not rewritten. " +
+      "Person assignments (Preacher, Service Leader, prayer leaders) and " +
+      "prayer or person-event elements cannot be set here.",
     inputSchema: {
       dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
           .describe("The Sunday's date, YYYY-MM-DD"),
-      fields: z.object(liturgyFieldsShape())
-          .describe(
-              "The liturgy fields to write. Omit what should not change."),
+      fields: liturgyFieldsSchema(),
     },
     annotations: {readOnlyHint: false, destructiveHint: false},
   }, async ({dateKey, fields}) => {
@@ -634,7 +682,9 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     }
     const given = fields || {};
     if (!Object.keys(given).length) {
-      return refuse("No fields given, so there is nothing to write.");
+      return refuse(
+          "No fields given, so there is nothing to write. Send the " +
+          "element `field` ids oos_get_service returns for this date.");
     }
 
     const result = await lw.updateLiturgy(db, {
@@ -646,16 +696,23 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     });
 
     if (!result.ok) {
-      return refuse(
+      return refuse(result.message ||
           "Refused. These fields cannot be written here: " +
           result.rejectedFields.concat(result.invalidFields).join(", "));
     }
+    const written = result.written ||
+      Object.keys(result.updated || {}).map((f) => ({field: f}));
+    const unchanged = result.unchanged || [];
     return jsonResult({
-      written: Object.keys(given),
       dateKey,
-      note: "Written. An open Order of Service page for that Sunday " +
-        "takes it without a reload. An element this Sunday's order does " +
-        "not include is stored and stays hidden.",
+      liturgyOrder: result.order || null,
+      written,
+      unchanged,
+      note: written.length ?
+        "Written. An open Order of Service page for that Sunday takes it " +
+          "without a reload. `written` names the element each field is." :
+        "Nothing changed — every value sent was already there, so " +
+          "nothing was written.",
     });
   });
 
@@ -807,6 +864,7 @@ module.exports = {
   describeCapabilities,
   MCP_ENDPOINT_PATH,
   liturgyFieldsShape,
+  liturgyFieldsSchema,
   SERVER_NAME,
   SERVER_VERSION,
   EDITOR_LEVELS,
