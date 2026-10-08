@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
 ```
 
 | Target | Why it is in the set |
@@ -19,6 +19,8 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:onAttendanceCreated` | Attendance rule (MS-425 / ADR-0066). Export name in `functions/index.js`. Create on `event_occurrences/{occurrenceId}/attendance/{personId}`. Without this target the Visitor → Regular Attender promotion never installs. |
 | `functions:syncAccountRankToPerson` | Account Rank projection (MS-539 / MS-557). Export name in `functions/index.js`. Write on `users/{uid}` (link, unlink, permission change, delete). Without this target `people.accountRank` never updates; merging the Trade picker before it is live fail-closes existing Linked Users on non-public Trades. |
 | `functions:sendPrayerRequestNow` | Service Builder "Send Prayer Request Text Now" (MS-598). Export name in `functions/index.js` (`onCall`). Without this target a Hosting merge that admits Pastoral Assistants on that button (MS-594 / #82) would show PA chrome against an elder-only deployed function. |
+| `functions:sendPrayerRequestTexts` | Hourly pastoral-prayer sender. Export name in `functions/index.js` (`onSchedule`). A prayer's days-in-advance lives on the Liturgy Order; without this target the scheduler stays on the older five-and-three timing and ignores that field. |
+| `functions:notifyEldersOnPrayerComplete` | Elder digest when every person a Sunday asks has answered. Export name in `functions/index.js` (`onDocumentWritten`). It reads the same subject list as the scheduler, including people named on a requesting prayer. |
 | `functions:mcp` | MCP HTTP surface (MS-598). Export name in `functions/index.js` (`onRequest`). Without this target a Hosting merge that admits PAs on `shep_` DECIDE tools (MS-594 / #82) would show PA chrome against a stale deployed MCP. |
 | `functions:notificationOverview` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). The tab's only opening read: the send-path constants, the registry with its counts, and **the device list**. **This is the only way masked Device tokens reach a browser** — `users/{uid}/push_tokens` stays owner-only in the rules (ADR-0036) and this reads it with the Admin SDK. Without this target the tab falls back to its offline registry and says so. |
 | `functions:notificationHistory` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Paged, filtered read of `notifications`. |
@@ -83,7 +85,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
