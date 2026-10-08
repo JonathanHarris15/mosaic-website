@@ -73,164 +73,118 @@ window.initDocxImporter = function(onSuccess) {
         if (onSuccess) onSuccess();
     });
 
+    const dateIdFrom = (dateStr) => {
+        if (!dateStr) return null;
+        // Remove ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) and caret symbols
+        const cleanDateStr = String(dateStr).replace(/(\d+)(st|nd|rd|th)/gi, '$1').replace(/\^/g, '');
+        const dateObj = new Date(cleanDateStr);
+        if (isNaN(dateObj)) return null;
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    // The same translator that switches a Sunday from one order to another.
+    // A labeled bulletin resolves in code. Anything else is Jev's to place,
+    // and a line that fits nowhere is stored as a leftover on the Sunday.
     const parseAndSaveService = async (text) => {
-        const paragraphs = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        
-        const findValue = (label) => {
-            const lowerLabel = label.toLowerCase();
-            for (const p of paragraphs) {
-                if (p.toLowerCase().startsWith(lowerLabel)) {
-                    if (p.includes(':')) {
-                        return p.split(':').slice(1).join(':').trim();
-                    }
-                    return p.substring(label.length).trim();
-                }
-            }
-            return '';
-        };
-
-        const service = {
-            theme: findValue('Service Theme'),
-            keyVerse: findValue('Key Verse'),
-            serviceLeader: findValue('Service Leader'),
-            musicLeader: findValue('Music Leader'),
-            preacher: findValue('Preacher'),
-            hasBaptism: findValue('Baptism').length > 0,
-            notes: {},
-            liturgy: {
-                preparatoryHymn: matchHymn(findValue('Preparatory Hymn')),
-                callToWorship: findValue('Scriptural Call to Worship'),
-                hymn1: { id: null, name: '' },
-                hymn2: { id: null, name: '' },
-                callToConfession: findValue('Call to Confession'),
-                assuranceOfPardon: findValue('Scriptural Assurance of Pardon'),
-                hymnMid1: { id: null, name: '' },
-                hymnMid2: { id: null, name: '' },
-                scriptureReading: findValue('Scripture Reading'),
-                sermon: findValue('Sermon'),
-                baptism: findValue('Baptism'),
-                hymnEnd1: { id: null, name: '' },
-                hymnEnd2: { id: null, name: '' },
-                benediction: findValue('Benediction')
-            }
-        };
-
-        // Date Parsing
-        let dateId = null;
-        const dateStr = findValue('Date');
-        if (dateStr) {
-            // Remove ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) and caret symbols
-            const cleanDateStr = dateStr.replace(/(\d+)(st|nd|rd|th)/gi, '$1').replace(/\^/g, '');
-            const dateObj = new Date(cleanDateStr);
-            if (!isNaN(dateObj)) {
-                // Correct format: YYYY-MM-DD (Month is 0-indexed in JS, so add 1)
-                const year = dateObj.getFullYear();
-                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                const day = String(dateObj.getDate()).padStart(2, '0');
-                dateId = `${year}-${month}-${day}`;
-            }
+        const parsed = LiturgyTranslateCore.fragmentsFromText(text);
+        let catalog = LiturgyOrderCore.standardCatalog();
+        try {
+            catalog = await LiturgyOrderStore.loadCatalog(firebase.firestore());
+        } catch (err) {
+            console.warn('Liturgy orders could not be read; importing into Standard.', err);
         }
 
+        const labeledDate = parsed.fragments.find((item) => item.header === 'date');
+        let dateId = dateIdFrom(labeledDate && labeledDate.valueText);
+        let order = LiturgyOrderCore.orderFor({}, catalog);
+        const db = firebase.firestore();
+
+        if (dateId) {
+            const existing = await db.collection('services').doc(dateId).get();
+            const orderId = existing.exists ? existing.data().liturgyOrderId : '';
+            order = LiturgyOrderCore.orderFor({ liturgyOrderId: orderId || '' }, catalog);
+        }
+
+        const planInto = async (target) => {
+            const plan = await LiturgyTranslate.translate(
+                parsed.fragments,
+                LiturgyTranslateCore.targetsFromOrder(target, { headers: true }),
+                'document',
+                { sourceOrder: 'Bulletin', targetOrder: target.name }
+            );
+            return LiturgyTranslateCore.importPatch(plan, target);
+        };
+
+        let patch = await planInto(order);
+        if (!dateId) dateId = dateIdFrom(patch.dateText);
         if (!dateId) {
             return { success: false, error: 'Could not find or parse "Date" field.' };
         }
 
-        // Nothing exists before the church's first Sunday, so an order of
-        // service dated earlier has nowhere to land. Both dates are YYYY-MM-DD,
-        // which compares correctly as a string and avoids a UTC parse turning
-        // the first Sunday into the Saturday before it.
         const firstSunday = ServiceDatesCore.FIRST_SUNDAY;
         if (dateId < firstSunday) {
             return { success: false, error: `Date (${dateId}) is before the project start date of ${DateUtils.formatDateLong(firstSunday)}.` };
         }
 
-        // Hymn Collection
-        const hymnsFound = paragraphs
-            .filter(p => p.toLowerCase().startsWith('hymn:'))
-            .map(p => matchHymn(p.split(':').slice(1).join(':').trim()));
-
-        /**
-         * Baptism Displacement Logic (from Python reference):
-         * - Hymn3 is cleared for baptism.
-         * - Subsequent hymns are shifted down.
-         * Mapping to our Liturgy object:
-         * Hymn1 = hymn1
-         * Hymn2 = hymn2
-         * Hymn3 = hymnMid1
-         * Hymn4 = hymnMid2
-         * Hymn5 = hymnEnd1
-         * Hymn6 = hymnEnd2
-         */
-        if (service.hasBaptism) {
-            service.liturgy.hymn1 = hymnsFound[0] || { id: null, name: '' };
-            service.liturgy.hymn2 = hymnsFound[1] || { id: null, name: '' };
-            // Hymn3 (hymnMid1) is cleared/reserved for baptism
-            service.liturgy.hymnMid1 = { id: null, name: '' }; 
-            service.liturgy.hymnMid2 = hymnsFound[2] || { id: null, name: '' }; // Original Hymn3 -> Hymn4
-            service.liturgy.hymnEnd1 = hymnsFound[3] || { id: null, name: '' }; // Original Hymn4 -> Hymn5
-            service.liturgy.hymnEnd2 = hymnsFound[4] || { id: null, name: '' }; // Original Hymn5 -> Hymn6
-        } else {
-            service.liturgy.hymn1 = hymnsFound[0] || { id: null, name: '' };
-            service.liturgy.hymn2 = hymnsFound[1] || { id: null, name: '' };
-            service.liturgy.hymnMid1 = hymnsFound[2] || { id: null, name: '' };
-            service.liturgy.hymnMid2 = hymnsFound[3] || { id: null, name: '' };
-            service.liturgy.hymnEnd1 = hymnsFound[4] || { id: null, name: '' };
-            service.liturgy.hymnEnd2 = hymnsFound[5] || { id: null, name: '' };
+        const docRef = db.collection('services').doc(dateId);
+        const existingDoc = await docRef.get();
+        const exists = existingDoc.exists;
+        const orderId = exists ? existingDoc.data().liturgyOrderId : '';
+        const savedOrder = LiturgyOrderCore.orderFor({ liturgyOrderId: orderId || '' }, catalog);
+        if (savedOrder.id !== order.id) {
+            order = savedOrder;
+            patch = await planInto(order);
         }
 
-        // Notes Extraction
-        let inNotes = false;
-        for (const p of paragraphs) {
-            if (p.toLowerCase().startsWith('notes:')) {
-                inNotes = true;
-                continue;
+        const hymnIds = {};
+        (order.elements || []).forEach((el) => { if (el.kind === 'hymn') hymnIds[el.id] = true; });
+        Object.keys(patch.liturgy).forEach((key) => {
+            if (!hymnIds[key]) return;
+            const value = patch.liturgy[key];
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                patch.liturgy[key] = matchHymn(value.name || '');
             }
-            if (inNotes) {
-                const noteMatch = p.match(/(.+?):\s*(.+)/);
-                if (noteMatch) {
-                    const key = mapNoteKey(noteMatch[1]);
-                    if (key) {
-                        service.notes[key] = noteMatch[2];
-                    }
-                }
-            }
-        }
+        });
 
         try {
-            const db = firebase.firestore();
-            const docRef = db.collection('services').doc(dateId);
-            const existingDoc = await docRef.get();
-            const exists = existingDoc.exists;
-
             if (exists) {
-                // SURGICAL UPDATE: Use dot-notation to avoid wiping out the entire nested object
                 const updates = {
-                    theme: service.theme,
-                    keyVerse: service.keyVerse,
-                    serviceLeader: service.serviceLeader,
-                    musicLeader: service.musicLeader,
-                    preacher: service.preacher,
-                    hasBaptism: service.hasBaptism,
+                    liturgyOrderId: patch.liturgyOrderId,
+                    liturgyLeftovers: patch.liturgyLeftovers,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-
-                // Surgical updates for liturgy
-                for (const [key, value] of Object.entries(service.liturgy)) {
+                ['theme', 'keyVerse', 'serviceLeader', 'musicLeader', 'preacher'].forEach((key) => {
+                    if (patch[key]) updates[key] = patch[key];
+                });
+                if (Object.prototype.hasOwnProperty.call(patch.liturgy, 'baptism')) {
+                    updates.hasBaptism = patch.hasBaptism;
+                }
+                for (const [key, value] of Object.entries(patch.liturgy)) {
                     updates[`liturgy.${key}`] = value;
                 }
-
-                // Surgical updates for notes (preserve existing manual notes not in docx)
-                for (const [key, value] of Object.entries(service.notes)) {
+                for (const [key, value] of Object.entries(patch.notes)) {
                     updates[`notes.${key}`] = value;
                 }
-
                 await docRef.update(updates);
             } else {
-                // New document
-                service.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                const service = {
+                    theme: patch.theme || '',
+                    keyVerse: patch.keyVerse || '',
+                    serviceLeader: patch.serviceLeader || '',
+                    musicLeader: patch.musicLeader || '',
+                    preacher: patch.preacher || '',
+                    hasBaptism: patch.hasBaptism,
+                    liturgyOrderId: patch.liturgyOrderId,
+                    liturgyLeftovers: patch.liturgyLeftovers,
+                    notes: patch.notes,
+                    liturgy: patch.liturgy,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
                 await docRef.set(service);
             }
-
             return { success: true, dateId, isUpdate: exists };
         } catch (error) {
             return { success: false, error: `Firestore error: ${error.message}` };
@@ -251,18 +205,5 @@ window.initDocxImporter = function(onSuccess) {
             return { id: results[0].item.id, name: results[0].item.hymn_name };
         }
         return { id: null, name: name };
-    };
-
-    const mapNoteKey = (label) => {
-        const mapping = {
-            'call to worship': 'callToWorship',
-            'call to confession': 'callToConfession',
-            'scriptural assurance of pardon': 'assuranceOfPardon',
-            'assurance of pardon': 'assuranceOfPardon',
-            'scripture reading': 'sermon', // Per request: Scripture Reading goes with pastoral prayer/sermon section
-            'sermon': 'sermon',
-            'baptism': 'baptism'
-        };
-        return mapping[label.toLowerCase()];
     };
 };
