@@ -71,81 +71,51 @@
                 <div class="m-notice__body"><span class="m-notice__text">Only an editor can change the liturgy orders.</span></div>
             </div>
 
-            <!-- ── Elements: the five kinds, above every order ──────── -->
-            <section class="m-section" aria-labelledby="elements-title">
-                <div class="m-section__head">
-                    <h2 class="m-section__title" id="elements-title">Elements</h2>
-                    <p class="m-section__hint">Five kinds, the same for every congregation. An order is a combination of them, in a sequence. Drag one in, or add it. A hymn and a scripture reading are filled on the Sunday. A prayer, a person event, and other take their name here.</p>
-                </div>
-
-                <div class="m-card-list" id="element-library">
-                    <template x-for="kind in kinds" :key="kind">
-                        <div class="m-row" data-library-item :data-kind="kind">
-                            <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag into the order" aria-hidden="true">drag_indicator</span>
-                            <span class="m-row__main">
-                                <span class="m-row__title" x-text="kindLabel(kind)"></span>
-                                <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A scripture reference, on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
-                            </span>
-                            <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing" @click="placeKind(kind)"
-                                    :aria-label="'Add ' + kindLabel(kind) + ' to ' + selectedOrder.name">
-                                <span class="m-btn__label">Add to order</span>
-                            </button>
-                        </div>
-                    </template>
-                </div>
-            </section>
-
             <div class="lo-grid">
 
-                <!-- ── Orders ──────────────────────────────────────────── -->
-                <section class="m-section" aria-labelledby="orders-title">
+                <!-- ── Elements: the five kinds, to the left of the order ── -->
+                <section class="m-section" aria-labelledby="elements-title">
                     <div class="m-section__head">
-                        <h2 class="m-section__title" id="orders-title">Orders</h2>
-                        <p class="m-section__hint">A Sunday follows one order. Standard is the default.</p>
+                        <h2 class="m-section__title" id="elements-title">Elements</h2>
+                        <p class="m-section__hint">Five kinds, the same for every congregation. Drag a row into the order, or add it. A hymn and a scripture reading are filled on the Sunday. A prayer, a person event, and other take their name here.</p>
                     </div>
-                    <div class="m-card-list" id="order-list">
-                        <template x-for="o in orders" :key="o.id">
-                            <button type="button" class="m-row m-row--interactive text-left"
-                                    :class="o.id === selectedOrder.id ? 'm-row--current' : ''"
-                                    :aria-current="o.id === selectedOrder.id ? 'true' : 'false'"
-                                    @click="selectOrder(o.id)">
+
+                    <div class="m-card-list" id="element-library" :class="editing ? 'lo-library--drag' : ''">
+                        <template x-for="kind in kinds" :key="kind">
+                            <div class="m-row" data-library-item :data-kind="kind">
+                                <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag into the order" aria-hidden="true">drag_indicator</span>
                                 <span class="m-row__main">
-                                    <span class="m-row__title" x-text="o.name"></span>
-                                    <span class="m-row__sub" x-text="orderSummary(o) + (o.id === 'standard' ? ' · default' : '')"></span>
+                                    <span class="m-row__title" x-text="kindLabel(kind)"></span>
+                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A scripture reference, on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
                                 </span>
-                                <span class="material-symbols-outlined m-row__chevron">chevron_right</span>
-                            </button>
+                                <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing" @click="placeKind(kind)"
+                                        :aria-label="'Add ' + kindLabel(kind) + ' to ' + selectedOrder.name">
+                                    <span class="m-btn__label">Add</span>
+                                </button>
+                            </div>
                         </template>
                     </div>
-
-                    <form class="m-card lo-form" x-show="editing" @submit.prevent="createOrder()">
-                        <label class="m-field">
-                            <span class="m-label">New order</span>
-                            <input id="new-order-name" class="m-input" type="text" maxlength="60" x-model="newOrder.name" placeholder="Name it — Communion Sunday" />
-                        </label>
-                        <label class="m-field">
-                            <span class="m-label">Start from</span>
-                            <span class="m-select-wrap">
-                                <select class="m-select" x-model="newOrder.copyFrom">
-                                    <option value="">Nothing</option>
-                                    <template x-for="o in orders" :key="o.id">
-                                        <option :value="o.id" x-text="o.name" :selected="o.id === newOrder.copyFrom"></option>
-                                    </template>
-                                </select>
-                            </span>
-                        </label>
-                        <button type="submit" class="m-btn m-btn--secondary m-btn--sm" :disabled="!newOrder.name.trim()">
-                            <span class="material-symbols-outlined">add</span>
-                            <span class="m-btn__label">Add order</span>
-                        </button>
-                    </form>
                 </section>
 
-                <!-- ── The selected order ──────────────────────────────── -->
+                <!-- ── The order being edited ──────────────────────────── -->
                 <section class="m-section" aria-labelledby="order-title">
                     <div class="m-section__head">
-                        <h2 class="m-section__title" id="order-title" x-text="selectedOrder.name"></h2>
-                        <p class="m-section__hint" x-show="editing">One combination of the five elements, in one sequence. Drag one in, or move a row. Sundays that follow it see the change once it is saved.</p>
+                        <h2 class="m-section__title" id="order-title">Order</h2>
+                        <p class="m-section__hint">A Sunday follows one. Standard is the default. Drag a kind in from the panel, or add it. Sundays that follow this order see the change once it is saved.</p>
+                    </div>
+
+                    <div class="lo-order-bar">
+                        <span class="m-select-wrap">
+                            <select id="order-picker" class="m-select" aria-labelledby="order-title"
+                                    :value="selectedOrderId" @change="selectOrder($event.target.value)">
+                                <template x-for="o in orders" :key="o.id">
+                                    <option :value="o.id" x-text="o.id === 'standard' ? o.name + ' (default)' : o.name"></option>
+                                </template>
+                            </select>
+                        </span>
+                        <button type="button" class="m-icon-btn m-icon-btn--lg m-icon-btn--outline" x-show="editing" @click="addOrder()" aria-label="New order">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                        </button>
                     </div>
 
                     <div class="m-card lo-form">
@@ -158,7 +128,7 @@
                     <div class="m-card-list" id="order-elements">
                         <div class="m-empty" x-show="!orderElements.length">
                             <span class="material-symbols-outlined">list_alt</span>
-                            <p>Drag an element here, or add one from the library.</p>
+                            <p>Drag an element here, or add one.</p>
                         </div>
                         <template x-for="(el, index) in orderElements" :key="el.id">
                             <div class="m-row" :data-order-row="el.id" :data-element-id="el.id">
@@ -258,7 +228,11 @@
     <style>
         .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
         .lo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
-        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 340px minmax(0, 1fr); } }
+        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 280px minmax(0, 1fr); } }
+        .lo-order-bar { display: flex; align-items: flex-end; gap: var(--space-sm); }
+        .lo-order-bar > .m-select-wrap { flex: 1 1 auto; min-width: 0; }
+        .lo-library--drag [data-library-item] { cursor: grab; }
+        .lo-library--drag [data-library-item]:active { cursor: grabbing; }
         .lo-form { display: flex; flex-direction: column; gap: var(--space-sm); }
         .lo-form--row { flex-direction: row; flex-wrap: wrap; align-items: flex-end; }
         .lo-form--row .m-field { flex: 1 1 200px; }

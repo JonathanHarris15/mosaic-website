@@ -27,6 +27,17 @@ function describeLiturgyLoadFailure(error) {
     return 'The liturgy orders did not load. Try again. Standard is shown in their place, and saving stays off until they load.';
 }
 
+// A dragged kind is a copy of an Alpine row. The copy must not carry
+// directives: Alpine would evaluate `kind` outside the loop that defined it.
+function stripAlpine(node) {
+    [node, ...node.querySelectorAll('*')].forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+            const name = attr.name;
+            if (name.startsWith('x-') || name.startsWith(':') || name.startsWith('@')) el.removeAttribute(name);
+        });
+    });
+}
+
 function liturgyOrdersPage() {
     const Core = window.LiturgyOrderCore;
     return {
@@ -42,7 +53,6 @@ function liturgyOrdersPage() {
         baseline: '',
         selectedOrderId: Core.STANDARD_ORDER_ID,
         orderName: '',
-        newOrder: { name: '', copyFrom: Core.STANDARD_ORDER_ID },
         kinds: Core.KINDS,
         primitives: Core.PRIMITIVES,
         _sortable: null,
@@ -73,10 +83,6 @@ function liturgyOrdersPage() {
 
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
         takesName(kind) { return Core.kindTakesName(kind); },
-        orderSummary(order) {
-            const n = Core.elementsOf(order, this.catalog).length;
-            return n === 1 ? '1 element' : n + ' elements';
-        },
         usedBy(elementId) {
             const names = this.orders.filter(o => o.elementIds.indexOf(elementId) !== -1).map(o => o.name);
             return names.length ? 'In ' + names.join(', ') : 'In no order';
@@ -147,15 +153,24 @@ function liturgyOrdersPage() {
             this.editProblem = '';
         },
 
-        createOrder() {
+        // An empty order, named so it does not collide with one already open,
+        // then the name field is ready to replace "New order".
+        addOrder() {
+            const names = new Set(this.orders.map(o => o.name));
+            let name = 'New order';
+            for (let n = 2; names.has(name); n += 1) name = 'New order ' + n;
             let made = null;
-            if (this._apply(cat => {
-                made = Core.addOrder(cat, { name: this.newOrder.name, copyFrom: this.newOrder.copyFrom || null });
+            if (!this._apply(cat => {
+                made = Core.addOrder(cat, { name: name });
                 return made.catalog;
-            })) {
-                this.newOrder = { name: '', copyFrom: Core.STANDARD_ORDER_ID };
-                this.selectOrder(made.order.id);
-            }
+            })) return;
+            this.selectOrder(made.order.id);
+            this.$nextTick(() => {
+                const input = document.getElementById('order-name');
+                if (!input) return;
+                input.focus();
+                input.select();
+            });
         },
 
         renameOrder() {
@@ -212,11 +227,17 @@ function liturgyOrdersPage() {
             };
             const library = document.getElementById('element-library');
             if (library && !this._librarySortable) {
+                // The row itself is the handle. Add stays a click: the filter
+                // lets that event through instead of starting a drag.
                 this._librarySortable = Sortable.create(library, Object.assign({}, shared, {
                     sort: false,
-                    handle: '.m-row__handle',
                     draggable: '[data-library-item]',
+                    filter: 'button, input, select, label, a',
+                    preventOnFilter: false,
                     group: { name: 'liturgy-library', pull: 'clone', put: false },
+                    // The clone is a copy of an Alpine row. Leave the directives
+                    // on it and Alpine evaluates `kind` outside the loop.
+                    onClone: (evt) => stripAlpine(evt.clone),
                 }));
             }
             const list = document.getElementById('order-elements');
@@ -230,7 +251,17 @@ function liturgyOrdersPage() {
                     onAdd: (evt) => {
                         const kind = evt.item.getAttribute('data-kind');
                         const to = evt.newDraggableIndex;
+                        // The drop is the library row itself. Take that node
+                        // and Sortable's clone back out, then draw the five
+                        // kinds again if one is missing. Alpine owns the list.
+                        if (evt.clone) evt.clone.remove();
                         evt.item.remove();
+                        evt.from.querySelectorAll(':scope > *').forEach((node) => {
+                            if (node.tagName === 'TEMPLATE' || node.hasAttribute('data-library-item')) return;
+                            node.remove();
+                        });
+                        const missing = this.kinds.some((k) => !evt.from.querySelector('[data-kind="' + k + '"]'));
+                        if (missing) this.kinds = this.kinds.slice();
                         if (kind) this.placeKind(kind, to);
                     },
                     onEnd: (evt) => {

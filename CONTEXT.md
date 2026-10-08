@@ -557,7 +557,7 @@ A named sequence of [[Liturgy Element]] placements — the shape a kind of Sunda
 _Avoid_: template (the guide's word), Order of Service (that is one Sunday's filled-in result), service type
 
 ### Liturgy Orders page
-`liturgy-orders.html`, where an editor places the five kinds into a [[Liturgy Order]], names the ones that take a name, and sets a prayer's requests. The kinds sit above the orders. Dragging a kind in, or Add, places a new instance. Rows move by the grip or with the move-up and move-down buttons. Reached from the Order of Service's manage button (it comes back to that Sunday) and from the Services table's **Manage orders**. A **shared definition**, so it holds a draft and writes it with **Save**; **Discard** throws the draft away. It does not autosave.
+`liturgy-orders.html`, where an editor places the five kinds into a [[Liturgy Order]], names the ones that take a name, and sets a prayer's requests. The kinds are a panel to the left of the order. Which order is open is a dropdown above its list, and a plus beside that dropdown makes a new empty order. Dragging a kind's row in, or Add, places a new instance. Rows already in the order move by the grip or with the move-up and move-down buttons. Reached from the Order of Service's manage button (it comes back to that Sunday) and from the Services table's **Manage orders**. A **shared definition**, so it holds a draft and writes it with **Save**; **Discard** throws the draft away. It does not autosave.
 _Avoid_: order editor, liturgy settings
 
 ### Service Element (Irregular Only)

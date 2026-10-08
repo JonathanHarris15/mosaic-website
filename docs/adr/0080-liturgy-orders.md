@@ -75,9 +75,11 @@ What reads the order:
    the order that asks for something on the Sunday.
 2. **The Liturgy Orders page** (`liturgy-orders.html`) places the five kinds
    into an order, names the ones that take a name, and sets a prayer's
-   requests. The kinds sit above the orders. Dragging a kind in, or Add,
-   places a new instance. Rows also move by dragging or with move-up and
-   move-down. The page saves a draft with one Save, in one batch, so a
+   requests. The kinds are a panel to the left of the order. Which order is
+   open is a dropdown above its list, and a plus beside that dropdown makes
+   a new empty order. Dragging a kind's row in, or Add, places a new
+   instance. Rows also move by dragging or with move-up and move-down. The
+   page saves a draft with one Save, in one batch, so a
    half-built combination is not live on every Sunday. Taking a placement
    out of every order leaves the values Sundays hold under it. It is
    reached from the Order of Service and from the Services table.

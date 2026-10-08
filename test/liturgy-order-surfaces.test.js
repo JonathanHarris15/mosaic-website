@@ -67,13 +67,20 @@ test('the Order of Service composes its order from the element collection', () =
 test('the Liturgy Orders page drags the collection into the selected order', () => {
     const html = read('liturgy-orders.html');
     const js = read('liturgy-orders.js');
-    const library = html.indexOf('id="element-library"');
     const grid = html.indexOf('class="lo-grid"');
-    assert.ok(library !== -1 && grid !== -1 && library < grid, 'the collection sits above the orders');
+    const library = html.indexOf('id="element-library"');
+    const order = html.indexOf('id="order-elements"');
+    assert.ok(grid !== -1 && library > grid && library < order, 'the kinds are the left panel of the order');
+    assert.match(html, /id="order-picker"/);
+    assert.match(html, /selectOrder\(\$event\.target\.value\)/);
+    assert.match(html, /aria-label="New order"/);
+    assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
-    assert.match(html, /id="order-elements"/);
-    assert.match(js, /pull: 'clone'/);
+    const librarySortable = js.slice(js.indexOf("getElementById('element-library')"), js.indexOf("getElementById('order-elements')"));
+    assert.match(librarySortable, /pull: 'clone'/);
+    assert.match(librarySortable, /preventOnFilter: false/);
+    assert.doesNotMatch(librarySortable, /handle:/, 'the kind row itself drags');
     assert.match(js, /placeKind\(kind, to\)/);
 });
 
