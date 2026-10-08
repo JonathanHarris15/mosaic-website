@@ -22,6 +22,7 @@ const {
 const pr = require("./prayer-request");
 const prWrites = require("./prayer-request-writes");
 const liturgyCatalog = require("./liturgy-catalog");
+const liturgyTranslate = require("./liturgy-translate");
 const LiturgyOrders = require("./shared/liturgy-order-core");
 const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
@@ -1577,6 +1578,43 @@ exports.oosUpdateLiturgy = onCall(
       }
 
       return {updated: Object.keys(fields)};
+    },
+);
+
+/**
+ * Carry a filled order of service onto another liturgy order, or read a
+ * bulletin into one. Jev chooses which filled moment is which slot. With
+ * no TYPESAFE_API_KEY the same function answers by kind and position, so
+ * a missing key never blocks the switch. Editor+ only: a call can spend
+ * money. This export is not in the standing deploy set until that secret
+ * exists — see docs/ops/ms-545-functions-deploy-set.md.
+ */
+exports.translateLiturgy = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "Sign in to translate an order.");
+      }
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied",
+            "Editors only — translating an order can call a paid API.");
+      }
+      const data = request.data || {};
+      if (!Array.isArray(data.sources) || !Array.isArray(data.targets)) {
+        throw new HttpsError("invalid-argument",
+            "sources and targets must be lists.");
+      }
+      if (data.sources.length > 240 || data.targets.length > 80) {
+        throw new HttpsError("invalid-argument",
+            "That order is too large to translate in one pass.");
+      }
+      return liturgyTranslate.judge(process.env.TYPESAFE_API_KEY || "", data);
     },
 );
 
