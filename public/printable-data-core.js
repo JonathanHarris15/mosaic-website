@@ -39,6 +39,14 @@
         ? require('./hymn-versions.js')
         : global.HymnVersions;
 
+    // The congregation's Liturgy Elements and Orders (ADR-0080). A Sunday's
+    // order of service is the elements of its order, so its fields, its rows
+    // and its hymns are read off them. Without a stored catalog in the bundle
+    // the seed — Standard — is the answer.
+    const Liturgy = (typeof require !== 'undefined')
+        ? require('./liturgy-order-core.js')
+        : global.LiturgyOrderCore;
+
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -270,31 +278,23 @@
     // about, who is down, and who has not confirmed yet.
     const ROTA_LEVEL = 'editor';
 
-    const LITURGY_ORDER = ['baptism', 'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'callToConfession',
-        'assuranceOfPardon', 'hymnMid1', 'hymnMid2', 'scriptureReading', 'prayerMale', 'prayerFemale', 'sermon',
-        'hymnEnd1', 'hymnEnd2', 'benediction'];
-    const LITURGY_LABELS = {
-        baptism: 'Baptism', preparatoryHymn: 'Preparatory hymn', callToWorship: 'Call to worship', hymn1: 'Hymn',
-        hymn2: 'Hymn', callToConfession: 'Call to confession', assuranceOfPardon: 'Assurance of pardon',
-        hymnMid1: 'Hymn', hymnMid2: 'Hymn', scriptureReading: 'Scripture reading', prayerMale: 'Prayer',
-        prayerFemale: 'Prayer', sermon: 'Sermon', hymnEnd1: 'Hymn', hymnEnd2: 'Hymn', benediction: 'Benediction',
-    };
-    const HYMN_SLOTS = ['preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'];
-    const HYMN_SLOT_LABELS = {
-        preparatoryHymn: 'Preparatory hymn', hymn1: 'First hymn', hymn2: 'Second hymn', hymnMid1: 'Third hymn',
-        hymnMid2: 'Fourth hymn', hymnEnd1: 'Closing hymn', hymnEnd2: 'Final hymn',
-    };
+    // The Standard order's song elements — the hymn slots a reader that has
+    // not seen the congregation's catalog can name.
+    const HYMN_SLOTS = Liturgy.songIdsOf(Liturgy.STANDARD_ORDER, Liturgy.standardCatalog());
 
     // What a row of one Sunday carries — the single Sunday and each row of
-    // the Sundays list are the same shape. Who is preaching and on what come
-    // first: that is the preaching schedule.
-    const SUNDAY_FIELDS = [
+    // the Sundays list are the same shape. The Sunday's own facts first (who
+    // is preaching is the preaching schedule), then one field per Liturgy
+    // Element, keyed by its id, so a field bound to `sermon` or `hymn1`
+    // still resolves and another church's element is a field the moment it
+    // is saved. A Sunday has one field per element, never two: who carries
+    // an element is not a second field.
+    const SUNDAY_IDENTITY_FIELDS = [
         { key: 'date', label: 'Date', kind: 'date' },
         { key: 'longDate', label: 'Date (Sunday, June 14, 2026)', kind: 'date' },
         { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
         { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
         { key: 'preacher', label: 'Preacher', kind: 'text' },
-        { key: 'sermon', label: 'Sermon passage', kind: 'text' },
         { key: 'theme', label: 'Theme', kind: 'text' },
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
         { key: 'prayerLabel', label: 'Prayer heading', kind: 'text' },
@@ -302,14 +302,33 @@
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
         { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
         { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
-        { key: 'callToWorship', label: 'Call to worship', kind: 'text' },
-        { key: 'callToConfession', label: 'Call to confession', kind: 'text' },
-        { key: 'assuranceOfPardon', label: 'Assurance of pardon', kind: 'text' },
-        { key: 'scriptureReading', label: 'Scripture reading', kind: 'text' },
-        { key: 'benediction', label: 'Benediction', kind: 'text' },
-    ].concat(HYMN_SLOTS.map(k => ({ key: k, label: HYMN_SLOT_LABELS[k], kind: 'text' })), [
-        { key: 'baptism', label: 'Baptism candidates', kind: 'text' },
-    ]);
+    ];
+
+    function catalogOrSeed(catalog) {
+        return (catalog && Array.isArray(catalog.elements) && Array.isArray(catalog.orders))
+            ? catalog
+            : Liturgy.standardCatalog();
+    }
+
+    function sundayFieldsFor(catalog) {
+        return SUNDAY_IDENTITY_FIELDS.concat(catalogOrSeed(catalog).elements.map(el => ({
+            key: el.id, label: el.name, kind: 'text', element: el.primitive,
+        })));
+    }
+
+    const SUNDAY_FIELDS = sundayFieldsFor(null);
+
+    // "Which hymn" on the hymn sheets: every song element, by its name.
+    function hymnSlotOptions(catalog) {
+        return catalogOrSeed(catalog).elements
+            .filter(el => el.primitive === 'song')
+            .map(el => ({ value: el.id, label: el.name }));
+    }
+
+    function elementName(catalog, id) {
+        const el = Liturgy.elementById(catalogOrSeed(catalog), id);
+        return el ? el.name : id;
+    }
 
     const SOURCES = [
         {
@@ -405,11 +424,12 @@
         },
         {
             key: 'sunday_rows', region: 'Sunday', label: 'Order of service, as rows', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per slot in service order, with its label and what is planned. Empty slots are left out.',
+            blurb: 'One row per element of the Sunday\'s liturgy order, in that order, with its name and what is planned. Empty elements are left out.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'label', label: 'Slot', kind: 'text' },
                 { key: 'value', label: 'What is planned', kind: 'text' },
+                { key: 'carriedBy', label: 'Who carries it', kind: 'text' },
                 { key: 'number', label: 'Row number', kind: 'number' },
             ],
         },
@@ -428,8 +448,8 @@
                 { key: 'sheetCredit', label: 'Credit on the last sheet', kind: 'text' },
             ],
             filters: [
-                { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', options: [{ value: '', label: 'Every hymn' }]
-                    .concat(HYMN_SLOTS.map(k => ({ value: k, label: HYMN_SLOT_LABELS[k] }))) },
+                { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', verbatim: true, options: [{ value: '', label: 'Every hymn' }]
+                    .concat(hymnSlotOptions(null)) },
             ],
         },
         {
@@ -604,6 +624,8 @@
     function fieldsFor(source, params, options) {
         const s = typeof source === 'string' ? sourceByKey(source) : source;
         if (!s) return [];
+        const registered = sourceByKey(s.key);
+        if (registered && registered.fields === SUNDAY_FIELDS && options && options.liturgy) return sundayFieldsFor(options.liturgy);
         const base = s.fields.slice();
         if (s.key === 'form_answers') {
             const form = ((options && options.forms) || []).find(f => f.id === (params && params.formId));
@@ -891,16 +913,19 @@
 
     // What a Sunday nobody has planned yet never "announces": its date is
     // already known, and a baptism is not something to be announced later.
-    // TBA is only written onto text fields — a date is a date.
-    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort', 'baptism'];
-    const SUNDAY_TEXT_KEYS = SUNDAY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
+    // TBA is only written onto text fields — a date is a date — and never
+    // onto a people element (a baptism's candidates).
+    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort'];
 
     // One Sunday as a row — the single Sunday, and each row of the Sundays
-    // list. A hymn the Sunday has dropped reads as nothing, as it did on the
-    // old guide. `notPlanned`, when it has words, stands in for whatever
-    // nobody has written yet ("TBA"); a dropped hymn is not coming, so it
-    // stays blank.
-    function sundayRow(date, s, notPlanned) {
+    // list. Every element of the catalog has its field, whatever order this
+    // Sunday follows: a field is an element, and the value under
+    // `liturgy.<id>` is there or it is not. A hymn the Sunday has dropped
+    // reads as nothing, as it did on the old guide. `notPlanned`, when it has
+    // words, stands in for whatever nobody has written yet ("TBA"); a dropped
+    // hymn is not coming, so it stays blank.
+    function sundayRow(date, s, notPlanned, catalog) {
+        const cat = catalogOrSeed(catalog);
         const lit = (s && s.liturgy) || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
         const row = {
@@ -916,20 +941,19 @@
             musicLeader: slotText(s && s.musicLeader),
             prayerMale: slotText(lit.prayerMale),
             prayerFemale: slotText(lit.prayerFemale),
-            callToWorship: slotText(lit.callToWorship),
-            callToConfession: slotText(lit.callToConfession),
-            assuranceOfPardon: slotText(lit.assuranceOfPardon),
-            scriptureReading: slotText(lit.scriptureReading),
-            sermon: slotText(lit.sermon) || slotText(s && s.sermon),
-            benediction: slotText(lit.benediction),
             prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
-            baptism: slotText(lit.baptism),
         };
-        HYMN_SLOTS.forEach(k => { row[k] = dropped.indexOf(k) !== -1 ? '' : slotText(lit[k]); });
+        const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
+        cat.elements.forEach(el => {
+            const dropsOut = el.primitive === 'song' && dropped.indexOf(el.id) !== -1;
+            row[el.id] = dropsOut ? '' : slotText(lit[el.id]);
+            if (el.primitive !== 'people' && !dropsOut) textKeys.push(el.id);
+        });
+        if (!row.sermon && s && s.sermon) row.sermon = slotText(s.sermon);
         const fill = typeof notPlanned === 'string' ? notPlanned.trim() : '';
         if (fill) {
-            SUNDAY_TEXT_KEYS.forEach(k => {
-                if (row[k] || NEVER_TO_BE_ANNOUNCED.indexOf(k) !== -1 || dropped.indexOf(k) !== -1) return;
+            textKeys.forEach(k => {
+                if (row[k] || NEVER_TO_BE_ANNOUNCED.indexOf(k) !== -1) return;
                 row[k] = fill;
             });
         }
@@ -942,25 +966,26 @@
         const s = serviceAt(data, date);
         const warnings = [];
         if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
-        return { rows: [sundayRow(date, s)], warnings: warnings, date: date };
+        return { rows: [sundayRow(date, s, undefined, data.liturgy)], warnings: warnings, date: date };
     }
 
+    // The Sunday's liturgy order, walked: one row per element with something
+    // planned. A dropped hymn is not a row. Who carries an element rides on
+    // its row rather than being a row of its own.
     function resolveSundayRows(params, data, ctx) {
         const p = Object.assign(defaultParams('sunday_rows'), params || {});
         const date = resolveWhen(p.when, ctx.today);
         const s = serviceAt(data, date);
         if (!s) return { rows: [], warnings: ['Nothing is planned yet for ' + formatDate(date) + '.'], date: date };
-        const lit = s.liturgy || {};
+        const cat = catalogOrSeed(data.liturgy);
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
         const rows = [];
-        LITURGY_ORDER.forEach(key => {
-            if (removed.indexOf(key) !== -1) return;
-            if (key === 'baptism' && !s.hasBaptism) return;
-            const value = slotText(lit[key]);
+        Liturgy.elementsFor(s, cat).forEach(el => {
+            if (el.primitive === 'song' && removed.indexOf(el.id) !== -1) return;
+            const value = slotText(Liturgy.valueOf(s, el));
             if (!value) return;
-            let label = LITURGY_LABELS[key];
-            if (key === 'scriptureReading' && lit.prayerLabel) label = 'Scripture reading / ' + lit.prayerLabel;
-            rows.push({ _id: key, label: label, value: value, number: rows.length + 1 });
+            const carrier = el.hasRole ? Liturgy.carrierOf(s, el) : null;
+            rows.push({ _id: el.id, label: el.name, value: value, carriedBy: carrier ? carrier.name : '', number: rows.length + 1 });
         });
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };
     }
@@ -971,10 +996,11 @@
         const s = serviceAt(data, date);
         if (!s) return { rows: [], warnings: ['Nothing is planned yet for ' + formatDate(date) + '.'], date: date };
         const lit = s.liturgy || {};
+        const cat = catalogOrSeed(data.liturgy);
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
         const rows = [];
         const warnings = [];
-        HYMN_SLOTS.forEach(slot => {
+        Liturgy.songIdsOf(Liturgy.orderFor(s, cat), cat).forEach(slot => {
             if (p.slot && slot !== p.slot) return;
             if (removed.indexOf(slot) !== -1) return;
             const h = lit[slot];
@@ -992,7 +1018,7 @@
                 rows.push({
                     _id: slot + '~' + i,
                     name: name,
-                    slot: HYMN_SLOT_LABELS[slot] || slot,
+                    slot: elementName(cat, slot),
                     image: image,
                     page: i + 1,
                     pageCount: images.length,
@@ -1006,7 +1032,7 @@
             });
         });
         if (p.slot && !rows.length) {
-            warnings.push('No ' + String(HYMN_SLOT_LABELS[p.slot] || p.slot).toLowerCase() + ' is planned for ' + formatDate(date) + '.');
+            warnings.push('No ' + String(elementName(cat, p.slot)).toLowerCase() + ' is planned for ' + formatDate(date) + '.');
         }
         return { rows: rows, warnings: warnings, date: date };
     }
@@ -1176,7 +1202,7 @@
         const rows = Object.keys(dates).sort()
             .map(d => ({ date: d, service: serviceAt(data, d) }))
             .filter(x => x.service || p.which !== 'planned')
-            .map(x => sundayRow(x.date, x.service, p.notPlanned));
+            .map(x => sundayRow(x.date, x.service, p.notPlanned, data.liturgy));
         const warnings = [];
         if (w.cut) warnings.push('Only the first ' + SUNDAYS_MAX + ' Sundays are listed.');
         if (!rows.length) {
@@ -1440,12 +1466,12 @@
             case 'people': return { people: true, families: true, households: true };
             case 'households': return { people: true, families: true, households: true };
             case 'household_children': return { people: true, families: true, households: true };
-            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true };
             case 'sunday_typed':
             case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
-            case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true };
-            case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to } }; }
+            case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true, liturgy: true };
+            case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to }, liturgy: true }; }
             case 'event_dates': {
                 const n = { series: true, occurrenceRange: resolveRange(p.range, t) };
                 return p.roleSlug ? Object.assign(n, { roles: true, people: true, rosters: p.seriesId || true }) : n;
@@ -1490,7 +1516,7 @@
         });
         (s.filters || []).forEach(f => {
             const v = p[f.key];
-            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(lowerFirst(o.label)); }
+            if (f.kind === 'choice') { const o = (f.options || []).find(x => x.value === v); if (o && v !== f.default && v !== '') bits.push(f.verbatim ? o.label : lowerFirst(o.label)); }
             else if (f.kind === 'text' && v && v !== f.default) bits.push(lowerFirst(f.label) + ' "' + v + '"');
             else if (f.kind === 'bool' && v) bits.push(lowerFirst(f.label));
         });
@@ -1500,9 +1526,9 @@
     const PrintableDataCore = {
         LEVELS,
         SOURCES,
-        LITURGY_ORDER,
-        LITURGY_LABELS,
         HYMN_SLOTS,
+        sundayFieldsFor,
+        hymnSlotOptions,
         levelRank,
         mayRead,
         isDateStr,

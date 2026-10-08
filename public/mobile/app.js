@@ -17,7 +17,7 @@
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
-    serviceGuide: { title: "Service Guide", page: "service-guide.html" },
+    serviceGuide: { title: "Service Guide", page: "service-guide-editor.html" },
   };
 
   function currentRoute() {
@@ -293,6 +293,7 @@
     var user = props.user;
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
+    var liturgyState = M.useAsync(data.getLiturgyCatalog, []);
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
     var tiles = [
       { icon: "book-open", label: "Hymns", route: "hymnDirectory" },
@@ -315,7 +316,7 @@
     var sermon = svc && svc.sermon ? svc.sermon : "";
     var themeLine = [theme, sermon].filter(Boolean).join(" · ");
     var dateLabel = HD && svc && svc.date ? HD.dayMonth(svc.date, HD.todayKey(new Date())) : "";
-    var ready = HD && svc ? HD.readiness(svc) : null;
+    var ready = HD && svc ? HD.readiness(svc, liturgyState.data) : null;
     var canFix = !!(user && window.AccessCore && window.AccessCore.canFixSundayService(user));
     var notReady = !!(ready && ready.notReady && canFix);
     var blanksHref = svc && svc.date

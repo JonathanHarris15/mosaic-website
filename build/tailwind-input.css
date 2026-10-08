@@ -1699,6 +1699,8 @@ a.m-person:hover .m-person__name, button.m-person:hover .m-person__name { color:
 }
 .m-row__meta { flex-shrink: 0; font-size: 13px; color: var(--on-surface-variant); }
 .m-row__chevron { display: flex; flex-shrink: 0; color: var(--outline); }
+.m-row__handle { display: flex; flex-shrink: 0; color: var(--outline); cursor: grab; touch-action: none; }
+.m-row__handle:active { cursor: grabbing; }
 
 /* CardList — Rows gathered into one bordered surface, so a list reads as a single object rather than a stack of cards. */
 .m-card-list {

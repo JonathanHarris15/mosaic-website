@@ -22,8 +22,8 @@ const Core = require('../public/service-note-core.js');
 // ── Which elements can carry a note ──────────────────────────────────────
 
 test('the note keys are the elements the service actually has', () => {
-    // Matches service-builder.js's _MOVEMENTS: the liturgy fields plus
-    // baptism, which carries a note even though its value is not settable.
+    // The Standard seed's elements, baptism included, which carries a note
+    // even though its value is not settable.
     assert.strictEqual(Core.NOTE_KEYS.length, 14);
     ['hymn1', 'sermon', 'benediction', 'baptism'].forEach((k) => {
         assert.ok(Core.isNoteKey(k), k);

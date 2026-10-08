@@ -22,6 +22,7 @@
  */
 
 const core = require("./shared/service-read-core.js");
+const {loadLiturgyCatalog} = require("./liturgy-catalog.js");
 
 const SERVICES = "services";
 
@@ -36,13 +37,20 @@ const MAX_RANGE = 26;
  * A date with no document is `exists: false`, not an error — most dates have
  * no document, and "nothing is planned that week" is a useful answer.
  *
+ * The rows come back in the Sunday's Liturgy Order (ADR-0080), so the
+ * congregation's elements and orders are read alongside it.
+ *
  * @param {object} db the Firestore handle
  * @param {string} dateKey YYYY-MM-DD
  * @return {Promise<object>} the readable service
  */
 async function getService(db, dateKey) {
-  const snap = await db.collection(SERVICES).doc(dateKey).get();
-  return core.readableService(dateKey, snap.exists ? snap.data() : null);
+  const [snap, liturgy] = await Promise.all([
+    db.collection(SERVICES).doc(dateKey).get(),
+    loadLiturgyCatalog(db),
+  ]);
+  return core.readableService(dateKey, snap.exists ? snap.data() : null,
+      liturgy);
 }
 
 /**
@@ -68,16 +76,19 @@ async function getServiceRange(db, from, through, {documentId, limit} = {}) {
 
   // One more than the cap, so we can tell "exactly full" from "there was
   // more" and say so rather than silently truncating.
-  const snap = await db.collection(SERVICES)
-      .orderBy(documentId)
-      .startAt(from)
-      .endAt(through)
-      .limit(cap + 1)
-      .get();
+  const [snap, liturgy] = await Promise.all([
+    db.collection(SERVICES)
+        .orderBy(documentId)
+        .startAt(from)
+        .endAt(through)
+        .limit(cap + 1)
+        .get(),
+    loadLiturgyCatalog(db),
+  ]);
 
   const docs = snap.docs.slice(0, cap);
   return {
-    services: docs.map((d) => core.readableService(d.id, d.data())),
+    services: docs.map((d) => core.readableService(d.id, d.data(), liturgy)),
     truncated: snap.docs.length > cap,
     limit: cap,
   };

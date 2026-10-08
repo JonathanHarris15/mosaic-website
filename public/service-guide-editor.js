@@ -9,9 +9,8 @@
 // this page links to; the structured Service remains the canonical source feeding
 // Bound Components.
 //
-// Weeks whose guide predates this system (no format:'v2') render through the kept
-// legacy generator (service-guide.html); this page offers to rebuild them on the
-// template system.
+// Weeks whose guide predates this system (no format:'v2') are offered a rebuild
+// on the template system. The old generator is no longer linked (ADR-0080).
 //
 // db / auth / getUserData come from auth.js; GuideEngine / GuideComponents /
 // GuideSeed / GuideStore / DateUtils from their modules loaded before this one.
@@ -27,7 +26,6 @@ function guideEditorV2() {
         loading: true,
         saving: false,
         legacy: false,
-        legacyGuideUrl: '',
         _baseline: null,      // JSON of the saved state; drives hasChanges by diff
         _resolveTimer: null,
         _saveTimer: null,
@@ -78,7 +76,6 @@ function guideEditorV2() {
                 const params = new URLSearchParams(window.location.search);
                 self.date = params.get('date');
                 if (!self.date) { window.location.href = 'service-calendar.html'; return; }
-                self.legacyGuideUrl = 'service-guide.html?date=' + encodeURIComponent(self.date);
 
                 try {
                     await self.bootstrap();

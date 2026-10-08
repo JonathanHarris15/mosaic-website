@@ -50,6 +50,7 @@ function load() {
     sandbox.HymnRegistry = require('../public/hymn-registry.js');
     sandbox.PersonPhotoCore = require('../public/person-photo-core.js');
     sandbox.UsageStats = require('../public/usage-stats-store.js');
+    sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
 
     vm.createContext(sandbox);
     vm.runInContext(SRC, sandbox, { filename: 'service-calendar.js' });
@@ -172,7 +173,7 @@ test('the badge appears only in the Planning view', () => {
 });
 
 test('it sits at the leading edge of the row, before the date', () => {
-    const dateCell = SRC.slice(SRC.indexOf('sticky-col-left">'), SRC.indexOf('sermon-cell'));
+    const dateCell = SRC.slice(SRC.indexOf('sticky-col-left">'), SRC.indexOf('theme-cell'));
     assert.ok(dateCell.indexOf('assigned-btn') < dateCell.indexOf('toLocaleDateString'),
         'the badge should come before the date, not after it');
 });
@@ -228,7 +229,7 @@ test('a viewer sees who is assigned but is not invited to change it', () => {
     // An empty badge is an offer. Offering a button that does nothing when
     // pressed is worse than offering nothing.
     const body = SRC.slice(SRC.indexOf("el.querySelector('.assigned-btn')"),
-                           SRC.indexOf('PLANNING_COLUMNS.forEach'));
+                           SRC.indexOf("el.querySelectorAll('.liturgy-cell')"));
     assert.match(body, /!canEdit && !assigned/);
     assert.match(body, /if \(canEdit\) \{[\s\S]{0,80}assignedBtn\.onclick/,
         'only an editor gets the click');

@@ -1,15 +1,15 @@
-// MS-245 — the Planning view.
+// MS-245 — the Planning view, and the table's liturgy columns (ADR-0080).
 //
-// The table opened out to every liturgy slot, so a service guide session can
-// fill one hymn slot down twelve Sundays instead of opening twelve Sundays one
-// at a time.
+// The table carries one column per Liturgy Element of the orders toggled on
+// above it, so a service guide session can fill one hymn slot down twelve
+// Sundays instead of opening twelve Sundays one at a time.
 //
 // Two things here are worth pinning against a careless edit later:
 //
-//   1. The columns come from ONE list. The header, the cell and the editor that
-//      opens when you click are all read off PLANNING_COLUMNS, because three
-//      hand-kept lists is how a column ends up with a heading and no way to
-//      type into it.
+//   1. The columns come from ONE place. The header, the cell and the editor
+//      that opens when you click are all read off the congregation's elements
+//      (liturgyColumns / liturgyElementFor), because hand-kept lists are how a
+//      column ends up with a heading and no way to type into it.
 //
 //   2. A hymn slot is {id, name}, and a slot typed in freehand must drop the
 //      old id. Keep it and the cell reads one hymn while the printed guide
@@ -24,6 +24,7 @@ const vm = require('node:vm');
 const PUBLIC = path.join(__dirname, '..', 'public');
 const SRC = fs.readFileSync(path.join(PUBLIC, 'service-calendar.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(PUBLIC, 'service-calendar.html'), 'utf8');
+const Liturgy = require('../public/liturgy-order-core.js');
 
 function load() {
     const sandbox = {
@@ -46,6 +47,7 @@ function load() {
     };
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.HymnRegistry = require('../public/hymn-registry.js');
+    sandbox.LiturgyOrderCore = Liturgy;
 
     vm.createContext(sandbox);
     vm.runInContext(SRC, sandbox, { filename: 'service-calendar.js' });
@@ -54,46 +56,37 @@ function load() {
     return Object.assign(sandbox, sandbox.module.exports);
 }
 
-// ── The columns Jonathan asked for ────────────────────────────────────────
+// ── The columns: the toggled orders' elements ─────────────────────────────
 
-test('every liturgy slot from the ticket has a column', () => {
+const STANDARD_IDS = [
+    'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'callToConfession',
+    'assuranceOfPardon', 'hymnMid1', 'hymnMid2', 'scriptureReading', 'sermon',
+    'baptism', 'hymnEnd1', 'hymnEnd2', 'benediction',
+];
+
+// A congregation with a second order that shares some of Standard's elements
+// and adds one of its own. Fictional, like every fixture here.
+function twoOrderCatalog() {
+    const seed = Liturgy.standardCatalog();
+    return Liturgy.catalogFrom({
+        elements: seed.elements.concat([
+            { id: 'lordsSupper', name: 'Lord\'s Supper', primitive: 'text', hasRole: true, hasNote: false },
+        ]),
+        orders: seed.orders.concat([
+            { id: 'communion', name: 'Communion', elementIds: ['hymn1', 'lordsSupper', 'sermon', 'benediction'] },
+        ]),
+    });
+}
+
+test('with nothing remembered, the columns are Standard\'s elements in service order', () => {
     const sb = load();
-    const fields = sb.PLANNING_COLUMNS.map(c => c.field);
-
-    // Jonathan listed these in the room as Preparatory, Worship Hymn 1, Hymn 2,
-    // confession/assurance, Hymn 3, Hymn 4, pastoral prayer, Hymn 5, Hymn 6.
-    // He then chose to keep the code's names for them, so these are those.
-    [
-        'preparatoryHymn',
-        'hymn1',
-        'hymn2',
-        'callToConfession',
-        'assuranceOfPardon',
-        'hymnMid1',
-        'hymnMid2',
-        'hymnEnd1',
-        'hymnEnd2',
-        // Added on review: the pastoral prayer's scripture reference and the
-        // benediction's.
-        'scriptureReading',
-        'benediction',
-    ].forEach(f => assert.ok(fields.includes(f), `no column for ${f}`));
-});
-
-test('the pastoral prayer reference is its own column, beside the people', () => {
-    // The existing Pastoral Prayer column carries the two people prayed for.
-    // This one is the scripture reference — a different thing, a different
-    // field, and it must not be mistaken for a duplicate and removed.
-    const sb = load();
-    const col = sb.PLANNING_COLUMNS.find(c => c.field === 'scriptureReading');
-    assert.ok(col, 'no column for the pastoral prayer reference');
-    assert.match(col.label, /Pastoral Prayer/);
-    assert.strictEqual(col.type, 'verse', 'a reference is picked, not typed freehand');
+    assert.deepStrictEqual(Array.from(sb.currentTableOrderIds()), ['standard']);
+    assert.deepStrictEqual(sb.liturgyColumns().map(c => c.id), STANDARD_IDS);
 });
 
 test('the columns read left to right in the order the service runs', () => {
     const sb = load();
-    const order = sb.PLANNING_COLUMNS.map(c => c.field);
+    const order = sb.liturgyColumns().map(c => c.id);
     const pos = f => order.indexOf(f);
 
     assert.ok(pos('preparatoryHymn') < pos('hymn1'), 'the preparatory hymn opens');
@@ -105,50 +98,84 @@ test('the columns read left to right in the order the service runs', () => {
     assert.ok(pos('benediction') === order.length - 1, 'the benediction sends everyone home');
 });
 
-test('the pastoral prayer is not doubled up', () => {
-    // The table already carries a Pastoral Prayer column; a second one would be
-    // two boxes writing the same two fields.
+test('a shared element is one column, and Standard\'s come first', () => {
     const sb = load();
-    const fields = sb.PLANNING_COLUMNS.map(c => c.field);
-    assert.ok(!fields.includes('prayerMale'));
-    assert.ok(!fields.includes('prayerFemale'));
-    assert.match(HTML + SRC, /Pastoral Prayer/, 'and it is still there');
+    sb.setLiturgyCatalog(twoOrderCatalog());
+    sb.setTableOrderIds(['communion', 'standard']);
+
+    const ids = sb.liturgyColumns().map(c => c.id);
+    assert.deepStrictEqual(ids, STANDARD_IDS.concat(['lordsSupper']),
+        'Standard in its order, then only what Communion adds');
+    assert.strictEqual(ids.filter(id => id === 'sermon').length, 1, 'the shared sermon is one column');
 });
 
-test('all seven hymn slots are editable as hymns, not as loose text', () => {
+test('an order toggled on alone gives its own elements, in its own order', () => {
     const sb = load();
-    // Array.from: the vm builds these with its own Array, so a strict compare
-    // against a host-realm literal fails on the prototype alone.
-    assert.deepStrictEqual(Array.from(sb.LITURGY_HYMN_FIELDS).sort(), [
+    sb.setLiturgyCatalog(twoOrderCatalog());
+    sb.setTableOrderIds(['communion']);
+    assert.deepStrictEqual(sb.liturgyColumns().map(c => c.id),
+        ['hymn1', 'lordsSupper', 'sermon', 'benediction']);
+});
+
+test('the toggled orders are remembered on this device', () => {
+    const sb = load();
+    const writes = {};
+    sb.localStorage.setItem = (k, v) => { writes[k] = v; };
+    sb.setLiturgyCatalog(twoOrderCatalog());
+    sb.setTableOrderIds(['standard', 'communion']);
+    assert.strictEqual(sb.TABLE_ORDERS_KEY, 'calendarLiturgyOrders');
+    assert.deepStrictEqual(JSON.parse(writes.calendarLiturgyOrders), ['standard', 'communion']);
+});
+
+test('a remembered order that has since been deleted is let go', () => {
+    const sb = load();
+    sb.localStorage.getItem = (k) => (k === 'calendarLiturgyOrders' ? '["gone","communion"]' : null);
+    sb.setLiturgyCatalog(twoOrderCatalog());
+    assert.deepStrictEqual(Array.from(sb.currentTableOrderIds()), ['communion']);
+});
+
+test('the pastoral prayer reference is its own column, beside the people', () => {
+    // The Prayed For column carries the two people prayed for. The element
+    // "Pastoral Prayer" is the scripture reference — a different thing, a
+    // different field, and it must not be mistaken for a duplicate.
+    const sb = load();
+    const col = sb.liturgyColumns().find(c => c.id === 'scriptureReading');
+    assert.ok(col, 'no column for the pastoral prayer reference');
+    assert.match(col.name, /Pastoral Prayer/);
+    assert.strictEqual(col.primitive, 'scripture', 'a reference is picked, not typed freehand');
+});
+
+test('the people prayed for are not elements, so they are never doubled up', () => {
+    const sb = load();
+    assert.strictEqual(sb.liturgyElementFor('prayerMale'), null);
+    assert.strictEqual(sb.liturgyElementFor('prayerFemale'), null);
+    assert.match(SRC, /Prayed For/, 'and their column is still there');
+});
+
+test('every song column opens the hymn editor, every scripture column the verse picker', () => {
+    const sb = load();
+    const songs = sb.liturgyColumns().filter(c => c.primitive === 'song').map(c => c.id).sort();
+    assert.deepStrictEqual(songs, [
         'hymn1', 'hymn2', 'hymnEnd1', 'hymnEnd2', 'hymnMid1', 'hymnMid2', 'preparatoryHymn'
     ]);
+    ['sermon', 'callToConfession', 'assuranceOfPardon', 'benediction'].forEach(f =>
+        assert.strictEqual(sb.liturgyElementFor(f).primitive, 'scripture', `${f} should use the verse picker`));
+    assert.match(SRC, /element && element\.primitive === 'song'[\s\S]{0,80}openHymnEditor/);
+    assert.match(SRC, /element && element\.primitive === 'scripture'/);
 });
 
-test('the scripture slots open the verse picker, and so does the sermon', () => {
-    const sb = load();
-    ['sermon', 'callToConfession', 'assuranceOfPardon'].forEach(f =>
-        assert.ok(sb.LITURGY_VERSE_FIELDS.includes(f), `${f} should use the verse picker`));
+test('a text element typed into the table is written under liturgy, not on the Sunday itself', () => {
+    assert.match(SRC, /if \(element\) \{\s*await writeLiturgyField\(dateKey, field, newVal\);/);
 });
 
-test('no column is both a hymn and a scripture', () => {
-    const sb = load();
-    const both = Array.from(sb.LITURGY_HYMN_FIELDS).filter(f => sb.LITURGY_VERSE_FIELDS.includes(f));
-    assert.deepStrictEqual(both, []);
+test('a people element is shown but not edited in the table', () => {
+    // Naming a baptism candidate writes the candidate's own record too
+    // (ADR-0006); that belongs to the Order of Service.
+    assert.match(SRC, /canEdit && element\.primitive !== 'people'/);
 });
 
-test('one list drives the header, the cell and the editor', () => {
-    // If a column is ever added by hand to the header without joining this
-    // list, it gets a heading and no way to type into it.
-    const sb = load();
-    sb.PLANNING_COLUMNS.forEach(c => {
-        assert.ok(c.label, 'a column needs a heading');
-        assert.ok(c.cell, 'a column needs a cell class to be filled through');
-        assert.ok(c.field, 'a column needs a liturgy field to write');
-        assert.ok(['hymn', 'verse'].includes(c.type), `${c.field} has no editor type`);
-    });
-
-    const classes = sb.PLANNING_COLUMNS.map(c => c.cell);
-    assert.strictEqual(new Set(classes).size, classes.length, 'cell classes must be distinct');
+test('the sermon, baptism and old pastoral prayer reference are no longer fixed columns', () => {
+    assert.ok(!/sermon-cell|baptism-cell|prayer-ref-cell|PLANNING_COLUMNS/.test(SRC));
 });
 
 // ── How a hymn slot reads ─────────────────────────────────────────────────
@@ -180,13 +207,14 @@ test('a legacy slot stored as a bare string still reads', () => {
 
 // ── The markup ────────────────────────────────────────────────────────────
 
-test('the liturgy columns are hidden until the Planning view is on', () => {
-    // They live in the markup either way, so turning the view on is a class
-    // rather than a re-render — a re-render would take away the box somebody
-    // was typing in.
-    assert.match(HTML, /\.planning-col\s*\{\s*display:\s*none/);
-    assert.match(HTML, /\.planning-mode\s+\.planning-col\s*\{\s*display:\s*table-cell/);
-    assert.match(SRC, /planning-col/, 'the cells must carry the class');
+test('every order has a toggle over the table, and a way to manage them', () => {
+    assert.match(HTML, /id="table-orders"[\s\S]{0,600}x-for="o in liturgyOrders"[\s\S]{0,300}toggleTableOrder\(o\.id\)/);
+    assert.match(HTML, /href="liturgy-orders\.html"/);
+    assert.match(HTML, /<script src="liturgy-order-core\.js"><\/script>[\s\S]*<script src="service-calendar\.js"><\/script>/);
+});
+
+test('the liturgy columns are on the table whether or not the Planning view is', () => {
+    assert.ok(!/planning-col/.test(SRC + HTML));
 });
 
 test('the Planning view is offered only on the table', () => {
@@ -242,12 +270,52 @@ test('the rail centres its compass by rule, not by luck', () => {
     assert.match(HTML, /\.planning-rail:not\(\.rail-open\) h2 \{ justify-content: center !important; \}/);
 });
 
-test('the month separator still spans the whole row', () => {
-    // A hard-coded colspan would leave the month heading short by nine columns
-    // the moment the Planning view opened. The label sits in the sticky date
-    // column; the filler cell carries the rest of the band.
-    assert.match(SRC, /colspan="\$\{9 \+ PLANNING_COLUMNS\.length\}"/);
+// Draw the table into a stand-in DOM and hand back the header and the first
+// month band, as markup.
+function drawTable(sb) {
+    const made = [];
+    const container = { innerHTML: '', appendChild(n) { made.push(n); } };
+    sb.document.getElementById = (id) => (id === 'calendar-table-container' ? container : null);
+    sb.document.createElement = () => {
+        const n = { className: '', innerHTML: '', dataset: {}, children: [], appendChild(c) { this.children.push(c); } };
+        made.push(n);
+        return n;
+    };
+    sb.renderTable({ 2026: { August: [new Date(2026, 7, 16)] } });
+    const thead = made.find(n => /<th/.test(n.innerHTML));
+    const band = made.find(n => /colspan=/.test(n.innerHTML));
+    const dateRow = made.find(n => n.dataset && n.dataset.serviceDate);
+    return { thead: thead.innerHTML, band: band.innerHTML, row: dateRow.innerHTML };
+}
+
+test('the month separator spans the whole row, however many orders are on', () => {
+    // The label sits in the sticky date column; the filler cell carries the
+    // rest of the band, so its span is every column but the date.
     assert.match(SRC, /sticky-col-left bg-surface-container-low\/90 backdrop-blur-sm/);
+    [['standard'], ['standard', 'communion'], ['communion'], []].forEach(ids => {
+        const sb = load();
+        sb.setLiturgyCatalog(twoOrderCatalog());
+        sb.setTableOrderIds(ids);
+        const { thead, band, row } = drawTable(sb);
+        const headings = (thead.match(/<th\b/g) || []).length;
+        const span = Number(band.match(/colspan="(\d+)"/)[1]);
+        assert.strictEqual(span, headings - 1, `band short or long with ${ids.join('+') || 'nothing'} on`);
+        assert.strictEqual((row.match(/<td\b/g) || []).length, headings, 'a cell under every heading');
+    });
+});
+
+test('the header keeps the identity columns and names each element once', () => {
+    const sb = load();
+    sb.setLiturgyCatalog(twoOrderCatalog());
+    sb.setTableOrderIds(['standard', 'communion']);
+    const { thead, row } = drawTable(sb);
+    const names = Array.from(thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)).map(m => m[1]);
+    assert.deepStrictEqual(names.slice(0, 7),
+        ['Date', 'Theme', 'Leader', 'Preacher', 'Music', 'Prayers', 'Prayed For']);
+    assert.strictEqual(names[names.length - 1], 'Actions');
+    assert.deepStrictEqual(names.slice(7, -1), sb.liturgyColumns().map(c => sb.escapeHtml(c.name)));
+    assert.match(row, /class="liturgy-carrier[^"]*" data-element="lordsSupper"/,
+        'an element a person carries has a line for the person');
 });
 
 // ── Writing a slot ────────────────────────────────────────────────────────

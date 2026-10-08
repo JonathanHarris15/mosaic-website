@@ -95,6 +95,28 @@ suite('reading Sundays and looking things up', () => {
             s.liturgy.find(r => r.field === 'sermon').value, 'The current one');
     });
 
+    test('a Sunday that names a saved Liturgy Order reads in that order', async () => {
+        // ADR-0080. The congregation's elements and orders are read from
+        // their own collections; the Sunday holds only the pointer.
+        await db.collection('liturgy_elements').doc('callToWorship')
+            .set({name: 'Call to Worship', primitive: 'scripture', hasRole: false, hasNote: true});
+        await db.collection('liturgy_elements').doc('offertory')
+            .set({name: 'Offertory', primitive: 'song', hasRole: false, hasNote: true});
+        await db.collection('liturgy_orders').doc('standard')
+            .set({name: 'Standard', elementIds: ['callToWorship']});
+        await db.collection('liturgy_orders').doc('giving')
+            .set({name: 'Giving Sunday', elementIds: ['offertory', 'callToWorship']});
+        await db.collection('services').doc('2026-08-24').set({
+            liturgyOrderId: 'giving',
+            liturgy: {callToWorship: 'Psalm 96', offertory: {id: 'h-2', name: 'A Giving Song'}},
+        });
+
+        const s = await sr.getService(db, '2026-08-24');
+        assert.deepStrictEqual(s.liturgyOrder, {id: 'giving', name: 'Giving Sunday'});
+        assert.deepStrictEqual(s.liturgy.map(r => r.field), ['offertory', 'callToWorship']);
+        assert.strictEqual(s.liturgy[0].label, 'Offertory');
+    });
+
     test('a Sunday with nothing planned says so rather than failing', async () => {
         const s = await sr.getService(db, '2030-01-06');
         assert.strictEqual(s.exists, false);

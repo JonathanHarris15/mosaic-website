@@ -49,34 +49,12 @@ async function stepToService(move) {
     move.go(move.target);
     return true;
 }
-const CANONICAL_MAPPING = {
-    'Theme': { field: 'theme', type: 'text' },
-    'Key Verse': { field: 'keyVerse', type: 'text' },
-    'Service Leader': { field: 'serviceLeader', type: 'person' },
-    'Music Leader': { field: 'musicLeader', type: 'person' },
-    'Preacher': { field: 'preacher', type: 'person' },
-    'Prayer (Praise)': { field: 'prayerPraise', type: 'person' },
-    'Prayer (Confession)': { field: 'prayerConfession', type: 'person' },
-    'Elements of the Service': { field: 'elements', type: 'person' },
-    'Other Involvement': { field: 'other', type: 'person' },
-    'Baptism': { field: 'baptism', type: 'text', liturgy: true },
-    'Preparatory Hymn': { field: 'preparatoryHymn', type: 'hymn', liturgy: true },
-    'Call to Worship': { field: 'callToWorship', type: 'text', liturgy: true },
-    'Hymn 1': { field: 'hymn1', type: 'hymn', liturgy: true },
-    'Hymn 2': { field: 'hymn2', type: 'hymn', liturgy: true },
-    'Call to Confession': { field: 'callToConfession', type: 'text', liturgy: true },
-    'Assurance of Pardon': { field: 'assuranceOfPardon', type: 'text', liturgy: true },
-    'Hymn Mid 1': { field: 'hymnMid1', type: 'hymn', liturgy: true },
-    'Hymn Mid 2': { field: 'hymnMid2', type: 'hymn', liturgy: true },
-    'Scripture Reading': { field: 'scriptureReading', type: 'text', liturgy: true },
-    'Pastoral Prayer': { field: 'scriptureReading', type: 'text', liturgy: true },
-    'Prayer Male': { field: 'prayerMale', type: 'person', liturgy: true },
-    'Prayer Female': { field: 'prayerFemale', type: 'person', liturgy: true },
-    'Sermon': { field: 'sermon', type: 'text', liturgy: true },
-    'Hymn End 1': { field: 'hymnEnd1', type: 'hymn', liturgy: true },
-    'Hymn End 2': { field: 'hymnEnd2', type: 'hymn', liturgy: true },
-    'Benediction': { field: 'benediction', type: 'text', liturgy: true }
-};
+// The congregation's Liturgy Elements and Orders (ADR-0080). A global on the
+// page; a require under node:test.
+function liturgyCore() {
+    if (typeof window !== 'undefined' && window.LiturgyOrderCore) return window.LiturgyOrderCore;
+    return require('./liturgy-order-core.js');
+}
 
 // Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by older
 // saves that used set() with merge, which stored them as top-level field names
@@ -105,11 +83,16 @@ function normalizeDottedKeys(raw) {
     return data;
 }
 
-// The liturgy slots and note keys a save descends into one level, so an edit
-// names the slot it touched rather than the whole map. Anything else nested
-// (guide, irregularElements) is written whole — it is rebuilt wholesale by
-// whoever owns it, so a partial write of it would mean less, not more.
-const NESTED_SAVE_MAPS = ['liturgy', 'notes'];
+// The liturgy slots, note keys, and element carriers a save descends into one
+// level, so an edit names the slot it touched rather than the whole map.
+// Anything else nested (guide, irregularElements) is written whole — it is
+// rebuilt wholesale by whoever owns it, so a partial write of it would mean
+// less, not more.
+//
+// `carriedBy.<elementId>` is the one person who carries a Liturgy Element
+// marked hasRole (ADR-0080): kept beside the value, keyed the same way the
+// notes are, so it is not a second element and not a second column.
+const NESTED_SAVE_MAPS = ['liturgy', 'notes', 'carriedBy'];
 
 // ── Row identity for the lists a person is picked into (MS-277) ─────────────
 //
@@ -291,14 +274,19 @@ function flattenServiceForSave(service) {
         otherId: ref(s.other).id,
         hasBaptism: s.hasBaptism,
         removedHymns: s.removedHymns || [],
+        // Which Liturgy Order this Sunday follows. Empty reads as Standard.
+        liturgyOrderId: s.liturgyOrderId || '',
+        // Kept as stored so an older Irregular Service round-trips untouched;
+        // nothing on this page edits either any more (ADR-0080).
         isIrregular: s.isIrregular,
         // Both carry lists whose rows are keyed by `_rowId` (irregular elements
-        // directly, liturgy through its Baptism Candidates). The id is a handle
+        // directly, liturgy through its people elements). The id is a handle
         // for the screen, so it is left behind on the way to the document — and
         // on the way into changedFieldPaths, or re-keying a row would read as a
         // changed field and write a Sunday nobody edited.
         irregularElements: withoutRowIds(s.irregularElements),
         notes: s.notes,
+        carriedBy: s.carriedBy || {},
         liturgy: withoutRowIds(s.liturgy)
     };
 }
@@ -364,7 +352,7 @@ const PERSON_REF_PATHS = {
 // Fields that go into the document as they are.
 const PLAIN_SAVE_FIELDS = [
     'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
-    'isIrregular', 'irregularElements', 'notes', 'liturgy'
+    'liturgyOrderId', 'isIrregular', 'irregularElements', 'notes', 'carriedBy', 'liturgy'
 ];
 
 // Writes one dot-path field back into the editor's nested model — the inverse
@@ -399,10 +387,11 @@ function applyFlatFieldPath(service, path, value) {
         if (bothPlainObjects) {
             for (const key of Object.keys(current)) delete current[key];
             Object.assign(current, value);
-        } else if (map === 'liturgy' && slot === 'baptism') {
-            // Baptism Candidates are a list of Person references with a picker
-            // per row, so they are brought in line rather than swapped out —
-            // same reason as the slot above, and see reconcilePersonList.
+        } else if (map === 'liturgy' && Array.isArray(value)) {
+            // A people element (Baptism Candidates, or any other) is a list of
+            // Person references with a picker per row, so it is brought in
+            // line rather than swapped out — same reason as the slot above,
+            // and see reconcilePersonList.
             if (!Array.isArray(service[map][slot])) service[map][slot] = [];
             reconcilePersonList(service[map][slot], value);
         } else {
@@ -599,7 +588,6 @@ function serviceForm() {
         showPrayerPraise: false,
         showPrayerConfession: false,
         _quill: null,
-        _sortable: null,
         hymnRegistry: [],
         fuse: null,
         peopleRegistry: [],
@@ -629,12 +617,14 @@ function serviceForm() {
             isIrregular: false,
             irregularElements: [],
             hasBaptism: false,
-            // Hymn slots the user has pulled out of the order of service. Each entry
-            // is a liturgy field key (e.g. 'hymn2'). Removed hymns are kept in the
+            // Song elements the user has pulled out of this Sunday. Each entry
+            // is an element id (e.g. 'hymn2'). Removed songs are kept in the
             // liturgy data but skipped by the service guide generator, which pads the
             // freed pages with extra sermon-notes pages instead.
             removedHymns: [],
+            liturgyOrderId: '',
             notes: {},
+            carriedBy: {},
             liturgy: {
                 preparatoryHymn: { id: null, name: '' },
                 callToWorship: '',
@@ -661,107 +651,93 @@ function serviceForm() {
         personToAdd: { name: '', callback: null },
         duplicateWarning: false,
 
-        // ── Service Guide system (ADR-0010) ────────────────────────────────────
-        // The Order of Service editor chooses the week's Service Guide Template, or
-        // toggles back to the legacy generator. The chosen template's builder-
-        // surface section components (baptism, pastoral-prayer subjects) decide
-        // which template-driven sections this page prompts.
-        guideSystem: 'v2',                  // 'v2' | 'legacy'
-        // Whether this week has opted into the new guide controls. False for a week
-        // that predates ADR-0010 (no stored guideSystem, no v2 guide) and hasn't been
-        // touched this session — so opening + re-saving such a week never silently
-        // flips guideSystem, derives hasBaptism, or freezes a v2 guide record (which
-        // would, e.g., clear an existing baptism's baptismDate). Set true on load for
-        // an already-v2 week, and when the editor toggles legacy or picks a template.
-        _guideEngaged: false,
-        guideCatalogLoaded: false,
-        guideTemplates: [],
-        _pageTemplatesById: {},
-        _stylePresetsById: {},
-        selectedTemplateId: '',
-        guideSnapshot: null,
+        // ── Liturgy Orders (ADR-0080) ──────────────────────────────────────────
+        // The congregation's elements and orders. Starts as the Standard seed so
+        // the page draws before the read lands; init() reads the real catalog
+        // BEFORE load(), so every element's empty slot is on the model before
+        // the loaded snapshot is taken and an unfilled slot never reads as an
+        // unsaved edit.
+        liturgyCatalog: liturgyCore().standardCatalog(),
+        liturgyCatalogLoaded: false,
 
-        get useLegacySystem() { return this.guideSystem === 'legacy'; },
-        get _guideCatalog() { return (window.GuideComponents && window.GuideComponents.defaultCatalog) || null; },
-        // The bespoke Builder sections the chosen template requests (null in legacy
-        // mode, where the static form shows everything).
-        get _builderSections() {
-            if (this.guideSystem === 'legacy' || !this.guideSnapshot || !window.GuideStore) return null;
-            return GuideStore.builderSections(this.guideSnapshot, this._guideCatalog);
-        },
-        // Baptism: legacy uses the "Include Baptism?" checkbox; v2 derives presence
-        // from whether the template places the baptism component.
-        get showBaptismSection() {
-            if (this.guideSystem === 'legacy') return !!this.service.hasBaptism;
-            return !!(this._builderSections && this._builderSections.includes('baptism'));
-        },
-        // Pastoral-prayer subjects (the two prayed-for members + their request
-        // texts): always in legacy. In v2 they show unless the chosen template uses
-        // congregational prayer, which omits them (ADR-0010). Stated as "not
-        // congregational" rather than "has pastoral-prayer-subjects" so a template
-        // seeded before this system still shows subjects rather than hiding them.
-        get showPrayerSubjects() {
-            if (this.guideSystem === 'legacy') return true;
-            const sections = this._builderSections;
-            if (!sections) return true;
-            return !sections.includes('congregational-prayer');
+        async loadLiturgyCatalog() {
+            if (!window.LiturgyOrderStore) return;
+            this.liturgyCatalog = await LiturgyOrderStore.loadCatalog(db);
+            this.liturgyCatalogLoaded = true;
         },
 
-        async loadGuideCatalog() {
-            if (!window.GuideStore) return;
-            try {
-                let data = await GuideStore.loadCatalog(db);
-                if (!data.guideTemplates.length && this.canEdit) {
-                    await GuideStore.seedAll(db, this._guideCatalog);
-                    data = await GuideStore.loadCatalog(db);
+        // Every order, Standard first and then by name — the same order the
+        // Service calendar lists them in.
+        get liturgyOrders() {
+            const Core = liturgyCore();
+            return Core.toggledOrders(this.liturgyCatalog, this.liturgyCatalog.orders.map(o => o.id));
+        },
+        get selectedOrderId() {
+            return liturgyCore().orderFor(this.service, this.liturgyCatalog).id;
+        },
+        get orderElements() {
+            return liturgyCore().elementsFor(this.service, this.liturgyCatalog);
+        },
+        orderLabel(order) {
+            return order.id === liturgyCore().STANDARD_ORDER_ID ? order.name + ' (default)' : order.name;
+        },
+
+        // This Sunday follows another order. Only the Sunday's pointer moves:
+        // the shared order is untouched, and values under elements the new
+        // order leaves out stay on the document, hidden.
+        changeLiturgyOrder(id) {
+            if (!this.canEdit || !id || id === this.selectedOrderId) return;
+            this.service.liturgyOrderId = id;
+            this._ensureLiturgySlots();
+            if (this.openKey && !this.orderElements.some(el => el.id === this.openKey)) this.closeRow();
+        },
+
+        // An empty value under every element the catalog knows and a carrier
+        // box for every element that needs a person, so a picker always has an
+        // object to bind to. Never overwrites a stored value.
+        _ensureLiturgySlots() {
+            const Core = liturgyCore();
+            if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') this.service.carriedBy = {};
+            for (const el of this.liturgyCatalog.elements) {
+                const current = this.service.liturgy[el.id];
+                if (current === undefined || current === null) {
+                    this.service.liturgy[el.id] = Core.emptyValue(el.primitive);
+                } else if (el.primitive === 'people' && !Array.isArray(current)) {
+                    this.service.liturgy[el.id] = withRowIds(coerceBaptismCandidates(current));
+                } else if (el.primitive === 'song' && typeof current === 'string') {
+                    this.service.liturgy[el.id] = { name: current, id: null };
                 }
-                this.guideTemplates = data.guideTemplates;
-                this._pageTemplatesById = GuideStore.indexById(data.pageTemplates);
-                this._stylePresetsById = GuideStore.indexById(data.stylePresets);
-                this.guideCatalogLoaded = true;
-                const savedId = (this.service.guide && this.service.guide.guideTemplateId) || '';
-                this.selectedTemplateId = savedId || this._defaultTemplateId();
-                this._rebuildSnapshot(false);
-            } catch (e) {
-                console.error('Failed to load the Service Guide catalog:', e);
+                if (el.hasRole && !this.service.carriedBy[el.id]) {
+                    this.service.carriedBy[el.id] = { name: '', id: null };
+                }
             }
         },
-        _defaultTemplateId() {
-            const d = this.guideTemplates.find(t => t.isDefault) || this.guideTemplates[0];
-            return d ? d.id : '';
+
+        // Baptism is the one element with a side effect elsewhere: its
+        // candidates' baptismDate (ADR-0006). A Sunday has a baptism when its
+        // order carries the element and somebody is on it.
+        _orderHasBaptism(service) {
+            const s = service || this.service;
+            return liturgyCore().elementsFor(s, this.liturgyCatalog).some(el => el.id === 'baptism');
         },
-        // Build the snapshot of the selected template (gates the template-driven
-        // sections). On a user action (deriveBaptism=true) it also reflects the
-        // template's baptism presence into service.hasBaptism so the section and the
-        // OOS list update immediately; on initial load it leaves stored data alone.
-        _rebuildSnapshot(deriveBaptism) {
-            const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId);
-            this.guideSnapshot = gt
-                ? GuideStore.buildSnapshot(gt, this._pageTemplatesById, this._stylePresetsById)
-                : null;
-            if (deriveBaptism && this.guideSystem === 'v2') {
-                this.service.hasBaptism = !!(this.guideSnapshot &&
-                    GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog));
-            }
+        _deriveHasBaptism(service) {
+            const s = service || this.service;
+            const bap = s.liturgy && s.liturgy.baptism;
+            const named = Array.isArray(bap) && bap.some(c => c && (c.id || (c.name && c.name.trim())));
+            s.hasBaptism = this._orderHasBaptism(s) && named;
         },
-        changeGuideTemplate(id) {
-            if (!id || id === this.selectedTemplateId) return;
-            this._guideEngaged = true;
-            this.selectedTemplateId = id;
-            this._rebuildSnapshot(true);
+
+        // Pastoral-prayer subjects (the two prayed-for members and their
+        // request texts) are asked for unless this Sunday's prayer is
+        // congregational.
+        get showPrayerSubjects() {
+            return this.service.liturgy.prayerLabel !== 'Congregational Prayer';
         },
-        setUseLegacy(useLegacy) {
-            this._guideEngaged = true;
-            this.guideSystem = useLegacy ? 'legacy' : 'v2';
-            if (this.guideSystem === 'v2') {
-                if (!this.selectedTemplateId) this.selectedTemplateId = this._defaultTemplateId();
-                this._rebuildSnapshot(true);
-            }
-        },
+
         // The single shared routing rule (calendar + this page never drift).
         guideGenerateHref() {
-            if (!window.GuideStore) return 'service-guide.html?date=' + encodeURIComponent(this.date);
-            return GuideStore.guideHref({ guideSystem: this.guideSystem, guide: this.service.guide }, this.date);
+            if (window.GuideStore) return GuideStore.guideHref(this.service, this.date);
+            return 'service-guide-editor.html?date=' + encodeURIComponent(this.date);
         },
 
         // --- Hymn Preview ---
@@ -1079,6 +1055,8 @@ function serviceForm() {
                 return;
             }
             this.initThemeSimilarity();
+            // Before load(): see liturgyCatalog.
+            await this.loadLiturgyCatalog();
             await this.load();
             // Score whatever theme this Sunday already has, so returning to
             // a drafted service shows the readout immediately rather than
@@ -1091,7 +1069,6 @@ function serviceForm() {
             if (this.shell === 'mobile' && typeof window.setMobileHeaderTitle === 'function') {
                 window.setMobileHeaderTitle(DateUtils.formatDateMedium(this.date));
             }
-            await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadScriptureIndex();
             await this.loadPeopleRegistry();
@@ -1130,10 +1107,6 @@ function serviceForm() {
                     e.returnValue = '';
                 }
             });
-
-            if (this.service.isIrregular) {
-                this.$nextTick(() => this.initSortable());
-            }
         },
 
         // Shared with the Planning view on the Service Calendar (MS-245), so
@@ -1219,9 +1192,7 @@ function serviceForm() {
             if (!this.fuse || !this.hymnRegistry || this.hymnRegistry.length === 0) return;
 
             let updated = false;
-            const hymnFields = [
-                'preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'
-            ];
+            const hymnFields = this.songElementIds;
 
             for (const field of hymnFields) {
                 const hymn = this.service.liturgy[field];
@@ -1269,9 +1240,10 @@ function serviceForm() {
                 // Update top-level properties
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
+                this.service.liturgyOrderId = typeof data.liturgyOrderId === 'string' ? data.liturgyOrderId : '';
+                // An Irregular Service from before Liturgy Orders: its custom
+                // elements are shown read-only and kept as stored (ADR-0080).
                 this.service.isIrregular = data.isIrregular || false;
-                // Row ids so a drag, or somebody else's change, cannot leave a
-                // row's picker wired to the element that used to be in it.
                 this.service.irregularElements = stampRowIds(data.irregularElements);
                 
                 this.service.serviceLeader.name = data.serviceLeader || '';
@@ -1298,46 +1270,46 @@ function serviceForm() {
                 if (this.service.prayerPraise.id) this.showPrayerPraise = true;
                 if (this.service.prayerConfession.id) this.showPrayerConfession = true;
 
-                this.service.hasBaptism = data.hasBaptism || false;
                 this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
-                
-                // Update liturgy properties
+                const carriedBy = {};
+                Object.entries(data.carriedBy || {}).forEach(([key, ref]) => {
+                    if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
+                });
+                this.service.carriedBy = carriedBy;
+
+                // Every liturgy value on the document, whichever order it was
+                // filled under: a value under an element this order leaves out
+                // is hidden, never dropped (ADR-0080).
                 if (data.liturgy) {
                     for (const key in data.liturgy) {
-                        if (this.service.liturgy.hasOwnProperty(key)) {
-                            const val = data.liturgy[key];
-                            if (val && typeof val === 'object' && !Array.isArray(val)) {
-                                // Preserve reference for components like hymnPicker
-                                Object.assign(this.service.liturgy[key], val);
-                            } else {
-                                this.service.liturgy[key] = val;
-                            }
+                        const val = data.liturgy[key];
+                        const current = this.service.liturgy[key];
+                        if (val && typeof val === 'object' && !Array.isArray(val) &&
+                            current && typeof current === 'object' && !Array.isArray(current)) {
+                            // Preserve reference for components like hymnPicker
+                            Object.assign(current, val);
+                        } else {
+                            this.service.liturgy[key] = val;
                         }
                     }
                 }
-                // Normalize Baptism Candidates to an array of Person refs. A legacy
-                // free-text value (pre-migration) is wrapped as a single literal
-                // candidate so it still displays; the migration resolves it properly.
-                this.service.liturgy.baptism = withRowIds(
-                    coerceBaptismCandidates(this.service.liturgy.baptism));
+                // People elements are arrays of Person refs. A legacy free-text
+                // value (pre-migration) is wrapped as a single literal entry so
+                // it still displays; the migration resolves it properly.
+                for (const el of this.liturgyCatalog.elements) {
+                    if (el.primitive !== 'people') continue;
+                    this.service.liturgy[el.id] = withRowIds(coerceBaptismCandidates(this.service.liturgy[el.id]));
+                }
                 // Who decided each element (MS-246). Read-only on this page —
                 // it is written by the save, never edited directly — so it is
                 // kept off flattenServiceForSave and moved by hand.
                 this.service[ServiceAuthorship.FIELD] = data[ServiceAuthorship.FIELD] || {};
-                // Store guide data to preserve/update it during save
-                this.service.guide = data.guide || null;
-                // Which Service Guide system this week is on (ADR-0010): explicit
-                // toggle, else legacy for a pre-existing elements blob, else v2.
-                if (window.GuideStore) {
-                    this.guideSystem = GuideStore.guideSystemOf(data);
-                    // A week is already "engaged" only if it explicitly stored a
-                    // guideSystem or already carries a v2 guide; a pre-ADR-0010 week
-                    // that merely defaults to v2 stays un-engaged until the editor
-                    // touches the new controls (guards the destructive save paths).
-                    this._guideEngaged = (typeof data.guideSystem === 'string') || GuideStore.isV2Guide(data.guide);
-                }
             }
+            this._ensureLiturgySlots();
+            // Read off the order and the candidates, not the stored flag, so
+            // the save that follows an edit and this snapshot agree.
+            this._deriveHasBaptism();
             this.originalService = serviceSnapshot(this.service);
         },
 
@@ -1483,120 +1455,19 @@ function serviceForm() {
             }
         },
 
-        toggleIrregular() {
-            if (!this.service.isIrregular) {
-                // Toggling TO Irregular: Flatten existing fields
-                const elements = [];
-                // Add in a logical order
-                const orderedKeys = [
-                    'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher',
-                    'Prayer (Praise)', 'Prayer (Confession)', 'Baptism', 'Preparatory Hymn', 'Call to Worship',
-                    'Hymn 1', 'Hymn 2', 'Call to Confession', 'Assurance of Pardon', 'Hymn Mid 1', 'Hymn Mid 2',
-                    'Pastoral Prayer', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
-                ];
-
-                for (const key of orderedKeys) {
-                    const mapping = CANONICAL_MAPPING[key];
-                    if (!mapping) continue;
-
-                    let value;
-                    if (mapping.liturgy) {
-                        value = this.service.liturgy[mapping.field];
-                    } else {
-                        value = this.service[mapping.field];
-                    }
-                    
-                    // Only add if it has content OR is a primary role
-                    const hasContent = (typeof value === 'object') ? (value && (value.name || value.id)) : value;
-                    if (hasContent || ['Service Leader', 'Music Leader', 'Preacher'].includes(key)) {
-                        elements.push({ 
-                            key, 
-                            value: value ? JSON.parse(JSON.stringify(value)) : (mapping.type === 'text' ? '' : {name:'', id:null}), 
-                            type: mapping.type 
-                        });
-                    }
-                }
-                this.service.irregularElements = stampRowIds(elements);
-                this.service.isIrregular = true;
-                this.$nextTick(() => this.initSortable());
-            } else {
-                // Toggling BACK to Regular: Sync back what we can
-                if (confirm('Toggle back to Regular service? Custom elements will be hidden but preserved in the database.')) {
-                    this.service.irregularElements.forEach(el => {
-                        const mapping = CANONICAL_MAPPING[el.key];
-                        if (mapping) {
-                            if (mapping.liturgy) {
-                                this.service.liturgy[mapping.field] = JSON.parse(JSON.stringify(el.value));
-                            } else {
-                                this.service[mapping.field] = JSON.parse(JSON.stringify(el.value));
-                            }
-                        }
-                    });
-                    this.service.isIrregular = false;
-                }
-            }
-        },
-
-        addBlankElement() {
-            this.service.irregularElements.push({ key: '', value: '', type: 'text', [ROW_ID]: newRowId() });
-        },
-
-        removeElement(index) {
-            this.service.irregularElements.splice(index, 1);
-        },
-
-        onElementKeyChange(el) {
-            const mapping = CANONICAL_MAPPING[el.key];
-            if (mapping) {
-                // Check if this canonical element already exists elsewhere
-                const existing = this.service.irregularElements.filter(e => e.key === el.key);
-                if (existing.length > 1) {
-                    alert(`Hey, the "${el.key}" element already exists!`);
-                    el.key = '';
-                    return;
-                }
-                el.type = mapping.type;
-                // Initialize value structure if needed
-                if (el.type === 'person' || el.type === 'hymn') {
-                    if (typeof el.value !== 'object' || el.value === null) {
-                        el.value = { name: '', id: null };
-                    }
-                } else if (el.type === 'text') {
-                    if (typeof el.value === 'object') el.value = '';
-                }
-            } else {
-                el.type = 'text'; // Default for custom keys
-            }
-        },
-
-        initSortable() {
-            const el = document.getElementById('irregular-elements-list');
-            if (!el || !window.Sortable) return;
-            
-            if (this._sortable) this._sortable.destroy();
-            
-            this._sortable = Sortable.create(el, {
-                handle: '.drag-handle',
-                animation: 150,
-                onEnd: (evt) => {
-                    const item = this.service.irregularElements.splice(evt.oldIndex, 1)[0];
-                    this.service.irregularElements.splice(evt.newIndex, 0, item);
-                }
+        // An Irregular Service from before Liturgy Orders, read-only: its own
+        // elements, each as one line, so nothing it carried is out of sight.
+        get irregularRows() {
+            if (!this.service.isIrregular) return [];
+            return (this.service.irregularElements || []).map((el, index) => {
+                const v = el && el.value;
+                const text = (v && typeof v === 'object') ? (v.name || '') : (v == null ? '' : String(v));
+                return { key: (el && el[ROW_ID]) || 'i' + index, label: (el && el.key) || 'Untitled', value: text };
             });
         },
 
         async validateForm() {
             this.$nextTick(() => {
-                if (this.service.isIrregular) {
-                    // Simpler validation for irregular services?
-                    // For now, just check if it's empty
-                    if (this.service.irregularElements.length === 0) {
-                        alert('Irregular service must have at least one element.');
-                        return;
-                    }
-                    return;
-                }
-
                 const highlight = (key) => {
                     const section = document.querySelector(`[data-field-key="${key}"]`);
                     if (section) {
@@ -1613,18 +1484,20 @@ function serviceForm() {
                 // The same slots the progress fraction counts. A hymn pulled
                 // out of the order is not in the list. A typed hymn that is
                 // not linked to the book is unfinished, same as a blank.
-                const items = window.HomeDashboard.checklist(flattenServiceForSave(this.service));
+                const items = window.HomeDashboard.checklist(
+                    flattenServiceForSave(this.service), this.liturgyCatalog);
                 for (const item of items) {
                     if (item.state === 'set') continue;
                     if (highlight(item.key)) return;
                 }
 
-                // A baptism the tally calls set can still be a typed name with
-                // no person behind it. Fix the blanks lands on that row too.
-                if (this.service.hasBaptism) {
-                    const candidates = this.service.liturgy.baptism || [];
-                    const unlinked = candidates.some(c => c && c.name && !c.id);
-                    if (unlinked) highlight('baptism');
+                // A people element the tally calls set can still be a typed
+                // name with no person behind it. Fix the blanks lands on that
+                // row too.
+                for (const el of this.orderElements) {
+                    if (el.primitive !== 'people') continue;
+                    const people = this.service.liturgy[el.id] || [];
+                    if (Array.isArray(people) && people.some(c => c && c.name && !c.id) && highlight(el.id)) return;
                 }
             });
         },
@@ -1636,21 +1509,6 @@ function serviceForm() {
             try {
                 const batch = db.batch();
                 const original = JSON.parse(this.originalService);
-                
-                // For irregular services, sync canonical elements back to standard fields 
-                // so they are visible to calendar/dashboard and tracked for involvements.
-                if (this.service.isIrregular) {
-                    this.service.irregularElements.forEach(el => {
-                        const mapping = CANONICAL_MAPPING[el.key];
-                        if (mapping) {
-                            if (mapping.liturgy) {
-                                this.service.liturgy[mapping.field] = JSON.parse(JSON.stringify(el.value));
-                            } else {
-                                this.service[mapping.field] = JSON.parse(JSON.stringify(el.value));
-                            }
-                        }
-                    });
-                }
 
                 // Role synchronization logic
                 const roles = [
@@ -1722,17 +1580,15 @@ function serviceForm() {
                     }
                 }
 
-                // In the new system baptism presence is derived from the chosen
-                // template (ADR-0010), not the "Include Baptism?" checkbox; reconcile
-                // hasBaptism here so the candidate sync below and the saved flag match
-                // the template. Legacy weeks keep the checkbox value as-is.
-                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
-                    this.service.hasBaptism = GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog);
-                }
+                // Baptism presence is read off this Sunday's Liturgy Order and its
+                // candidates (ADR-0080), so the candidate sync below and the saved
+                // flag agree with what the page shows.
+                this._deriveHasBaptism();
 
                 // 1c. Process Baptism Candidates: each baptized Person's baptismDate is
-                // this service's date. The effective set is empty when baptism is toggled
-                // off, so clearing "Include Baptism?" also clears the dates it set.
+                // this service's date. The effective set is empty when the Sunday's
+                // order leaves Baptism out, so switching to such an order clears the
+                // dates it set, and switching back sets them again.
                 const oldCandidates = (original.hasBaptism && Array.isArray(original.liturgy.baptism)) ? original.liturgy.baptism : [];
                 const newCandidates = (this.service.hasBaptism && Array.isArray(this.service.liturgy.baptism)) ? this.service.liturgy.baptism : [];
                 const baptismChanges = personRefSetChanges(oldCandidates, newCandidates);
@@ -1767,8 +1623,6 @@ function serviceForm() {
                 PastoralPrayerCore.writePastoralPrayerDecision(
                     batch, db.collection('people'), prayerDecision,
                     firebase.firestore.FieldValue.serverTimestamp());
-                const pageMatchedFrozen = serviceSnapshot(this.service) === serviceSnapshot(frozenService);
-
                 // Write only what THIS editor changed.
                 //
                 // A Sunday is edited by several people at once at a guide-writing
@@ -1800,47 +1654,6 @@ function serviceForm() {
                 Object.assign(toSave, ServiceAuthorship.stampsFor(
                     toSave, this.me,
                     firebase.firestore.FieldValue.serverTimestamp(), authorRemove));
-                // Only persist the guide system once the editor has engaged the new
-                // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
-                if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
-
-                // Sync Pastoral Prayer names to Guide elements if they exist.
-                // Skip re-saving if the guide is missing hymn2 when it should have it —
-                // those stale elements were generated by an old bug and must not be propagated.
-                if (frozenService.guide && frozenService.guide.elements) {
-                    const elements = frozenService.guide.elements;
-                    const isBroken = !frozenService.hasBaptism &&
-                        frozenService.liturgy.hymn2?.name &&
-                        !elements.some(el => el.id && el.id.startsWith('hymn-h2'));
-                    if (!isBroken) {
-                        const prayerEl = elements.find(el => el.type === 'pastoral_prayer');
-                        if (prayerEl) {
-                            prayerEl.maleMember = frozenService.liturgy.prayerMale.name || '';
-                            prayerEl.femaleMember = frozenService.liturgy.prayerFemale.name || '';
-                            toSave.guide = frozenService.guide;
-                        }
-                    }
-                }
-
-                // In the new system the Order of Service editor applies the chosen
-                // Service Guide Template first (ADR-0010), freezing the per-week v2
-                // guide record so the Service Guide generator opens on that template.
-                // Existing generator-surface values are preserved, pruned to the keys
-                // that survive into the (possibly just-refreshed, see
-                // reloadGuideTemplate) snapshot — same rule whether this is an actual
-                // template switch or a same-template reload after the template's own
-                // pages/style changed underneath it.
-                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
-                    const existing = (frozenService.guide && frozenService.guide.format === 'v2') ? frozenService.guide : null;
-                    const values = GuideStore.preserveValues((existing && existing.values) || {}, this.guideSnapshot);
-                    const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
-                    toSave.guide = GuideStore.buildGuideRecord(gt, this.guideSnapshot, values);
-                    frozenService.guide = toSave.guide;
-                }
-                // The page and the Sunday we wrote still agree, so show the
-                // guide we just saved. If they diverged during the reads, leave
-                // the page alone — those edits are the next save.
-                if (pageMatchedFrozen && toSave.guide) this.service.guide = frozenService.guide;
 
                 const serviceRef = db.collection('services').doc(this.date);
                 if (this._docExists) {
@@ -1856,8 +1669,7 @@ function serviceForm() {
                     batch.set(serviceRef, Object.assign({}, flatNow, {
                         involvementDeferred: toSave.involvementDeferred,
                         updatedAt: toSave.updatedAt
-                    }, toSave.guide ? { guide: toSave.guide } : {},
-                       toSave.guideSystem ? { guideSystem: toSave.guideSystem } : {},
+                    },
                        // Nested, because set() reads a dot as part of a field
                        // NAME. Without this the first save of a brand-new
                        // Sunday would be the one save that records nobody.
@@ -1989,48 +1801,26 @@ function serviceForm() {
             if (!this.canEdit || this.saving) return;
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => {
-                // save() rewrites parts of `service` for irregular Sundays, which
-                // trips the watcher again. Re-checking isDirty here is what stops
+                // save() rewrites parts of `service` (the derived baptism flag),
+                // which trips the watcher again. Re-checking isDirty here is what stops
                 // that from becoming a save loop.
                 if (this.isDirty && !this.saving) this.save();
             }, 3000);
         },
 
-        // ── Order of Service model (movement-grouped station rows) ──────────────
-        // The liturgy laid out as the three movements of a Mosaic service. Each
-        // entry is [fieldKey, displayLabel, type]. The `movements` getter turns this
-        // into display rows; the HTML renders one generic template per type, so the
-        // pickers below stay wired to the same service.liturgy field objects.
-        _MOVEMENTS: [
-            { num: 'I', name: 'Service Leading', keys: [
-                ['preparatoryHymn', 'Preparatory Hymn', 'hymn'],
-                ['callToWorship', 'Call to Worship', 'verse'],
-                ['hymn1', 'Hymn', 'hymn'],
-                ['hymn2', 'Hymn', 'hymn'],
-                ['callToConfession', 'Call to Confession', 'verse'],
-                ['assuranceOfPardon', 'Assurance of Pardon', 'verse'],
-                ['hymnMid1', 'Hymn', 'hymn'],
-                ['hymnMid2', 'Hymn', 'hymn'],
-            ]},
-            { num: 'II', name: 'Preaching', keys: [
-                ['scriptureReading', 'Pastoral Prayer', 'verse'],
-                ['sermon', 'Sermon', 'verse'],
-            ]},
-            { num: 'III', name: 'Closing', keys: [
-                ['baptism', 'Baptism', 'baptism'],
-                ['hymnEnd1', 'Hymn', 'hymn'],
-                ['hymnEnd2', 'Hymn', 'hymn'],
-                ['benediction', 'Benediction', 'verse'],
-            ]},
-        ],
+        // ── Order of Service model (one station row per Liturgy Element) ───────
+        // The rows are this Sunday's Liturgy Order, in its order (ADR-0080). The
+        // HTML renders one generic template per primitive, so the pickers below
+        // stay wired to the same service.liturgy field objects.
+        _ROW_TYPES: { song: 'hymn', scripture: 'verse', text: 'text', people: 'people' },
 
-        // Dot colour by element status (canonical/literal hymns, set references,
-        // baptism, or empty) — kept within the brand palette.
+        // Dot colour by element status (canonical/literal hymns, set values,
+        // people, or empty) — kept within the brand palette.
         _dotColor(status) {
             return status === 'canonical' ? 'var(--success)'
                 : status === 'literal' ? 'var(--warning)'
                 : status === 'set' ? 'var(--secondary)'
-                : status === 'baptism' ? 'var(--primary)'
+                : status === 'people' ? 'var(--primary)'
                 : 'var(--outline-variant)';
         },
 
@@ -2041,7 +1831,9 @@ function serviceForm() {
             return d.textContent || d.innerText || '';
         },
 
-        _buildItem(key, label, type, lit) {
+        _buildItem(el, lit) {
+            const key = el.id;
+            const type = this._ROW_TYPES[el.primitive];
             const removed = type === 'hymn' && this.isHymnRemoved(key);
             let value = '', status = 'empty', emptyLabel = '';
             if (type === 'hymn') {
@@ -2049,41 +1841,45 @@ function serviceForm() {
                 value = ref.name || '';
                 status = ref.id ? 'canonical' : (ref.name ? 'literal' : 'empty');
                 emptyLabel = 'Choose a hymn…';
-            } else if (type === 'baptism') {
-                const arr = Array.isArray(lit.baptism) ? lit.baptism : [];
+            } else if (type === 'people') {
+                const arr = Array.isArray(lit[key]) ? lit[key] : [];
                 const names = arr.map(c => (c && c.name) || '').filter(Boolean);
                 value = names.join(', ');
-                status = names.length ? 'baptism' : 'empty';
-                emptyLabel = 'Add candidates…';
-            } else { // verse / text reference
-                value = lit[key] || '';
+                status = names.length ? 'people' : 'empty';
+                emptyLabel = 'Add people…';
+            } else if (type === 'text') {
+                value = typeof lit[key] === 'string' ? lit[key] : '';
+                status = value.trim() ? 'set' : 'empty';
+                emptyLabel = 'Add text…';
+            } else {
+                value = typeof lit[key] === 'string' ? lit[key] : '';
                 status = value ? 'set' : 'empty';
                 emptyLabel = 'Add a reference…';
             }
+            const carrier = el.hasRole ? liturgyCore().carrierOf(this.service, el) : null;
             const note = (this.service.notes && this.service.notes[key]) || '';
             return {
-                key, label, type, value, status, emptyLabel, removed,
+                key, label: el.name, type, value, status, emptyLabel, removed,
+                hasRole: el.hasRole,
+                carrierName: carrier ? carrier.name : '',
+                noteOn: el.hasNote,
                 dotColor: this._dotColor(status),
-                hasNote: !!this._stripHtml(note).trim(),
+                noted: el.hasNote && !!this._stripHtml(note).trim(),
             };
         },
 
-        // The three movements, each with its visible station rows. hymn2 hides when
-        // a baptism takes its place; the baptism row only appears when the template
-        // (or the legacy checkbox) calls for it (ADR-0010).
-        get movements() {
+        // This Sunday's station rows. Changing the order changes which rows
+        // show; no value is dropped.
+        get rows() {
             const lit = this.service.liturgy;
-            return this._MOVEMENTS.map(mv => ({
-                num: mv.num,
-                name: mv.name,
-                items: mv.keys
-                    .filter(([key]) => {
-                        if (key === 'hymn2' && this.service.hasBaptism) return false;
-                        if (key === 'baptism' && !this.showBaptismSection) return false;
-                        return true;
-                    })
-                    .map(([key, label, type]) => this._buildItem(key, label, type, lit)),
-            }));
+            return this.orderElements.map(el => this._buildItem(el, lit));
+        },
+
+        // The order's song elements, for linking typed hymns and printing
+        // music sheets.
+        get songElementIds() {
+            return liturgyCore().songIdsOf(
+                liturgyCore().orderFor(this.service, this.liturgyCatalog), this.liturgyCatalog);
         },
 
         // ── Who decided this element (MS-246) ───────────────────────────────
@@ -2105,19 +1901,24 @@ function serviceForm() {
         // and the optional prayer leaders, and to count a hymn name as finished
         // before it was linked, so the two screens disagreed.
         get filledLabel() {
-            return window.HomeDashboard.readiness(flattenServiceForSave(this.service)).fraction;
+            const ready = window.HomeDashboard.readiness(
+                flattenServiceForSave(this.service), this.liturgyCatalog);
+            // An old irregular Sunday has not been given an order yet. The
+            // fraction would score it as a blank Standard, which it is not.
+            return ready.irregular ? 'Custom order' : ready.fraction;
         },
 
-        // Service notes surfaced for the leader, in service order, one card each.
+        // Service notes surfaced for the leader, in service order, one card
+        // each. Only elements that take a note; a note under an element whose
+        // note was switched off is kept on the document, not shown.
         get notesList() {
             const out = [];
             const notes = this.service.notes || {};
-            for (const mv of this.movements) {
-                for (const it of mv.items) {
-                    const html = notes[it.key];
-                    if (html && this._stripHtml(html).trim()) {
-                        out.push({ key: it.key, label: it.label, value: it.value, dotColor: it.dotColor, html });
-                    }
+            for (const it of this.rows) {
+                if (!it.noteOn) continue;
+                const html = notes[it.key];
+                if (html && this._stripHtml(html).trim()) {
+                    out.push({ key: it.key, label: it.label, value: it.value, dotColor: it.dotColor, html });
                 }
             }
             return out;
@@ -2328,17 +2129,19 @@ function serviceForm() {
             this.service.removedHymns = this.service.removedHymns.filter(f => f !== field);
         },
 
-        // ── Baptism Candidates ───────────────────────────────────────────────
-        addBaptismCandidate() {
-            if (!Array.isArray(this.service.liturgy.baptism)) this.service.liturgy.baptism = [];
-            this.service.liturgy.baptism.push({ name: '', id: null, [ROW_ID]: newRowId() });
+        // ── People elements (Baptism Candidates, or any other) ───────────────
+        addPerson(key) {
+            if (!Array.isArray(this.service.liturgy[key])) this.service.liturgy[key] = [];
+            this.service.liturgy[key].push({ name: '', id: null, [ROW_ID]: newRowId() });
         },
 
-        removeBaptismCandidate(index) {
-            this.service.liturgy.baptism.splice(index, 1);
+        removePerson(key, index) {
+            if (Array.isArray(this.service.liturgy[key])) this.service.liturgy[key].splice(index, 1);
         },
 
         // ── Utility ────────────────────────────────────────────────────────────
+        // Every liturgy value goes, whichever order it was filled under. The
+        // Sunday keeps its Liturgy Order.
         clearService() {
             if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
             this.service.theme = '';
@@ -2354,25 +2157,20 @@ function serviceForm() {
             this.service.hasBaptism = false;
             this.service.removedHymns = [];
             this.service.notes = {};
-            this.service.liturgy = {
-                preparatoryHymn: { id: null, name: '' },
-                callToWorship: '',
-                hymn1: { id: null, name: '' },
-                hymn2: { id: null, name: '' },
-                callToConfession: '',
-                assuranceOfPardon: '',
-                hymnMid1: { id: null, name: '' },
-                hymnMid2: { id: null, name: '' },
-                scriptureReading: '',
+            this.service.carriedBy = {};
+            const liturgy = {
                 prayerMale: { id: null, name: '' },
                 prayerFemale: { id: null, name: '' },
                 prayerLabel: 'Pastoral Prayer',
-                sermon: '',
-                baptism: [],
-                hymnEnd1: { id: null, name: '' },
-                hymnEnd2: { id: null, name: '' },
-                benediction: ''
             };
+            Object.keys(this.service.liturgy || {}).forEach(key => {
+                if (!(key in liturgy)) liturgy[key] = '';
+            });
+            this.service.liturgy = liturgy;
+            for (const el of this.liturgyCatalog.elements) {
+                this.service.liturgy[el.id] = liturgyCore().emptyValue(el.primitive);
+            }
+            this._ensureLiturgySlots();
         },
 
         formatDate(dateStr) {
@@ -2383,9 +2181,7 @@ function serviceForm() {
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF();
 
-            const hymnFields = [
-                'preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'
-            ];
+            const hymnFields = this.songElementIds;
             const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
             const hymnIds = hymnFields
                 .filter(field => !removedHymns.includes(field))
@@ -2477,10 +2273,6 @@ function serviceForm() {
         },
 
         _renderOOSPage(pdf) {
-            const liturgy = this.service.liturgy || {};
-            const hasBaptism = this.service.hasBaptism;
-            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
-            const prayerLabel = liturgy.prayerLabel || 'Pastoral Prayer';
             const pageW = pdf.internal.pageSize.getWidth();
             const pageH = pdf.internal.pageSize.getHeight();
             const margin = 15;
@@ -2513,48 +2305,11 @@ function serviceForm() {
             const footerH = 18;
             const footerY = pageH - margin - footerH;
 
-            // Build item list (mirrors the OOS page in the service guide)
-            const items = [
-                { label: 'Preparatory',                    value: liturgy.preparatoryHymn?.name || '', italic: true, field: 'preparatoryHymn' },
-                { label: 'Welcome' },
-                { label: 'Moment of Silent Preparation' },
-                { label: 'Scriptural Call to Worship',     value: liturgy.callToWorship || '' },
-                { label: 'Hymn',                           value: liturgy.hymn1?.name || '',           italic: true, field: 'hymn1' },
-            ];
-            if (!hasBaptism) {
-                items.push({ label: 'Hymn',                value: liturgy.hymn2?.name || '',           italic: true, field: 'hymn2' });
-            }
-            items.push(
-                { label: 'Prayer of Praise' },
-                { label: 'Call To Confession',             value: liturgy.callToConfession || '' },
-                { label: 'Prayer of Confession' },
-                { label: 'Scriptural Assurance of Pardon', value: liturgy.assuranceOfPardon || '' },
-            );
-            if (!hasBaptism) {
-                items.push({ label: 'Hymn',                value: liturgy.hymnMid1?.name || '',        italic: true, field: 'hymnMid1' });
-            }
-            items.push(
-                { label: 'Hymn',                           value: liturgy.hymnMid2?.name || '',        italic: true, field: 'hymnMid2' },
-                { label: 'Scripture Reading',              value: liturgy.scriptureReading || '' },
-                { label: prayerLabel },
-                { label: 'Sermon',                         value: liturgy.sermon || '' },
-            );
-            if (hasBaptism) {
-                const baptismNames = Array.isArray(liturgy.baptism)
-                    ? liturgy.baptism.map(c => c.name).filter(Boolean).join(', ')
-                    : (liturgy.baptism || '');
-                items.push({ label: 'Sacrament of Baptism', value: baptismNames });
-            }
-            items.push(
-                { label: 'Hymn',                           value: liturgy.hymnEnd1?.name || '',        italic: true, field: 'hymnEnd1' },
-                { label: 'Hymn',                           value: liturgy.hymnEnd2?.name || '',        italic: true, field: 'hymnEnd2' },
-                { label: "The Lord's Supper" },
-                { label: 'Moment of Silent Reflection' },
-                { label: 'Benediction',                    value: liturgy.benediction || '' },
-            );
-
-            // Drop hymn rows the user pulled out of the order of service.
-            const visibleItems = items.filter(it => !it.field || !removedHymns.includes(it.field));
+            // One line per element in this Sunday's order, songs pulled out of
+            // this Sunday left off.
+            const visibleItems = this.rows
+                .filter(it => !it.removed)
+                .map(it => ({ label: it.label, value: it.value || '', italic: it.type === 'hymn' }));
 
             // Distribute items evenly in available space
             const lineH = (footerY - y) / visibleItems.length;
@@ -2955,5 +2710,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
 }

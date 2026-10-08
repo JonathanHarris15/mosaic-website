@@ -11,6 +11,7 @@ const assert = require('node:assert');
 // fixed calendar.
 
 const Data = require('../public/printable-data-core.js');
+const Liturgy = require('../public/liturgy-order-core.js');
 
 const TODAY = '2026-09-03'; // a Thursday
 
@@ -30,7 +31,9 @@ test('a member sees a strict subset of what an editor sees, and nothing elder-on
     assert.ok(!memberPeople.includes('stage'), 'the Membership Track is pastoral, not congregational');
     assert.ok(editorPeople.includes('stage'));
     Data.SOURCES.forEach(s => assert.ok(!['elder', 'super_admin'].includes(s.minLevel), s.key + ' is elder-only and must not be in the catalog'));
-    const text = JSON.stringify(Data.SOURCES).toLowerCase();
+    // "Pastoral Prayer" is a Liturgy Element — the slot in the service every
+    // bulletin prints (ADR-0080) — not the pastoral record.
+    const text = JSON.stringify(Data.SOURCES).toLowerCase().split('pastoral prayer').join('');
     ['shepherding', 'prayer_request', 'pastoral', 'relationship'].forEach(w => assert.ok(!text.includes(w), 'the catalog mentions ' + w));
 });
 
@@ -393,11 +396,68 @@ test('dotted liturgy keys on an old record are folded back before reading', () =
     assert.equal(r.rows[0].hymn1, 'Doxology');
 });
 
-test('order of service rows come in service order, skip empty slots and removed hymns', () => {
+test('order of service rows walk the Sunday\'s order, skip empty elements and removed hymns', () => {
+    // The people prayed for are the Sunday's own fields (prayerMale /
+    // prayerFemale on the single Sunday), not elements of its order.
     const r = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory hymn', 'Call to worship', 'Hymn', 'Prayer', 'Sermon']);
-    assert.deepEqual(r.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Tom', 'Romans 8']);
+    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn 1', 'Sermon']);
+    assert.deepEqual(r.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
     assert.equal(r.rows[0].number, 1);
+    assert.equal(Data.needsFor('sunday_rows', {}, TODAY).liturgy, true, 'the store brings the orders');
+});
+
+// A congregation with a second order: a shared hymn, a text element a person
+// carries, and a people element. Fictional, like every fixture here.
+const WITH_ORDERS = () => {
+    const data = SUNDAYS();
+    const seed = Liturgy.standardCatalog();
+    data.liturgy = Liturgy.catalogFrom({
+        elements: seed.elements.concat([
+            { id: 'lordsSupper', name: 'Lord\'s Supper', primitive: 'text', hasRole: true, hasNote: false },
+            { id: 'offertory', name: 'Offertory', primitive: 'song', hasRole: false, hasNote: true },
+        ]),
+        orders: seed.orders.concat([
+            { id: 'communion', name: 'Communion', elementIds: ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon'] },
+        ]),
+    });
+    const s = data.services['2026-09-06'];
+    s.liturgyOrderId = 'communion';
+    s.liturgy.offertory = { id: 'h2', name: 'Doxology' };
+    s.liturgy.lordsSupper = 'Words of institution';
+    s.liturgy.baptism = [{ id: 'p-1', name: 'Ada Example' }, { id: null, name: 'Ben Example' }];
+    s.carriedBy = { lordsSupper: { id: 'p-2', name: 'Cal Example' } };
+    return data;
+};
+
+test('order of service rows follow the order the Sunday names, with who carries an element', () => {
+    const r = Data.resolve('sunday_rows', {}, WITH_ORDERS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon']);
+    assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn 1', 'Lord\'s Supper', 'Baptism', 'Sermon']);
+    assert.equal(r.rows[3].value, 'Ada Example, Ben Example', 'a people element lists its people');
+    assert.equal(r.rows[2].carriedBy, 'Cal Example');
+    assert.equal(r.rows[0].carriedBy, '', 'an element nobody carries says nothing');
+    assert.ok(!r.rows.some(x => x._id === 'preparatoryHymn'), 'a value outside the order stays hidden, not deleted');
+});
+
+test('a Sunday\'s fields are one per element, the existing keys and a new element\'s alike', () => {
+    const data = WITH_ORDERS();
+    const keys = Data.fieldsFor('sunday', {}, { liturgy: data.liturgy }).map(f => f.key);
+    ['theme', 'preacher', 'prayerMale', 'sermon', 'hymn1', 'scriptureReading', 'baptism', 'lordsSupper', 'offertory']
+        .forEach(k => assert.ok(keys.includes(k), k + ' should be a field'));
+    assert.equal(keys.filter(k => k === 'lordsSupper').length, 1, 'who carries it is not a second field');
+    const row = Data.resolve('sunday', {}, data, { today: TODAY }).rows[0];
+    assert.equal(row.lordsSupper, 'Words of institution');
+    assert.equal(row.preparatoryHymn, 'Amazing Grace', 'every element\'s field resolves, whatever the order');
+    assert.equal(row.offertory, 'Doxology');
+    assert.deepEqual(Data.SOURCES.find(x => x.key === 'sunday').fields.map(f => f.key).slice(12),
+        Liturgy.STANDARD_ELEMENTS.map(el => el.id), 'with no catalog, the fields are Standard\'s elements');
+});
+
+test('the hymn sheets are the song elements of the Sunday\'s order', () => {
+    const r = Data.resolve('sunday_hymns', {}, WITH_ORDERS(), { today: TODAY });
+    assert.deepEqual(r.rows.map(x => x.slot), ['Offertory', 'Hymn 1']);
+    assert.deepEqual(r.rows.map(x => x.name), ['Doxology', 'A Literal Hymn']);
+    assert.equal(Data.needsFor('sunday_hymns', {}, TODAY).liturgy, true);
 });
 
 test('the hymns of a Sunday return every sheet-music page, in slot then page order', () => {
@@ -428,7 +488,8 @@ test('the hymns of a Sunday can be kept to one hymn, so its pages can sit on a p
     const dropped = Data.resolve('sunday_hymns', { slot: 'hymnEnd2' }, SUNDAYS(), { today: TODAY });
     assert.equal(dropped.rows.length, 0, 'a hymn the Sunday has dropped has no pages');
     assert.match(dropped.warnings[0], /final hymn/i);
-    assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · closing hymn');
+    assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · Closing Hymn',
+        'an element is named as the congregation named it');
 });
 
 test('a starred later version is what a Sunday prints, and an unstarred hymn still prints its first', () => {
@@ -706,7 +767,7 @@ test('Sundays start as a preaching schedule: five from this Sunday, planned or n
     assert.equal(r.rows[2].date, 'Sunday 20 September 2026');
     assert.equal(r.rows[2]._id, '2026-09-20');
     assert.deepEqual(r.warnings, [], 'a Sunday nobody has planned yet is not a failure');
-    assert.deepEqual(Data.needsFor('sundays', {}, TODAY), { serviceRange: { from: '2026-09-06', to: '2026-10-10' } });
+    assert.deepEqual(Data.needsFor('sundays', {}, TODAY), { serviceRange: { from: '2026-09-06', to: '2026-10-10' }, liturgy: true });
 });
 
 test('what is not planned yet reads as whatever the query says, or stays blank', () => {

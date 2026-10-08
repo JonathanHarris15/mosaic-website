@@ -365,12 +365,13 @@
     return nested[key] != null ? nested[key] : "";
   }
 
+  // Every liturgy value, nested or under an older dotted key: a Sunday's
+  // Liturgy Order can name any element the congregation has made (ADR-0080).
   function liturgyForHome(d) {
-    var keys = [
-      "callToWorship", "callToConfession", "assuranceOfPardon", "scriptureReading",
-      "sermon", "benediction", "preparatoryHymn", "hymn1", "hymn2", "hymnMid1",
-      "hymnMid2", "hymnEnd1", "hymnEnd2", "baptism", "prayerMale", "prayerFemale",
-    ];
+    var keys = Object.keys((d && d.liturgy) || {});
+    Object.keys(d || {}).forEach(function (key) {
+      if (key.indexOf("liturgy.") === 0 && keys.indexOf(key.slice(8)) === -1) keys.push(key.slice(8));
+    });
     var liturgy = {};
     keys.forEach(function (key) { liturgy[key] = litField(d, key); });
     return liturgy;
@@ -392,6 +393,10 @@
       isIrregular: !!d.isIrregular,
       // A hymn pulled out of the order is not part of the readiness tally.
       removedHymns: Array.isArray(d.removedHymns) ? d.removedHymns : [],
+      // Which Liturgy Order the tally walks, and who carries the elements
+      // that need a person.
+      liturgyOrderId: typeof d.liturgyOrderId === "string" ? d.liturgyOrderId : "",
+      carriedBy: d.carriedBy && typeof d.carriedBy === "object" ? d.carriedBy : {},
       // The fields the home readiness line scores. Not `guide` — that is the
       // printed booklet and it is most of the document.
       liturgy: liturgyForHome(d),
@@ -409,6 +414,19 @@
   // Home asks for this on every visit; `remembered` is why that stopped
   // meaning "fetch every service the church has ever had", every time.
   function getServices() { return remembered("services", loadServices); }
+
+  // The congregation's Liturgy Elements and Orders, so Home scores a Sunday
+  // against the order it follows. An empty collection reads as Standard.
+  function loadLiturgyCatalog() {
+    var Core = window.LiturgyOrderCore;
+    return Promise.all([
+      get(db.collection(Core.COLLECTIONS.elements)),
+      get(db.collection(Core.COLLECTIONS.orders)),
+    ]).then(function (snaps) {
+      return Core.catalogFrom({ elements: mapDocs(snaps[0]), orders: mapDocs(snaps[1]) });
+    });
+  }
+  function getLiturgyCatalog() { return remembered("liturgyCatalog", loadLiturgyCatalog); }
 
   // ── Shepherding (native Shepherd Dashboard) ──────────────────
   // Reads/writes the same collections as the desktop page
@@ -1526,6 +1544,7 @@
     disconnectDirectoryAccount: disconnectDirectoryAccount,
     refreshDirectoryFamilies: refreshDirectoryFamilies,
     getServices: getServices,
+    getLiturgyCatalog: getLiturgyCatalog,
     getNextService: getNextService,
     getShepherdingPanelTasks: getShepherdingPanelTasks,
     getPersonTasks: getPersonTasks,

@@ -1,6 +1,11 @@
 // Service Read Core — one Sunday's `services/{date}` document, turned into
 // something readable in the order the service actually runs.
 //
+// The order is the Sunday's Liturgy Order (ADR-0080): the one its
+// `liturgyOrderId` names, or Standard when it names none or names one that
+// has since been deleted. A value whose element is not in that order is not
+// read back — it is still on the document, only hidden, as on every page.
+//
 // Pure logic only, so it can be COPIED into functions/shared (see
 // scripts/sync-shared-to-functions.js) for the MCP server's oos_get_service
 // tool (MS-262) without dragging in Firestore or the DOM.
@@ -29,47 +34,21 @@
         require('./service-note-core.js') :
         (global && global.ServiceNoteCore);
 
-    // The order the service runs in. An Order of Service read back
-    // alphabetically is not an order of service — the sequence is the
-    // meaning, so it is pinned here rather than left to object key order.
-    const LITURGY_ORDER = Object.freeze([
-        'baptism',
-        'preparatoryHymn',
-        'callToWorship',
-        'hymn1',
-        'hymn2',
-        'callToConfession',
-        'assuranceOfPardon',
-        'hymnMid1',
-        'hymnMid2',
-        'scriptureReading',
-        'prayerMale',
-        'prayerFemale',
-        'sermon',
-        'hymnEnd1',
-        'hymnEnd2',
-        'benediction',
-    ]);
+    // The congregation's Liturgy Elements and Orders. The sequence is the
+    // meaning — an Order of Service read back alphabetically is not an order
+    // of service — so the rows walk the order rather than object key order.
+    const Liturgy = (typeof require !== 'undefined' &&
+            typeof module !== 'undefined' && module.exports) ?
+        require('./liturgy-order-core.js') :
+        (global && global.LiturgyOrderCore);
 
-    // How each slot reads aloud, for an assistant with no field-name context.
-    const LITURGY_LABELS = Object.freeze({
-        baptism: 'Baptism',
-        preparatoryHymn: 'Preparatory Hymn',
-        callToWorship: 'Call to Worship',
-        hymn1: 'Hymn 1',
-        hymn2: 'Hymn 2',
-        callToConfession: 'Call to Confession',
-        assuranceOfPardon: 'Assurance of Pardon',
-        hymnMid1: 'Hymn Mid 1',
-        hymnMid2: 'Hymn Mid 2',
-        scriptureReading: 'Scripture Reading / Pastoral Prayer',
-        prayerMale: 'Prayer (Male)',
-        prayerFemale: 'Prayer (Female)',
-        sermon: 'Sermon',
-        hymnEnd1: 'Hymn End 1',
-        hymnEnd2: 'Hymn End 2',
-        benediction: 'Benediction',
-    });
+    // The two people prayed for in the pastoral prayer. They are stored under
+    // `liturgy` but are people on the Sunday, not Liturgy Elements, so they
+    // read back beside the order rather than as rows of it.
+    const PRAYED_FOR_FIELDS = Object.freeze([
+        ['prayerMale', 'Male Being Prayed For'],
+        ['prayerFemale', 'Female Being Prayed For'],
+    ]);
 
     // The people fields, as document-field -> readable name. Read-only here:
     // this tool can SAY who is preaching, and oos_update_liturgy still
@@ -109,8 +88,8 @@
         return data;
     }
 
-    // Is this slot empty? Blank all the way down — a hymn is {id, name}, a
-    // scripture is a string, baptism candidates are a list.
+    // Is this slot empty? Blank all the way down — a song is {id, name}, a
+    // scripture or text is a string, a people element is a list.
     function isBlank(value) {
         if (value === null || value === undefined) return true;
         if (typeof value === 'string') return value.trim() === '';
@@ -124,7 +103,11 @@
     // One liturgy slot, rendered for reading rather than for writing.
     function slotValue(value) {
         if (isBlank(value)) return null;
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if (Array.isArray(value)) {
+            const named = value.filter((p) => !isBlank(p));
+            return named.length ? named : null;
+        }
+        if (value && typeof value === 'object') {
             // A hymn slot. The name is what a person says; the id is what a
             // write needs, so both come back.
             if ('name' in value || 'id' in value) {
@@ -140,33 +123,48 @@
      * `exists: false` is an ANSWER, not an error — most dates simply have no
      * document yet, and an assistant asked about one should be able to say
      * "nothing is planned for that Sunday" rather than report a failure.
+     *
+     * `liturgyCatalog` is the congregation's {elements, orders}. Without one
+     * the Sunday reads in the Standard seed, which is what an empty catalog
+     * means everywhere else.
      */
-    function readableService(dateKey, raw) {
+    function readableService(dateKey, raw, liturgyCatalog) {
         if (!raw) {
             return {date: dateKey, exists: false, liturgy: [], people: {}};
         }
         const doc = normalizeServiceDoc(raw);
         const liturgy = doc.liturgy || {};
         const decidedBy = doc.decidedBy || {};
+        const catalog = Liturgy.catalogFrom(liturgyCatalog);
+        const order = Liturgy.orderFor(doc, catalog);
 
         const notes = doc.notes || {};
-        const rows = LITURGY_ORDER.map((field) => {
-            const value = slotValue(liturgy[field]);
-            const who = decidedBy[field];
+        const rows = Liturgy.elementsOf(order, catalog).map((el) => {
+            const value = slotValue(liturgy[el.id]);
+            const who = decidedBy[el.id];
             // The note comes back as TEXT, not as the markup it is stored as.
             // An assistant reading `<p>Bill is away</p>` would sooner or
             // later echo the tags back into something, and it has no use for
             // them either way.
-            const noteHtml = notes[field];
+            const noteHtml = el.hasNote ? notes[el.id] : '';
             const noteText = noteHtml ? noteCore.noteHtmlToText(noteHtml) : '';
+            const carrier = el.hasRole ? Liturgy.carrierOf(doc, el) : null;
             return {
-                field,
-                label: LITURGY_LABELS[field] || field,
+                field: el.id,
+                label: el.name,
+                primitive: el.primitive,
                 value,
                 filled: value !== null,
                 decidedBy: (who && who.name) || null,
                 note: noteText || null,
+                carriedBy: (carrier && carrier.name) || null,
             };
+        });
+
+        const prayedFor = {};
+        PRAYED_FOR_FIELDS.forEach(([field, label]) => {
+            const value = slotValue(liturgy[field]);
+            if (value && value.name) prayedFor[label] = value;
         });
 
         const people = {};
@@ -185,8 +183,10 @@
             exists: true,
             theme: doc.theme || null,
             keyVerse: doc.keyVerse || null,
+            liturgyOrder: {id: order.id, name: order.name},
             liturgy: rows,
             people,
+            prayedFor,
             hasBaptism: !!doc.hasBaptism,
             isIrregular: !!doc.isIrregular,
             // An irregular Sunday keeps its content somewhere else entirely,
@@ -198,9 +198,8 @@
     }
 
     const ServiceReadCore = {
-        LITURGY_ORDER,
-        LITURGY_LABELS,
         PEOPLE_FIELDS,
+        PRAYED_FOR_FIELDS,
         normalizeServiceDoc,
         readableService,
         isBlank,

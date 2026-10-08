@@ -12,6 +12,7 @@ Base class `.m-row`, modifiers `.m-row--<variant>`.
 - On a phone the trailing action is always visible — there is no hover on touch.
 - A serif title is for something a person reads: a hymn, a Role, somebody's name. Sans is for everything operational.
 - --current is for a Row that is a DESTINATION: a list where picking one changes a pane beside it, rather than navigating away. Same job as `.m-picklist__item--current`, and it carries the same 3px edge on purpose, so a screen holding both kinds of list says "you are here" once rather than twice. A Row that merely leads somewhere never wears it.
+- __handle is the leading drag grip on a Row in a list you reorder. It is never the only way to move a row: the trailing cluster carries move-up and move-down icon buttons, which are the keyboard and screen-reader path, and the grip itself is aria-hidden.
 
 Built from the Mosaic tokens only — no raw colours, no second icon set.
 Icons are Material Symbols Outlined.

@@ -512,11 +512,15 @@ async function savePageTemplate(db, args, actor) {
  * the caller's own level is what keeps a tool from describing a field the
  * caller could not read (ADR-0057).
  *
+ * A Sunday's fields are the congregation's Liturgy Elements (ADR-0080), so
+ * the catalog takes them in; without one it lists the Standard seed's.
+ *
  * @param {?string} permissionLevel the caller's level
  * @param {object} args {source} to expand one, or {} for all
+ * @param {?object} liturgy the congregation's {elements, orders}
  * @return {object} how to wire, how to repeat, and the sources
  */
-function dataCatalog(permissionLevel, args) {
+function dataCatalog(permissionLevel, args, liturgy) {
   const sources = Catalog.sourcesFor(permissionLevel) || [];
   const wanted = args && args.source ? String(args.source) : "";
   const chosen = wanted ? sources.filter((s) => s.key === wanted) : sources;
@@ -553,9 +557,8 @@ function dataCatalog(permissionLevel, args) {
       blurb: s.blurb,
       params: s.params || [],
       filters: s.filters || [],
-      fields: (s.fields || []).map((f) => ({
-        key: f.key, label: f.label, kind: f.kind,
-      })),
+      fields: Catalog.fieldsFor(s, null, {liturgy: liturgy || null})
+          .map((f) => ({key: f.key, label: f.label, kind: f.kind})),
     })),
   };
 }

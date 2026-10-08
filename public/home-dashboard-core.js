@@ -4,43 +4,28 @@
 // home, the phone home, and the service editor's progress all call readiness,
 // so they cannot disagree about how much of a Sunday is left.
 //
-// Counted: the three leaders, the liturgy texts, baptism when the Sunday has
-// one, and each hymn still in the order. A hymn pulled out of the order is
-// not work left and not work done. A hymn typed in but not linked to the book
-// is not blank, and it is not set either. Theme, the key verse, and the
-// optional prayer leaders are not part of the tally. An Irregular Service has
-// no Order of Service to be short of.
+// Counted: the three leaders, then each Liturgy Element in the Sunday's
+// Liturgy Order, in that order (ADR-0080). A song pulled out of this Sunday is
+// not work left and not work done. A song typed in but not linked to the book
+// is not blank, and it is not set either. A people element (Baptism) counts
+// only once somebody is on it — most Sundays have nobody, and that is not a
+// blank. An element that carries a person is unfinished until the person is
+// named. Theme, the key verse, and the optional prayer leaders are not part
+// of the tally.
+//
+// Pass the congregation's catalog (LiturgyOrderStore.loadCatalog) as the
+// second argument; without one, every Sunday is read against Standard.
 
 (function (global) {
     'use strict';
+
+    const Liturgy = (typeof require !== 'undefined') ? require('./liturgy-order-core.js') : global.LiturgyOrderCore;
 
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
     const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-    const TEXT_FIELDS = [
-        ['callToWorship', 'Call to Worship'],
-        ['callToConfession', 'Call to Confession'],
-        ['assuranceOfPardon', 'Assurance of Pardon'],
-        ['scriptureReading', 'Scripture Reading'],
-        ['sermon', 'Sermon'],
-        ['benediction', 'Benediction'],
-    ];
-
-    const HYMN_FIELDS = [
-        ['preparatoryHymn', 'Preparatory Hymn'],
-        ['hymn1', 'Hymn 1'],
-        ['hymnMid2', 'Hymn Mid 2'],
-        ['hymnEnd1', 'Hymn End 1'],
-        ['hymnEnd2', 'Hymn End 2'],
-    ];
-
-    const HYMN_FIELDS_NO_BAPTISM = [
-        ['hymn2', 'Hymn 2'],
-        ['hymnMid1', 'Hymn Mid 1'],
-    ];
 
     const FIXERS = ['editor', 'elder', 'admin', 'super_admin'];
 
@@ -145,9 +130,24 @@
         return 'set';
     }
 
-    function checklist(svc) {
+    function peopleCount(value) {
+        if (Array.isArray(value)) return value.filter(function (c) { return c && c.name; }).length;
+        return typeof value === 'string' && value.trim() ? 1 : 0;
+    }
+
+    // An Irregular Service from before Liturgy Orders is a different shape.
+    // Until somebody gives it an order, scoring it against Standard would
+    // call a finished custom Sunday unfinished. Once it has a liturgyOrderId,
+    // the tally is that order, the same as any other Sunday.
+    function unscoredIrregular(service) {
+        if (!service || !service.isIrregular) return false;
+        const id = service.liturgyOrderId;
+        return !(typeof id === 'string' && id.trim());
+    }
+
+    function checklist(svc, catalog) {
         const service = svc || {};
-        if (service.isIrregular) return [];
+        if (unscoredIrregular(service)) return [];
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
         const items = [];
@@ -160,23 +160,20 @@
         add('musicLeader', 'Music Leader', personSet(service.musicLeader) ? 'set' : 'blank');
         add('preacher', 'Preacher', personSet(service.preacher) ? 'set' : 'blank');
 
-        TEXT_FIELDS.forEach(function (pair) {
-            add(pair[0], pair[1], filledText(liturgy[pair[0]]) ? 'set' : 'blank');
-        });
-
-        if (service.hasBaptism) {
-            const bap = liturgy.baptism;
-            const count = Array.isArray(bap)
-                ? bap.filter(function (c) { return c && c.name; }).length
-                : (typeof bap === 'string' && bap.trim() ? 1 : 0);
-            add('baptism', 'Baptism', count > 0 ? 'set' : 'blank');
-        }
-
-        const hymns = HYMN_FIELDS.concat(service.hasBaptism ? [] : HYMN_FIELDS_NO_BAPTISM);
-        hymns.forEach(function (pair) {
-            if (removed.indexOf(pair[0]) !== -1) return;
-            const state = hymnState(liturgy[pair[0]]);
-            add(pair[0], pair[1], state);
+        Liturgy.elementsFor(service, catalog).forEach(function (el) {
+            const value = liturgy[el.id];
+            let state;
+            if (el.primitive === 'song') {
+                if (removed.indexOf(el.id) !== -1) return;
+                state = hymnState(value);
+            } else if (el.primitive === 'people') {
+                if (!peopleCount(value)) return;
+                state = 'set';
+            } else {
+                state = filledText(value) ? 'set' : 'blank';
+            }
+            if (el.hasRole && !Liturgy.carrierOf(service, el)) state = 'blank';
+            add(el.id, el.name, state);
         });
 
         return items;
@@ -200,9 +197,9 @@
         return parts.join(', and ');
     }
 
-    function readiness(svc) {
+    function readiness(svc, catalog) {
         const service = svc || {};
-        if (service.isIrregular) {
+        if (unscoredIrregular(service)) {
             return {
                 irregular: true,
                 total: 0,
@@ -214,7 +211,7 @@
                 literals: [],
             };
         }
-        const items = checklist(service);
+        const items = checklist(service, catalog);
         const blanks = items.filter(function (item) { return item.state === 'blank'; }).map(function (item) { return item.label; });
         const literals = items.filter(function (item) { return item.state === 'literal'; }).map(function (item) { return item.label; });
         const set = items.length - blanks.length - literals.length;
@@ -232,7 +229,7 @@
 
     function glance(svc) {
         const service = svc || {};
-        if (service.isIrregular) {
+        if (unscoredIrregular(service)) {
             return { theme: '', sermon: '', pairs: [], baptism: '' };
         }
         const liturgy = service.liturgy || {};

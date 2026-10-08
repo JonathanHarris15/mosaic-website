@@ -37,6 +37,7 @@ function sandboxFor(extra) {
     sandbox.EventsCore = require('../public/events-core.js');
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
+    sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.ServiceInvolvementCore = require('../public/service-involvement-core.js');
     sandbox.AccessCore = require('../public/access-core.js');
     sandbox.EventAnnouncementCore = require('../public/event-announcement-core.js');

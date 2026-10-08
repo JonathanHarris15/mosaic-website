@@ -158,9 +158,8 @@
     <div x-show="!loading && legacy" x-cloak class="max-w-2xl mx-auto mt-16 p-8 bg-white rounded-2xl shadow text-center">
         <span class="material-symbols-outlined text-5xl text-secondary mb-3">history</span>
         <h2 class="text-xl font-bold text-primary mb-2">This week uses the legacy guide format</h2>
-        <p class="text-gray-500 mb-6">It was created before the template system. You can keep printing it from the classic editor, or rebuild it on the new template system.</p>
+        <p class="text-gray-500 mb-6" x-text="canEdit ? 'It was made before the template system. Rebuild it on the template system to edit and print it.' : 'It was made before the template system. An editor can rebuild it on the template system.'"></p>
         <div class="flex items-center justify-center gap-3">
-            <a :href="legacyGuideUrl" class="px-5 py-2.5 border border-outline-variant rounded-lg text-primary font-semibold hover:bg-surface">Open classic editor</a>
             <button x-show="canEdit" @click="rebuildOnTemplateSystem()" class="px-5 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-secondary">Rebuild on template system</button>
         </div>
     </div>

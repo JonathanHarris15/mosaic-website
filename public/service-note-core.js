@@ -27,10 +27,11 @@
 (function (global) {
     'use strict';
 
-    // Every element that can carry a note, in service order. These are the
-    // keys service-builder.js's _MOVEMENTS uses — the liturgy fields plus
-    // `baptism`, which carries a note even though oos_update_liturgy cannot
-    // set its value.
+    // The elements an assistant may write a note on, in service order: the
+    // Standard seed's elements (liturgy-order-core.js) — including `baptism`,
+    // which carries a note even though oos_update_liturgy cannot set its
+    // value. The pages note any element with hasNote; this list stays the
+    // seed until widening the assistant's write is decided on its own.
     const NOTE_KEYS = Object.freeze([
         'preparatoryHymn',
         'callToWorship',

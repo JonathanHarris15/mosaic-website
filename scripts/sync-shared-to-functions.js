@@ -67,6 +67,10 @@ const MODULES = [
     'trade-core.js',
     'usage-stats-core.js',
     'theme-similarity-core.js',
+    // ADR-0080. The congregation's Liturgy Elements and Orders. The MCP read
+    // emits a Sunday in its order, and the Printables catalog reads a
+    // Sunday's fields, rows and hymns off its elements.
+    'liturgy-order-core.js',
     'liturgy-save-core.js',
     'mcp-guidance-core.js',
     'service-note-core.js',

@@ -121,28 +121,13 @@ test('the default template requests the pastoral-prayer-subjects section (today\
     assert.ok(Store.builderSections(defaultSnapshot(), catalog).includes('pastoral-prayer-subjects'));
 });
 
-// ── 5. which guide system a week uses, and where Generate routes ─────────────
-test('guideSystemOf defaults a fresh week to v2', () => {
-    assert.equal(Store.guideSystemOf({}), 'v2');
-    assert.equal(Store.guideSystemOf({ guideSystem: 'v2' }), 'v2');
-});
-
-test('guideSystemOf honours an explicit legacy toggle', () => {
-    assert.equal(Store.guideSystemOf({ guideSystem: 'legacy' }), 'legacy');
-});
-
-test('guideSystemOf falls back to legacy for a pre-existing elements-blob week', () => {
-    // Back-compat: weeks created before the toggle carry no guideSystem.
-    assert.equal(Store.guideSystemOf({ guide: { elements: [{ type: 'order_of_service' }] } }), 'legacy');
-});
-
-test('guideHref routes legacy weeks to the legacy generator and v2 weeks to the new one', () => {
+// ── 5. where Generate routes ──────────────────────────────────────────────
+test('guideHref sends every week to the template editor, an old legacy week included', () => {
+    // The legacy generator is off the user path (ADR-0080). A week whose guide
+    // predates the template system is offered a rebuild in the editor.
+    assert.equal(Store.guideHref({}, '2026-07-05'), 'service-guide-editor.html?date=2026-07-05');
     assert.equal(
-        Store.guideHref({ guideSystem: 'legacy' }, '2026-07-05'),
-        'service-guide.html?date=2026-07-05',
-    );
-    assert.equal(
-        Store.guideHref({ guideSystem: 'v2' }, '2026-07-05'),
+        Store.guideHref({ guideSystem: 'legacy', guide: { elements: [{ type: 'order_of_service' }] } }, '2026-07-05'),
         'service-guide-editor.html?date=2026-07-05',
     );
 });
