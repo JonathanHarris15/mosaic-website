@@ -682,6 +682,7 @@ function serviceForm() {
                 this.liturgyStored = read.stored;
                 this.liturgyCatalogLoaded = true;
                 this.liturgyReadProblem = '';
+                this.releaseQuietRow();
             } catch (err) {
                 // The seed stays on screen so the Sunday can still be read.
                 // This page does not write the order.
@@ -716,6 +717,7 @@ function serviceForm() {
             this.service.liturgyOrderId = id;
             this._ensureLiturgySlots();
             if (this.openKey && !this.orderElements.some(el => el.id === this.openKey)) this.closeRow();
+            this.releaseQuietRow();
         },
 
         // The order is locked on this page. Its shape changes on the Liturgy
@@ -2106,12 +2108,36 @@ function serviceForm() {
         },
         get noteCount() { return this.notesList.length; },
 
+        // A row opens only when the panel under it has a field. A hymn, a
+        // scripture, a line of text, or a person is entered there. A prayer's
+        // people and its leader already sit under the row, and a prayer or an
+        // Other that is only a name on the order has nothing to enter, so it
+        // stays closed. A note, or a person who carries the element, is a field.
+        rowOpens(item) {
+            if (!item || item.removed || item.type === 'legacy') return false;
+            if (item.noteOn || item.hasRole) return true;
+            return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
+                || item.type === 'people' || item.type === 'person';
+        },
+
+        // The open row lost its field (the order changed, or the note came off).
+        releaseQuietRow() {
+            if (!this.openKey) return;
+            const item = this.displayRows.find(r => r.key === this.openKey);
+            if (!this.rowOpens(item)) this.closeRow();
+        },
+
         // ── Station rows + inline notes ─────────────────────────────────────────
         // Expanding a row reveals its picker and a rich-text Service Note. The note
         // is a single Quill instance mounted into whichever row is open; switching
         // rows commits the current note first, so service.notes stays in sync (and
         // the Service Notes sidebar updates live).
         toggleRow(key) {
+            const item = this.displayRows.find(r => r.key === key);
+            if (!this.rowOpens(item)) {
+                if (this.openKey === key) this.closeRow();
+                return;
+            }
             if (this.openKey === key) { this.closeRow(); return; }
 
             // One person per box (MS-246). A row somebody else is in does not
@@ -2228,6 +2254,11 @@ function serviceForm() {
 
         // Open a specific row (from the Service Notes sidebar) and scroll to it.
         openRow(key) {
+            const item = this.displayRows.find(r => r.key === key);
+            if (!this.rowOpens(item)) {
+                this.$nextTick(() => this.scrollToRow(key));
+                return;
+            }
             if (this.openKey !== key) {
                 this.commitNote();
                 this.openKey = key;

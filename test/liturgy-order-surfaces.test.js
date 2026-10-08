@@ -65,10 +65,15 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /Who prays /);
     assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
-    assert.match(html, /item\.type === 'other'/);
+    assert.match(js, /type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
     assert.match(js, /legacyPrayerHomes/);
     assert.match(js, /el\.prayedByOther/);
+    assert.match(js, /rowOpens\(item\)/);
+    assert.match(html, /rowOpens\(item\)/);
+    assert.match(html, /station-quiet/);
+    assert.doesNotMatch(html, /Nothing to enter/);
+    assert.match(html, /x-show="rowOpens\(item\) && !heldBy\(item\.key\)"/);
 });
 
 test('the Liturgy Orders page drags the collection into the selected order', () => {

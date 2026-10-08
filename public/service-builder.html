@@ -67,6 +67,10 @@
     <style>
         .station-row { transition: background .15s ease; }
         .station-row:hover { background: var(--surface); }
+        /* A row with nothing to enter is not a control. No pointer, and no
+           hover wash that would read as "this opens". */
+        .station-quiet { cursor: default; }
+        .station-quiet:hover { background: transparent; }
         #regular-service-sections > div:first-of-type .station-row,
         #regular-service-sections > div:first-of-type > div.border-t,
         #regular-service-sections > .m-empty + div .station-row,
@@ -737,9 +741,9 @@
                                     <div>
                                         <div class="station-row flex items-center gap-3 px-5 py-3 border-t border-cream"
                                              x-show="item.type !== 'legacy'"
-                                             :class="heldBy(item.key) ? 'station-held' : 'cursor-pointer'"
+                                             :class="heldBy(item.key) ? 'station-held' : (rowOpens(item) ? 'cursor-pointer' : 'station-quiet')"
                                              :style="openKey === item.key ? 'background:var(--background)' : ''"
-                                             @click="toggleRow(item.key)">
+                                             @click="rowOpens(item) && toggleRow(item.key)">
                                             <span class="flex-none w-[124px] font-label-md text-[10.5px] font-semibold tracking-[.07em] uppercase text-secondary" x-text="item.label"></span>
                                             <span class="flex-none inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + item.dotColor"></span>
                                             <span class="flex-1 min-w-0 font-body-md text-[14.5px] text-primary truncate" x-show="item.value" x-text="item.value"></span>
@@ -767,7 +771,7 @@
                                             </template>
 
                                             <span class="material-symbols-outlined station-chevron text-[18px] text-sand"
-                                                  x-show="!heldBy(item.key)"
+                                                  x-show="rowOpens(item) && !heldBy(item.key)"
                                                   :style="openKey === item.key ? 'transform:rotate(90deg)' : ''">chevron_right</span>
                                         </div>
 
@@ -1228,10 +1232,6 @@
                                                     </div>
                                                 </template>
 
-                                                <template x-if="item.type === 'prayer' && !item.requests && !item.prayedByOther">
-                                                    <p class="text-sm text-on-surface-variant">Nothing to enter here. <span x-text="item.label"></span> is named on the liturgy order.</p>
-                                                </template>
-
                                                 <!-- PERSON EVENT. One person, on this Sunday. -->
                                                 <template x-if="item.type === 'person'">
                                                     <div x-data="personPicker(service.liturgy[item.key], $data)" @click.away="open = false" class="relative max-w-md">
@@ -1247,11 +1247,6 @@
                                                             </template>
                                                         </div>
                                                     </div>
-                                                </template>
-
-                                                <!-- OTHER. A name on the order, and nothing here. -->
-                                                <template x-if="item.type === 'other'">
-                                                    <p class="text-sm text-on-surface-variant">Nothing to enter on this Sunday. <span x-text="item.label"></span> is named on the liturgy order.</p>
                                                 </template>
 
                                                 <!-- Who carries this element (hasRole). One person, kept
