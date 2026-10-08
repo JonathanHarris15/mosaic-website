@@ -221,3 +221,50 @@ test('access-assert does not load firebase-functions (root npm test)', () => {
     );
     assert.doesNotMatch(src, /require\(["']firebase-functions/);
 });
+
+// MS-715 follow-up — the oosUpdateLiturgy callable read `permissionLevel` /
+// `role` itself, with a hard-coded list, from before MS-695. Access now
+// comes from the Account Level's permissions map (`services.builder.edit`),
+// so the gate must ask AccessCore the same question the pages do.
+const {assertEditsServices} = require('../functions/access-assert.js');
+
+async function editsServices(account) {
+    await assertEditsServices(fakeDb({'uid-1': account}), {uid: 'uid-1'});
+}
+
+test('a custom Account Level with services.builder.edit may write a Sunday, whatever its permissionLevel string says', async () => {
+    await editsServices({
+        accountLevelId: 'liturgy-team', permissionLevel: 'member',
+        permissions: {'services.builder.view': true, 'services.builder.edit': true},
+    });
+});
+
+test('a permissions map without services.builder.edit is refused even if a stale string says editor', async () => {
+    await assert.rejects(
+        () => editsServices({
+            accountLevelId: 'readers', permissionLevel: 'editor',
+            permissions: {'services.builder.view': true},
+        }),
+        (err) => err && err.code === 'permission-denied' && /editors only/i.test(err.message)
+    );
+});
+
+test('a legacy editor with no permissions map still may; a member may not', async () => {
+    await editsServices({permissionLevel: 'editor'});
+    await assert.rejects(() => editsServices({permissionLevel: 'member'}),
+        (err) => err && err.code === 'permission-denied');
+});
+
+test('no sign-in is unauthenticated', async () => {
+    await assert.rejects(() => assertEditsServices(fakeDb({}), null),
+        (err) => err && err.code === 'unauthenticated');
+});
+
+test('oosUpdateLiturgy asks assertEditsServices, not a permissionLevel list', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const start = src.indexOf('exports.oosUpdateLiturgy');
+    const body = src.slice(start, src.indexOf('exports.', start + 10));
+    assert.match(body, /assertEditsServicesCore\(db, request\.auth\)/);
+    assert.doesNotMatch(body, /permissionLevel/);
+    assert.doesNotMatch(body, /\["editor", "elder", "admin", "super_admin"\]/);
+});

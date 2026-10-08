@@ -70,6 +70,28 @@ async function assertWritesAsEditor(db, authCtx) {
 }
 
 /**
+ * Throws unless the caller may edit Sundays and their liturgy — the
+ * `services.builder.edit` permission (MS-695), or, for an account with no
+ * permissions map yet, an editor-writing Permission Level
+ * (AccessCore.canFixSundayService).
+ *
+ * The oosUpdateLiturgy callable used to read `permissionLevel`/`role`
+ * itself, so an account whose access came from its Account Level and
+ * permissions map was refused (or let in) on a stale string.
+ *
+ * @param {object} db Firestore
+ * @param {object} authCtx request.auth
+ * @return {Promise<void>}
+ */
+async function assertEditsServices(db, authCtx) {
+  const account = await loadAccount(db, authCtx);
+  if (!Access.canFixSundayService(account)) {
+    throw refuse("permission-denied",
+        "Editors only — this changes the live Order of Service.");
+  }
+}
+
+/**
  * Throws unless the caller runs the Admin Dashboard: admin or super_admin.
  *
  * An elder is not an admin here. The dashboard's tools reach the Textbelt
@@ -95,5 +117,6 @@ module.exports = {
   loadAccount,
   assertCanDecide,
   assertWritesAsEditor,
+  assertEditsServices,
   assertIsAdmin,
 };
