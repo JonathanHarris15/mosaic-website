@@ -276,6 +276,8 @@ function flattenServiceForSave(service) {
         removedHymns: s.removedHymns || [],
         // Which Liturgy Order this Sunday follows. Empty reads as Standard.
         liturgyOrderId: s.liturgyOrderId || '',
+        // Filled elements that did not fit the order this Sunday follows now.
+        liturgyLeftovers: Array.isArray(s.liturgyLeftovers) ? s.liturgyLeftovers : [],
         // Kept as stored so an older Irregular Service round-trips untouched;
         // nothing on this page edits either any more (ADR-0080).
         isIrregular: s.isIrregular,
@@ -352,7 +354,7 @@ const PERSON_REF_PATHS = {
 // Fields that go into the document as they are.
 const PLAIN_SAVE_FIELDS = [
     'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
-    'liturgyOrderId', 'isIrregular', 'irregularElements', 'notes', 'carriedBy', 'liturgy'
+    'liturgyOrderId', 'liturgyLeftovers', 'isIrregular', 'irregularElements', 'notes', 'carriedBy', 'liturgy'
 ];
 
 // Writes one dot-path field back into the editor's nested model — the inverse
@@ -387,6 +389,13 @@ function applyFlatFieldPath(service, path, value) {
         if (bothPlainObjects) {
             for (const key of Object.keys(current)) delete current[key];
             Object.assign(current, value);
+        } else if (map === 'liturgy' && value === null &&
+                current && typeof current === 'object' && !Array.isArray(current)) {
+            // An assistant clears a hymn with null. Replacing the object would
+            // leave the picker holding one that is no longer on the model.
+            for (const key of Object.keys(current)) delete current[key];
+            current.id = null;
+            current.name = '';
         } else if (map === 'liturgy' && Array.isArray(value)) {
             // A people element (Baptism Candidates, or any other) is a list of
             // Person references with a picker per row, so it is brought in
@@ -635,6 +644,7 @@ function serviceForm() {
             // freed pages with extra sermon-notes pages instead.
             removedHymns: [],
             liturgyOrderId: '',
+            liturgyLeftovers: [],
             notes: {},
             carriedBy: {},
             liturgy: {
@@ -709,15 +719,75 @@ function serviceForm() {
             return order.id === liturgyCore().STANDARD_ORDER_ID ? order.name + ' (default)' : order.name;
         },
 
-        // This Sunday follows another order. Only the Sunday's pointer moves:
-        // the shared order is untouched, and values under elements the new
-        // order leaves out stay on the document, hidden.
-        changeLiturgyOrder(id) {
-            if (!this.canEdit || !id || id === this.selectedOrderId) return;
-            this.service.liturgyOrderId = id;
-            this._ensureLiturgySlots();
-            if (this.openKey && !this.orderElements.some(el => el.id === this.openKey)) this.closeRow();
-            this.releaseQuietRow();
+        // Translating the filled order onto another one. The select shows the
+        // choice immediately; the rows update when the plan lands.
+        translatingOrder: false,
+        pendingOrderId: '',
+        translateNote: '',
+
+        get orderSelectValue() {
+            return this.pendingOrderId || this.selectedOrderId;
+        },
+
+        get leftoverItems() {
+            const Orders = liturgyCore();
+            return (this.service.liturgyLeftovers || []).map(function (item) {
+                const kind = (Orders.KIND_LABELS && Orders.KIND_LABELS[item.kind]) || (item.kind ? item.kind : 'Line');
+                const preview = LiturgyTranslateCore.previewOf(item);
+                return {
+                    sourceId: item.sourceId,
+                    name: item.name || 'Untitled',
+                    detail: preview ? kind + ' · ' + preview : kind,
+                };
+            });
+        },
+
+        discardLeftover(sourceId) {
+            if (!this.canEdit) return;
+            this.service.liturgyLeftovers = (this.service.liturgyLeftovers || [])
+                .filter(function (item) { return item.sourceId !== sourceId; });
+        },
+
+        discardAllLeftovers() {
+            if (!this.canEdit) return;
+            this.service.liturgyLeftovers = [];
+        },
+
+        // This Sunday follows another order. Comparable filled elements move
+        // onto it. What does not fit stays in the drawer until it is discarded.
+        async changeLiturgyOrder(id) {
+            if (!this.canEdit || !id || id === this.selectedOrderId || this.translatingOrder) return;
+            const Core = liturgyCore();
+            const from = Core.orderFor(this.service, this.liturgyCatalog);
+            const to = Core.orderById(this.liturgyCatalog, id);
+            if (!to) return;
+            this.pendingOrderId = id;
+            this.translatingOrder = true;
+            this.translateNote = '';
+            try {
+                const sources = LiturgyTranslateCore.filledItemsFromService(this.service, from);
+                const targets = LiturgyTranslateCore.targetsFromOrder(to);
+                const plan = await LiturgyTranslate.translate(sources, targets, 'order', {
+                    sourceOrder: from.name,
+                    targetOrder: to.name,
+                });
+                LiturgyTranslateCore.applyToService(this.service, to, plan);
+                this._ensureLiturgySlots();
+                this._deriveHasBaptism();
+                this.releaseQuietRow();
+                if (plan.judge !== 'jev' && plan.guessed) {
+                    this.translateNote = 'Matched in order, by kind.';
+                }
+            } catch (err) {
+                console.error(err);
+                this.service.liturgyOrderId = id;
+                this._ensureLiturgySlots();
+                this.releaseQuietRow();
+                this.translateNote = 'The order changed, and what was filled in stayed where it was.';
+            } finally {
+                this.translatingOrder = false;
+                this.pendingOrderId = '';
+            }
         },
 
         // The order is locked on this page. Its shape changes on the Liturgy
@@ -756,27 +826,29 @@ function serviceForm() {
         // An empty value under every element the catalog knows and a carrier
         // box for every element that needs a person, so a picker always has an
         // object to bind to. Never overwrites a stored value.
-        _ensureLiturgySlots() {
+        _ensureLiturgySlots(service) {
             const Core = liturgyCore();
-            if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') this.service.carriedBy = {};
+            const s = service || this.service;
+            if (!s.liturgy || typeof s.liturgy !== 'object') s.liturgy = {};
+            if (!s.carriedBy || typeof s.carriedBy !== 'object') s.carriedBy = {};
             for (const el of this.liturgyCatalog.elements) {
                 if (el.kind === 'other') continue;
-                const current = this.service.liturgy[el.id];
+                const current = s.liturgy[el.id];
                 if (el.kind === 'prayer' && el.requests) {
                     const arr = Array.isArray(current) ? current.slice() : [];
                     while (arr.length < el.requests.count) arr.push({ id: null, name: '' });
-                    this.service.liturgy[el.id] = arr.slice(0, el.requests.count);
+                    s.liturgy[el.id] = arr.slice(0, el.requests.count);
                 } else if (current === undefined || current === null) {
-                    this.service.liturgy[el.id] = Core.emptyValue(el.primitive);
+                    s.liturgy[el.id] = Core.emptyValue(el.primitive);
                 } else if (el.primitive === 'people' && !Array.isArray(current)) {
-                    this.service.liturgy[el.id] = withRowIds(coerceBaptismCandidates(current));
+                    s.liturgy[el.id] = withRowIds(coerceBaptismCandidates(current));
                 } else if (el.primitive === 'person' && (typeof current !== 'object' || Array.isArray(current))) {
-                    this.service.liturgy[el.id] = { name: '', id: null };
+                    s.liturgy[el.id] = { name: '', id: null };
                 } else if (el.primitive === 'song' && typeof current === 'string') {
-                    this.service.liturgy[el.id] = { name: current, id: null };
+                    s.liturgy[el.id] = { name: current, id: null };
                 }
-                if ((el.prayedByOther || el.hasRole) && !this.service.carriedBy[el.id]) {
-                    this.service.carriedBy[el.id] = { name: '', id: null };
+                if ((el.prayedByOther || el.hasRole) && !s.carriedBy[el.id]) {
+                    s.carriedBy[el.id] = { name: '', id: null };
                 }
             }
         },
@@ -1344,6 +1416,7 @@ function serviceForm() {
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
                 this.service.liturgyOrderId = typeof data.liturgyOrderId === 'string' ? data.liturgyOrderId : '';
+                this.service.liturgyLeftovers = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers : [];
                 // An Irregular Service from before Liturgy Orders: its custom
                 // elements are shown read-only and kept as stored (ADR-0080).
                 this.service.isIrregular = data.isIrregular || false;
@@ -1890,14 +1963,35 @@ function serviceForm() {
         watchRemoteChanges() {
             if (typeof db === 'undefined' || this._remoteUnsubscribe) return;
 
-            this._remoteUnsubscribe = db.collection('services').doc(this.date)
-                .onSnapshot(
-                    (doc) => this.adoptRemoteChanges(doc),
-                    (e) => {
-                        console.error('Lost the live connection to this Sunday:', e);
-                        this._remoteUnsubscribe = null;
-                    }
-                );
+            const ref = db.collection('services').doc(this.date);
+            const onNext = (doc) => this.adoptRemoteChanges(doc);
+            const onError = (e) => {
+                console.error('Lost the live connection to this Sunday:', e);
+            };
+            // The same helper the phone uses everywhere else (MS-482). On the
+            // web this is a listener. In the app a listener that stays silent
+            // is dropped and the Sunday is re-read, so an assistant's write
+            // still arrives on a phone whose stream never connects.
+            const Live = (typeof MosaicLiveRead !== 'undefined' && MosaicLiveRead && MosaicLiveRead.watch)
+                ? MosaicLiveRead : null;
+            if (Live) {
+                this._remoteUnsubscribe = Live.watch(ref, onNext, {
+                    fallbackEveryMs: Live.PERSON_EVERY_MS,
+                    onError: onError,
+                });
+            } else {
+                this._remoteUnsubscribe = ref.onSnapshot(onNext, (e) => {
+                    onError(e);
+                    this._remoteUnsubscribe = null;
+                });
+            }
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('pagehide', () => {
+                    if (!this._remoteUnsubscribe) return;
+                    this._remoteUnsubscribe();
+                    this._remoteUnsubscribe = null;
+                });
+            }
         },
 
         adoptRemoteChanges(doc) {
@@ -1928,6 +2022,7 @@ function serviceForm() {
                 original[ServiceAuthorship.FIELD] = remoteDecided;
             }
 
+            let orderMoved = false;
             for (const [path, value] of Object.entries(adoptions)) {
                 // Applied to BOTH the live model and the loaded snapshot. Miss
                 // the snapshot and the next save reads the adopted value as a
@@ -1937,7 +2032,20 @@ function serviceForm() {
                 if (applyFlatFieldPath(this.service, path, value)) {
                     applyFlatFieldPath(original, path, value);
                     adopted++;
+                    if (path === 'liturgyOrderId') orderMoved = true;
                 }
+            }
+
+            // Another editor translated this Sunday onto a different order.
+            // The pointer, the moved values, and the drawer have arrived.
+            // Slots the new order asks for still need an object for a picker
+            // to hold, and a row that left the order should not stay open.
+            if (orderMoved) {
+                this._ensureLiturgySlots(this.service);
+                this._ensureLiturgySlots(original);
+                this._deriveHasBaptism(this.service);
+                this._deriveHasBaptism(original);
+                this.releaseQuietRow();
             }
 
             if (adopted) this.originalService = serviceSnapshot(original);

@@ -303,6 +303,37 @@ test('a Sunday with no document yet is nothing to adopt', () => {
     assert.strictEqual(JSON.stringify(page.service), before);
 });
 
+test('clearing a hymn with null keeps the picker object', () => {
+    const m = model();
+    const slotBefore = m.liturgy.hymn1;
+
+    assert.strictEqual(applyFlatFieldPath(m, 'liturgy.hymn1', null), true);
+
+    assert.strictEqual(m.liturgy.hymn1, slotBefore, 'the slot object must survive a clear');
+    assert.deepStrictEqual(m.liturgy.hymn1, { id: null, name: '' });
+});
+
+test("another editor's order, drawer, and untouched hymn all arrive", () => {
+    const loaded = flattenServiceForSave(model());
+    const mine = model();
+    mine.liturgy.hymn1 = { id: 'h-mine', name: 'Be Thou My Vision' };
+
+    const remoteLiturgy = model().liturgy;
+    remoteLiturgy.hymn1 = { id: 'h-theirs', name: 'It Is Well' };
+    remoteLiturgy.hymnEnd1 = { id: 'h-9', name: 'A Closing Song' };
+
+    const adoptions = remoteAdoptions(loaded, flattenServiceForSave(mine), {
+        liturgyOrderId: 'short',
+        liturgyLeftovers: [{ sourceId: 'hymn2', kind: 'hymn', name: 'Hymn 2', value: { id: 'h-2', name: 'Rock of Ages' } }],
+        liturgy: remoteLiturgy,
+    });
+
+    assert.equal(adoptions.liturgyOrderId, 'short');
+    assert.equal(adoptions.liturgyLeftovers[0].value.name, 'Rock of Ages');
+    assert.deepStrictEqual(adoptions['liturgy.hymnEnd1'], { id: 'h-9', name: 'A Closing Song' });
+    assert.ok(!('liturgy.hymn1' in adoptions), 'the hymn under my hands stays mine');
+});
+
 test('the page subscribes to its own Sunday', () => {
     const calls = [];
     const page = loadPage({
@@ -322,6 +353,74 @@ test('the page subscribes to its own Sunday', () => {
     page.watchRemoteChanges();   // twice must not mean two listeners
 
     assert.deepStrictEqual(calls, [['services', '2026-08-16']]);
+});
+
+test('the Sunday is watched through the live-read helper when the page has one', () => {
+    const seen = [];
+    const page = loadPage({
+        MosaicLiveRead: {
+            PERSON_EVERY_MS: 3000,
+            watch(ref, onNext, opts) {
+                seen.push({ ref, onNext, opts });
+                return () => { seen.push('stopped'); };
+            },
+        },
+        db: {
+            collection(name) {
+                return { doc(id) { return { kind: 'doc', name, id }; } };
+            },
+        },
+    });
+    page.date = '2026-08-16';
+    page.watchRemoteChanges();
+    page.watchRemoteChanges();
+
+    assert.equal(seen.length, 1);
+    assert.deepStrictEqual(seen[0].ref, { kind: 'doc', name: 'services', id: '2026-08-16' });
+    assert.equal(seen[0].opts.fallbackEveryMs, 3000);
+    assert.equal(typeof seen[0].onNext, 'function');
+});
+
+test("another editor's switch lands on this page, and a row that left closes", () => {
+    const Orders = require('../public/liturgy-order-core.js');
+    const page = loadPage({
+        PresenceStore: { release() {} },
+        LiturgyTranslateCore: require('../public/liturgy-translate-core.js'),
+    });
+    page.liturgyCatalog = Orders.catalogFrom({
+        elements: Orders.STANDARD_ELEMENTS,
+        orders: [
+            Orders.STANDARD_ORDER,
+            { id: 'short', name: 'Short', elementIds: ['hymn1', 'sermon', 'hymnEnd1'] },
+        ],
+    });
+    page.originalService = serviceSnapshot(page.service);
+    page.service.liturgy.hymn1.id = 'h-mine';
+    page.service.liturgy.hymn1.name = 'Be Thou My Vision';
+    const hymnEnd = page.service.liturgy.hymnEnd1;
+    page.openKey = 'hymn2';
+
+    page.adoptRemoteChanges(snapshot({
+        liturgyOrderId: 'short',
+        liturgyLeftovers: [{
+            sourceId: 'hymn2', kind: 'hymn', name: 'Hymn 2',
+            value: { id: 'h-2', name: 'It Is Well' },
+        }],
+        liturgy: Object.assign({}, page.service.liturgy, {
+            hymn1: { id: 'h-theirs', name: 'Holy Holy Holy' },
+            hymnEnd1: { id: 'h-9', name: 'A Closing Song' },
+        }),
+    }));
+
+    assert.equal(page.service.liturgyOrderId, 'short');
+    assert.deepStrictEqual(page.orderElements.map((el) => el.id), ['hymn1', 'sermon', 'hymnEnd1']);
+    assert.equal(page.service.liturgy.hymn1.name, 'Be Thou My Vision');
+    assert.equal(page.service.liturgy.hymnEnd1, hymnEnd, 'the closing hymn picker keeps its object');
+    assert.equal(page.service.liturgy.hymnEnd1.name, 'A Closing Song');
+    assert.equal(page.leftoverItems[0].name, 'Hymn 2');
+    assert.equal(page.leftoverItems[0].detail.includes('It Is Well'), true);
+    assert.equal(page.openKey, null, 'a row the new order does not have must close');
+    assert.equal(page.isDirty, true, 'my hymn is still unsaved');
 });
 
 // ── The music helpers survive somebody else's change (MS-277) ──────────────

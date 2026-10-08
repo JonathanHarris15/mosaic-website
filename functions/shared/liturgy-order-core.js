@@ -18,7 +18,9 @@
 //
 // A Sunday names its order with `liturgyOrderId` and keeps values at
 // `liturgy.<elementId>` and notes at `notes[elementId]`. Changing the order
-// hides values. It does not delete them.
+// translates comparable filled elements onto the new order
+// (liturgy-translate-core.js). What does not fit is kept on
+// `liturgyLeftovers` until an editor discards it.
 //
 // Pure. Loaded as a classic <script> (window.LiturgyOrderCore) on the pages,
 // required under node:test, and copied into functions/shared by

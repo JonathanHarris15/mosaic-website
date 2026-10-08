@@ -190,6 +190,25 @@
             .filter(Boolean);
         if (helperNames.length) people['Music Helpers'] = helperNames;
 
+        // What the translator could not place. Hidden values are omitted on
+        // purpose; these are the ones an editor is still being asked about,
+        // so an assistant that cannot see them will plan as if they were gone.
+        const leftovers = (Array.isArray(doc.liturgyLeftovers) ? doc.liturgyLeftovers : [])
+            .map((item) => {
+                if (!item || typeof item !== 'object') return null;
+                const value = slotValue(item.value);
+                const text = String(item.valueText || item.text || '').trim();
+                const note = item.note ? noteCore.noteHtmlToText(item.note) : '';
+                return {
+                    sourceId: item.sourceId || null,
+                    name: item.name || null,
+                    kind: item.kind || null,
+                    value: value != null ? value : (text || null),
+                    note: note || null,
+                };
+            })
+            .filter(Boolean);
+
         return {
             date: dateKey,
             exists: true,
@@ -197,6 +216,7 @@
             keyVerse: doc.keyVerse || null,
             liturgyOrder: {id: order.id, name: order.name},
             liturgy: rows,
+            leftovers,
             people,
             prayedFor,
             hasBaptism: !!doc.hasBaptism,

@@ -22,6 +22,7 @@ const {
 const pr = require("./prayer-request");
 const prWrites = require("./prayer-request-writes");
 const liturgyCatalog = require("./liturgy-catalog");
+const liturgyTranslate = require("./liturgy-translate");
 const LiturgyOrders = require("./shared/liturgy-order-core");
 const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
@@ -166,6 +167,13 @@ const TEXTBELT_KEY = defineSecret("TEXTBELT_KEY");
  *   firebase functions:secrets:set GEMINI_KEY
  */
 const GEMINI_KEY = defineSecret("GEMINI_KEY");
+
+/**
+ * TypeSafe key for liturgy translation. Set or rotate it with:
+ *   firebase functions:secrets:set TYPESAFE_API_KEY
+ * An empty value still translates, by kind and position.
+ */
+const TYPESAFE_API_KEY = defineSecret("TYPESAFE_API_KEY");
 
 /**
  * Public URL of the smsInbound HTTP function. Textbelt POSTs reply webhooks
@@ -1577,6 +1585,42 @@ exports.oosUpdateLiturgy = onCall(
       }
 
       return {updated: Object.keys(fields)};
+    },
+);
+
+/**
+ * Carry a filled order of service onto another liturgy order, or read a
+ * bulletin into one. Jev chooses which filled moment is which slot. With
+ * no key the same function answers by kind and position, so a missing
+ * value never blocks the switch. Editor+ only: a call can spend money.
+ * In the standing deploy set — docs/ops/ms-545-functions-deploy-set.md.
+ */
+exports.translateLiturgy = onCall(
+    {cors: true, region: "us-central1", secrets: [TYPESAFE_API_KEY]},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "Sign in to translate an order.");
+      }
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied",
+            "Editors only — translating an order can call a paid API.");
+      }
+      const data = request.data || {};
+      if (!Array.isArray(data.sources) || !Array.isArray(data.targets)) {
+        throw new HttpsError("invalid-argument",
+            "sources and targets must be lists.");
+      }
+      if (data.sources.length > 240 || data.targets.length > 80) {
+        throw new HttpsError("invalid-argument",
+            "That order is too large to translate in one pass.");
+      }
+      return liturgyTranslate.judge(TYPESAFE_API_KEY.value() || "", data);
     },
 );
 

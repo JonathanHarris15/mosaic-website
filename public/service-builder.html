@@ -475,12 +475,12 @@
                     <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline">Progress</div>
                     <div class="font-headline-md text-xl md:text-2xl font-semibold text-secondary mt-1" x-text="filledLabel"></div>
 
-                    <!-- This Sunday's Liturgy Order (ADR-0080). Choosing one moves
-                         only this Sunday's pointer. The combination itself is
-                         changed on the Liturgy Orders page. -->
+                    <!-- This Sunday's Liturgy Order (ADR-0080). Choosing one
+                         carries what was filled into the new order. The
+                         combination itself is changed on the Liturgy Orders page. -->
                     <div class="flex items-center md:justify-end gap-2 mt-4 w-full md:w-auto min-w-0 max-w-full">
                         <label class="font-label-md text-[11px] text-secondary shrink-0" for="liturgy-order-select">Liturgy order</label>
-                        <select id="liturgy-order-select" :value="selectedOrderId" @change="changeLiturgyOrder($event.target.value)" :disabled="!canEdit" class="rounded-lg border-outline-variant bg-surface-container-low text-xs py-1 pl-2 pr-9 disabled:opacity-50 min-w-0 max-w-full flex-1 md:flex-none truncate">
+                        <select id="liturgy-order-select" :value="orderSelectValue" @change="changeLiturgyOrder($event.target.value)" :disabled="!canEdit || translatingOrder" class="rounded-lg border-outline-variant bg-surface-container-low text-xs py-1 pl-2 pr-9 disabled:opacity-50 min-w-0 max-w-full flex-1 md:flex-none truncate">
                             <template x-for="o in liturgyOrders" :key="o.id">
                                 <option :value="o.id" :selected="o.id === selectedOrderId" x-text="orderLabel(o)"></option>
                             </template>
@@ -489,6 +489,8 @@
                             <span class="material-symbols-outlined">tune</span>
                         </a>
                     </div>
+                    <p class="font-body-md text-[12px] text-on-surface-variant mt-1 mb-0" x-show="translatingOrder" role="status">Moving what fits into this order.</p>
+                    <p class="font-body-md text-[12px] text-on-surface-variant mt-1 mb-0" x-show="translateNote && !translatingOrder" role="status" x-text="translateNote"></p>
                 </div>
             </div>
 
@@ -707,6 +709,23 @@
                             </div>
                         </div>
                     </template>
+
+                    <section id="liturgy-leftovers" class="m-card m-card--sm mb-4" x-show="leftoverItems.length" x-cloak aria-label="Didn't fit this order">
+                        <h2 class="m-section__title">Didn't fit this order</h2>
+                        <p class="font-body-md text-sm text-on-surface-variant mt-1 mb-3">These were filled in and have no place in this Liturgy Order. Discard one if this Sunday no longer needs it.</p>
+                        <ul class="m-card-list">
+                            <template x-for="(item, index) in leftoverItems" :key="item.sourceId + '-' + index">
+                                <li class="m-row">
+                                    <div class="m-row__main">
+                                        <span class="m-row__title" x-text="item.name"></span>
+                                        <span class="m-row__sub" x-text="item.detail"></span>
+                                    </div>
+                                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="discardLeftover(item.sourceId)" :disabled="!canEdit" :aria-label="'Discard ' + item.name">Discard</button>
+                                </li>
+                            </template>
+                        </ul>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm mt-3" x-show="leftoverItems.length > 1 && canEdit" @click="discardAllLeftovers()">Discard all</button>
+                    </section>
 
                     <div class="m-notice m-notice--error" role="alert" x-show="liturgyReadProblem" x-cloak>
                         <span class="material-symbols-outlined m-notice__icon">error</span>
@@ -1838,6 +1857,8 @@
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <script src="liturgy-order-core.js"></script>
+    <script src="liturgy-translate-core.js"></script>
+    <script src="liturgy-translate.js"></script>
     <script src="liturgy-order-store.js"></script>
     <script src="home-dashboard-core.js"></script>
     <script src="service-builder.js"></script>

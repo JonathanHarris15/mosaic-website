@@ -460,9 +460,12 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
       "What is currently planned for a Sunday: theme, key verse, which " +
       "Liturgy Order it follows and every element of that order in the " +
       "order the service actually runs, who chose each one, and who is " +
-      "preaching, leading, on music and being prayed for. Read this BEFORE " +
-      "proposing changes, so you know what is already there and do not " +
-      "offer to replace something that was deliberately chosen. Give one " +
+      "preaching, leading, on music and being prayed for. Filled elements " +
+      "that did not fit this Sunday's order come back as leftovers — the " +
+      "same drawer the Order of Service shows — so do not plan as if they " +
+      "were gone. Read this BEFORE proposing changes, so you know what is " +
+      "already there and do not offer to replace something that was " +
+      "deliberately chosen. Give one " +
       "date, or add 'through' to read a span of Sundays at once. Dates are " +
       "YYYY-MM-DD — resolve anything vaguer yourself and say which date you " +
       "settled on, because guessing a year silently is worse than asking. " +
@@ -650,7 +653,9 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
     return jsonResult({
       written: Object.keys(given),
       dateKey,
-      note: "Visible on the Order of Service page for that Sunday now.",
+      note: "Written. An open Order of Service page for that Sunday " +
+        "takes it without a reload. An element this Sunday's order does " +
+        "not include is stored and stays hidden.",
     });
   });
 

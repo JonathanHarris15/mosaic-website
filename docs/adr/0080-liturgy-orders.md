@@ -272,3 +272,45 @@ element that Sunday's own order lined up there, so two orders can share a
 heading and still store different placements. A cell for a column the
 Sunday's order does not use is quiet, and still shows a value the Sunday
 holds.
+
+## Amendment — translating a filled order onto another
+
+Changing the order used to move the pointer and nothing else. Values the
+new order did not carry stayed on their old ids, hidden, and came back when
+the order changed back. That was right while every Sunday was the one
+static list. It is the wrong tool once a congregation keeps several orders:
+a filled hymn has to land on the hymn slot of the order being switched to,
+and a baptism the new order does not have has to stay visible until somebody
+discards it.
+
+**Switching orders translates.** `liturgy-translate-core.js` is the
+assignment. The same element id is exact and stays in code, and so is a name
+that is the only one of its kind on both sides. What is still open is one
+Choice per slot — the filled elements, plus none — asked of Jev through
+`translateLiturgy`. Code assigns from the probabilities, highest first, so
+two slots cannot take the same element. A probability at or under 0.4, or
+no stronger than none, does not land. Baptism's candidate list moves only
+onto baptism. A prayer's people move only onto a prayer that asks for
+people. A slot with nothing comparable stays as it was, unless the value
+that used to be there was itself moved. What was filled and did not land is
+`liturgyLeftovers`, listed on the Order of Service until it is discarded.
+The next switch offers those leftovers again.
+
+When Jev does not answer — no key, the callable is not deployed, the call
+fails — the same assigner runs on kind and position: the next unused
+element of that kind, in the order they were filled. The page says
+"Matched in order, by kind." The Word import on Services uses this same
+plan. A line labeled the way the old static bulletin was labeled is an
+exact lookup. Any other line is a Choice. A line that fits nowhere is a
+leftover on that Sunday, not a hymn shoved into the next empty slot.
+
+The callable reads `TYPESAFE_API_KEY` through `defineSecret` and ships in
+the standing deploy set. A missing answer — the call fails, or the secret
+value is empty — still translates by kind and position.
+
+The MCP read of that Sunday includes `leftovers`, the same drawer. The
+write allowlist stays the Standard seed. An open Order of Service takes a
+switch, a leftover, or an assistant's write through the live listener
+(`live-read.js`), including the phone's re-read when the stream stays
+silent. A Standard element the Sunday's order does not include is stored
+and stays hidden.

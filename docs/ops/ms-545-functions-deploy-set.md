@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,firestore:rules
 ```
 
 | Target | Why it is in the set |
@@ -26,6 +26,7 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:notificationHistory` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Paged, filtered read of `notifications`. |
 | `functions:notificationRevokeToken` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Deletes one device token. Admin-gated, and refused without `confirm: true`. |
 | `functions:notificationTestPush` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Pushes to the **caller's own** devices only; the address is `request.auth.uid` and the only payload field read is `confirm`. |
+| `functions:translateLiturgy` | Liturgy translation. Export name in `functions/index.js` (`onCall`). The Order of Service switch and the Word import both call it. It asks Jev with `TYPESAFE_API_KEY`. Without this target those pages still translate, by kind and position. |
 
 There is deliberately **no** `functions:notificationDevices`. The device list
 rides on `notificationOverview` because on the server both halves are the same
@@ -71,6 +72,19 @@ Agents must not `firebase deploy` from a cloud box (AGENTS.md). Adding
 another function — or `firestore:rules` — to prod means adding it here
 (and to the agreement test), not a laptop CLI that skips the workflow.
 
+## `translateLiturgy` and `TYPESAFE_API_KEY`
+
+The secret is set on `mosaic-hymn-database`:
+
+```bash
+firebase functions:secrets:set TYPESAFE_API_KEY --project mosaic-hymn-database
+```
+
+The callable declares it with `defineSecret`. An empty value, or a Jev
+call that does not answer, still translates by kind and position. The
+ghost workflow writes a non-sending placeholder when that project has
+no `TYPESAFE_API_KEY` yet, the same way it does for `GEMINI_KEY`.
+
 ## Dry-run (MS-600) — Maintain CLEAR before live
 
 Same B path as MS-545 / MS-557 / MS-565. Plan only, through the
@@ -85,7 +99,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,firestore:rules`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits

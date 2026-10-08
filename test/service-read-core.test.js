@@ -91,6 +91,32 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         assert.deepStrictEqual(s.irregularElements, [{ name: 'Lessons and Carols' }]);
     });
 
+    test('leftovers come back with the Sunday, and an empty drawer is an empty list', () => {
+        const held = Read.readableService('2031-05-04', {
+            liturgyOrderId: 'communion',
+            liturgy: { callToWorship: 'Isaiah 55:1' },
+            liturgyLeftovers: [{
+                sourceId: 'hymn1',
+                kind: 'hymn',
+                name: 'Opening Hymn',
+                value: { id: 'h-1', name: 'It Is Well' },
+                note: '<p>Check the key</p>',
+                text: '',
+            }],
+        }, WITH_ORDERS);
+        assert.deepStrictEqual(held.leftovers, [{
+            sourceId: 'hymn1',
+            name: 'Opening Hymn',
+            kind: 'hymn',
+            value: { name: 'It Is Well', id: 'h-1' },
+            note: 'Check the key',
+        }]);
+        assert.ok(!fields(held).includes('hymn1'), 'a leftover is not also a row of this order');
+
+        const clear = Read.readableService('2031-05-11', { liturgy: {} });
+        assert.deepStrictEqual(clear.leftovers, []);
+    });
+
     test('a date with no document is an answer, not an error', () => {
         assert.deepStrictEqual(Read.readableService('2031-04-27', null, WITH_ORDERS),
             { date: '2031-04-27', exists: false, liturgy: [], people: {} });
