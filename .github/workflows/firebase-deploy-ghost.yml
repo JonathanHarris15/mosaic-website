@@ -16,10 +16,10 @@ name: Deploy Firebase ghost
 # mosaic-hymn-database. Do not point this file at that project.
 #
 # App Check stays off. A ghost web origin does not collect a token, and this
-# job never writes monitor or enforce. TEXTBELT_KEY and GEMINI_KEY are created
-# as non-sending placeholders only when Secret Manager does not already have
-# them, so a later real Gemini key is kept. autoSendEnabled stays at its
-# default (off) — this job does not turn texts on.
+# job never writes monitor or enforce. TEXTBELT_KEY, GEMINI_KEY, and
+# TYPESAFE_API_KEY are created as non-sending placeholders only when Secret
+# Manager does not already have them, so a later real key is kept.
+# autoSendEnabled stays at its default (off) — this job does not turn texts on.
 
 on:
   workflow_dispatch:
@@ -165,6 +165,7 @@ jobs:
           }
           ensure TEXTBELT_KEY ghost-does-not-send
           ensure GEMINI_KEY ghost-gemini-unset
+          ensure TYPESAFE_API_KEY ghost-typesafe-unset
 
       - name: Deploy the ghost
         run: |

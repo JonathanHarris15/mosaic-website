@@ -169,6 +169,13 @@ const TEXTBELT_KEY = defineSecret("TEXTBELT_KEY");
 const GEMINI_KEY = defineSecret("GEMINI_KEY");
 
 /**
+ * TypeSafe key for liturgy translation. Set or rotate it with:
+ *   firebase functions:secrets:set TYPESAFE_API_KEY
+ * An empty value still translates, by kind and position.
+ */
+const TYPESAFE_API_KEY = defineSecret("TYPESAFE_API_KEY");
+
+/**
  * Public URL of the smsInbound HTTP function. Textbelt POSTs reply webhooks
  * here so test-text replies land in the sms_test_replies stack. This is the
  * stable cloudfunctions.net alias for the deployed function.
@@ -1584,13 +1591,12 @@ exports.oosUpdateLiturgy = onCall(
 /**
  * Carry a filled order of service onto another liturgy order, or read a
  * bulletin into one. Jev chooses which filled moment is which slot. With
- * no TYPESAFE_API_KEY the same function answers by kind and position, so
- * a missing key never blocks the switch. Editor+ only: a call can spend
- * money. This export is not in the standing deploy set until that secret
- * exists — see docs/ops/ms-545-functions-deploy-set.md.
+ * no key the same function answers by kind and position, so a missing
+ * value never blocks the switch. Editor+ only: a call can spend money.
+ * In the standing deploy set — docs/ops/ms-545-functions-deploy-set.md.
  */
 exports.translateLiturgy = onCall(
-    {cors: true, region: "us-central1"},
+    {cors: true, region: "us-central1", secrets: [TYPESAFE_API_KEY]},
     async (request) => {
       if (!request.auth) {
         throw new HttpsError(
@@ -1614,7 +1620,7 @@ exports.translateLiturgy = onCall(
         throw new HttpsError("invalid-argument",
             "That order is too large to translate in one pass.");
       }
-      return liturgyTranslate.judge(process.env.TYPESAFE_API_KEY || "", data);
+      return liturgyTranslate.judge(TYPESAFE_API_KEY.value() || "", data);
     },
 );
 

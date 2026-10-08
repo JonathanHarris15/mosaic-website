@@ -269,7 +269,6 @@ plan. A line labeled the way the old static bulletin was labeled is an
 exact lookup. Any other line is a Choice. A line that fits nowhere is a
 leftover on that Sunday, not a hymn shoved into the next empty slot.
 
-The callable reads `TYPESAFE_API_KEY` from the environment and is not in
-the standing deploy set until that secret exists. Adding it before the
-secret exists would fail the church deploy. Until then the pages still
-translate, by kind and position.
+The callable reads `TYPESAFE_API_KEY` through `defineSecret` and ships in
+the standing deploy set. A missing answer — the call fails, or the secret
+value is empty — still translates by kind and position.
