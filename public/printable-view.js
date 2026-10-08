@@ -20,10 +20,14 @@ function printableView() {
         entries: [],
         warnings: [],
         zoom: 1,
+        zoomPinned: false,
         showWarnings: false,
         fillTotal: 0,
         fillLeft: 0,
         fillNote: '',
+        focusId: '',
+        focusIndex: 0,
+        justDone: false,
         eventBag: {},
         sundayDrafts: {},
         kidsLines: {},
@@ -35,10 +39,10 @@ function printableView() {
         get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get canFill() { return this.canEdit; },
         get fillLeftText() {
-            if (!this.fillLeft) return 'Nothing left to fill';
-            if (this.fillLeft === 1) return '1 left to fill';
-            return this.fillLeft + ' left to fill';
+            const Fill = window.PrintableFillCore;
+            return Fill ? Fill.leftToGoText(this.fillLeft) : '';
         },
+        get zoomLabel() { return Math.round(this.zoom * 100) + '%'; },
         get editorHref() {
             let href = 'printable-editor.html?id=' + encodeURIComponent(this.id);
             if (this.viewDate) href += '&asOf=' + encodeURIComponent(this.viewDate);
@@ -102,6 +106,42 @@ function printableView() {
                 }
             });
             window.addEventListener('resize', () => this.fit());
+            this.bindChrome();
+        },
+
+        bindChrome() {
+            if (this._chrome) return;
+            this._chrome = true;
+            const view = this;
+            window.addEventListener('keydown', (e) => {
+                if (!view.template) return;
+                const mod = e.ctrlKey || e.metaKey;
+                if (!mod) return;
+                if (e.key === '=' || e.key === '+') { e.preventDefault(); view.zoomIn(); }
+                else if (e.key === '-' || e.key === '_') { e.preventDefault(); view.zoomOut(); }
+                else if (e.key === '0') { e.preventDefault(); view.zoomFit(); }
+            });
+            window.addEventListener('wheel', (e) => {
+                if (!(e.ctrlKey || e.metaKey) || !view.template) return;
+                e.preventDefault();
+                view.setZoom(view.zoom * Math.exp(-e.deltaY * 0.0015));
+            }, { passive: false });
+            // Remember which blank the person is in, including one they
+            // clicked themselves. The arrow click moves focus onto the
+            // arrow before it runs, so the remembered blank is what it steps from.
+            document.addEventListener('focusin', (e) => {
+                const t = e.target;
+                if (!t || !t.closest) return;
+                const host = t.closest('[data-fill-id]');
+                if (!host) return;
+                const id = host.getAttribute('data-fill-id');
+                const blanks = view.remainingBlanks();
+                const at = blanks.findIndex(s => s.id === id);
+                if (at < 0) return;
+                view.focusId = id;
+                view.focusIndex = at;
+                view.markBlank(id);
+            });
         },
 
         async resolveAndDraw() {
@@ -267,8 +307,67 @@ function printableView() {
             this.fillById = {};
             this.fillSlots.forEach(slot => { this.fillById[slot.id] = slot; });
             const tally = Fill.tally(this.fillSlots, slot => this.valueForSlot(slot));
+            const before = this.fillLeft;
             this.fillTotal = tally.total;
             this.fillLeft = tally.left;
+            if (before > 0 && this.fillLeft === 0) {
+                this.justDone = true;
+                if (this._doneTimer) clearTimeout(this._doneTimer);
+                this._doneTimer = setTimeout(() => { this.justDone = false; }, 900);
+            } else if (this.fillLeft > 0) {
+                this.justDone = false;
+            }
+        },
+
+        remainingBlanks() {
+            const Fill = window.PrintableFillCore;
+            if (!Fill) return [];
+            return Fill.remaining(this.fillSlots, slot => this.valueForSlot(slot));
+        },
+
+        liveBlankId(ids) {
+            const active = document.activeElement;
+            const host = active && active.closest ? active.closest('[data-fill-id]') : null;
+            const activeId = host ? host.getAttribute('data-fill-id') : '';
+            if (activeId && ids.indexOf(activeId) >= 0) return { id: activeId, fallback: 0 };
+            if (this.focusId && ids.indexOf(this.focusId) >= 0) return { id: this.focusId, fallback: 0 };
+            if (this.focusId) return { id: this.focusId, fallback: this.focusIndex };
+            return { id: '', fallback: 0 };
+        },
+
+        goBlank(delta) {
+            const Fill = window.PrintableFillCore;
+            const blanks = this.remainingBlanks();
+            if (!Fill || !blanks.length) return;
+            const ids = blanks.map(s => s.id);
+            const live = this.liveBlankId(ids);
+            const id = Fill.stepBlank(ids, live.id, delta, live.fallback);
+            const slot = blanks.find(s => s.id === id);
+            if (slot) this.revealBlank(slot);
+        },
+
+        markBlank(slotId) {
+            document.querySelectorAll('.pv-fill--current').forEach(node => node.classList.remove('pv-fill--current'));
+            const el = document.querySelector(this.fillSelector(slotId));
+            if (!el) return null;
+            const mark = el.closest('.pv-fill-img') || el;
+            mark.classList.add('pv-fill--current');
+            return { el: el, mark: mark };
+        },
+
+        revealBlank(slot) {
+            const blanks = this.remainingBlanks();
+            const at = blanks.findIndex(s => s.id === slot.id);
+            this.focusId = slot.id;
+            this.focusIndex = at < 0 ? 0 : at;
+            const found = this.markBlank(slot.id);
+            if (!found) return;
+            const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            found.mark.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center', inline: 'nearest' });
+            if (typeof found.el.focus === 'function') {
+                try { found.el.focus({ preventScroll: true }); }
+                catch (e) { found.el.focus(); }
+            }
         },
 
         mountListAdds(page) {
@@ -280,6 +379,8 @@ function printableView() {
                 btn.type = 'button';
                 btn.className = 'pv-fill-add';
                 btn.textContent = spec.label;
+                const empty = Fill.emptyListSlot(this.project, el.getAttribute('data-list-of'));
+                if (empty) btn.setAttribute('data-fill-id', empty.id);
                 btn.addEventListener('click', () => this.addFillRow(spec));
                 el.appendChild(btn);
             });
@@ -287,6 +388,7 @@ function printableView() {
 
         wireFills(stage) {
             stage.querySelectorAll('[data-fill-id]').forEach(el => {
+                if (el.tagName === 'BUTTON') return;
                 const id = el.getAttribute('data-fill-id');
                 if (this.fillCommitted[id] == null) this.fillCommitted[id] = el.value || '';
                 if (el.type === 'file') {
@@ -460,21 +562,42 @@ function printableView() {
             this.relayout();
         },
 
-        fit() {
+        applyZoom() {
             const stage = document.getElementById('pv-pages');
             const t = this.template;
             if (!stage || !t) return;
-            if (!stage.clientWidth) return;
-            const available = Math.min(stage.clientWidth - 32, 1100);
-            const zoom = Math.max(0.1, Math.min(1, available / t.widthPx));
-            if (Math.abs(zoom - this.zoom) < 0.001) return;
-            this.zoom = zoom;
+            const zoom = this.zoom;
             Array.from(stage.children).forEach(sheet => {
                 sheet.style.width = (t.widthPx * zoom) + 'px';
                 sheet.style.height = (t.heightPx * zoom) + 'px';
                 const page = sheet.firstChild;
                 if (page) page.style.transform = 'scale(' + zoom + ')';
             });
+        },
+
+        setZoom(next) {
+            const z = Math.max(0.15, Math.min(3, next));
+            this.zoomPinned = true;
+            if (Math.abs(z - this.zoom) < 0.001) return;
+            this.zoom = z;
+            this.applyZoom();
+        },
+
+        zoomIn() { this.setZoom(this.zoom * 1.2); },
+        zoomOut() { this.setZoom(this.zoom / 1.2); },
+        zoomFit() { this.zoomPinned = false; this.fit(); },
+
+        fit() {
+            const stage = document.getElementById('pv-pages');
+            const t = this.template;
+            if (!stage || !t) return;
+            if (this.zoomPinned) { this.applyZoom(); return; }
+            if (!stage.clientWidth) return;
+            const available = Math.min(stage.clientWidth - 32, 1100);
+            const zoom = Math.max(0.1, Math.min(1, available / t.widthPx));
+            if (Math.abs(zoom - this.zoom) < 0.001) return;
+            this.zoom = zoom;
+            this.applyZoom();
         },
 
         printEntries() {

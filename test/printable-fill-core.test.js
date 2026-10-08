@@ -126,6 +126,34 @@ test('writing one Sunday blank keeps the rest of the Sunday', () => {
     assert.equal(saved.announcements[0].title, 'Picnic');
 });
 
+test('what is left to go stays in page order, and a step walks that list', () => {
+    const slots = [
+        { id: 'a', store: 'event' },
+        { id: 'a', store: 'event' },
+        { id: 'b', store: 'event' },
+        { id: 'c', store: 'empty-list' },
+        { id: 'd', store: 'sunday' },
+    ];
+    const values = { a: 'Yes', b: '  ', d: '' };
+    const left = Fill.remaining(slots, slot => values[slot.id]);
+    assert.deepEqual(left.map(s => s.id), ['b', 'c', 'd']);
+    assert.equal(Fill.leftToGoText(16), '16 left to go');
+    assert.equal(Fill.leftToGoText(1), '1 left to go');
+    const ids = left.map(s => s.id);
+    assert.equal(Fill.stepBlank(ids, '', 1), 'b');
+    assert.equal(Fill.stepBlank(ids, '', -1), 'd');
+    assert.equal(Fill.stepBlank(ids, 'b', 1), 'c');
+    assert.equal(Fill.stepBlank(ids, 'b', -1), 'd');
+    assert.equal(Fill.stepBlank(ids, 'd', 1), 'b');
+    // b was filled; c slid into its place. Forward lands on c, back on the new last.
+    assert.equal(Fill.stepBlank(['c', 'd'], 'b', 1, 0), 'c');
+    assert.equal(Fill.stepBlank(['c', 'd'], 'b', -1, 0), 'd');
+    // The last blank was filled. Forward wraps to the first.
+    assert.equal(Fill.stepBlank(['b', 'c'], 'd', 1, 2), 'b');
+    assert.equal(Fill.stepBlank(['b', 'c'], 'd', -1, 2), 'c');
+    assert.equal(Fill.stepBlank([], 'b', 1, 0), '');
+});
+
 test('the preview is where an editor fills blanks, and the link place does not list them', () => {
     const viewJs = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
     const viewHtml = fs.readFileSync(path.join(__dirname, '../public/printable-view.html'), 'utf8');
@@ -135,6 +163,17 @@ test('the preview is where an editor fills blanks, and the link place does not l
     assert.match(viewJs, /get canFill\(\) \{ return this\.canEdit; \}/);
     assert.match(viewHtml, /fillLeftText/);
     assert.match(viewHtml, /role="status"/);
+    assert.match(viewHtml, /m-header--sticky/);
+    assert.match(viewHtml, /class="pv-zoom"/);
+    assert.match(viewHtml, /class="pv-go"/);
+    assert.match(viewHtml, /Zoom in/);
+    assert.match(viewHtml, /Zoom out/);
+    assert.match(viewHtml, /Previous blank/);
+    assert.match(viewHtml, /Next blank/);
+    assert.match(viewJs, /leftToGoText/);
+    assert.match(viewJs, /goBlank/);
+    assert.match(viewJs, /ctrlKey \|\| e\.metaKey/);
+    assert.equal(viewHtml.includes('pv-left'), false);
     const printFn = viewJs.slice(viewJs.indexOf('printPrintable()'), viewJs.indexOf('printFolio()'));
     const folioFn = viewJs.slice(viewJs.indexOf('printFolio()'));
     assert.equal(printFn.includes('fillFor'), false);
