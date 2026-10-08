@@ -531,6 +531,111 @@ test('templatesWithAnswerLink adds a {link} slot when a saved template omitted i
     assert.strictEqual(withSlot.thankyou, 'Thanks {name}.');
 });
 
+test('automatic: a prayer set to 10 days asks on day 10 and not on day 11', () => {
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, daysUntilService: 10, noticeDays: 10,
+    }), 'initial');
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, daysUntilService: 11, noticeDays: 10,
+    }), 'none');
+});
+
+test('automatic: the reminder follows two days after the first ask', () => {
+    assert.strictEqual(pr.reminderDaysFor(10), 8);
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, daysUntilService: 8, noticeDays: 10, initialSentDate: '2026-06-20',
+    }), 'reminder');
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, daysUntilService: 9, noticeDays: 10, initialSentDate: '2026-06-20',
+    }), 'none');
+});
+
+test('automatic: 0 days sends nothing on its own', () => {
+    assert.strictEqual(pr.noticeDaysOf({ requests: { count: 1 }, noticeDays: 0 }), 0);
+    assert.strictEqual(pr.prayerRequestAction({
+        ...baseAuto, daysUntilService: 0, noticeDays: 0,
+    }), 'none');
+});
+
+test('notice days: a prayer with no number keeps the old five', () => {
+    assert.strictEqual(pr.noticeDaysOf({ requests: { count: 1 } }), 5);
+    assert.strictEqual(pr.noticeDaysOf({ kind: 'hymn' }), 0);
+});
+
+test('pastoral subjects: a prayer and the older fields are one list', () => {
+    const prayer = {
+        id: 'pastoral', kind: 'prayer', name: 'Pastoral Prayer',
+        requests: { count: 1, who: 'either' }, noticeDays: 10,
+    };
+    const subjects = pr.pastoralSubjects({
+        liturgy: {
+            pastoral: [{ id: 'p-ada', name: 'Ada Cole' }],
+            prayerMale: { id: 'p-ada', name: 'Ada Cole' },
+            prayerFemale: { id: 'p-bea', name: 'Bea Cole' },
+        },
+        elements: [prayer],
+    });
+    assert.deepStrictEqual(subjects.map((s) => s.id), ['p-ada', 'p-bea']);
+    const ada = subjects.find((s) => s.id === 'p-ada');
+    assert.strictEqual(ada.noticeDays, 10);
+    assert.strictEqual(ada.fromElement, true);
+    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 10);
+});
+
+test('pastoral subjects: a prayer set to 0 does not tell its own people', () => {
+    const subjects = pr.pastoralSubjects({
+        liturgy: {
+            quiet: [{ id: 'p-ada', name: 'Ada Cole' }],
+            prayerMale: { id: 'p-bea', name: 'Bea Cole' },
+        },
+        elements: [{
+            id: 'quiet', kind: 'prayer', requests: { count: 1, who: 'either' },
+            noticeDays: 0,
+        }],
+    });
+    assert.strictEqual(subjects.find((s) => s.id === 'p-ada').noticeDays, 0);
+    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 5);
+});
+
+test('prayer notice plan: days on a prayer turn asking on', () => {
+    const on = pr.prayerNoticePlan({
+        liturgy: {},
+        elements: [{
+            id: 'p', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 4,
+        }],
+    });
+    assert.strictEqual(on.notifies, true);
+    const off = pr.prayerNoticePlan({
+        liturgy: { prayerMale: { id: 'p-ada', name: 'Ada' } },
+        elements: [{
+            id: 'p', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 0,
+        }],
+    });
+    assert.strictEqual(off.notifies, false);
+    assert.strictEqual(off.subjects[0].id, 'p-ada');
+});
+
+test('mayAnswer: a person named on a requesting prayer can answer', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        liturgy: liturgyFor('p-other', 'p-john'),
+        subjectIds: ['p-jane'],
+        noticeDays: 10,
+        todayDate: '2026-06-18',
+        viaAnswerLink: false,
+    }), true);
+});
+
+test('mayAnswer: signed-in before that prayer\'s days → no', () => {
+    assert.strictEqual(pr.mayAnswerPrayerRequest({
+        ...baseMayAnswer,
+        subjectIds: ['p-jane'],
+        noticeDays: 4,
+        todayDate: '2026-06-23',
+        viaAnswerLink: false,
+    }), false);
+});
+
 test('ensureAnswerLinkInTemplate appends the link when {link} is missing', () => {
     const url = 'https://mosaic-hymn-database.web.app/a/tok';
     const withSlot = pr.ensureAnswerLinkInTemplate('Hi {name}, reply here: {link}', url);

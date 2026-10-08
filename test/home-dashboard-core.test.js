@@ -93,6 +93,33 @@ test('a scripture reading is set when the reference is filled', () => {
     assert.equal(set.state, 'set');
 });
 
+test('a prayer is scored only for what the order asked', () => {
+    const plain = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, { name: 'Opening Prayer' });
+    assert.equal(
+        Home.checklist({}, plain.catalog).find(function (item) { return item.key === plain.element.id; }),
+        undefined,
+        'the service leader prays it, so the Sunday has nothing to fill'
+    );
+
+    const marked = Liturgy.updateElement(plain.catalog, plain.element.id, { prayedByOther: true });
+    const id = plain.element.id;
+    const blank = Home.checklist({}, marked).find(function (item) { return item.key === id; });
+    assert.equal(blank.state, 'blank');
+    const named = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, marked)
+        .find(function (item) { return item.key === id; });
+    assert.equal(named.state, 'set');
+
+    const both = Liturgy.updateElement(marked, id, { requests: { count: 1, who: 'either' } });
+    const half = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, both)
+        .find(function (item) { return item.key === id; });
+    assert.equal(half.state, 'blank');
+    const full = Home.checklist({
+        carriedBy: { [id]: { id: 'p1', name: 'Ada' } },
+        liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
+    }, both).find(function (item) { return item.key === id; });
+    assert.equal(full.state, 'set');
+});
+
 test('a person event is unfinished until the person is named', () => {
     const made = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'person', 0, { name: 'Reader' });
     const id = made.element.id;

@@ -408,8 +408,10 @@
                 {
                     kind: 'schedule',
                     name: 'sendPrayerRequestTexts',
-                    how: 'Hourly. Asks five days out, once, when the ' +
-                        'Prayer Request is still empty.',
+                    how: 'Hourly. Asks the number of days set on the ' +
+                        'prayer in the Liturgy Order — five, when that ' +
+                        'prayer has not set one — once, when the Prayer ' +
+                        'Request is still empty.',
                 },
                 {
                     kind: 'manual',
@@ -418,11 +420,11 @@
                         'elder, a super admin, or a Pastoral Assistant.',
                 },
             ],
-            killSwitch: 'Automatic sending (this page). The manual button ' +
-                'ignores the switch.',
+            killSwitch: 'Days in advance on the Liturgy Order. 0 sends ' +
+                'nothing on its own. A Sunday whose order has no such ' +
+                'prayer still follows the saved automatic-sending switch.',
             window: 'church-unless-manual',
-            wordingSource: 'Prayer Request Messages → Initial request, and ' +
-                'its lock screen',
+            wordingSource: 'The built-in prayer request wording',
             live: true,
         },
         {
@@ -431,13 +433,13 @@
             purpose: 'prayer_request',
             wording: 'reminder',
             channels: ['push', 'text'],
-            audience: 'A subject three days out whose request is still empty',
+            audience: 'A subject closer in, two days after the first ask, whose request is still empty',
             firedBy: [
                 {
                     kind: 'schedule',
                     name: 'sendPrayerRequestTexts',
-                    how: 'Hourly. Three days out, once, and only after an ' +
-                        'initial ask went unanswered.',
+                    how: 'Hourly. Two days closer than the first ask, once, ' +
+                        'and only after that ask went unanswered.',
                 },
                 {
                     kind: 'manual',
@@ -445,11 +447,11 @@
                     how: 'The same button, pressed again after the initial.',
                 },
             ],
-            killSwitch: 'Automatic sending (this page). The manual button ' +
-                'ignores the switch.',
+            killSwitch: 'Days in advance on the Liturgy Order. 0 sends ' +
+                'nothing on its own. A Sunday whose order has no such ' +
+                'prayer still follows the saved automatic-sending switch.',
             window: 'church-unless-manual',
-            wordingSource: 'Prayer Request Messages → Reminder, and its ' +
-                'lock screen',
+            wordingSource: 'The built-in prayer request wording',
             escalates: true,
             live: true,
         },
@@ -469,7 +471,7 @@
             ],
             killSwitch: 'None. It answers a person who just wrote in.',
             window: 'none',
-            wordingSource: 'Prayer Request Messages → Thank-you reply',
+            wordingSource: 'The built-in prayer request wording',
             live: true,
             note: 'Text only. It replies to a text, so it has never asked ' +
                 'the send path for a channel.',
@@ -491,7 +493,7 @@
             ],
             killSwitch: 'None. Independent of Automatic sending.',
             window: 'none',
-            wordingSource: 'Prayer Request Messages → Elder digest',
+            wordingSource: 'The built-in prayer request wording',
             live: true,
             note: 'Text only, and one row per elder plus a lock row named ' +
                 'elder_digest_<date> that stops a second digest.',

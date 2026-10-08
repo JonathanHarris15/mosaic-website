@@ -22,7 +22,7 @@
 <!-- Liturgy Orders (ADR-0080). The congregation's Liturgy Elements and the
      orders made of them, on one page. A Sunday picks its order on the Order
      of Service; this page decides what the orders are. -->
-<body class="m-page" x-data="liturgyOrdersPage()" x-init="init()" x-cloak>
+<body class="m-page m-page--tool" x-data="liturgyOrdersPage()" x-init="init()" x-cloak>
 
     <header class="m-header">
         <div class="m-header__inner">
@@ -74,7 +74,7 @@
             <div class="lo-grid">
 
                 <!-- ── Elements: the five kinds, to the left of the order ── -->
-                <section class="m-section" aria-labelledby="elements-title">
+                <section class="m-section lo-kinds" aria-labelledby="elements-title">
                     <div class="m-section__head">
                         <h2 class="m-section__title" id="elements-title">Elements</h2>
                     </div>
@@ -85,7 +85,7 @@
                                 <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag into the order" aria-hidden="true">drag_indicator</span>
                                 <span class="m-row__main">
                                     <span class="m-row__title" x-text="kindLabel(kind)"></span>
-                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A scripture reference, on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
+                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A name here, and a reference on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
                                 </span>
                                 <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing" @click="placeKind(kind)"
                                         :aria-label="'Add ' + kindLabel(kind) + ' to ' + selectedOrder.name">
@@ -97,7 +97,7 @@
                 </section>
 
                 <!-- ── The order being edited ──────────────────────────── -->
-                <section class="m-section" aria-labelledby="order-title">
+                <section class="m-section lo-order" aria-labelledby="order-title">
                     <div class="m-section__head">
                         <h2 class="m-section__title" id="order-title">Order</h2>
                     </div>
@@ -141,16 +141,28 @@
                                     <span class="m-row__title" x-show="!takesName(el.kind)" x-text="el.name"></span>
                                     <span class="m-row__sub" x-text="kindLabel(el.kind) + (el.hasNote ? ' · note' : '')"></span>
                                     <label class="m-check" x-show="editing && el.kind === 'prayer'">
+                                        <input type="checkbox" :checked="!!el.prayedByOther" @change="updateElement(el.id, { prayedByOther: $event.target.checked })" />
+                                        <span>Prayed by someone other than the service leader</span>
+                                    </label>
+                                    <label class="m-check" x-show="editing && el.kind === 'prayer'">
                                         <input type="checkbox" :checked="!!el.requests" @change="updateElement(el.id, { requests: $event.target.checked ? { count: 1, who: 'either' } : null })" />
                                         <span>Send prayer requests</span>
                                     </label>
                                     <template x-if="editing && el.kind === 'prayer' && el.requests">
+                                        <span>
                                         <span class="lo-prayer">
                                             <label class="m-field">
                                                 <span class="m-label">How many</span>
                                                 <input class="m-input" type="number" min="1" max="12"
                                                        :aria-label="'How many people for ' + el.name"
                                                        x-model.number="el.requests.count" @change="clampRequests(el)" />
+                                            </label>
+                                            <label class="m-field">
+                                                <span class="m-label">Days in advance</span>
+                                                <input class="m-input" type="number" min="0" max="30"
+                                                       :aria-label="'Days in advance for ' + el.name"
+                                                       :value="el.noticeDays"
+                                                       @change="updateElement(el.id, { noticeDays: $event.target.value })" />
                                             </label>
                                             <label class="m-field">
                                                 <span class="m-label">Who</span>
@@ -164,6 +176,8 @@
                                                 </select>
                                                 </span>
                                             </label>
+                                        </span>
+                                        <span class="lo-hint">A text or a push goes out this many days before the Sunday. A reminder follows two days later. 0 sends nothing on its own.</span>
                                         </span>
                                     </template>
                                 </span>
@@ -224,9 +238,18 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
     <style>
-        .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
-        .lo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
-        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 280px minmax(0, 1fr); } }
+        .m-page--tool .m-page__body { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+        .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); flex: 1 1 auto; min-height: 0; overflow: hidden; }
+        .lo-grid {
+            display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+            gap: var(--space-lg); align-items: stretch; flex: 1 1 auto; min-height: 0; overflow: hidden;
+        }
+        @media (min-width: 1024px) {
+            .lo-grid { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+        }
+        .lo-kinds { min-height: 0; overflow: hidden; }
+        .lo-order { min-height: 0; height: 100%; overflow: hidden; }
+        #order-elements { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
         .lo-order-bar { display: flex; align-items: flex-end; gap: var(--space-sm); }
         .lo-order-bar > .m-select-wrap { flex: 1 1 auto; min-width: 0; }
         .lo-library--drag [data-library-item] { cursor: grab; }
@@ -237,6 +260,7 @@
         .lo-form--row .lo-grow { flex: 2 1 240px; }
         .lo-form > .m-btn { align-self: flex-start; }
         .lo-form--row > .m-btn { align-self: flex-end; }
+        .lo-hint { display: block; margin-top: var(--space-xs); font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); white-space: normal; }
         .lo-prayer { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-xs); }
         .lo-prayer .m-field { flex: 1 1 8rem; }
         .lo-stack .m-row__main, .lo-stack .m-row__title, .lo-stack .m-row__sub { display: block; }

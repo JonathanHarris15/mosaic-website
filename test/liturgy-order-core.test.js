@@ -133,6 +133,76 @@ test('a new element id is stable, readable, and never a reserved or taken key', 
     assert.throws(() => Core.addElement(cat, { name: 'Clip', primitive: 'video' }));
 });
 
+test('a scripture is titled on the order and the kind is called Scripture', () => {
+    assert.equal(Core.KIND_LABELS.scripture, 'Scripture');
+    assert.equal(Core.PRIMITIVE_LABELS.scripture, 'Scripture');
+    assert.equal(Core.kindTakesName('scripture'), true);
+    assert.equal(Core.kindTakesName('hymn'), false);
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'scripture', 2);
+    assert.equal(made.element.name, 'Scripture');
+    assert.equal(made.element.hasRole, false);
+    const renamed = Core.updateElement(made.catalog, made.element.id, { name: 'The Epistle' });
+    assert.equal(Core.elementById(renamed, made.element.id).name, 'The Epistle');
+    const round = Core.normaliseElement({ id: made.element.id, kind: 'scripture', name: 'The Epistle' });
+    assert.equal(round.name, 'The Epistle');
+    assert.equal(round.kind, 'scripture');
+});
+
+test('a kind lands where it was dropped, not at the top', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'other', 3, { name: 'Offertory' });
+    assert.equal(made.catalog.orders[0].elementIds[3], made.element.id);
+    assert.equal(made.catalog.orders[0].elementIds[0], 'preparatoryHymn');
+});
+
+test('a prayer can be prayed by someone other than the service leader', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 1, { name: 'Opening Prayer' });
+    assert.equal(made.element.prayedByOther, false);
+    assert.equal(made.element.hasRole, false);
+    const on = Core.updateElement(made.catalog, made.element.id, { prayedByOther: true });
+    const el = Core.elementById(on, made.element.id);
+    assert.equal(el.prayedByOther, true);
+    assert.equal(el.hasRole, false);
+    const round = Core.normaliseElement({ id: el.id, kind: 'prayer', name: el.name, prayedByOther: true });
+    assert.equal(round.prayedByOther, true);
+    assert.equal(round.hasRole, false);
+    const off = Core.updateElement(on, el.id, { prayedByOther: false });
+    assert.equal(Core.elementById(off, el.id).prayedByOther, false);
+    const hymn = Core.updateElement(off, 'hymn1', { prayedByOther: true });
+    assert.ok(!Core.elementById(hymn, 'hymn1').prayedByOther);
+});
+
+test('a prayer that sends requests remembers how many days ahead', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 0, { name: 'Pastoral Prayer' });
+    const on = Core.updateElement(made.catalog, made.element.id, { requests: { count: 2, who: 'either' } });
+    const el = Core.elementById(on, made.element.id);
+    assert.equal(el.noticeDays, 5);
+    const sooner = Core.updateElement(on, el.id, { noticeDays: 10 });
+    assert.equal(Core.elementById(sooner, el.id).noticeDays, 10);
+    const quiet = Core.updateElement(sooner, el.id, { noticeDays: 0 });
+    assert.equal(Core.elementById(quiet, el.id).noticeDays, 0);
+    const off = Core.updateElement(quiet, el.id, { requests: null });
+    assert.equal(Core.elementById(off, el.id).noticeDays, null);
+    const round = Core.normaliseElement({
+        id: el.id, kind: 'prayer', name: el.name,
+        requests: { count: 2, who: 'male' }, noticeDays: 7,
+    });
+    assert.equal(round.noticeDays, 7);
+});
+
+test('older prayer fields sit under the seed rows they belong with', () => {
+    const order = Core.standardCatalog().orders[0];
+    const homes = Core.legacyPrayerHomes(order, 'Pastoral Prayer');
+    assert.equal(homes.praiseId, 'callToWorship');
+    assert.equal(homes.confessionId, 'callToConfession');
+    assert.equal(homes.pastoralId, 'scriptureReading');
+    const renamed = Core.legacyPrayerHomes(order, 'congregational prayer');
+    assert.equal(renamed.pastoralId, null);
+    const stripped = {
+        elements: order.elements.filter(function (el) { return el.id !== 'callToWorship'; }),
+    };
+    assert.equal(Core.legacyPrayerHomes(stripped, 'Pastoral Prayer').praiseId, null);
+});
+
 test('moving within an order reorders it and the source catalog is untouched', () => {
     const cat = Core.standardCatalog();
     const moved = Core.moveInOrder(cat, 'standard', 0, 2);

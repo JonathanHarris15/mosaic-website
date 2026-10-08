@@ -21,6 +21,8 @@ const {
 } = require("./sms");
 const pr = require("./prayer-request");
 const prWrites = require("./prayer-request-writes");
+const liturgyCatalog = require("./liturgy-catalog");
+const LiturgyOrders = require("./shared/liturgy-order-core");
 const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
@@ -2949,6 +2951,8 @@ async function processPrayerSubject(db, args) {
     initialSentDate: req.initialSentDate || null,
     reminderSent: !!req.reminderSent,
     today,
+    noticeDays: args.noticeDays,
+    reminderDays: args.reminderDays,
   });
   if (action === "none") return;
 
@@ -2966,12 +2970,33 @@ async function processPrayerSubject(db, args) {
 }
 
 /**
- * Hourly scheduled sender for pastoral-prayer Prayer Request texts. Gated
- * by the autoSendEnabled kill switch (default off). For each upcoming
- * Service within the initial-send window, each pastoral-prayer subject
- * (prayerMale/prayerFemale) with an empty request is texted per the
- * 5-day/3-day, 8am-8pm-Central rules.
+ * Who a Sunday asks, and whether its order has turned asking on.
+ * A failed order read falls back to the older male and female fields.
+ * @param {Object} db Firestore instance.
+ * @param {Object} service the service document
+ * @param {Object} liturgy
+ * @param {Object|false|null} catalog loaded orders, false after a failed
+ *   read, or null to load them here
+ * @return {Promise<{subjects: Array, notifies: boolean}>}
  */
+async function prayerPlanForService(db, service, liturgy, catalog) {
+  if (catalog === false) {
+    return pr.prayerNoticePlan({liturgy, elements: []});
+  }
+  let orders = catalog;
+  if (!orders) {
+    try {
+      orders = await liturgyCatalog.loadLiturgyCatalog(db);
+    } catch (err) {
+      log("Liturgy orders could not be read; using the Sunday's " +
+          "prayer fields. " + err);
+      return pr.prayerNoticePlan({liturgy, elements: []});
+    }
+  }
+  const order = LiturgyOrders.orderFor(service || {}, orders);
+  return pr.prayerNoticePlan({liturgy, elements: order.elements});
+}
+
 /**
  * Hourly sender for told event announcements (MS-623). Uses the MS-189
  * Notification path when notification-send.js is on the branch; otherwise
@@ -3000,6 +3025,13 @@ exports.sendEventAnnouncementTells = onSchedule(
     },
 );
 
+/**
+ * Hourly scheduled sender for pastoral-prayer Prayer Request texts.
+ * A prayer on the Liturgy Order tells its people the number of days that
+ * prayer sets, even when the older admin switch is off. A Sunday whose
+ * order has no such prayer still follows that switch and the older male
+ * and female fields.
+ */
 exports.sendPrayerRequestTexts = onSchedule(
     {
       schedule: "every 60 minutes",
@@ -3010,10 +3042,6 @@ exports.sendPrayerRequestTexts = onSchedule(
     async () => {
       const db = admin.firestore();
       const {templates, autoSendEnabled} = await loadPrayerConfig(db);
-      if (!autoSendEnabled) {
-        log("sendPrayerRequestTexts: automation disabled — skipping.");
-        return;
-      }
 
       const {date: today, hour: localHour} = pr.churchDateParts(new Date());
       if (localHour < pr.WINDOW_OPEN_HOUR ||
@@ -3025,17 +3053,35 @@ exports.sendPrayerRequestTexts = onSchedule(
           .where(admin.firestore.FieldPath.documentId(), ">=", today)
           .get();
 
+      let catalog = null;
+      try {
+        catalog = await liturgyCatalog.loadLiturgyCatalog(db);
+      } catch (err) {
+        log("sendPrayerRequestTexts: liturgy orders could not be read. " + err);
+        catalog = false;
+      }
+
       for (const doc of snap.docs) {
         const serviceDate = doc.id;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) continue;
-        if (pr.daysUntil(serviceDate, today) > pr.INITIAL_DAYS_OUT) continue;
+        const service = doc.data() || {};
+        const liturgy = service.liturgy || {};
+        const plan = await prayerPlanForService(db, service, liturgy, catalog);
+        if (!plan.notifies && !autoSendEnabled) continue;
+        const horizon = plan.subjects.reduce(
+            (max, subject) => Math.max(max, subject.noticeDays || 0), 0);
+        if (pr.daysUntil(serviceDate, today) > horizon) continue;
 
-        const liturgy = doc.data().liturgy || {};
-        const subjects = [liturgy.prayerMale, liturgy.prayerFemale]
-            .filter((s) => s && s.id);
-        for (const subject of subjects) {
+        for (const subject of plan.subjects) {
+          if (!(subject.noticeDays > 0)) continue;
           await processPrayerSubject(db, {
-            serviceDate, personId: subject.id, today, localHour, templates,
+            serviceDate,
+            personId: subject.id,
+            today,
+            localHour,
+            templates,
+            noticeDays: subject.noticeDays,
+            reminderDays: pr.reminderDaysFor(subject.noticeDays),
           });
         }
       }
@@ -3324,9 +3370,10 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
       // Designated subjects for this service.
       const svcSnap = await db.collection("services").doc(serviceDate).get();
       if (!svcSnap.exists) return;
-      const liturgy = svcSnap.data().liturgy || {};
-      const subjects = [liturgy.prayerMale, liturgy.prayerFemale]
-          .filter((s) => s && s.id);
+      const service = svcSnap.data() || {};
+      const liturgy = service.liturgy || {};
+      const plan = await prayerPlanForService(db, service, liturgy);
+      const subjects = plan.subjects;
       if (subjects.length === 0) return;
 
       // Current request docs for each subject (the changed one uses the write's

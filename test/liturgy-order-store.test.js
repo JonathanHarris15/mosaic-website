@@ -24,5 +24,27 @@ test('planSave writes the draft and deletes only the records the draft dropped',
     standard.elements.forEach(function (el) {
         assert.ok(!el.primitive, 'a kind is not stored as a primitive');
         assert.ok(!el.hasRole, 'a person event is the person; there is no carried-by flag');
+        assert.ok(!el.prayedByOther, 'the flag is written only when a prayer is marked');
     });
+});
+
+test('a prayer records that someone else prays it, and a scripture keeps its title', () => {
+    const prayer = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 0, { name: 'Opening Prayer' });
+    const marked = Core.updateElement(prayer.catalog, prayer.element.id, {
+        prayedByOther: true,
+        requests: { count: 2, who: 'either' },
+    });
+    const scripture = Core.placeKind(marked, 'standard', 'scripture', 1);
+    const titled = Core.updateElement(scripture.catalog, scripture.element.id, { name: 'The Epistle' });
+    const plan = Store.planSave(titled, { elementIds: [], orderIds: ['standard'] });
+    const standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
+    const storedPrayer = standard.elements.find(function (el) { return el.id === prayer.element.id; });
+    assert.equal(storedPrayer.prayedByOther, true);
+    assert.deepEqual(storedPrayer.requests, { count: 2, who: 'either' });
+    assert.equal(storedPrayer.noticeDays, 5);
+    assert.ok(!storedPrayer.hasRole);
+    const storedScripture = standard.elements.find(function (el) { return el.id === scripture.element.id; });
+    assert.equal(storedScripture.kind, 'scripture');
+    assert.equal(storedScripture.name, 'The Epistle');
+    assert.ok(!storedScripture.prayedByOther);
 });

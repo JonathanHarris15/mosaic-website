@@ -27,13 +27,16 @@ any of its Sundays can say so.
 stay where they are. The elements are five kinds, hardcoded.**
 
 - A **Liturgy Element** is a placement of one kind: `{ id, kind, name,
-  hasNote }`, and a prayer may also carry `requests: { count, who }`. The
+  hasNote }`, and a prayer may also carry `requests: { count, who }` and
+  `prayedByOther`. The
   kinds are `hymn`, `scripture`, `prayer`, `person`, and `other`. A hymn is
-  chosen on the Sunday through the hymn picker. A scripture reading is a
-  reference, through the reference picker. A prayer and a person event and
-  other take a name on the order. A prayer can send prayer requests: how
-  many, and male, female, or either, chosen on the Sunday from the members,
-  longest since their last request first. A person event is one person on
+  chosen on the Sunday through the hymn picker. A scripture is named on the
+  order and is a reference on the Sunday, through the reference picker. A
+  prayer, a person event, and other take a name on the order. A prayer can
+  send prayer requests: how many, and male, female, or either, chosen on the
+  Sunday from the members, longest since their last request first. A prayer
+  can also be prayed by someone other than the service leader: the order
+  says so, and the Sunday names who, kept at `carriedBy.<id>`. A person event is one person on
   the Sunday; baptism (`baptism`) stays the candidates list (ADR 0006).
   Other has nothing on the Sunday, and a printable row still prints its
   name. `hasNote` means the per-slot note at `notes.<id>`. The same kind can
@@ -65,24 +68,26 @@ What reads the order:
 1. **The Order of Service** shows the Sunday's order's elements, in order,
    with a **Liturgy order** select in the header and a manage button through
    to the new page. The select is a field-level save of `liturgyOrderId`
-   (ADR 0034). The five kinds sit above this order. An editor drags a kind
-   in, adds it, rearranges the rows, or takes one out. That writes the
-   shared order immediately — the order, with its placements — and the page
-   names the order, because every Sunday that follows it changes with it.
-   The Sunday's own values are a different save. If the orders could not be
+   (ADR 0034). The order is already locked: this page fills values and does
+   not place, move, or remove elements. If the orders could not be
    read, the page shows Standard and does not write it back. The progress
    is the same tally as the home card: the leaders, then each element of
-   the order that asks for something on the Sunday.
+   the order that asks for something on the Sunday. A prayer's leader and
+   the people it prays for sit under that row. The older praise leader,
+   confession leader, and pastoral ask sit under the rows the order already
+   uses for those moments.
 2. **The Liturgy Orders page** (`liturgy-orders.html`) places the five kinds
    into an order, names the ones that take a name, and sets a prayer's
-   requests. The kinds are a panel to the left of the order. Which order is
+   requests, including how many days ahead those people are told. The kinds
+   are a panel to the left of the order. Which order is
    open is a dropdown above its list, and a plus beside that dropdown makes
    a new empty order. Dragging a kind's row in, or Add, places a new
    instance. Rows also move by dragging or with move-up and move-down. The
    page saves a draft with one Save, in one batch, so a
    half-built combination is not live on every Sunday. Taking a placement
    out of every order leaves the values Sundays hold under it. It is
-   reached from the Order of Service and from the Services table.
+   reached from the Order of Service and from the Services table. It is the
+   only place an order's combination changes.
 3. **The Services table** draws one liturgy column per element of the orders
    toggled on above it. The columns are the union of those orders: Standard
    first in its own order, then the others by name, each element at its
@@ -163,20 +168,23 @@ dragged is a kind, not a record from a second collection.
 The five kinds are code. An order is a sequence of placements of those
 kinds, and the same kind can be placed more than once. Dragging a kind in,
 rearranging the rows, or taking one out changes that order for every Sunday
-that follows it. The Order of Service names the order and writes it as the
-combination changes. The Liturgy Orders page keeps the same gesture and
-still saves a draft, because a half-built order should not publish on every
-step. A hymn and a scripture reading take no name on the order. A prayer, a
-person event, and other do. A prayer's requests — how many, and male,
-female, or either — are set on the order. Each placement can take a note.
-Neither surface copies the order onto the Sunday. Up and down buttons make
-the same moves.
+that follows it. The Liturgy Orders page is where that gesture lives, and
+it still saves a draft, because a half-built order should not publish on
+every step. The Order of Service names the order and does not write it.
+A hymn takes no name on the order. A scripture, a prayer, a person
+event, and other do. A prayer's requests — how many, male, female, or
+either, and how many days ahead the people are told — are set on the order.
+A prayer can also be marked to be prayed by someone other than the service
+leader; the Sunday then names that person at `carriedBy`. Each placement
+can take a note. Neither surface copies the order onto the Sunday. Up and
+down buttons make the same moves on the Liturgy Orders page.
 
 A separate element collection, a primitive, and a carried-by flag were the
 split this replaces. A reader still derives the old shape, so a hymn picker
 and a scripture picker keep working, and a Sunday that already names who
-carried an element still reads that person. Nothing new writes the flag or
-the loose documents.
+carried an element still reads that person. Nothing new writes the
+`hasRole` flag or the loose documents. A prayer marked to be prayed by
+someone else is the one new writer of `carriedBy`.
 
 ## Consequences
 
@@ -200,3 +208,29 @@ the loose documents.
   running, a client read is permission-denied. The Liturgy Orders page shows
   Standard in that case and does not save it: a failed read is not a draft
   of the congregation's orders.
+
+## Amendment — a locked Sunday, and when a prayer asks
+
+The Order of Service no longer composes the order. Placing, moving, and
+taking out happen on the Liturgy Orders page, and a Sunday shows the
+combination already locked.
+
+A prayer that sends requests carries `noticeDays`: how many days before the
+Sunday those people get the text or the push. Absent reads as 5, which is
+what the hourly job used to hard-code. 0 sends nothing on its own. The
+reminder is two days closer, the old gap between 5 and 3. That field
+replaces the prayer-request message editors on the admin dashboard. The
+wording stays the built-in text; a value already saved in
+`app_config/prayer_request_sms` still wins for the words. A Sunday whose
+order has no prayer that sends requests still follows `autoSendEnabled` on
+that document, and still asks `liturgy.prayerMale` and `liturgy.prayerFemale`.
+When the order does send requests, those older fields are asked on the same
+days, so a Sunday planned before the prayer element keeps its people.
+
+On the Sunday, a prayer's leader and the people it prays for are drawn
+under that row. The older praise leader sits under `callToWorship`, the
+confession leader under `callToConfession`, and the pastoral ask under the
+element whose name is the Sunday's prayer label (the seed names that
+element Pastoral Prayer). An order that no longer has that row draws the
+field once, after the list. Those anchors are the seed's ids and the
+label the Sunday already stores. They are not a new kind.

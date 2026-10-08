@@ -226,13 +226,108 @@ function daysUntil(serviceDate, todayDate) {
  * Whether personId is pastoral prayer on this service's liturgy.
  * @param {?Object} liturgy
  * @param {?string} personId
+ * @param {?Array<string>} subjectIds people the order names, when known
  * @return {boolean}
  */
-function isPastoralPrayerSubject(liturgy, personId) {
-  if (!personId || !liturgy) return false;
+function isPastoralPrayerSubject(liturgy, personId, subjectIds) {
+  if (!personId) return false;
+  if (Array.isArray(subjectIds)) return subjectIds.indexOf(personId) !== -1;
+  if (!liturgy) return false;
   const male = liturgy.prayerMale && liturgy.prayerMale.id;
   const female = liturgy.prayerFemale && liturgy.prayerFemale.id;
   return personId === male || personId === female;
+}
+
+/**
+ * Days before the Sunday a prayer tells the people it prays for. Missing
+ * reads as the old five. 0 tells nobody on its own.
+ * @param {?Object} element
+ * @return {number}
+ */
+function noticeDaysOf(element) {
+  if (!element || !element.requests) return 0;
+  if (element.noticeDays == null || element.noticeDays === "") {
+    return INITIAL_DAYS_OUT;
+  }
+  const n = parseInt(element.noticeDays, 10);
+  if (!Number.isFinite(n)) return INITIAL_DAYS_OUT;
+  if (n < 0) return 0;
+  if (n > 30) return 30;
+  return n;
+}
+
+/**
+ * The reminder sits two days closer than the first ask, the old 5-and-3 gap.
+ * @param {number} noticeDays
+ * @return {number}
+ */
+function reminderDaysFor(noticeDays) {
+  const n = Number(noticeDays);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.max(0, n - (INITIAL_DAYS_OUT - REMINDER_DAYS_OUT));
+}
+
+/**
+ * Everyone a Sunday's pastoral prayer asks, from a prayer that sends
+ * requests and from the older male and female fields. One person is one
+ * row. A prayer's own days win over the older fields.
+ * @param {Object} args
+ * @param {?Object} args.liturgy
+ * @param {Array} [args.elements] the Sunday's order
+ * @return {Array<Object>} id, name, noticeDays, fromElement
+ */
+function pastoralSubjects(args) {
+  const liturgy = (args && args.liturgy) || {};
+  const elements = (args && args.elements) || [];
+  const byId = new Map();
+  const consider = (person, noticeDays, fromElement) => {
+    if (!person || !person.id) return;
+    const days = Number.isFinite(noticeDays) ? noticeDays : INITIAL_DAYS_OUT;
+    const prev = byId.get(person.id);
+    if (!prev) {
+      byId.set(person.id, {
+        id: person.id,
+        name: person.name || "",
+        noticeDays: days,
+        fromElement: !!fromElement,
+      });
+      return;
+    }
+    if (fromElement && !prev.fromElement) {
+      prev.noticeDays = days;
+      prev.fromElement = true;
+      if (person.name) prev.name = person.name;
+    } else if (fromElement && days > prev.noticeDays) {
+      prev.noticeDays = days;
+    }
+  };
+  const prayers = elements.filter((el) =>
+    el && el.kind === "prayer" && el.requests);
+  prayers.forEach((el) => {
+    const days = noticeDaysOf(el);
+    const value = liturgy[el.id];
+    const list = Array.isArray(value) ? value : [];
+    list.forEach((person) => consider(person, days, true));
+  });
+  const positive = prayers.map(noticeDaysOf).filter((n) => n > 0);
+  const legacyDays = positive.length ?
+    Math.max.apply(null, positive) : INITIAL_DAYS_OUT;
+  consider(liturgy.prayerMale, legacyDays, false);
+  consider(liturgy.prayerFemale, legacyDays, false);
+  return Array.from(byId.values());
+}
+
+/**
+ * Subjects plus whether the order itself has turned asking on. A prayer
+ * with days set tells its people even when the old admin switch is off.
+ * @param {Object} args liturgy and elements
+ * @return {{subjects: Array, notifies: boolean}}
+ */
+function prayerNoticePlan(args) {
+  const elements = (args && args.elements) || [];
+  const notifies = elements.some((el) =>
+    el && el.kind === "prayer" && el.requests && noticeDaysOf(el) > 0);
+  return {subjects: pastoralSubjects(args), notifies};
 }
 
 /**
@@ -264,11 +359,14 @@ function mayAnswerPrayerRequest(state) {
   const serviceDate = s.serviceDate;
   const todayDate = s.todayDate;
   if (!personId || !serviceDate || !todayDate) return false;
-  if (!isPastoralPrayerSubject(s.liturgy, personId)) return false;
+  if (!isPastoralPrayerSubject(s.liturgy, personId, s.subjectIds)) return false;
   if (serviceDateHasEnded(todayDate, serviceDate)) return false;
   if (s.viaAnswerLink) return true;
   if (s.initialSentDate) return true;
-  return daysUntil(serviceDate, todayDate) <= INITIAL_DAYS_OUT;
+  const noticeRaw = s.noticeDays == null ?
+    INITIAL_DAYS_OUT : Number(s.noticeDays);
+  const notice = Number.isFinite(noticeRaw) ? noticeRaw : INITIAL_DAYS_OUT;
+  return daysUntil(serviceDate, todayDate) <= notice;
 }
 
 /**
@@ -375,15 +473,24 @@ function prayerRequestAction(state) {
   if (daysUntilService < 0) return "none";
   if (!nc.isInsideSendWindow(localHour)) return "none";
 
+  const noticeRaw = state.noticeDays == null ?
+    INITIAL_DAYS_OUT : Number(state.noticeDays);
+  const notice = Number.isFinite(noticeRaw) ? noticeRaw : INITIAL_DAYS_OUT;
+  if (notice <= 0) return "none";
+  const reminderRaw = state.reminderDays == null ?
+    reminderDaysFor(notice) : Number(state.reminderDays);
+  const reminder = Number.isFinite(reminderRaw) ?
+    reminderRaw : REMINDER_DAYS_OUT;
+
   const initialSent = !!initialSentDate;
   if (!initialSent) {
-    return daysUntilService <= INITIAL_DAYS_OUT ? "initial" : "none";
+    return daysUntilService <= notice ? "initial" : "none";
   }
 
-  // Initial already sent — the reminder fires only at the three-day mark and
-  // never on the same church-local day the initial went out (late entries).
+  // The reminder sits closer than the first ask, and never on the same
+  // church-local day the initial went out (late entries).
   if (!reminderSent &&
-      daysUntilService <= REMINDER_DAYS_OUT &&
+      daysUntilService <= reminder &&
       initialSentDate < today) {
     return "reminder";
   }
@@ -553,6 +660,10 @@ if (typeof module !== "undefined" && module.exports) {
     churchDateParts,
     daysUntil,
     isPastoralPrayerSubject,
+    noticeDaysOf,
+    reminderDaysFor,
+    pastoralSubjects,
+    prayerNoticePlan,
     serviceDateHasEnded,
     mayAnswerPrayerRequest,
     prayerAnswerPageView,

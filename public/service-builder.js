@@ -544,12 +544,12 @@ function coerceBaptismCandidates(bap) {
 function describeLiturgyReadFailure(error) {
     const code = error && error.code;
     if (code === 'permission-denied') {
-        return 'The liturgy orders could not be read. This is a permissions problem, not a connection problem. Standard is shown in their place, and this Sunday\'s order cannot be changed from here until they load.';
+        return 'The liturgy orders could not be read. This is a permissions problem, not a connection problem. Standard is shown in their place.';
     }
     if (code === 'unavailable') {
-        return 'The liturgy orders could not be reached. Check your connection and try again. Standard is shown in their place, and this Sunday\'s order cannot be changed from here until they load.';
+        return 'The liturgy orders could not be reached. Check your connection and try again. Standard is shown in their place.';
     }
-    return 'The liturgy orders did not load. Try again. Standard is shown in their place, and this Sunday\'s order cannot be changed from here until they load.';
+    return 'The liturgy orders did not load. Try again. Standard is shown in their place.';
 }
 
 function serviceForm() {
@@ -589,6 +589,7 @@ function serviceForm() {
             female: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
         },
         prayerSending: { male: false, female: false },
+        _prayerLoaded: {},
         user: null,
         originalService: '',
         // The signed-in user as a Person, for the authorship tags (MS-246).
@@ -672,9 +673,6 @@ function serviceForm() {
         liturgyCatalogLoaded: false,
         liturgyStored: null,
         liturgyReadProblem: '',
-        orderShapeError: '',
-        orderShapeNote: '',
-        orderShapeSaving: false,
 
         async loadLiturgyCatalog() {
             if (!window.LiturgyOrderStore) return;
@@ -682,19 +680,16 @@ function serviceForm() {
                 const read = await LiturgyOrderStore.load(db);
                 this.liturgyCatalog = read.catalog;
                 this.liturgyStored = read.stored;
-                this._orderShapeGood = read.catalog;
                 this.liturgyCatalogLoaded = true;
                 this.liturgyReadProblem = '';
             } catch (err) {
                 // The seed stays on screen so the Sunday can still be read.
-                // It is not a catalog we may write: a failed read must not
-                // save Standard over orders that were never loaded.
-                console.warn('Liturgy orders could not be read; using Standard. The order will not be edited from here.', err);
+                // This page does not write the order.
+                console.warn('Liturgy orders could not be read; using Standard.', err);
                 this.liturgyCatalogLoaded = false;
                 this.liturgyStored = null;
                 this.liturgyReadProblem = describeLiturgyReadFailure(err);
             }
-            this.$nextTick(() => this.initOrderSortable());
         },
 
         // Every order, Standard first and then by name — the same order the
@@ -723,15 +718,27 @@ function serviceForm() {
             if (this.openKey && !this.orderElements.some(el => el.id === this.openKey)) this.closeRow();
         },
 
-        // The library is the congregation's collection. This Sunday's order
-        // stores ids, in a sequence. Placing, moving, or taking one out writes
-        // that shared order — every Sunday that follows it — and leaves the
-        // element record where it is.
-        orderHas(id) {
-            return this.orderElements.some(el => el.id === id);
+        // The order is locked on this page. Its shape changes on the Liturgy
+        // Orders page, and this Sunday only fills the values.
+        legacyHomes() {
+            const order = liturgyCore().orderFor(this.service, this.liturgyCatalog);
+            const label = this.service.liturgy && this.service.liturgy.prayerLabel;
+            return liturgyCore().legacyPrayerHomes(order, label);
         },
-        orderIndex(key) {
-            return this.orderElements.findIndex(el => el.id === key);
+        showsPraise(item) {
+            const homes = this.legacyHomes();
+            if (homes.praiseId) return item.key === homes.praiseId;
+            return !!item.legacy;
+        },
+        showsConfession(item) {
+            const homes = this.legacyHomes();
+            if (homes.confessionId) return item.key === homes.confessionId;
+            return !!item.legacy;
+        },
+        showsPastoral(item) {
+            const homes = this.legacyHomes();
+            if (homes.pastoralId) return item.key === homes.pastoralId;
+            return !!item.legacy;
         },
         kindLabel(kind) {
             const labels = liturgyCore().KIND_LABELS;
@@ -742,130 +749,6 @@ function serviceForm() {
         },
         get currentOrderName() {
             return liturgyCore().orderFor(this.service, this.liturgyCatalog).name;
-        },
-
-        placeInOrder(elementId, index) {
-            if (!this.canEdit || !this.liturgyCatalogLoaded || !elementId || this.orderHas(elementId)) return;
-            const next = liturgyCore().addToOrder(this.liturgyCatalog, this.selectedOrderId, elementId, index);
-            this._commitOrder(next);
-        },
-        placeKind(kind, index) {
-            if (!this.canEdit || !this.liturgyCatalogLoaded || !kind) return;
-            const placed = liturgyCore().placeKind(this.liturgyCatalog, this.selectedOrderId, kind, index);
-            this._commitOrder(placed.catalog);
-        },
-        reorderOrder(from, to) {
-            if (!this.canEdit || !this.liturgyCatalogLoaded || from === to || from == null || to == null) return;
-            const next = liturgyCore().moveInOrder(this.liturgyCatalog, this.selectedOrderId, from, to);
-            this._commitOrder(next);
-        },
-        takeFromOrder(elementId) {
-            if (!this.canEdit || !this.liturgyCatalogLoaded || !elementId) return;
-            if (this.openKey === elementId) this.closeRow();
-            const next = liturgyCore().removeFromOrder(this.liturgyCatalog, this.selectedOrderId, elementId);
-            this._commitOrder(next);
-        },
-        async moveOrderRow(key, delta, event) {
-            const index = this.orderIndex(key);
-            const to = index + delta;
-            if (index < 0 || to < 0 || to >= this.orderElements.length) return;
-            const which = event && event.currentTarget && event.currentTarget.dataset.move;
-            this.reorderOrder(index, to);
-            this.$nextTick(() => {
-                const row = document.querySelector('[data-field-key="' + key + '"]');
-                if (!row) return;
-                const btn = row.querySelector('[data-move="' + which + '"]');
-                if (btn && !btn.disabled) btn.focus();
-                else {
-                    const other = row.querySelector('[data-move]:not([disabled])');
-                    if (other) other.focus();
-                }
-            });
-        },
-
-        // Apply at once, then write. A second gesture during the write is
-        // kept and sent when the first returns, so two quick moves are not
-        // the first one twice. A failed write puts the last saved combination
-        // back. The Sunday's own fields are a different save.
-        _commitOrder(next) {
-            if (!this.canEdit || !this.liturgyCatalogLoaded) return;
-            this.liturgyCatalog = next;
-            this._ensureLiturgySlots();
-            this.orderShapeError = '';
-            if (this._orderShapeFlight) {
-                this._orderShapePending = true;
-                return;
-            }
-            this._orderShapeFlight = this._flushOrderShape();
-        },
-        async _flushOrderShape() {
-            this.orderShapeSaving = true;
-            try {
-                do {
-                    this._orderShapePending = false;
-                    const snapshot = this.liturgyCatalog;
-                    const stored = this.liturgyStored;
-                    try {
-                        this.liturgyStored = await LiturgyOrderStore.save(db, snapshot, stored);
-                        this._orderShapeGood = snapshot;
-                        if (this.liturgyCatalog === snapshot) {
-                            this.orderShapeNote = 'Saved to ' + this.currentOrderName + '. Every Sunday that follows it has this combination.';
-                        }
-                    } catch (err) {
-                        console.error('Liturgy order did not save', err);
-                        this.liturgyCatalog = this._orderShapeGood || snapshot;
-                        this._ensureLiturgySlots();
-                        this.orderShapeNote = '';
-                        this.orderShapeError = 'That change to ' + this.currentOrderName + ' did not save. The order is unchanged.';
-                        this._orderShapePending = false;
-                        break;
-                    }
-                } while (this._orderShapePending);
-            } finally {
-                this.orderShapeSaving = false;
-                this._orderShapeFlight = null;
-            }
-        },
-
-        // Sortable moves the DOM; Alpine owns it. A drop from the library
-        // inserts an id. A move inside the list reorders those ids.
-        initOrderSortable() {
-            if (!this.canEdit || !this.liturgyCatalogLoaded || typeof Sortable === 'undefined') return;
-            const library = document.getElementById('element-library');
-            if (library && !this._librarySortable) {
-                this._librarySortable = Sortable.create(library, {
-                    animation: 150,
-                    sort: false,
-                    handle: '.oos-chip__handle',
-                    draggable: '[data-kind]',
-                    group: { name: 'liturgy-library', pull: 'clone', put: false },
-                });
-            }
-            const list = document.getElementById('regular-service-sections');
-            if (list && !this._orderSortable) {
-                this._orderSortable = Sortable.create(list, {
-                    animation: 150,
-                    group: { name: 'liturgy-library', pull: true, put: true },
-                    handle: '.m-row__handle',
-                    draggable: '[data-element-id]',
-                    filter: '.m-empty',
-                    onAdd: (evt) => {
-                        const kind = evt.item.getAttribute('data-kind');
-                        const to = evt.newDraggableIndex;
-                        evt.item.remove();
-                        if (kind) this.placeKind(kind, to);
-                    },
-                    onEnd: (evt) => {
-                        if (evt.from !== evt.to) return;
-                        const from = evt.oldDraggableIndex;
-                        const to = evt.newDraggableIndex;
-                        evt.item.remove();
-                        evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
-                        if (from === to || from == null || to == null) return;
-                        this.reorderOrder(from, to);
-                    },
-                });
-            }
         },
 
         // An empty value under every element the catalog knows and a carrier
@@ -890,7 +773,7 @@ function serviceForm() {
                 } else if (el.primitive === 'song' && typeof current === 'string') {
                     this.service.liturgy[el.id] = { name: current, id: null };
                 }
-                if (el.hasRole && !this.service.carriedBy[el.id]) {
+                if ((el.prayedByOther || el.hasRole) && !this.service.carriedBy[el.id]) {
                     this.service.carriedBy[el.id] = { name: '', id: null };
                 }
             }
@@ -1248,7 +1131,6 @@ function serviceForm() {
                     // unable to see who else is here is not a reason to stop
                     // somebody working.
                     if (this.canEdit) this.watchPresence();
-                    if (this.canEdit) this.$nextTick(() => this.initOrderSortable());
                 } else {
                     this.canEdit = false;
                 }
@@ -1527,9 +1409,33 @@ function serviceForm() {
         // from the pastoral_prayer_history entry that says they were a subject
         // at all, because a request is sensitive and the history is not.
 
+        blankPrayerRequest() {
+            return { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
+        },
+
         subjectFor(which) {
-            return which === 'male' ?
-                this.service.liturgy.prayerMale : this.service.liturgy.prayerFemale;
+            if (which === 'male') return this.service.liturgy.prayerMale || { id: null, name: '' };
+            if (which === 'female') return this.service.liturgy.prayerFemale || { id: null, name: '' };
+            for (const el of this.orderElements) {
+                if (!el.requests) continue;
+                const list = this.service.liturgy[el.id];
+                if (!Array.isArray(list)) continue;
+                const hit = list.find(p => p && p.id === which);
+                if (hit) return hit;
+            }
+            const person = (this.peopleRegistry || []).find(p => p.id === which);
+            return { id: which, name: person ? person.name : '' };
+        },
+
+        prayerRequestKeys() {
+            const keys = ['male', 'female'];
+            for (const el of this.orderElements) {
+                if (!el.requests) continue;
+                const list = this.service.liturgy[el.id];
+                if (!Array.isArray(list)) continue;
+                list.forEach(slot => { if (slot && slot.id && keys.indexOf(slot.id) === -1) keys.push(slot.id); });
+            }
+            return keys;
         },
 
         // A Prayer Request is read far more often than it is typed, and a texted
@@ -1541,27 +1447,46 @@ function serviceForm() {
             el.style.height = el.scrollHeight + 'px';
         },
 
+        async loadOnePrayerRequest(which) {
+            const subject = this.subjectFor(which);
+            const blank = this.blankPrayerRequest();
+            if (!subject || !subject.id) {
+                this.prayerRequests[which] = blank;
+                return;
+            }
+            try {
+                const snap = await db.collection('people').doc(subject.id)
+                    .collection('prayer_requests').doc(this.date).get();
+                const d = snap.exists ? snap.data() : {};
+                this.prayerRequests[which] = {
+                    text: d.prayerRequest || '',
+                    initialSentDate: d.initialSentDate || null,
+                    reminderSent: !!d.reminderSent,
+                    source: d.prayerRequestSource || null,
+                    noteGenerated: !!d.noteGenerated,
+                };
+            } catch (e) {
+                console.error('Error loading prayer request:', e);
+                if (!this.prayerRequests[which]) this.prayerRequests[which] = blank;
+            }
+        },
+
         async loadPrayerRequests() {
             if (!this.isShepherd || !this.date) return;
-            for (const which of ['male', 'female']) {
-                const subject = this.subjectFor(which);
-                const blank = { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
-                if (!subject || !subject.id) { this.prayerRequests[which] = blank; continue; }
-                try {
-                    const snap = await db.collection('people').doc(subject.id)
-                        .collection('prayer_requests').doc(this.date).get();
-                    const d = snap.exists ? snap.data() : {};
-                    this.prayerRequests[which] = {
-                        text: d.prayerRequest || '',
-                        initialSentDate: d.initialSentDate || null,
-                        reminderSent: !!d.reminderSent,
-                        source: d.prayerRequestSource || null,
-                        noteGenerated: !!d.noteGenerated,
-                    };
-                } catch (e) {
-                    console.error('Error loading prayer request:', e);
-                }
+            this._prayerLoaded = {};
+            for (const which of this.prayerRequestKeys()) {
+                await this.loadOnePrayerRequest(which);
+                this._prayerLoaded[which] = true;
             }
+        },
+
+        ensurePrayerRequest(which) {
+            if (!which) return;
+            if (!this.prayerRequests[which]) this.prayerRequests[which] = this.blankPrayerRequest();
+            if (this.prayerSending[which] == null) this.prayerSending[which] = false;
+            if (!this.isShepherd || !this.date || this._prayerLoaded[which]) return;
+            this._prayerLoaded[which] = true;
+            this.loadOnePrayerRequest(which);
         },
 
         prayerRequestStatus(which) {
@@ -2065,6 +1990,12 @@ function serviceForm() {
                 value = names.join(', ');
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
+                if (!el.requests && el.prayedByOther) {
+                    const who = liturgyCore().carrierOf(this.service, el);
+                    value = who ? who.name : '';
+                    status = value ? 'people' : 'empty';
+                    emptyLabel = 'Name who prays…';
+                }
             } else if (type === 'person') {
                 const ref = lit[key] && !Array.isArray(lit[key]) ? lit[key] : {};
                 value = ref.name || '';
@@ -2079,12 +2010,13 @@ function serviceForm() {
                 status = value ? 'set' : 'empty';
                 emptyLabel = 'Add a reference…';
             }
-            const carrier = el.hasRole ? liturgyCore().carrierOf(this.service, el) : null;
+            const carrier = (el.prayedByOther || el.hasRole) ? liturgyCore().carrierOf(this.service, el) : null;
             const note = (this.service.notes && this.service.notes[key]) || '';
             return {
                 key, label: el.name, type, value, status, emptyLabel, removed,
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
+                prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',
                 noteOn: el.hasNote,
@@ -2098,6 +2030,30 @@ function serviceForm() {
         get rows() {
             const lit = this.service.liturgy;
             return this.orderElements.map(el => this._buildItem(el, lit));
+        },
+
+        // The locked order, plus one trailing row when an older prayer field
+        // has no element to sit under. That row is not part of the order.
+        get displayRows() {
+            const rows = this.rows.slice();
+            const homes = this.legacyHomes();
+            if (homes.praiseId && homes.confessionId && homes.pastoralId) return rows;
+            rows.push({
+                key: '__legacy_prayer__',
+                type: 'legacy',
+                legacy: true,
+                label: '',
+                removed: false,
+                requests: null,
+                prayedByOther: false,
+                hasRole: false,
+                noteOn: false,
+                value: '',
+                emptyLabel: '',
+                noted: false,
+                carrierName: '',
+            });
+            return rows;
         },
 
         // The order's song elements, for linking typed hymns and printing

@@ -11,7 +11,6 @@
   var useState = M.hooks.useState, useEffect = M.hooks.useEffect;
   var ui = M.ui, Screen = ui.Screen, TopBar = ui.TopBar, Body = ui.Body;
 
-  var OVER = { fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--on-surface-variant)" };
   var PANEL = { background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 16, marginBottom: 14 };
   var H2 = { margin: 0, fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--primary)" };
   var LABEL = { fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)" };
@@ -21,37 +20,9 @@
     return { padding: "9px 16px", borderRadius: "var(--radius-full)", border: variant === "ghost" ? "1px solid var(--outline-variant)" : "none", background: variant === "ghost" ? "transparent" : "var(--primary)", color: variant === "ghost" ? "var(--on-surface-variant)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, cursor: "pointer" };
   }
 
-  var PRAYER_FIELDS = [
-    { key: "initial", label: "Initial request", help: "Sent first, a few days before the service. Uses {name}." },
-    { key: "reminder", label: "Reminder", help: "Sent closer to the service if no reply yet. Uses {name}." },
-    { key: "thankyou", label: "Thank-you reply", help: "Auto-reply after someone sends their request. Uses {name}." },
-    { key: "elderDigest", label: "Elder digest", help: "Texted to Elder-tagged people once all of a service's requests are in by reply. Uses {date} and {requests}." },
-  ];
-
-  var PUSH_KINDS = [
-    { key: "initial", label: "Initial request" },
-    { key: "reminder", label: "Reminder" },
-    { key: "thankyou", label: "Thank-you" },
-  ];
-
-  function clonePush(src) {
-    var out = {};
-    PUSH_KINDS.forEach(function (k) {
-      var piece = (src && src[k]) || (data.DEFAULT_PUSH_WORDING && data.DEFAULT_PUSH_WORDING[k]) || { title: "", body: "" };
-      out[k.key] = { title: piece.title || "", body: piece.body || "" };
-    });
-    return out;
-  }
-
   function Toast(props) {
     if (!props.toast) return null;
     return html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: props.toast.type === "error" ? "var(--error)" : "var(--primary)", color: props.toast.type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${props.toast.message}</div>`;
-  }
-
-  function Switch(props) {
-    return html`<button onClick=${props.onClick} role="switch" aria-checked=${props.on} style=${{ position: "relative", width: 46, height: 27, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", cursor: "pointer", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
-      <span style=${{ position: "absolute", top: 2, left: props.on ? 21 : 2, width: 21, height: 21, borderRadius: "50%", background: "var(--surface-container-lowest)", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
-    </button>`;
   }
 
   function fmtDatetime(ts) {
@@ -65,9 +36,6 @@
     var statusLoadingS = useState(false), keyConfiguredS = useState(null), quotaS = useState(null), statusErrS = useState("");
     var testPhoneS = useState(""), testMsgS = useState(""), sendingS = useState(false), lastResultS = useState(null);
     var repliesS = useState([]), repliesLoadingS = useState(false);
-    var msgsS = useState(Object.assign({}, data.PRAYER_MESSAGE_DEFAULTS)), prayerSavingS = useState(false);
-    var pushS = useState(clonePush(data.DEFAULT_PUSH_WORDING));
-    var autoSendS = useState(false), autoSavingS = useState(false);
     var toastS = useState(null);
 
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2800); }
@@ -84,21 +52,13 @@
       repliesLoadingS[1](true);
       data.getSmsReplies().then(function (r) { repliesS[1](r); }).catch(function () { showToast("Could not load replies", "error"); }).then(function () { repliesLoadingS[1](false); });
     }
-    function loadPrayer() {
-      data.getPrayerMessages().then(function (r) {
-        msgsS[1](r.messages);
-        pushS[1](clonePush(r.pushWording));
-        autoSendS[1](r.autoSendEnabled);
-      }).catch(function () { showToast("Could not load prayer messages", "error"); });
-    }
-
     useEffect(function () {
       var alive = true;
       // Wait until auth resolves + permissionLevel known before hitting admin callables.
       if (props.user === undefined) return;
       if (!props.user || (props.user.permissionLevel !== "admin" && props.user.permissionLevel !== "super_admin")) { loadingS[1](false); return; }
       loadingS[1](false);
-      refreshStatus(); loadReplies(); loadPrayer();
+      refreshStatus(); loadReplies();
       return function () { alive = false; };
     }, [props.user]);
 
@@ -127,21 +87,6 @@
       if (!repliesS[0].length || !window.confirm("Delete all replies in the stack?")) return;
       data.clearSmsReplies(repliesS[0].map(function (r) { return r.id; })).then(function () { repliesS[1]([]); showToast("Replies cleared"); }).catch(function () { showToast("Error clearing replies", "error"); });
     }
-    function savePrayer() {
-      prayerSavingS[1](true);
-      data.savePrayerMessages(msgsS[0], props.user, pushS[0]).then(function () { showToast("Prayer messages saved"); }).catch(function () { showToast("Error saving messages", "error"); }).then(function () { prayerSavingS[1](false); });
-    }
-    function resetPrayer() {
-      msgsS[1](Object.assign({}, data.PRAYER_MESSAGE_DEFAULTS));
-      pushS[1](clonePush(data.DEFAULT_PUSH_WORDING));
-      showToast("Reset to defaults — Save to apply");
-    }
-    function toggleAuto() {
-      var next = !autoSendS[0];
-      autoSavingS[1](true);
-      data.setAutoSend(next, props.user).then(function () { autoSendS[1](next); showToast(next ? "Automatic sending ON" : "Automatic sending OFF"); }).catch(function () { showToast("Could not change automation", "error"); }).then(function () { autoSavingS[1](false); });
-    }
-
     var userKnown = props.user !== undefined;
     var isAdmin = userKnown && !!props.user && (props.user.permissionLevel === "admin" || props.user.permissionLevel === "super_admin");
     var lastResult = lastResultS[0];
@@ -230,52 +175,11 @@
               </div>`}
           </div>
 
-          <!-- Prayer messages -->
           <div style=${PANEL}>
-            <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
-              <h2 style=${H2}>Prayer-Request Messages</h2>
-              <label style=${{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, color: autoSendS[0] ? "var(--primary)" : "var(--on-surface-variant)" }}>Auto-send ${autoSendS[0] ? "ON" : "OFF"}</span>
-                <${Switch} on=${autoSendS[0]} onClick=${function () { if (!autoSavingS[0]) toggleAuto(); }} />
-              </label>
-            </div>
-            <div style=${{ display: "flex", flexDirection: "column", gap: 14 }}>
-              ${PRAYER_FIELDS.map(function (f) {
-                return html`<label key=${f.key} style=${{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <span style=${LABEL}>${f.label}</span>
-                  <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)", lineHeight: 1.35 }}>${f.help}</span>
-                  <textarea rows=${3} value=${msgsS[0][f.key]} onInput=${function (e) { var n = Object.assign({}, msgsS[0]); n[f.key] = e.target.value; msgsS[1](n); }} style=${Object.assign({}, inputStyle, { resize: "vertical", marginTop: 2 })}></textarea>
-                </label>`;
-              })}
-              <p style=${{ margin: "4px 0 0", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.4 }}>
-                Lock screen wording for the same asks. A title past ${data.PUSH_TITLE_LIMIT} characters is cut off on the phone. The elder digest stays a text.
-              </p>
-              ${PUSH_KINDS.map(function (k) {
-                var piece = pushS[0][k.key] || { title: "", body: "" };
-                var over = (piece.title || "").length > data.PUSH_TITLE_LIMIT;
-                function setPart(part) {
-                  return function (e) {
-                    var next = clonePush(pushS[0]);
-                    next[k.key][part] = e.target.value;
-                    pushS[1](next);
-                  };
-                }
-                return html`<div key=${k.key} style=${{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style=${LABEL}>${k.label} — lock screen</span>
-                  <input type="text" value=${piece.title} onInput=${setPart("title")} style=${inputStyle} />
-                  <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: over ? "var(--error)" : "var(--on-surface-variant)" }}>
-                    ${(piece.title || "").length} / ${data.PUSH_TITLE_LIMIT}${over ? " — a lock screen will cut this" : ""}
-                  </span>
-                  <textarea rows=${2} value=${piece.body} onInput=${setPart("body")} style=${Object.assign({}, inputStyle, { resize: "vertical" })}></textarea>
-                </div>`;
-              })}
-            </div>
-            <div style=${{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button onClick=${resetPrayer} style=${pill("ghost")}>Reset to defaults</button>
-              <button onClick=${savePrayer} disabled=${prayerSavingS[0]} style=${Object.assign({}, pill(), { display: "inline-flex", alignItems: "center", gap: 6, opacity: prayerSavingS[0] ? 0.6 : 1 })}>
-                ${prayerSavingS[0] ? html`<span style=${{ display: "flex", animation: "mspin 0.7s linear infinite" }}>${Ic("loader-circle", 15)}</span>` : Ic("save", 15)} Save messages
-              </button>
-            </div>
+            <h2 style=${Object.assign({}, H2, { marginBottom: 8 })}>Prayer requests</h2>
+            <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.45 }}>
+              How many days ahead someone is told is set on the prayer, on the Liturgy Order. The wording is the built-in text.
+            </p>
           </div>
         </${Body}>
         <${Toast} toast=${toastS[0]} />

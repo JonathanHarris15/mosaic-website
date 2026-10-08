@@ -46,22 +46,29 @@ test('a failed read keeps the orders on screen and does not treat Standard as a 
     assert.match(js, /this\.baseline = JSON\.stringify\(catalog\)/);
 });
 
-test('the Order of Service composes its order from the element collection', () => {
+test('the Order of Service fills a locked order and does not compose it', () => {
     const html = read('service-builder.html');
     const js = read('service-builder.js');
-    assert.match(html, /id="element-library"/);
-    assert.match(html, /sortable-1\.15\.0\.min\.js/);
-    assert.match(html, /placeKind\(kind\)/);
-    assert.match(html, /moveOrderRow\(item\.key/);
-    assert.match(html, /takeFromOrder\(item\.key\)/);
+    assert.doesNotMatch(html, /id="element-library"/);
+    assert.doesNotMatch(html, /sortable-1\.15\.0\.min\.js/);
+    assert.doesNotMatch(html, /placeKind\(kind\)/);
+    assert.doesNotMatch(html, /moveOrderRow\(/);
+    assert.doesNotMatch(html, /takeFromOrder\(/);
+    assert.doesNotMatch(js, /LiturgyOrderStore\.save/);
+    assert.doesNotMatch(js, /function indexInList/);
+    assert.match(html, /showsPraise\(item\)/);
+    assert.match(html, /showsConfession\(item\)/);
+    assert.match(html, /showsPastoral\(item\)/);
+    assert.match(html, /Prayer Leader \(Praise\)/);
+    assert.match(html, /Male Being Prayed For/);
     assert.match(html, /item\.type === 'prayer'/);
+    assert.match(html, /Who prays /);
+    assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
     assert.match(html, /item\.type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
-    assert.match(js, /LiturgyOrderStore\.save\(db, snapshot, stored\)/);
-    assert.match(js, /addToOrder/);
-    assert.match(js, /liturgyCatalogLoaded = false/);
-    assert.doesNotMatch(js, /Rows do not drag/);
+    assert.match(js, /legacyPrayerHomes/);
+    assert.match(js, /el\.prayedByOther/);
 });
 
 test('the Liturgy Orders page drags the collection into the selected order', () => {
@@ -77,6 +84,17 @@ test('the Liturgy Orders page drags the collection into the selected order', () 
     assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
+    assert.match(html, /Days in advance/);
+    assert.match(html, /Prayed by someone other than the service leader/);
+    assert.match(html, /A name here, and a reference on the Sunday/);
+    assert.match(html, /class="m-page m-page--tool"/);
+    assert.match(html, /class="m-section lo-kinds"/);
+    assert.match(html, /class="m-section lo-order"/);
+    assert.match(html, /#order-elements \{[^}]*overflow-y: auto/);
+    assert.match(js, /function indexInList/);
+    const onAdd = js.slice(js.indexOf('onAdd:'), js.indexOf('onEnd:'));
+    assert.match(onAdd, /indexInList\(evt\.to, evt\.item\)/);
+    assert.doesNotMatch(onAdd, /newDraggableIndex/);
     const librarySortable = js.slice(js.indexOf("getElementById('element-library')"), js.indexOf("getElementById('order-elements')"));
     assert.match(librarySortable, /pull: 'clone'/);
     assert.match(librarySortable, /preventOnFilter: false/);

@@ -29,6 +29,23 @@ function describeLiturgyLoadFailure(error) {
 
 // A dragged kind is a copy of an Alpine row. The copy must not carry
 // directives: Alpine would evaluate `kind` outside the loop that defined it.
+// Sortable's newDraggableIndex counts with the list the drag started in.
+// A kind dropped into the order is still a library row, so that count is 0
+// and the placement snaps to the top. The index is where the row actually sits.
+function indexInList(list, item) {
+    let index = 0;
+    if (!list) return index;
+    for (const child of list.children) {
+        if (child === item) return index;
+        if (child.tagName === 'TEMPLATE') continue;
+        if (child.classList.contains('m-empty')) continue;
+        if (child.classList.contains('sortable-ghost') || child.classList.contains('sortable-fallback')) continue;
+        if (child.style.display === 'none') continue;
+        index += 1;
+    }
+    return index;
+}
+
 function stripAlpine(node) {
     [node, ...node.querySelectorAll('*')].forEach((el) => {
         [...el.attributes].forEach((attr) => {
@@ -248,9 +265,12 @@ function liturgyOrdersPage() {
                     handle: '.m-row__handle',
                     draggable: '[data-order-row]',
                     filter: '.m-empty',
+                    onStart: (evt) => {
+                        evt.item.dataset.dragFrom = String(indexInList(evt.from, evt.item));
+                    },
                     onAdd: (evt) => {
                         const kind = evt.item.getAttribute('data-kind');
-                        const to = evt.newDraggableIndex;
+                        const to = indexInList(evt.to, evt.item);
                         // The drop is the library row itself. Take that node
                         // and Sortable's clone back out, then draw the five
                         // kinds again if one is missing. Alpine owns the list.
@@ -266,11 +286,12 @@ function liturgyOrdersPage() {
                     },
                     onEnd: (evt) => {
                         if (evt.from !== evt.to) return;
-                        const from = evt.oldDraggableIndex;
-                        const to = evt.newDraggableIndex;
+                        const from = Number(evt.item.dataset.dragFrom);
+                        const to = indexInList(evt.to, evt.item);
+                        delete evt.item.dataset.dragFrom;
                         evt.item.remove();
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
-                        if (from === to || from == null || to == null) return;
+                        if (from === to || !Number.isInteger(from)) return;
                         this._apply(cat => Core.moveInOrder(cat, this.selectedOrder.id, from, to));
                     },
                 });
