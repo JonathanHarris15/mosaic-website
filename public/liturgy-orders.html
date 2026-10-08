@@ -149,12 +149,20 @@
                                         <span>Send prayer requests</span>
                                     </label>
                                     <template x-if="editing && el.kind === 'prayer' && el.requests">
+                                        <span>
                                         <span class="lo-prayer">
                                             <label class="m-field">
                                                 <span class="m-label">How many</span>
                                                 <input class="m-input" type="number" min="1" max="12"
                                                        :aria-label="'How many people for ' + el.name"
                                                        x-model.number="el.requests.count" @change="clampRequests(el)" />
+                                            </label>
+                                            <label class="m-field">
+                                                <span class="m-label">Days in advance</span>
+                                                <input class="m-input" type="number" min="0" max="30"
+                                                       :aria-label="'Days in advance for ' + el.name"
+                                                       :value="el.noticeDays"
+                                                       @change="updateElement(el.id, { noticeDays: $event.target.value })" />
                                             </label>
                                             <label class="m-field">
                                                 <span class="m-label">Who</span>
@@ -168,6 +176,8 @@
                                                 </select>
                                                 </span>
                                             </label>
+                                        </span>
+                                        <span class="lo-hint">A text or a push goes out this many days before the Sunday. A reminder follows two days later. 0 sends nothing on its own.</span>
                                         </span>
                                     </template>
                                 </span>
@@ -250,6 +260,7 @@
         .lo-form--row .lo-grow { flex: 2 1 240px; }
         .lo-form > .m-btn { align-self: flex-start; }
         .lo-form--row > .m-btn { align-self: flex-end; }
+        .lo-hint { display: block; margin-top: var(--space-xs); font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); white-space: normal; }
         .lo-prayer { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-xs); }
         .lo-prayer .m-field { flex: 1 1 8rem; }
         .lo-stack .m-row__main, .lo-stack .m-row__title, .lo-stack .m-row__sub { display: block; }

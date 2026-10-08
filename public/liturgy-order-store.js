@@ -21,7 +21,10 @@
     // leader prays it. Nothing here is a primitive or a carried-by flag.
     function elementDoc(el) {
         const doc = { id: el.id, kind: el.kind, name: el.name, hasNote: !!el.hasNote };
-        if (el.kind === 'prayer' && el.requests) doc.requests = { count: el.requests.count, who: el.requests.who };
+        if (el.kind === 'prayer' && el.requests) {
+            doc.requests = { count: el.requests.count, who: el.requests.who };
+            doc.noticeDays = el.noticeDays == null ? Core.DEFAULT_NOTICE_DAYS : el.noticeDays;
+        }
         if (el.kind === 'prayer' && el.prayedByOther) doc.prayedByOther = true;
         return doc;
     }

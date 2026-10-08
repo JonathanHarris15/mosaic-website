@@ -41,6 +41,7 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
     const storedPrayer = standard.elements.find(function (el) { return el.id === prayer.element.id; });
     assert.equal(storedPrayer.prayedByOther, true);
     assert.deepEqual(storedPrayer.requests, { count: 2, who: 'either' });
+    assert.equal(storedPrayer.noticeDays, 5);
     assert.ok(!storedPrayer.hasRole);
     const storedScripture = standard.elements.find(function (el) { return el.id === scripture.element.id; });
     assert.equal(storedScripture.kind, 'scripture');

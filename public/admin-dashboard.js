@@ -91,28 +91,10 @@ document.addEventListener('alpine:init', () => {
         replies: [],
         repliesLoading: false,
 
-        // Prayer-request message templates
-        prayerMessages: { ...PRAYER_MESSAGE_DEFAULTS },
-        pushWording: {
-            initial: { ...DEFAULT_PUSH_WORDING.initial },
-            reminder: { ...DEFAULT_PUSH_WORDING.reminder },
-            thankyou: { ...DEFAULT_PUSH_WORDING.thankyou },
-        },
-        pushTitleLimit: PUSH_TITLE_LIMIT,
-        pushKinds: [
-            { key: 'initial', label: 'Initial request' },
-            { key: 'reminder', label: 'Reminder' },
-            { key: 'thankyou', label: 'Thank-you reply' },
-        ],
-        prayerFields: [
-            { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service. Uses {name} and {link}.' },
-            { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet. Uses {name} and {link}.' },
-            { key: 'thankyou', label: 'Thank-you reply', help: 'Auto-reply after someone sends their request. Uses {name}.' },
-            { key: 'elderDigest', label: 'Elder digest', help: 'Texted to Elder-tagged people once all of a service\'s requests are in by reply. Uses {date} and {requests}.' },
-        ],
-        prayerSaving: false,
-        autoSendEnabled: false,
-        autoSendSaving: false,
+        // Prayer-request wording is no longer edited here. A prayer on the
+        // Liturgy Order says how many days ahead its people are told, and the
+        // words stay the defaults above (a saved override in
+        // app_config/prayer_request_sms still wins on the server).
 
         eventAnnouncementWording: { ...EVENT_ANNOUNCEMENT_DEFAULTS },
         eventAnnouncementSaving: false,
@@ -160,7 +142,6 @@ document.addEventListener('alpine:init', () => {
                 this.loading = false;
                 this.refreshStatus();
                 this.loadReplies();
-                this.loadPrayerMessages();
                 this.loadEventAnnouncementWording();
                 const hash = (window.location.hash || '').replace(/^#/, '');
                 if (hash === 'push') this.selectTab('push');
@@ -292,73 +273,6 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async loadPrayerMessages() {
-            try {
-                const doc = await db.collection('app_config').doc('prayer_request_sms').get();
-                const saved = doc.exists ? doc.data() : {};
-                // Fall back to defaults for any template not yet customized.
-                this.prayerMessages = {
-                    initial: saved.initial || PRAYER_MESSAGE_DEFAULTS.initial,
-                    reminder: saved.reminder || PRAYER_MESSAGE_DEFAULTS.reminder,
-                    thankyou: saved.thankyou || PRAYER_MESSAGE_DEFAULTS.thankyou,
-                    elderDigest: saved.elderDigest || PRAYER_MESSAGE_DEFAULTS.elderDigest,
-                };
-                const push = {};
-                for (const kind of PUSH_WORDING_KINDS) {
-                    const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
-                    const title = (saved['push' + cap + 'Title'] || '').trim();
-                    const body = (saved['push' + cap + 'Body'] || '').trim();
-                    push[kind] = {
-                        title: title || DEFAULT_PUSH_WORDING[kind].title,
-                        body: body || DEFAULT_PUSH_WORDING[kind].body,
-                    };
-                }
-                this.pushWording = push;
-                this.autoSendEnabled = !!saved.autoSendEnabled;
-            } catch (e) {
-                console.error('Error loading prayer messages:', e);
-                this.showToast('Could not load prayer messages', 'error');
-            }
-        },
-
-        async savePrayerMessages() {
-            this.prayerSaving = true;
-            try {
-                const payload = {
-                    initial: this.prayerMessages.initial.trim(),
-                    reminder: this.prayerMessages.reminder.trim(),
-                    thankyou: this.prayerMessages.thankyou.trim(),
-                    elderDigest: this.prayerMessages.elderDigest.trim(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: this.currentUser.uid,
-                };
-                for (const kind of PUSH_WORDING_KINDS) {
-                    const cap = kind.charAt(0).toUpperCase() + kind.slice(1);
-                    payload['push' + cap + 'Title'] = (this.pushWording[kind].title || '').trim();
-                    payload['push' + cap + 'Body'] = (this.pushWording[kind].body || '').trim();
-                }
-                await db.collection('app_config').doc('prayer_request_sms').set(payload, { merge: true });
-                this.showToast('Prayer messages saved');
-            } catch (e) {
-                console.error('Error saving prayer messages:', e);
-                this.showToast('Error saving messages', 'error');
-            } finally {
-                this.prayerSaving = false;
-            }
-        },
-
-        resetPrayerMessages() {
-            this.prayerMessages = { ...PRAYER_MESSAGE_DEFAULTS };
-            this.pushWording = {
-                initial: { ...DEFAULT_PUSH_WORDING.initial },
-                reminder: { ...DEFAULT_PUSH_WORDING.reminder },
-                thankyou: { ...DEFAULT_PUSH_WORDING.thankyou },
-            };
-            this.showToast('Reset to defaults — Save to apply');
-        },
-
-        // Kill switch — writes immediately so turning automation off takes effect
-        // without waiting for a Save.
         async loadEventAnnouncementWording() {
             try {
                 const doc = await db.collection('app_config').doc('prayer_request_sms').get();
@@ -398,24 +312,6 @@ document.addEventListener('alpine:init', () => {
             this.showToast('Reset to defaults — Save to apply');
         },
 
-        async toggleAutoSend() {
-            const next = !this.autoSendEnabled;
-            this.autoSendSaving = true;
-            try {
-                await db.collection('app_config').doc('prayer_request_sms').set({
-                    autoSendEnabled: next,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: this.currentUser.uid,
-                }, { merge: true });
-                this.autoSendEnabled = next;
-                this.showToast(next ? 'Automatic sending ON' : 'Automatic sending OFF');
-            } catch (e) {
-                console.error('Error toggling automation:', e);
-                this.showToast('Could not change automation', 'error');
-            } finally {
-                this.autoSendSaving = false;
-            }
-        },
 
         // ── Push notifications tab ──────────────────────────────────────
 

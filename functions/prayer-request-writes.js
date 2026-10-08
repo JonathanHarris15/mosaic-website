@@ -5,6 +5,8 @@
  */
 
 const pr = require("./prayer-request");
+const liturgyCatalog = require("./liturgy-catalog");
+const LiturgyOrders = require("./shared/liturgy-order-core");
 
 /**
  * @param {FirebaseFirestore.Firestore} db
@@ -74,7 +76,20 @@ async function applyReply(db, args) {
 async function loadPrayerAnswerState(db, args) {
   const {personId, serviceDate, todayDate} = args;
   const svcSnap = await db.collection("services").doc(serviceDate).get();
-  const liturgy = svcSnap.exists ? (svcSnap.data().liturgy || {}) : {};
+  const service = svcSnap.exists ? (svcSnap.data() || {}) : {};
+  const liturgy = service.liturgy || {};
+  let subjectIds = null;
+  let noticeDays = null;
+  try {
+    const catalog = await liturgyCatalog.loadLiturgyCatalog(db);
+    const order = LiturgyOrders.orderFor(service, catalog);
+    const plan = pr.prayerNoticePlan({liturgy, elements: order.elements});
+    subjectIds = plan.subjects.map((s) => s.id);
+    const mine = plan.subjects.find((s) => s.id === personId);
+    if (mine) noticeDays = mine.noticeDays;
+  } catch (err) {
+    subjectIds = null;
+  }
   const personSnap = await db.collection("people").doc(personId).get();
   const reqSnap = await requestRef(db, personId, serviceDate).get();
   const req = reqSnap.exists ? reqSnap.data() : {};
@@ -84,6 +99,8 @@ async function loadPrayerAnswerState(db, args) {
     serviceDate,
     todayDate,
     liturgy,
+    subjectIds,
+    noticeDays,
     viaAnswerLink,
     initialSentDate: req.initialSentDate || null,
   });

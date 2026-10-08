@@ -39,6 +39,6 @@ test('the admin dashboard and the phone admin mirror the server defaults', () =>
         assert.ok(mobile.includes(piece.title), kind + ' title missing from the phone admin');
         assert.ok(mobile.includes(piece.body), kind + ' body missing from the phone admin');
     }
-    assert.match(html, /pushTitleLimit/);
-    assert.match(html, /pushWording\[kind\.key\]\.title/);
+    assert.doesNotMatch(html, /Prayer Request Messages/);
+    assert.doesNotMatch(html, /pushWording\[kind\.key\]\.title/);
 });

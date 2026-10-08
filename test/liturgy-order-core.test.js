@@ -171,6 +171,38 @@ test('a prayer can be prayed by someone other than the service leader', () => {
     assert.ok(!Core.elementById(hymn, 'hymn1').prayedByOther);
 });
 
+test('a prayer that sends requests remembers how many days ahead', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 0, { name: 'Pastoral Prayer' });
+    const on = Core.updateElement(made.catalog, made.element.id, { requests: { count: 2, who: 'either' } });
+    const el = Core.elementById(on, made.element.id);
+    assert.equal(el.noticeDays, 5);
+    const sooner = Core.updateElement(on, el.id, { noticeDays: 10 });
+    assert.equal(Core.elementById(sooner, el.id).noticeDays, 10);
+    const quiet = Core.updateElement(sooner, el.id, { noticeDays: 0 });
+    assert.equal(Core.elementById(quiet, el.id).noticeDays, 0);
+    const off = Core.updateElement(quiet, el.id, { requests: null });
+    assert.equal(Core.elementById(off, el.id).noticeDays, null);
+    const round = Core.normaliseElement({
+        id: el.id, kind: 'prayer', name: el.name,
+        requests: { count: 2, who: 'male' }, noticeDays: 7,
+    });
+    assert.equal(round.noticeDays, 7);
+});
+
+test('older prayer fields sit under the seed rows they belong with', () => {
+    const order = Core.standardCatalog().orders[0];
+    const homes = Core.legacyPrayerHomes(order, 'Pastoral Prayer');
+    assert.equal(homes.praiseId, 'callToWorship');
+    assert.equal(homes.confessionId, 'callToConfession');
+    assert.equal(homes.pastoralId, 'scriptureReading');
+    const renamed = Core.legacyPrayerHomes(order, 'congregational prayer');
+    assert.equal(renamed.pastoralId, null);
+    const stripped = {
+        elements: order.elements.filter(function (el) { return el.id !== 'callToWorship'; }),
+    };
+    assert.equal(Core.legacyPrayerHomes(stripped, 'Pastoral Prayer').praiseId, null);
+});
+
 test('moving within an order reorders it and the source catalog is untouched', () => {
     const cat = Core.standardCatalog();
     const moved = Core.moveInOrder(cat, 'standard', 0, 2);

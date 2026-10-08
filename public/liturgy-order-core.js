@@ -42,6 +42,21 @@
 
     const REQUEST_WHO = Object.freeze(['male', 'female', 'either']);
 
+    // How many days before the Sunday a prayer that sends requests tells
+    // someone. 0 tells nobody on its own. A reminder follows two days closer,
+    // the same gap the old 5-day ask and 3-day reminder used.
+    const DEFAULT_NOTICE_DAYS = 5;
+    const NOTICE_DAYS_MAX = 30;
+
+    // The older Sunday fields are not elements. They are drawn under the
+    // elements the seed already uses for those moments. A leader stays under
+    // its row when that element is renamed, because the id does not change.
+    // The people being prayed for follow the Sunday's prayer label, which the
+    // seed names Pastoral Prayer.
+    const LEGACY_PRAISE_ID = 'callToWorship';
+    const LEGACY_CONFESSION_ID = 'callToConfession';
+    const LEGACY_PRAYER_NAME = 'Pastoral Prayer';
+
     const STANDARD_ORDER_ID = 'standard';
 
     const COLLECTIONS = Object.freeze({
@@ -105,6 +120,15 @@
         return kind === 'prayer' && !!(src && src.prayedByOther === true);
     }
 
+    function normaliseNoticeDays(raw) {
+        if (raw == null || raw === '') return DEFAULT_NOTICE_DAYS;
+        let n = parseInt(raw, 10);
+        if (!Number.isFinite(n)) return DEFAULT_NOTICE_DAYS;
+        if (n < 0) n = 0;
+        if (n > NOTICE_DAYS_MAX) n = NOTICE_DAYS_MAX;
+        return n;
+    }
+
     function cleanName(value) {
         return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
     }
@@ -130,12 +154,14 @@
 
     function decorate(src) {
         const kind = src.kind;
+        const requests = normaliseRequests(kind, src.requests);
         const el = {
             id: src.id,
             kind: kind,
             name: src.name,
             hasNote: src.hasNote !== false,
-            requests: normaliseRequests(kind, src.requests),
+            requests: requests,
+            noticeDays: requests ? normaliseNoticeDays(src.noticeDays) : null,
             prayedByOther: prayedByOtherOf(kind, src),
             hasRole: false,
         };
@@ -176,6 +202,7 @@
             name: name,
             hasNote: src.hasNote,
             requests: src.requests,
+            noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
         });
     }
@@ -447,6 +474,7 @@
             name: name,
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
+            noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
         });
         if (!order.elements) order.elements = [];
@@ -473,6 +501,7 @@
             name: name,
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
+            noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
         });
         next.elements.push(element);
@@ -491,6 +520,11 @@
             if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
             if (el.kind === 'prayer' && src.requests !== undefined) {
                 el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
+                if (!el.requests) el.noticeDays = null;
+                else if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_DAYS;
+            }
+            if (el.kind === 'prayer' && src.noticeDays !== undefined) {
+                el.noticeDays = el.requests ? normaliseNoticeDays(src.noticeDays) : null;
             }
             if (el.kind === 'prayer' && src.prayedByOther !== undefined) {
                 el.prayedByOther = src.prayedByOther === true;
@@ -641,10 +675,32 @@
         return problems;
     }
 
+    // Where the older prayer fields are drawn on a locked order. A missing
+    // id means the page draws that field once, after the list.
+    function legacyPrayerHomes(order, prayerLabel) {
+        const elements = (order && order.elements) || [];
+        const label = (cleanName(prayerLabel) || LEGACY_PRAYER_NAME).toLowerCase();
+        const named = elements.find(function (el) {
+            return cleanName(el.name).toLowerCase() === label;
+        });
+        const praise = elements.find(function (el) { return el.id === LEGACY_PRAISE_ID; });
+        const confession = elements.find(function (el) { return el.id === LEGACY_CONFESSION_ID; });
+        return {
+            pastoralId: named ? named.id : null,
+            praiseId: praise ? praise.id : null,
+            confessionId: confession ? confession.id : null,
+        };
+    }
+
     const LiturgyOrderCore = {
         KINDS: KINDS,
         KIND_LABELS: KIND_LABELS,
         REQUEST_WHO: REQUEST_WHO,
+        DEFAULT_NOTICE_DAYS: DEFAULT_NOTICE_DAYS,
+        NOTICE_DAYS_MAX: NOTICE_DAYS_MAX,
+        LEGACY_PRAISE_ID: LEGACY_PRAISE_ID,
+        LEGACY_CONFESSION_ID: LEGACY_CONFESSION_ID,
+        LEGACY_PRAYER_NAME: LEGACY_PRAYER_NAME,
         PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
         PRIMITIVE_LABELS: Object.freeze({
             song: 'Hymn',
@@ -692,6 +748,7 @@
         removeFromOrder: removeFromOrder,
         moveInOrder: moveInOrder,
         validateCatalog: validateCatalog,
+        legacyPrayerHomes: legacyPrayerHomes,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

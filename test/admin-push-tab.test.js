@@ -32,8 +32,6 @@ test('the page has two tabs, and the old sections are still on the first one', (
         'SMS (Textbelt)',
         'Credits Remaining',
         'Test &amp; Debug',
-        'Prayer Request Messages',
-        'Automatic sending',
         'Event announcement tells',
     ];
     kept.forEach((section) => {
