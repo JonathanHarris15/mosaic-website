@@ -237,3 +237,39 @@ element whose name is the Sunday's prayer label (the seed names that
 element Pastoral Prayer). An order that no longer has that row draws the
 field once, after the list. Those anchors are the seed's ids and the
 label the Sunday already stores. They are not a new kind.
+
+## Amendment — translating a filled order onto another
+
+Changing the order used to move the pointer and nothing else. Values the
+new order did not carry stayed on their old ids, hidden, and came back when
+the order changed back. That was right while every Sunday was the one
+static list. It is the wrong tool once a congregation keeps several orders:
+a filled hymn has to land on the hymn slot of the order being switched to,
+and a baptism the new order does not have has to stay visible until somebody
+discards it.
+
+**Switching orders translates.** `liturgy-translate-core.js` is the
+assignment. The same element id is exact and stays in code, and so is a name
+that is the only one of its kind on both sides. What is still open is one
+Choice per slot — the filled elements, plus none — asked of Jev through
+`translateLiturgy`. Code assigns from the probabilities, highest first, so
+two slots cannot take the same element. A probability at or under 0.4, or
+no stronger than none, does not land. Baptism's candidate list moves only
+onto baptism. A prayer's people move only onto a prayer that asks for
+people. A slot with nothing comparable stays as it was, unless the value
+that used to be there was itself moved. What was filled and did not land is
+`liturgyLeftovers`, listed on the Order of Service until it is discarded.
+The next switch offers those leftovers again.
+
+When Jev does not answer — no key, the callable is not deployed, the call
+fails — the same assigner runs on kind and position: the next unused
+element of that kind, in the order they were filled. The page says
+"Matched in order, by kind." The Word import on Services uses this same
+plan. A line labeled the way the old static bulletin was labeled is an
+exact lookup. Any other line is a Choice. A line that fits nowhere is a
+leftover on that Sunday, not a hymn shoved into the next empty slot.
+
+The callable reads `TYPESAFE_API_KEY` from the environment and is not in
+the standing deploy set until that secret exists. Adding it before the
+secret exists would fail the church deploy. Until then the pages still
+translate, by kind and position.

@@ -71,6 +71,16 @@ Agents must not `firebase deploy` from a cloud box (AGENTS.md). Adding
 another function — or `firestore:rules` — to prod means adding it here
 (and to the agreement test), not a laptop CLI that skips the workflow.
 
+## Not in the set yet — `translateLiturgy`
+
+`functions/liturgy-translate.js` asks Jev which filled moment belongs in
+which slot. It reads `TYPESAFE_API_KEY` from the environment. It is not in
+the standing `--only` line: binding that secret before it exists fails the
+church deploy, hosting included. The Order of Service and the Word import
+call it and, when the call does not answer, translate by kind and position.
+Add `functions:translateLiturgy` here, and to the agreement test, in the
+same change that sets the secret.
+
 ## Dry-run (MS-600) — Maintain CLEAR before live
 
 Same B path as MS-545 / MS-557 / MS-565. Plan only, through the
