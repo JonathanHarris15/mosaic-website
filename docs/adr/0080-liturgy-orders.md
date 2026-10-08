@@ -174,8 +174,9 @@ every step. The Order of Service names the order and does not write it.
 A hymn takes no name on the order. A scripture, a prayer, a person
 event, and other do. A prayer's requests — how many, male, female, or
 either, and how many days ahead the people are told — are set on the order.
-A prayer can also be marked to be prayed by someone other than the service
-leader; the Sunday then names that person at `carriedBy`. Each placement
+A prayer can also be marked so it can be prayed by someone other than the
+service leader; the Sunday then names that person at `carriedBy`. When it
+is not marked, the Sunday does not ask who prays it. Each placement
 can take a note. Neither surface copies the order onto the Sunday. Up and
 down buttons make the same moves on the Liturgy Orders page.
 

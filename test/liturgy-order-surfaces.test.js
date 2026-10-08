@@ -80,6 +80,10 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
     assert.ok(panel < html.indexOf('>Pastoral Prayer<'), 'the pastoral fields are inside the dropdown');
     assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
+    const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
+    const who = html.indexOf("'Who prays '");
+    assert.ok(leaderGate !== -1 && leaderGate < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    assert.equal(html.indexOf("'Who prays '", who + 1), -1);
 });
 
 test('the Liturgy Orders page drags the collection into the selected order', () => {
@@ -96,7 +100,8 @@ test('the Liturgy Orders page drags the collection into the selected order', () 
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
     assert.match(html, /Days in advance/);
-    assert.match(html, /Prayed by someone other than the service leader/);
+    assert.match(html, /Can be prayed by someone other than the service leader/);
+    assert.doesNotMatch(html, /Prayed by someone other than the service leader/);
     assert.match(html, /A name here, and a reference on the Sunday/);
     assert.match(html, /class="m-page m-page--tool"/);
     assert.match(html, /class="m-section lo-kinds"/);

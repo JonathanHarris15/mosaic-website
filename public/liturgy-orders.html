@@ -142,7 +142,7 @@
                                     <span class="m-row__sub" x-text="kindLabel(el.kind) + (el.hasNote ? ' · note' : '')"></span>
                                     <label class="m-check" x-show="editing && el.kind === 'prayer'">
                                         <input type="checkbox" :checked="!!el.prayedByOther" @change="updateElement(el.id, { prayedByOther: $event.target.checked })" />
-                                        <span>Prayed by someone other than the service leader</span>
+                                        <span>Can be prayed by someone other than the service leader</span>
                                     </label>
                                     <label class="m-check" x-show="editing && el.kind === 'prayer'">
                                         <input type="checkbox" :checked="!!el.requests" @change="updateElement(el.id, { requests: $event.target.checked ? { count: 1, who: 'either' } : null })" />

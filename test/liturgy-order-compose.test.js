@@ -85,6 +85,10 @@ test('a row with nothing to enter does not open', () => {
     assert.equal(form.rowOpens(byKey.callToConfession), true);
     assert.equal(form.rowOpens({ type: 'legacy' }), false);
 
+    form.service.carriedBy[made.praise] = { id: 'p-robin', name: 'Robin Hale' };
+    const quiet = Object.fromEntries(form.displayRows.map(row => [row.key, row]));
+    assert.equal(quiet[made.praise].prayedByOther, false);
+    assert.equal(quiet[made.praise].carrierName, '');
     form.toggleRow(made.praise);
     assert.equal(form.openKey, null);
 
