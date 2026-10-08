@@ -104,9 +104,19 @@ test('a shared element is one column, and Standard\'s come first', () => {
     sb.setTableOrderIds(['communion', 'standard']);
 
     const ids = sb.liturgyColumns().map(c => c.id);
-    assert.deepStrictEqual(ids, STANDARD_IDS.concat(['lordsSupper']),
-        'Standard in its order, then only what Communion adds');
+    STANDARD_IDS.forEach((id, i) => {
+        if (i === 0) return;
+        assert.ok(ids.indexOf(STANDARD_IDS[i - 1]) < ids.indexOf(id), `${id} stayed in Standard's order`);
+    });
     assert.strictEqual(ids.filter(id => id === 'sermon').length, 1, 'the shared sermon is one column');
+    assert.strictEqual(ids.filter(id => id === 'lordsSupper').length, 1, 'Communion adds the supper once');
+    assert.ok(ids.indexOf('hymn1') < ids.indexOf('lordsSupper') && ids.indexOf('lordsSupper') < ids.indexOf('sermon'),
+        'the supper sits between the hymn and the sermon it follows');
+    const supper = sb.liturgyColumns().find(c => c.id === 'lordsSupper');
+    assert.strictEqual(supper.orderName, 'Communion');
+    assert.strictEqual(supper.label, 'Communion · Lord\'s Supper');
+    const hymn = sb.liturgyColumns().find(c => c.id === 'hymn1');
+    assert.strictEqual(hymn.orderName, '', 'a column two orders share is not labelled with one of them');
 });
 
 test('an order toggled on alone gives its own elements, in its own order', () => {
@@ -314,9 +324,70 @@ test('the header keeps the identity columns and names each element once', () => 
     assert.deepStrictEqual(names.slice(0, 7),
         ['Date', 'Theme', 'Leader', 'Preacher', 'Music', 'Prayers', 'Prayed For']);
     assert.strictEqual(names[names.length - 1], 'Actions');
-    assert.deepStrictEqual(names.slice(7, -1), sb.liturgyColumns().map(c => sb.escapeHtml(c.name)));
+    assert.deepStrictEqual(names.slice(7, -1), sb.liturgyColumns().map(c => sb.escapeHtml(c.label)));
+    assert.ok(names.includes(sb.escapeHtml('Communion · Lord\'s Supper')), 'a column only Communion uses names Communion');
+    assert.ok(names.includes('Hymn 1'), 'a shared hymn stays the hymn, with no order in front of it');
     assert.doesNotMatch(row, /liturgy-carrier/,
         'a person is the element\'s own field, not a second line under every row');
+});
+
+test('a Sunday fills the element its own order lined up, and leaves the other quiet', () => {
+    const sb = load();
+    const cat = Liturgy.catalogFrom({
+        elements: [
+            { id: 'hA', name: 'Hymn', kind: 'hymn' },
+            { id: 'hB', name: 'Hymn', kind: 'hymn' },
+            { id: 'pA', name: 'Prayer', kind: 'prayer' },
+            { id: 'bA', name: 'Baptism', kind: 'person' },
+            { id: 'hC', name: 'Hymn', kind: 'hymn' },
+            { id: 'pB', name: 'Prayer', kind: 'prayer' },
+        ],
+        orders: [
+            { id: 'liturgy1', name: 'Liturgy 1', elementIds: ['hA', 'hB', 'pA'] },
+            { id: 'liturgy2', name: 'Liturgy 2', elementIds: ['bA', 'hC', 'pB'] },
+        ],
+    });
+    sb.setLiturgyCatalog(cat);
+    sb.setTableOrderIds(['liturgy1', 'liturgy2']);
+    const cols = sb.liturgyColumns();
+    const cells = cols.map(c => {
+        const classes = new Set();
+        return {
+            dataset: { column: c.key, element: c.id },
+            style: {},
+            textContent: '—',
+            classList: {
+                add(name) { classes.add(name); },
+                remove(name) { classes.delete(name); },
+                has(name) { return classes.has(name); },
+            },
+            parentElement: { querySelector() { return null; } },
+            classes,
+        };
+    });
+    sb.document.querySelectorAll = () => [{
+        dataset: { serviceDate: '2026-08-16' },
+        querySelector() { return null; },
+        querySelectorAll(sel) { return sel === '.liturgy-cell' ? cells : []; },
+    }];
+    sb.injectServiceData({
+        '2026-08-16': {
+            liturgyOrderId: 'liturgy2',
+            liturgy: {
+                bA: [{ name: 'Ada' }],
+                hC: { name: 'Old Hundredth' },
+                pB: 'Thanks',
+            },
+        },
+    });
+    assert.strictEqual(cells[0].textContent, '—', 'Liturgy 1\'s opening hymn is not this Sunday\'s');
+    assert.strictEqual(cells[0].classes.has('liturgy-cell--gap'), true);
+    assert.strictEqual(cells[1].textContent, 'Ada');
+    assert.strictEqual(cells[1].dataset.element, 'bA');
+    assert.strictEqual(cells[2].textContent, 'Old Hundredth');
+    assert.strictEqual(cells[2].dataset.element, 'hC', 'the shared hymn column writes Liturgy 2\'s own hymn');
+    assert.strictEqual(cells[2].classes.has('liturgy-cell--gap'), false);
+    assert.strictEqual(cells[3].textContent, 'Thanks');
 });
 
 // ── Writing a slot ────────────────────────────────────────────────────────
