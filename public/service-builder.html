@@ -1208,7 +1208,7 @@
                                                                     :value="slot.id || ''"
                                                                     @change="setPrayerPerson(item.key, idx, $event.target.value)">
                                                                 <option value="">Choose someone</option>
-                                                                <template x-for="p in prayerChoices(item.requestsWho)" :key="p.id">
+                                                                <template x-for="p in prayerChoices(requestWho(item, idx), slot.id)" :key="p.id">
                                                                     <option :value="p.id" :selected="slot.id === p.id" x-text="p.name + ' — ' + prayerLastLabel(p)"></option>
                                                                 </template>
                                                             </select>

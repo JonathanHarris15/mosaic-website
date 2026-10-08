@@ -239,21 +239,74 @@ function isPastoralPrayerSubject(liturgy, personId, subjectIds) {
 }
 
 /**
- * Days before the Sunday a prayer tells the people it prays for. Missing
- * reads as the old five. 0 tells nobody on its own.
+ * Days a prayer tells people, furthest first. A stored number is that day
+ * and the reminder two days closer. Missing is 5 and 3. An empty list
+ * tells nobody.
+ * @param {?Object} element
+ * @return {Array<number>}
+ */
+function noticeListOf(element) {
+  if (!element || !element.requests) return [];
+  const raw = element.noticeDays;
+  if (Array.isArray(raw)) {
+    const days = [];
+    raw.forEach((value) => {
+      let n = parseInt(value, 10);
+      if (!Number.isFinite(n) || n < 1) return;
+      if (n > 30) n = 30;
+      if (days.indexOf(n) === -1) days.push(n);
+    });
+    days.sort((a, b) => b - a);
+    return days;
+  }
+  if (raw == null || raw === "") {
+    return [INITIAL_DAYS_OUT, REMINDER_DAYS_OUT];
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return [];
+  const first = Math.min(n, 30);
+  const reminder = reminderDaysFor(first);
+  if (reminder >= 1 && reminder !== first) return [first, reminder];
+  return [first];
+}
+
+/**
+ * The furthest day a prayer tells people. Missing reads as the old five.
+ * 0 tells nobody on its own.
  * @param {?Object} element
  * @return {number}
  */
 function noticeDaysOf(element) {
-  if (!element || !element.requests) return 0;
-  if (element.noticeDays == null || element.noticeDays === "") {
-    return INITIAL_DAYS_OUT;
-  }
-  const n = parseInt(element.noticeDays, 10);
-  if (!Number.isFinite(n)) return INITIAL_DAYS_OUT;
-  if (n < 0) return 0;
-  if (n > 30) return 30;
-  return n;
+  const list = noticeListOf(element);
+  return list.length ? list[0] : 0;
+}
+
+/**
+ * The ask and the thank-you written on a prayer. Blank uses the built-in
+ * wording, after any saved config.
+ * @param {?Object} element
+ * @return {{message: string, response: string}}
+ */
+function proseOf(element) {
+  const text = (value) => (
+    typeof value === "string" ? value.trim() : ""
+  );
+  return {
+    message: text(element && element.message),
+    response: text(element && element.response),
+  };
+}
+
+/**
+ * A custom message still carries the answer link.
+ * @param {?string} text
+ * @return {string}
+ */
+function messageWithLink(text) {
+  const raw = typeof text === "string" ? text.trim() : "";
+  if (!raw) return "";
+  if (raw.includes("{link}")) return raw;
+  return `${raw}\n{link}`;
 }
 
 /**
@@ -274,46 +327,68 @@ function reminderDaysFor(noticeDays) {
  * @param {Object} args
  * @param {?Object} args.liturgy
  * @param {Array} [args.elements] the Sunday's order
- * @return {Array<Object>} id, name, noticeDays, fromElement
+ * @return {Array<Object>} id, name, noticeDays, noticeList, message,
+ *   response, fromElement
  */
 function pastoralSubjects(args) {
   const liturgy = (args && args.liturgy) || {};
   const elements = (args && args.elements) || [];
   const byId = new Map();
-  const consider = (person, noticeDays, fromElement) => {
+  const consider = (person, noticeList, fromElement, prose) => {
     if (!person || !person.id) return;
-    const days = Number.isFinite(noticeDays) ? noticeDays : INITIAL_DAYS_OUT;
+    const list = Array.isArray(noticeList) ? noticeList : [];
+    const days = list.length ? list[0] : 0;
+    const words = prose || {message: "", response: ""};
     const prev = byId.get(person.id);
     if (!prev) {
       byId.set(person.id, {
         id: person.id,
         name: person.name || "",
         noticeDays: days,
+        noticeList: list.slice(),
+        message: words.message || "",
+        response: words.response || "",
         fromElement: !!fromElement,
       });
       return;
     }
     if (fromElement && !prev.fromElement) {
       prev.noticeDays = days;
+      prev.noticeList = list.slice();
+      prev.message = words.message || "";
+      prev.response = words.response || "";
       prev.fromElement = true;
       if (person.name) prev.name = person.name;
     } else if (fromElement && days > prev.noticeDays) {
       prev.noticeDays = days;
+      prev.noticeList = list.slice();
+      if (words.message) prev.message = words.message;
+      if (words.response) prev.response = words.response;
     }
   };
   const prayers = elements.filter((el) =>
     el && el.kind === "prayer" && el.requests);
   prayers.forEach((el) => {
-    const days = noticeDaysOf(el);
     const value = liturgy[el.id];
-    const list = Array.isArray(value) ? value : [];
-    list.forEach((person) => consider(person, days, true));
+    const named = Array.isArray(value) ? value : [];
+    const words = proseOf(el);
+    named.forEach((person) =>
+      consider(person, noticeListOf(el), true, words));
   });
-  const positive = prayers.map(noticeDaysOf).filter((n) => n > 0);
-  const legacyDays = positive.length ?
-    Math.max.apply(null, positive) : INITIAL_DAYS_OUT;
-  consider(liturgy.prayerMale, legacyDays, false);
-  consider(liturgy.prayerFemale, legacyDays, false);
+  let legacyList = null;
+  prayers.forEach((el) => {
+    const list = noticeListOf(el);
+    if (!list.length) return;
+    if (!legacyList || list[0] > legacyList[0]) legacyList = list;
+  });
+  if (!legacyList) {
+    legacyList = noticeListOf({
+      requests: {count: 1}, noticeDays: INITIAL_DAYS_OUT,
+    });
+  }
+  const quiet = {message: "", response: ""};
+  consider(liturgy.prayerMale, legacyList, false, quiet);
+  consider(liturgy.prayerFemale, legacyList, false, quiet);
   return Array.from(byId.values());
 }
 
@@ -498,6 +573,66 @@ function prayerRequestAction(state) {
 }
 
 /**
+ * Days already sent. An older record with no list still counts the first
+ * ask and the reminder.
+ * @param {Object} state
+ * @param {Array<number>} list
+ * @return {Set<number>}
+ */
+function sentNoticeDays(state, list) {
+  const sent = new Set();
+  const explicit = Array.isArray(state.sentDays) ? state.sentDays : [];
+  if (explicit.length) {
+    explicit.forEach((d) => {
+      const n = Number(d);
+      if (list.indexOf(n) !== -1) sent.add(n);
+    });
+    return sent;
+  }
+  if (state.initialSentDate && list.length) sent.add(list[0]);
+  if (state.reminderSent && list.length > 1) sent.add(list[1]);
+  return sent;
+}
+
+/**
+ * Which listed day to send now, and whether it is the first ask.
+ * One send per church-local day. A list walks each day in turn.
+ * Without a list, the older single notice and its reminder stand.
+ * @param {Object} state
+ * @return {{action: string, day: ?number}}
+ */
+function prayerAskPlan(state) {
+  const s = state || {};
+  const list = Array.isArray(s.noticeList) ? s.noticeList : null;
+  if (!list) {
+    const action = prayerRequestAction(s);
+    if (action === "none") return {action: "none", day: null};
+    const noticeRaw = Number(s.noticeDays);
+    const notice = Number.isFinite(noticeRaw) ?
+      noticeRaw : INITIAL_DAYS_OUT;
+    const reminder = s.reminderDays == null ?
+      reminderDaysFor(notice) : Number(s.reminderDays);
+    return {action, day: action === "reminder" ? reminder : notice};
+  }
+  if (!canBeTold(s) || s.requestFilled) {
+    return {action: "none", day: null};
+  }
+  if (s.daysUntilService < 0) return {action: "none", day: null};
+  if (!nc.isInsideSendWindow(s.localHour)) {
+    return {action: "none", day: null};
+  }
+  const days = list.filter((n) => Number(n) > 0);
+  if (!days.length) return {action: "none", day: null};
+  const sent = sentNoticeDays(s, days);
+  const last = s.reminderSentDate || s.initialSentDate || null;
+  if (last && last === s.today) return {action: "none", day: null};
+  const due = days.filter((d) => s.daysUntilService <= d && !sent.has(d));
+  if (!due.length) return {action: "none", day: null};
+  const day = Math.max.apply(null, due);
+  return {action: sent.size ? "reminder" : "initial", day};
+}
+
+/**
  * The manual ("Send now") decision: a human is choosing to send now, so the
  * timing/quiet-hours guards are bypassed, but the hard guards remain — refuse
  * when nobody can be reached, or the request is already filled. Initial if
@@ -661,6 +796,8 @@ if (typeof module !== "undefined" && module.exports) {
     daysUntil,
     isPastoralPrayerSubject,
     noticeDaysOf,
+    noticeListOf,
+    messageWithLink,
     reminderDaysFor,
     pastoralSubjects,
     prayerNoticePlan,
@@ -669,6 +806,7 @@ if (typeof module !== "undefined" && module.exports) {
     prayerAnswerPageView,
     prayerRequestNoteDecision,
     prayerRequestAction,
+    prayerAskPlan,
     manualPrayerRequestKind,
     prayerNotifyRequest,
     prayerAskUrl,

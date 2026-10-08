@@ -41,12 +41,17 @@
     });
 
     const REQUEST_WHO = Object.freeze(['male', 'female', 'either']);
+    const REQUEST_PEOPLE_MAX = 12;
 
     // How many days before the Sunday a prayer that sends requests tells
-    // someone. 0 tells nobody on its own. A reminder follows two days closer,
-    // the same gap the old 5-day ask and 3-day reminder used.
+    // someone. A stored number is that day and the reminder two days closer,
+    // the old 5-and-3 gap. Turning the ask on starts at 5, 3, and 1. An
+    // empty list tells nobody on its own.
     const DEFAULT_NOTICE_DAYS = 5;
+    const DEFAULT_NOTICE_LIST = Object.freeze([5, 3, 1]);
     const NOTICE_DAYS_MAX = 30;
+    const NOTICE_REMINDER_GAP = 2;
+    const PROSE_MAX = 1000;
 
     // The older Sunday fields are not elements. They are drawn under the
     // elements the seed already uses for those moments. A leader stays under
@@ -120,13 +125,72 @@
         return kind === 'prayer' && !!(src && src.prayedByOther === true);
     }
 
+    function whoOf(raw) {
+        return REQUEST_WHO.indexOf(raw) === -1 ? 'either' : raw;
+    }
+
+    function sharedWho(people) {
+        if (!people.length) return 'either';
+        const first = people[0].who;
+        for (let i = 1; i < people.length; i++) {
+            if (people[i].who !== first) return 'either';
+        }
+        return first;
+    }
+
+    // One line per person. An older { count, who } becomes that many lines
+    // of the same who.
+    function normalisePeople(raw) {
+        const src = raw || {};
+        let people = [];
+        if (Array.isArray(src.people) && src.people.length) {
+            people = src.people.map(function (person) {
+                return { who: whoOf(person && person.who) };
+            });
+        } else {
+            const who = whoOf(src.who);
+            let count = parseInt(src.count, 10);
+            if (!count || count < 1) count = 1;
+            if (count > REQUEST_PEOPLE_MAX) count = REQUEST_PEOPLE_MAX;
+            for (let i = 0; i < count; i++) people.push({ who: who });
+        }
+        if (people.length > REQUEST_PEOPLE_MAX) people = people.slice(0, REQUEST_PEOPLE_MAX);
+        if (!people.length) people = [{ who: 'either' }];
+        return people;
+    }
+
+    // A number already saved is that day plus the reminder two days closer.
+    // A list is the days themselves. Empty tells nobody.
+    function legacyNoticeList(n) {
+        let first = n;
+        if (first > NOTICE_DAYS_MAX) first = NOTICE_DAYS_MAX;
+        if (first < 1) return [];
+        const reminder = first - NOTICE_REMINDER_GAP;
+        if (reminder >= 1) return [first, reminder];
+        return [first];
+    }
+
     function normaliseNoticeDays(raw) {
-        if (raw == null || raw === '') return DEFAULT_NOTICE_DAYS;
-        let n = parseInt(raw, 10);
-        if (!Number.isFinite(n)) return DEFAULT_NOTICE_DAYS;
-        if (n < 0) n = 0;
-        if (n > NOTICE_DAYS_MAX) n = NOTICE_DAYS_MAX;
-        return n;
+        if (Array.isArray(raw)) {
+            const days = [];
+            raw.forEach(function (value) {
+                let n = parseInt(value, 10);
+                if (!Number.isFinite(n) || n < 1) return;
+                if (n > NOTICE_DAYS_MAX) n = NOTICE_DAYS_MAX;
+                if (days.indexOf(n) === -1) days.push(n);
+            });
+            days.sort(function (a, b) { return b - a; });
+            return days;
+        }
+        if (raw == null || raw === '') return legacyNoticeList(DEFAULT_NOTICE_DAYS);
+        const n = parseInt(raw, 10);
+        if (!Number.isFinite(n) || n <= 0) return [];
+        return legacyNoticeList(n);
+    }
+
+    function proseOf(value) {
+        const text = String(value == null ? '' : value).replace(/\r\n/g, '\n').trim();
+        return text.length > PROSE_MAX ? text.slice(0, PROSE_MAX) : text;
     }
 
     function cleanName(value) {
@@ -145,11 +209,8 @@
 
     function normaliseRequests(kind, raw) {
         if (kind !== 'prayer' || !raw || typeof raw !== 'object') return null;
-        const who = REQUEST_WHO.indexOf(raw.who) === -1 ? 'either' : raw.who;
-        let count = parseInt(raw.count, 10);
-        if (!count || count < 1) count = 1;
-        if (count > 12) count = 12;
-        return { count: count, who: who };
+        const people = normalisePeople(raw);
+        return { people: people, count: people.length, who: sharedWho(people) };
     }
 
     function decorate(src) {
@@ -165,6 +226,10 @@
             prayedByOther: prayedByOtherOf(kind, src),
             hasRole: false,
         };
+        if (kind === 'prayer') {
+            el.message = proseOf(src.message);
+            el.response = proseOf(src.response);
+        }
         el.primitive = primitiveOf(el);
         return el;
     }
@@ -204,6 +269,8 @@
             requests: src.requests,
             noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
+            message: src.message,
+            response: src.response,
         });
     }
 
@@ -476,6 +543,8 @@
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
+            message: src.message,
+            response: src.response,
         });
         if (!order.elements) order.elements = [];
         const at = typeof index === 'number' && index >= 0 && index <= order.elements.length
@@ -503,6 +572,8 @@
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
             prayedByOther: src.prayedByOther,
+            message: src.message,
+            response: src.response,
         });
         next.elements.push(element);
         return { catalog: next, element: copyElement(element) };
@@ -521,7 +592,7 @@
             if (el.kind === 'prayer' && src.requests !== undefined) {
                 el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
                 if (!el.requests) el.noticeDays = null;
-                else if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_DAYS;
+                else if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_LIST.slice();
             }
             if (el.kind === 'prayer' && src.noticeDays !== undefined) {
                 el.noticeDays = el.requests ? normaliseNoticeDays(src.noticeDays) : null;
@@ -529,6 +600,8 @@
             if (el.kind === 'prayer' && src.prayedByOther !== undefined) {
                 el.prayedByOther = src.prayedByOther === true;
             }
+            if (el.kind === 'prayer' && src.message !== undefined) el.message = proseOf(src.message);
+            if (el.kind === 'prayer' && src.response !== undefined) el.response = proseOf(src.response);
             el.primitive = primitiveOf(el);
         };
         let found = false;
@@ -696,7 +769,9 @@
         KINDS: KINDS,
         KIND_LABELS: KIND_LABELS,
         REQUEST_WHO: REQUEST_WHO,
+        REQUEST_PEOPLE_MAX: REQUEST_PEOPLE_MAX,
         DEFAULT_NOTICE_DAYS: DEFAULT_NOTICE_DAYS,
+        DEFAULT_NOTICE_LIST: DEFAULT_NOTICE_LIST,
         NOTICE_DAYS_MAX: NOTICE_DAYS_MAX,
         LEGACY_PRAISE_ID: LEGACY_PRAISE_ID,
         LEGACY_CONFESSION_ID: LEGACY_CONFESSION_ID,

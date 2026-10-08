@@ -69,6 +69,13 @@ function liturgyOrdersPage() {
         stored: { elementIds: [], orderIds: [] },
         baseline: '',
         selectedOrderId: Core.STANDARD_ORDER_ID,
+        selectedElementId: '',
+        dayDrafts: {},
+        whoOptions: [
+            { value: 'male', label: 'A man' },
+            { value: 'female', label: 'A woman' },
+            { value: 'either', label: 'Anyone' },
+        ],
         orderName: '',
         kinds: Core.KINDS,
         primitives: Core.PRIMITIVES,
@@ -93,6 +100,12 @@ function liturgyOrdersPage() {
         // must not be written back over orders this page did not read.
         get editing() { return this.canEdit && !this.problem && !this.loading; },
         get orderElements() { return Core.elementsOf(this.selectedOrder, this.catalog); },
+        get proseElement() {
+            if (!this.selectedElementId) return null;
+            const el = Core.elementById(this.catalog, this.selectedElementId);
+            if (!el || el.kind !== 'prayer' || !el.requests) return null;
+            return el;
+        },
         get addable() {
             const inOrder = new Set(this.selectedOrder.elementIds);
             return this.catalog.elements.filter(el => !inOrder.has(el.id));
@@ -211,6 +224,7 @@ function liturgyOrdersPage() {
         },
 
         removeFromOrder(elementId) {
+            if (this.selectedElementId === elementId) this.selectedElementId = '';
             this._apply(cat => Core.removeFromOrder(cat, this.selectedOrder.id, elementId));
         },
 
@@ -302,11 +316,71 @@ function liturgyOrdersPage() {
         updateElement(id, patch) {
             this._apply(cat => Core.updateElement(cat, id, patch));
         },
-        // The number field writes the count onto the draft as it is typed.
-        // This puts it back through the core so 0 and 20 become 1 and 12.
-        clampRequests(el) {
-            if (!el || !el.requests) return;
-            this.updateElement(el.id, { requests: { count: el.requests.count, who: el.requests.who } });
+
+        peopleCopy(el) {
+            return ((el.requests && el.requests.people) || []).map(person => ({ who: person.who }));
+        },
+        toggleRequests(el, on) {
+            this.updateElement(el.id, {
+                requests: on ? { people: [{ who: 'either' }] } : null,
+            });
+            if (on) this.showProse(el);
+            else if (this.selectedElementId === el.id) this.selectedElementId = '';
+        },
+        addPerson(el) {
+            const people = this.peopleCopy(el);
+            if (people.length >= Core.REQUEST_PEOPLE_MAX) return;
+            people.push({ who: 'either' });
+            this.updateElement(el.id, { requests: { people: people } });
+        },
+        removePerson(el, index) {
+            const people = this.peopleCopy(el);
+            if (people.length <= 1) return;
+            people.splice(index, 1);
+            this.updateElement(el.id, { requests: { people: people } });
+        },
+        movePerson(el, index, delta) {
+            const people = this.peopleCopy(el);
+            const to = index + delta;
+            if (to < 0 || to >= people.length) return;
+            const moved = people.splice(index, 1)[0];
+            people.splice(to, 0, moved);
+            this.updateElement(el.id, { requests: { people: people } });
+        },
+        setPersonWho(el, index, who) {
+            const people = this.peopleCopy(el);
+            if (!people[index]) return;
+            people[index].who = who;
+            this.updateElement(el.id, { requests: { people: people } });
+        },
+        addDay(el) {
+            if (!el) return;
+            const n = parseInt(this.dayDrafts[el.id], 10);
+            if (!Number.isFinite(n) || n < 1 || n > Core.NOTICE_DAYS_MAX) {
+                this.editProblem = 'A day is a number from 1 to 30.';
+                return;
+            }
+            const days = (Array.isArray(el.noticeDays) ? el.noticeDays : []).slice();
+            if (days.indexOf(n) === -1) days.push(n);
+            this.dayDrafts[el.id] = '';
+            this.updateElement(el.id, { noticeDays: days });
+        },
+        removeDay(el, day) {
+            const days = (el.noticeDays || []).filter(value => value !== day);
+            this.updateElement(el.id, { noticeDays: days });
+        },
+        openProse(el, event) {
+            if (!this.editing || !el || !el.requests) return;
+            if (event && event.target && event.target.closest('button, a, input, select, textarea, label')) return;
+            this.showProse(el);
+        },
+        showProse(el) {
+            if (!el) return;
+            this.selectedElementId = el.id;
+            this.$nextTick(() => {
+                const field = document.getElementById('prayer-message');
+                if (field) field.focus();
+            });
         },
 
         renameElement(id, event) {

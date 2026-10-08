@@ -216,13 +216,15 @@ The Order of Service no longer composes the order. Placing, moving, and
 taking out happen on the Liturgy Orders page, and a Sunday shows the
 combination already locked.
 
-A prayer that sends requests carries `noticeDays`: how many days before the
-Sunday those people get the text or the push. Absent reads as 5, which is
-what the hourly job used to hard-code. 0 sends nothing on its own. The
-reminder is two days closer, the old gap between 5 and 3. That field
-replaces the prayer-request message editors on the admin dashboard. The
-wording stays the built-in text; a value already saved in
-`app_config/prayer_request_sms` still wins for the words. A Sunday whose
+A prayer that sends requests carries one line per person (`requests.people`,
+each `who` male, female, or either) and `noticeDays` as the days they are
+told, furthest first, such as 5, 3, and 1. Turning the ask on starts at
+5, 3, and 1. A number already saved is that day and the reminder two days
+closer, so a stored 5 is 5 and 3. An empty list sends nothing on its own.
+Each day in the list sends once. `sentDays` on the request records which
+of those days have gone out. The message and the response live on the
+prayer. Written prose wins for that prayer's people. Blank still uses
+`app_config/prayer_request_sms`, then the built-in text. A Sunday whose
 order has no prayer that sends requests still follows `autoSendEnabled` on
 that document, and still asks `liturgy.prayerMale` and `liturgy.prayerFemale`.
 When the order does send requests, those older fields are asked on the same

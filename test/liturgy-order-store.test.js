@@ -33,6 +33,8 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
     const marked = Core.updateElement(prayer.catalog, prayer.element.id, {
         prayedByOther: true,
         requests: { count: 2, who: 'either' },
+        message: 'Hello {name}',
+        response: 'Thanks {name}',
     });
     const scripture = Core.placeKind(marked, 'standard', 'scripture', 1);
     const titled = Core.updateElement(scripture.catalog, scripture.element.id, { name: 'The Epistle' });
@@ -40,8 +42,14 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
     const standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
     const storedPrayer = standard.elements.find(function (el) { return el.id === prayer.element.id; });
     assert.equal(storedPrayer.prayedByOther, true);
-    assert.deepEqual(storedPrayer.requests, { count: 2, who: 'either' });
-    assert.equal(storedPrayer.noticeDays, 5);
+    assert.deepEqual(storedPrayer.requests, {
+        people: [{ who: 'either' }, { who: 'either' }],
+        count: 2,
+        who: 'either',
+    });
+    assert.deepEqual(storedPrayer.noticeDays, [5, 3, 1]);
+    assert.equal(storedPrayer.message, 'Hello {name}');
+    assert.equal(storedPrayer.response, 'Thanks {name}');
     assert.ok(!storedPrayer.hasRole);
     const storedScripture = standard.elements.find(function (el) { return el.id === scripture.element.id; });
     assert.equal(storedScripture.kind, 'scripture');

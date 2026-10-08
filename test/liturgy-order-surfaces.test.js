@@ -99,7 +99,13 @@ test('the Liturgy Orders page drags the collection into the selected order', () 
     assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
-    assert.match(html, /Days in advance/);
+    assert.match(html, /Add another person/);
+    assert.match(html, /Days before the Sunday/);
+    assert.match(html, /id="prayer-message"/);
+    assert.match(html, /id="prayer-response"/);
+    assert.match(html, /Write the message/);
+    assert.doesNotMatch(html, /Days in advance/);
+    assert.doesNotMatch(html, /How many/);
     assert.match(html, /Can be prayed by someone other than the service leader/);
     assert.doesNotMatch(html, /Prayed by someone other than the service leader/);
     assert.match(html, /A name here, and a reference on the Sunday/);

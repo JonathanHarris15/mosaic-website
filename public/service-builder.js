@@ -868,13 +868,24 @@ function serviceForm() {
 
         // Everyone the prayer's dropdown can offer, oldest prayer first.
         // "Either" is the whole list. Male and female are that sex only.
-        prayerChoices(who) {
+        requestWho(item, idx) {
+            const people = (item && item.requestPeople) || [];
+            const line = people[idx];
+            if (line && line.who) return line.who;
+            return (item && item.requestsWho) || 'either';
+        },
+        prayerChoices(who, currentId) {
             const NEVER = '0000-00-00';
             const last = (m) => (m && m.lastPastoralPrayerDate) || NEVER;
-            return (this.prayerMembers || [])
+            const list = (this.prayerMembers || [])
                 .filter(m => who !== 'male' && who !== 'female' || m.sex === who)
                 .slice()
                 .sort((a, b) => String(last(a)).localeCompare(String(last(b))));
+            if (currentId && !list.some(m => m.id === currentId)) {
+                const found = (this.prayerMembers || []).find(m => m.id === currentId);
+                if (found) list.unshift(found);
+            }
+            return list;
         },
         prayerLastLabel(person) {
             if (window.PastoralPrayerCore) return PastoralPrayerCore.lastPrayedLabel(person && person.lastPastoralPrayerDate);
@@ -2018,6 +2029,7 @@ function serviceForm() {
                 key, label: el.name, type, value, status, emptyLabel, removed,
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
+                requestPeople: el.requests && el.requests.people ? el.requests.people : [],
                 prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',

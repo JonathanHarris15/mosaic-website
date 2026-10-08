@@ -52,7 +52,13 @@ function wordings(templates, request, person) {
   const kind = request.wording;
   const name = firstName(request, person);
   const url = destinationUrl(request);
-  const textTemplates = t.text || {};
+  const textTemplates = Object.assign({}, t.text || {});
+  const custom = request && typeof request.message === "string" ?
+    request.message.trim() : "";
+  if (custom) {
+    textTemplates.initial = custom;
+    textTemplates.reminder = custom;
+  }
   const textFallbacks = t.textFallback || {};
   const pushTemplates = t.push || {};
   const pushFallbacks = t.pushFallback || {};
