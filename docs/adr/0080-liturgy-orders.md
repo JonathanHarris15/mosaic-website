@@ -272,3 +272,10 @@ leftover on that Sunday, not a hymn shoved into the next empty slot.
 The callable reads `TYPESAFE_API_KEY` through `defineSecret` and ships in
 the standing deploy set. A missing answer — the call fails, or the secret
 value is empty — still translates by kind and position.
+
+The MCP read of that Sunday includes `leftovers`, the same drawer. The
+write allowlist stays the Standard seed. An open Order of Service takes a
+switch, a leftover, or an assistant's write through the live listener
+(`live-read.js`), including the phone's re-read when the stream stays
+silent. A Standard element the Sunday's order does not include is stored
+and stays hidden.
