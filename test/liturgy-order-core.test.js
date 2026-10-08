@@ -171,22 +171,39 @@ test('a prayer can be prayed by someone other than the service leader', () => {
     assert.ok(!Core.elementById(hymn, 'hymn1').prayedByOther);
 });
 
-test('a prayer that sends requests remembers how many days ahead', () => {
+test('a prayer that sends requests keeps one line per person and a list of days', () => {
     const made = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 0, { name: 'Pastoral Prayer' });
-    const on = Core.updateElement(made.catalog, made.element.id, { requests: { count: 2, who: 'either' } });
+    const on = Core.updateElement(made.catalog, made.element.id, { requests: { people: [{ who: 'either' }] } });
     const el = Core.elementById(on, made.element.id);
-    assert.equal(el.noticeDays, 5);
-    const sooner = Core.updateElement(on, el.id, { noticeDays: 10 });
-    assert.equal(Core.elementById(sooner, el.id).noticeDays, 10);
-    const quiet = Core.updateElement(sooner, el.id, { noticeDays: 0 });
-    assert.equal(Core.elementById(quiet, el.id).noticeDays, 0);
+    assert.deepEqual(el.noticeDays, [5, 3, 1]);
+    assert.deepEqual(el.requests.people, [{ who: 'either' }]);
+    const lines = Core.updateElement(on, el.id, {
+        requests: { people: [{ who: 'female' }, { who: 'male' }] },
+    });
+    const lined = Core.elementById(lines, el.id);
+    assert.equal(lined.requests.count, 2);
+    assert.deepEqual(lined.requests.people, [{ who: 'female' }, { who: 'male' }]);
+    assert.equal(lined.requests.who, 'either');
+    const sooner = Core.updateElement(lines, el.id, { noticeDays: [10, 4, 1] });
+    assert.deepEqual(Core.elementById(sooner, el.id).noticeDays, [10, 4, 1]);
+    const quiet = Core.updateElement(sooner, el.id, { noticeDays: [] });
+    assert.deepEqual(Core.elementById(quiet, el.id).noticeDays, []);
     const off = Core.updateElement(quiet, el.id, { requests: null });
     assert.equal(Core.elementById(off, el.id).noticeDays, null);
     const round = Core.normaliseElement({
         id: el.id, kind: 'prayer', name: el.name,
         requests: { count: 2, who: 'male' }, noticeDays: 7,
     });
-    assert.equal(round.noticeDays, 7);
+    assert.equal(round.requests.count, 2);
+    assert.deepEqual(round.requests.people, [{ who: 'male' }, { who: 'male' }]);
+    assert.deepEqual(round.noticeDays, [7, 5]);
+    const words = Core.updateElement(on, el.id, {
+        message: '  Pray for {name}. {link}  ',
+        response: 'Thank you, {name}.',
+    });
+    const written = Core.elementById(words, el.id);
+    assert.equal(written.message, 'Pray for {name}. {link}');
+    assert.equal(written.response, 'Thank you, {name}.');
 });
 
 test('older prayer fields sit under the seed rows they belong with', () => {

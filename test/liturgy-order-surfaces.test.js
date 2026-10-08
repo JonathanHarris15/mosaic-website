@@ -65,10 +65,25 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /Who prays /);
     assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
-    assert.match(html, /item\.type === 'other'/);
+    assert.match(js, /type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
     assert.match(js, /legacyPrayerHomes/);
     assert.match(js, /el\.prayedByOther/);
+    assert.match(js, /rowOpens\(item\)/);
+    assert.match(html, /rowOpens\(item\)/);
+    assert.match(html, /station-quiet/);
+    assert.doesNotMatch(html, /Nothing to enter/);
+    assert.match(html, /x-show="rowOpens\(item\) && !heldBy\(item\.key\)"/);
+    const panel = html.indexOf("openKey === item.key || item.type === 'legacy'");
+    assert.ok(panel !== -1, 'the row panel is the dropdown');
+    assert.ok(panel < html.indexOf('Prayer Leader (Confession)'), 'the confession leader is inside the dropdown');
+    assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
+    assert.ok(panel < html.indexOf('>Pastoral Prayer<'), 'the pastoral fields are inside the dropdown');
+    assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
+    const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
+    const who = html.indexOf("'Who prays '");
+    assert.ok(leaderGate !== -1 && leaderGate < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    assert.equal(html.indexOf("'Who prays '", who + 1), -1);
 });
 
 test('the Liturgy Orders page drags the collection into the selected order', () => {
@@ -84,8 +99,15 @@ test('the Liturgy Orders page drags the collection into the selected order', () 
     assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
-    assert.match(html, /Days in advance/);
-    assert.match(html, /Prayed by someone other than the service leader/);
+    assert.match(html, /Add another person/);
+    assert.match(html, /Days before the Sunday/);
+    assert.match(html, /id="prayer-message"/);
+    assert.match(html, /id="prayer-response"/);
+    assert.match(html, /Write the message/);
+    assert.doesNotMatch(html, /Days in advance/);
+    assert.doesNotMatch(html, /How many/);
+    assert.match(html, /Can be prayed by someone other than the service leader/);
+    assert.doesNotMatch(html, /Prayed by someone other than the service leader/);
     assert.match(html, /A name here, and a reference on the Sunday/);
     assert.match(html, /class="m-page m-page--tool"/);
     assert.match(html, /class="m-section lo-kinds"/);

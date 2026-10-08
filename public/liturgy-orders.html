@@ -71,7 +71,7 @@
                 <div class="m-notice__body"><span class="m-notice__text">Only an editor can change the liturgy orders.</span></div>
             </div>
 
-            <div class="lo-grid">
+            <div class="lo-grid" :class="proseElement && 'lo-grid--prose'">
 
                 <!-- ── Elements: the five kinds, to the left of the order ── -->
                 <section class="m-section lo-kinds" aria-labelledby="elements-title">
@@ -129,7 +129,9 @@
                             <p>Drag an element here, or add one.</p>
                         </div>
                         <template x-for="(el, index) in orderElements" :key="el.id">
-                            <div class="m-row" :data-order-row="el.id" :data-element-id="el.id">
+                            <div class="m-row" :data-order-row="el.id" :data-element-id="el.id"
+                                 :class="{ 'm-row--current': proseElement && proseElement.id === el.id, 'lo-ask': !!(editing && el.kind === 'prayer') }"
+                                 @click="openProse(el, $event)">
                                 <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag to move" aria-hidden="true">drag_indicator</span>
                                 <span class="lo-num" x-text="index + 1"></span>
                                 <span class="m-row__main">
@@ -140,46 +142,6 @@
                                     </template>
                                     <span class="m-row__title" x-show="!takesName(el.kind)" x-text="el.name"></span>
                                     <span class="m-row__sub" x-text="kindLabel(el.kind) + (el.hasNote ? ' · note' : '')"></span>
-                                    <label class="m-check" x-show="editing && el.kind === 'prayer'">
-                                        <input type="checkbox" :checked="!!el.prayedByOther" @change="updateElement(el.id, { prayedByOther: $event.target.checked })" />
-                                        <span>Prayed by someone other than the service leader</span>
-                                    </label>
-                                    <label class="m-check" x-show="editing && el.kind === 'prayer'">
-                                        <input type="checkbox" :checked="!!el.requests" @change="updateElement(el.id, { requests: $event.target.checked ? { count: 1, who: 'either' } : null })" />
-                                        <span>Send prayer requests</span>
-                                    </label>
-                                    <template x-if="editing && el.kind === 'prayer' && el.requests">
-                                        <span>
-                                        <span class="lo-prayer">
-                                            <label class="m-field">
-                                                <span class="m-label">How many</span>
-                                                <input class="m-input" type="number" min="1" max="12"
-                                                       :aria-label="'How many people for ' + el.name"
-                                                       x-model.number="el.requests.count" @change="clampRequests(el)" />
-                                            </label>
-                                            <label class="m-field">
-                                                <span class="m-label">Days in advance</span>
-                                                <input class="m-input" type="number" min="0" max="30"
-                                                       :aria-label="'Days in advance for ' + el.name"
-                                                       :value="el.noticeDays"
-                                                       @change="updateElement(el.id, { noticeDays: $event.target.value })" />
-                                            </label>
-                                            <label class="m-field">
-                                                <span class="m-label">Who</span>
-                                                <span class="m-select-wrap">
-                                                    <select class="m-select" :aria-label="'Who ' + el.name + ' asks'"
-                                                        :value="el.requests.who"
-                                                        @change="updateElement(el.id, { requests: { count: el.requests.count, who: $event.target.value } })">
-                                                    <option value="either">Either</option>
-                                                    <option value="male">Male</option>
-                                                    <option value="female">Female</option>
-                                                </select>
-                                                </span>
-                                            </label>
-                                        </span>
-                                        <span class="lo-hint">A text or a push goes out this many days before the Sunday. A reminder follows two days later. 0 sends nothing on its own.</span>
-                                        </span>
-                                    </template>
                                 </span>
                                 <label class="m-check" x-show="editing">
                                     <input type="checkbox" :checked="el.hasNote" @change="updateElement(el.id, { hasNote: $event.target.checked })" />
@@ -201,6 +163,93 @@
                                         <span class="material-symbols-outlined">remove_circle_outline</span>
                                     </button>
                                 </span>
+                                    <template x-if="editing && el.kind === 'prayer'">
+                                        <div class="lo-ask__more">
+                                        <label class="m-check">
+                                            <input type="checkbox" :checked="!!el.prayedByOther" @change="updateElement(el.id, { prayedByOther: $event.target.checked })" />
+                                            <span>Can be prayed by someone other than the service leader</span>
+                                        </label>
+                                        <label class="m-check">
+                                            <input type="checkbox" :checked="!!el.requests" @change="toggleRequests(el, $event.target.checked)" />
+                                            <span>Send prayer requests</span>
+                                        </label>
+                                        <template x-if="el.requests">
+                                        <div class="lo-ask__body">
+                                        <span class="lo-person">
+                                            <ul class="lo-person__list">
+                                                <template x-for="(person, index) in el.requests.people" :key="el.id + '-' + index">
+                                                    <li class="lo-person__line">
+                                                        <div class="lo-person__head">
+                                                            <span class="lo-person__n" x-text="'Person ' + (index + 1)"></span>
+                                                            <span class="lo-person__acts">
+                                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                                                        :disabled="index === 0" @click="movePerson(el, index, -1)"
+                                                                        :aria-label="'Move person ' + (index + 1) + ' up'">
+                                                                    <span class="material-symbols-outlined">arrow_upward</span>
+                                                                </button>
+                                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                                                        :disabled="index === el.requests.people.length - 1" @click="movePerson(el, index, 1)"
+                                                                        :aria-label="'Move person ' + (index + 1) + ' down'">
+                                                                    <span class="material-symbols-outlined">arrow_downward</span>
+                                                                </button>
+                                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                                                        :disabled="el.requests.people.length <= 1" @click="removePerson(el, index)"
+                                                                        :aria-label="'Remove person ' + (index + 1)">
+                                                                    <span class="material-symbols-outlined">close</span>
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div class="m-seg m-seg--fill m-seg--lg" role="group" :aria-label="'Who person ' + (index + 1) + ' is for ' + el.name">
+                                                            <template x-for="opt in whoOptions" :key="opt.value">
+                                                                <button type="button" class="m-seg__opt"
+                                                                        @click="setPersonWho(el, index, opt.value)"
+                                                                        :aria-pressed="person.who === opt.value"
+                                                                        x-text="opt.label"></button>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                            <button type="button" class="lo-person__add" @click="addPerson(el)"
+                                                    :disabled="el.requests.people.length >= 12">
+                                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                                Add another person
+                                            </button>
+                                        </span>
+                                        <span class="lo-days">
+                                            <span class="m-label">Days before the Sunday</span>
+                                            <span class="lo-days__list">
+                                                <template x-for="day in el.noticeDays" :key="day">
+                                                    <span class="m-token">
+                                                        <span x-text="day"></span>
+                                                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                                                @click="removeDay(el, day)"
+                                                                :aria-label="'Take day ' + day + ' off ' + el.name">
+                                                            <span class="material-symbols-outlined">close</span>
+                                                        </button>
+                                                    </span>
+                                                </template>
+                                            </span>
+                                            <span class="lo-days__row">
+                                                <input class="m-input" type="number" min="1" max="30" inputmode="numeric"
+                                                       :aria-label="'Add a day for ' + el.name"
+                                                       :value="dayDrafts[el.id] || ''"
+                                                       @input="dayDrafts[el.id] = $event.target.value"
+                                                       @keydown.enter.prevent="addDay(el)" />
+                                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="addDay(el)">
+                                                    <span class="m-btn__label">Add</span>
+                                                </button>
+                                            </span>
+                                            <span class="lo-hint">A text or a push goes out on each of these days. With no days, nothing goes out on its own.</span>
+                                        </span>
+                                        <button type="button" class="m-btn m-btn--quiet m-btn--sm lo-message" @click="showProse(el)"
+                                                :aria-pressed="proseElement && proseElement.id === el.id">
+                                            <span class="m-btn__label">Write the message</span>
+                                        </button>
+                                        </div>
+                                        </template>
+                                        </div>
+                                    </template>
                             </div>
                         </template>
                     </div>
@@ -210,6 +259,33 @@
                             <span class="material-symbols-outlined">delete</span>
                             <span class="m-btn__label">Delete this order</span>
                         </button>
+                    </div>
+                </section>
+
+                <section class="m-section lo-prose" x-show="proseElement" x-cloak aria-labelledby="prose-title">
+                    <div class="m-section__head">
+                        <h2 class="m-section__title" id="prose-title" x-text="proseElement && proseElement.name"></h2>
+                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="selectedElementId = ''" aria-label="Close the message">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    <div class="m-card lo-form">
+                        <label class="m-field">
+                            <span class="m-label">Message</span>
+                            <textarea id="prayer-message" class="m-input" rows="8" maxlength="1000"
+                                      :value="proseElement ? proseElement.message : ''"
+                                      :disabled="!editing"
+                                      @change="proseElement && updateElement(proseElement.id, { message: $event.target.value })"></textarea>
+                        </label>
+                        <p class="lo-hint">Sent on each of the days. {name} is their first name. {link} is where they answer. Blank uses the built-in message.</p>
+                        <label class="m-field">
+                            <span class="m-label">Response</span>
+                            <textarea id="prayer-response" class="m-input" rows="5" maxlength="1000"
+                                      :value="proseElement ? proseElement.response : ''"
+                                      :disabled="!editing"
+                                      @change="proseElement && updateElement(proseElement.id, { response: $event.target.value })"></textarea>
+                        </label>
+                        <p class="lo-hint">Sent back when they reply. Blank uses the built-in thank-you.</p>
                     </div>
                 </section>
             </div>
@@ -249,7 +325,7 @@
         }
         .lo-kinds { min-height: 0; overflow: hidden; }
         .lo-order { min-height: 0; height: 100%; overflow: hidden; }
-        #order-elements { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+        #order-elements { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; container-type: inline-size; }
         .lo-order-bar { display: flex; align-items: flex-end; gap: var(--space-sm); }
         .lo-order-bar > .m-select-wrap { flex: 1 1 auto; min-width: 0; }
         .lo-library--drag [data-library-item] { cursor: grab; }
@@ -261,8 +337,58 @@
         .lo-form > .m-btn { align-self: flex-start; }
         .lo-form--row > .m-btn { align-self: flex-end; }
         .lo-hint { display: block; margin-top: var(--space-xs); font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); white-space: normal; }
-        .lo-prayer { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-xs); }
-        .lo-prayer .m-field { flex: 1 1 8rem; }
+        .lo-ask { align-items: flex-start; }
+        .lo-ask:has(.lo-message) { cursor: pointer; }
+        .lo-ask > .m-row__handle, .lo-ask > .lo-num, .lo-ask > .m-check, .lo-ask > .lo-acts { margin-top: 8px; }
+        .lo-ask__more { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+        .lo-ask__more > .m-check { align-self: flex-start; max-width: 100%; }
+        .lo-ask__more > .m-check span { white-space: normal; }
+        .lo-ask__body { min-width: 0; }
+        @container (max-width: 640px) {
+            #order-elements > .m-row { flex-wrap: wrap; align-items: flex-start; }
+            #order-elements > .m-row > .m-row__handle,
+            #order-elements > .m-row > .lo-num,
+            #order-elements > .m-row > .m-check,
+            #order-elements > .m-row > .lo-acts { margin-top: 8px; }
+            #order-elements > .m-row > .m-row__main { flex: 1 1 calc(100% - 4.5rem); min-width: 0; }
+            #order-elements > .m-row > .m-check { margin-left: auto; }
+        }
+        .lo-person { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
+        .lo-person__list { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+        .lo-person__line {
+            display: flex; flex-direction: column; gap: var(--space-sm);
+            padding: 8px var(--space-sm) 10px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface);
+        }
+        .lo-person__head { display: flex; align-items: center; gap: var(--space-xs); }
+        .lo-person__n { flex: 1 1 auto; min-width: 0; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .lo-person__acts { display: flex; align-items: center; margin-left: auto; flex: 0 0 auto; }
+        .lo-person__add {
+            align-self: stretch; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs);
+            min-height: 46px; padding: 0 var(--space-sm); background: transparent;
+            border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary);
+            font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600;
+            letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+        }
+        .lo-person__add:hover { background: var(--surface-container-low); }
+        .lo-person__add:disabled { opacity: .4; cursor: default; }
+        .lo-days { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-sm); }
+        .lo-days__list { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+        .lo-days__row { display: flex; gap: var(--space-xs); align-items: center; }
+        .lo-days__row .m-input { max-width: 6rem; }
+        .lo-message { align-self: flex-start; margin-top: var(--space-sm); }
+        .lo-prose { min-height: 0; overflow: auto; }
+        .lo-prose .m-section__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+        @media (max-width: 1023px) {
+            .lo-grid--prose { grid-template-rows: auto minmax(0, 1fr) auto; overflow: auto; }
+        }
+        @media (min-width: 1024px) and (max-width: 1279px) {
+            .lo-grid--prose { grid-template-rows: minmax(0, 1fr) auto; overflow: auto; }
+            .lo-grid--prose .lo-prose { grid-column: 1 / -1; }
+        }
+        @media (min-width: 1280px) {
+            .lo-grid--prose { grid-template-columns: 280px minmax(0, 1fr) minmax(260px, 320px); grid-template-rows: minmax(0, 1fr); }
+        }
         .lo-stack .m-row__main, .lo-stack .m-row__title, .lo-stack .m-row__sub { display: block; }
         .lo-stack .m-card-list > .m-row:last-of-type { border-bottom: 0; }
         .lo-num { flex: 0 0 1.5rem; text-align: right; font-size: 13px; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }

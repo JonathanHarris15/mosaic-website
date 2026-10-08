@@ -2833,6 +2833,10 @@ async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
     const to = toE164US(phone);
     if (to) {
       const {templates} = await loadPrayerConfig(db);
+      const subject = await subjectWording(db, serviceDate, personId);
+      if (subject && subject.response) {
+        templates.thankyou = subject.response;
+      }
       const body = pr.renderPrayerRequestMessage(
           "thankyou", pr.firstNameOf(personName), templates);
       const result = await sendViaTextbelt({to, body, withReplyWebhook: false});
@@ -2897,6 +2901,7 @@ async function dispatchPrayerAsk(db, args) {
     url: minted.url,
     values: {name: pr.firstNameOf(personSnap.data().name)},
     expectReply: true,
+    message: pr.messageWithLink(args.message),
   });
   if (!result.accepted) {
     return {
@@ -2911,9 +2916,18 @@ async function dispatchPrayerAsk(db, args) {
   const today = pr.churchDateParts(new Date()).date;
   const sentChannel = result.channel === "push" || result.channel === "text" ?
     result.channel : null;
-  const update = kind === "initial" ?
-    {serviceDate, initialSentDate: today, sentChannel} :
-    {serviceDate, reminderSent: true, reminderSentDate: today, sentChannel};
+  const update = {serviceDate, sentChannel};
+  if (Number.isFinite(args.day)) {
+    const sentDays = Array.isArray(args.sentDays) ?
+      args.sentDays.slice() : [];
+    if (sentDays.indexOf(args.day) === -1) sentDays.push(args.day);
+    update.sentDays = sentDays;
+  }
+  if (kind === "initial") update.initialSentDate = today;
+  else {
+    update.reminderSent = true;
+    update.reminderSentDate = today;
+  }
   await reqRef.set(update, {merge: true});
   return {
     success: true,
@@ -2942,7 +2956,7 @@ async function processPrayerSubject(db, args) {
   const to = toE164US(person.contact && person.contact.phone);
   const tokens = await loadDeviceTokens(db, person.userId);
 
-  const action = pr.prayerRequestAction({
+  const plan = pr.prayerAskPlan({
     daysUntilService: pr.daysUntil(serviceDate, today),
     localHour,
     hasPhone: !!to,
@@ -2950,21 +2964,27 @@ async function processPrayerSubject(db, args) {
     requestFilled: !!(req.prayerRequest || "").trim(),
     initialSentDate: req.initialSentDate || null,
     reminderSent: !!req.reminderSent,
+    reminderSentDate: req.reminderSentDate || null,
+    sentDays: req.sentDays || [],
     today,
     noticeDays: args.noticeDays,
-    reminderDays: args.reminderDays,
+    noticeList: args.noticeList,
+    reminderDays: pr.reminderDaysFor(args.noticeDays),
   });
-  if (action === "none") return;
+  if (plan.action === "none") return;
 
   const result = await dispatchPrayerAsk(db, {
-    serviceDate, personId, kind: action, personSnap, reqRef,
+    serviceDate, personId, kind: plan.action, day: plan.day,
+    personSnap, reqRef,
     previousChannel: req.sentChannel || null,
+    sentDays: req.sentDays || [],
+    message: args.message || "",
   });
   if (!result.success) {
-    log(`Prayer-request ${action} send failed for ${personId}: ` +
+    log(`Prayer-request ${plan.action} send failed for ${personId}: ` +
         `${result.error}`);
   } else {
-    log(`Sent prayer-request ${action} to ${personId} ` +
+    log(`Sent prayer-request ${plan.action} to ${personId} ` +
         `(service ${serviceDate}).`);
   }
 }
@@ -2995,6 +3015,27 @@ async function prayerPlanForService(db, service, liturgy, catalog) {
   }
   const order = LiturgyOrders.orderFor(service || {}, orders);
   return pr.prayerNoticePlan({liturgy, elements: order.elements});
+}
+
+/**
+ * The prayer's message and response for one person on a Sunday.
+ * Blank when the order cannot be read.
+ * @param {Object} db Firestore instance.
+ * @param {string} serviceDate
+ * @param {string} personId
+ * @return {Promise<?Object>}
+ */
+async function subjectWording(db, serviceDate, personId) {
+  try {
+    const svcSnap = await db.collection("services").doc(serviceDate).get();
+    const service = svcSnap.exists ? (svcSnap.data() || {}) : {};
+    const plan = await prayerPlanForService(
+        db, service, service.liturgy || {}, null);
+    return (plan.subjects || []).find((s) => s.id === personId) || null;
+  } catch (err) {
+    log("Prayer wording could not be read. " + err);
+    return null;
+  }
 }
 
 /**
@@ -3081,7 +3122,8 @@ exports.sendPrayerRequestTexts = onSchedule(
             localHour,
             templates,
             noticeDays: subject.noticeDays,
-            reminderDays: pr.reminderDaysFor(subject.noticeDays),
+            noticeList: subject.noticeList,
+            message: subject.message || "",
           });
         }
       }
@@ -3316,6 +3358,7 @@ exports.sendPrayerRequestNow = onCall(
           "This person cannot be reached — no phone number and no app.");
       }
 
+      const subject = await subjectWording(db, serviceDate, personId);
       const result = await dispatchPrayerAsk(db, {
         serviceDate,
         personId,
@@ -3324,6 +3367,7 @@ exports.sendPrayerRequestNow = onCall(
         reqRef,
         manual: true,
         previousChannel: req.sentChannel || null,
+        message: subject && subject.message || "",
       });
       if (!result.success) {
         throw new HttpsError(

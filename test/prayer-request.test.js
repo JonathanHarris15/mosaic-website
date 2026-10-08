@@ -550,6 +550,56 @@ test('automatic: the reminder follows two days after the first ask', () => {
     }), 'none');
 });
 
+test('a list of days sends once on each day, and not twice in one day', () => {
+    const list = [5, 3, 1];
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 6, noticeList: list,
+    }), {action: 'none', day: null});
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 5, noticeList: list,
+    }), {action: 'initial', day: 5});
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 3, noticeList: list,
+        sentDays: [5], initialSentDate: '2026-06-20',
+    }), {action: 'reminder', day: 3});
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 1, noticeList: list,
+        sentDays: [5, 3], initialSentDate: '2026-06-18',
+        reminderSent: true, reminderSentDate: '2026-06-20',
+    }), {action: 'reminder', day: 1});
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 3, noticeList: list,
+        sentDays: [5], initialSentDate: baseAuto.today,
+    }), {action: 'none', day: null});
+    assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 1, noticeList: [],
+    }), {action: 'none', day: null});
+    assert.deepStrictEqual(pr.noticeListOf({
+        requests: {count: 1}, noticeDays: 5,
+    }), [5, 3]);
+    assert.deepStrictEqual(pr.noticeListOf({
+        requests: {count: 1}, noticeDays: [5, 3, 1],
+    }), [5, 3, 1]);
+});
+
+test('pastoral subjects carry the prayer message and the day list', () => {
+    const subjects = pr.pastoralSubjects({
+        liturgy: {pastoral: [{id: 'p-ada', name: 'Ada Cole'}]},
+        elements: [{
+            id: 'pastoral', kind: 'prayer',
+            requests: {people: [{who: 'either'}]},
+            noticeDays: [5, 3, 1],
+            message: 'Hello {name} {link}',
+            response: 'Thank you, {name}.',
+        }],
+    });
+    const ada = subjects.find((s) => s.id === 'p-ada');
+    assert.deepStrictEqual(ada.noticeList, [5, 3, 1]);
+    assert.strictEqual(ada.noticeDays, 5);
+    assert.strictEqual(ada.message, 'Hello {name} {link}');
+    assert.strictEqual(ada.response, 'Thank you, {name}.');
+});
+
 test('automatic: 0 days sends nothing on its own', () => {
     assert.strictEqual(pr.noticeDaysOf({ requests: { count: 1 }, noticeDays: 0 }), 0);
     assert.strictEqual(pr.prayerRequestAction({

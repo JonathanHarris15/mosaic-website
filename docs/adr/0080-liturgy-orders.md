@@ -73,9 +73,9 @@ What reads the order:
    read, the page shows Standard and does not write it back. The progress
    is the same tally as the home card: the leaders, then each element of
    the order that asks for something on the Sunday. A prayer's leader and
-   the people it prays for sit under that row. The older praise leader,
-   confession leader, and pastoral ask sit under the rows the order already
-   uses for those moments.
+   the people it prays for are filled in that row's panel. The older praise
+   leader, confession leader, and pastoral ask are filled in the panel of
+   the row the order already uses for that moment.
 2. **The Liturgy Orders page** (`liturgy-orders.html`) places the five kinds
    into an order, names the ones that take a name, and sets a prayer's
    requests, including how many days ahead those people are told. The kinds
@@ -174,8 +174,9 @@ every step. The Order of Service names the order and does not write it.
 A hymn takes no name on the order. A scripture, a prayer, a person
 event, and other do. A prayer's requests — how many, male, female, or
 either, and how many days ahead the people are told — are set on the order.
-A prayer can also be marked to be prayed by someone other than the service
-leader; the Sunday then names that person at `carriedBy`. Each placement
+A prayer can also be marked so it can be prayed by someone other than the
+service leader; the Sunday then names that person at `carriedBy`. When it
+is not marked, the Sunday does not ask who prays it. Each placement
 can take a note. Neither surface copies the order onto the Sunday. Up and
 down buttons make the same moves on the Liturgy Orders page.
 
@@ -215,13 +216,15 @@ The Order of Service no longer composes the order. Placing, moving, and
 taking out happen on the Liturgy Orders page, and a Sunday shows the
 combination already locked.
 
-A prayer that sends requests carries `noticeDays`: how many days before the
-Sunday those people get the text or the push. Absent reads as 5, which is
-what the hourly job used to hard-code. 0 sends nothing on its own. The
-reminder is two days closer, the old gap between 5 and 3. That field
-replaces the prayer-request message editors on the admin dashboard. The
-wording stays the built-in text; a value already saved in
-`app_config/prayer_request_sms` still wins for the words. A Sunday whose
+A prayer that sends requests carries one line per person (`requests.people`,
+each `who` male, female, or either) and `noticeDays` as the days they are
+told, furthest first, such as 5, 3, and 1. Turning the ask on starts at
+5, 3, and 1. A number already saved is that day and the reminder two days
+closer, so a stored 5 is 5 and 3. An empty list sends nothing on its own.
+Each day in the list sends once. `sentDays` on the request records which
+of those days have gone out. The message and the response live on the
+prayer. Written prose wins for that prayer's people. Blank still uses
+`app_config/prayer_request_sms`, then the built-in text. A Sunday whose
 order has no prayer that sends requests still follows `autoSendEnabled` on
 that document, and still asks `liturgy.prayerMale` and `liturgy.prayerFemale`.
 When the order does send requests, those older fields are asked on the same

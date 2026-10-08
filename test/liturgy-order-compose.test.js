@@ -47,3 +47,55 @@ test('a catalog that failed to load is not saved from the Sunday page', async ()
     assert.equal(saved, false);
     assert.equal(form.liturgyCatalog.orders[0].id, 'standard');
 });
+
+// A row opens only when its panel has a field. A prayer that asks for people
+// opens so those people can be named there. A name that is only on the order
+// has nothing to enter.
+function catalogWithQuietRows() {
+    let catalog = Core.standardCatalog();
+    const place = (kind, fields) => {
+        const placed = Core.placeKind(catalog, 'standard', kind, null, fields);
+        catalog = placed.catalog;
+        return placed.element.id;
+    };
+    const praise = place('prayer', { name: 'Prayer of Praise', hasNote: false });
+    const asked = place('prayer', { name: 'Asked Prayer', hasNote: false, requests: { count: 1, who: 'either' } });
+    const other = place('other', { name: 'Announcements', hasNote: false });
+    const noted = place('other', { name: 'Welcome', hasNote: true });
+    const hymn = place('hymn', { hasNote: false });
+    return { catalog, praise, asked, other, noted, hymn };
+}
+
+test('a row with nothing to enter does not open', () => {
+    global.PresenceStore = { release() {}, claim() { return true; }, leave() {} };
+    const made = catalogWithQuietRows();
+    const form = formWith({ load: async () => ({ catalog: made.catalog, stored: null }) });
+    form.liturgyCatalog = made.catalog;
+    form.canEdit = false;
+
+    const byKey = Object.fromEntries(form.displayRows.map(row => [row.key, row]));
+    assert.equal(form.rowOpens(byKey[made.praise]), false);
+    assert.equal(form.rowOpens(byKey[made.asked]), true);
+    form.toggleRow(made.asked);
+    assert.equal(form.openKey, made.asked);
+    form.closeRow();
+    assert.equal(form.rowOpens(byKey[made.other]), false);
+    assert.equal(form.rowOpens(byKey[made.noted]), true);
+    assert.equal(form.rowOpens(byKey[made.hymn]), true);
+    assert.equal(form.rowOpens(byKey.callToConfession), true);
+    assert.equal(form.rowOpens({ type: 'legacy' }), false);
+
+    form.service.carriedBy[made.praise] = { id: 'p-robin', name: 'Robin Hale' };
+    const quiet = Object.fromEntries(form.displayRows.map(row => [row.key, row]));
+    assert.equal(quiet[made.praise].prayedByOther, false);
+    assert.equal(quiet[made.praise].carrierName, '');
+    form.toggleRow(made.praise);
+    assert.equal(form.openKey, null);
+
+    form.toggleRow(made.hymn);
+    assert.equal(form.openKey, made.hymn);
+
+    form.openKey = made.praise;
+    form.releaseQuietRow();
+    assert.equal(form.openKey, null);
+});

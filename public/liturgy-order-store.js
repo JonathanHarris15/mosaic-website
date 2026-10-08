@@ -22,9 +22,14 @@
     function elementDoc(el) {
         const doc = { id: el.id, kind: el.kind, name: el.name, hasNote: !!el.hasNote };
         if (el.kind === 'prayer' && el.requests) {
-            doc.requests = { count: el.requests.count, who: el.requests.who };
-            doc.noticeDays = el.noticeDays == null ? Core.DEFAULT_NOTICE_DAYS : el.noticeDays;
+            const people = (el.requests.people || []).map(function (person) {
+                return { who: person.who };
+            });
+            doc.requests = { people: people, count: people.length, who: el.requests.who };
+            doc.noticeDays = Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [];
         }
+        if (el.kind === 'prayer' && el.message) doc.message = el.message;
+        if (el.kind === 'prayer' && el.response) doc.response = el.response;
         if (el.kind === 'prayer' && el.prayedByOther) doc.prayedByOther = true;
         return doc;
     }

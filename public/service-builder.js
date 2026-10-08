@@ -682,6 +682,7 @@ function serviceForm() {
                 this.liturgyStored = read.stored;
                 this.liturgyCatalogLoaded = true;
                 this.liturgyReadProblem = '';
+                this.releaseQuietRow();
             } catch (err) {
                 // The seed stays on screen so the Sunday can still be read.
                 // This page does not write the order.
@@ -716,6 +717,7 @@ function serviceForm() {
             this.service.liturgyOrderId = id;
             this._ensureLiturgySlots();
             if (this.openKey && !this.orderElements.some(el => el.id === this.openKey)) this.closeRow();
+            this.releaseQuietRow();
         },
 
         // The order is locked on this page. Its shape changes on the Liturgy
@@ -866,13 +868,24 @@ function serviceForm() {
 
         // Everyone the prayer's dropdown can offer, oldest prayer first.
         // "Either" is the whole list. Male and female are that sex only.
-        prayerChoices(who) {
+        requestWho(item, idx) {
+            const people = (item && item.requestPeople) || [];
+            const line = people[idx];
+            if (line && line.who) return line.who;
+            return (item && item.requestsWho) || 'either';
+        },
+        prayerChoices(who, currentId) {
             const NEVER = '0000-00-00';
             const last = (m) => (m && m.lastPastoralPrayerDate) || NEVER;
-            return (this.prayerMembers || [])
+            const list = (this.prayerMembers || [])
                 .filter(m => who !== 'male' && who !== 'female' || m.sex === who)
                 .slice()
                 .sort((a, b) => String(last(a)).localeCompare(String(last(b))));
+            if (currentId && !list.some(m => m.id === currentId)) {
+                const found = (this.prayerMembers || []).find(m => m.id === currentId);
+                if (found) list.unshift(found);
+            }
+            return list;
         },
         prayerLastLabel(person) {
             if (window.PastoralPrayerCore) return PastoralPrayerCore.lastPrayedLabel(person && person.lastPastoralPrayerDate);
@@ -2016,6 +2029,7 @@ function serviceForm() {
                 key, label: el.name, type, value, status, emptyLabel, removed,
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
+                requestPeople: el.requests && el.requests.people ? el.requests.people : [],
                 prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',
@@ -2106,12 +2120,37 @@ function serviceForm() {
         },
         get noteCount() { return this.notesList.length; },
 
+        // A row opens only when its panel has a field. A hymn, a scripture, a
+        // line of text, or a person is entered there. So is a prayer's people
+        // and its leader, and the older praise, confession, and pastoral
+        // fields that belong to this row. A prayer or an Other that is only a
+        // name on the order has nothing to enter, so it stays closed.
+        rowOpens(item) {
+            if (!item || item.removed || item.type === 'legacy') return false;
+            if (item.noteOn || item.hasRole || item.requests || item.prayedByOther) return true;
+            if (this.showsPraise(item) || this.showsConfession(item) || this.showsPastoral(item)) return true;
+            return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
+                || item.type === 'people' || item.type === 'person';
+        },
+
+        // The open row lost its field (the order changed, or the note came off).
+        releaseQuietRow() {
+            if (!this.openKey) return;
+            const item = this.displayRows.find(r => r.key === this.openKey);
+            if (!this.rowOpens(item)) this.closeRow();
+        },
+
         // ── Station rows + inline notes ─────────────────────────────────────────
         // Expanding a row reveals its picker and a rich-text Service Note. The note
         // is a single Quill instance mounted into whichever row is open; switching
         // rows commits the current note first, so service.notes stays in sync (and
         // the Service Notes sidebar updates live).
         toggleRow(key) {
+            const item = this.displayRows.find(r => r.key === key);
+            if (!this.rowOpens(item)) {
+                if (this.openKey === key) this.closeRow();
+                return;
+            }
             if (this.openKey === key) { this.closeRow(); return; }
 
             // One person per box (MS-246). A row somebody else is in does not
@@ -2228,6 +2267,11 @@ function serviceForm() {
 
         // Open a specific row (from the Service Notes sidebar) and scroll to it.
         openRow(key) {
+            const item = this.displayRows.find(r => r.key === key);
+            if (!this.rowOpens(item)) {
+                this.$nextTick(() => this.scrollToRow(key));
+                return;
+            }
             if (this.openKey !== key) {
                 this.commitNote();
                 this.openKey = key;
