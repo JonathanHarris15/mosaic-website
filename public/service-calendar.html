@@ -167,6 +167,11 @@
         .cal-orders { padding-bottom: var(--space-sm); }
         body:not(.can-edit) .cal-orders__manage { display: none; }
 
+        /* A column this Sunday's order does not use. The value, when the
+           Sunday still holds one, stays readable; the slot itself is quiet
+           so the overlap is the part that looks filled in. */
+        .liturgy-cell--gap { opacity: .4; }
+
         /* ── Planning view (MS-245) ──────────────────────────────────────────
            The table given the whole width, the Directory folded to a rail, and
            who is writing each Sunday at the front of its row. Turning it on is
@@ -722,8 +727,9 @@
                 <div x-show="view === 'table'" x-cloak id="table-view"
                      :class="planning ? 'planning-mode' : ''"
                      class="flex-grow overflow-hidden flex flex-col">
-                    <!-- The orders whose elements are the liturgy columns. A
-                         shared element is one column, Standard's come first. -->
+                    <!-- The orders whose elements are the liturgy columns.
+                         What lines up is one column. A column only one order
+                         uses is labelled with that order. -->
                     <div id="table-orders" class="m-toolbar cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
                         <div class="m-toolbar__cluster">
                             <span id="table-orders-label" class="m-label">Liturgy orders</span>
