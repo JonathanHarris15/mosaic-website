@@ -1508,7 +1508,6 @@ function renderTable(grouped) {
                         ${columns.map(c => `
                         <td class="px-md py-md min-w-[150px] relative">
                             <div class="liturgy-cell font-body-md text-on-surface-variant text-sm" data-element="${escapeHtml(c.id)}">—</div>
-                            ${c.hasRole ? `<div class="liturgy-carrier text-[11px] text-on-surface-variant/70" data-element="${escapeHtml(c.id)}"></div>` : ''}
                         </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
@@ -1857,12 +1856,23 @@ function injectServiceData(serviceMap) {
             const element = liturgyElementFor(cell.dataset.element);
             if (!element) return;
             setCellText(cell, liturgyCellText(element, LiturgyOrderCore.valueOf(svc, element)));
-            if (canEdit && element.primitive !== 'people') setupInlineEdit(cell, dateKey, element.id);
-        });
-        el.querySelectorAll('.liturgy-carrier').forEach(cell => {
-            const element = liturgyElementFor(cell.dataset.element);
-            const carrier = element && LiturgyOrderCore.carrierOf(svc, element);
-            setCellText(cell, carrier ? carrier.name : '');
+            if (canEdit && (element.primitive === 'song' || element.primitive === 'scripture')) setupInlineEdit(cell, dateKey, element.id);
+            // Older Sundays stored who carried an element beside the value.
+            // A person event's person is the value itself, so this line only
+            // appears when that older field is actually set.
+            const carrier = LiturgyOrderCore.carrierOf(svc, element);
+            let line = cell.parentElement.querySelector('.liturgy-carrier[data-element="' + element.id + '"]');
+            if (carrier && carrier.name) {
+                if (!line) {
+                    line = document.createElement('div');
+                    line.className = 'liturgy-carrier text-[11px] text-on-surface-variant/70';
+                    line.dataset.element = element.id;
+                    cell.insertAdjacentElement('afterend', line);
+                }
+                setCellText(line, carrier.name);
+            } else if (line) {
+                line.remove();
+            }
         });
 
         const prayersCell = el.querySelector('.prayers-cell');

@@ -148,10 +148,14 @@
             // them either way.
             const noteHtml = el.hasNote ? notes[el.id] : '';
             const noteText = noteHtml ? noteCore.noteHtmlToText(noteHtml) : '';
-            const carrier = el.hasRole ? Liturgy.carrierOf(doc, el) : null;
+            // A Sunday from before the five kinds may still name who carried
+            // an element. New elements do not write that; a person event's
+            // person is the value.
+            const carrier = Liturgy.carrierOf(doc, el);
             return {
                 field: el.id,
                 label: el.name,
+                kind: el.kind,
                 primitive: el.primitive,
                 value,
                 filled: value !== null,

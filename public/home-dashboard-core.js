@@ -163,16 +163,22 @@
         Liturgy.elementsFor(service, catalog).forEach(function (el) {
             const value = liturgy[el.id];
             let state;
-            if (el.primitive === 'song') {
+            if (el.kind === 'other') return;
+            if (el.kind === 'hymn' || el.primitive === 'song') {
                 if (removed.indexOf(el.id) !== -1) return;
                 state = hymnState(value);
+            } else if (el.kind === 'prayer') {
+                if (!el.requests) return;
+                const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
+                state = named >= el.requests.count ? 'set' : 'blank';
             } else if (el.primitive === 'people') {
                 if (!peopleCount(value)) return;
                 state = 'set';
+            } else if (el.kind === 'person' || el.primitive === 'person') {
+                state = personSet(value) ? 'set' : 'blank';
             } else {
                 state = filledText(value) ? 'set' : 'blank';
             }
-            if (el.hasRole && !Liturgy.carrierOf(service, el)) state = 'blank';
             add(el.id, el.name, state);
         });
 

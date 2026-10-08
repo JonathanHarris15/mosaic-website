@@ -146,6 +146,27 @@ test('Standard cannot be deleted; another order can', () => {
     assert.deepEqual(Core.deleteOrder(cat, 'lessonsAndCarols').orders.map(o => o.id), ['standard']);
 });
 
+test('an element is one record; each order keeps its own sequence of ids', () => {
+    let cat = Core.standardCatalog();
+    const made = Core.addElement(cat, { name: 'Offertory', primitive: 'text' });
+    cat = made.catalog;
+    const elementId = made.element.id;
+    const carols = Core.addOrder(cat, { name: 'Lessons and Carols' });
+    cat = carols.catalog;
+    const communion = Core.addOrder(cat, { name: 'Communion Sunday' });
+    cat = communion.catalog;
+    cat = Core.addToOrder(cat, carols.order.id, elementId, 0);
+    cat = Core.addToOrder(cat, communion.order.id, 'hymn1', 0);
+    cat = Core.addToOrder(cat, communion.order.id, elementId, 1);
+    const reordered = Core.moveInOrder(cat, communion.order.id, 0, 1);
+
+    assert.equal(Core.elementById(reordered, elementId).name, 'Offertory');
+    assert.equal(reordered.elements.filter(el => el.id === elementId).length, 1);
+    assert.deepEqual(Core.orderById(reordered, carols.order.id).elementIds, [elementId]);
+    assert.deepEqual(Core.orderById(reordered, communion.order.id).elementIds.slice(0, 2), [elementId, 'hymn1']);
+    assert.equal(Core.orderById(cat, communion.order.id).elementIds[0], 'hymn1');
+});
+
 test('validateCatalog finds a duplicate id and an order naming a missing element', () => {
     const cat = Core.standardCatalog();
     cat.elements.push({ id: 'hymn1', name: 'Again', primitive: 'song' });

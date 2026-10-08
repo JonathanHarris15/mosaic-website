@@ -23,24 +23,33 @@ any of its Sundays can say so.
 
 ## Decision
 
-**A congregation keeps Liturgy Elements and Liturgy Orders. A Sunday names
-one order. Values stay where they are.**
+**A congregation keeps Liturgy Orders. A Sunday names one order. Values
+stay where they are. The elements are five kinds, hardcoded.**
 
-- A **Liturgy Element** is `{ id, name, primitive, hasRole, hasNote }`. The
-  primitive is one of four, closed: `song` (`{ id, name }`), `scripture` (a
-  string), `text` (a string), `people` (an ordered list of `{ id, name }`).
-  `hasRole` means one person carries it, stored at `carriedBy.<id>` on the
-  Sunday. `hasNote` means it gets the per-slot note at `notes.<id>`. The id
-  is fixed once made, renaming included, and the primitive is fixed too.
-- A **Liturgy Order** is `{ id, name, elementIds }`, each element at most
-  once.
-- Both live in their own collections, `liturgy_elements` and
-  `liturgy_orders`, with the same rule as `guide_templates`: anybody reads,
-  an editor writes.
+- A **Liturgy Element** is a placement of one kind: `{ id, kind, name,
+  hasNote }`, and a prayer may also carry `requests: { count, who }`. The
+  kinds are `hymn`, `scripture`, `prayer`, `person`, and `other`. A hymn is
+  chosen on the Sunday through the hymn picker. A scripture reading is a
+  reference, through the reference picker. A prayer and a person event and
+  other take a name on the order. A prayer can send prayer requests: how
+  many, and male, female, or either, chosen on the Sunday from the members,
+  longest since their last request first. A person event is one person on
+  the Sunday; baptism (`baptism`) stays the candidates list (ADR 0006).
+  Other has nothing on the Sunday, and a printable row still prints its
+  name. `hasNote` means the per-slot note at `notes.<id>`. The same kind can
+  be placed more than once. The id is fixed once placed.
+- A **Liturgy Order** is `{ id, name, elements }`. `elementIds` is that same
+  sequence, kept so an older reader still walks it.
+- Orders live in `liturgy_orders`, with the same rule as `guide_templates`:
+  anybody reads, an editor writes. The kinds are code. An older
+  `liturgy_elements` document is still read and joined onto its order, and
+  the next save deletes it.
 - **Standard** (`standard`) is seeded in code (`liturgy-order-core.js`): the
-  fourteen old slots under their old ids, every one with `hasRole: false` and
-  `hasNote: true`. An empty collection reads as the seed, so a congregation
-  that never opens the new page loses nothing. Standard cannot be deleted.
+  fourteen old slots under their old ids, each one of the five kinds, every
+  one with its note on. An empty collection reads as the seed, so a
+  congregation that never opens the new page loses nothing. Standard cannot
+  be deleted. The scripture slot that was named Pastoral Prayer keeps that
+  name, so a printable already bound to it still says so.
 - A Sunday stores `liturgyOrderId`. Absent means Standard, and so does an id
   whose order has gone. Values stay at `liturgy.<elementId>`, notes at
   `notes[elementId]`, authorship at `decidedBy[elementId]`. **Changing the
@@ -56,14 +65,22 @@ What reads the order:
 1. **The Order of Service** shows the Sunday's order's elements, in order,
    with a **Liturgy order** select in the header and a manage button through
    to the new page. The select is a field-level save of `liturgyOrderId`
-   (ADR 0034). Rows do not drag here. The progress is the same tally as the
-   home card: the leaders, then each element of the order.
-2. **The Liturgy Orders page** (`liturgy-orders.html`) adds, renames and
-   deletes elements and orders, and orders an order's elements by dragging or
-   with move-up and move-down buttons. It saves a draft with one Save, in one
-   batch. Deleting an element takes it out of every order and writes no
-   Sunday. It is reached from the Order of Service and from the Services
-   table.
+   (ADR 0034). The five kinds sit above this order. An editor drags a kind
+   in, adds it, rearranges the rows, or takes one out. That writes the
+   shared order immediately — the order, with its placements — and the page
+   names the order, because every Sunday that follows it changes with it.
+   The Sunday's own values are a different save. If the orders could not be
+   read, the page shows Standard and does not write it back. The progress
+   is the same tally as the home card: the leaders, then each element of
+   the order that asks for something on the Sunday.
+2. **The Liturgy Orders page** (`liturgy-orders.html`) places the five kinds
+   into an order, names the ones that take a name, and sets a prayer's
+   requests. The kinds sit above the orders. Dragging a kind in, or Add,
+   places a new instance. Rows also move by dragging or with move-up and
+   move-down. The page saves a draft with one Save, in one batch, so a
+   half-built combination is not live on every Sunday. Taking a placement
+   out of every order leaves the values Sundays hold under it. It is
+   reached from the Order of Service and from the Services table.
 3. **The Services table** draws one liturgy column per element of the orders
    toggled on above it. The columns are the union of those orders: Standard
    first in its own order, then the others by name, each element at its
@@ -71,16 +88,18 @@ What reads the order:
    remembered per device (`localStorage`). The old reference columns (Sermon,
    Baptism, Pastoral Prayer) and the fixed planning column list are gone,
    because the elements are those columns now.
-4. **Printables** read the catalog. A Sunday's fields are one per element,
-   keyed by its id, so a box bound to `hymn1` or `sermon` still resolves.
-   `sunday_rows` walks the Sunday's order. Hymn sheets read the order's
-   `song` elements. A Printable still stores which field feeds which box,
-   never the value (ADR 0057).
+4. **Printables** read these elements. A Sunday's fields are one per
+   placement, keyed by its id, so a box bound to `hymn1` or `sermon` still
+   resolves. `sunday_rows` walks the Sunday's order. An Other row prints
+   the name. Hymn sheets read the order's hymns. A Printable still stores
+   which field feeds which box, never the value (ADR 0057).
 5. **The MCP read** (`service-read-core.js`) emits a Sunday in its order. It
    uses the order the Sunday names, or Standard. Each row carries the
-   element's id, name and primitive, and its carrier and note when the
-   element has them. The people being prayed for come back as `prayedFor`,
-   beside the rows. The dotted-key normalisation is kept.
+   element's id, name, kind, and the derived primitive, and its note when
+   the element has one. A Sunday that already stored who carried an element
+   still reads that name. The people being prayed for in the header come
+   back as `prayedFor`, beside the rows. The dotted-key normalisation is
+   kept.
 
 Two smaller rules:
 
@@ -113,10 +132,9 @@ pre-template week a rebuild.
   Services table would have no column order to share, and it is the
   Irregular Service again under another name. The pointer is one field, and
   a Sunday that wants a different shape picks, or makes, another order.
-- **Drag on the Order of Service.** It would either rewrite the order every
-  other Sunday shares, from inside one Sunday, or quietly start a per-Sunday
-  copy. Rejected for both reasons; the select is one tap from the page that
-  reorders.
+- **Drag on the Order of Service, as a per-Sunday copy.** Rejected: copying
+  the list onto the Sunday is the Irregular Service again. Dragging that
+  writes the shared order is decided in the amendment below.
 - **Union columns in toggle order or in catalog order.** Toggle order makes
   the table depend on what somebody clicked first. Catalog order puts a new
   element wherever it was created. Standard first, then by name, gives the
@@ -134,13 +152,37 @@ pre-template week a rebuild.
   read fails instead. The pages do fall back, because a person can see
   what they are looking at.
 
+## Amendment — the five kinds
+
+The drag alternative above refused a per-Sunday copy. The gesture is how an
+order is composed, and it writes the shared order on purpose. What is
+dragged is a kind, not a record from a second collection.
+
+The five kinds are code. An order is a sequence of placements of those
+kinds, and the same kind can be placed more than once. Dragging a kind in,
+rearranging the rows, or taking one out changes that order for every Sunday
+that follows it. The Order of Service names the order and writes it as the
+combination changes. The Liturgy Orders page keeps the same gesture and
+still saves a draft, because a half-built order should not publish on every
+step. A hymn and a scripture reading take no name on the order. A prayer, a
+person event, and other do. A prayer's requests — how many, and male,
+female, or either — are set on the order. Each placement can take a note.
+Neither surface copies the order onto the Sunday. Up and down buttons make
+the same moves.
+
+A separate element collection, a primitive, and a carried-by flag were the
+split this replaces. A reader still derives the old shape, so a hymn picker
+and a scripture picker keep working, and a Sunday that already names who
+carried an element still reads that person. Nothing new writes the flag or
+the loose documents.
+
 ## Consequences
 
-- Another church adds an element by saving one. No code names a new
-  element's id.
-- A new element id becomes a key under `liturgy`, `notes` and `carriedBy`,
-  and a printable field name. The core refuses the names already used on the
-  Sunday (`RESERVED_IDS`).
+- Another church places the same five kinds. A sixth kind is a code change.
+  A new placement's id is made from its name, and the core refuses the
+  names already used on the Sunday (`RESERVED_IDS`).
+- A new element id becomes a key under `liturgy` and `notes`, and a
+  printable field name.
 - The MCP write allowlist and the note keys are still the Standard seed. An
   assistant can read every element, and write only Standard's. Widening that
   is its own decision, with its own review of what an assistant may write.
@@ -149,8 +191,10 @@ pre-template week a rebuild.
 - The Order of Service list on the old guide (`<oos-list>`) still prints
   Standard's slots. The guide system is being replaced by Printables
   (MS-401), and Printables walk the order.
-- `firestore.rules` gains two matches, copied from `guide_templates`. No
-  other rule changes. Until those rules are what the project is running, a
-  client read of the two collections is permission-denied. The Liturgy Orders
-  page shows Standard in that case and does not save it: a failed read is not
-  a draft of the congregation's orders.
+- `firestore.rules` already matches `liturgy_orders` and `liturgy_elements`,
+  copied from `guide_templates`. This change does not edit the rules.
+  Placements are written on the order, and a save deletes loose element
+  documents it still finds. Until those rules are what the project is
+  running, a client read is permission-denied. The Liturgy Orders page shows
+  Standard in that case and does not save it: a failed read is not a draft
+  of the congregation's orders.

@@ -68,7 +68,20 @@
         .station-row { transition: background .15s ease; }
         .station-row:hover { background: var(--surface); }
         #regular-service-sections > div:first-of-type .station-row,
-        #regular-service-sections > div:first-of-type > div.border-t { border-top-color: transparent; }
+        #regular-service-sections > div:first-of-type > div.border-t,
+        #regular-service-sections > .m-empty + div .station-row,
+        #regular-service-sections > .m-empty + div > div.border-t { border-top-color: transparent; }
+
+        .oos-library { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-md); }
+        .oos-library__hint { margin: 0; max-width: 68ch; font-size: 0.875rem; line-height: 1.45; color: var(--on-surface-variant); }
+        .oos-library__list { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+        .oos-chip { display: inline-flex; align-items: center; gap: var(--space-xs); padding: 0.2rem 0.45rem 0.2rem 0.3rem; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container-low); }
+        .oos-chip--used { opacity: 0.55; }
+        .oos-chip__handle { cursor: grab; font-size: 18px; color: var(--on-surface-variant); }
+        .oos-chip__name { font-size: 0.875rem; color: var(--on-surface); }
+        .oos-chip__kind { font-size: 0.75rem; color: var(--on-surface-variant); }
+        .oos-library__saved { margin: 0; font-size: 0.875rem; color: var(--on-surface-variant); }
+        .oos-row-acts { display: inline-flex; align-items: center; flex: none; }
 
         /* A row somebody else is in (MS-246). Not-allowed rather than
            pointer, so the row says it is shut before you click it — and
@@ -468,8 +481,9 @@
                     <div class="font-headline-md text-xl md:text-2xl font-semibold text-secondary mt-1" x-text="filledLabel"></div>
 
                     <!-- This Sunday's Liturgy Order (ADR-0080). Choosing one moves
-                         only this Sunday's pointer; the shared orders are edited
-                         on their own page, one tap away. -->
+                         only this Sunday's pointer. Composing that order — which
+                         elements, in what sequence — is the library under the
+                         Order of Service tab, and it writes the shared order. -->
                     <div class="flex items-center md:justify-end gap-2 mt-4 w-full md:w-auto min-w-0 max-w-full">
                         <label class="font-label-md text-[11px] text-secondary shrink-0" for="liturgy-order-select">Liturgy order</label>
                         <select id="liturgy-order-select" :value="selectedOrderId" @change="changeLiturgyOrder($event.target.value)" :disabled="!canEdit" class="rounded-lg border-outline-variant bg-surface-container-low text-xs py-1 pl-2 pr-9 disabled:opacity-50 min-w-0 max-w-full flex-1 md:flex-none truncate">
@@ -886,7 +900,38 @@
                         </div>
                     </template>
 
-                    <template x-if="!rows.length">
+                    <div class="m-notice m-notice--error" role="alert" x-show="liturgyReadProblem" x-cloak>
+                        <span class="material-symbols-outlined m-notice__icon">error</span>
+                        <div class="m-notice__body"><span class="m-notice__text" x-text="liturgyReadProblem"></span></div>
+                    </div>
+
+                    <div class="oos-library" x-show="canEdit && liturgyCatalogLoaded" x-cloak>
+                        <p class="oos-library__hint">The elements are Hymn, Scripture Reading, Prayer, Person Event, and Other. <span x-text="currentOrderName"></span> is one combination of them. Dragging one in, moving a row, or taking one out changes that order for every Sunday that follows it. A prayer, a person event, and other are named on the liturgy order.</p>
+                        <div id="element-library" class="oos-library__list">
+                            <template x-for="kind in ['hymn', 'scripture', 'prayer', 'person', 'other']" :key="kind">
+                                <div class="oos-chip" :data-kind="kind">
+                                    <span class="material-symbols-outlined oos-chip__handle" aria-hidden="true">drag_indicator</span>
+                                    <span class="oos-chip__name" x-text="kindLabel(kind)"></span>
+                                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="placeKind(kind)"
+                                            :aria-label="'Add ' + kindLabel(kind) + ' to ' + currentOrderName">
+                                        <span class="m-btn__label">Add</span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                        <a :href="'liturgy-orders.html?date=' + encodeURIComponent(date)" class="m-btn m-btn--quiet m-btn--sm">
+                            <span class="material-symbols-outlined">tune</span>
+                            <span class="m-btn__label">Name them on the liturgy order</span>
+                        </a>
+                        <p class="oos-library__saved" x-show="orderShapeNote" x-text="orderShapeNote"></p>
+                    </div>
+
+                    <div class="m-notice m-notice--error mb-4" role="alert" x-show="orderShapeError" x-cloak>
+                        <span class="material-symbols-outlined m-notice__icon">error</span>
+                        <div class="m-notice__body"><span class="m-notice__text" x-text="orderShapeError"></span></div>
+                    </div>
+
+                    <template x-if="!rows.length && !(canEdit && liturgyCatalogLoaded)">
                         <div class="m-empty bg-white">
                             <span class="material-symbols-outlined">list_alt</span>
                             <p>This Liturgy Order has no elements yet.</p>
@@ -894,9 +939,13 @@
                         </div>
                     </template>
 
-                    <div id="regular-service-sections" x-show="rows.length" class="bg-white border border-outline-variant rounded-2xl overflow-hidden">
+                    <div id="regular-service-sections" x-show="rows.length || (canEdit && liturgyCatalogLoaded)" class="bg-white border border-outline-variant rounded-2xl overflow-hidden">
+                        <div class="m-empty" x-show="!rows.length">
+                            <span class="material-symbols-outlined">list_alt</span>
+                            <p>Drag an element here to start this order.</p>
+                        </div>
                         <template x-for="item in rows" :key="item.key">
-                            <div :data-field-key="item.key">
+                            <div :data-field-key="item.key" :data-element-id="item.key">
                                 <!-- Removed-hymn bar -->
                                 <template x-if="item.removed">
                                     <div class="flex items-center gap-2 px-5 py-2.5 border-t border-cream bg-surface-container-low/40">
@@ -915,6 +964,23 @@
                                              :class="heldBy(item.key) ? 'station-held' : 'cursor-pointer'"
                                              :style="openKey === item.key ? 'background:var(--background)' : ''"
                                              @click="toggleRow(item.key)">
+                                            <span class="oos-row-acts" x-show="canEdit && liturgyCatalogLoaded" @click.stop>
+                                                <span class="material-symbols-outlined m-row__handle" title="Drag to move" aria-hidden="true">drag_indicator</span>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" data-move="up"
+                                                        :disabled="orderIndex(item.key) === 0" @click="moveOrderRow(item.key, -1, $event)"
+                                                        :aria-label="'Move ' + item.label + ' up'">
+                                                    <span class="material-symbols-outlined">arrow_upward</span>
+                                                </button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" data-move="down"
+                                                        :disabled="orderIndex(item.key) === rows.length - 1" @click="moveOrderRow(item.key, 1, $event)"
+                                                        :aria-label="'Move ' + item.label + ' down'">
+                                                    <span class="material-symbols-outlined">arrow_downward</span>
+                                                </button>
+                                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="takeFromOrder(item.key)"
+                                                        :aria-label="'Take ' + item.label + ' out of ' + currentOrderName" title="Take out of this order">
+                                                    <span class="material-symbols-outlined">remove_circle_outline</span>
+                                                </button>
+                                            </span>
                                             <span class="flex-none w-[124px] font-label-md text-[10.5px] font-semibold tracking-[.07em] uppercase text-secondary" x-text="item.label"></span>
                                             <span class="flex-none inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + item.dotColor"></span>
                                             <span class="flex-1 min-w-0 font-body-md text-[14.5px] text-primary truncate" x-show="item.value" x-text="item.value"></span>
@@ -1158,6 +1224,53 @@
                                                             <span class="material-symbols-outlined text-[16px]">add</span> Add a person
                                                         </button>
                                                     </div>
+                                                </template>
+
+                                                <!-- PRAYER. The name is on the order. When the order
+                                                     sends prayer requests, the Sunday picks that many
+                                                     people, oldest request first. -->
+                                                <template x-if="item.type === 'prayer'">
+                                                    <div>
+                                                        <p class="text-sm text-on-surface-variant" x-show="!item.requests">Nothing to enter here. <span x-text="item.label"></span> is named on the liturgy order.</p>
+                                                        <div x-show="item.requests" class="flex flex-col gap-2">
+                                                            <template x-for="(slot, idx) in service.liturgy[item.key]" :key="item.key + '-' + idx">
+                                                                <label class="flex flex-col gap-1">
+                                                                    <span class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline" x-text="item.label + ' ' + (idx + 1)"></span>
+                                                                    <select class="rounded-lg border border-outline-variant bg-white text-sm px-3 py-2" :disabled="!canEdit"
+                                                                            :aria-label="item.label + ' ' + (idx + 1)"
+                                                                            :value="slot.id || ''"
+                                                                            @change="setPrayerPerson(item.key, idx, $event.target.value)">
+                                                                        <option value="">Choose someone</option>
+                                                                        <template x-for="p in prayerChoices(item.requestsWho)" :key="p.id">
+                                                                            <option :value="p.id" :selected="slot.id === p.id" x-text="p.name + ' — ' + prayerLastLabel(p)"></option>
+                                                                        </template>
+                                                                    </select>
+                                                                </label>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+
+                                                <!-- PERSON EVENT. One person, on this Sunday. -->
+                                                <template x-if="item.type === 'person'">
+                                                    <div x-data="personPicker(service.liturgy[item.key], $data)" @click.away="open = false" class="relative max-w-md">
+                                                        <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
+                                                            <span class="material-symbols-outlined text-[18px] text-secondary mr-2">person</span>
+                                                            <input type="text" :aria-label="item.label" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                                        </div>
+                                                        <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
+                                                            <template x-for="p in results" :key="p.id">
+                                                                <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                                                    <p class="font-label-md text-sm text-on-surface" x-text="p.name"></p>
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+
+                                                <!-- OTHER. A name on the order, and nothing here. -->
+                                                <template x-if="item.type === 'other'">
+                                                    <p class="text-sm text-on-surface-variant">Nothing to enter on this Sunday. <span x-text="item.label"></span> is named on the liturgy order.</p>
                                                 </template>
 
                                                 <!-- Who carries this element (hasRole). One person, kept
@@ -1751,6 +1864,7 @@
     <script src="events-core.js"></script>
     <script src="liturgy-order-core.js"></script>
     <script src="liturgy-order-store.js"></script>
+    <script src="vendor/sortable-1.15.0.min.js"></script>
     <script src="home-dashboard-core.js"></script>
     <script src="service-builder.js"></script>
 

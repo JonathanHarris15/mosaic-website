@@ -1,5 +1,6 @@
-// Liturgy Orders — the one page where a congregation makes, renames, reorders,
-// and deletes its Liturgy Elements and Liturgy Orders (ADR-0080).
+// Liturgy Orders — the page where a congregation places the five kinds into
+// Liturgy Orders (ADR-0080). The kinds are code. Each placement lives on
+// the order.
 //
 // The page edits a draft of the whole catalog and saves it with one button,
 // the same way the Service Guide Manager saves a template. A Sunday only ever
@@ -42,8 +43,7 @@ function liturgyOrdersPage() {
         selectedOrderId: Core.STANDARD_ORDER_ID,
         orderName: '',
         newOrder: { name: '', copyFrom: Core.STANDARD_ORDER_ID },
-        newElement: { name: '', primitive: 'song', hasRole: false, hasNote: true },
-        addElementId: '',
+        kinds: Core.KINDS,
         primitives: Core.PRIMITIVES,
         _sortable: null,
 
@@ -71,7 +71,8 @@ function liturgyOrdersPage() {
             return this.catalog.elements.filter(el => !inOrder.has(el.id));
         },
 
-        primitiveLabel(p) { return Core.PRIMITIVE_LABELS[p] || p; },
+        kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
+        takesName(kind) { return Core.kindTakesName(kind); },
         orderSummary(order) {
             const n = Core.elementsOf(order, this.catalog).length;
             return n === 1 ? '1 element' : n + ' elements';
@@ -143,7 +144,6 @@ function liturgyOrdersPage() {
         selectOrder(id) {
             this.selectedOrderId = id;
             this.orderName = this.selectedOrder.name;
-            this.addElementId = '';
             this.editProblem = '';
         },
 
@@ -171,11 +171,11 @@ function liturgyOrdersPage() {
             if (this._apply(cat => Core.deleteOrder(cat, order.id))) this.selectOrder(Core.STANDARD_ORDER_ID);
         },
 
-        addToOrder() {
-            if (!this.addElementId) return;
-            if (this._apply(cat => Core.addToOrder(cat, this.selectedOrder.id, this.addElementId))) {
-                this.addElementId = '';
-            }
+        // A kind from the collection, placed on this order. The same kind can
+        // be placed again: each place is its own instance.
+        placeKind(kind, index) {
+            if (!kind) return;
+            this._apply(cat => Core.placeKind(cat, this.selectedOrder.id, kind, index).catalog);
         },
 
         removeFromOrder(elementId) {
@@ -202,39 +202,59 @@ function liturgyOrdersPage() {
 
         // Sortable moves the DOM; Alpine owns it. Put the row back where it
         // was and let the model move it, so the two never disagree.
+        // The library clones into the order: the drop inserts an id, and the
+        // element itself stays in the collection.
         initSortable() {
-            if (this._sortable || !this.editing || typeof Sortable === 'undefined') return;
-            const list = document.getElementById('order-elements');
-            if (!list) return;
-            this._sortable = Sortable.create(list, {
+            if (!this.editing || typeof Sortable === 'undefined') return;
+            const shared = {
                 animation: 150,
-                handle: '.m-row__handle',
-                draggable: '[data-order-row]',
-                onEnd: (evt) => {
-                    const from = evt.oldDraggableIndex;
-                    const to = evt.newDraggableIndex;
-                    evt.item.remove();
-                    evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
-                    if (from === to || from == null || to == null) return;
-                    this._apply(cat => Core.moveInOrder(cat, this.selectedOrder.id, from, to));
-                },
-            });
-        },
-
-        // ── elements ────────────────────────────────────────────────────────
-        createElement() {
-            let made = null;
-            if (this._apply(cat => {
-                made = Core.addElement(cat, this.newElement);
-                return made.catalog;
-            })) {
-                this.newElement = { name: '', primitive: this.newElement.primitive, hasRole: false, hasNote: true };
-                this.addElementId = this.selectedOrder.elementIds.indexOf(made.element.id) === -1 ? made.element.id : '';
+                group: { name: 'liturgy-library', pull: true, put: false },
+            };
+            const library = document.getElementById('element-library');
+            if (library && !this._librarySortable) {
+                this._librarySortable = Sortable.create(library, Object.assign({}, shared, {
+                    sort: false,
+                    handle: '.m-row__handle',
+                    draggable: '[data-library-item]',
+                    group: { name: 'liturgy-library', pull: 'clone', put: false },
+                }));
+            }
+            const list = document.getElementById('order-elements');
+            if (list && !this._orderSortable) {
+                this._orderSortable = Sortable.create(list, {
+                    animation: 150,
+                    group: { name: 'liturgy-library', pull: true, put: true },
+                    handle: '.m-row__handle',
+                    draggable: '[data-order-row]',
+                    filter: '.m-empty',
+                    onAdd: (evt) => {
+                        const kind = evt.item.getAttribute('data-kind');
+                        const to = evt.newDraggableIndex;
+                        evt.item.remove();
+                        if (kind) this.placeKind(kind, to);
+                    },
+                    onEnd: (evt) => {
+                        if (evt.from !== evt.to) return;
+                        const from = evt.oldDraggableIndex;
+                        const to = evt.newDraggableIndex;
+                        evt.item.remove();
+                        evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+                        if (from === to || from == null || to == null) return;
+                        this._apply(cat => Core.moveInOrder(cat, this.selectedOrder.id, from, to));
+                    },
+                });
             }
         },
 
+        // ── elements ────────────────────────────────────────────────────────
         updateElement(id, patch) {
             this._apply(cat => Core.updateElement(cat, id, patch));
+        },
+        // The number field writes the count onto the draft as it is typed.
+        // This puts it back through the core so 0 and 20 become 1 and 12.
+        clampRequests(el) {
+            if (!el || !el.requests) return;
+            this.updateElement(el.id, { requests: { count: el.requests.count, who: el.requests.who } });
         },
 
         renameElement(id, event) {

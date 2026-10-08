@@ -14,10 +14,15 @@ test('planSave writes the draft and deletes only the records the draft dropped',
         orderIds: ['standard', 'oldOrder'],
     });
 
-    assert.ok(plan.setElements.some(function (el) { return el.id === 'offertory'; }));
-    assert.ok(plan.setElements.some(function (el) { return el.id === 'preparatoryHymn'; }));
-    assert.deepEqual(plan.deleteElements, ['retired']);
+    assert.deepEqual(plan.setElements, []);
+    assert.deepEqual(plan.deleteElements, ['preparatoryHymn', 'retired']);
     assert.deepEqual(plan.deleteOrders, ['oldOrder']);
     assert.ok(!plan.setOrders.some(function (order) { return order.id === 'oldOrder'; }));
     assert.equal(plan.services, undefined);
+    const standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
+    assert.ok(standard.elements.some(function (el) { return el.id === 'preparatoryHymn' && el.kind === 'hymn'; }));
+    standard.elements.forEach(function (el) {
+        assert.ok(!el.primitive, 'a kind is not stored as a primitive');
+        assert.ok(!el.hasRole, 'a person event is the person; there is no carried-by flag');
+    });
 });

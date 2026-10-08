@@ -170,8 +170,9 @@ test('a text element typed into the table is written under liturgy, not on the S
 
 test('a people element is shown but not edited in the table', () => {
     // Naming a baptism candidate writes the candidate's own record too
-    // (ADR-0006); that belongs to the Order of Service.
-    assert.match(SRC, /canEdit && element\.primitive !== 'people'/);
+    // (ADR-0006); that belongs to the Order of Service. A hymn and a
+    // scripture reading are the cells this table writes.
+    assert.match(SRC, /canEdit && \(element\.primitive === 'song' \|\| element\.primitive === 'scripture'\)/);
 });
 
 test('the sermon, baptism and old pastoral prayer reference are no longer fixed columns', () => {
@@ -314,8 +315,8 @@ test('the header keeps the identity columns and names each element once', () => 
         ['Date', 'Theme', 'Leader', 'Preacher', 'Music', 'Prayers', 'Prayed For']);
     assert.strictEqual(names[names.length - 1], 'Actions');
     assert.deepStrictEqual(names.slice(7, -1), sb.liturgyColumns().map(c => sb.escapeHtml(c.name)));
-    assert.match(row, /class="liturgy-carrier[^"]*" data-element="lordsSupper"/,
-        'an element a person carries has a line for the person');
+    assert.doesNotMatch(row, /liturgy-carrier/,
+        'a person is the element\'s own field, not a second line under every row');
 });
 
 // ── Writing a slot ────────────────────────────────────────────────────────
