@@ -217,9 +217,11 @@ A printable is linked from the recurring event's **Printables** tab, and from a 
 
 Where a printable is linked, the row opens the preview. An editor — and anyone who writes as an editor — types on that preview, in the spot the blank already occupies. Below editor the same page is static: no boxes and no count. Print and folio stay static either way.
 
+The preview header stays on screen (`.m-header--sticky`) while the pages scroll under it. Zoom sits in the bottom-right corner (`.pv-zoom`): minus, the percent, plus. The percent fits the page again. Control-scroll, or command-scroll, zooms the same way, and so do Control-plus, Control-minus, and Control-zero. A zoom someone chose stays until they fit the page again.
+
 A blank is a value a person supplies. That is a field filled on the event (text, image, number, date, or one cell of a list) and Sunday booklet text the page is wired to: prayer-country facts and Mosaic Kids. A live Sunday, a hymn, scripture, and announcements are not blanks. Announcements stay on the Announcements tab. The same blank placed twice is one blank. An empty list that drew no rows is one blank, with **Add a row** or **Add a question** on the list itself.
 
-A small box on the preview, `role="status"`, reads **3 left to fill**, **1 left to fill**, or **Nothing left to fill**. It is hidden when the page has no blanks. Typing saves when the box loses focus. The words for the event stay on that occurrence. Sunday booklet text stays on that Sunday, so every printable bound to it reads the same words. The Files tab does not list the blanks again.
+A card on the preview (`.pv-go`, `role="status"`) reads **16 left to go** or **1 left to go**. It is hidden when the page has no blanks. The words are a button: they open the next blank. Arrows on the card move through the blanks still empty, wrapping. The blank you land on is scrolled into view and focused. When the last blank is filled, the card becomes a green check (`.pv-go--done`) and the check pops once; a page that was already full shows the check still, without the pop. `prefers-reduced-motion` skips the pop. Typing saves when the box loses focus. The words for the event stay on that occurrence. Sunday booklet text stays on that Sunday, so every printable bound to it reads the same words. The Files tab does not list the blanks again.
 
 ## Sunday announcements
 

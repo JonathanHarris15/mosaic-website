@@ -251,15 +251,60 @@
     function tally(slots, valueOf) {
         const seen = {};
         let total = 0;
-        let left = 0;
         (slots || []).forEach(slot => {
             if (!slot || seen[slot.id]) return;
             seen[slot.id] = true;
             total += 1;
-            const value = valueOf ? valueOf(slot) : '';
-            if (slot.store === 'empty-list' || isBlank(value)) left += 1;
         });
-        return { total: total, left: left };
+        return { total: total, left: remaining(slots, valueOf).length };
+    }
+
+    // Blanks still empty, in the order the pages draw them. The same blank
+    // placed twice is one blank, the first time it appears.
+    function remaining(slots, valueOf) {
+        const seen = {};
+        const out = [];
+        (slots || []).forEach(slot => {
+            if (!slot || seen[slot.id]) return;
+            seen[slot.id] = true;
+            const value = valueOf ? valueOf(slot) : '';
+            if (slot.store === 'empty-list' || isBlank(value)) out.push(slot);
+        });
+        return out;
+    }
+
+    function leftToGoText(left) {
+        const n = Number(left) || 0;
+        if (n === 1) return '1 left to go';
+        return n + ' left to go';
+    }
+
+    // Walk the blanks still empty. delta +1 is the next one, -1 the previous,
+    // wrapping. No current id means we have not landed yet: forward opens the
+    // first, back opens the last. A current id that was just filled is gone
+    // from the list; fallbackIndex is where it sat, and a forward step lands
+    // on whatever slid into that place (or the first, when it was the last).
+    function stepBlank(ids, currentId, delta, fallbackIndex) {
+        const list = [];
+        const seen = {};
+        (ids || []).forEach(id => {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            list.push(id);
+        });
+        if (!list.length) return '';
+        const step = delta < 0 ? -1 : 1;
+        let i = currentId ? list.indexOf(currentId) : -1;
+        if (i < 0) {
+            if (currentId) {
+                const raw = fallbackIndex == null ? 0 : fallbackIndex;
+                if (raw >= list.length) i = step < 0 ? 0 : -1;
+                else i = step < 0 ? raw : raw - 1;
+            } else {
+                i = step < 0 ? 0 : -1;
+            }
+        }
+        return list[(i + step + list.length) % list.length];
     }
 
     function eventValue(bag, slot) {
@@ -348,7 +393,11 @@
         slotFor,
         slotsOn,
         listSpec,
+        emptyListSlot,
         tally,
+        remaining,
+        leftToGoText,
+        stepBlank,
         isBlank,
         eventValue,
         sundayValue,
