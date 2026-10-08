@@ -1,0 +1,128 @@
+[
+ {
+  "id": "standard",
+  "elementIds": [
+   "hymn2",
+   "callToWorship",
+   "hymn6",
+   "hymn7",
+   "prayer",
+   "callToConfession",
+   "prayer2",
+   "assuranceOfPardon",
+   "hymn",
+   "hymn3",
+   "scriptureReading",
+   "prayer3",
+   "sermon",
+   "hymn4",
+   "hymn5",
+   "benediction"
+  ],
+  "name": "Standard",
+  "elements": [
+   {
+    "name": "Hymn",
+    "hasNote": false,
+    "kind": "hymn",
+    "id": "hymn2"
+   },
+   {
+    "name": "Call to Worship",
+    "id": "callToWorship",
+    "kind": "scripture",
+    "hasNote": false
+   },
+   {
+    "id": "hymn6",
+    "hasNote": false,
+    "name": "Hymn",
+    "kind": "hymn"
+   },
+   {
+    "kind": "hymn",
+    "hasNote": false,
+    "name": "Hymn",
+    "id": "hymn7"
+   },
+   {
+    "kind": "prayer",
+    "id": "prayer",
+    "hasNote": true,
+    "name": "Prayer of Praise"
+   },
+   {
+    "id": "callToConfession",
+    "name": "Call to Confession",
+    "hasNote": false,
+    "kind": "scripture"
+   },
+   {
+    "name": "Prayer of Confession",
+    "id": "prayer2",
+    "hasNote": true,
+    "kind": "prayer"
+   },
+   {
+    "kind": "scripture",
+    "id": "assuranceOfPardon",
+    "name": "Assurance of Pardon",
+    "hasNote": true
+   },
+   {
+    "name": "Hymn",
+    "id": "hymn",
+    "kind": "hymn",
+    "hasNote": true
+   },
+   {
+    "name": "Hymn",
+    "id": "hymn3",
+    "kind": "hymn",
+    "hasNote": true
+   },
+   {
+    "kind": "scripture",
+    "id": "scriptureReading",
+    "name": "Scripture Reading",
+    "hasNote": false
+   },
+   {
+    "hasNote": true,
+    "id": "prayer3",
+    "requests": {
+     "count": 1,
+     "who": "either"
+    },
+    "noticeDays": 5,
+    "kind": "prayer",
+    "name": "Pastoral Prayer"
+   },
+   {
+    "id": "sermon",
+    "name": "Sermon",
+    "kind": "scripture",
+    "hasNote": true
+   },
+   {
+    "id": "hymn4",
+    "kind": "hymn",
+    "name": "Hymn",
+    "hasNote": true
+   },
+   {
+    "id": "hymn5",
+    "hasNote": true,
+    "name": "Hymn",
+    "kind": "hymn"
+   },
+   {
+    "id": "benediction",
+    "kind": "scripture",
+    "hasNote": true,
+    "name": "Benediction"
+   }
+  ],
+  "updatedAt": "2026-10-08T18:49:30.792Z"
+ }
+]

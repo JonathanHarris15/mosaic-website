@@ -1,0 +1,14 @@
+{
+  "orderId": "standard",
+  "elements": {
+    "callToWorship": { "hasNote": true },
+    "callToConfession": { "hasNote": true },
+    "hymn2": { "name": "Preparatory Hymn" },
+    "hymn6": { "name": "Hymn of Praise" },
+    "hymn7": { "name": "Second Hymn of Praise" },
+    "hymn": { "name": "Hymn of Assurance" },
+    "hymn3": { "name": "Second Hymn of Assurance" },
+    "hymn4": { "name": "Hymn of Response" },
+    "hymn5": { "name": "Closing Hymn" }
+  }
+}
