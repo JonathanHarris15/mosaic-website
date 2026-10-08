@@ -10,9 +10,10 @@
 //
 // The elements are five kinds, hardcoded. An order is a combination of them,
 // in a sequence. A kind brings its own fields: a hymn is chosen on the Sunday,
-// a scripture reading is a reference, a prayer is named on the order and may
-// send prayer requests, a person event is named on the order and picked on the
-// Sunday, and other is a name and nothing on the Sunday. Each one can take a
+// a scripture is named on the order and is a reference on the Sunday, a prayer
+// is named on the order and may send prayer requests or be prayed by someone
+// other than the service leader, a person event is named on the order and
+// picked on the Sunday, and other is a name and nothing on the Sunday. Each one can take a
 // note. There is no separate element record and no primitive to pick.
 //
 // A Sunday names its order with `liturgyOrderId` and keeps values at
@@ -29,7 +30,7 @@
 
     const KIND_LABELS = Object.freeze({
         hymn: 'Hymn',
-        scripture: 'Scripture Reading',
+        scripture: 'Scripture',
         prayer: 'Prayer',
         person: 'Person Event',
         other: 'Other',
@@ -105,7 +106,11 @@
     }
 
     function kindTakesName(kind) {
-        return kind === 'prayer' || kind === 'person' || kind === 'other';
+        return kind === 'scripture' || kind === 'prayer' || kind === 'person' || kind === 'other';
+    }
+
+    function prayedByOtherOf(kind, src) {
+        return kind === 'prayer' && !!(src && src.prayedByOther === true);
     }
 
     function cleanName(value) {
@@ -139,6 +144,7 @@
             name: src.name,
             hasNote: src.hasNote !== false,
             requests: normaliseRequests(kind, src.requests),
+            prayedByOther: prayedByOtherOf(kind, src),
             hasRole: false,
         };
         el.primitive = primitiveOf(el);
@@ -172,7 +178,14 @@
         const kind = kindOf(src);
         if (!id || !kind) return null;
         const name = cleanName(src.name) || KIND_LABELS[kind];
-        return decorate({ id: id, kind: kind, name: name, hasNote: src.hasNote, requests: src.requests });
+        return decorate({
+            id: id,
+            kind: kind,
+            name: name,
+            hasNote: src.hasNote,
+            requests: src.requests,
+            prayedByOther: src.prayedByOther,
+        });
     }
 
     function normaliseOrder(raw, fallbackId, looseById) {
@@ -442,6 +455,7 @@
             name: name,
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
+            prayedByOther: src.prayedByOther,
         });
         if (!order.elements) order.elements = [];
         const at = typeof index === 'number' && index >= 0 && index <= order.elements.length
@@ -467,6 +481,7 @@
             name: name,
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
+            prayedByOther: src.prayedByOther,
         });
         next.elements.push(element);
         return { catalog: next, element: copyElement(element) };
@@ -484,6 +499,9 @@
             if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
             if (el.kind === 'prayer' && src.requests !== undefined) {
                 el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
+            }
+            if (el.kind === 'prayer' && src.prayedByOther !== undefined) {
+                el.prayedByOther = src.prayedByOther === true;
             }
             el.primitive = primitiveOf(el);
         };
@@ -638,7 +656,7 @@
         PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
         PRIMITIVE_LABELS: Object.freeze({
             song: 'Hymn',
-            scripture: 'Scripture Reading',
+            scripture: 'Scripture',
             text: 'Other',
             people: 'Person Event',
         }),

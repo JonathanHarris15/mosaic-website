@@ -511,7 +511,7 @@ A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-D
   - `liturgyOrderId`: The [[Liturgy Order]] this Sunday follows. Absent means Standard, and so does an id whose order has since been deleted.
   - `liturgy.<elementId>`: The value of each [[Liturgy Element]], in that kind's shape. Kept whatever the order: a value the Sunday's order no longer carries is hidden, not deleted.
   - `notes.<elementId>`: The per-slot note, for an element whose note is on.
-  - `carriedBy.<elementId>`: Still read when a Sunday from before the five kinds names who carried an element — `{ id, name }`. Nothing new writes it. A person event's person is the element's own value.
+  - `carriedBy.<elementId>`: Who prays a prayer the order marked as prayed by someone other than the service leader — `{ id, name }`. Also still read when a Sunday from before the five kinds names who carried an element. A person event's person is the element's own value.
   - `isIrregular`, `irregularElements`: An Irregular Service from before Liturgy Orders. Still read and shown, read-only, under the Order of Service; nothing creates a new one ([ADR 0080](docs/adr/0080-liturgy-orders.md)). Until that Sunday is given a `liturgyOrderId`, the home tally does not score it — it is not a blank Standard — and the editor's progress says Custom order.
   - `serviceLeader`: Reference to a Person (historically a string).
   - `preacher`: Reference to a Person (historically a string).
@@ -544,8 +544,8 @@ _Avoid_: type (the old Irregular word), field type
 One of five kinds, hardcoded. A [[Liturgy Order]] is a sequence of placements of those kinds. The same kind can be placed more than once, and each placement has a stable `id` that Sundays, notes, [[Element authorship]] and Printable bindings hold.
 
 - **Hymn.** A hymn chosen on the Sunday, `{ id, name }`, through the hymn picker. It takes no name on the order.
-- **Scripture Reading.** A reference chosen on the Sunday through the reference picker. It takes no name on the order.
-- **Prayer.** A name on the order. The order can say it sends prayer requests: how many, and whether each person is male, female, or either. On the Sunday those people are chosen from the members, longest since their last prayer request first.
+- **Scripture.** A name on the order, and a reference chosen on the Sunday through the reference picker.
+- **Prayer.** A name on the order. The order can say it sends prayer requests: how many, and whether each person is male, female, or either. On the Sunday those people are chosen from the members, longest since their last prayer request first. The order can also say the prayer is prayed by someone other than the service leader. When it does, the Sunday names that person, kept at `carriedBy.<id>`. Otherwise the service leader prays it.
 - **Person Event.** A name on the order, and one person on the Sunday through the person picker. Baptism (`baptism`) is the one whose Sunday value is the candidates list ([ADR 0006](docs/adr/0006-baptism-candidates-as-person-references.md)).
 - **Other.** A name on the order, and nothing on the Sunday. A printable order-of-service row still prints the name.
 
@@ -557,7 +557,7 @@ A named sequence of [[Liturgy Element]] placements — the shape a kind of Sunda
 _Avoid_: template (the guide's word), Order of Service (that is one Sunday's filled-in result), service type
 
 ### Liturgy Orders page
-`liturgy-orders.html`, where an editor places the five kinds into a [[Liturgy Order]], names the ones that take a name, and sets a prayer's requests. The kinds are a panel to the left of the order. Which order is open is a dropdown above its list, and a plus beside that dropdown makes a new empty order. Dragging a kind's row in, or Add, places a new instance. Rows already in the order move by the grip or with the move-up and move-down buttons. Reached from the Order of Service's manage button (it comes back to that Sunday) and from the Services table's **Manage orders**. A **shared definition**, so it holds a draft and writes it with **Save**; **Discard** throws the draft away. It does not autosave.
+`liturgy-orders.html`, where an editor places the five kinds into a [[Liturgy Order]], names the ones that take a name — a scripture, a prayer, a person event, and other — and sets a prayer's requests and whether someone other than the service leader prays it. The kinds are a panel to the left of the order. Which order is open is a dropdown above its list, and a plus beside that dropdown makes a new empty order. Dragging a kind's row in, or Add, places a new instance. Rows already in the order move by the grip or with the move-up and move-down buttons. Reached from the Order of Service's manage button (it comes back to that Sunday) and from the Services table's **Manage orders**. A **shared definition**, so it holds a draft and writes it with **Save**; **Discard** throws the draft away. It does not autosave.
 _Avoid_: order editor, liturgy settings
 
 ### Service Element (Irregular Only)

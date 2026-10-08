@@ -16,11 +16,13 @@
 
     const Core = (typeof require !== 'undefined') ? require('./liturgy-order-core.js') : global.LiturgyOrderCore;
 
-    // The element lives on the order. `kind` is one of the five. A prayer's
-    // request setup is the only extra field. Nothing here is a primitive.
+    // The element lives on the order. `kind` is one of the five. A prayer may
+    // also carry who it asks for, and that someone other than the service
+    // leader prays it. Nothing here is a primitive or a carried-by flag.
     function elementDoc(el) {
         const doc = { id: el.id, kind: el.kind, name: el.name, hasNote: !!el.hasNote };
         if (el.kind === 'prayer' && el.requests) doc.requests = { count: el.requests.count, who: el.requests.who };
+        if (el.kind === 'prayer' && el.prayedByOther) doc.prayedByOther = true;
         return doc;
     }
 

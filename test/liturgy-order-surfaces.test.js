@@ -55,12 +55,20 @@ test('the Order of Service composes its order from the element collection', () =
     assert.match(html, /moveOrderRow\(item\.key/);
     assert.match(html, /takeFromOrder\(item\.key\)/);
     assert.match(html, /item\.type === 'prayer'/);
+    assert.match(html, /item\.prayedByOther/);
+    assert.match(html, /Who prays /);
+    assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
     assert.match(html, /item\.type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
     assert.match(js, /LiturgyOrderStore\.save\(db, snapshot, stored\)/);
     assert.match(js, /addToOrder/);
     assert.match(js, /liturgyCatalogLoaded = false/);
+    assert.match(js, /function indexInList/);
+    assert.match(js, /el\.prayedByOther/);
+    const onAdd = js.slice(js.indexOf('onAdd: (evt)'), js.indexOf('onEnd: (evt)'));
+    assert.match(onAdd, /indexInList\(evt\.to, evt\.item\)/);
+    assert.doesNotMatch(onAdd, /newDraggableIndex/);
     assert.doesNotMatch(js, /Rows do not drag/);
 });
 
@@ -77,6 +85,16 @@ test('the Liturgy Orders page drags the collection into the selected order', () 
     assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
+    assert.match(html, /Prayed by someone other than the service leader/);
+    assert.match(html, /A name here, and a reference on the Sunday/);
+    assert.match(html, /class="m-page m-page--tool"/);
+    assert.match(html, /class="m-section lo-kinds"/);
+    assert.match(html, /class="m-section lo-order"/);
+    assert.match(html, /#order-elements \{[^}]*overflow-y: auto/);
+    assert.match(js, /function indexInList/);
+    const onAdd = js.slice(js.indexOf('onAdd:'), js.indexOf('onEnd:'));
+    assert.match(onAdd, /indexInList\(evt\.to, evt\.item\)/);
+    assert.doesNotMatch(onAdd, /newDraggableIndex/);
     const librarySortable = js.slice(js.indexOf("getElementById('element-library')"), js.indexOf("getElementById('order-elements')"));
     assert.match(librarySortable, /pull: 'clone'/);
     assert.match(librarySortable, /preventOnFilter: false/);

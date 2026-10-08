@@ -168,9 +168,16 @@
                 if (removed.indexOf(el.id) !== -1) return;
                 state = hymnState(value);
             } else if (el.kind === 'prayer') {
-                if (!el.requests) return;
-                const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
-                state = named >= el.requests.count ? 'set' : 'blank';
+                const needsRequests = !!el.requests;
+                const needsPerson = el.prayedByOther === true;
+                if (!needsRequests && !needsPerson) return;
+                let ready = true;
+                if (needsRequests) {
+                    const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
+                    if (named < el.requests.count) ready = false;
+                }
+                if (needsPerson && !Liturgy.carrierOf(service, el)) ready = false;
+                state = ready ? 'set' : 'blank';
             } else if (el.primitive === 'people') {
                 if (!peopleCount(value)) return;
                 state = 'set';

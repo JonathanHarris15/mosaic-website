@@ -906,7 +906,7 @@
                     </div>
 
                     <div class="oos-library" x-show="canEdit && liturgyCatalogLoaded" x-cloak>
-                        <p class="oos-library__hint">The elements are Hymn, Scripture Reading, Prayer, Person Event, and Other. <span x-text="currentOrderName"></span> is one combination of them. Dragging one in, moving a row, or taking one out changes that order for every Sunday that follows it. A prayer, a person event, and other are named on the liturgy order.</p>
+                        <p class="oos-library__hint">The elements are Hymn, Scripture, Prayer, Person Event, and Other. <span x-text="currentOrderName"></span> is one combination of them. Dragging one in, moving a row, or taking one out changes that order for every Sunday that follows it. A scripture, a prayer, a person event, and other are named on the liturgy order.</p>
                         <div id="element-library" class="oos-library__list">
                             <template x-for="kind in ['hymn', 'scripture', 'prayer', 'person', 'other']" :key="kind">
                                 <div class="oos-chip" :data-kind="kind">
@@ -985,7 +985,7 @@
                                             <span class="flex-none inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + item.dotColor"></span>
                                             <span class="flex-1 min-w-0 font-body-md text-[14.5px] text-primary truncate" x-show="item.value" x-text="item.value"></span>
                                             <span class="flex-1 min-w-0 font-body-md text-[13.5px] italic text-on-primary-container" x-show="!item.value" x-text="item.emptyLabel"></span>
-                                            <span class="flex-none font-label-md text-[11px] text-secondary truncate max-w-[140px]" x-show="item.hasRole && item.carrierName" :title="'Carried by ' + item.carrierName" x-text="item.carrierName"></span>
+                                            <span class="flex-none font-label-md text-[11px] text-secondary truncate max-w-[140px]" x-show="(item.prayedByOther || item.hasRole) && item.carrierName" :title="(item.prayedByOther ? 'Prayed by ' : 'Carried by ') + item.carrierName" x-text="item.carrierName"></span>
                                             <span class="material-symbols-outlined text-[16px] text-amber-600" x-show="item.noted" title="Has a service note">sticky_note_2</span>
 
                                             <!-- Who is in this box. A face and a name, so
@@ -1231,7 +1231,7 @@
                                                      people, oldest request first. -->
                                                 <template x-if="item.type === 'prayer'">
                                                     <div>
-                                                        <p class="text-sm text-on-surface-variant" x-show="!item.requests">Nothing to enter here. <span x-text="item.label"></span> is named on the liturgy order.</p>
+                                                        <p class="text-sm text-on-surface-variant" x-show="!item.requests && !item.prayedByOther">Nothing to enter here. <span x-text="item.label"></span> is named on the liturgy order.</p>
                                                         <div x-show="item.requests" class="flex flex-col gap-2">
                                                             <template x-for="(slot, idx) in service.liturgy[item.key]" :key="item.key + '-' + idx">
                                                                 <label class="flex flex-col gap-1">
@@ -1248,6 +1248,31 @@
                                                                 </label>
                                                             </template>
                                                         </div>
+                                                        <!-- Someone other than the service leader prays this.
+                                                             The person is the Sunday's carriedBy slot. -->
+                                                        <template x-if="item.prayedByOther && service.carriedBy[item.key]">
+                                                            <div :class="item.requests ? 'mt-4 pt-4 border-t border-dashed border-outline-variant' : ''">
+                                                                <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline mb-2">Prayed by</div>
+                                                                <div x-data="personPicker(service.carriedBy[item.key], $data)" @click.away="open = false" class="relative max-w-md">
+                                                                    <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
+                                                                        <input type="text" :aria-label="'Who prays ' + item.label" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                                                        <div class="flex items-center gap-1">
+                                                                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit" type="button">
+                                                                                <span class="material-symbols-outlined text-[18px]">close</span>
+                                                                            </button>
+                                                                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
+                                                                        <template x-for="p in results" :key="p.id">
+                                                                            <button @click="select(p)" type="button" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                                                                <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                                                            </button>
+                                                                        </template>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
                                                     </div>
                                                 </template>
 

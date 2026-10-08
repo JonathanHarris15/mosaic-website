@@ -22,7 +22,7 @@
 <!-- Liturgy Orders (ADR-0080). The congregation's Liturgy Elements and the
      orders made of them, on one page. A Sunday picks its order on the Order
      of Service; this page decides what the orders are. -->
-<body class="m-page" x-data="liturgyOrdersPage()" x-init="init()" x-cloak>
+<body class="m-page m-page--tool" x-data="liturgyOrdersPage()" x-init="init()" x-cloak>
 
     <header class="m-header">
         <div class="m-header__inner">
@@ -74,7 +74,7 @@
             <div class="lo-grid">
 
                 <!-- ── Elements: the five kinds, to the left of the order ── -->
-                <section class="m-section" aria-labelledby="elements-title">
+                <section class="m-section lo-kinds" aria-labelledby="elements-title">
                     <div class="m-section__head">
                         <h2 class="m-section__title" id="elements-title">Elements</h2>
                     </div>
@@ -85,7 +85,7 @@
                                 <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag into the order" aria-hidden="true">drag_indicator</span>
                                 <span class="m-row__main">
                                     <span class="m-row__title" x-text="kindLabel(kind)"></span>
-                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A scripture reference, on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
+                                    <span class="m-row__sub" x-text="kind === 'hymn' ? 'A hymn from the book, on the Sunday' : kind === 'scripture' ? 'A name here, and a reference on the Sunday' : kind === 'prayer' ? 'A name here. Prayer requests are optional.' : kind === 'person' ? 'A name here, and a person on the Sunday' : 'A name here, and nothing on the Sunday'"></span>
                                 </span>
                                 <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing" @click="placeKind(kind)"
                                         :aria-label="'Add ' + kindLabel(kind) + ' to ' + selectedOrder.name">
@@ -97,7 +97,7 @@
                 </section>
 
                 <!-- ── The order being edited ──────────────────────────── -->
-                <section class="m-section" aria-labelledby="order-title">
+                <section class="m-section lo-order" aria-labelledby="order-title">
                     <div class="m-section__head">
                         <h2 class="m-section__title" id="order-title">Order</h2>
                     </div>
@@ -140,6 +140,10 @@
                                     </template>
                                     <span class="m-row__title" x-show="!takesName(el.kind)" x-text="el.name"></span>
                                     <span class="m-row__sub" x-text="kindLabel(el.kind) + (el.hasNote ? ' · note' : '')"></span>
+                                    <label class="m-check" x-show="editing && el.kind === 'prayer'">
+                                        <input type="checkbox" :checked="!!el.prayedByOther" @change="updateElement(el.id, { prayedByOther: $event.target.checked })" />
+                                        <span>Prayed by someone other than the service leader</span>
+                                    </label>
                                     <label class="m-check" x-show="editing && el.kind === 'prayer'">
                                         <input type="checkbox" :checked="!!el.requests" @change="updateElement(el.id, { requests: $event.target.checked ? { count: 1, who: 'either' } : null })" />
                                         <span>Send prayer requests</span>
@@ -224,9 +228,18 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
     <style>
-        .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
-        .lo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
-        @media (min-width: 1024px) { .lo-grid { grid-template-columns: 280px minmax(0, 1fr); } }
+        .m-page--tool .m-page__body { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+        .lo-stack { display: flex; flex-direction: column; gap: var(--space-lg); flex: 1 1 auto; min-height: 0; overflow: hidden; }
+        .lo-grid {
+            display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+            gap: var(--space-lg); align-items: stretch; flex: 1 1 auto; min-height: 0; overflow: hidden;
+        }
+        @media (min-width: 1024px) {
+            .lo-grid { grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+        }
+        .lo-kinds { min-height: 0; overflow: hidden; }
+        .lo-order { min-height: 0; height: 100%; overflow: hidden; }
+        #order-elements { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
         .lo-order-bar { display: flex; align-items: flex-end; gap: var(--space-sm); }
         .lo-order-bar > .m-select-wrap { flex: 1 1 auto; min-width: 0; }
         .lo-library--drag [data-library-item] { cursor: grab; }

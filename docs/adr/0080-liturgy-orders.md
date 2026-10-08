@@ -27,13 +27,16 @@ any of its Sundays can say so.
 stay where they are. The elements are five kinds, hardcoded.**
 
 - A **Liturgy Element** is a placement of one kind: `{ id, kind, name,
-  hasNote }`, and a prayer may also carry `requests: { count, who }`. The
+  hasNote }`, and a prayer may also carry `requests: { count, who }` and
+  `prayedByOther`. The
   kinds are `hymn`, `scripture`, `prayer`, `person`, and `other`. A hymn is
-  chosen on the Sunday through the hymn picker. A scripture reading is a
-  reference, through the reference picker. A prayer and a person event and
-  other take a name on the order. A prayer can send prayer requests: how
-  many, and male, female, or either, chosen on the Sunday from the members,
-  longest since their last request first. A person event is one person on
+  chosen on the Sunday through the hymn picker. A scripture is named on the
+  order and is a reference on the Sunday, through the reference picker. A
+  prayer, a person event, and other take a name on the order. A prayer can
+  send prayer requests: how many, and male, female, or either, chosen on the
+  Sunday from the members, longest since their last request first. A prayer
+  can also be prayed by someone other than the service leader: the order
+  says so, and the Sunday names who, kept at `carriedBy.<id>`. A person event is one person on
   the Sunday; baptism (`baptism`) stays the candidates list (ADR 0006).
   Other has nothing on the Sunday, and a printable row still prints its
   name. `hasNote` means the per-slot note at `notes.<id>`. The same kind can
@@ -166,17 +169,19 @@ rearranging the rows, or taking one out changes that order for every Sunday
 that follows it. The Order of Service names the order and writes it as the
 combination changes. The Liturgy Orders page keeps the same gesture and
 still saves a draft, because a half-built order should not publish on every
-step. A hymn and a scripture reading take no name on the order. A prayer, a
-person event, and other do. A prayer's requests — how many, and male,
-female, or either — are set on the order. Each placement can take a note.
-Neither surface copies the order onto the Sunday. Up and down buttons make
-the same moves.
+step. A hymn takes no name on the order. A scripture, a prayer, a person
+event, and other do. A prayer's requests — how many, and male, female, or
+either — are set on the order. A prayer can also be marked to be prayed by
+someone other than the service leader; the Sunday then names that person at
+`carriedBy`. Each placement can take a note. Neither surface copies the
+order onto the Sunday. Up and down buttons make the same moves.
 
 A separate element collection, a primitive, and a carried-by flag were the
 split this replaces. A reader still derives the old shape, so a hymn picker
 and a scripture picker keep working, and a Sunday that already names who
-carried an element still reads that person. Nothing new writes the flag or
-the loose documents.
+carried an element still reads that person. Nothing new writes the
+`hasRole` flag or the loose documents. A prayer marked to be prayed by
+someone else is the one new writer of `carriedBy`.
 
 ## Consequences
 

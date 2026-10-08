@@ -133,6 +133,44 @@ test('a new element id is stable, readable, and never a reserved or taken key', 
     assert.throws(() => Core.addElement(cat, { name: 'Clip', primitive: 'video' }));
 });
 
+test('a scripture is titled on the order and the kind is called Scripture', () => {
+    assert.equal(Core.KIND_LABELS.scripture, 'Scripture');
+    assert.equal(Core.PRIMITIVE_LABELS.scripture, 'Scripture');
+    assert.equal(Core.kindTakesName('scripture'), true);
+    assert.equal(Core.kindTakesName('hymn'), false);
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'scripture', 2);
+    assert.equal(made.element.name, 'Scripture');
+    assert.equal(made.element.hasRole, false);
+    const renamed = Core.updateElement(made.catalog, made.element.id, { name: 'The Epistle' });
+    assert.equal(Core.elementById(renamed, made.element.id).name, 'The Epistle');
+    const round = Core.normaliseElement({ id: made.element.id, kind: 'scripture', name: 'The Epistle' });
+    assert.equal(round.name, 'The Epistle');
+    assert.equal(round.kind, 'scripture');
+});
+
+test('a kind lands where it was dropped, not at the top', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'other', 3, { name: 'Offertory' });
+    assert.equal(made.catalog.orders[0].elementIds[3], made.element.id);
+    assert.equal(made.catalog.orders[0].elementIds[0], 'preparatoryHymn');
+});
+
+test('a prayer can be prayed by someone other than the service leader', () => {
+    const made = Core.placeKind(Core.standardCatalog(), 'standard', 'prayer', 1, { name: 'Opening Prayer' });
+    assert.equal(made.element.prayedByOther, false);
+    assert.equal(made.element.hasRole, false);
+    const on = Core.updateElement(made.catalog, made.element.id, { prayedByOther: true });
+    const el = Core.elementById(on, made.element.id);
+    assert.equal(el.prayedByOther, true);
+    assert.equal(el.hasRole, false);
+    const round = Core.normaliseElement({ id: el.id, kind: 'prayer', name: el.name, prayedByOther: true });
+    assert.equal(round.prayedByOther, true);
+    assert.equal(round.hasRole, false);
+    const off = Core.updateElement(on, el.id, { prayedByOther: false });
+    assert.equal(Core.elementById(off, el.id).prayedByOther, false);
+    const hymn = Core.updateElement(off, 'hymn1', { prayedByOther: true });
+    assert.ok(!Core.elementById(hymn, 'hymn1').prayedByOther);
+});
+
 test('moving within an order reorders it and the source catalog is untouched', () => {
     const cat = Core.standardCatalog();
     const moved = Core.moveInOrder(cat, 'standard', 0, 2);

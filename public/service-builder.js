@@ -20,6 +20,22 @@ var FRESH_READ = { source: 'server' };
 // a page load, and landing on the order of service when you were staffing Roles
 // would undo the reason you pressed the arrow. 'order' is the default, so it is
 // left out rather than written down.
+// Sortable counts a dropped row with the list the drag started in. A kind
+// landing in the order is not one of that list's rows, so the count is 0.
+function indexInList(list, item) {
+    let index = 0;
+    if (!list) return index;
+    for (const child of list.children) {
+        if (child === item) return index;
+        if (child.tagName === 'TEMPLATE') continue;
+        if (child.classList.contains('m-empty')) continue;
+        if (child.classList.contains('sortable-ghost') || child.classList.contains('sortable-fallback')) continue;
+        if (child.style.display === 'none') continue;
+        index += 1;
+    }
+    return index;
+}
+
 function stepHref(date, options) {
     const opts = options || {};
     const params = new URLSearchParams({ date: date });
@@ -829,6 +845,8 @@ function serviceForm() {
 
         // Sortable moves the DOM; Alpine owns it. A drop from the library
         // inserts an id. A move inside the list reorders those ids.
+        // The index is read off the list the row landed in. Sortable's own
+        // count uses the library's selector, so a mid-list drop would be 0.
         initOrderSortable() {
             if (!this.canEdit || !this.liturgyCatalogLoaded || typeof Sortable === 'undefined') return;
             const library = document.getElementById('element-library');
@@ -849,19 +867,23 @@ function serviceForm() {
                     handle: '.m-row__handle',
                     draggable: '[data-element-id]',
                     filter: '.m-empty',
+                    onStart: (evt) => {
+                        evt.item.dataset.dragFrom = String(indexInList(evt.from, evt.item));
+                    },
                     onAdd: (evt) => {
                         const kind = evt.item.getAttribute('data-kind');
-                        const to = evt.newDraggableIndex;
+                        const to = indexInList(evt.to, evt.item);
                         evt.item.remove();
                         if (kind) this.placeKind(kind, to);
                     },
                     onEnd: (evt) => {
                         if (evt.from !== evt.to) return;
-                        const from = evt.oldDraggableIndex;
-                        const to = evt.newDraggableIndex;
+                        const from = Number(evt.item.dataset.dragFrom);
+                        const to = indexInList(evt.to, evt.item);
+                        delete evt.item.dataset.dragFrom;
                         evt.item.remove();
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
-                        if (from === to || from == null || to == null) return;
+                        if (from === to || !Number.isInteger(from)) return;
                         this.reorderOrder(from, to);
                     },
                 });
@@ -890,7 +912,7 @@ function serviceForm() {
                 } else if (el.primitive === 'song' && typeof current === 'string') {
                     this.service.liturgy[el.id] = { name: current, id: null };
                 }
-                if (el.hasRole && !this.service.carriedBy[el.id]) {
+                if ((el.prayedByOther || el.hasRole) && !this.service.carriedBy[el.id]) {
                     this.service.carriedBy[el.id] = { name: '', id: null };
                 }
             }
@@ -2065,6 +2087,12 @@ function serviceForm() {
                 value = names.join(', ');
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
+                if (!el.requests && el.prayedByOther) {
+                    const who = liturgyCore().carrierOf(this.service, el);
+                    value = who ? who.name : '';
+                    status = value ? 'people' : 'empty';
+                    emptyLabel = 'Name who prays…';
+                }
             } else if (type === 'person') {
                 const ref = lit[key] && !Array.isArray(lit[key]) ? lit[key] : {};
                 value = ref.name || '';
@@ -2079,12 +2107,13 @@ function serviceForm() {
                 status = value ? 'set' : 'empty';
                 emptyLabel = 'Add a reference…';
             }
-            const carrier = el.hasRole ? liturgyCore().carrierOf(this.service, el) : null;
+            const carrier = (el.prayedByOther || el.hasRole) ? liturgyCore().carrierOf(this.service, el) : null;
             const note = (this.service.notes && this.service.notes[key]) || '';
             return {
                 key, label: el.name, type, value, status, emptyLabel, removed,
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
+                prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',
                 noteOn: el.hasNote,
