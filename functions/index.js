@@ -89,6 +89,7 @@ const guidanceCore = require("./shared/mcp-guidance-core.js");
 const {
   assertCanDecide: assertCanDecideCore,
   assertWritesAsEditor: assertWritesAsEditorCore,
+  assertEditsServices: assertEditsServicesCore,
   assertIsAdmin: assertIsAdminCore,
 } = require("./access-assert");
 // The Admin Dashboard's Push notifications tab (MS-682). Reads the Device
@@ -1552,13 +1553,16 @@ exports.oosUpdateLiturgy = onCall(
       }
 
       const db = admin.firestore();
-      const callerSnap = await db.collection("users")
-          .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
-        throw new HttpsError("permission-denied",
-            "Editors only — this changes the live Order of Service.");
+      // MS-695: the Account Level's permissions map decides
+      // (services.builder.edit), not a legacy level string.
+      try {
+        await assertEditsServicesCore(db, request.auth);
+      } catch (err) {
+        if (err && (err.code === "unauthenticated" ||
+            err.code === "permission-denied")) {
+          throw new HttpsError(err.code, err.message);
+        }
+        throw err;
       }
 
       const dateKey = (request.data && request.data.dateKey) || "";
