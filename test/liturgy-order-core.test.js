@@ -82,23 +82,147 @@ function twoOrderCatalog() {
     return cat;
 }
 
-test('table columns: a shared element is one column, and Standard comes first', () => {
+test('table columns: a shared element is one column, and Standard stays in order', () => {
     const cat = twoOrderCatalog();
     const both = Core.tableColumns(cat, ['lessonsAndCarols', 'standard']).map(el => el.id);
-    assert.deepEqual(both, STANDARD_IDS.concat(['offertory']));
+    STANDARD_IDS.forEach((id, i) => {
+        if (i === 0) return;
+        assert.ok(both.indexOf(STANDARD_IDS[i - 1]) < both.indexOf(id), id);
+    });
+    // Lessons and Carols is call to worship, offertory, benediction. The
+    // offertory is the only new column, and it sits with the elements it
+    // follows rather than being tacked on at the end.
     assert.equal(both.filter(id => id === 'callToWorship').length, 1);
     assert.equal(both.filter(id => id === 'benediction').length, 1);
+    assert.equal(both.filter(id => id === 'offertory').length, 1);
+    assert.ok(both.indexOf('callToWorship') < both.indexOf('offertory'));
+    assert.ok(both.indexOf('offertory') < both.indexOf('benediction'));
 });
 
-test('table columns: the other orders follow by name, each element at first sight', () => {
+test('table columns: the other orders follow by name, and a new element sits where it lines up', () => {
     let cat = twoOrderCatalog();
     const made = Core.addOrder(cat, { name: 'Advent' });
     cat = Core.addToOrder(made.catalog, 'advent', 'offertory');
     cat = Core.addToOrder(cat, 'advent', 'hymn1');
     const cols = Core.tableColumns(cat, ['lessonsAndCarols', 'advent']).map(el => el.id);
-    assert.deepEqual(cols, ['offertory', 'hymn1', 'callToWorship', 'benediction']);
+    assert.deepEqual(cols, ['callToWorship', 'offertory', 'hymn1', 'benediction']);
     assert.deepEqual(Core.toggledOrders(cat, ['lessonsAndCarols', 'advent', 'standard']).map(o => o.id),
         ['standard', 'advent', 'lessonsAndCarols']);
+});
+
+test('a hymn lines up with a hymn, so the baptism is the only new column', () => {
+    const cat = Core.catalogFrom({
+        elements: [
+            { id: 'hA', name: 'Hymn', kind: 'hymn' },
+            { id: 'hB', name: 'Hymn', kind: 'hymn' },
+            { id: 'pA', name: 'Prayer', kind: 'prayer' },
+            { id: 'bA', name: 'Baptism', kind: 'person' },
+            { id: 'hC', name: 'Hymn', kind: 'hymn' },
+            { id: 'pB', name: 'Prayer', kind: 'prayer' },
+        ],
+        orders: [
+            { id: 'liturgy1', name: 'Liturgy 1', elementIds: ['hA', 'hB', 'pA'] },
+            { id: 'liturgy2', name: 'Liturgy 2', elementIds: ['bA', 'hC', 'pB'] },
+        ],
+    });
+    const cols = Core.tableColumns(cat, ['liturgy1', 'liturgy2']);
+    assert.deepEqual(cols.map(c => c.label), [
+        'Liturgy 1 · Hymn',
+        'Liturgy 2 · Baptism',
+        'Hymn',
+        'Prayer',
+    ]);
+    assert.deepEqual(cols.map(c => c.orderName), ['Liturgy 1', 'Liturgy 2', '', '']);
+    assert.deepEqual(cols[2].elementIds.slice().sort(), ['hB', 'hC']);
+    assert.deepEqual(cols[3].orderIds, ['liturgy1', 'liturgy2']);
+
+    const sunday = {
+        liturgyOrderId: 'liturgy2',
+        liturgy: { bA: [{ name: 'Ada' }], hC: { name: 'Old Hundredth' }, pB: 'Thanks' },
+    };
+    assert.equal(Core.elementForColumn(cols[0], sunday, cat), null);
+    assert.equal(Core.elementForColumn(cols[1], sunday, cat).id, 'bA');
+    assert.equal(Core.elementForColumn(cols[2], sunday, cat).id, 'hC');
+    assert.equal(Core.elementForColumn(cols[3], sunday, cat).id, 'pB');
+    assert.equal(Core.columnCarriesOrder(cols[0], sunday, cat), false);
+    assert.equal(Core.columnCarriesOrder(cols[2], sunday, cat), true);
+
+    const alone = Core.tableColumns(cat, ['liturgy2']);
+    assert.deepEqual(alone.map(c => c.orderName), ['', '', '']);
+    assert.deepEqual(alone.map(c => c.id), ['bA', 'hC', 'pB']);
+});
+
+test('orders with nothing in common keep every column, each labelled with its order', () => {
+    const cat = Core.catalogFrom({
+        elements: [
+            { id: 'hA', name: 'Hymn', kind: 'hymn' },
+            { id: 'pA', name: 'Prayer', kind: 'prayer' },
+            { id: 'meal', name: 'Meal', kind: 'other' },
+            { id: 'talk', name: 'Talk', kind: 'other' },
+        ],
+        orders: [
+            { id: 'liturgy1', name: 'Liturgy 1', elementIds: ['hA', 'pA'] },
+            { id: 'vespers', name: 'Vespers', elementIds: ['meal', 'talk'] },
+        ],
+    });
+    const cols = Core.tableColumns(cat, ['liturgy1', 'vespers']);
+    assert.deepEqual(cols.map(c => c.label), [
+        'Liturgy 1 · Hymn',
+        'Liturgy 1 · Prayer',
+        'Vespers · Meal',
+        'Vespers · Talk',
+    ]);
+});
+
+test('the same baptism name is one column, and a meal does not take the supper', () => {
+    const shared = Core.catalogFrom({
+        elements: [
+            { id: 'baptism', name: 'Baptism', kind: 'person' },
+            { id: 'b2', name: 'Baptism', kind: 'person' },
+        ],
+        orders: [
+            { id: 'morning', name: 'Morning', elementIds: ['baptism'] },
+            { id: 'evening', name: 'Evening', elementIds: ['b2'] },
+        ],
+    });
+    const one = Core.tableColumns(shared, ['morning', 'evening']);
+    assert.equal(one.length, 1);
+    assert.deepEqual(one[0].orderIds, ['evening', 'morning']);
+    assert.equal(one[0].orderName, '');
+
+    const apart = Core.catalogFrom({
+        elements: [
+            { id: 'baptism', name: 'Baptism', kind: 'person' },
+            { id: 'ded', name: 'Dedication', kind: 'person' },
+            { id: 'sup', name: "Lord's Supper", kind: 'other' },
+            { id: 'meal', name: 'Meal', kind: 'other' },
+        ],
+        orders: [
+            { id: 'morning', name: 'Morning', elementIds: ['baptism', 'sup'] },
+            { id: 'evening', name: 'Evening', elementIds: ['ded', 'meal'] },
+        ],
+    });
+    const cols = Core.tableColumns(apart, ['morning', 'evening']);
+    assert.equal(cols.length, 4);
+    assert.ok(cols.every(c => c.orderIds.length === 1));
+});
+
+test('the same element stays one column when two orders place it on opposite sides', () => {
+    const cat = Core.catalogFrom({
+        elements: [
+            { id: 'hymnEnd1', name: 'Closing Hymn', kind: 'hymn' },
+            { id: 'announcements', name: 'Announcements', kind: 'other' },
+        ],
+        orders: [
+            { id: 'morning', name: 'Morning', elementIds: ['hymnEnd1', 'announcements'] },
+            { id: 'evening', name: 'Evening', elementIds: ['announcements', 'hymnEnd1'] },
+        ],
+    });
+    const cols = Core.tableColumns(cat, ['morning', 'evening']);
+    const ids = cols.flatMap(c => c.elementIds);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.equal(cols.length, 2);
+    assert.ok(cols.every(c => c.orderIds.length === 2));
 });
 
 test('the toggles default to Standard alone and forget orders that are gone', () => {

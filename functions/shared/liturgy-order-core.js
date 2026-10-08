@@ -350,17 +350,211 @@
         return standard.concat(rest);
     }
 
-    function tableColumns(catalog, toggledIds) {
-        const seen = new Set();
+    // How alike two placements are, for lining the table's columns up.
+    // The same element is the same column wherever it sits. A hymn, a
+    // scripture, or a prayer also lines up with another of its kind — that
+    // is the overlap, so a baptism Sunday does not repeat every hymn. A
+    // person event or an other lines up only when the name is the same: a
+    // baptism is not a dedication, and a meal is not the Lord's Supper.
+    const ALIGN_ID = 10000;
+    const ALIGN_NAME = 20;
+    const ALIGN_KIND = 5;
+    const ALIGN_GAP = -1;
+
+    function looseKind(kind) {
+        return kind === 'hymn' || kind === 'scripture' || kind === 'prayer';
+    }
+
+    function alignScore(column, el) {
+        let best = 0;
+        const elements = column.elements || [];
+        for (let i = 0; i < elements.length; i++) {
+            const have = elements[i];
+            if (have.id === el.id) return ALIGN_ID;
+            if (have.kind !== el.kind) continue;
+            if (cleanName(have.name).toLowerCase() === cleanName(el.name).toLowerCase()) {
+                if (ALIGN_NAME > best) best = ALIGN_NAME;
+            } else if (looseKind(el.kind) && ALIGN_KIND > best) {
+                best = ALIGN_KIND;
+            }
+        }
+        return best;
+    }
+
+    function makeColumn(order, el) {
+        return {
+            id: el.id,
+            key: el.id,
+            name: el.name,
+            kind: el.kind,
+            primitive: el.primitive,
+            elements: [el],
+            elementIds: [el.id],
+            byOrder: { [order.id]: el },
+            orderIds: [order.id],
+        };
+    }
+
+    function absorbColumn(column, order, el) {
+        const byOrder = Object.assign({}, column.byOrder);
+        byOrder[order.id] = el;
+        const orderIds = column.orderIds.indexOf(order.id) === -1
+            ? column.orderIds.concat([order.id])
+            : column.orderIds.slice();
+        const elements = column.elements.some(function (e) { return e.id === el.id; })
+            ? column.elements
+            : column.elements.concat([el]);
+        return {
+            id: column.id,
+            key: column.key,
+            name: column.name,
+            kind: column.kind,
+            primitive: column.primitive,
+            elements: elements,
+            elementIds: elements.map(function (e) { return e.id; }),
+            byOrder: byOrder,
+            orderIds: orderIds,
+        };
+    }
+
+    // Line one order up under the columns already decided. Columns already
+    // placed stay in their order. A placement that matches a column joins
+    // it. One that matches nothing is inserted where it sits beside the
+    // matches, and an order with nothing in common is appended.
+    function alignOrder(columns, order) {
+        const els = elementsOf(order);
+        const n = columns.length;
+        const m = els.length;
+        const dp = new Array(n + 1);
+        for (let i = 0; i <= n; i++) {
+            dp[i] = new Array(m + 1);
+            for (let j = 0; j <= m; j++) dp[i][j] = 0;
+        }
+        for (let i = 1; i <= n; i++) dp[i][0] = i * ALIGN_GAP;
+        for (let j = 1; j <= m; j++) dp[0][j] = j * ALIGN_GAP;
+        for (let i = 1; i <= n; i++) {
+            for (let j = 1; j <= m; j++) {
+                const score = alignScore(columns[i - 1], els[j - 1]);
+                const diag = score > 0 ? dp[i - 1][j - 1] + score : -1e15;
+                const up = dp[i - 1][j] + ALIGN_GAP;
+                const left = dp[i][j - 1] + ALIGN_GAP;
+                dp[i][j] = Math.max(diag, up, left);
+            }
+        }
+        const steps = [];
+        let i = n;
+        let j = m;
+        while (i > 0 || j > 0) {
+            const score = (i > 0 && j > 0) ? alignScore(columns[i - 1], els[j - 1]) : 0;
+            const diag = (i > 0 && j > 0 && score > 0) ? dp[i - 1][j - 1] + score : -1e15;
+            const up = i > 0 ? dp[i - 1][j] + ALIGN_GAP : -1e15;
+            const left = j > 0 ? dp[i][j - 1] + ALIGN_GAP : -1e15;
+            if (diag === dp[i][j]) {
+                steps.push({ t: 'match', i: i - 1, j: j - 1 });
+                i -= 1;
+                j -= 1;
+            } else if (left === dp[i][j]) {
+                steps.push({ t: 'insert', j: j - 1 });
+                j -= 1;
+            } else {
+                steps.push({ t: 'keep', i: i - 1 });
+                i -= 1;
+            }
+        }
+        steps.reverse();
         const out = [];
-        toggledOrders(catalog, toggledIds).forEach(function (order) {
-            elementsOf(order).forEach(function (el) {
-                if (seen.has(el.id)) return;
-                seen.add(el.id);
-                out.push(el);
+        steps.forEach(function (step) {
+            if (step.t === 'keep') out.push(columns[step.i]);
+            else if (step.t === 'insert') out.push(makeColumn(order, els[step.j]));
+            else out.push(absorbColumn(columns[step.i], order, els[step.j]));
+        });
+        return dedupeColumns(out);
+    }
+
+    // The same element is one column even when two orders put it on
+    // opposite sides of a shared neighbour, which a sequence alignment
+    // cannot represent without crossing.
+    function dedupeColumns(columns) {
+        const owner = new Map();
+        const out = [];
+        columns.forEach(function (column) {
+            let prior = null;
+            column.elements.forEach(function (el) {
+                if (!prior && owner.has(el.id)) prior = owner.get(el.id);
             });
+            if (prior) {
+                column.orderIds.forEach(function (oid) {
+                    const el = column.byOrder[oid];
+                    if (!el || prior.byOrder[oid]) return;
+                    prior.byOrder[oid] = el;
+                    prior.orderIds.push(oid);
+                    if (!prior.elements.some(function (e) { return e.id === el.id; })) {
+                        prior.elements.push(el);
+                        prior.elementIds.push(el.id);
+                    }
+                });
+                return;
+            }
+            column.elements.forEach(function (el) { owner.set(el.id, column); });
+            out.push(column);
         });
         return out;
+    }
+
+    function finishColumn(column, catalog, labelOrders) {
+        const unique = labelOrders && column.orderIds.length === 1;
+        const order = unique ? orderById(catalog, column.orderIds[0]) : null;
+        const orderName = order ? order.name : '';
+        const title = column.orderIds.map(function (id) {
+            const named = orderById(catalog, id);
+            const el = column.byOrder[id];
+            const who = named ? named.name : id;
+            if (el && el.name && el.name !== column.name) return who + ' · ' + el.name;
+            return who;
+        }).join(', ');
+        return {
+            id: column.id,
+            key: column.key,
+            name: column.name,
+            label: orderName ? orderName + ' · ' + column.name : column.name,
+            kind: column.kind,
+            primitive: column.primitive,
+            orderName: orderName,
+            title: title,
+            orderIds: column.orderIds.slice(),
+            elementIds: column.elementIds.slice(),
+            byOrder: column.byOrder,
+            elements: column.elements,
+        };
+    }
+
+    function tableColumns(catalog, toggledIds) {
+        const orders = toggledOrders(catalog, toggledIds);
+        if (!orders.length) return [];
+        let columns = elementsOf(orders[0]).map(function (el) { return makeColumn(orders[0], el); });
+        for (let i = 1; i < orders.length; i++) columns = alignOrder(columns, orders[i]);
+        const labelOrders = orders.length > 1;
+        return columns.map(function (column) { return finishColumn(column, catalog, labelOrders); });
+    }
+
+    // The element a Sunday shows in a column. Its own order wins. A Sunday
+    // whose order does not use the column still shows a value it holds
+    // there, and otherwise nothing.
+    function elementForColumn(column, service, catalog) {
+        if (!column) return null;
+        const mapped = column.byOrder && column.byOrder[orderFor(service || {}, catalog).id];
+        if (mapped) return mapped;
+        const liturgy = (service && service.liturgy) || {};
+        const elements = column.elements || [];
+        for (let i = 0; i < elements.length; i++) {
+            if (displayValue(elements[i].kind, liturgy[elements[i].id])) return elements[i];
+        }
+        return null;
+    }
+
+    function columnCarriesOrder(column, service, catalog) {
+        if (!column || !column.byOrder) return false;
+        return !!column.byOrder[orderFor(service || {}, catalog).id];
     }
 
     function defaultToggles() {
@@ -738,6 +932,8 @@
         allSongIds: allSongIds,
         toggledOrders: toggledOrders,
         tableColumns: tableColumns,
+        elementForColumn: elementForColumn,
+        columnCarriesOrder: columnCarriesOrder,
         defaultToggles: defaultToggles,
         readToggles: readToggles,
         valueOf: valueOf,

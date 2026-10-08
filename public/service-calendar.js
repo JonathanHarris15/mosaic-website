@@ -1301,12 +1301,12 @@ function renderList(grouped) {
 
 // The table's liturgy columns (ADR-0080).
 //
-// The congregation's Liturgy Elements and Orders, read once. The orders
-// toggled on above the table decide the columns: the union of their elements,
-// Standard first, the rest by name, each element where it is first seen
-// (LiturgyOrderCore.tableColumns). One element is one column however many
-// orders share it, because a shared element is the same id and so the same
-// `liturgy.<id>` on the Sunday.
+// The orders toggled on above the table decide the columns
+// (LiturgyOrderCore.tableColumns). Standard comes first. A later order's
+// hymn, scripture, or prayer lines up with one already there, so the only
+// new column is the part that does not overlap — a baptism where the other
+// order had a hymn. A column only one order uses is labelled with that
+// order. One order on its own is not labelled; the toolbar already names it.
 //
 // Until the stored catalog arrives this is the seed, which is what an empty
 // collection reads as anyway, so the first draw already has Standard.
@@ -1443,7 +1443,7 @@ function renderTable(grouped) {
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
             <th class="px-md py-sm border-b border-outline-variant whitespace-nowrap" title="The two people the pastoral prayer is for">Prayed For</th>
             ${columns.map(c =>
-                `<th class="px-md py-sm border-b border-outline-variant whitespace-nowrap" data-element="${escapeHtml(c.id)}">${escapeHtml(c.name)}</th>`
+                `<th class="px-md py-sm border-b border-outline-variant whitespace-nowrap cal-col" data-column="${escapeHtml(c.key)}" data-element="${escapeHtml(c.id)}" title="${escapeHtml(c.title || c.name)}">${escapeHtml(c.label || c.name)}</th>`
             ).join('')}
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
         </tr>
@@ -1507,7 +1507,7 @@ function renderTable(grouped) {
                         </td>
                         ${columns.map(c => `
                         <td class="px-md py-md min-w-[150px] relative">
-                            <div class="liturgy-cell font-body-md text-on-surface-variant text-sm" data-element="${escapeHtml(c.id)}">—</div>
+                            <div class="liturgy-cell font-body-md text-on-surface-variant text-sm" data-column="${escapeHtml(c.key)}" data-element="${escapeHtml(c.id)}">—</div>
                         </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
@@ -1846,22 +1846,42 @@ function injectServiceData(serviceMap) {
             }
         }
 
-        // The liturgy columns: one per element of the toggled orders. A value
-        // shows whatever order this Sunday follows — a column is an element,
-        // and the value under `liturgy.<id>` is there or it is not. People
-        // (a baptism's candidates) are read-only here: naming one writes the
-        // candidate's own record too (ADR-0006), and that lives on the Order
-        // of Service.
+        // The liturgy columns. A Sunday shows the element its own order
+        // lined up in that column, which may be a different placement from
+        // the column's heading when two orders share the slot. A column the
+        // order does not use is quiet, and still shows a value the Sunday
+        // holds there. People (a baptism's candidates) are read-only here:
+        // naming one writes the candidate's own record too (ADR-0006), and
+        // that lives on the Order of Service.
+        const catalog = currentCatalog();
+        const columnsByKey = {};
+        liturgyColumns().forEach(c => { columnsByKey[c.key] = c; });
         el.querySelectorAll('.liturgy-cell').forEach(cell => {
-            const element = liturgyElementFor(cell.dataset.element);
-            if (!element) return;
+            const column = columnsByKey[cell.dataset.column] || columnsByKey[cell.dataset.element];
+            const element = column
+                ? LiturgyOrderCore.elementForColumn(column, svc, catalog)
+                : liturgyElementFor(cell.dataset.element);
+            const carries = column ? LiturgyOrderCore.columnCarriesOrder(column, svc, catalog) : !!element;
+            if (cell.classList) {
+                if (carries) cell.classList.remove('liturgy-cell--gap');
+                else cell.classList.add('liturgy-cell--gap');
+            }
+            if (!element) {
+                setCellText(cell, '—');
+                const parent = cell.parentElement;
+                const stale = parent && parent.querySelector('.liturgy-carrier');
+                if (stale) stale.remove();
+                return;
+            }
+            cell.dataset.element = element.id;
             setCellText(cell, liturgyCellText(element, LiturgyOrderCore.valueOf(svc, element)));
             if (canEdit && (element.primitive === 'song' || element.primitive === 'scripture')) setupInlineEdit(cell, dateKey, element.id);
             // Older Sundays stored who carried an element beside the value.
             // A person event's person is the value itself, so this line only
             // appears when that older field is actually set.
             const carrier = LiturgyOrderCore.carrierOf(svc, element);
-            let line = cell.parentElement.querySelector('.liturgy-carrier[data-element="' + element.id + '"]');
+            const parent = cell.parentElement;
+            let line = parent && parent.querySelector('.liturgy-carrier[data-element="' + element.id + '"]');
             if (carrier && carrier.name) {
                 if (!line) {
                     line = document.createElement('div');

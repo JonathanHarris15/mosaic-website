@@ -88,13 +88,19 @@ What reads the order:
    out of every order leaves the values Sundays hold under it. It is
    reached from the Order of Service and from the Services table. It is the
    only place an order's combination changes.
-3. **The Services table** draws one liturgy column per element of the orders
-   toggled on above it. The columns are the union of those orders: Standard
-   first in its own order, then the others by name, each element at its
-   first sighting. Standard alone is the default, and the toggles are
-   remembered per device (`localStorage`). The old reference columns (Sermon,
-   Baptism, Pastoral Prayer) and the fixed planning column list are gone,
-   because the elements are those columns now.
+3. **The Services table** draws the liturgy columns of the orders toggled
+   on above it. Standard comes first, in its own order, then the others by
+   name. An element lines up with a column already there when it is the
+   same element, or when it is a hymn, a scripture, or a prayer in the same
+   place in the sequence — a hymn lines up with a hymn. A differently named
+   person event or other does not: a baptism is not a dedication. What does
+   not line up is its own column, placed where it sits beside the elements
+   the orders share. When more than one order is on, a column only one of
+   them uses is labelled with that order. One order on its own is not
+   labelled. Standard alone is the default, and the toggles are remembered
+   per device (`localStorage`). The old reference columns (Sermon, Baptism,
+   Pastoral Prayer) and the fixed planning column list are gone, because
+   the elements are those columns now.
 4. **Printables** read these elements. A Sunday's fields are one per
    placement, keyed by its id, so a box bound to `hymn1` or `sermon` still
    resolves. `sunday_rows` walks the Sunday's order. An Other row prints
@@ -146,7 +152,10 @@ pre-template week a rebuild.
   the table depend on what somebody clicked first. Catalog order puts a new
   element wherever it was created. Standard first, then by name, gives the
   same table to everybody who toggles the same orders, and reads a Standard
-  Sunday left to right.
+  Sunday left to right. Lining a hymn up with a hymn, rather than only with
+  the same element id, is the amendment below: orders composed from the five
+  kinds do not share ids, and without that lining-up a baptism Sunday
+  repeats every hymn.
 - **Make the leaders and prayer people elements.** Rejected; see the
   Decision. They stay fields on the Sunday.
 - **Autosave on the Liturgy Orders page** (ADR 0032's default for a page
@@ -234,3 +243,29 @@ element whose name is the Sunday's prayer label (the seed names that
 element Pastoral Prayer). An order that no longer has that row draws the
 field once, after the list. Those anchors are the seed's ids and the
 label the Sunday already stores. They are not a new kind.
+
+## Amendment — the table lines orders up, and names a column one order uses
+
+The first-sighting union treated two placements as the same column only
+when they were the same element. An order composed from the five kinds
+gets new ids, so a baptism Sunday next to Standard repeated every hymn
+and the baptism was lost in the extra columns.
+
+The table now lines the toggled orders up as sequences. Standard's columns
+stay in Standard's order. A later order's hymn, scripture, or prayer joins
+a column of the same kind already there; the same name wins over a
+different one, so a closing hymn stays the closing hymn. A person event or
+an other joins a column only when it is the same element or the same name.
+What does not line up is inserted where it sits beside the shared
+elements, and an order with nothing in common is appended. Liturgy 1 as
+hymn, hymn, prayer and Liturgy 2 as baptism, hymn, prayer share the second
+hymn and the prayer; the baptism is the new column, and Liturgy 1's first
+hymn stays its own.
+
+When more than one order is on, a column only one of them uses is labelled
+with that order (`Communion · Lord's Supper`). A shared column keeps the
+element's name. One order on its own is not labelled. A cell shows the
+element that Sunday's own order lined up there, so two orders can share a
+heading and still store different placements. A cell for a column the
+Sunday's order does not use is quiet, and still shows a value the Sunday
+holds.
