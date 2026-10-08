@@ -36,6 +36,16 @@ test('the calendar\'s table mode toggles orders and links the management page', 
     assert.match(html, /href="liturgy-orders\.html"/);
 });
 
+test('a failed read keeps the orders on screen and does not treat Standard as a draft', () => {
+    const html = read('liturgy-orders.html');
+    const js = read('liturgy-orders.js');
+    assert.match(html, /class="lo-stack" x-show="!loading"/);
+    assert.doesNotMatch(html, /lo-stack" x-show="!loading && !problem"/);
+    assert.match(html, /m-header__actions" x-show="editing"/);
+    assert.match(js, /permissions problem, not a connection problem/);
+    assert.match(js, /this\.baseline = JSON\.stringify\(catalog\)/);
+});
+
 test('the management page loads the order core before its own script', () => {
     const html = read('liturgy-orders.html');
     const core = html.indexOf('src="liturgy-order-core.js"');

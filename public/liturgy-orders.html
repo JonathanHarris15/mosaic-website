@@ -33,7 +33,7 @@
                 </a>
                 <div class="m-header__titles"><h1 class="m-header__title">Liturgy Orders</h1></div>
             </div>
-            <div class="m-header__actions" x-show="canEdit">
+            <div class="m-header__actions" x-show="editing">
                 <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="dirty" @click="discard()">
                     <span class="m-btn__label">Discard</span>
                 </button>
@@ -51,7 +51,7 @@
 
         <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
 
-        <div class="m-notice m-notice--error" x-show="!loading && problem">
+        <div class="m-notice m-notice--error" role="alert" x-show="!loading && problem">
             <span class="material-symbols-outlined m-notice__icon">error</span>
             <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
             <div class="m-notice__acts">
@@ -59,14 +59,14 @@
             </div>
         </div>
 
-        <div class="lo-stack" x-show="!loading && !problem">
+        <div class="lo-stack" x-show="!loading">
 
             <div class="m-notice m-notice--error" role="alert" x-show="editProblem">
                 <span class="material-symbols-outlined m-notice__icon">error</span>
                 <div class="m-notice__body"><span class="m-notice__text" x-text="editProblem"></span></div>
             </div>
 
-            <div class="m-notice m-notice--info" x-show="!canEdit">
+            <div class="m-notice m-notice--info" x-show="!canEdit && !problem">
                 <span class="material-symbols-outlined m-notice__icon">visibility</span>
                 <div class="m-notice__body"><span class="m-notice__text">Only an editor can change the liturgy orders.</span></div>
             </div>
@@ -94,7 +94,7 @@
                         </template>
                     </div>
 
-                    <form class="m-card lo-form" x-show="canEdit" @submit.prevent="createOrder()">
+                    <form class="m-card lo-form" x-show="editing" @submit.prevent="createOrder()">
                         <label class="m-field">
                             <span class="m-label">New order</span>
                             <input id="new-order-name" class="m-input" type="text" maxlength="60" x-model="newOrder.name" placeholder="Name it — Communion Sunday" />
@@ -121,13 +121,13 @@
                 <section class="m-section" aria-labelledby="order-title">
                     <div class="m-section__head">
                         <h2 class="m-section__title" id="order-title" x-text="selectedOrder.name"></h2>
-                        <p class="m-section__hint" x-show="canEdit">Drag a row, or use its arrows, to change the order. Sundays see it once it is saved.</p>
+                        <p class="m-section__hint" x-show="editing">Drag a row, or use its arrows, to change the order. Sundays see it once it is saved.</p>
                     </div>
 
                     <div class="m-card lo-form">
                         <label class="m-field">
                             <span class="m-label">Name</span>
-                            <input id="order-name" class="m-input" type="text" maxlength="60" x-model="orderName" @change="renameOrder()" @keydown.enter.prevent="$el.blur()" :disabled="!canEdit" />
+                            <input id="order-name" class="m-input" type="text" maxlength="60" x-model="orderName" @change="renameOrder()" @keydown.enter.prevent="$el.blur()" :disabled="!editing" />
                         </label>
                     </div>
 
@@ -139,13 +139,13 @@
                     <div class="m-card-list" id="order-elements" x-show="orderElements.length">
                         <template x-for="(el, index) in orderElements" :key="el.id">
                             <div class="m-row" :data-order-row="el.id">
-                                <span class="material-symbols-outlined m-row__handle" x-show="canEdit" title="Drag to move" aria-hidden="true">drag_indicator</span>
+                                <span class="material-symbols-outlined m-row__handle" x-show="editing" title="Drag to move" aria-hidden="true">drag_indicator</span>
                                 <span class="lo-num" x-text="index + 1"></span>
                                 <span class="m-row__main">
                                     <span class="m-row__title" x-text="el.name"></span>
                                     <span class="m-row__sub" x-text="primitiveLabel(el.primitive) + (el.hasRole ? ' · carried by a person' : '') + (el.hasNote ? ' · note' : '')"></span>
                                 </span>
-                                <span class="lo-acts" x-show="canEdit">
+                                <span class="lo-acts" x-show="editing">
                                     <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" data-move="up"
                                             :disabled="index === 0" @click="move(index, -1, $event)"
                                             :aria-label="'Move ' + el.name + ' up'">
@@ -165,7 +165,7 @@
                         </template>
                     </div>
 
-                    <form class="m-card lo-form lo-form--row" x-show="canEdit" @submit.prevent="addToOrder()">
+                    <form class="m-card lo-form lo-form--row" x-show="editing" @submit.prevent="addToOrder()">
                         <label class="m-field">
                             <span class="m-label">Add an element</span>
                             <span class="m-select-wrap">
@@ -183,7 +183,7 @@
                         </button>
                     </form>
 
-                    <div x-show="canEdit && !isStandard">
+                    <div x-show="editing && !isStandard">
                         <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="deleteOrder()">
                             <span class="material-symbols-outlined">delete</span>
                             <span class="m-btn__label">Delete this order</span>
@@ -209,20 +209,20 @@
                         <div class="m-row lo-element" :data-element-row="el.id">
                             <span class="m-row__main lo-element__main">
                                 <input class="m-input lo-element__name" type="text" maxlength="60" :value="el.name"
-                                       :aria-label="'Name of ' + el.name" :disabled="!canEdit"
+                                       :aria-label="'Name of ' + el.name" :disabled="!editing"
                                        @change="renameElement(el.id, $event)" @keydown.enter.prevent="$el.blur()" />
                                 <span class="m-row__sub" x-text="primitiveLabel(el.primitive) + ' · ' + usedBy(el.id)"></span>
                             </span>
                             <span class="lo-element__flags">
                                 <label class="m-check">
-                                    <input type="checkbox" :checked="el.hasRole" :disabled="!canEdit" @change="updateElement(el.id, { hasRole: $event.target.checked })" />
+                                    <input type="checkbox" :checked="el.hasRole" :disabled="!editing" @change="updateElement(el.id, { hasRole: $event.target.checked })" />
                                     <span>Carried by a person</span>
                                 </label>
                                 <label class="m-check">
-                                    <input type="checkbox" :checked="el.hasNote" :disabled="!canEdit" @change="updateElement(el.id, { hasNote: $event.target.checked })" />
+                                    <input type="checkbox" :checked="el.hasNote" :disabled="!editing" @change="updateElement(el.id, { hasNote: $event.target.checked })" />
                                     <span>Takes a note</span>
                                 </label>
-                                <button type="button" class="m-icon-btn m-icon-btn--ghost" x-show="canEdit" @click="deleteElement(el.id)"
+                                <button type="button" class="m-icon-btn m-icon-btn--ghost" x-show="editing" @click="deleteElement(el.id)"
                                         :aria-label="'Delete ' + el.name" title="Delete element">
                                     <span class="material-symbols-outlined">delete</span>
                                 </button>
@@ -231,7 +231,7 @@
                     </template>
                 </div>
 
-                <form class="m-card lo-form lo-form--row" x-show="canEdit" @submit.prevent="createElement()">
+                <form class="m-card lo-form lo-form--row" x-show="editing" @submit.prevent="createElement()">
                     <label class="m-field lo-grow">
                         <span class="m-label">New element</span>
                         <input id="new-element-name" class="m-input" type="text" maxlength="60" x-model="newElement.name" placeholder="Name it — Offertory" />

@@ -11,6 +11,21 @@
 // select, which passes ?date= so the back link returns to that Sunday) and
 // from the Service calendar's table toggles.
 
+// Say what actually failed. A preview channel serves these pages against the
+// live rules, which do not know liturgy_elements / liturgy_orders until those
+// rules ship, so the read is permission-denied — not a dropped connection.
+// Standard stands in (ADR-0080: the pages fall back) and is not a draft.
+function describeLiturgyLoadFailure(error) {
+    const code = error && error.code;
+    if (code === 'permission-denied') {
+        return 'The liturgy orders could not be read. This is a permissions problem, not a connection problem. Standard is shown in their place, and saving stays off until they load.';
+    }
+    if (code === 'unavailable') {
+        return 'The liturgy orders could not be reached. Check your connection and try again. Standard is shown in their place, and saving stays off until they load.';
+    }
+    return 'The liturgy orders did not load. Try again. Standard is shown in their place, and saving stays off until they load.';
+}
+
 function liturgyOrdersPage() {
     const Core = window.LiturgyOrderCore;
     return {
@@ -47,6 +62,9 @@ function liturgyOrdersPage() {
                 || Core.orderById(this.catalog, Core.STANDARD_ORDER_ID);
         },
         get isStandard() { return this.selectedOrder.id === Core.STANDARD_ORDER_ID; },
+        // A failed read leaves Standard on screen. That is not a draft, and it
+        // must not be written back over orders this page did not read.
+        get editing() { return this.canEdit && !this.problem && !this.loading; },
         get orderElements() { return Core.elementsOf(this.selectedOrder, this.catalog); },
         get addable() {
             const inOrder = new Set(this.selectedOrder.elementIds);
@@ -67,7 +85,7 @@ function liturgyOrdersPage() {
             const params = new URLSearchParams(window.location.search);
             this.date = params.get('date') || '';
             window.addEventListener('beforeunload', (e) => {
-                if (this.canEdit && this.dirty) { e.preventDefault(); e.returnValue = ''; }
+                if (this.editing && this.dirty) { e.preventDefault(); e.returnValue = ''; }
             });
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'index.html'; return; }
@@ -84,7 +102,6 @@ function liturgyOrdersPage() {
 
         async load() {
             this.loading = true;
-            this.problem = '';
             try {
                 const read = await LiturgyOrderStore.load(db);
                 this.catalog = read.catalog;
@@ -92,9 +109,16 @@ function liturgyOrdersPage() {
                 this.baseline = JSON.stringify(this.catalog);
                 if (!Core.orderById(this.catalog, this.selectedOrderId)) this.selectedOrderId = Core.STANDARD_ORDER_ID;
                 this.orderName = this.selectedOrder.name;
+                this.problem = '';
             } catch (e) {
                 console.error('Liturgy orders did not load', e);
-                this.problem = 'The liturgy orders did not load. Check your connection and try again.';
+                const catalog = Core.standardCatalog();
+                this.catalog = catalog;
+                this.stored = { elementIds: [], orderIds: [] };
+                this.baseline = JSON.stringify(catalog);
+                this.selectedOrderId = Core.STANDARD_ORDER_ID;
+                this.orderName = this.selectedOrder.name;
+                this.problem = describeLiturgyLoadFailure(e);
             } finally {
                 this.loading = false;
                 this.$nextTick(() => this.initSortable());
@@ -104,7 +128,7 @@ function liturgyOrdersPage() {
         // Every edit goes through here: the core returns a new catalog or
         // throws a sentence the page shows as it is.
         _apply(edit) {
-            if (!this.canEdit) return false;
+            if (!this.editing) return false;
             try {
                 this.catalog = edit(this.catalog);
                 this.editProblem = '';
@@ -179,7 +203,7 @@ function liturgyOrdersPage() {
         // Sortable moves the DOM; Alpine owns it. Put the row back where it
         // was and let the model move it, so the two never disagree.
         initSortable() {
-            if (this._sortable || !this.canEdit || typeof Sortable === 'undefined') return;
+            if (this._sortable || !this.editing || typeof Sortable === 'undefined') return;
             const list = document.getElementById('order-elements');
             if (!list) return;
             this._sortable = Sortable.create(list, {
@@ -236,7 +260,7 @@ function liturgyOrdersPage() {
         },
 
         async save() {
-            if (!this.canEdit || this.saving || !this.dirty) return;
+            if (!this.editing || this.saving || !this.dirty) return;
             const problems = Core.validateCatalog(this.catalog);
             if (problems.length) { this.editProblem = problems[0]; return; }
             this.saving = true;
@@ -262,5 +286,5 @@ function liturgyOrdersPage() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { liturgyOrdersPage };
+    module.exports = { liturgyOrdersPage, describeLiturgyLoadFailure };
 }

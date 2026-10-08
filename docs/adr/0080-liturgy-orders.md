@@ -150,4 +150,7 @@ pre-template week a rebuild.
   Standard's slots. The guide system is being replaced by Printables
   (MS-401), and Printables walk the order.
 - `firestore.rules` gains two matches, copied from `guide_templates`. No
-  other rule changes.
+  other rule changes. Until those rules are what the project is running, a
+  client read of the two collections is permission-denied. The Liturgy Orders
+  page shows Standard in that case and does not save it: a failed read is not
+  a draft of the congregation's orders.
