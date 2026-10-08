@@ -138,7 +138,7 @@ suite('guidance files and the capability manifest', () => {
         // `cal_` beside `oos_`, which is exactly what the prefixes were chosen
         // to make possible — so this asserts the shape rather than the one
         // group that happened to exist first.
-        names.forEach(n => assert.match(n, /^(oos|shep|cal)_/, n));
+        names.forEach(n => assert.match(n, /^(oos|shep|cal|printable)_/, n));
         assert.ok(names.includes('shep_write_note'));
         assert.ok(names.includes('cal_list_events'));
     });

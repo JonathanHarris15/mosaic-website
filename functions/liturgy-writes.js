@@ -21,6 +21,9 @@
 global.MosaicIdentity = require("./shared/mosaic-identity.js");
 const ServiceAuthorship = require("./shared/service-authorship.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
+const Liturgy = require("./shared/liturgy-order-core.js");
+const ReadCore = require("./shared/service-read-core.js");
+const {loadLiturgyCatalog} = require("./liturgy-catalog.js");
 
 const SERVICES = "services";
 const USERS = "users";
@@ -46,32 +49,84 @@ function resolveIdentity(db, uid) {
 }
 
 /**
+ * The Sunday's document (normalised) and the elements of the Liturgy Order
+ * it follows — what a write is checked against (MS-715).
+ *
+ * Read fresh every call: an assistant may have changed the order a moment
+ * ago, and validating against a cached order is how a write lands in a slot
+ * the page no longer shows.
+ *
+ * @param {object} db the Firestore handle
+ * @param {string} dateKey YYYY-MM-DD
+ * @return {Promise<object>} {exists, doc, order, elements}
+ */
+async function sundayInOrder(db, dateKey) {
+  const [snap, catalog] = await Promise.all([
+    db.collection(SERVICES).doc(dateKey).get(),
+    loadLiturgyCatalog(db),
+  ]);
+  const raw = snap.exists ? snap.data() : null;
+  const doc = raw ? ReadCore.normalizeServiceDoc(raw) : null;
+  const order = Liturgy.orderFor(doc, catalog);
+  return {
+    exists: !!raw,
+    doc,
+    order,
+    elements: Liturgy.elementsOf(order),
+  };
+}
+
+/**
  * Merge a partial set of liturgy fields into one Sunday's document.
+ *
+ * ⚠ CHECKED AGAINST THAT SUNDAY'S OWN ORDER (MS-715). The keys are the
+ * element ids of the Liturgy Order the Sunday follows — the `field` values
+ * oos_get_service returns — not the Standard seed's. A key the order does
+ * not contain is refused by name; nothing is ever stored where no page
+ * shows it.
+ *
+ * ⚠ AN UNCHANGED VALUE IS NOT WRITTEN. Only fields whose value actually
+ * differs reach Firestore, so repeating a write stamps no `updatedAt` and
+ * moves no `decidedBy` credit.
  *
  * @param {object} db the Firestore handle
  * @param {object} args
  * @param {string} args.dateKey the `services/{dateKey}` doc id (YYYY-MM-DD)
- * @param {object} args.fields the proposed partial update, editor-field-named
+ * @param {object} args.fields the proposed partial update, keyed by element id
  * @param {string} args.uid the calling editor's Firebase uid, for the
  *   authorship stamp — never used for the permission check, which is the
- *   onCall wrapper's job before this is ever reached.
+ *   caller's job before this is ever reached.
  * @param {*} args.serverTimestamp admin.firestore.FieldValue.serverTimestamp()
  * @param {*} args.deleteField admin.firestore.FieldValue.delete()
- * @return {Promise<object>} { ok: true, updated } or
- *   { ok: false, rejectedFields, invalidFields }
+ * @return {Promise<object>} {ok: true, updated, written, unchanged, order}
+ *   or {ok: false, rejectedFields, invalidFields, message, accepts, order}
  */
 async function updateLiturgy(db, {
   dateKey, fields, uid, serverTimestamp, deleteField,
 }) {
-  const {rejectedFields, invalidFields} =
-    LiturgySaveCore.validateLiturgyUpdate(fields);
-  if (rejectedFields.length || invalidFields.length) {
-    return {ok: false, rejectedFields, invalidFields};
+  const sunday = await sundayInOrder(db, dateKey);
+  const plan = LiturgySaveCore.planOrderWrite(
+      fields, sunday.elements, sunday.doc);
+  const order = {id: sunday.order.id, name: sunday.order.name};
+
+  if (plan.rejected.length || plan.invalid.length) {
+    return {
+      ok: false,
+      rejectedFields: plan.rejected.map((r) => r.field),
+      invalidFields: plan.invalid.map((r) => r.field),
+      message: LiturgySaveCore.describeRefusal(
+          plan, sunday.elements, sunday.order),
+      accepts: ["theme", "keyVerse"].concat(
+          LiturgySaveCore.writableFieldsOf(sunday.elements)
+              .map((f) => f.field)),
+      order,
+    };
   }
 
-  const paths = LiturgySaveCore.toUpdatePaths(fields);
+  const paths = LiturgySaveCore.changePaths(plan.changes);
   if (!Object.keys(paths).length) {
-    return {ok: true, updated: {}};
+    return {ok: true, updated: {}, written: [],
+      unchanged: plan.unchanged, order};
   }
 
   const identity = await resolveIdentity(db, uid);
@@ -86,12 +141,19 @@ async function updateLiturgy(db, {
     if (e.code !== 5 && e.code !== "not-found") throw e; // gRPC NOT_FOUND = 5
     const nested = ServiceAuthorship.nestStamps(authorship, deleteField);
     await ref.set(Object.assign(
-        {}, LiturgySaveCore.toNestedDoc(fields), {updatedAt: serverTimestamp},
+        {}, LiturgySaveCore.changeDoc(plan.changes),
+        {updatedAt: serverTimestamp},
         nested ? {[ServiceAuthorship.FIELD]: nested} : {},
     ), {merge: true});
   }
 
-  return {ok: true, updated: fields};
+  return {
+    ok: true,
+    updated: plan.changes,
+    written: plan.written,
+    unchanged: plan.unchanged,
+    order,
+  };
 }
 
-module.exports = {updateLiturgy, resolveIdentity};
+module.exports = {updateLiturgy, resolveIdentity, sundayInOrder};

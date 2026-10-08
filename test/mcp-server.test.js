@@ -536,15 +536,26 @@ describe('the Order of Service MCP server', () => {
         const {client} = await connectAs('editor');
         const {tools} = await client.listTools();
         const write = tools.find((t) => t.name === 'oos_update_liturgy');
-        const fields = write.inputSchema.properties.fields.properties;
+        const schema = write.inputSchema.properties.fields;
+        const fields = schema.properties;
 
         assert.ok(fields.theme, 'theme should be settable');
-        assert.ok(fields.hymn1, 'hymn1 should be settable');
-        assert.ok(fields.sermon, 'sermon should be settable');
-        // The whole point of the allowlist.
+        assert.ok(fields.keyVerse, 'keyVerse should be settable');
+        // MS-715: element ids belong to the Sunday's Liturgy Order, so the
+        // schema cannot list them — it must let them through (a closed
+        // object strips them, which is how `hymn6` became "No fields given")
+        // and say where the ids come from.
+        assert.ok(schema.additionalProperties,
+            'element ids must pass through to the server, not be stripped');
+        assert.match(schema.description, /oos_get_service/);
+        assert.match(write.description, /refused by name/i);
+        // No person field is ever advertised.
         assert.strictEqual(fields.preacher, undefined);
         assert.strictEqual(fields.serviceLeader, undefined);
         assert.strictEqual(fields.prayerMale, undefined);
+        // And no seed id is advertised as if every Sunday had it.
+        assert.strictEqual(fields.hymn1, undefined);
+        assert.strictEqual(fields.hymnMid1, undefined);
     });
 
     // ── Reads ────────────────────────────────────────────────────────────
@@ -870,24 +881,37 @@ describe('the Order of Service MCP server', () => {
         assert.strictEqual(calls.length, 0);
     });
 
-    test('an element that carries no note is rejected by the schema', async () => {
-        const {client} = await connectAs('editor');
-        const result = await client.callTool({
-            name: 'oos_update_note',
-            arguments: {date: '2026-08-17', element: 'preacher', note: 'x'},
-        });
-        assert.strictEqual(result.isError, true);
-        assert.strictEqual(calls.length, 0);
+    test('an element the Sunday\'s order does not have is refused by name', async () => {
+        // MS-715: the note writer checks the element against that Sunday's
+        // own Liturgy Order, so the refusal comes back from it — naming the
+        // element and what the Sunday does accept.
+        const original = stubs.updateNote;
+        stubs.updateNote = (a) => ({ok: false, reason: 'unknown-element',
+            element: a.element, order: {id: 'standard', name: 'Standard'},
+            accepts: [{element: 'hymn6', name: 'Hymn 6'}]});
+        try {
+            const {client} = await connectAs('editor');
+            const result = await client.callTool({
+                name: 'oos_update_note',
+                arguments: {date: '2026-08-17', element: 'preacher', note: 'x'},
+            });
+            assert.strictEqual(result.isError, true);
+            assert.match(textOf(result), /"preacher"/);
+            assert.match(textOf(result), /hymn6 \(Hymn 6\)/);
+            assert.match(textOf(result), /nothing was written/i);
+        } finally {
+            stubs.updateNote = original;
+        }
     });
 
-    test('the note tool advertises which elements can carry one', async () => {
+    test('the note tool sends the assistant to the Sunday for element ids', async () => {
         const {client} = await connectAs('editor');
         const {tools} = await client.listTools();
         const noteTool = tools.find((t) => t.name === 'oos_update_note');
-        const allowed = noteTool.inputSchema.properties.element.enum;
-        assert.ok(allowed.includes('hymn1'));
-        assert.ok(allowed.includes('baptism'));
-        assert.ok(!allowed.includes('preacher'));
+        const element = noteTool.inputSchema.properties.element;
+        // Not a fixed enum of the seed's ids: those are not this Sunday's.
+        assert.strictEqual(element.enum, undefined);
+        assert.match(element.description, /oos_get_service/);
     });
 
     test('the note tool tells the assistant not to send HTML', async () => {

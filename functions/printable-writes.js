@@ -556,7 +556,9 @@ function dataCatalog(permissionLevel, args, liturgy) {
       of: s.of || null,
       blurb: s.blurb,
       params: s.params || [],
-      filters: s.filters || [],
+      // The same live catalog as `fields` below (MS-715): "Which hymn" on
+      // sunday_hymns lists this congregation's song elements, not the seed's.
+      filters: Catalog.filtersFor(s, {liturgy: liturgy || null}),
       fields: Catalog.fieldsFor(s, null, {liturgy: liturgy || null})
           .map((f) => ({key: f.key, label: f.label, kind: f.kind})),
     })),

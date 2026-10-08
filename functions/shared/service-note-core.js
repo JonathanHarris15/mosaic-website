@@ -35,11 +35,15 @@
 (function (global) {
     'use strict';
 
-    // The elements an assistant may write a note on, in service order: the
-    // Standard seed's elements (liturgy-order-core.js) — including `baptism`,
-    // which carries a note even though oos_update_liturgy cannot set its
-    // value. The pages note any element with hasNote; this list stays the
-    // seed until widening the assistant's write is decided on its own.
+    // The Standard seed's elements, in service order (liturgy-order-core.js)
+    // — including `baptism`, which carries a note even though
+    // oos_update_liturgy cannot set its value.
+    //
+    // ⚠ NOT THE NOTE ALLOWLIST ANY MORE (MS-715). A Sunday follows one of the
+    // congregation's Liturgy Orders (ADR-0080), whose element ids are not
+    // these. functions/note-writes.js checks a note against the elements of
+    // the order THAT Sunday resolves to, the same `hasNote` rule the pages
+    // use. This list is only what a Sunday with no catalog would have.
     const NOTE_KEYS = Object.freeze([
         'preparatoryHymn',
         'callToWorship',
