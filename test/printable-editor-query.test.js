@@ -38,9 +38,8 @@ test('a box inside a household card can query the children of that household', (
     assert.match(js, /listSourcesFor/, 'related lists are offered only inside their parent');
 });
 
-test('the drawer is Wired, the query builder, the Fill-in library, General live data, then warnings', () => {
+test('the drawer is the query builder, the Fill-in library, General live data, then warnings', () => {
     const order = [
-        'aria-label="Wired to this element"',
         'aria-label="Query builder"',
         '<span>Fill-in library</span>',
         '<span>General live data</span>',
@@ -51,6 +50,7 @@ test('the drawer is Wired, the query builder, the Fill-in library, General live 
         return at;
     });
     order.reduce((prev, at) => { assert.ok(at > prev, 'the parts read top to bottom'); return at; }, -1);
+    assert.doesNotMatch(drawer, /Wired to this element/);
     assert.match(drawer, /Live<\/button>[\s\S]*Stand-ins<\/button>[\s\S]*@click="reloadData\(\)"/, 'the head is Live | Stand-ins and refresh');
     assert.match(drawer, /<details class="pe-part pe-part--fill" open>/, 'the Fill-in library folds and starts open');
     assert.match(drawer, /<details class="pe-part pe-part--general">/, 'General live data folds');
@@ -172,21 +172,20 @@ test('the builder reads today\'s rows for what it is browsing, so chips say what
     assert.match(drawer, /queryResults\.warnings/, 'what the pick cannot read is said under it');
 });
 
-test('a wire lands on a chip that has a box, never on a hidden chip', () => {
+test('a selection wire lands on the query builder box, never a land chip', () => {
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
-    const hidden = { key: 'global|sunday|hymn2', rect: { width: 0, height: 0 } };
-    const shown = { key: 'global|sunday|hymn2', rect: { width: 48, height: 22 } };
-    assert.equal(Wires.firstLaidOutChip([hidden, shown], 'global|sunday|hymn2'), shown);
-    assert.equal(Wires.firstLaidOutChip([hidden], 'global|sunday|hymn2'), null);
     assert.equal(Wires.wireKey({ source: 'sunday', field: 'keyVerse', reading: 'passage' }), 'global|sunday|keyVerse#passage');
     assert.equal(Wires.drawerScrollDelta(
         { top: 100, bottom: 400 },
         { top: 20, bottom: 48 }
-    ) < 0, true, 'a chip above the drawer scrolls up');
-    assert.match(drawer, /Wired to this element/);
-    assert.match(drawer, /pe-chip--land/);
-    assert.match(js, /laidOutChip/);
+    ) < 0, true, 'a builder above the drawer scrolls up');
+    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'land-chip lookup is gone');
+    assert.doesNotMatch(drawer, /Wired to this element/, 'no land-chip strip above the builder');
+    assert.doesNotMatch(drawer, /pe-chip--land/);
+    assert.doesNotMatch(js, /connectedChips/);
+    assert.match(js, /wireLandsOnQuery/);
+    assert.match(js, /querySelector\('\.pe-query'\)/, 'the wire lands on the query builder');
 });
 
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
@@ -203,26 +202,15 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });
 
-test('a chip off the drawer body is not a wire landing, and scroll never pins it back', () => {
-    const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
-    const view = { left: 0, top: 100, right: 280, bottom: 500 };
-    const land = { key: 'global|sunday|theme', rect: { left: 8, top: -40, right: 120, bottom: -10, width: 112, height: 30 } };
-    const builder = { key: 'global|sunday|theme', rect: { left: 8, top: 200, right: 120, bottom: 230, width: 112, height: 30 } };
-    assert.equal(
-        Wires.firstLaidOutChip([land, builder], 'global|sunday|theme', view),
-        builder,
-        'the land chip above the drawer is skipped for the one still in view'
-    );
-    assert.equal(
-        Wires.firstLaidOutChip([land], 'global|sunday|theme', view),
-        null,
-        'nothing on screen means the wire breaks'
-    );
-    assert.match(js, /_wirePinnedFor/, 'pinning a chip is remembered per selection');
+test('selection wires land on the query builder for query sources only', () => {
+    assert.match(js, /wireLandsOnQuery/);
+    assert.match(js, /scrollQueryIntoDrawer/);
+    assert.match(js, /syncQueryToSelection/);
+    assert.match(js, /_wirePinnedFor/, 'pinning is remembered per selection');
     assert.match(js, /addEventListener\('scroll',\s*\(\)\s*=>\s*this\.refreshWires\(\)/,
         'scroll redraws the wire without asking to pin');
-    assert.doesNotMatch(js, /scrollChipIntoDrawer\(chip\);\s*\n\s*const a = this\.pointOf/,
-        'every redraw must not scroll the chip back into the drawer');
+    assert.doesNotMatch(js, /scrollChipIntoDrawer/);
+    assert.match(js, /source === 'event_field'/, 'fill-ins do not draw a line to the builder');
 });
 
 test('a Sunday in the query builder shows Service, Hymns and Scripture; fill-ins are a list of blanks', () => {
