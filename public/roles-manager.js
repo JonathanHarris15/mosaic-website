@@ -416,6 +416,7 @@ window.RolesManager = () => ({
     // ── Create, rename, delete ───────────────────────────────────────────────
 
     async createRole(name) {
+        if (!this.canManageRoles) return;
         const trimmed = String(name || '').trim();
         if (!trimmed) {
             this.showToast('A Role needs a name', 'error');
@@ -629,7 +630,7 @@ window.RolesManager = () => ({
     },
 
     async deleteRole(role) {
-        if (!role) return;
+        if (!role || !this.canManageRoles) return;
         if (RolesCore.isLocked(role)) {
             this.showToast('Liturgical Roles are built in and cannot be deleted', 'error');
             return;
@@ -838,7 +839,7 @@ window.RolesManager = () => ({
     },
 
     async setDoesNotServe(personId, value) {
-        if (!personId || this.savingNonServer) return;
+        if (!personId || this.savingNonServer || !this.canManageRoles) return;
         this.savingNonServer = personId;
 
         try {
@@ -1116,6 +1117,7 @@ window.RolesManager = () => ({
     },
 
     async setLiturgicalIntensity(slug, raw) {
+        if (!this.canManageRoles) return;
         const value = Number(raw);
         if (!Number.isFinite(value) || value < 0) {
             this.showToast('Rest between turns has to be zero or more weeks', 'error');

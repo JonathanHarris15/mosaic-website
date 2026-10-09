@@ -289,7 +289,10 @@
            paint that difference out. */
         html.shell-mobile .rm-role-row { min-height: 64px; border: 1px solid var(--outline-variant); border-radius: var(--radius); }
         html.shell-mobile .rm-role-list { gap: 8px; }
-    </style>
+            /* MS-721 (ADR 0081): read-only Roles read as text, not refusing inputs. */
+        .rm-readonly { margin: 0; font-size: 15px; color: var(--on-surface); padding: 2px 0; }
+        .rm-readonly--prose { white-space: pre-wrap; }
+</style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -372,7 +375,7 @@
 
                     <!-- Create. It stays at the top of the list because the thing
                          it makes appears directly underneath it. -->
-                    <div class="rm-create">
+                    <div class="rm-create" x-show="canManageRoles">
                         <input type="text" class="m-input" x-model="newRoleName"
                                placeholder="New role, e.g. Kids Ministry"
                                @keydown.enter="createRole(newRoleName)" />
@@ -503,7 +506,7 @@
                                     <h2 class="rm-editor-bar__name" x-text="draft.name"></h2>
                                     <div class="rm-editor-bar__meta" x-text="draftPeopleNeededLabel"></div>
                                 </span>
-                                <button @click="deleteRole(draftRole)" title="Delete this role" aria-label="Delete this role"
+                                <button x-show="canManageRoles" @click="deleteRole(draftRole)" title="Delete this role" aria-label="Delete this role"
                                         class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost">
                                     <span class="material-symbols-outlined" style="font-size: 21px; color: var(--error);">delete</span>
                                 </button>
@@ -511,7 +514,7 @@
 
                             <div class="rm-pane__head">
                                 <div style="min-width: 0;">
-                                    <span class="m-label m-label--sm">Editing Role</span>
+                                    <span class="m-label m-label--sm" x-text="canManageRoles ? 'Editing Role' : 'Role'">Editing Role</span>
                                     <h2 class="rm-pane__name" x-text="draft.name"></h2>
                                     <div class="rm-pane__sub">
                                         <span class="m-badge m-badge--secondary" x-text="draftPeopleNeededLabel"></span>
@@ -525,7 +528,7 @@
                                         <span class="m-btn__label">Delete</span>
                                     </button>
                                     <!-- MS-721 (ADR 0081): a Role saves itself. -->
-                                    <span data-live-chip :data-state="roleChip" class="rm-hint" style="margin:0"
+                                    <span data-live-chip x-show="canManageRoles" :data-state="roleChip" class="rm-hint" style="margin:0"
                                           :style="roleChip === 'failed' ? 'color:var(--error,#b3261e)' : ''"
                                           x-text="roleChipText(roleChip)"></span>
                                     <button type="button" x-show="roleChip === 'failed'" data-live-retry @click="saveDraft()"
@@ -552,11 +555,16 @@
                                         <!-- Name. Renaming changes the label only. -->
                                         <div class="rm-group">
                                             <label class="m-label" for="rm-name">Name</label>
+                                            <!-- MS-721 (ADR 0081): without roles.manager.edit
+                                                 the Role reads as text, not as inputs that refuse. -->
+                                            <template x-if="canManageRoles">
                                             <input id="rm-name" type="text" class="m-input" x-model="draft.name"
                                                    @blur="saveDraft()" @keydown.enter.prevent="saveDraft()" @keydown.escape="revertRole('name')"
                                                    :class="saveAttempted && !draft.name.trim() ? 'm-input--invalid' : ''"
                                                    :aria-invalid="saveAttempted && !draft.name.trim() ? 'true' : null" />
-                                            <p class="rm-hint">Renaming changes the label only — the Role keeps its serve history.</p>
+                                            </template>
+                                            <p x-show="!canManageRoles" class="rm-readonly" data-readonly="name" x-text="draft.name"></p>
+                                            <p x-show="canManageRoles" class="rm-hint">Renaming changes the label only — the Role keeps its serve history.</p>
                                         </div>
 
                                         <!-- ── What the job actually is (MS-222) ────────
@@ -570,12 +578,16 @@
                                              it has structure it wants a screen of its own. -->
                                         <div class="rm-group">
                                             <label class="m-label" for="rm-desc">What it involves</label>
+                                            <template x-if="canManageRoles">
                                             <textarea id="rm-desc" class="m-input" rows="6"
                                                       x-model="draft.description"
                                                       @blur="saveDraft()" @keydown.escape="revertRole('description')"
                                                       :maxlength="descriptionLimit"
                                                       placeholder="Arrive by 9:15, put the urns on, and set out the mugs on the side table."></textarea>
-                                            <p class="rm-hint" :class="descriptionLeft < 0 ? 'rm-hint--error' : ''">
+                                            </template>
+                                            <p x-show="!canManageRoles" class="rm-readonly rm-readonly--prose" data-readonly="description"
+                                               x-text="draft.description || 'Nothing written yet.'"></p>
+                                            <p x-show="canManageRoles" class="rm-hint" :class="descriptionLeft < 0 ? 'rm-hint--error' : ''">
                                                 Anyone down for this Role reads it beside the date.
                                                 <span x-show="draft.description" x-text="'· ' + descriptionLeft + ' left'"></span>
                                             </p>
@@ -598,20 +610,28 @@
                                                          number input writes a STRING, and the model reads
                                                          intensity strictly — so typing 1.2 made the Role
                                                          unsaveable with "intensity must be a number of weeks". -->
-                                                    <span class="m-unitfield">
+                                                    <span x-show="canManageRoles" class="m-unitfield">
+                                                        <template x-if="canManageRoles">
                                                         <input type="number" min="0" step="0.25" x-model.number="draft.intensity" />
+                                                        </template>
                                                         <span class="m-unitfield__unit" x-text="draft.intensity === 1 ? 'week' : 'weeks'"></span>
                                                     </span>
+                                                    <p x-show="!canManageRoles" class="rm-readonly" data-readonly="intensity"
+                                                       x-text="(draft.intensity === '' || draft.intensity == null ? 1 : draft.intensity) + ' ' + ((draft.intensity === '' || draft.intensity == null || draft.intensity === 1) ? 'week' : 'weeks')"></p>
                                                     <p class="rm-hint" style="margin-top: 6px;">
                                                         How long the rota leaves somebody alone afterwards. Left empty it reads as 1.
                                                     </p>
                                                 </div>
                                                 <hr class="m-divider" />
                                                 <div>
+                                                    <template x-if="canManageRoles">
                                                     <label class="m-check">
                                                         <input type="checkbox" x-model="draft.allowsAnotherRole" />
                                                         <span>They can also take another Role that day</span>
                                                     </label>
+                                                    </template>
+                                                    <p x-show="!canManageRoles" class="rm-readonly" data-readonly="allowsAnotherRole"
+                                                       x-text="draft.allowsAnotherRole ? 'They can also take another Role that day' : 'It uses up the morning'"></p>
                                                     <p class="rm-hint" x-text="draft.allowsAnotherRole
                                                         ? 'Ticked: somebody on this Role can also be given a second one that morning.'
                                                         : 'Unticked: this Role uses up the morning, so nobody on it is offered a second one. Separate from rest — rest says the job tires you, this says it occupies you.'"></p>
@@ -635,7 +655,7 @@
                                                     <li class="rm-slot">
                                                         <div class="rm-slot__head">
                                                             <span class="rm-slot__n" x-text="`Person ${index + 1}`"></span>
-                                                            <span class="rm-slot__acts">
+                                                            <span class="rm-slot__acts" x-show="canManageRoles">
                                                                 <button @click="moveSlot(index, index - 1)" :disabled="index === 0"
                                                                         title="Move up" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
                                                                     <span class="material-symbols-outlined" style="font-size: 18px;">arrow_upward</span>
@@ -653,7 +673,8 @@
                                                         <!-- Three named choices, all visible: the requirement is
                                                              the point of the row, not something to go looking for
                                                              in a menu. `aria-pressed` IS the selected state. -->
-                                                        <div class="m-seg m-seg--fill m-seg--lg">
+                                                        <p x-show="!canManageRoles" class="rm-readonly" x-text="requirementLabel(slot.requirement)"></p>
+                                                        <div x-show="canManageRoles" class="m-seg m-seg--fill m-seg--lg">
                                                             <template x-for="value in requirementOptions" :key="value">
                                                                 <button type="button" class="m-seg__opt"
                                                                         @click="setSlotRequirement(slot.id, value)"
@@ -664,7 +685,7 @@
                                                     </li>
                                                 </template>
                                             </ul>
-                                            <button @click="addSlot()" class="rm-add">
+                                            <button x-show="canManageRoles" @click="addSlot()" class="rm-add">
                                                 <span class="material-symbols-outlined" style="font-size: 18px;">add</span>Add another person
                                             </button>
                                         </div>
@@ -692,7 +713,7 @@
                                                         <span class="material-symbols-outlined m-rule-row__icon"
                                                               x-text="isRulePrivate(rule) ? 'lock' : ruleIcon(rule)"></span>
                                                         <span class="m-rule-row__text" x-text="ruleSentence(rule)"></span>
-                                                        <button @click="removeRule(index)" title="Remove this rule"
+                                                        <button x-show="canManageRoles" @click="removeRule(index)" title="Remove this rule"
                                                                 class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
                                                             <span class="material-symbols-outlined" style="font-size: 19px;">close</span>
                                                         </button>
@@ -706,14 +727,14 @@
                                                         <template x-for="(personId, i) in (rule.personIds || [])" :key="personId">
                                                             <span class="m-token">
                                                                 <span x-text="allowlistNames(rule)[i]"></span>
-                                                                <button @click="removeFromAllowlistRule(index, personId)"
+                                                                <button x-show="canManageRoles" @click="removeFromAllowlistRule(index, personId)"
                                                                         :title="`Take ${allowlistNames(rule)[i]} off this list`"
                                                                         class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
                                                                     <span class="material-symbols-outlined" style="font-size: 15px;">close</span>
                                                                 </button>
                                                             </span>
                                                         </template>
-                                                        <span class="m-select-wrap" style="width: 17.5rem;">
+                                                        <span x-show="canManageRoles" class="m-select-wrap" style="width: 17.5rem;">
                                                             <select class="m-select" @change="pickIntoAllowlistRule(index, $event)">
                                                                 <option value="">Add someone to this list…</option>
                                                                 <template x-for="option in allowlistOptionsFor(rule)" :key="option.id">
@@ -733,7 +754,7 @@
 
                                         <!-- One pair of pickers, reading as a sentence. Only Shared
                                              Relationship Types are ever offered (ADR-0017). -->
-                                        <div class="rm-composer">
+                                        <div class="rm-composer" x-show="canManageRoles">
                                             <span class="m-label m-label--sm">Add a rule</span>
 
                                             <div class="rm-composer__row">
@@ -810,7 +831,7 @@
 
                             <div class="rm-editor-actions">
                                 <span x-show="roleChip === 'failed' && roleError" class="rm-hint rm-hint--error" x-text="roleError"></span>
-                                <span data-live-chip :data-state="roleChip" class="rm-hint" style="margin:0" x-text="roleChipText(roleChip)"></span>
+                                <span data-live-chip x-show="canManageRoles" :data-state="roleChip" class="rm-hint" style="margin:0" x-text="roleChipText(roleChip)"></span>
                                 <button type="button" x-show="roleChip === 'failed'" data-live-retry @click="saveDraft()"
                                         class="m-btn m-btn--secondary">Retry</button>
                             </div>
@@ -878,13 +899,17 @@
                                         <li class="m-locked-role">
                                             <span class="material-symbols-outlined m-locked-role__lock">lock</span>
                                             <span class="m-locked-role__name" x-text="role.name"></span>
-                                            <span class="m-unitfield m-unitfield--sm">
+                                            <span x-show="canManageRoles" class="m-unitfield m-unitfield--sm">
+                                                <template x-if="canManageRoles">
                                                 <input type="number" min="0" step="0.25"
                                                        :value="liturgicalIntensity(role.slug)"
                                                        @change="setLiturgicalIntensity(role.slug, $event.target.value)"
                                                        :disabled="savingIntensity === role.slug" />
+                                                </template>
                                                 <span class="m-unitfield__unit" x-text="liturgicalRestUnit(role.slug)"></span>
                                             </span>
+                                            <span x-show="!canManageRoles" class="rm-readonly" data-readonly="liturgical"
+                                                  x-text="liturgicalIntensity(role.slug) + ' ' + liturgicalRestUnit(role.slug)"></span>
                                         </li>
                                     </template>
                                 </ul>
@@ -945,7 +970,7 @@
                                 </div>
 
                                 <div class="rm-cols rm-cols--people">
-                                    <div class="rm-group">
+                                    <div class="rm-group" x-show="canManageRoles">
                                         <span class="m-label">Add somebody</span>
                                         <div class="m-search">
                                             <span class="material-symbols-outlined">search</span>
@@ -981,7 +1006,7 @@
                                             <template x-for="p in nonServers" :key="p.id">
                                                 <li class="rm-person">
                                                     <span class="rm-person__name" x-text="p.name || 'Someone no longer in the directory'"></span>
-                                                    <button type="button" @click="setDoesNotServe(p.id, false)"
+                                                    <button type="button" x-show="canManageRoles" @click="setDoesNotServe(p.id, false)"
                                                             :disabled="savingNonServer === p.id"
                                                             title="Put them back on the rotas"
                                                             class="m-icon-btn m-icon-btn--ghost">

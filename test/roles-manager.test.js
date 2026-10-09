@@ -1842,3 +1842,38 @@ test('MS-721: only roles.manager.edit gets a live editor (the rule on roles)', a
     await viewerPage.saveDraft();
     assert.equal(stored('roles').r1.name, 'Kids Ministry');
 });
+
+// ── MS-721 lead call: without roles.manager.edit the page reads, not edits ──
+
+test('MS-721: without roles.manager.edit every Role control is display text', () => {
+    const html = rolesManagerHtml();
+    // Each input that writes a Role is only rendered for the key holder…
+    for (const field of ['x-model="draft.name"', 'x-model="draft.description"',
+        'x-model.number="draft.intensity"', 'x-model="draft.allowsAnotherRole"',
+        'setLiturgicalIntensity(role.slug']) {
+        const at = html.indexOf(field);
+        assert.ok(at !== -1, field);
+        const opened = html.lastIndexOf('<template x-if="canManageRoles">', at);
+        const closed = html.lastIndexOf('</template>', at);
+        assert.ok(opened !== -1 && opened > closed, field + ' is rendered without the key');
+    }
+    // …and reads as text otherwise.
+    for (const f of ['name', 'description', 'intensity', 'allowsAnotherRole', 'liturgical']) {
+        assert.match(html, new RegExp(`x-show="!canManageRoles"[^>]*data-readonly="${f}"`), f);
+    }
+    for (const m of ['class="rm-create" x-show="canManageRoles"', 'class="rm-composer" x-show="canManageRoles"',
+        'x-show="canManageRoles" @click="addSlot()"', 'x-show="canManageRoles" @click="removeRule(index)"',
+        'class="rm-slot__acts" x-show="canManageRoles"']) {
+        assert.ok(html.indexOf(m) !== -1, m);
+    }
+});
+
+test('MS-721: the write entry points refuse without roles.manager.edit', () => {
+    const js = rolesManagerJs();
+    for (const fn of ['async createRole(name) {\n        if (!this.canManageRoles) return;',
+        'async deleteRole(role) {\n        if (!role || !this.canManageRoles) return;',
+        'if (!personId || this.savingNonServer || !this.canManageRoles) return;',
+        'async setLiturgicalIntensity(slug, raw) {\n        if (!this.canManageRoles) return;']) {
+        assert.ok(js.indexOf(fn) !== -1, fn);
+    }
+});

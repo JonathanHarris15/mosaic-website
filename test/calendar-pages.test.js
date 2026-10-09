@@ -2322,7 +2322,7 @@ test('one date of a repeating Event does not decide who can see it', () => {
     const html = readPage('calendar-event.html');
     // The ladder is still on the page — for a ONE-OFF, whose occurrence is the
     // whole Event — so the guard is what matters.
-    assert.ok(/x-show="isEditor && isOneOff"[\s\S]*?Who can see this/.test(html),
+    assert.ok(/x-show="editsEvent && isOneOff"[\s\S]*?Who can see this/.test(html),
         'the visibility ladder is offered on one date of a repeating Event');
 });
 
@@ -2425,7 +2425,7 @@ test('one Sunday does not decide the pattern, and is not skippable here', () => 
     assert.strictEqual(page.patternEditable, false);
 
     const html = readPage('calendar-event.html');
-    assert.ok(/x-show="isEditor && patternEditable"/.test(html),
+    assert.ok(/x-show="editsEvent && patternEditable"/.test(html),
         'the pattern controls are not guarded for a Sunday');
 });
 
@@ -3899,7 +3899,7 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
     // isEditor promise the Calendar makes with `x-show="canCreate"` is no
     // longer the whole page's — it is this footer's, stated here so a later
     // refactor that lifts the grid out cannot quietly drop it.
-    assert.match(html, /class="m-actionbar re-desktop-only" x-show="isEditor && hasRoles"/,
+    assert.match(html, /class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles"/,
         'the drafting footer is offered to people who cannot use it');
     // The room it opens is a wide grid and says so when you arrive. Better not
     // to offer the journey than to end it with a shrug — so the whole action
@@ -7582,4 +7582,40 @@ test('MS-721: Recurring events editor mode matches the rules (calendar.events.ed
     const p = liveSeriesPage({ rank: 'member', account: rolesOnly }).page;
     assert.strictEqual(p.isEditor, false, 'Roles Manager alone cannot write events');
     assert.strictEqual(p.liveSeries, null);
+});
+
+// ── MS-721 lead call: the calendar key alone offers editing ─────────────────
+
+test('MS-721: a Member level holding only calendar.events.edit is offered the Event writes', () => {
+    const Levels = require('../public/account-levels-core.js');
+    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
+    const keyOnly = { permissionLevel: 'member', accountLevelId: 'level_custom_x',
+        permissions: Object.assign({}, member, { 'calendar.events.edit': true }) };
+    const plain = { permissionLevel: 'member', accountLevelId: 'level_custom_y',
+        permissions: Object.assign({}, member) };
+
+    const page = liveDetailsPage({ rank: 'member', account: keyOnly }).page;
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
+    page.series = null;
+    assert.strictEqual(page.editsEvent, true);
+    assert.strictEqual(page.canEditDetails, true);
+    assert.strictEqual(page.canManageAttachments, true);
+    assert.strictEqual(page.canDelete, true);
+    // The roster lanes need the editor READS, so they stay on the ladder; a
+    // printable's member toggle is the printables key's.
+    assert.strictEqual(page.isEditor, false);
+    assert.strictEqual(page.canEditPrintables, false);
+
+    const none = liveDetailsPage({ rank: 'member', account: plain }).page;
+    assert.strictEqual(none.editsEvent, false);
+    assert.strictEqual(none.canEditDetails, false);
+    assert.strictEqual(none.canManageAttachments, false);
+
+    const re = liveSeriesPage({ rank: 'member', account: keyOnly }).page;
+    assert.strictEqual(re.isEditor, true, 'the key is what the rule asks for');
+    assert.ok(re.liveSeries, 'the Details go live for the key holder');
+    assert.strictEqual(re.editorLanes, false, 'the rota and directory need editor reads');
+    assert.strictEqual(re.canEditPrintables, false);
+    const ed = liveSeriesPage({ rank: 'editor' }).page;
+    assert.strictEqual(ed.editorLanes, true);
 });
