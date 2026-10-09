@@ -13,6 +13,8 @@ document.addEventListener('alpine:init', () => {
         ...AccessCore.pageFlags(null),
         currentUser: null,
         currentPermissionLevel: null,
+        // Closed until auth answers; then directory.edit_identity decides.
+        canAddPerson: false,
 
         people: [],
         shepherdingTags: [],
@@ -99,6 +101,9 @@ document.addEventListener('alpine:init', () => {
                 const userData = await getUserData(user.uid);
                 this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
                 Object.assign(this, AccessCore.pageFlags(userData));
+                // Adding a Person is an identity write (people create). The page
+                // asks the permission key the surface stands on (MS-721).
+                this.canAddPerson = AccessCore.hasPermission(userData || this.currentPermissionLevel, 'directory.edit_identity');
                 if (!this.canReadElder) {
                     window.location.href = 'index.html';
                     return;
@@ -118,6 +123,9 @@ document.addEventListener('alpine:init', () => {
                     this.loadTags(),
                     this.loadFilterViews(),
                 ]);
+                // Then keep listening: another elder's tag, view, or new Person
+                // shows up without a reload (ADR 0081 part 4).
+                this.watchLists();
                 // A restored Hold-Duration filter needs its history up front.
                 if (this.anyHoldActive()) await this.loadTagHolds();
                 if (new URLSearchParams(window.location.search).get('panel') === 'tags') {
@@ -127,10 +135,71 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        // ── Live lists (ADR 0081, MS-721) ─────────────────────────────────
+        // The first paint still comes from the one-shot reads above; these
+        // listeners then keep people, tags, and saved views current.
+        stopListWatches: [],
+
+        watchLists() {
+            const Live = window.MosaicLiveRead;
+            if (!Live || !db || typeof db.collection !== 'function') return;
+            this.stopListWatches.forEach(stop => { try { stop(); } catch (e) {} });
+            const quiet = { onError: () => {} };
+            try {
+                this.stopListWatches = [
+                    Live.watch(db.collection('people').orderBy('name', 'asc'), (snap) => {
+                        if (snap && snap.docs) this.people = this.peopleFrom(snap);
+                    }, quiet),
+                    Live.watch(db.collection('people_tags').orderBy('name', 'asc'), (snap) => {
+                        if (!snap || !snap.docs) return;
+                        this.shepherdingTags = this.tagsFrom(snap);
+                        this.adoptTagRename(snap);
+                    }, quiet),
+                    Live.watch(db.collection('shepherding_views').orderBy('title', 'asc'), (snap) => {
+                        if (snap && snap.docs) this.filterViews = this.viewsFrom(snap);
+                    }, quiet),
+                ];
+            } catch (e) {
+                console.warn('Live People lists unavailable; the page stays as loaded.', e);
+            }
+        },
+
+        // The tag being renamed: an untouched name takes the stored one; a
+        // name being typed is left alone (LiveFields remote adoption).
+        adoptTagRename(snap) {
+            if (!this.tagLive || !this.editingTagId) return;
+            const doc = snap.docs.find(d => d.id === this.editingTagId);
+            if (!doc) return;
+            const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+            this.tagLive.remote({ name: doc.data().name || doc.id }, { pendingWrites: pending });
+            const st = this.tagLive.state;
+            if (st && st.draft && !st.dirty.length) this.editingTagName = st.draft.name;
+        },
+
+        peopleFrom(snap) {
+            return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        },
+
+        tagsFrom(snap) {
+            return snap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                hiddenFromOthers: doc.data().hiddenFromOthers || false,
+                hidePeople: doc.data().hidePeople || false,
+                // Projected tags are code-defined (ADR-0012, ADR-0013). The
+                // panel locks rename, merge, delete, and hide on them.
+                locked: ShepherdingCore.isProjectedTagId(doc.id),
+            }));
+        },
+
+        viewsFrom(snap) {
+            return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        },
+
         async loadPeople() {
             try {
                 const peopleSnap = await db.collection('people').orderBy('name', 'asc').get();
-                this.people = peopleSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.people = this.peopleFrom(peopleSnap);
             } catch (e) {
                 console.error('Error loading people:', e);
                 this.showToast('Error loading people', 'error');

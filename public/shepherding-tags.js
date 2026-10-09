@@ -65,37 +65,100 @@ window.TagManager = () => ({
         startRenameTag(tag) {
             if (!this.canDecide) return;
             if (this.rejectIfMembershipTag(tag.id)) return;
+            this.stopLiveTag();
             this.editingTagId = tag.id;
             this.editingTagName = tag.name;
             this.mergingTagId = null;
+            this.startLiveTag(tag);
         },
 
+        // A tag name saves itself (ADR 0081, MS-721): typing waits 1.5 s,
+        // Enter or leaving the box saves now, Escape puts back what is stored.
+        // A dense list keeps click-to-edit, so the pencil still opens the box.
+        tagLive: null,
+        tagChip: 'saved',
+        tagFault: '',
+
+        tagChipLabel() {
+            return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.tagChip) : '';
+        },
+
+        tagNameFault(id, value) {
+            const name = String(value == null ? '' : value).trim();
+            if (!name) return 'A tag needs a name';
+            if (this.shepherdingTags.find(t => t.id !== id && t.name.toLowerCase() === name.toLowerCase())) {
+                return 'A tag with that name already exists';
+            }
+            return '';
+        },
+
+        startLiveTag(tag) {
+            this.tagChip = 'saved';
+            this.tagFault = '';
+            if (typeof LiveFields === 'undefined') return;
+            const id = tag.id;
+            this.tagLive = LiveFields.create({
+                fields: ['name'],
+                initial: { name: tag.name },
+                validate: (draft) => {
+                    const fault = this.tagNameFault(id, draft.name);
+                    return fault ? { name: fault } : null;
+                },
+                save: async (patch) => {
+                    const name = String(patch.name).trim();
+                    try {
+                        await db.collection('people_tags').doc(id).update({ name });
+                    } catch (e) {
+                        console.error('Error renaming tag:', e);
+                        this.showToast('Error renaming tag', 'error');
+                        throw e;
+                    }
+                    this.shepherdingTags = this.shepherdingTags
+                        .map(t => t.id === id ? { ...t, name } : t)
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    return { name };
+                },
+                onChange: (state) => {
+                    if (this.editingTagId !== id) return;
+                    this.tagChip = state.status;
+                    this.tagFault = (state.invalid && state.invalid.name) || '';
+                },
+            });
+        },
+
+        editTagName(value) {
+            this.editingTagName = value;
+            if (this.tagLive) this.tagLive.edit('name', value);
+        },
+
+        stopLiveTag() {
+            if (this.tagLive) this.tagLive.dispose();
+            this.tagLive = null;
+            this.tagChip = 'saved';
+            this.tagFault = '';
+        },
+
+        // Escape: whatever has not saved goes back to the stored name.
         cancelRenameTag() {
+            if (this.tagLive) this.tagLive.revert('name');
+            this.stopLiveTag();
             this.editingTagId = null;
             this.editingTagName = '';
         },
 
+        // Enter or blur. Saves now; the box closes once the name is stored.
+        // A name that fails its check stays open and says why.
         async renameTag(id) {
             if (!this.canDecide) { this.cancelRenameTag(); return; }
             if (this.rejectIfMembershipTag(id)) { this.cancelRenameTag(); return; }
-            const name = this.editingTagName.trim();
-            const tag = this.shepherdingTags.find(t => t.id === id);
-            if (!tag) { this.cancelRenameTag(); return; }
-            if (!name || name === tag.name) { this.cancelRenameTag(); return; }
-            if (this.shepherdingTags.find(t => t.id !== id && t.name.toLowerCase() === name.toLowerCase())) {
-                this.showToast('A tag with that name already exists', 'error');
-                return;
-            }
-            try {
-                await db.collection('people_tags').doc(id).update({ name });
-                this.shepherdingTags = this.shepherdingTags
-                    .map(t => t.id === id ? { ...t, name } : t)
-                    .sort((a, b) => a.name.localeCompare(b.name));
-                this.cancelRenameTag();
-                this.showToast(`Tag renamed to "${name}"`);
-            } catch (e) {
-                console.error('Error renaming tag:', e);
-                this.showToast('Error renaming tag', 'error');
+            if (this.editingTagId !== id) return;
+            if (!this.tagLive) { this.cancelRenameTag(); return; }
+            this.tagLive.edit('name', this.editingTagName);
+            const ok = await this.tagLive.flush();
+            if (ok && this.editingTagId === id && this.tagLive && !this.tagLive.dirtyFields().length) {
+                this.stopLiveTag();
+                this.editingTagId = null;
+                this.editingTagName = '';
             }
         },
 
