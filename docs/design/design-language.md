@@ -201,25 +201,40 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 **Print folio** (editor File menu, view-only header) lays two pages on one landscape sheet, the same saddle-stitch order as the service guide editor. The sheet class is `.pr-folio-sheet`; each page sits in a `.pr-folio-leaf` at the page's own inch size. A half-letter page therefore prints at letter landscape. The label is **Print folio** (with `…` inside the editor's File menu, where the other print item already uses it). Flat **Print** stays the one-page-per-sheet path. On a Sunday booklet the view page says which button folds on the copier and which one is already paired.
 
-## Printable editor — scalar inserts (MS-689)
+## Printable editor — the data drawer (MS-730)
 
-The data drawer opens on two jobs. **Repeat a box** (`.pe-drawer__cta`, heading “Repeat a box”) is always there until a box is already repeating. A selected box gets **Make this element iterated**. Quick lists — Announcements, Hymn pages, Order of service, Kids questions, Sundays — call the same path and open the **Query** builder on that list. **All lists…** opens the builder with every iterable list. A text or a picture tells you to select the box around it; the query builder stays shut until that box repeats.
+The data drawer has three parts, in this order, under **Wired to this element** and above **Not all data could be pulled**. Every catalog source has exactly one home among them (`PrintableEditorWires.drawerPartOf`): a source the catalog marks `scalar` is General live data, one it marks `blank` is the Fill-in library, and everything else is the query builder. A source never appears in two parts, and no part is a second way to reach another part's data.
 
-**This Sunday** (`.pe-sunday`) sits above the single-value cards. Chips are grouped **Service**, **Hymns**, and **Booklet text**. Drag a chip onto a text. A hymn name is the hymn slot (Second hymn, Closing hymn). Booklet text is one list of the Sunday booklet fields. It does not split into a heading per pamphlet. Scripture citations are not in this card.
+**Query builder** (`.pe-query`) is the drawer's main job and never folds. One `.m-dropdown` (`.pe-query__pick`) lists every source this viewer may read, single and list together, grouped by region (People, Sunday, Events, Forms). Each option carries an `.m-badge.m-badge--neutral` reading **List** or **One**. **Find data…** filters the menu. Below the pick: the source's blurb, the filters this viewer may use, then what it reads today — `.pe-query__count` (“3 rows today”), up to eight names in `.pe-query__preview`, and what it could not read in `.pe-query__notes`. The fields to drag come last.
 
-Below that, **single values** use stacked **`.pe-typecard`** cards (Variant C): **Scripture references**, **Filled on the event**, then **Date, page, and files**. Scripture and the date group are **`.pe-fold`** (`<details>`), shut until opened, so they do not fill the drawer. Each open card configures inline (segmented mode controls, compact `.pe-in` fields) and ends with **`.pe-typecard__foot`**: a live preview (`.pe-typecard__live`) and one draggable **`.pe-chip`**. Divider copy is **`.pe-scalars-divider`** (“Single values”). Brand assets upload only — no pre-seeded church constants; list rows use **`.pe-asset-row`**. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
+One `.pe-hint` under the heading says whose query it is:
 
-**Scripture references** lists this Sunday's citations (key verse, calls, reading, sermon, benediction). Each row is **`.pe-scripture-row`** with the live reference and two chips: **Reference** (the citation) and **Words** (the verses, styled, citation line on, short copyright on). Plain text, verse numbers, and copyright off stay on the element panel after the wire lands.
+- **Nothing selected, or a text or picture selected** — “Anything the site keeps that you may read. A field you drag onto the page carries the settings below.” The pick is the drawer's. Changing it changes what the next chip carries, never a wire already drawn.
+- **A repeating box** — “This box repeats over the list below. Its filters are saved on the box.” The query *is* the box's Repeat. Picking another list re-points it.
+- **Inside an iterated card** — “Inside *Card*. Drag a field of one row onto an element inside it.” The chips are fields of one row.
 
-**Filled on the event** is a blank the occurrence supplies. Add **Text**, **Image**, **Number**, **Date**, or **List**. A scalar chip drags onto an element. A list iterates the selected box; its columns are **`.pe-event-col`** chips dragged inside that box. The names live on the printable. The values live on the occurrence for that date.
+A list with a box selected that does not repeat offers one button, **Iterate the selected box over this** (`.pe-src__iter`). An unbound box inside an iterated card puts the card's related lists first in the menu (“Of this household”) and the button reads **Make this a sub-iteration**. A list with no box selected says how to get one. A query the viewer may not rebuild is locked with one sentence, and its rows still draw.
 
-**Wired to this element** (`.pe-drawer__section--wired`) sits at the top of the data drawer whenever the selection is bound. The connector lands on that chip (`.pe-chip--land`). A hymn name, a Sunday date, or a country map whose catalog card is hidden still has a chip here, so the line stays in the drawer.
+**A Sunday** in the builder shows its chips in `.pe-sun__group`s: **Service**, **Hymns**, **Scripture**. Names follow the liturgy order that Sunday uses, not the seed's names. Scripture rows are `.pe-scripture-row`, each with the live citation and two chips: **Reference** (the citation) and **Words** (the verses, styled, citation line on, short copyright on). Scripture appears only here. It is part of what a Sunday holds, so it is not a separate card, not a fill-in, and not a page insert. Plain text, verse numbers, and copyright off stay on the element panel after the wire lands.
+
+**Fill-in library** (`details.pe-part.pe-part--fill`, open) holds the values a person supplies, summarised **Blanks a person types**:
+
+- **Filled on the event** is a blank the occurrence supplies. Add **Text**, **Image**, **Number**, **Date**, or **List** (editors only). A scalar chip drags onto an element. A list iterates the selected box, and its columns are `.pe-event-col` chips dragged inside that box. The names live on the printable. The values live on the occurrence for that date.
+- **Sunday booklet text** (`.pe-booklet`) has **Which Sunday** (Last, This, Next, or a date), one chip per booklet field showing that Sunday's words, and, for editors, a `.pe-fold` **Type the text for *date*** that saves onto that Sunday. The announcements and kids questions as one-per-row lists are in the query builder, and the card says so.
+
+**General live data** (`details.pe-part.pe-part--general`, shut) is summarised **Date · page number · brand files**. Its **Date**, **Page number**, and **Brand assets** cards belong to the page, not to a source.
+
+The cards in both folds are `.pe-typecard`s. Each configures inline (segmented mode controls, compact `.pe-in` fields) and ends with `.pe-typecard__foot`: a live preview (`.pe-typecard__live`) and one draggable `.pe-chip`. Brand assets are upload only, with no pre-seeded church constants, and list rows use `.pe-asset-row`. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
+
+A secondary part of a side panel is a `<details>` whose `<summary>` is the part's heading (`.pe-part__head`), with a one-line digest of what is inside right-aligned (`.pe-part__sum`). The panel's main job is never inside a fold. A picker that mixes one-value and many-row sources marks each option **List** or **One** with `.m-badge--neutral`; it does not split into two pickers.
+
+**Wired to this element** (`.pe-drawer__section--wired`) sits at the top of the data drawer whenever the selection is bound. The connector lands on that chip (`.pe-chip--land`), and dragging it again carries the wire's own settings, not the drawer's current pick. A hymn name, a Sunday date, or a country map that is not showing in the parts below still has a chip here, so the line stays in the drawer.
 
 ## View date
 
 The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The view-only page names the same date in the header. **Send snapshot to…** stays in the File menu, next to Print.
 
-On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, citation-line, and copyright-line checks. The same Reference and Words chips live on the **Scripture references** card in the data drawer.
+On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, citation-line, and copyright-line checks. The same Reference and Words chips live in a Sunday's **Scripture** group in the data drawer's query builder.
 
 ## Filled on the event
 

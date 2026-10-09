@@ -15,11 +15,18 @@
 // a **list** (many rows — the directory, the next fortnight's events). A list
 // may be **related** (`of` a parent list): its rows are of one parent row —
 // the children of this household — and the query picker only offers it inside
-// that parent. Every source declares its **fields** (what a row carries, each
+// that parent, under what one row of the parent is called (`row`). Every
+// source declares its **fields** (what a row carries, each
 // with a kind: text,
 // image, date, number), its **params** (what has to be chosen before it can
 // be read — which Sunday, which event, which form) and its **filters**, and
 // the lowest Permission Level that may read it.
+//
+// The drawer's query builder offers every source a level may read, single
+// or list (`querySourcesFor`), except two kinds that are not records the
+// site keeps: a **scalar** insert (the date, the page number) and a
+// **blank** — values a person types, which the drawer's Fill-in library
+// offers with the form they are typed in.
 //
 // ⚠ THE CATALOG IS THE PERMISSION BOUNDARY'S FIRST HALF. Nothing elder-only
 // is a *source* in it at all — not a Shepherding Note, not a Prayer Request,
@@ -394,7 +401,7 @@
             ],
         },
         {
-            key: 'households', region: 'People', label: 'Households', shape: 'list', minLevel: 'member',
+            key: 'households', region: 'People', label: 'Households', shape: 'list', row: 'household', minLevel: 'member',
             blurb: 'One row per household — a family, or a person on their own.',
             fields: [
                 { key: 'name', label: 'Household name', kind: 'text' },
@@ -478,7 +485,7 @@
             ],
         },
         {
-            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', minLevel: 'viewer',
+            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', blank: true, minLevel: 'viewer',
             blurb: 'What an editor types once for this Sunday — country facts for the prayer page, Mosaic Kids lesson, and announcements. Every bound Printable reads the same fields.',
             params: [WHEN_PARAM],
             fields: (typedCore() && typedCore().FIELDS) || [
@@ -549,8 +556,8 @@
             key: 'role_holder', region: 'Events', label: 'Who holds a role', shape: 'single', minLevel: 'editor',
             blurb: 'Who is down for a role on the next date of an event — the person giving the sermonette at the members\' meeting.',
             params: [
-                { key: 'seriesId', label: 'Event', kind: 'series', default: '' },
-                { key: 'roleSlug', label: 'Role', kind: 'role', default: '' },
+                { key: 'seriesId', label: 'Event', kind: 'series', default: '', required: true },
+                { key: 'roleSlug', label: 'Role', kind: 'role', default: '', required: true },
                 { key: 'when', label: 'Which date', kind: 'when-event', default: { mode: 'next' } },
             ],
             fields: [
@@ -563,7 +570,7 @@
         {
             key: 'form_answers', region: 'Forms', label: 'Answers to a form', shape: 'list', minLevel: 'editor',
             blurb: 'One row per answer somebody gave, with a field per question — a sign-up sheet.',
-            params: [{ key: 'formId', label: 'Form', kind: 'form', default: '' }],
+            params: [{ key: 'formId', label: 'Form', kind: 'form', default: '', required: true }],
             fields: [
                 { key: 'personName', label: 'Who answered', kind: 'text' },
                 { key: 'submittedAt', label: 'Answered on', kind: 'date' },
@@ -657,6 +664,27 @@
     function relatedSourcesFor(parentKey, level) {
         if (!parentKey) return [];
         return sourcesFor(level).filter(s => s.shape === 'list' && s.of === parentKey);
+    }
+
+    // Which part of the data drawer a catalog source lives in. Every source
+    // has exactly one home, so a new source lands without drawer markup:
+    // query by default; `blank` → Fill-in library; `scalar` → General live data.
+    function drawerPartOf(source) {
+        const s = typeof source === 'string' ? sourceByKey(source) : source;
+        if (!s) return '';
+        if (s.scalar) return 'general';
+        if (s.blank) return 'fill';
+        return 'query';
+    }
+
+    // What the query builder offers this level: every source it may read,
+    // single or list, related lists first and only inside their parent.
+    // A scalar insert and a blank are not queried — they have no records.
+    function querySourcesFor(level, parentKey) {
+        const all = sourcesFor(level).filter(s => drawerPartOf(s) === 'query');
+        const related = parentKey ? all.filter(s => s.of === parentKey) : [];
+        const top = all.filter(s => !s.of);
+        return related.concat(top);
     }
 
     // The fields a source offers for a given choice of params — most are
@@ -1596,6 +1624,8 @@
         filtersFor,
         listSourcesFor,
         relatedSourcesFor,
+        drawerPartOf,
+        querySourcesFor,
         fieldsFor,
         defaultParams,
         accepts,
