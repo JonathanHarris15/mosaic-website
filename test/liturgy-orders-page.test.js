@@ -61,6 +61,28 @@ test('a failed read does not save the stand-in over the congregation\'s orders',
     assert.equal(saved, false);
 });
 
+test('a chosen index places the kind there even when another element is selected', async () => {
+    const page = await loadedPage();
+    const ids = page.selectedOrder.elementIds.slice();
+    page.selectElement(ids[2]);
+    page.placeKind('hymn', 0);
+    assert.equal(page.selectedOrder.elementIds[0], page.selectedElementId);
+    const el = Core.elementById(page.catalog, page.selectedElementId);
+    assert.equal(el.kind, 'hymn');
+    assert.equal(page.selectedOrder.elementIds[3], ids[2]);
+});
+
+test('a drag-finished click does not insert a second kind', async () => {
+    const page = await loadedPage();
+    const before = page.selectedOrder.elementIds.length;
+    page._suppressKindClick = true;
+    page.placeKindFromTile('other');
+    assert.equal(page.selectedOrder.elementIds.length, before);
+    assert.equal(page._suppressKindClick, false);
+    page.placeKindFromTile('other');
+    assert.equal(page.selectedOrder.elementIds.length, before + 1);
+});
+
 test('insert-after places a new kind after the selected element', async () => {
     const page = await loadedPage();
     const ids = page.selectedOrder.elementIds.slice();

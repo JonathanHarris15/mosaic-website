@@ -97,7 +97,17 @@ test('the Liturgy Orders page uses tabs, a palette, a list, and an inspector', (
     assert.match(html, /class="lo-tabs"/);
     assert.match(html, /selectOrder\(o\.id\)/);
     assert.match(html, /addOrder\(\)/);
-    assert.match(html, /placeKind\(kind\)/);
+    assert.match(html, /id="kind-palette"/);
+    assert.match(html, /:data-kind="kind"/);
+    assert.match(html, /placeKindFromTile\(kind\)/);
+    assert.match(html, /lo-kind-btn__grip/);
+    assert.match(js, /pull: 'clone'/);
+    assert.match(js, /_dropKind/);
+    const desktop = html.slice(html.indexOf('@media (min-width: 1024px)'));
+    const paletteRule = desktop.match(/\.lo-palette \{[^}]+\}/);
+    assert.ok(paletteRule, 'the desktop palette rule is present');
+    assert.match(paletteRule[0], /padding: 16px 12px 20px 16px/);
+    assert.doesNotMatch(paletteRule[0], /20px 0/);
     assert.match(html, /Send prayer requests/);
     assert.match(html, /Add a person/);
     assert.match(html, /Days before the Sunday/);
