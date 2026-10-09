@@ -32,6 +32,14 @@ test('npm run test:emulator exists and points at the emulator suite', () => {
         'the old name is back, and `node --test` will run it as a test again');
 });
 
+test('the emulator suite still covers the MS-725 presence-read door', () => {
+    const reads = read('test/emulator/presence-read.test.js');
+    assert.match(reads, /services\.builder\.edit-only custom level can read presence/,
+        'the presence-read exception is no longer exercised');
+    assert.match(reads, /cannot read shepherding_presence/,
+        'the exception leaking onto the elder collection is no longer caught');
+});
+
 test('the emulator suite still covers both callables’ writes', () => {
     const suite = read('test/emulator/assignment-writes.test.js');
     assert.match(suite, /writes\.answer\(/, 'answering is no longer exercised');

@@ -54,3 +54,32 @@ test('reads never use editsWith (write paths only)', () => {
         }
     }
 });
+
+// MS-725: one read does name a write surface's key, and it is `presence`.
+// Whoever may write a Sunday may read who else is in it — otherwise a level
+// built from Member plus services.builder.edit publishes a claim it can never
+// see, and ADR 0035's one-person-per-box lock fails open for that person.
+// The exception is named here so a second one cannot arrive unannounced.
+const PRESENCE_READ_KEY = 'services.builder.edit';
+
+test('the presence read, and only it, admits the service key', () => {
+    const at = rules.indexOf('match /presence/{uid}');
+    assert.ok(at >= 0, 'the presence block moved');
+    const read = rules.slice(at).match(/allow read:[^;]*;/)[0];
+    assert.match(read,
+        new RegExp(`readsAsEditor\\(\\) \\|\\| hasPermission\\('${PRESENCE_READ_KEY}'\\)`));
+
+    for (const line of rules.split('\n')) {
+        if (!/allow\s+(read|get|list)\b/.test(line)) continue;
+        if (line.includes('readsAsEditor() || hasPermission')) continue;
+        assert.ok(!line.includes(`hasPermission('${PRESENCE_READ_KEY}')`),
+            `a second read grew the service key: ${line.trim()}`);
+    }
+});
+
+test('shepherding_presence stays elders-only', () => {
+    const at = rules.indexOf('match /shepherding_presence/{uid}');
+    assert.ok(at >= 0, 'the shepherding_presence block moved');
+    const read = rules.slice(at).match(/allow read:[^;]*;/)[0];
+    assert.match(read, /allow read: if readsAsElder\(\);/);
+});
