@@ -172,20 +172,18 @@ test('the builder reads today\'s rows for what it is browsing, so chips say what
     assert.match(drawer, /queryResults\.warnings/, 'what the pick cannot read is said under it');
 });
 
-test('a wire lands on a chip that has a box, never on a hidden chip', () => {
+test('a selection wire lands on the query builder box, never a land chip', () => {
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
-    const hidden = { key: 'global|sunday|hymn2', rect: { width: 0, height: 0 } };
-    const shown = { key: 'global|sunday|hymn2', rect: { width: 48, height: 22 } };
-    assert.equal(Wires.firstLaidOutChip([hidden, shown], 'global|sunday|hymn2'), shown);
-    assert.equal(Wires.firstLaidOutChip([hidden], 'global|sunday|hymn2'), null);
     assert.equal(Wires.wireKey({ source: 'sunday', field: 'keyVerse', reading: 'passage' }), 'global|sunday|keyVerse#passage');
     assert.equal(Wires.drawerScrollDelta(
         { top: 100, bottom: 400 },
         { top: 20, bottom: 48 }
-    ) < 0, true, 'a chip above the drawer scrolls up');
+    ) < 0, true, 'a builder above the drawer scrolls up');
+    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'land-chip lookup is gone');
     assert.doesNotMatch(drawer, /Wired to this element/, 'no land-chip strip above the builder');
     assert.doesNotMatch(drawer, /pe-chip--land/);
+    assert.doesNotMatch(js, /connectedChips/);
     assert.match(js, /wireLandsOnQuery/);
     assert.match(js, /querySelector\('\.pe-query'\)/, 'the wire lands on the query builder');
 });

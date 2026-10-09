@@ -111,7 +111,10 @@ test('scripture sits with the Sunday results, and both chips carry the Sunday th
     assert.equal(bind.reading, 'passage');
     assert.ok(bind.passage && typeof bind.passage === 'object', 'the presentation is stored on the wire');
     assert.equal(ed.wireLandsOnQuery(bind), true, 'a Sunday scripture bind lands on the query builder');
-    assert.equal(ed.connectedChips[0].key, 'global|sunday|sermon#passage');
+    assert.equal(
+        require('../public/printable-editor-data.js').PrintableEditorWires.wireKey(bind, ''),
+        'global|sunday|sermon#passage'
+    );
 });
 
 test('a chip browsed with no pick does nothing, and the menu only offers what the viewer may read', () => {
@@ -358,11 +361,12 @@ test('sunday_typed is not offered in the query builder', () => {
     assert.equal(Data.drawerPartOf('sunday_typed'), '');
 });
 
-test('re-dragging a wired chip carries the wire\'s own params, not the builder\'s', () => {
+test('selecting a wired element syncs the query builder to that source', () => {
     const nodes = [text('t', { bind: { text: { scope: 'global', source: 'sunday', params: { when: { mode: 'last' } }, field: 'theme' } } })];
     const { ed } = editor({ nodes: nodes, select: 't' });
-    ed.setQuerySource('sunday');
-    ed.setQueryParam('when', { mode: 'next' });
-    ed.onConnectedChipDragStart(dragEvent(), ed.connectedChips[0]);
-    assert.deepEqual(ed.dragField.params, { when: { mode: 'last' } });
+    ed.setQuerySource('sundays');
+    ed.syncQueryToSelection();
+    assert.equal(ed.querySourceKey, 'sunday');
+    assert.deepEqual(ed.browseParams('sunday').when, { mode: 'last' });
+    assert.equal(ed.wireLandsOnQuery(ed.selectedNode.bind.text), true);
 });

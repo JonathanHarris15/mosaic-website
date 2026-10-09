@@ -12,8 +12,8 @@
 //         typed where it is linked (any event, any printable);
 //       – GENERAL LIVE DATA: the date, the page number, brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
-//     the chip to the cursor and, once bound, from the chip to the element
-//     whenever that element is selected;
+//     the chip to the cursor and, once bound, from the selected element to
+//     the query builder (no line when the bind is a fill-in or page insert);
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
     //     list that overflows keeps real pages, each editable, with live rows;
@@ -224,27 +224,8 @@
         return 'global|' + (b.source || '') + '|' + field;
     }
 
-    // A chip inside a closed catalog section is still in the document, at
-    // no size. A wire to that point runs to the corner of the editor.
-    // The first chip with this key that actually has a box is the one on
-    // screen. When a drawer viewport is passed, a chip that has scrolled
-    // out of that box is skipped — the wire breaks instead of dragging
-    // the drawer back to keep the land chip in view.
-    function firstLaidOutChip(chips, key, viewRect) {
-        const list = chips || [];
-        for (let i = 0; i < list.length; i++) {
-            const chip = list[i];
-            if (!chip || chip.key !== key) continue;
-            const r = chip.rect || {};
-            if ((r.width || 0) <= 0 || (r.height || 0) <= 0) continue;
-            if (viewRect && !rectsOverlap(r, viewRect)) continue;
-            return chip;
-        }
-        return null;
-    }
-
-    // How far to move the drawer so the chip sits inside it. Positive
-    // scrolls down. Zero when the chip is already in view.
+    // How far to move the drawer so the query builder sits inside it.
+    // Positive scrolls down. Zero when the builder is already in view.
     function drawerScrollDelta(bodyRect, chipRect) {
         if (!bodyRect || !chipRect) return 0;
         const pad = 8;
@@ -340,7 +321,6 @@
     const PrintableEditorWires = {
         elementOnCanvas: rectsOverlap,
         wireKey: wireKey,
-        firstLaidOutChip: firstLaidOutChip,
         drawerScrollDelta: drawerScrollDelta,
         drawerPartOf: drawerPartOf,
         groupQuerySources: groupQuerySources,
@@ -1923,78 +1903,6 @@
                     scope: 'global', source: 'sunday', field: ref.key,
                     reading: mode === 'passage' ? 'passage' : '',
                 }, '');
-            },
-
-            // The chips the selection is actually wired to. They sit at the
-            // top of the drawer so the connector has a chip on screen even
-            // when that field's catalog card is hidden.
-            get connectedChips() {
-                const node = this.selectedNode;
-                if (!node || !node.bind) return [];
-                const repeatSource = this.repeatContext && this.repeatContext.repeat
-                    ? this.repeatContext.repeat.source : '';
-                return Object.keys(node.bind).map(prop => {
-                    const b = node.bind[prop];
-                    return {
-                        prop: prop,
-                        key: PrintableEditorWires.wireKey(b, repeatSource),
-                        label: this.connectedChipLabel(b),
-                        kind: this.connectedChipKind(b),
-                        bind: b,
-                    };
-                });
-            },
-
-            connectedChipLabel(b) {
-                if (!b) return '';
-                if (b.scope === 'asset') return 'Brand asset';
-                const liturgy = this.data && this.data.options && this.data.options.liturgy;
-                if (b.source === 'sunday' && Data.isScriptureField && Data.isScriptureField(b.field, liturgy)) {
-                    const fromDrawer = (this.sundayDrawer().scripture || []).find(f => f.key === b.field);
-                    const name = (fromDrawer && fromDrawer.label) || SCRIPTURE_LABELS[b.field] || b.field;
-                    return name + (b.reading === 'passage' ? ' · Words' : ' · Reference');
-                }
-                const src = b.source ? Data.sourceByKey(b.source) : null;
-                const fields = src
-                    ? Data.fieldsFor(src, b.params || {}, this.data && this.data.options)
-                    : [];
-                const field = fields.find(f => f.key === b.field)
-                    || (src && (src.fields || []).find(f => f.key === b.field));
-                if (b.scope === 'item') return (field && field.label) || b.field || 'This row';
-                const sourceLabel = (src && src.label) || b.source || '';
-                const fieldLabel = (field && field.label) || b.field || '';
-                return sourceLabel && fieldLabel ? sourceLabel + ' · ' + fieldLabel : (fieldLabel || sourceLabel);
-            },
-
-            connectedChipKind(b) {
-                if (!b) return 'text';
-                if (b.scope === 'asset') return 'image';
-                if (b.source === 'event_field') {
-                    const input = (this.eventInputs || []).find(i => i.id === b.field);
-                    return (input && input.kind) || 'text';
-                }
-                const src = b.source ? Data.sourceByKey(b.source) : null;
-                const field = src && (src.fields || []).find(f => f.key === b.field);
-                return (field && field.kind) || 'text';
-            },
-
-            onConnectedChipDragStart(e, chip) {
-                const b = chip && chip.bind;
-                if (!b) return;
-                const liturgy = this.data && this.data.options && this.data.options.liturgy;
-                if (b.source === 'sunday' && Data.isScriptureField && Data.isScriptureField(b.field, liturgy)) {
-                    this.onScriptureChipDragStart(e, { key: b.field, label: chip.label }, b.reading === 'passage' ? 'passage' : 'citation', b.params);
-                    return;
-                }
-                if (b.scope === 'asset') return;
-                const repeatSource = this.repeatContext && this.repeatContext.repeat
-                    ? this.repeatContext.repeat.source : '';
-                const source = b.scope === 'item'
-                    ? { key: repeatSource || b.source || '' }
-                    : (Data.sourceByKey(b.source) || { key: b.source });
-                this.onChipDragStart(e, b.scope === 'item' ? 'item' : 'global', source, {
-                    key: b.field, kind: chip.kind || 'text', label: chip.label,
-                }, b.scope === 'item' ? null : (b.params || {}));
             },
 
             // ── Filled on the event ──────────────────────────────────────
