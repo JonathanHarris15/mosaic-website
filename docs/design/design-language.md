@@ -203,7 +203,7 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 ## Printable editor — the data drawer (MS-730)
 
-The data drawer has three parts, in this order, under **Wired to this element** and above **Not all data could be pulled**. Catalog sources go in the query builder by default, or in General live data when marked `scalar`. A source marked `noDrawer` is not offered to author (legacy resolve / typedContent read-through only). The Fill-in library is not a catalog region — it is the printable's own list of blanks. Nothing in the drawer is named for one kind of printable (no Sunday-booklet card). Old `sunday_typed` wires rewrite to event fill-ins (`legacy_*`) on load.
+The data drawer has three parts, in this order, above **Not all data could be pulled**. Catalog sources go in the query builder by default, or in General live data when marked `scalar`. A source marked `noDrawer` is not offered to author (legacy resolve / typedContent read-through only). The Fill-in library is not a catalog region — it is the printable's own list of blanks. Nothing in the drawer is named for one kind of printable (no Sunday-booklet card). Old `sunday_typed` wires rewrite to event fill-ins (`legacy_*`) on load. A selection wire runs from the element to the **Query builder** box when that bind is a query source; fill-ins and page inserts draw no line.
 
 **Query builder** (`.pe-query`) is the drawer's main job and never folds. One `.m-dropdown` (`.pe-query__pick`) lists every source this viewer may read, single and list together, grouped by region (People, Sunday, Events, Forms). Each option carries an `.m-badge.m-badge--neutral` reading **List** or **One**. **Find data…** filters the menu. Below the pick: the source's blurb, the filters this viewer may use, then what it reads today — `.pe-query__count` (“3 rows today”), up to eight names in `.pe-query__preview`, and what it could not read in `.pe-query__notes`. The fields to drag come last.
 
@@ -224,8 +224,6 @@ A list with a box selected that does not repeat offers one button, **Iterate the
 The cards in both folds are `.pe-typecard`s. Each configures inline (segmented mode controls, compact `.pe-in` fields) and ends with `.pe-typecard__foot`: a live preview (`.pe-typecard__live`) and one draggable `.pe-chip`. Brand assets are upload only, with no pre-seeded church constants, and list rows use `.pe-asset-row`. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
 
 A secondary part of a side panel is a `<details>` whose `<summary>` is the part's heading (`.pe-part__head`), with a one-line digest of what is inside right-aligned (`.pe-part__sum`). The panel's main job is never inside a fold. A picker that mixes one-value and many-row sources marks each option **List** or **One** with `.m-badge--neutral`; it does not split into two pickers.
-
-**Wired to this element** (`.pe-drawer__section--wired`) sits at the top of the data drawer whenever the selection is bound. The connector lands on that chip (`.pe-chip--land`), and dragging it again carries the wire's own settings, not the drawer's current pick. A hymn name, a Sunday date, or a country map that is not showing in the parts below still has a chip here, so the line stays in the drawer.
 
 ## View date
 

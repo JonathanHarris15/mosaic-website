@@ -110,7 +110,8 @@ test('scripture sits with the Sunday results, and both chips carry the Sunday th
     const bind = Core.findNode(ed.currentPage, 'verse').bind.text;
     assert.equal(bind.reading, 'passage');
     assert.ok(bind.passage && typeof bind.passage === 'object', 'the presentation is stored on the wire');
-    assert.equal(ed.connectedChips[0].key, 'global|sunday|sermon#passage', 'the wire lands on its own chip');
+    assert.equal(ed.wireLandsOnQuery(bind), true, 'a Sunday scripture bind lands on the query builder');
+    assert.equal(ed.connectedChips[0].key, 'global|sunday|sermon#passage');
 });
 
 test('a chip browsed with no pick does nothing, and the menu only offers what the viewer may read', () => {

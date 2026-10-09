@@ -1543,42 +1543,58 @@
                 return { x: r.left - m.left, y: r.top - m.top + r.height / 2, w: r.width, h: r.height };
             },
 
-            // The chip the wire lands on. A hidden catalog chip has the same
-            // key and no box; the one in "Wired to this element" is on screen
-            // while it still overlaps the drawer body.
-            laidOutChip(key) {
-                const body = document.querySelector('.pe-drawer__body');
-                const view = body ? body.getBoundingClientRect() : null;
-                const nodes = document.querySelectorAll('[data-chip]');
-                const chips = [];
-                for (let i = 0; i < nodes.length; i++) {
-                    const el = nodes[i];
-                    const r = el.getBoundingClientRect();
-                    chips.push({ key: el.getAttribute('data-chip'), rect: r, el: el });
-                }
-                const hit = PrintableEditorWires.firstLaidOutChip(chips, key, view);
-                return hit ? hit.el : null;
+            // A selection wire lands on the query builder when the bind is a
+            // catalog query source. Fill-ins, page inserts, and assets draw
+            // no line — there is no query-builder home for them.
+            wireLandsOnQuery(bind) {
+                if (!bind || bind.scope === 'asset') return false;
+                const source = bind.source || (this.repeatContext && this.repeatContext.repeat && this.repeatContext.repeat.source) || '';
+                if (!source || source === 'event_field' || source === 'event_list') return false;
+                const src = Data.sourceByKey(source);
+                return drawerPartOf(src || source) === 'query';
             },
 
-            scrollChipIntoDrawer(chip) {
+            // When the selection is wired to a query source, show that source
+            // in the builder so the line and the menu agree.
+            syncQueryToSelection() {
+                const node = this.selectedNode;
+                if (!node || !node.bind) return;
+                const prop = Object.keys(node.bind)[0];
+                const b = prop && node.bind[prop];
+                if (!b || !this.wireLandsOnQuery(b)) return;
+                if (b.scope === 'item') {
+                    const repeat = this.repeatContext && this.repeatContext.repeat;
+                    if (repeat && repeat.source) this.setQuerySource(repeat.source);
+                    return;
+                }
+                if (b.source && this.data.query.source !== b.source) {
+                    this.setQuerySource(b.source);
+                }
+                if (b.params && typeof b.params === 'object') {
+                    this.data.params[b.source] = Object.assign({}, this.browseParams(b.source), b.params);
+                }
+            },
+
+            scrollQueryIntoDrawer() {
                 const body = document.querySelector('.pe-drawer__body');
-                if (!body || !chip) return;
+                const query = document.querySelector('.pe-query');
+                if (!body || !query) return;
                 const delta = PrintableEditorWires.drawerScrollDelta(
-                    body.getBoundingClientRect(), chip.getBoundingClientRect()
+                    body.getBoundingClientRect(), query.getBoundingClientRect()
                 );
                 if (delta) body.scrollTop += delta;
             },
 
-            // Pin the chip into the drawer only when the selection changes.
-            // Scroll redraws follow the chip and break the wire when it leaves
-            // the drawer — they must not scroll the drawer back to the chip.
+            // The line runs from the selected element to the query builder.
+            // Pin (scroll the builder into view) only when the selection changes.
             refreshWires(opts) {
                 const wires = [];
                 const main = document.querySelector('.pe-main');
                 const viewport = document.getElementById('pe-viewport');
+                const query = document.querySelector('.pe-query');
                 const node = this.selectedNode;
                 const nodeId = node && node.id;
-                const pinChip = !!(opts && opts.pinChip)
+                const pin = !!(opts && opts.pinChip)
                     || !!(nodeId && nodeId !== this._wirePinnedFor);
                 if (nodeId) this._wirePinnedFor = nodeId;
                 else this._wirePinnedFor = null;
@@ -1586,30 +1602,18 @@
                 const nextKeys = {};
                 const repeatSource = this.repeatContext && this.repeatContext.repeat
                     ? this.repeatContext.repeat.source : '';
-                if (main && node && node.bind && !this.dragWire) {
+                if (pin && node) this.syncQueryToSelection();
+                if (main && node && node.bind && !this.dragWire && query) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
+                        if (!this.wireLandsOnQuery(b)) return;
                         const key = PrintableEditorWires.wireKey(b, repeatSource);
-                        if (pinChip) {
-                            const nodes = document.querySelectorAll('[data-chip]');
-                            const all = [];
-                            for (let i = 0; i < nodes.length; i++) {
-                                const elChip = nodes[i];
-                                all.push({
-                                    key: elChip.getAttribute('data-chip'),
-                                    rect: elChip.getBoundingClientRect(),
-                                    el: elChip,
-                                });
-                            }
-                            const any = PrintableEditorWires.firstLaidOutChip(all, key);
-                            if (any) this.scrollChipIntoDrawer(any.el);
-                        }
-                        const chip = this.laidOutChip(key);
+                        if (pin) this.scrollQueryIntoDrawer();
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
-                        if (!chip || !el) return;
+                        if (!el) return;
                         if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
                         const a = this.pointOf(el);
-                        const c = this.pointOf(chip);
+                        const c = this.pointOf(query);
                         const enter = !prev[key];
                         nextKeys[key] = true;
                         wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });

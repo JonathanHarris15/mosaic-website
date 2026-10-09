@@ -536,23 +536,6 @@
             <div class="pe-drawer__body" :class="data.queryMenuOpen ? 'is-menu-open' : ''">
                 <p class="pe-drawer__error" x-show="data.error" x-text="data.error"></p>
 
-                <section class="pe-drawer__section pe-drawer__section--wired" x-show="connectedChips.length" aria-label="Wired to this element">
-                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">cable</span>Wired to this element</h3>
-                    <p class="pe-hint">The line lands here. This is the field that fills the selection.</p>
-                    <template x-for="chip in connectedChips" :key="chip.prop + '|' + chip.key">
-                        <div class="pe-scripture-row">
-                            <div class="pe-scripture-row__meta">
-                                <strong x-text="chip.label"></strong>
-                            </div>
-                            <span class="pe-chip pe-chip--land" draggable="true" tabindex="0"
-                                  :data-chip="chip.key"
-                                  @dragstart="onConnectedChipDragStart($event, chip)" @dragend="onChipDragEnd()">
-                                <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
-                            </span>
-                        </div>
-                    </template>
-                </section>
-
                 <section class="pe-drawer__section pe-query" aria-label="Query builder" x-effect="ensureQueryPreview()">
                     <h3 class="pe-drawer__title"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Query builder</h3>
                     <template x-if="queryLocked">
@@ -1376,7 +1359,6 @@
             border-radius: var(--radius);
             background: var(--surface);
         }
-        .pe-event-field + .pe-event-field { /* gap from .pe-fill-list */ }
         .pe-event-field > .pe-f:last-of-type { margin-bottom: 0; }
         .pe-event-field .pe-typecard__foot { margin-top: 8px; }
         .pe-event-col { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
