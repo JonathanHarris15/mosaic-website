@@ -29,7 +29,12 @@ function guideEditorV2() {
         _baseline: null,      // JSON of the saved state; drives hasChanges by diff
         _resolveTimer: null,
         _saveTimer: null,
-        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
+        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved' | 'failed'
+        // ADR 0081 / MS-721: the week's guide record is one document. A change
+        // made elsewhere is taken only while this copy has nothing unsaved;
+        // otherwise "Changed elsewhere — reload to see it" with Reload.
+        changedElsewhere: false,
+        _live: null,
         imageNote: '',
 
         service: null,
@@ -123,6 +128,7 @@ function guideEditorV2() {
             this.resolve();
             // A saved week starts clean; a new week is dirty until first save.
             if (savedWeek) this.markBaseline();
+            this.startLive(savedWeek ? guide : null);
             await this.fetchPreviousAnnouncements();
 
             if (this.canEdit) {
@@ -415,8 +421,8 @@ function guideEditorV2() {
         // ── persistence ──────────────────────────────────────────────────────────
         //
         // The guide saves itself 1.5s after you stop typing — the same debounce
-        // the elder documents use. The Save Progress button stays for anyone who
-        // wants the write to happen now rather than in a second and a half.
+        // the elder documents use. MS-721: there is no Save button now; a
+        // failed save says "Not saved" with Retry.
         //
         // The watchers are armed only once bootstrap has finished, so loading a
         // week never writes it back.
@@ -427,33 +433,75 @@ function guideEditorV2() {
 
         scheduleSave() {
             if (!this.canEdit || !this.snapshot) return;
-            this.saveStatus = 'unsaved';
+            // An adopted remote copy re-fires the watchers; it is not an edit.
+            if (this._baseline != null && !this.hasChanges) return;
+            if (this._live) this._live.edited(); else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
 
-        async save(manual = false) {
+        async save() {
             if (!this.canEdit || !this.snapshot) return;
             clearTimeout(this._saveTimer);
             this.saving = true;
-            this.saveStatus = 'saving';
+            const ticket = this._live ? this._live.saving() : 0;
+            if (!this._live) this.saveStatus = 'saving';
             try {
                 const template = this.templates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
                 const record = GuideStore.buildGuideRecord(template, this.snapshot, JSON.parse(JSON.stringify(this.values)));
                 await GuideStore.saveWeekGuide(db, this.date, record);
                 this.markBaseline();
-                this.saveStatus = 'saved';
+                if (this._live) this._live.saved(ticket, { guide: record }); else this.saveStatus = 'saved';
             } catch (e) {
                 console.error('Error saving guide:', e);
-                // A failed autosave must not throw a dialog at somebody who is
-                // still typing — the chip says "Unsaved changes" and the next
-                // keystroke tries again. A save you asked for still speaks up.
-                this.saveStatus = 'unsaved';
-                if (manual) alert('Error saving. Check the console for details.');
+                // No dialog at somebody still typing: the chip says "Not saved"
+                // with Retry, and the next keystroke tries again on its own.
+                if (this._live) this._live.failed(ticket, e); else this.saveStatus = 'failed';
             } finally {
                 this.saving = false;
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ────────────────────────────────────────
+        // The record this page writes (template, snapshot, values) is what is
+        // compared; the order of service is the Builder's and is resolved on
+        // open, as before.
+        guideFingerprint(data) {
+            const g = (data && data.guide) || null;
+            if (!g) return JSON.stringify(null);
+            return JSON.stringify({ t: g.guideTemplateId || null, s: g.snapshot || null, v: g.values || {} });
+        },
+        startLive(guide) {
+            if (typeof DocLive === 'undefined' || this._live) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => self.guideFingerprint(d),
+                onAdopt: (d) => self.adoptGuide(d),
+                onChange: (st) => { self.saveStatus = st.status; self.changedElsewhere = st.changedElsewhere; },
+            });
+            this._live.loaded({ guide: guide || null });
+            // A new week is unsaved until its first save, as before.
+            if (!guide && this.canEdit && this.snapshot) this._live.edited();
+            if (typeof MosaicLiveRead === 'undefined') return;
+            this._unwatch = MosaicLiveRead.watch(db.collection('services').doc(this.date), (snap) => {
+                if (!snap || !snap.exists) return;
+                self._live.remote(snap.data() || {}, { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) });
+            }, { onError: (e) => console.warn('Service guide is not following live changes:', e && e.message) });
+        },
+        adoptGuide(data) {
+            const g = (data && data.guide) || null;
+            if (!GuideStore.isV2Guide(g)) return;
+            clearTimeout(this._saveTimer);
+            this.snapshot = g.snapshot;
+            this.selectedTemplateId = g.guideTemplateId || this.selectedTemplateId;
+            this.values = JSON.parse(JSON.stringify(g.values || {}));
+            this.markBaseline();
+            this.applyPreviewStyles();
+            this.resolve();
+        },
+        reloadGuide() { if (this._live) this._live.reload(); },
+        retrySave() { return this.save(); },
+        get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
         // ── ESV ────────────────────────────────────────────────────────────────
         async getESVPlainText(reference) {

@@ -50,6 +50,8 @@
     <script src="printed-announcement-lines.js"></script>
     <script src="printed-announcement-guide.js"></script>
     <script src="hymn-versions.js"></script>
+    <script src="live-read.js"></script>
+    <script src="doc-live-core.js"></script>
     <script src="service-guide.js"></script>
     <!-- Alpine -->
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
@@ -175,24 +177,22 @@
                     <span class="m-chip-dot m-chip-dot--pulse"></span>
                     <span class="m-btn__label" x-text="visibleElements.length + ' Pages (Limit 16)'"></span>
                 </span>
-                <span x-show="typeof saveStatus !== 'undefined' && saveStatus === 'saving'" x-cloak
-                      class="m-badge m-badge--neutral m-header__chip">
-                    <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-                    <span class="m-btn__label">Saving…</span>
+                <!-- ADR 0081 / MS-721: the guide saves itself; no Save button.
+                     The chip says Saved / Unsaved changes / Saving… / Not saved. -->
+                <span x-show="typeof saveStatus !== 'undefined' && permissionLevel !== 'viewer'" x-cloak
+                      data-live-chip :data-state="saveStatus"
+                      class="m-badge m-header__chip"
+                      :class="saveStatus === 'failed' ? 'm-badge--error' : (saveStatus === 'unsaved' ? 'm-badge--warning' : (saveStatus === 'saving' ? 'm-badge--neutral' : 'm-badge--success'))">
+                    <span class="m-btn__label" x-text="chipText"></span>
                 </span>
-                <span x-show="typeof hasChanges !== 'undefined' && hasChanges && saveStatus !== 'saving'" x-cloak
-                      class="m-badge m-badge--warning m-header__chip">
-                    <span class="m-chip-dot m-chip-dot--pulse"></span>
-                    <span class="m-btn__label">Unsaved</span>
+                <button x-show="saveStatus === 'failed'" x-cloak data-live-retry @click="retrySave()" class="m-btn m-btn--quiet m-btn--sm">
+                    <span class="m-btn__label">Retry</span>
+                </button>
+                <span x-show="changedElsewhere" x-cloak data-changed-elsewhere class="m-badge m-badge--neutral m-header__chip">
+                    <span class="m-btn__label">Changed elsewhere — reload to see it</span>
                 </span>
-                <span x-show="typeof saveStatus !== 'undefined' && saveStatus === 'saved' && !hasChanges && permissionLevel !== 'viewer'" x-cloak
-                      class="m-badge m-badge--success m-header__chip">
-                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                    <span class="m-btn__label">Saved</span>
-                </span>
-                <button x-show="permissionLevel !== 'viewer'" @click="save()" class="m-btn m-btn--primary m-btn--sm">
-                    <span class="material-symbols-outlined">save</span>
-                    <span class="m-btn__label">Save</span>
+                <button x-show="changedElsewhere" x-cloak data-live-reload @click="reloadGuide()" class="m-btn m-btn--quiet m-btn--sm">
+                    <span class="m-btn__label">Reload</span>
                 </button>
                 <button @click="printGuide()" class="m-btn m-btn--secondary m-btn--sm">
                     <span class="material-symbols-outlined">print</span>
@@ -828,9 +828,6 @@
                         </div>
                     </template>
                 </button>
-                <div class="mt-2 text-center">
-                    <button @click="save()" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
-                </div>
             </div>
         </aside>
     </main>
