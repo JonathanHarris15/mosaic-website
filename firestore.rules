@@ -859,12 +859,24 @@ service cloud.firestore {
       return readsAsElder() || (readsAsEditor() && resource.data.sharedWithEditors == true);
     }
 
+    // MS-728: relationship_types is labels and shape — name, kind, priority,
+    // sharedWithEditors — not people. Roles Manager lists shared types to
+    // build serving rules. A custom level whose only editor key is
+    // roles.manager.edit or services.builder.edit can open that page, but
+    // readsAsEditor() refused the list. Edges and group rosters name people
+    // and stay on canReadRelationshipRecord alone.
+    function canReadSharedTypeAsKeyEditor() {
+      return (hasPermission('roles.manager.edit')
+          || hasPermission('services.builder.edit'))
+        && resource.data.sharedWithEditors == true;
+    }
+
     match /relationships/{edgeId} {
       allow read: if canReadRelationshipRecord();
       allow write: if canDecide();
     }
     match /relationship_types/{typeId} {
-      allow read: if canReadRelationshipRecord();
+      allow read: if canReadRelationshipRecord() || canReadSharedTypeAsKeyEditor();
       allow write: if canDecide();
     }
     // A roster names everyone in it, so sharing one Group-kind Type is a larger

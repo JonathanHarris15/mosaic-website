@@ -41,6 +41,11 @@ test('the emulator suite still covers the MS-725 rules doors', () => {
         'the presence-read exception is no longer exercised');
     assert.match(reads, /cannot read shepherding_presence/,
         'the exception leaking onto the elder collection is no longer caught');
+    const types = read('test/emulator/relationship-types-read.test.js');
+    assert.match(types, /roles\.manager\.edit-only custom level can read a shared type/,
+        'the Roles-key type read is no longer exercised');
+    assert.match(types, /neither key-only level can read a shared edge/,
+        'the type-read exception leaking onto people-bearing edges is no longer caught');
 });
 
 test('the emulator suite still covers both callables’ writes', () => {
