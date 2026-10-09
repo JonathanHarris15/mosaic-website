@@ -37,6 +37,11 @@
     <script src="hymn-versions.js"></script>
     <script src="image-intake.js"></script>
     <script src="guide-store.js"></script>
+    <script src="permission-catalog.js"></script>
+    <script src="account-levels-core.js"></script>
+    <script src="access-core.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="service-guide-manager.js"></script>
     <script src="vendor/codemirror/codemirror.min.js"></script>
     <script src="vendor/codemirror/mode/xml/xml.min.js"></script>
@@ -168,7 +173,7 @@
                         <span class="text-sm font-semibold text-gray-100 whitespace-nowrap hidden sm:inline">Service Page Editor</span>
                         <span class="text-gray-600 hidden sm:inline">/</span>
                         <span class="material-symbols-outlined text-[16px] text-secondary" x-text="editingPage && editingPage.emitsPages === 'component' ? 'music_note' : 'description'"></span>
-                        <input x-model="editingPage.name" placeholder="Page name" class="bg-transparent text-sm font-medium text-gray-100 px-1.5 py-0.5 rounded hover:bg-white/5 focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-secondary/60 min-w-0 w-56" />
+                        <input x-model="editingPage.name" placeholder="Page name" @blur="savePage()" @keydown.enter.prevent="savePage()" @keydown.escape="revertLive('page', 'name')" data-live-name="page" class="bg-transparent text-sm font-medium text-gray-100 px-1.5 py-0.5 rounded hover:bg-white/5 focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-secondary/60 min-w-0 w-56" />
                         <span x-show="editingPage && isSeed(editingPage.id)" class="text-[9px] uppercase tracking-wide text-gray-500 border border-gray-700 rounded px-1.5 py-0.5">seeded</span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -176,14 +181,15 @@
                             <span class="material-symbols-outlined text-[15px]" x-text="pageValidation.ok ? 'check_circle' : 'error'"></span>
                             <span x-text="pageValidation.ok ? 'Valid' : (pageValidation.problems.length + ' problem' + (pageValidation.problems.length === 1 ? '' : 's'))"></span>
                         </div>
-                        <button class="px-3 py-1.5 bg-primary text-white rounded-md text-sm font-semibold hover:bg-secondary transition-colors flex items-center gap-1.5" @click="savePage()">
-                            <span class="material-symbols-outlined text-[17px]">save</span> Save
-                        </button>
+                        <button x-show="liveFaults.page.html && !liveFaults.page.name" type="button" class="px-2 py-1 text-xs text-red-300 border border-red-300/40 rounded-md hover:bg-white/5" @click="savePageAnyway()" title="Save even with validation problems">Save anyway</button>
+                        <span x-show="liveFaults.page.name" class="text-xs text-red-300" x-text="liveFaults.page.name" role="alert"></span>
+                        <span data-live-chip="page" class="text-xs whitespace-nowrap" :class="liveChip.page === 'failed' ? 'text-red-300' : 'text-gray-400'" x-text="liveChipText('page')" aria-live="polite"></span>
+                        <button x-show="liveChip.page === 'failed'" data-live-retry="page" type="button" class="px-2 py-1 text-xs text-gray-100 border border-gray-600 rounded-md hover:bg-white/5" @click="live.page && live.page.retry()">Retry</button>
                     </div>
                 </div>
 
                 <!-- body -->
-                <div id="editor-body" class="flex-1 flex min-h-0">
+                <div id="editor-body" class="flex-1 flex min-h-0" @focusout="savePage()">
 
                     <!-- LEFT: editor column -->
                     <div class="flex flex-col min-w-0 min-h-0" :style="'flex:0 0 ' + splitPct + '%'">
@@ -332,13 +338,17 @@
                 <div class="card space-y-3">
                     <div>
                         <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Name</label>
-                        <input type="text" x-model="editingPreset.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                        <input type="text" x-model="editingPreset.name" @blur="savePreset()" @keydown.enter.prevent="savePreset()" @keydown.escape="revertLive('preset', 'name')" data-live-name="preset" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                     </div>
                     <div>
                         <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">CSS</label>
-                        <textarea x-model="editingPreset.css" rows="16" class="code-editor"></textarea>
+                        <textarea x-model="editingPreset.css" @blur="savePreset()" rows="16" class="code-editor"></textarea>
                     </div>
-                    <div class="flex justify-end"><button class="btn-primary text-sm" @click="savePreset()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button></div>
+                    <div class="flex justify-end items-center gap-3">
+                        <span x-show="liveFaultText('preset')" class="text-xs text-error" x-text="liveFaultText('preset')" role="alert"></span>
+                        <span data-live-chip="preset" class="text-xs text-on-surface-variant" :class="liveChip.preset === 'failed' ? 'text-error' : ''" x-text="liveChipText('preset')" aria-live="polite"></span>
+                        <button x-show="liveChip.preset === 'failed'" data-live-retry="preset" type="button" class="btn-ghost text-xs" @click="live.preset && live.preset.retry()">Retry</button>
+                    </div>
                 </div>
             </div>
             </template>
@@ -380,13 +390,17 @@
             <div class="max-w-3xl">
                 <div class="flex justify-between items-center mb-4">
                     <button class="btn-ghost text-xs" @click="closeTemplate()"><span class="material-symbols-outlined text-[16px]">chevron_left</span> Back</button>
-                    <button class="btn-primary text-sm" @click="saveTemplate()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button>
+                    <div class="flex items-center gap-3">
+                        <span x-show="liveFaultText('template')" class="text-xs text-error" x-text="liveFaultText('template')" role="alert"></span>
+                        <span data-live-chip="template" class="text-xs text-on-surface-variant" :class="liveChip.template === 'failed' ? 'text-error' : ''" x-text="liveChipText('template')" aria-live="polite"></span>
+                        <button x-show="liveChip.template === 'failed'" data-live-retry="template" type="button" class="btn-ghost text-xs" @click="live.template && live.template.retry()">Retry</button>
+                    </div>
                 </div>
-                <div class="card space-y-4">
+                <div class="card space-y-4" @focusout="saveTemplate()">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div class="md:col-span-2">
                             <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Name</label>
-                            <input type="text" x-model="editingTemplate.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                            <input type="text" x-model="editingTemplate.name" @keydown.enter.prevent="saveTemplate()" @keydown.escape="revertLive('template', 'name')" data-live-name="template" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                         </div>
                         <div>
                             <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Start numbering on page</label>

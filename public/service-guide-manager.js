@@ -16,6 +16,16 @@
 //
 // Reuses the pure engine for preview/validation; no special-cased rendering.
 
+// The three editors on this page that save themselves (MS-721).
+const LIVE_KINDS = {
+    page: { slot: 'editingPage', list: 'pageTemplates', store: 'pageTemplates', collection: 'page_templates', create: 'savePageTemplate',
+        fields: ['name', 'stylePresetId', 'isFiller', 'emitsPages', 'html', 'css'] },
+    preset: { slot: 'editingPreset', list: 'stylePresets', store: 'stylePresets', collection: 'style_presets', create: 'saveStylePreset',
+        fields: ['name', 'css'] },
+    template: { slot: 'editingTemplate', list: 'guideTemplates', store: 'guideTemplates', collection: 'guide_templates', create: 'saveGuideTemplate',
+        fields: ['name', 'numberStartPage', 'isDefault', 'pages'] },
+};
+
 function guideManager() {
     // CodeMirror instances live OUTSIDE the object Alpine makes reactive. If they
     // were stored as Alpine data, Alpine would wrap them in reactive Proxies, and
@@ -56,7 +66,14 @@ function guideManager() {
         toast: '',
         _uidCounter: 0,
 
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
+        // MS-721: the page asks AccessCore, never a level list. The guide
+        // collections are an editor write door, and the Service Guide is a
+        // Services surface, so the key is services.builder.edit.
+        account: null,
+        get canEdit() {
+            const who = this.account || this.permissionLevel;
+            return AccessCore.writesAsEditor(who) && AccessCore.hasPermission(who, 'services.builder.edit');
+        },
 
         async init() {
             const self = this;
@@ -71,10 +88,18 @@ function guideManager() {
                     if (cm) cm.refresh();
                 }, 150);
             });
+            // A deep watch catches every way a field changes: x-model, the
+            // CodeMirror change handler, the placement rows.
+            if (typeof this.$watch === 'function') {
+                Object.keys(LIVE_KINDS).forEach(kind => {
+                    this.$watch(LIVE_KINDS[kind].slot, () => this.syncLive(kind));
+                });
+            }
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
                 self.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                self.account = userData || null;
                 if (!self.canEdit) { window.location.href = 'service-calendar.html'; return; }
                 self.palette = self.catalog.palette();
                 try {
@@ -194,20 +219,25 @@ function guideManager() {
 
         // ── Page Library ─────────────────────────────────────────────────────────
         newPage() {
+            this.stopLive('page');
             this.editingPage = { name: 'New Page', html: '<div class="h-full"></div>', css: '',
                 stylePresetId: (this.stylePresets[0] && this.stylePresets[0].id) || '', emitsPages: 'single', isFiller: false };
             this.editorTab = 'html';
             this.refreshPagePreview();
             this.openEditorUI();
+            this.startLive('page');
         },
         editPage(pt) {
+            this.stopLive('page');
             this.editingPage = JSON.parse(JSON.stringify(pt));
             if (this.editingPage.emitsPages == null) this.editingPage.emitsPages = 'single';
             this.editorTab = 'html';
             this.refreshPagePreview();
             this.openEditorUI();
+            this.startLive('page');
         },
         closePage() {
+            this.stopLive('page');
             this.editingPage = null;
             this.pagePreviewPages = [];
             // The editor markup is removed from the DOM (x-if) on close, which takes
@@ -484,23 +514,19 @@ function guideManager() {
             this.$nextTick(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = start + snippet.length; this.refreshPagePreview(); });
         },
 
-        async savePage() {
-            if (!this.editingPage.name || !this.editingPage.name.trim()) { alert('Give the page a name.'); return; }
-            this.refreshPagePreview();
-            if (!this.pageValidation.ok && !confirm('This page has validation problems (unknown tags or duplicate field keys). Save anyway?')) return;
-            try {
-                const id = await GuideStore.savePageTemplate(db, this.editingPage, this.catalog);
-                await this.reload();
-                this.editingPage = JSON.parse(JSON.stringify(this.pageTemplate(id)));
-                this.syncEditorsFromState();
-                this.flash('Page saved');
-            } catch (e) { console.error(e); alert('Error saving page. Check the console.'); }
+        // Blur / Retry. The page saves itself; this saves now.
+        async savePage() { return this.flushLive('page'); },
+        // A page with unknown tags or duplicate field keys waits. This is the
+        // old "Save anyway?" answer, given on purpose.
+        async savePageAnyway() {
+            this.pageSaveAnyway = true;
+            return this.flushLive('page');
         },
         async deletePage(pt) {
             if (this.usedByTemplates(pt.id).length) { alert('This page is used by a Service Guide Template; remove it there first.'); return; }
             if (!confirm(`Delete the page "${pt.name}"?`)) return;
+            if (this.editingPage && this.editingPage.id === pt.id) { this.stopLive('page', true); this.closePage(); }
             await GuideStore.deletePageTemplate(db, pt.id);
-            if (this.editingPage && this.editingPage.id === pt.id) this.closePage();
             await this.reload();
             this.flash('Page deleted');
         },
@@ -509,23 +535,15 @@ function guideManager() {
         },
 
         // ── Style Presets ──────────────────────────────────────────────────────
-        newPreset() { this.editingPreset = { name: 'New Style Preset', css: '' }; },
-        editPreset(sp) { this.editingPreset = JSON.parse(JSON.stringify(sp)); },
-        closePreset() { this.editingPreset = null; },
-        async savePreset() {
-            if (!this.editingPreset.name || !this.editingPreset.name.trim()) { alert('Give the preset a name.'); return; }
-            try {
-                const id = await GuideStore.saveStylePreset(db, this.editingPreset);
-                await this.reload();
-                this.editingPreset = JSON.parse(JSON.stringify(this.stylePresets.find(s => s.id === id)));
-                this.flash('Style preset saved');
-            } catch (e) { console.error(e); alert('Error saving preset.'); }
-        },
+        newPreset() { this.stopLive('preset'); this.editingPreset = { name: 'New Style Preset', css: '' }; this.startLive('preset'); },
+        editPreset(sp) { this.stopLive('preset'); this.editingPreset = JSON.parse(JSON.stringify(sp)); this.startLive('preset'); },
+        closePreset() { this.stopLive('preset'); this.editingPreset = null; },
+        async savePreset() { return this.flushLive('preset'); },
         async deletePreset(sp) {
             if (this.pageTemplates.some(pt => pt.stylePresetId === sp.id)) { alert('This preset is inherited by a Page Template; change those first.'); return; }
             if (!confirm(`Delete the style preset "${sp.name}"?`)) return;
+            if (this.editingPreset && this.editingPreset.id === sp.id) { this.stopLive('preset', true); this.closePreset(); }
             await GuideStore.deleteStylePreset(db, sp.id);
-            if (this.editingPreset && this.editingPreset.id === sp.id) this.closePreset();
             await this.reload();
             this.flash('Preset deleted');
         },
@@ -536,15 +554,19 @@ function guideManager() {
         // the moved row. Stripped before save.
         _uid() { return 'row' + (this._uidCounter++); },
         newTemplate() {
+            this.stopLive('template');
             this.editingTemplate = { name: 'New Service Guide Template', targetPageCount: 16, numberStartPage: 2, isDefault: false, pages: [] };
+            this.startLive('template');
         },
         editTemplate(gt) {
             const copy = JSON.parse(JSON.stringify(gt));
             if (copy.numberStartPage == null) copy.numberStartPage = 2; // back-fill legacy templates
             copy.pages = (copy.pages || []).map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: p.params || {}, _uid: this._uid() }));
+            this.stopLive('template');
             this.editingTemplate = copy;
+            this.startLive('template');
         },
-        closeTemplate() { this.editingTemplate = null; },
+        closeTemplate() { this.stopLive('template'); this.editingTemplate = null; },
         addTemplatePage() {
             const first = this.pageTemplates[0];
             this.editingTemplate.pages.push({ pageTemplateId: first ? first.id : '', role: 'normal', params: {}, _uid: this._uid() });
@@ -567,34 +589,19 @@ function guideManager() {
             const pt = this.pageTemplate(pageTemplateId);
             return pt && pt.emitsPages === 'component';
         },
-        async saveTemplate() {
-            const t = this.editingTemplate;
-            if (!t.name || !t.name.trim()) { alert('Give the template a name.'); return; }
-            // Exactly one Filler Page (it absorbs page-count variance to hit the target).
-            if (t.pages.filter(p => p.role === 'filler').length !== 1) { alert('Mark exactly one page as the Filler Page.'); return; }
-            // Never orphan the church default: a default template can't be demoted
-            // without promoting another first (mirrors the delete guard).
+        async saveTemplate() { return this.flushLive('template'); },
+        // What a template's checks say. Exactly one Filler Page; the church
+        // default can't be taken off without promoting another first.
+        templateFaults(t) {
+            const out = {};
+            if (!t) return out;
+            if (!String(t.name || '').trim()) out.name = 'Give the template a name.';
+            if ((t.pages || []).filter(p => p.role === 'filler').length !== 1) out.pages = 'Mark exactly one page as the Filler Page.';
             const prior = this.guideTemplates.find(g => g.id === t.id);
             if (prior && prior.isDefault && !t.isDefault) {
-                alert('A church default is required. Make another template the default before removing it from this one.');
-                return;
+                out.isDefault = 'A church default is required. Make another template the default before removing it from this one.';
             }
-            // Persist a clean copy: strip the client-only _uid from placements.
-            const clean = {
-                id: t.id, name: t.name, isDefault: !!t.isDefault,
-                // Floor only (no longer user-set); the booklet auto-grows in ×4 above it.
-                targetPageCount: Number(t.targetPageCount) > 0 ? Number(t.targetPageCount) : 16,
-                numberStartPage: Number(t.numberStartPage) > 0 ? Number(t.numberStartPage) : 2,
-                pages: t.pages.map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: p.params || {} })),
-            };
-            try {
-                const id = await GuideStore.saveGuideTemplate(db, clean);
-                await this.reload();
-                if (clean.isDefault) await this.makeDefault(id, true);
-                await this.reload();
-                this.editingTemplate = null;
-                this.flash('Template saved');
-            } catch (e) { console.error(e); alert('Error saving template.'); }
+            return out;
         },
         async makeDefault(id, silent) {
             await GuideStore.setDefaultGuideTemplate(db, id, this.guideTemplates);
@@ -604,15 +611,203 @@ function guideManager() {
         async deleteTemplate(gt) {
             if (gt.isDefault) { alert('Set another template as default before deleting this one.'); return; }
             if (!confirm(`Delete the Service Guide Template "${gt.name}"? Past weeks keep their frozen snapshot.`)) return;
+            if (this.editingTemplate && this.editingTemplate.id === gt.id) { this.stopLive('template', true); this.closeTemplate(); }
             await GuideStore.deleteGuideTemplate(db, gt.id);
-            if (this.editingTemplate && this.editingTemplate.id === gt.id) this.closeTemplate();
             await this.reload();
             this.flash('Template deleted');
+        },
+
+        // ── It saves itself (ADR 0081, MS-721) ───────────────────────────────
+        // One LiveFields controller per open editor. Typing waits 1.5 s;
+        // leaving the editor saves now; Escape on a name puts it back. Only the
+        // changed fields are written (GuideStore.patchGuideDoc). A new item is
+        // created on its first save. The open doc is watched, so another
+        // editor's change lands in whatever you have not touched.
+        live: { page: null, preset: null, template: null },
+        liveWatch: { page: null, preset: null, template: null },
+        liveChip: { page: 'saved', preset: 'saved', template: 'saved' },
+        liveError: { page: '', preset: '', template: '' },
+        liveFaults: { page: {}, preset: {}, template: {} },
+        liveSyncing: false,
+        pageSaveAnyway: false,
+
+        liveChipText(kind) {
+            return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.liveChip[kind]) : '';
+        },
+        liveFaultText(kind) {
+            return Object.values(this.liveFaults[kind] || {}).join(' ');
+        },
+
+        liveValues(kind, doc) {
+            const out = {};
+            if (!doc) return out;
+            LIVE_KINDS[kind].fields.forEach(f => {
+                let v = doc[f];
+                if (f === 'pages') v = (v || []).map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: Object.assign({}, p.params || {}) }));
+                if (f === 'numberStartPage') v = Number(v) > 0 ? Number(v) : 2;
+                if (f === 'isFiller' || f === 'isDefault') v = !!v;
+                if (f === 'emitsPages') v = v || 'single';
+                if (v === undefined || v === null) v = '';
+                out[f] = v;
+            });
+            return out;
+        },
+
+        liveFaultsFor(kind, draft) {
+            if (kind === 'template') return this.templateFaults(Object.assign({}, this.editingTemplate, draft));
+            const out = {};
+            if (!String(draft.name || '').trim()) out.name = kind === 'page' ? 'Give the page a name.' : 'Give the preset a name.';
+            if (kind === 'page' && !this.pageSaveAnyway) {
+                const v = GuideEngine.validatePageHtml(draft.html || '', this.catalog);
+                if (!v.ok) out.html = 'This page has validation problems (unknown tags or duplicate field keys).';
+            }
+            return out;
+        },
+
+        startLive(kind) {
+            this.stopLive(kind, true);
+            if (kind === 'page') this.pageSaveAnyway = false;
+            const doc = this[LIVE_KINDS[kind].slot];
+            if (!doc || typeof LiveFields === 'undefined' || !this.canEdit) return;
+            const same = (a, b) => (typeof a === 'string' || typeof b === 'string')
+                ? String(a == null ? '' : a) === String(b == null ? '' : b)
+                : JSON.stringify(a) === JSON.stringify(b);
+            this.live[kind] = LiveFields.create({
+                fields: LIVE_KINDS[kind].fields,
+                initial: this.liveValues(kind, doc),
+                same,
+                validate: (draft) => {
+                    const faults = this.liveFaultsFor(kind, draft);
+                    return Object.keys(faults).length ? faults : null;
+                },
+                save: (patch) => this.saveLive(kind, patch),
+                onChange: (state) => {
+                    this.liveChip[kind] = state.status;
+                    this.liveError[kind] = state.error || '';
+                    this.liveFaults[kind] = state.dirty.length ? (state.invalid || {}) : {};
+                },
+            });
+            this.watchLive(kind);
+        },
+
+        // Put whatever the editor holds into the controller.
+        syncLive(kind) {
+            const live = this.live[kind];
+            const doc = this[LIVE_KINDS[kind].slot];
+            if (!live || !doc || this.liveSyncing) return;
+            const values = this.liveValues(kind, doc);
+            LIVE_KINDS[kind].fields.forEach(f => live.edit(f, values[f]));
+        },
+
+        async flushLive(kind) {
+            const live = this.live[kind];
+            if (!live) return false;
+            this.syncLive(kind);
+            return live.flush();
+        },
+
+        revertLive(kind, field) {
+            const live = this.live[kind];
+            if (!live || !this[LIVE_KINDS[kind].slot]) return;
+            this.syncLive(kind);
+            live.revert(field);
+            this.adoptLive(kind, live.state.draft, [field]);
+        },
+
+        // Write controller values back into the open editor (remote change or
+        // Escape). The placement rows get fresh ids; CodeMirror is told.
+        adoptLive(kind, values, only) {
+            const doc = this[LIVE_KINDS[kind].slot];
+            if (!doc) return;
+            this.liveSyncing = true;
+            let code = false;
+            const now = this.liveValues(kind, doc);
+            (only || LIVE_KINDS[kind].fields).forEach(f => {
+                if (!(f in values)) return;
+                if (JSON.stringify(now[f]) === JSON.stringify(values[f])) return;
+                if (f === 'pages') doc.pages = values.pages.map(p => Object.assign({}, p, { params: Object.assign({}, p.params), _uid: this._uid() }));
+                else doc[f] = values[f];
+                if (kind === 'page' && (f === 'html' || f === 'css')) code = true;
+            });
+            this.liveSyncing = false;
+            if (code) this.syncEditorsFromState();
+            if (kind === 'page') this.refreshPagePreview();
+        },
+
+        async saveLive(kind, patch) {
+            const spec = LIVE_KINDS[kind];
+            const doc = this[spec.slot];
+            const list = this[spec.list];
+            try {
+                if (!doc.id) {
+                    // First save of a new item creates it, whole.
+                    const whole = Object.assign({}, doc, this.liveValues(kind, doc));
+                    if (kind === 'template') whole.targetPageCount = Number(doc.targetPageCount) > 0 ? Number(doc.targetPageCount) : 16;
+                    const id = await GuideStore[spec.create](db, whole, this.catalog);
+                    doc.id = id;
+                    list.push(Object.assign({}, whole, { id }));
+                    list.sort(byName);
+                    this.watchLive(kind);
+                } else {
+                    await GuideStore.patchGuideDoc(db, spec.store, doc.id, patch, this.catalog);
+                    const i = list.findIndex(x => x.id === doc.id);
+                    if (i !== -1) list.splice(i, 1, Object.assign({}, list[i], patch));
+                    if ('name' in patch) list.sort(byName);
+                }
+                if (kind === 'template' && patch.isDefault === true) {
+                    await GuideStore.setDefaultGuideTemplate(db, doc.id, this.guideTemplates);
+                    this.guideTemplates.forEach(g => { g.isDefault = g.id === doc.id; });
+                }
+            } catch (e) {
+                console.error('Error saving ' + kind + ':', e);
+                this.flash('Not saved — Retry when you are back online');
+                throw e;
+            }
+            return patch;
+        },
+
+        watchLive(kind) {
+            const spec = LIVE_KINDS[kind];
+            if (this.liveWatch[kind]) { try { this.liveWatch[kind](); } catch (e) {} }
+            this.liveWatch[kind] = null;
+            const doc = this[spec.slot];
+            const Live = window.MosaicLiveRead;
+            if (!doc || !doc.id || !Live || !db || typeof db.collection !== 'function') return;
+            const id = doc.id;
+            try {
+                this.liveWatch[kind] = Live.watch(db.collection(spec.collection).doc(id), (snap) => {
+                    const live = this.live[kind];
+                    const open = this[spec.slot];
+                    if (!snap || !snap.exists || !live || !open || open.id !== id) return;
+                    const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                    live.remote(this.liveValues(kind, snap.data() || {}), { pendingWrites: pending });
+                    if (pending) return;
+                    const st = live.state;
+                    this.adoptLive(kind, st.draft, spec.fields.filter(f => st.dirty.indexOf(f) === -1));
+                }, { onError: () => {} });
+            } catch (e) { /* stays as opened */ }
+        },
+
+        // Closing saves what is waiting; `drop` throws it away (delete, reset).
+        stopLive(kind, drop) {
+            const live = this.live[kind];
+            if (live && !drop) {
+                this.syncLive(kind);
+                if (live.dirtyFields().length) live.flush();
+            }
+            if (live) live.dispose();
+            this.live[kind] = null;
+            if (this.liveWatch[kind]) { try { this.liveWatch[kind](); } catch (e) {} }
+            this.liveWatch[kind] = null;
+            this.liveChip[kind] = 'saved';
+            this.liveError[kind] = '';
+            this.liveFaults[kind] = {};
         },
 
         // Reset all seeded docs to their shipped definitions (guardrail).
         async resetSeed() {
             if (!confirm('Reset the seeded Style Preset, Page Templates, and the default Service Guide Template to their shipped versions? Your own custom templates are untouched.')) return;
+            Object.keys(LIVE_KINDS).forEach(kind => this.stopLive(kind, true));
             await GuideStore.seedAll(db, this.catalog);
             await this.reload();
             this.closePage(); this.closePreset(); this.closeTemplate();
