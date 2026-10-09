@@ -274,19 +274,20 @@
                 <div class="min-w-0">
 
                     <!-- ─── The type form ─────────────────────────────────── -->
-                    <div x-show="showTypeForm"
+                    <div x-show="showTypeForm" @focusout="editingTypeId && saveTypeNow()"
                          class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-md p-md">
                         <div class="flex items-center justify-between mb-md">
                             <h2 class="font-display text-[20px] font-semibold tracking-[.02em] text-navy-900"
                                 x-text="editingTypeId ? 'Edit Relationship Type' : 'New Relationship Type'"></h2>
                             <button @click="resetTypeForm()"
                                 class="flex items-center gap-[4px] font-sans text-[11px] font-semibold uppercase tracking-[.12em] text-on-surface-variant hover:text-error transition-colors">
-                                <span class="material-symbols-outlined text-[18px]">close</span>Cancel
+                                <span class="material-symbols-outlined text-[18px]">close</span><span x-text="editingTypeId ? 'Close' : 'Cancel'"></span>
                             </button>
                         </div>
 
                         <label class="block font-sans text-[11px] font-semibold uppercase tracking-[.14em] text-on-surface-variant mb-[6px]">Type Name</label>
                         <input type="text" x-model="typeForm.name" placeholder="e.g. Discipleship"
+                               @keydown.escape="revertType('name')" data-live-type-name
                                class="w-full bg-surface border border-outline-variant rounded-md px-sm py-[10px] font-sans text-[15px] font-semibold text-navy-900 focus:outline-none focus:border-steel focus:ring-2 focus:ring-steel/20" />
 
                         <!-- kind × priority: two segmented controls. This 2×2 is the
@@ -412,7 +413,7 @@
                              rules like "no married couple in Kids" can work. -->
                         <div class="mt-md border border-outline-variant rounded-lg p-sm">
                             <label class="flex items-start gap-[10px] cursor-pointer">
-                                <input type="checkbox" x-model="typeForm.sharedWithEditors"
+                                <input type="checkbox" :checked="typeForm.sharedWithEditors" @change="if (!setTypeSharing($event.target.checked)) $event.target.checked = false"
                                     class="mt-[3px] h-[16px] w-[16px] accent-ocean shrink-0">
                                 <span>
                                     <span class="block font-sans text-[13px] font-semibold text-navy-900">Share this type with editors</span>
@@ -431,11 +432,17 @@
                             </p>
                         </div>
 
+                        <div x-show="editingTypeId" class="flex items-center justify-end gap-sm mt-md" data-live-type>
+                            <span x-show="typeFault" class="font-sans text-[12px] text-error mr-auto" x-text="typeFault" role="alert"></span>
+                            <span data-live-chip class="font-sans text-[11px] font-semibold uppercase tracking-[.12em]" :class="typeChip === 'failed' ? 'text-error' : 'text-on-surface-variant'" x-text="typeChipText" aria-live="polite"></span>
+                            <button x-show="typeChip === 'failed'" data-live-retry type="button" @click="typeLive && typeLive.retry()"
+                                class="font-sans text-[11px] font-semibold uppercase tracking-[.12em] text-ocean underline">Retry</button>
+                        </div>
                         <div class="flex gap-[10px] mt-md">
                             <button @click="saveType()"
                                 class="flex-1 bg-primary text-on-primary rounded-md py-sm font-sans text-[12px] font-semibold uppercase tracking-[.12em] shadow-xs hover:bg-primary/90 active:scale-[.99] transition-all"
-                                x-text="editingTypeId ? 'Save changes' : 'Create type'"></button>
-                            <button @click="resetTypeForm()"
+                                x-text="editingTypeId ? 'Done' : 'Create type'"></button>
+                            <button x-show="!editingTypeId" @click="resetTypeForm()"
                                 class="border border-ocean text-ocean rounded-md px-md py-sm font-sans text-[12px] font-semibold uppercase tracking-[.12em] hover:bg-ocean/5 transition-colors">Cancel</button>
                         </div>
                     </div>
@@ -712,6 +719,8 @@
     <script src="access-core.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="shepherding-relationships.js"></script>
     <script src="shepherding-families.js"></script>
     <script src="relations-viewer.js"></script>

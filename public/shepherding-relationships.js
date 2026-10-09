@@ -259,6 +259,7 @@ window.RelationshipsTab = () => ({
     // ── Relationship Types ────────────────────────────────────────────────────
 
     resetTypeForm() {
+        this.stopLiveType();
         this.typeForm = {
             name: '', kind: 'pairwise', priority: false,
             holderLabel: '', counterpartLabel: '',
@@ -333,6 +334,7 @@ window.RelationshipsTab = () => ({
         };
         this.editingTypeId = type.id;
         this.showTypeForm = true;
+        this.startLiveType(type);
     },
 
     async saveType() {
@@ -344,6 +346,14 @@ window.RelationshipsTab = () => ({
             : RelationshipCore.validateType(this.typeForm);
         if (!check.valid) {
             this.showToast(check.errors[0], 'error');
+            return;
+        }
+        // Editing saves itself (MS-721); the button is "Done": save what is
+        // waiting now, and close once it is stored.
+        if (existing && this.typeLive) {
+            this.syncLiveType();
+            const ok = await this.typeLive.flush();
+            if (ok && this.typeLive && !this.typeLive.dirtyFields().length) this.resetTypeForm();
             return;
         }
         // Store only the label fields this shape uses, so a Prioritized type edited
@@ -377,10 +387,162 @@ window.RelationshipsTab = () => ({
         }
     },
 
+    // ── An existing Type saves itself (ADR 0081, MS-721) ─────────────────
+    // A new Type is still created on purpose ("Create type": its kind is fixed
+    // from then on). Editing one autosaves: typing waits 1.5 s, leaving a box
+    // saves now, Escape on the name puts it back. Only what changed is
+    // written; a label the shape no longer uses is deleted, as canonicalType
+    // drops it. Changing who it is shared with re-projects its edges.
+    typeLive: null,
+    stopTypeWatch: null,
+    typeChip: 'saved',
+    typeFault: '',
+    typeSyncing: false,
+    typeWatchSet: false,
+
+    get typeChipText() {
+        return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.typeChip) : '';
+    },
+
+    typeLiveValues(def) {
+        const d = def || {};
+        return {
+            name: d.name || '', priority: !!d.priority,
+            holderLabel: d.holderLabel || '', counterpartLabel: d.counterpartLabel || '',
+            leaderLabel: d.leaderLabel || '', memberLabel: d.memberLabel || '',
+            label: d.label || '',
+            sharedWithEditors: RelationshipCore.isSharedWithEditors(d),
+        };
+    },
+
+    startLiveType(type) {
+        this.stopLiveType(true);
+        if (typeof LiveFields === 'undefined' || !this.canDecide) return;
+        const id = type.id;
+        if (!this.typeWatchSet && typeof this.$watch === 'function') {
+            this.typeWatchSet = true;
+            this.$watch('typeForm', () => this.syncLiveType());
+        }
+        this.typeLive = LiveFields.create({
+            fields: Object.keys(this.typeLiveValues({})),
+            initial: this.typeLiveValues(type),
+            same: (a, b) => (typeof a === 'boolean' || typeof b === 'boolean')
+                ? !!a === !!b
+                : String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim(),
+            validate: (draft) => {
+                const existing = this.relTypes.find(t => t.id === id) || type;
+                const check = RelationshipCore.validateEdit(existing, Object.assign({}, existing, draft, { kind: existing.kind }));
+                return check.valid ? null : { form: check.errors[0] };
+            },
+            save: (patch) => this.saveTypePatch(id, patch),
+            onChange: (state) => {
+                if (this.editingTypeId !== id) return;
+                this.typeChip = state.status;
+                this.typeFault = state.dirty.length ? ((state.invalid && state.invalid.form) || '') : '';
+            },
+        });
+        const Live = window.MosaicLiveRead;
+        if (Live && typeof db !== 'undefined' && db && typeof db.collection === 'function') {
+            try {
+                this.stopTypeWatch = Live.watch(db.collection('relationship_types').doc(id), (snap) => {
+                    if (!snap || !snap.exists || !this.typeLive || this.editingTypeId !== id) return;
+                    const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                    this.typeLive.remote(this.typeLiveValues(snap.data() || {}), { pendingWrites: pending });
+                    if (pending) return;
+                    const st = this.typeLive.state;
+                    this.typeSyncing = true;
+                    Object.keys(st.draft).forEach(f => {
+                        if (st.dirty.indexOf(f) === -1 && this.typeForm[f] !== st.draft[f]) this.typeForm[f] = st.draft[f];
+                    });
+                    this.typeSyncing = false;
+                }, { onError: () => {} });
+            } catch (e) { /* stays as opened */ }
+        }
+    },
+
+    // Leaving a box: save now, keep the form open.
+    async saveTypeNow() {
+        if (!this.typeLive) return false;
+        this.syncLiveType();
+        return this.typeLive.flush();
+    },
+
+    syncLiveType() {
+        if (!this.typeLive || this.typeSyncing) return;
+        const values = this.typeLiveValues(this.typeForm);
+        Object.keys(values).forEach(f => this.typeLive.edit(f, values[f]));
+    },
+
+    revertType(field) {
+        if (!this.typeLive) return;
+        this.syncLiveType();
+        this.typeLive.revert(field);
+        this.typeSyncing = true;
+        this.typeForm[field] = this.typeLive.state.draft[field];
+        this.typeSyncing = false;
+    },
+
+    // Sharing a Type outward is the one change that asks first, live or not:
+    // it shows every relationship of the Type to editors.
+    setTypeSharing(on) {
+        if (on && !this.typeForm.sharedWithEditors && this.typeLive
+            && !confirm(`Share every ${this.typeForm.name || 'relationship of this type'} with editors?`)) {
+            this.typeForm.sharedWithEditors = false;
+            return false;
+        }
+        this.typeForm.sharedWithEditors = !!on;
+        return true;
+    },
+
+    async saveTypePatch(id, patch) {
+        const existing = this.relTypes.find(t => t.id === id);
+        if (!existing) throw new Error('Relationship Type ' + id + ' is gone');
+        const doc = RelationshipCore.canonicalType({ ...existing, ...patch, kind: existing.kind });
+        delete doc.id;
+        // Diff against the stored Type read the same way, so a default the
+        // canonical form spells out (sharedWithEditors: false) is not a change.
+        const before = RelationshipCore.canonicalType({ ...existing });
+        const write = {};
+        Object.keys(doc).forEach(k => {
+            if (JSON.stringify(doc[k]) !== JSON.stringify(before[k])) write[k] = doc[k];
+        });
+        Object.keys(existing).forEach(k => {
+            if (k !== 'id' && !(k in doc)) write[k] = firebase.firestore.FieldValue.delete();
+        });
+        try {
+            if (Object.keys(write).length) await db.collection('relationship_types').doc(id).update(write);
+        } catch (e) {
+            console.error('Error saving Relationship Type:', e);
+            this.showToast('Error saving Relationship Type', 'error');
+            throw e;
+        }
+        this.relTypes = this.relTypes
+            .map(t => t.id === id ? { id, ...doc } : t)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        if ('sharedWithEditors' in patch) await this.reprojectSharing({ id, ...doc });
+        return patch;
+    },
+
+    // Closing (Done / Cancel / another Type) saves what is waiting.
+    stopLiveType(drop) {
+        const live = this.typeLive;
+        if (live && !drop) {
+            this.syncLiveType();
+            if (live.dirtyFields().length) live.flush();
+        }
+        if (live) live.dispose();
+        this.typeLive = null;
+        if (this.stopTypeWatch) { try { this.stopTypeWatch(); } catch (e) {} }
+        this.stopTypeWatch = null;
+        this.typeChip = 'saved';
+        this.typeFault = '';
+    },
+
     // Deleting a type in use cascades — so it says how much it will take with it
     // before the elder confirms (ADR-0014 s7).
     async deleteType(type) {
         if (!this.canDecide) return;
+        if (this.editingTypeId === type.id) this.stopLiveType(true);
         const pairs = this.pairsForType(type.id);
         const groups = this.groupsForType(type.id);
         const parts = [];
