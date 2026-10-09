@@ -38,6 +38,29 @@ test('every relationship collection gates reads on the shared-record predicate',
     });
 });
 
+// MS-728: relationship_types is labels and shape, not people. Roles Manager
+// and the Service Guide need those labels. Edges and group rosters stay on
+// the predicate alone.
+test('only relationship_types also admits the Roles and Services keys', () => {
+    assert.match(
+        blockFor('relationship_types'),
+        /canReadSharedTypeAsKeyEditor\(\)/);
+    assert.doesNotMatch(
+        blockFor('relationships'),
+        /canReadSharedTypeAsKeyEditor/);
+    assert.doesNotMatch(
+        blockFor('relationship_groups'),
+        /canReadSharedTypeAsKeyEditor/);
+});
+
+test('the key-editor type read still requires sharedWithEditors == true', () => {
+    const fn = rules.match(/function canReadSharedTypeAsKeyEditor\(\)\s*\{([\s\S]*?)\n    \}/);
+    assert.ok(fn, 'canReadSharedTypeAsKeyEditor() is missing');
+    assert.match(fn[1], /roles\.manager\.edit/);
+    assert.match(fn[1], /services\.builder\.edit/);
+    assert.match(fn[1], /sharedWithEditors == true/);
+});
+
 test('the predicate lets elders through and editors only for shared records', () => {
     const fn = rules.match(/function canReadRelationshipRecord\(\)\s*\{([\s\S]*?)\n    \}/);
     assert.ok(fn, 'canReadRelationshipRecord() is missing');
