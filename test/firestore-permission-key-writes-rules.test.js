@@ -26,9 +26,12 @@ const KEYS = {
     printable_templates: 'printables.edit',
 };
 
-test('editsWith keeps the level names as an OR', () => {
+// MS-725 (ADR 0082): a saved map is the whole answer. The level names are
+// still there, but only behind `!usesPermissionMap()` — put them back as a
+// plain OR and unticking a key in Admin → Accounts stops meaning anything.
+test('editsWith is keys-only once a map has been saved', () => {
     assert.match(rules,
-        /function editsWith\(key\) \{\s*return isEditor\(\) \|\| hasPermission\(key\);\s*\}/);
+        /function editsWith\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isEditor\(\)\);\s*\}/);
 });
 
 test('every editsWith key is a real MS-695 permission key', () => {
@@ -82,4 +85,12 @@ test('shepherding_presence stays elders-only', () => {
     assert.ok(at >= 0, 'the shepherding_presence block moved');
     const read = rules.slice(at).match(/allow read:[^;]*;/)[0];
     assert.match(read, /allow read: if readsAsElder\(\);/);
+});
+
+// The write doors are the only thing editsWith touches, and there are still
+// nineteen of them. A read that quietly started asking a write key would be
+// caught above; this catches a write door being dropped.
+test('the nineteen write doors are all still there', () => {
+    const used = [...rules.matchAll(/editsWith\('([^']+)'\)/g)].map(m => m[1]);
+    assert.equal(used.length, 19);
 });

@@ -290,12 +290,19 @@ function identityMoved(before, after) {
 // member-sync put the string back) would otherwise be shown and gated as a
 // Member. Resolve once, here, so every page sees the rung the assignment
 // actually granted.
+//
+// ⚠ BOTH FIELDS THIS REWRITES ARE FIELDS firestore.rules READS, and a write
+// gate that mirrors a rule needs what the rule sees, not what the page shows
+// (MS-725, ADR 0082). `permissions` becomes the EFFECTIVE map; the rules read
+// the saved one. `permissionLevel` becomes the canonical rung; the rules read
+// the stored string. So the stored pair is carried alongside, untouched.
 function withResolvedLevel(data) {
     const Levels = typeof AccountLevelsCore !== 'undefined' ? AccountLevelsCore : null;
-    if (!data || !Levels || typeof Levels.normalizeAccount !== 'function') return data;
+    if (!data || !Levels || typeof Levels.normalizeAccount !== 'function'
+        || typeof Levels.storedMarkers !== 'function') return data;
     const account = Levels.normalizeAccount(data);
     const permissions = Levels.effectivePermissions(data);
-    return Object.assign({}, data, {
+    return Object.assign({}, data, Levels.storedMarkers(data), {
         permissionLevel: account.permissionLevel,
         role: account.permissionLevel,
         permissions: permissions,

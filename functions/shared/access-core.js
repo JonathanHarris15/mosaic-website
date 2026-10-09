@@ -51,6 +51,32 @@
         pastoral_assistant: ['public', 'member', 'participant', 'editor', 'elder'],
     });
 
+    // MS-725 (ADR 0082): what the STORED users/{uid} document said, which is
+    // all firestore.rules can see. AccountLevelsCore owns both (it owns what a
+    // stored document means); these two are the way in from here.
+    //
+    // ⚠ A SAVED MAP IS NOT THE SAME THING AS `permissions` BEING PRESENT ON
+    // THE OBJECT IN HAND. normalizeAccount() synthesises one from the preset
+    // for a legacy account, and auth.js hands every page the EFFECTIVE map, so
+    // by the time a page asks, a legacy editor looks like they carry one.
+    function savedPermissionMap(value) {
+        return Levels ? Levels.savedPermissionMap(value) : null;
+    }
+
+    function storedPermissionLevel(value) {
+        if (Levels) return Levels.storedPermissionLevel(value);
+        if (!value || typeof value !== 'object') {
+            return typeof value === 'string' ? value : null;
+        }
+        return value.permissionLevel || value.role || null;
+    }
+
+    function storedPastoralAssistant(value) {
+        return storedPermissionLevel(value) === PASTORAL_ASSISTANT_LEVEL
+            || !!(value && typeof value === 'object'
+                && value.pastoralAssistant === true);
+    }
+
     function accountOf(value) {
         if (!Levels) {
             if (!value || typeof value !== 'object') {
@@ -68,6 +94,10 @@
             pastoralAssistant: norm.pastoralAssistant,
             accountLevelId: norm.accountLevelId,
             permissions: norm.permissions,
+            // Carried so pageFlags().account can be handed back to a gate and
+            // still answer the question the rules would answer.
+            savedPermissions: savedPermissionMap(value),
+            storedLevel: storedPermissionLevel(value),
         };
     }
 
@@ -193,26 +223,29 @@
         ].indexOf(level) !== -1;
     }
 
-    function canFixSundayService(value) {
-        if (Levels && accountOf(value).permissions) {
-            return hasPermission(value, 'services.builder.edit');
-        }
-        return legacyWritesAsEditor(permissionLevelOf(value));
+    // MS-725 (ADR 0082): the mirror of firestore.rules editsWith(key), clause
+    // for clause, so a page never offers a control the rules will refuse and
+    // never hides one they would allow. Any new write gate on one of the
+    // nineteen doors goes through here rather than growing its own shape.
+    //
+    // The saved map is the whole answer when there is one. There is no OR on
+    // the level names beside it, and no overlay: not the Pastoral Assistant
+    // grant, not the preset recompute effectivePermissions() does for a
+    // builtin rung. The rules read a raw map and so does this.
+    function writesWith(value, key) {
+        const saved = savedPermissionMap(value);
+        if (saved) return saved[key] === true;
+        return legacyWritesAsEditor(storedPermissionLevel(value))
+            || storedPastoralAssistant(value);
     }
 
-    // MS-720 (ADR 0081): who may change an Event's details. The mirror of
-    // firestore.rules editsWith('calendar.events.edit') on event_occurrences
-    // and events (MS-722): the MS-695 key, OR the editor level names the
-    // rules have always let through. The Editor preset does not carry
-    // calendar.events.edit, so the key alone would lock out every editor.
+    function canFixSundayService(value) {
+        return writesWith(value, 'services.builder.edit');
+    }
+
+    // MS-720 (ADR 0081): who may change an Event's details.
     function canEditEvents(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions
-            && Levels.hasPermission(account, 'calendar.events.edit')) {
-            return true;
-        }
-        return legacyWritesAsEditor(account.permissionLevel)
-            || isPastoralAssistant(value);
+        return writesWith(value, 'calendar.events.edit');
     }
 
     function pageFlags(userData) {
@@ -229,6 +262,7 @@
         };
     }
 
+
     const AccessCore = {
         PASTORAL_ASSISTANT_LEVEL,
         PASTORAL_ASSISTANT_LABEL,
@@ -237,6 +271,8 @@
         VISIBILITY_RUNGS,
         accountOf,
         permissionLevelOf,
+        savedPermissionMap,
+        storedPermissionLevel,
         isPastoralAssistant,
         isAnElder,
         writesAsEditor,
@@ -250,6 +286,7 @@
         hasPermission,
         accessesAdminDashboard,
         canViewDirectory,
+        writesWith,
         canFixSundayService,
         canEditEvents,
         pageFlags,

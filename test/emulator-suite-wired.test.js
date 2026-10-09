@@ -32,7 +32,10 @@ test('npm run test:emulator exists and points at the emulator suite', () => {
         'the old name is back, and `node --test` will run it as a test again');
 });
 
-test('the emulator suite still covers the MS-725 presence-read door', () => {
+test('the emulator suite still covers the MS-725 rules doors', () => {
+    const writes = read('test/emulator/permission-key-writes.test.js');
+    assert.match(writes, /saved map with the key revoked may not, even as editor/,
+        'revoking a key on a saved editor is no longer exercised');
     const reads = read('test/emulator/presence-read.test.js');
     assert.match(reads, /services\.builder\.edit-only custom level can read presence/,
         'the presence-read exception is no longer exercised');

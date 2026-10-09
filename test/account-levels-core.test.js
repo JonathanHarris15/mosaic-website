@@ -33,10 +33,12 @@ test('Pastoral Assistant preset locks count_as_elder and be_assignee off', () =>
     assert.equal(perms['admin.dashboard.access'], false);
 });
 
-test('Editor preset does not grant calendar.events.edit', () => {
+test('Editor preset grants calendar.events.edit (MS-725, Helm option A)', () => {
     const perms = Levels.buildPresetPermissions('editor');
-    assert.equal(perms['calendar.events.edit'], false);
+    assert.equal(perms['calendar.events.edit'], true);
     assert.equal(perms['shep.dashboard.view'], false);
+    const admin = Levels.buildPresetPermissions('admin');
+    assert.equal(admin['calendar.events.edit'], true);
 });
 
 test('legacy pastoralAssistant grant migrates to PA-effective permissions', () => {

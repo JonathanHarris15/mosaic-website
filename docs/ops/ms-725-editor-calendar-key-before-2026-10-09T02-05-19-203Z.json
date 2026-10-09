@@ -1,0 +1,35 @@
+{
+  "ticket": "MS-725",
+  "project": "mosaic-hymn-database",
+  "at": "2026-10-09T02-05-19-203Z",
+  "mode": "BACKFILL",
+  "key": "calendar.events.edit",
+  "field": "permissions.calendar.events.edit",
+  "kind": "before",
+  "accounts": [
+    {
+      "uid": "STGsqGJWUQXcnEf93qgXk2Velzk2",
+      "permissionLevel": "editor",
+      "accountLevelId": "level_editor",
+      "field": "permissions.calendar.events.edit",
+      "before": false,
+      "after": true
+    },
+    {
+      "uid": "eHIGIuwisaPemlnoXoysY8vfCuv1",
+      "permissionLevel": "editor",
+      "accountLevelId": "level_editor",
+      "field": "permissions.calendar.events.edit",
+      "before": false,
+      "after": true
+    },
+    {
+      "uid": "tLzstphouTY8VUEFojSH7JGVeek2",
+      "permissionLevel": "editor",
+      "accountLevelId": "level_editor",
+      "field": "permissions.calendar.events.edit",
+      "before": false,
+      "after": true
+    }
+  ]
+}
