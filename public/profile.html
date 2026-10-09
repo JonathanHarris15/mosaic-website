@@ -368,10 +368,17 @@
                                     <option value="female">Female</option>
                                 </select>
                                 <span id="my-sex-locked" class="hidden text-[10px] text-on-surface-variant italic">Set — contact the office to change.</span>
+                                <!-- Set once, so it asks first and is never on the autosave. -->
+                                <div class="flex items-center gap-2">
+                                    <button type="button" id="my-sex-set" class="m-btn m-btn--secondary m-btn--sm">Set</button>
+                                    <span id="my-sex-status" class="text-[10px]"></span>
+                                </div>
                             </div>
                             <div class="md:col-span-2 flex items-center gap-3">
-                                <button type="submit" class="m-btn m-btn--primary">Save my info</button>
-                                <span id="my-info-status" class="text-[11px] font-body-md"></span>
+                                <!-- Live (ADR 0081): no Save button. The chip says Saved /
+                                     Unsaved changes / Saving… / Not saved, with Retry. -->
+                                <span id="my-info-status" data-live-chip class="text-[11px] font-body-md"></span>
+                                <button type="button" id="my-info-retry" data-live-retry class="hidden m-btn m-btn--quiet m-btn--sm">Retry</button>
                             </div>
                         </form>
                     </div>
@@ -482,6 +489,9 @@
     <script src="notification-open.js"></script>
     <script src="notification-permission.js"></script>
     <script src="mobile/push.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
+    <script src="my-info-live.js"></script>
     <script src="profile.js"></script>
     <script>
         (function () {
