@@ -63,7 +63,6 @@
     const Grid = window.RecurringRosterCore;
     const Dates = window.DateUtils;
 
-    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'];
 
     // How much calendar to compute dates across. Arithmetic, not a read, so it
     // costs nothing — but it is bounded, because "every date this series has
@@ -299,7 +298,16 @@
 
             // ── Who is looking ───────────────────────────────────────────────
 
-            get isEditor() { return EDITOR_RANKS.indexOf(this.rank) !== -1; },
+            // MS-721 (ADR 0081): the page's writes are the Event's — series,
+            // dates and their rosters, all behind editsWith('calendar.events.edit')
+            // in firestore.rules — so editor mode asks AccessCore.canEditEvents
+            // (and the editor ladder, which this page's directory reads need)
+            // rather than a list of level names.
+            get isEditor() {
+                if (!this.rank) return false;
+                const who = this.account || this.rank;
+                return AccessCore.writesAsEditor(who) && AccessCore.canEditEvents(who);
+            },
             get signedOut() { return !this.loading && !this.rank; },
 
             // Signed in, no rank to change anything. Not a refusal — the list is
@@ -1146,6 +1154,86 @@
                     location: s.location || '',
                     description: s.description || '',
                 };
+                this.startLiveSeries();
+            },
+
+            // ── Details are live (MS-721, ADR 0081) ─────────────────────────
+            //
+            // No Save button: typing saves 1.5 s later, blur and Enter at
+            // once, Escape puts back what was stored. The chip says where it
+            // is; a refused save says Not saved with a Retry, and the next
+            // edit retries. Another editor's change lands in any box this
+            // editor is not changing (events/{id} is watched).
+
+            liveSeries: null,
+            stopSeriesWatch: null,
+            seriesChip: 'saved',
+            seriesError: '',
+
+            seriesChipText(status) {
+                return window.LiveFields ? window.LiveFields.chipText(status) : '';
+            },
+
+            startLiveSeries() {
+                if (this.liveSeries) { this.liveSeries.dispose(); this.liveSeries = null; }
+                if (this.stopSeriesWatch) { this.stopSeriesWatch(); this.stopSeriesWatch = null; }
+                this.seriesChip = 'saved';
+                this.seriesError = '';
+                const LF = window.LiveFields;
+                const s = this.chosen;
+                if (!LF || !s || !s.id || !this.isEditor) return;
+                const id = s.id;
+                const fields = this.isSundaySeries
+                    ? ['location', 'description']
+                    : ['name', 'location', 'description'];
+                const initial = {};
+                fields.forEach(f => { initial[f] = this.seriesDraft[f]; });
+                this.liveSeries = LF.create({
+                    fields,
+                    initial,
+                    validate: (d) => (fields.indexOf('name') !== -1 && !String(d.name || '').trim()
+                        ? { name: 'An event needs a name.' } : null),
+                    save: async (patch) => {
+                        const saved = await Store.saveSeriesDetails(db, id, patch);
+                        if (this.chosen && this.chosen.id === id) this.patchSeries(saved);
+                        return saved;
+                    },
+                    onChange: (st) => {
+                        Object.keys(st.draft).forEach(f => {
+                            if (this.seriesDraft[f] !== st.draft[f]) this.seriesDraft[f] = st.draft[f];
+                        });
+                        this.seriesChip = st.status;
+                        this.seriesError = st.error;
+                    },
+                });
+                const Live = window.MosaicLiveRead;
+                if (Live && db && typeof db.collection === 'function') {
+                    try {
+                        this.stopSeriesWatch = Live.watch(db.collection('events').doc(id), (snap) => {
+                            if (!snap || !snap.exists || !this.liveSeries) return;
+                            const data = snap.data() || {};
+                            const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                            this.liveSeries.remote(data, { pendingWrites: pending });
+                            if (!pending && this.chosen && this.chosen.id === id) {
+                                const patch = {};
+                                fields.forEach(f => { if (f in data) patch[f] = data[f]; });
+                                this.patchSeries(patch);
+                            }
+                        }, { onError: (e) => console.warn('Event details are not live:', e) });
+                    } catch (e) {
+                        console.warn('Event details are not live:', e);
+                    }
+                }
+            },
+
+            editSeries(field, value) {
+                this.seriesDraft[field] = value;
+                if (this.liveSeries) this.liveSeries.edit(field, value);
+            },
+
+            revertSeries(field) {
+                if (this.liveSeries) this.liveSeries.revert(field);
+                else this.startSeriesDraft();
             },
 
             get seriesDetailsChanged() {
@@ -1158,6 +1246,8 @@
             get seriesDetailsValid() { return !!String(this.seriesDraft.name || '').trim(); },
 
             async saveSeriesDetails() {
+                // Live: blur, Enter and Retry — save now.
+                if (this.liveSeries) return this.liveSeries.flush();
                 if (!this.seriesDetailsValid || !this.seriesDetailsChanged || this.saving) return;
                 this.saving = true;
                 this.error = '';

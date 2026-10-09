@@ -2066,7 +2066,7 @@ test('the Sunday Service keeps its name and its pattern', () => {
     // Everything else in the app refers to both. Renaming it or moving it off
     // Sundays would break the Service Guide and every Involvement record.
     const html = readPage('recurring-events.html');
-    assert.ok(/x-model="seriesDraft.name"[\s\S]{0,120}:disabled="isSundaySeries"/.test(html),
+    assert.ok(/:value="seriesDraft.name"[\s\S]{0,400}:disabled="isSundaySeries"/.test(html),
         'the Sunday Service can be renamed');
     // Changing the pattern is offered behind `patternEditable`, which is the
     // one place the "not a Sunday" rule is written — a second spelling of it in
@@ -7109,8 +7109,9 @@ test('the browse lane offers nothing that writes', () => {
     const eventTab = html.slice(html.indexOf("tab === 'event'"), html.indexOf("tab === 'who'"));
     const editableFields = eventTab.match(/<div class="re-fields" x-show="isEditor">[\s\S]*?<\/div>\s*<\/div>/);
     assert.ok(editableFields, 'the Event tab\'s editable fields are not behind x-show="isEditor"');
-    ['x-model="seriesDraft.name"', 'x-model="seriesDraft.location"',
-     'x-model="seriesDraft.description"', 'saveSeriesTime(', 'saveSeriesDetails()']
+    // MS-721: the typed fields save themselves (:value + editSeries), no x-model.
+    [':value="seriesDraft.name"', ':value="seriesDraft.location"',
+     ':value="seriesDraft.description"', 'saveSeriesTime(', 'saveSeriesDetails()']
         .forEach(control => {
             assert.ok(editableFields[0].indexOf(control) !== -1,
                 'the Event tab lost its editable ' + control);
@@ -7483,4 +7484,102 @@ test('MS-720: a Roles-only or Files-only host starts no live details (no extra l
         assert.strictEqual(page.liveDetails, null, JSON.stringify(cfg));
         assert.strictEqual(watched, 0, JSON.stringify(cfg));
     }
+});
+
+// ── Recurring events: Details are live (MS-721, ADR 0081) ───────────────────
+
+function liveSeriesPage(opts) {
+    const o = opts || {};
+    const writes = [];
+    let onNext = null;
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async set(data) {
+                    if (o.fail) throw new Error('Missing or insufficient permissions.');
+                    writes.push({ path: name + '/' + id, data: JSON.parse(JSON.stringify(data)) });
+                },
+            }),
+        }),
+    };
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        db: fakeDb,
+        LiveFields: require('../public/live-fields-core.js'),
+        MosaicLiveRead: { watch: (ref, fn) => { onNext = fn; return () => { onNext = null; }; } },
+    });
+    page.rank = o.rank || 'editor';
+    if (o.account) page.account = o.account;
+    page.series = [Object.assign({ id: o.id || 'midweek', name: 'Midweek', location: 'Hall', description: '' })];
+    page.seriesId = o.id || 'midweek';
+    page.startSeriesDraft();
+    return { page, writes, remote: (data, pending) => onNext && onNext({
+        exists: true, data: () => data, metadata: { hasPendingWrites: !!pending } }) };
+}
+
+test('MS-721: the series Details save themselves — no Save button, a chip and Retry', () => {
+    const html = readPage('recurring-events.html');
+    assert.strictEqual(html.indexOf('Save details'), -1);
+    assert.ok(html.indexOf('data-live-chip') !== -1 && html.indexOf('data-live-retry') !== -1);
+    assert.strictEqual(html.indexOf('x-model="seriesDraft.'), -1);
+    ['name', 'location', 'description'].forEach(f => {
+        assert.ok(html.indexOf(`editSeries('${f}', $event.target.value)`) !== -1, f);
+        assert.ok(html.indexOf(`revertSeries('${f}')`) !== -1, f);
+    });
+    assert.ok(html.indexOf('src="live-fields-core.js"') !== -1 && html.indexOf('src="live-read.js"') !== -1);
+});
+
+test('MS-721: a series edit writes only the changed field and the row follows', async () => {
+    const { page, writes } = liveSeriesPage();
+    page.editSeries('location', 'Barn');
+    assert.strictEqual(page.seriesChip, 'unsaved');
+    await page.saveSeriesDetails();
+    assert.deepStrictEqual(writes, [{ path: 'events/midweek', data: { location: 'Barn' } }]);
+    assert.strictEqual(page.seriesChip, 'saved');
+    assert.strictEqual(page.chosen.location, 'Barn');
+});
+
+test('MS-721: a refused series save says Not saved and keeps the typing', async () => {
+    const { page } = liveSeriesPage({ fail: true });
+    page.editSeries('name', 'Midweek Gathering');
+    await page.saveSeriesDetails();
+    assert.strictEqual(page.seriesChip, 'failed');
+    assert.strictEqual(page.seriesDraft.name, 'Midweek Gathering');
+});
+
+test('MS-721: an empty series name does not save; Escape reverts', async () => {
+    const { page, writes } = liveSeriesPage();
+    page.editSeries('name', ' ');
+    await page.saveSeriesDetails();
+    assert.strictEqual(writes.length, 0);
+    page.revertSeries('name');
+    assert.strictEqual(page.seriesDraft.name, 'Midweek');
+    assert.strictEqual(page.seriesChip, 'saved');
+});
+
+test('MS-721: the Sunday Service never sends its name', () => {
+    const { page } = liveSeriesPage({ id: 'sunday_service' });
+    page.editSeries('name', 'Renamed');
+    assert.strictEqual(page.liveSeries.dirtyFields().length, 0);
+});
+
+test('MS-721: another editor\'s series change lands in untouched boxes only', () => {
+    const { page, remote } = liveSeriesPage();
+    page.editSeries('name', 'Mine');
+    remote({ name: 'Theirs', location: 'Barn' });
+    assert.strictEqual(page.seriesDraft.name, 'Mine');
+    assert.strictEqual(page.seriesDraft.location, 'Barn');
+    assert.strictEqual(page.chosen.location, 'Barn');
+});
+
+test('MS-721: Recurring events editor mode matches the rules (calendar.events.edit or editor names)', () => {
+    const Levels = require('../public/account-levels-core.js');
+    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
+    for (const [rank, want] of [['editor', true], ['elder', true], ['pastoral_assistant', true], ['member', false], ['viewer', false]]) {
+        assert.strictEqual(liveSeriesPage({ rank }).page.isEditor, want, rank);
+    }
+    const rolesOnly = { permissionLevel: 'member', permissions: Object.assign({}, member, { 'roles.manager.edit': true }) };
+    const p = liveSeriesPage({ rank: 'member', account: rolesOnly }).page;
+    assert.strictEqual(p.isEditor, false, 'Roles Manager alone cannot write events');
+    assert.strictEqual(p.liveSeries, null);
 });
