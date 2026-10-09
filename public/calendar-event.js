@@ -2498,6 +2498,115 @@
                     location: o.location || '',
                     description: o.description || '',
                 };
+                this.startLiveDetails();
+            },
+
+            // ── Event Details are live (MS-720, ADR 0081) ───────────────────
+            //
+            // The value is the control: no Save button. Typing waits 1.5 s,
+            // blur and Enter save at once, Escape puts back what was stored,
+            // and the chip says Unsaved changes → Saving… → Saved. A failed
+            // save keeps the typing, says Not saved with a Retry, and the
+            // next edit retries on its own. Another editor's change lands in
+            // any box this editor is not changing (the occurrence is watched).
+            // The pure half is live-fields-core.js; this is the wiring.
+
+            liveDetails: null,
+            stopDetailsWatch: null,
+            detailsChip: 'saved',
+            detailsError: '',
+
+            // Who gets the inputs. The page's isEditor is the wider editor
+            // ladder (it also opens editor reads); writing these fields is
+            // what firestore.rules editsWith('calendar.events.edit') allows
+            // (MS-722), so the boxes are offered only where the write lands.
+            get canEditDetails() {
+                return this.isEditor && AccessCore.canEditEvents(this.account || this.rank);
+            },
+
+            detailsChipText(status) {
+                const LF = window.LiveFields;
+                return LF ? LF.chipText(status) : '';
+            },
+
+            startLiveDetails() {
+                if (this.liveDetails) { this.liveDetails.dispose(); this.liveDetails = null; }
+                if (this.stopDetailsWatch) { this.stopDetailsWatch(); this.stopDetailsWatch = null; }
+                this.detailsChip = 'saved';
+                this.detailsError = '';
+                const LF = window.LiveFields;
+                const o = this.occurrence;
+                // A host that draws only Roles or only Files (the Order of
+                // Service) has no details panel to keep live.
+                if (cfg.rolesOnly || cfg.filesOnly) return;
+                if (!LF || !o || !o.id || !this.canEditDetails) return;
+
+                const fields = this.occurrenceOwnFields.slice();
+                const initial = {};
+                fields.forEach(f => { initial[f] = this.occurrenceDraft[f]; });
+                const id = o.id;
+                this.liveDetails = LF.create({
+                    fields,
+                    initial,
+                    validate: (d) => this.detailsProblems(d),
+                    save: async (patch) => {
+                        const saved = await Store.saveOccurrenceDetails(db, id, patch);
+                        if (this.occurrence && this.occurrence.id === id) {
+                            Object.keys(saved).forEach(f => { this.occurrence[f] = saved[f]; });
+                        }
+                        return saved;
+                    },
+                    onChange: (st) => {
+                        Object.keys(st.draft).forEach(f => {
+                            if (this.occurrenceDraft[f] !== st.draft[f]) this.occurrenceDraft[f] = st.draft[f];
+                        });
+                        this.detailsChip = st.status;
+                        this.detailsError = st.error;
+                    },
+                });
+
+                // Live: a series date with no document yet has nothing to
+                // watch until its first save creates one — the listener
+                // simply reports "missing" until then.
+                const Live = window.MosaicLiveRead;
+                if (Live && db && typeof db.collection === 'function') {
+                    try {
+                        const ref = db.collection('event_occurrences').doc(id);
+                        this.stopDetailsWatch = Live.watch(ref, (snap) => {
+                            if (!snap || !snap.exists || !this.liveDetails) return;
+                            const data = snap.data() || {};
+                            const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                            this.liveDetails.remote(data, { pendingWrites: pending });
+                            if (!pending && this.occurrence && this.occurrence.id === id) {
+                                fields.forEach(f => { if (f in data) this.occurrence[f] = data[f]; });
+                            }
+                        }, { onError: (e) => console.warn('Event details are not live:', e) });
+                    } catch (e) {
+                        console.warn('Event details are not live:', e);
+                    }
+                }
+            },
+
+            // The same checks occurrenceDetailsValid makes, per field, so the
+            // box that is wrong can say so.
+            detailsProblems(d) {
+                if (this.isDateOfSeries) return null;
+                const out = {};
+                if (!String(d.name || '').trim()) out.name = 'An event needs a name.';
+                if (!d.date) out.date = 'An event needs a date.';
+                const span = Core.spanError({ date: d.date, endDate: d.endDate });
+                if (span) out.endDate = span;
+                return Object.keys(out).length ? out : null;
+            },
+
+            editDetail(field, value) {
+                this.occurrenceDraft[field] = value;
+                if (this.liveDetails) this.liveDetails.edit(field, value);
+            },
+
+            revertDetail(field) {
+                if (this.liveDetails) this.liveDetails.revert(field);
+                else this.startOccurrenceDraft();
             },
 
             // WHICH FIELDS THIS DATE ACTUALLY OWNS.
@@ -2555,6 +2664,8 @@
             },
 
             async saveOccurrenceDetails() {
+                // Live: this is blur, Enter and Retry — save now.
+                if (this.liveDetails) return this.liveDetails.flush();
                 if (!this.occurrenceDetailsValid || !this.occurrenceDetailsChanged || this.saving) return;
                 this.saving = true;
                 this.error = '';

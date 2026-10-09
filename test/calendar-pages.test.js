@@ -34,7 +34,7 @@ function readPage(htmlFile) {
 
 // ── Loading a page component without a browser ────────────────────────────────
 
-function loadComponent(scriptFile, factoryName, overrides) {
+function loadComponent(scriptFile, factoryName, overrides, config) {
     const sandbox = {
         console: console,
         Promise: Promise,
@@ -94,7 +94,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
 
     assert.strictEqual(typeof sandbox[factoryName], 'function',
         scriptFile + ' does not define window.' + factoryName);
-    return sandbox[factoryName]();
+    return sandbox[factoryName](config);
 }
 
 // Alpine gives every component `$nextTick` and `$refs`; the raw object built
@@ -2182,16 +2182,16 @@ test("the Event's description cannot be edited from one date of it", () => {
 test('one date of a repeating Event has a box of its own', () => {
     const html = readPage('calendar-event.html');
     const flat = html.replace(/\s+/g, ' ');
-    assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') !== -1,
+    assert.ok(flat.indexOf('x-show="canEditDetails && isDateOfSeries"') !== -1,
         'a date of a series still has nowhere to say anything about itself');
     assert.ok(flat.indexOf('Individual description') !== -1);
 
     // It overrides the Event's own words, so it reads directly under them in
     // the main column — not across the page in the side column, which left you
     // holding one sentence in your head while you read the other.
-    assert.ok(flat.indexOf('x-text="eventDescription"') < flat.indexOf('x-show="isEditor && isDateOfSeries"'),
+    assert.ok(flat.indexOf('x-text="eventDescription"') < flat.indexOf('x-show="canEditDetails && isDateOfSeries"'),
         'the box no longer sits under what the Event says');
-    assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') < flat.indexOf('<aside'),
+    assert.ok(flat.indexOf('x-show="canEditDetails && isDateOfSeries"') < flat.indexOf('<aside'),
         'the box drifted back into the side column');
 
     // With those words above it, the help line only said them again.
@@ -7347,4 +7347,140 @@ test('a Files tab that reads cleanly says nothing at all', async () => {
 
     assert.strictEqual(page.filesError, '');
     assert.strictEqual(page.documents.length, 1);
+});
+
+// ── Event Details are live (MS-720, ADR 0081) ────────────────────────────────
+
+function liveDetailsPage(opts) {
+    const o = opts || {};
+    const writes = [];
+    let onNext = null;
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async get() { return { exists: true, id, data: () => ({ date: '2026-09-20' }) }; },
+                async set(data) {
+                    if (o.fail) throw new Error('Missing or insufficient permissions.');
+                    writes.push({ path: name + '/' + id, data });
+                },
+            }),
+        }),
+    };
+    const timers = [];
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+        db: fakeDb,
+        LiveFields: require('../public/live-fields-core.js'),
+        MosaicLiveRead: { watch: (ref, fn) => { onNext = fn; return () => { onNext = null; }; } },
+        setTimeout: (fn) => { timers.push(fn); return timers.length; },
+        clearTimeout: () => {},
+    });
+    page.rank = o.rank || 'editor';
+    if (o.account) page.account = o.account;
+    page.occurrence = Object.assign(
+        { id: 'harvest', seriesId: null, date: '2026-09-20', name: 'Harvest', location: 'Hall' },
+        o.occurrence || {});
+    page.startOccurrenceDraft();
+    return { page, writes, remote: (data, pending) => onNext && onNext({
+        exists: true, data: () => data, metadata: { hasPendingWrites: !!pending },
+    }) };
+}
+
+test('MS-720: the details panel has no Save button — it saves itself, with a chip and Retry', () => {
+    const flat = readPage('calendar-event.html').replace(/\s+/g, ' ');
+    assert.strictEqual(flat.indexOf('>Save details<'), -1, 'the one-off panel still has a Save button');
+    assert.ok(flat.indexOf('x-show="canEditDetails && isOneOff"') !== -1);
+    assert.ok(flat.indexOf('data-live-chip') !== -1);
+    assert.ok(flat.indexOf('data-live-retry') !== -1, 'a failed save has no Retry');
+    assert.ok(flat.indexOf('x-model="occurrenceDraft.') === -1, 'a box still edits a draft that never saves itself');
+    ['name', 'date', 'time', 'endDate', 'location', 'description'].forEach(f => {
+        assert.ok(flat.indexOf(`editDetail('${f}', $event.target.value)`) !== -1, f + ' does not save itself');
+        assert.ok(flat.indexOf(`revertDetail('${f}')`) !== -1, f + ' has no Escape');
+    });
+    const html = readPage('calendar-event.html');
+    assert.ok(html.indexOf('src="live-fields-core.js"') !== -1);
+    assert.ok(html.indexOf('src="live-read.js"') !== -1);
+});
+
+test('MS-720: an edit saves only the changed field, once flushed (blur/Enter)', async () => {
+    const { page, writes } = liveDetailsPage();
+    assert.ok(page.liveDetails, 'an editor got no live controller');
+    page.editDetail('location', 'Barn');
+    assert.strictEqual(page.detailsChip, 'unsaved');
+    await page.saveOccurrenceDetails();
+    assert.deepStrictEqual(writes.map(w => w.path), ['event_occurrences/harvest']);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(writes[0].data)), { location: 'Barn' });
+    assert.strictEqual(page.detailsChip, 'saved');
+    assert.strictEqual(page.occurrence.location, 'Barn');
+});
+
+test('MS-720: a refused save says Not saved and keeps the typing', async () => {
+    const { page } = liveDetailsPage({ fail: true });
+    page.editDetail('name', 'Harvest Supper');
+    await page.saveOccurrenceDetails();
+    assert.strictEqual(page.detailsChip, 'failed');
+    assert.match(page.detailsError, /insufficient permissions/);
+    assert.strictEqual(page.occurrenceDraft.name, 'Harvest Supper');
+});
+
+test('MS-720: an empty name or a backwards span does not save', async () => {
+    const { page, writes } = liveDetailsPage();
+    page.editDetail('name', '  ');
+    await page.saveOccurrenceDetails();
+    page.editDetail('name', 'Harvest');
+    page.editDetail('endDate', '2026-09-01');
+    await page.saveOccurrenceDetails();
+    assert.strictEqual(writes.length, 0);
+    assert.strictEqual(page.detailsChip, 'unsaved');
+});
+
+test('MS-720: Escape puts back what was stored', () => {
+    const { page } = liveDetailsPage();
+    page.editDetail('name', 'Oops');
+    page.revertDetail('name');
+    assert.strictEqual(page.occurrenceDraft.name, 'Harvest');
+    assert.strictEqual(page.detailsChip, 'saved');
+});
+
+test('MS-720: another editor\'s change lands in an untouched box, not in one being typed in', () => {
+    const { page, remote } = liveDetailsPage();
+    page.editDetail('name', 'Mine');
+    remote({ name: 'Theirs', location: 'Barn', date: '2026-09-20' });
+    assert.strictEqual(page.occurrenceDraft.name, 'Mine');
+    assert.strictEqual(page.occurrenceDraft.location, 'Barn');
+    remote({ name: 'Echo', location: 'Echo' }, true);
+    assert.strictEqual(page.occurrenceDraft.location, 'Barn', 'our own echo was adopted');
+});
+
+test('MS-720: the boxes are offered only where firestore.rules let the write land', () => {
+    const Levels = require('../public/account-levels-core.js');
+    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
+    const custom = (key) => ({ permissionLevel: 'member', accountLevelId: 'level_custom_x',
+        permissions: Object.assign({}, member, { [key]: true }) });
+
+    assert.strictEqual(liveDetailsPage({ rank: 'editor' }).page.canEditDetails, true);
+    assert.strictEqual(liveDetailsPage({ rank: 'elder' }).page.canEditDetails, true);
+    assert.strictEqual(liveDetailsPage({ rank: 'member' }).page.canEditDetails, false);
+    assert.strictEqual(liveDetailsPage({ rank: 'viewer' }).page.canEditDetails, false);
+    // Editor ladder on the page, but the rules ask calendar.events.edit or
+    // an editor level name: Roles Manager alone is not enough.
+    const roles = liveDetailsPage({ rank: 'member', account: custom('roles.manager.edit') }).page;
+    assert.strictEqual(roles.canEditDetails, false);
+    assert.strictEqual(roles.liveDetails, null);
+});
+
+test('MS-720: a Roles-only or Files-only host starts no live details (no extra listener)', () => {
+    for (const cfg of [{ rolesOnly: true }, { filesOnly: true }]) {
+        let watched = 0;
+        const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+            LiveFields: require('../public/live-fields-core.js'),
+            MosaicLiveRead: { watch: () => { watched++; return () => {}; } },
+            db: { collection: () => ({ doc: () => ({}) }) },
+        }, cfg);
+        page.rank = 'editor';
+        page.occurrence = { id: 'sunday_service_2026-10-11', seriesId: 'sunday_service', date: '2026-10-11' };
+        page.startOccurrenceDraft();
+        assert.strictEqual(page.liveDetails, null, JSON.stringify(cfg));
+        assert.strictEqual(watched, 0, JSON.stringify(cfg));
+    }
 });

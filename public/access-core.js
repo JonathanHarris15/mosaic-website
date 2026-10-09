@@ -192,6 +192,21 @@
         return legacyWritesAsEditor(permissionLevelOf(value));
     }
 
+    // MS-720 (ADR 0081): who may change an Event's details. The mirror of
+    // firestore.rules editsWith('calendar.events.edit') on event_occurrences
+    // and events (MS-722): the MS-695 key, OR the editor level names the
+    // rules have always let through. The Editor preset does not carry
+    // calendar.events.edit, so the key alone would lock out every editor.
+    function canEditEvents(value) {
+        const account = accountOf(value);
+        if (Levels && account.permissions
+            && Levels.hasPermission(account, 'calendar.events.edit')) {
+            return true;
+        }
+        return legacyWritesAsEditor(account.permissionLevel)
+            || isPastoralAssistant(value);
+    }
+
     function pageFlags(userData) {
         const account = accountOf(userData);
         return {
@@ -228,6 +243,7 @@
         accessesAdminDashboard,
         canViewDirectory,
         canFixSundayService,
+        canEditEvents,
         pageFlags,
     };
 
