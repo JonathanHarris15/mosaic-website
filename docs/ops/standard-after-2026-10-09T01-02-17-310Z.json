@@ -1,0 +1,141 @@
+{
+  "id": "standard",
+  "name": "Standard",
+  "elementIds": [
+    "hymn2",
+    "callToWorship",
+    "hymn6",
+    "hymn7",
+    "prayer",
+    "callToConfession",
+    "prayer2",
+    "assuranceOfPardon",
+    "hymn",
+    "hymn3",
+    "scriptureReading",
+    "prayer3",
+    "sermon",
+    "hymn4",
+    "hymn5",
+    "benediction"
+  ],
+  "elements": [
+    {
+      "id": "hymn2",
+      "kind": "hymn",
+      "name": "Preparatory Hymn",
+      "hasNote": false
+    },
+    {
+      "id": "callToWorship",
+      "kind": "scripture",
+      "name": "Call to Worship",
+      "hasNote": true
+    },
+    {
+      "id": "hymn6",
+      "kind": "hymn",
+      "name": "Hymn of Praise",
+      "hasNote": false
+    },
+    {
+      "id": "hymn7",
+      "kind": "hymn",
+      "name": "Second Hymn of Praise",
+      "hasNote": false
+    },
+    {
+      "id": "prayer",
+      "kind": "prayer",
+      "name": "Prayer of Praise",
+      "hasNote": true
+    },
+    {
+      "id": "callToConfession",
+      "kind": "scripture",
+      "name": "Call to Confession",
+      "hasNote": true
+    },
+    {
+      "id": "prayer2",
+      "kind": "prayer",
+      "name": "Prayer of Confession",
+      "hasNote": true
+    },
+    {
+      "id": "assuranceOfPardon",
+      "kind": "scripture",
+      "name": "Assurance of Pardon",
+      "hasNote": true
+    },
+    {
+      "id": "hymn",
+      "kind": "hymn",
+      "name": "Hymn of Assurance",
+      "hasNote": true
+    },
+    {
+      "id": "hymn3",
+      "kind": "hymn",
+      "name": "Second Hymn of Assurance",
+      "hasNote": true
+    },
+    {
+      "id": "scriptureReading",
+      "kind": "scripture",
+      "name": "Scripture Reading",
+      "hasNote": false
+    },
+    {
+      "id": "prayer3",
+      "kind": "prayer",
+      "name": "Pastoral Prayer",
+      "hasNote": true,
+      "requests": {
+        "people": [
+          {
+            "who": "male"
+          },
+          {
+            "who": "female"
+          }
+        ],
+        "count": 2,
+        "who": "either"
+      },
+      "noticeDays": [
+        5,
+        3,
+        1
+      ]
+    },
+    {
+      "id": "sermon",
+      "kind": "scripture",
+      "name": "Sermon",
+      "hasNote": true
+    },
+    {
+      "id": "hymn4",
+      "kind": "hymn",
+      "name": "Hymn of Response",
+      "hasNote": true
+    },
+    {
+      "id": "hymn5",
+      "kind": "hymn",
+      "name": "Closing Hymn",
+      "hasNote": true
+    },
+    {
+      "id": "benediction",
+      "kind": "scripture",
+      "name": "Benediction",
+      "hasNote": true
+    }
+  ],
+  "updatedAt": {
+    "_seconds": 1791507737,
+    "_nanoseconds": 750000000
+  }
+}
