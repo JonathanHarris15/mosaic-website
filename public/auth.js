@@ -33,9 +33,10 @@ if (window.MosaicLocalCache) {
 
 // Connect to emulators if running locally and emulators are detected
 if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    // You can manually toggle this if you want to test against production or emulators
-    const USE_EMULATORS = false; 
-    
+    const params = new URLSearchParams(location.search);
+    const USE_EMULATORS = window.MosaicUseEmulators === true
+        || params.get('emulator') === '1';
+
     if (USE_EMULATORS) {
         console.log("Connecting to Firebase emulators...");
         auth.useEmulator("http://localhost:9099");
