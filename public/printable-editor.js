@@ -75,6 +75,11 @@ function printableEditor() {
         saveStatus: 'saved',
         _saveTimer: null,
         saving: false,
+        // ADR 0081 / MS-721: one document — a change made elsewhere is taken
+        // only while this copy has nothing unsaved; otherwise "Changed
+        // elsewhere — reload to see it" with Reload.
+        changedElsewhere: false,
+        _live: null,
 
         // ── The picker (MS-393) ──────────────────────────────────────────
         picker: { open: false, tab: 'paper', paper: 'letter', orientation: 'portrait', dpi: 150, customs: [], customId: '', busy: false },
@@ -164,6 +169,7 @@ function printableEditor() {
                         PrintableCore.migrate(record));
                     ui.history = [this.snapshot()];
                     ui.future = [];
+                    this.startLive(record);
                     if (!this.project.template) {
                         await this.openPicker();
                     }
@@ -367,7 +373,7 @@ function printableEditor() {
         // ── Saving (ADR-0032) ────────────────────────────────────────────
 
         touch() {
-            this.saveStatus = 'unsaved';
+            if (this._live) this._live.edited(); else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(false), 1500);
         },
@@ -375,20 +381,66 @@ function printableEditor() {
         async save(pressed) {
             clearTimeout(this._saveTimer);
             if (!this.project || !this.canEdit) return;
-            this.saveStatus = 'saving';
+            const ticket = this._live ? this._live.saving() : 0;
+            if (!this._live) this.saveStatus = 'saving';
             this.saving = true;
+            const written = JSON.parse(JSON.stringify(this.project));
             try {
-                await PrintableStore.savePrintable(db, firebase, this.currentUser, this.project.id, this.project);
-                this.saveStatus = 'saved';
+                await PrintableStore.savePrintable(db, firebase, this.currentUser, this.project.id, written);
+                if (this._live) this._live.saved(ticket, written); else this.saveStatus = 'saved';
             } catch (e) {
                 console.error(e);
-                this.saveStatus = 'unsaved';
-                // A failed autosave is silent; a press reports.
+                // "Not saved" + Retry; the next edit tries again on its own.
+                if (this._live) this._live.failed(ticket, e); else this.saveStatus = 'failed';
+                // Ctrl+S (a press) still says so in words.
                 if (pressed) this.problem = 'That save did not go through. Check your connection and try again.';
             } finally {
                 this.saving = false;
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ──────────────────────────────────────
+        // What is compared is the printable as the store writes it, minus
+        // its name and folder (renamed and moved by their own writes, and
+        // always followed).
+        printableFingerprint(data) {
+            const r = PrintableCore.buildPrintable(data || {});
+            delete r.name; delete r.folderId;
+            return JSON.stringify(r);
+        },
+        startLive(record) {
+            if (typeof DocLive === 'undefined' || this._live) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => self.printableFingerprint(d),
+                onAdopt: (d) => self.adoptPrintable(d),
+                onChange: (st) => { self.saveStatus = st.status; self.changedElsewhere = st.changedElsewhere; },
+            });
+            this._live.loaded(record);
+            if (typeof MosaicLiveRead === 'undefined') return;
+            this._unwatch = MosaicLiveRead.watch(db.collection('printables').doc(this.id), (snap) => {
+                if (!snap || !snap.exists || !self.project) return;
+                const data = snap.data() || {};
+                const pendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                if (!pendingWrites && !self.renaming && data.name) self.project.name = data.name;
+                self._live.remote(data, { pendingWrites });
+            }, { onError: (e) => console.warn('Printable is not following live changes:', e && e.message) });
+        },
+        adoptPrintable(data) {
+            if (!this.project) return;
+            clearTimeout(this._saveTimer);
+            const next = PrintableCore.migrate(data);
+            Object.assign(this.project, next, { id: this.project.id });
+            if (!this.pages.find(p => p.id === this.selection.pageId)) this.selection.pageId = this.pages[0] ? this.pages[0].id : null;
+            if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
+            ui.history = [this.snapshot()];
+            ui.future = [];
+            this.renderAll();
+            this.readProps();
+        },
+        reloadPrintable() { if (this._live) this._live.reload(); },
+        retrySave() { return this.save(false); },
+        get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
         flash(text) {
             this.problem = '';
