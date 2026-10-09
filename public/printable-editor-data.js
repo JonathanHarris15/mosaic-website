@@ -31,6 +31,14 @@
     // A wire is drawn only while the bound element still overlaps the
     // canvas. Off-screen copies leave a stray curve; coming back on
     // screen is a fresh show, animated by the drawer.
+    function rectsOverlap(elRect, viewRect) {
+        if (!elRect || !viewRect) return false;
+        return elRect.right > viewRect.left
+            && elRect.left < viewRect.right
+            && elRect.bottom > viewRect.top
+            && elRect.top < viewRect.bottom;
+    }
+
     // Every iterable list the catalog used to list, grouped the way the
     // query builder shows them. Related lists (`of`) sit first, as
     // "Of this household", and only if the caller passed them in.
@@ -120,7 +128,12 @@
         if (b.scope === 'item') return 'item|' + (repeatSource || b.source || '') + '|' + (b.field || '');
         let field = b.field || '';
         const Passage = global.ScripturePassage;
-        if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
+        const Core = global.PrintableDataCore;
+        if (b.source === 'sunday' && (
+            (Passage && Passage.isScriptureField(b.field))
+            || b.reading === 'passage'
+            || (Core && Core.isScriptureField && Core.isScriptureField(b.field))
+        )) {
             field += (b.reading === 'passage' ? '#passage' : '#citation');
         }
         return 'global|' + (b.source || '') + '|' + field;
@@ -128,14 +141,19 @@
 
     // A chip inside a closed catalog section is still in the document, at
     // no size. A wire to that point runs to the corner of the editor.
-    // The first chip with this key that actually has a box is the one on screen.
-    function firstLaidOutChip(chips, key) {
+    // The first chip with this key that actually has a box is the one on
+    // screen. When a drawer viewport is passed, a chip that has scrolled
+    // out of that box is skipped — the wire breaks instead of dragging
+    // the drawer back to keep the land chip in view.
+    function firstLaidOutChip(chips, key, viewRect) {
         const list = chips || [];
         for (let i = 0; i < list.length; i++) {
             const chip = list[i];
             if (!chip || chip.key !== key) continue;
             const r = chip.rect || {};
-            if ((r.width || 0) > 0 && (r.height || 0) > 0) return chip;
+            if ((r.width || 0) <= 0 || (r.height || 0) <= 0) continue;
+            if (viewRect && !rectsOverlap(r, viewRect)) continue;
+            return chip;
         }
         return null;
     }
@@ -163,23 +181,69 @@
     // What "This Sunday" shows as chips. Scripture stays on its own card.
     // Extra date formats stay off — longDate is the one the guide prints.
     // `fillFields` is the typed-on-the-Sunday set (prayer, Mosaic Kids).
-    function sundayDrawerFields(Data, Passage, fillFields) {
-        const scripture = (Passage && Passage.FIELDS) || [];
-        const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
+    // Chips follow the Liturgy Order This Sunday uses (ADR 0080): identity
+    // fields, then that order's placements under their order names. Without
+    // a catalog, Standard is the order.
+    function sundayDrawerFields(Data, Passage, fillFields, options) {
+        const Liturgy = global.LiturgyOrderCore;
+        const liturgy = options && options.liturgy;
+        const cat = liturgy || (Liturgy && Liturgy.standardCatalog ? Liturgy.standardCatalog() : null);
+        const order = Liturgy && Liturgy.orderFor
+            ? Liturgy.orderFor((options && options.service) || {}, cat)
+            : null;
+        const orderEls = order && Liturgy.elementsOf ? Liturgy.elementsOf(order) : [];
+        const orderById = new Map(orderEls.map(el => [el.id, el]));
+        const fields = Data && Data.fieldsFor
+            ? Data.fieldsFor('sunday', {}, { liturgy: cat })
+            : ((Data && Data.sourceByKey && Data.sourceByKey('sunday') || {}).fields || []);
         const skip = { date: true, shortDate: true, dateShort: true };
         const shortLabel = { longDate: 'Date' };
-        const src = Data && Data.sourceByKey ? Data.sourceByKey('sunday') : null;
         const service = [];
         const hymns = [];
-        ((src && src.fields) || []).forEach(f => {
-            if (!f || scripture.indexOf(f.key) !== -1 || skip[f.key]) return;
-            const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
-            if (hymnSlots.indexOf(f.key) !== -1) hymns.push(chip);
-            else service.push(chip);
-        });
+        const scripture = [];
+        if (!orderById.size && Passage && Passage.FIELDS) {
+            // No liturgy module — keep the old seed split so the drawer still paints.
+            const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
+            const scriptureKeys = Passage.FIELDS;
+            fields.forEach(f => {
+                if (!f || skip[f.key]) return;
+                if (f.key === 'keyVerse' || scriptureKeys.indexOf(f.key) !== -1) {
+                    scripture.push(f.key === 'keyVerse'
+                        ? Object.assign({}, f, { label: 'Key verse' })
+                        : f);
+                    return;
+                }
+                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
+                if (hymnSlots.indexOf(f.key) !== -1) hymns.push(chip);
+                else service.push(chip);
+            });
+        } else {
+            fields.forEach(f => {
+                if (!f || skip[f.key]) return;
+                if (f.key === 'keyVerse') {
+                    scripture.push(Object.assign({}, f, { label: 'Key verse' }));
+                    return;
+                }
+                const el = orderById.get(f.key);
+                if (el) {
+                    const label = Liturgy.elementDisplayName
+                        ? Liturgy.elementDisplayName(el)
+                        : (el.name || f.label);
+                    const chip = Object.assign({}, f, { label: label, element: el.kind || el.primitive });
+                    if (el.kind === 'hymn' || el.primitive === 'song') hymns.push(chip);
+                    else if (el.kind === 'scripture' || el.primitive === 'scripture') scripture.push(chip);
+                    else service.push(chip);
+                    return;
+                }
+                if (f.element || f.element === '') return;
+                // Identity fields of the Sunday (preacher, theme, …) — not placements.
+                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
+                service.push(chip);
+            });
+        }
         const typedSkip = { announcements: true, announcementCount: true };
         const typed = (fillFields || []).filter(f => f && !typedSkip[f.key]);
-        return { service: service, hymns: hymns, typed: typed };
+        return { service: service, hymns: hymns, typed: typed, scripture: scripture };
     }
 
     function chipPreview(kind, raw) {
@@ -192,13 +256,7 @@
     }
 
     const PrintableEditorWires = {
-        elementOnCanvas(elRect, viewRect) {
-            if (!elRect || !viewRect) return false;
-            return elRect.right > viewRect.left
-                && elRect.left < viewRect.right
-                && elRect.bottom > viewRect.top
-                && elRect.top < viewRect.bottom;
-        },
+        elementOnCanvas: rectsOverlap,
         wireKey: wireKey,
         firstLaidOutChip: firstLaidOutChip,
         drawerScrollDelta: drawerScrollDelta,
@@ -297,6 +355,7 @@
             wires: [],                 // [{x1,y1,x2,y2}] in main-area coordinates
             dragWire: null,
             _wireKeys: {},             // last-drawn wire keys, so a return can animate
+            _wirePinnedFor: null,      // selection id last pinned into the drawer
             _wiresBound: false,
 
             // ── Boot ─────────────────────────────────────────────────────
@@ -987,8 +1046,11 @@
             },
 
             isScriptureBind(b) {
+                if (!b || !b.bind) return false;
+                const liturgy = this.data && this.data.options && this.data.options.liturgy;
+                if (Data.isScriptureField) return Data.isScriptureField(b.bind.field, liturgy);
                 const Passage = global.ScripturePassage;
-                return !!(Passage && b && b.bind && Passage.isScriptureField(b.bind.field));
+                return !!(Passage && Passage.isScriptureField(b.bind.field));
             },
 
             passageOf(b) {
@@ -1125,8 +1187,11 @@
             },
 
             // The chip the wire lands on. A hidden catalog chip has the same
-            // key and no box; the one in "Wired to this element" is on screen.
+            // key and no box; the one in "Wired to this element" is on screen
+            // while it still overlaps the drawer body.
             laidOutChip(key) {
+                const body = document.querySelector('.pe-drawer__body');
+                const view = body ? body.getBoundingClientRect() : null;
                 const nodes = document.querySelectorAll('[data-chip]');
                 const chips = [];
                 for (let i = 0; i < nodes.length; i++) {
@@ -1134,7 +1199,7 @@
                     const r = el.getBoundingClientRect();
                     chips.push({ key: el.getAttribute('data-chip'), rect: r, el: el });
                 }
-                const hit = PrintableEditorWires.firstLaidOutChip(chips, key);
+                const hit = PrintableEditorWires.firstLaidOutChip(chips, key, view);
                 return hit ? hit.el : null;
             },
 
@@ -1147,11 +1212,19 @@
                 if (delta) body.scrollTop += delta;
             },
 
-            refreshWires() {
+            // Pin the chip into the drawer only when the selection changes.
+            // Scroll redraws follow the chip and break the wire when it leaves
+            // the drawer — they must not scroll the drawer back to the chip.
+            refreshWires(opts) {
                 const wires = [];
                 const main = document.querySelector('.pe-main');
                 const viewport = document.getElementById('pe-viewport');
                 const node = this.selectedNode;
+                const nodeId = node && node.id;
+                const pinChip = !!(opts && opts.pinChip)
+                    || !!(nodeId && nodeId !== this._wirePinnedFor);
+                if (nodeId) this._wirePinnedFor = nodeId;
+                else this._wirePinnedFor = null;
                 const prev = this._wireKeys || {};
                 const nextKeys = {};
                 const repeatSource = this.repeatContext && this.repeatContext.repeat
@@ -1160,11 +1233,24 @@
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
                         const key = PrintableEditorWires.wireKey(b, repeatSource);
+                        if (pinChip) {
+                            const nodes = document.querySelectorAll('[data-chip]');
+                            const all = [];
+                            for (let i = 0; i < nodes.length; i++) {
+                                const elChip = nodes[i];
+                                all.push({
+                                    key: elChip.getAttribute('data-chip'),
+                                    rect: elChip.getBoundingClientRect(),
+                                    el: elChip,
+                                });
+                            }
+                            const any = PrintableEditorWires.firstLaidOutChip(all, key);
+                            if (any) this.scrollChipIntoDrawer(any.el);
+                        }
                         const chip = this.laidOutChip(key);
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!chip || !el) return;
                         if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
-                        this.scrollChipIntoDrawer(chip);
                         const a = this.pointOf(el);
                         const c = this.pointOf(chip);
                         const enter = !prev[key];
@@ -1449,7 +1535,16 @@
 
             sundayDrawer() {
                 const fill = (global.SundayTypedCore && global.SundayTypedCore.FIELDS) || [];
-                return PrintableEditorWires.sundayDrawerFields(Data, global.ScripturePassage, fill);
+                const liturgy = this.data && this.data.options && this.data.options.liturgy;
+                let service = null;
+                if (ui.bundle && ui.bundle.services && Data) {
+                    const date = Data.resolveWhen({ mode: 'this' }, this.viewDate);
+                    service = ui.bundle.services[date] || null;
+                }
+                return PrintableEditorWires.sundayDrawerFields(Data, global.ScripturePassage, fill, {
+                    liturgy: liturgy,
+                    service: service,
+                });
             },
 
             sundayChips(fields, row) {
@@ -1487,13 +1582,12 @@
             },
 
             get scriptureRefs() {
-                const Passage = global.ScripturePassage;
-                if (!Passage) return [];
                 const row = this.resolvedSundayRow('sunday');
-                return Passage.FIELDS.map(key => ({
-                    key: key,
-                    label: SCRIPTURE_LABELS[key] || key,
-                    citation: row[key] ? String(row[key]) : '',
+                const fields = this.sundayDrawer().scripture || [];
+                return fields.map(f => ({
+                    key: f.key,
+                    label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
+                    citation: row[f.key] ? String(row[f.key]) : '',
                 }));
             },
 
@@ -1549,13 +1643,18 @@
             connectedChipLabel(b) {
                 if (!b) return '';
                 if (b.scope === 'asset') return 'Brand asset';
-                const Passage = global.ScripturePassage;
-                if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
-                    const name = SCRIPTURE_LABELS[b.field] || b.field;
+                const liturgy = this.data && this.data.options && this.data.options.liturgy;
+                if (b.source === 'sunday' && Data.isScriptureField && Data.isScriptureField(b.field, liturgy)) {
+                    const fromDrawer = (this.sundayDrawer().scripture || []).find(f => f.key === b.field);
+                    const name = (fromDrawer && fromDrawer.label) || SCRIPTURE_LABELS[b.field] || b.field;
                     return name + (b.reading === 'passage' ? ' · Words' : ' · Reference');
                 }
                 const src = b.source ? Data.sourceByKey(b.source) : null;
-                const field = src && (src.fields || []).find(f => f.key === b.field);
+                const fields = src
+                    ? Data.fieldsFor(src, b.params || {}, this.data && this.data.options)
+                    : [];
+                const field = fields.find(f => f.key === b.field)
+                    || (src && (src.fields || []).find(f => f.key === b.field));
                 if (b.scope === 'item') return (field && field.label) || b.field || 'This row';
                 const sourceLabel = (src && src.label) || b.source || '';
                 const fieldLabel = (field && field.label) || b.field || '';
@@ -1577,8 +1676,8 @@
             onConnectedChipDragStart(e, chip) {
                 const b = chip && chip.bind;
                 if (!b) return;
-                const Passage = global.ScripturePassage;
-                if (b.source === 'sunday' && Passage && Passage.isScriptureField(b.field)) {
+                const liturgy = this.data && this.data.options && this.data.options.liturgy;
+                if (b.source === 'sunday' && Data.isScriptureField && Data.isScriptureField(b.field, liturgy)) {
                     this.onScriptureChipDragStart(e, { key: b.field, label: chip.label }, b.reading === 'passage' ? 'passage' : 'citation');
                     return;
                 }
