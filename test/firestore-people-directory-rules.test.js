@@ -114,10 +114,12 @@ test('no directory read is gated on membership or any other rank', () => {
 
 // ── Writes are untouched ─────────────────────────────────────────────────────
 
-test('writing the directory is still editor-only', () => {
-    // MS-197 changed who may READ. A write rule that moved with it would be a
-    // change nobody asked for, hiding inside a security fix.
-    assert.match(personBlock(), /allow create, delete: if isEditor\(\)/);
+test('writing the directory is still editor-only, except Add person', () => {
+    // MS-197 changed who may READ. MS-727 moved create onto
+    // directory.edit_identity so the Add person button and the rule agree.
+    // Update and delete stay on the editor ladder.
+    assert.match(personBlock(), /allow create: if editsWith\('directory\.edit_identity'\)/);
+    assert.match(personBlock(), /allow delete: if isEditor\(\)/);
     assert.match(personBlock(), /allow update: if isEditor\(\)/);
     assert.match(DIRECTORY['Families'](), /allow create, update, delete: if isEditor\(\)/);
     assert.match(DIRECTORY['the directory tag vocabulary'](), /allow create, update, delete: if isEditor\(\)/);

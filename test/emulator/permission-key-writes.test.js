@@ -52,6 +52,11 @@ const DOORS = [
   ["liturgy_orders", "services.builder.edit",
     (u, t) => `liturgy_orders/l-${t}`],
   ["presence (own uid)", "services.builder.edit", (u) => `presence/${u}`],
+  ["style_presets", "services.builder.edit", (u, t) => `style_presets/s-${t}`],
+  ["page_templates", "services.builder.edit", (u, t) => `page_templates/p-${t}`],
+  ["guide_templates", "services.builder.edit", (u, t) => `guide_templates/g-${t}`],
+  ["guide_assets", "services.builder.edit", (u, t) => `guide_assets/a-${t}`],
+  ["people (create)", "directory.edit_identity", (u, t) => `people/p-${t}`],
   ["people/away (someone else's)", "calendar.away.edit",
     (u, t) => `people/${PERSON}/away/s-${t}`],
   ["printables", "printables.edit", (u, t) => `printables/p-${t}`],
@@ -166,4 +171,68 @@ suite("MS-722: write doors honour the MS-695 key", () => {
       });
     });
   }
+});
+
+// MS-727: app_config's leftover ladder is isAdmin(), not isEditor().
+const ADMIN_KEY = "admin.dashboard.access";
+
+suite("MS-727: app_config writes with the admin dashboard key", () => {
+  let db;
+
+  before(async () => {
+    db = H.connect();
+    await H.wipe();
+    await Promise.all([
+      db.collection("users").doc("member").set(
+          Levels.userWriteFromLevel(
+              Levels.accountLevelIdForPreset(Levels.PRESET_MEMBER))),
+      db.collection("users").doc("viewer").set(
+          Levels.userWriteFromLevel(
+              Levels.accountLevelIdForPreset(Levels.PRESET_VIEWER))),
+      db.collection("users").doc("legacyEditor").set(
+          {permissionLevel: "editor", role: "editor"}),
+      db.collection("users").doc("legacyAdmin").set(
+          {permissionLevel: "admin", role: "admin"}),
+      db.collection("users").doc("customAdmin").set(customLevel(ADMIN_KEY, true)),
+      db.collection("users").doc("revokedAdmin").set(customLevel(ADMIN_KEY, false)),
+      db.collection("users").doc("editorRevokedAdmin").set(
+          Object.assign(customLevel(ADMIN_KEY, false), {
+            permissionLevel: "editor", role: "editor",
+          })),
+      db.collection("users").doc("adminRevoked").set(
+          Object.assign(customLevel(ADMIN_KEY, false), {
+            permissionLevel: "admin", role: "admin",
+          })),
+    ]);
+  });
+
+  const path = (t) => `app_config/c-${t}`;
+
+  test("a custom level holding the key may write", async () => {
+    assert.equal(await writeAs("customAdmin", path("c")), 200);
+  });
+  test("Member may not", async () => {
+    assert.equal(await writeAs("member", path("m")), 403);
+  });
+  test("Viewer may not", async () => {
+    assert.equal(await writeAs("viewer", path("v")), 403);
+  });
+  test("signed out may not", async () => {
+    assert.equal(await writeAs(null, path("s")), 403);
+  });
+  test("a custom level with the key revoked may not", async () => {
+    assert.equal(await writeAs("revokedAdmin", path("r")), 403);
+  });
+  test("a leftover editor (no map) may not — admin ladder, not editor", async () => {
+    assert.equal(await writeAs("legacyEditor", path("e")), 403);
+  });
+  test("a leftover admin (no map) still may", async () => {
+    assert.equal(await writeAs("legacyAdmin", path("a")), 200);
+  });
+  test("a saved map with the key revoked may not, even as admin", async () => {
+    assert.equal(await writeAs("adminRevoked", path("x")), 403);
+  });
+  test("a saved editor map without the key may not", async () => {
+    assert.equal(await writeAs("editorRevokedAdmin", path("z")), 403);
+  });
 });

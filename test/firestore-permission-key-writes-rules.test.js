@@ -20,6 +20,11 @@ const KEYS = {
     liturgy_elements: 'services.builder.edit',
     liturgy_orders: 'services.builder.edit',
     presence: 'services.builder.edit',
+    style_presets: 'services.builder.edit',
+    page_templates: 'services.builder.edit',
+    guide_templates: 'services.builder.edit',
+    guide_assets: 'services.builder.edit',
+    people: 'directory.edit_identity',
     away: 'calendar.away.edit',
     printables: 'printables.edit',
     printable_folders: 'printables.edit',
@@ -32,6 +37,19 @@ const KEYS = {
 test('editsWith is keys-only once a map has been saved', () => {
     assert.match(rules,
         /function editsWith\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isEditor\(\)\);\s*\}/);
+});
+
+// MS-727: app_config's leftover ladder is isAdmin(), not isEditor().
+test('editsAsAdmin is keys-only once a map has been saved', () => {
+    assert.match(rules,
+        /function editsAsAdmin\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isAdmin\(\)\);\s*\}/);
+});
+
+test('app_config writes with the admin dashboard key', () => {
+    const at = rules.indexOf('match /app_config/{configId}');
+    assert.ok(at >= 0, 'the app_config block moved');
+    const firstWrite = rules.slice(at).match(/allow (?:read, write|write)[^;]*;/)[0];
+    assert.ok(firstWrite.includes("editsAsAdmin('admin.dashboard.access')"), firstWrite);
 });
 
 test('every editsWith key is a real MS-695 permission key', () => {
@@ -90,7 +108,8 @@ test('shepherding_presence stays elders-only', () => {
 // The write doors are the only thing editsWith touches, and there are still
 // nineteen of them. A read that quietly started asking a write key would be
 // caught above; this catches a write door being dropped.
-test('the nineteen write doors are all still there', () => {
+test('the editor-ladder write doors are all still there', () => {
     const used = [...rules.matchAll(/editsWith\('([^']+)'\)/g)].map(m => m[1]);
-    assert.equal(used.length, 19);
+    // MS-722/725's 19, plus MS-727's four guide collections and people create.
+    assert.equal(used.length, 24);
 });
