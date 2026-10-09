@@ -100,9 +100,10 @@ test('the Liturgy Orders page uses tabs, a palette, a list, and an inspector', (
     assert.match(html, /id="kind-palette"/);
     assert.match(html, /:data-kind="kind"/);
     assert.match(html, /placeKindFromTile\(kind\)/);
+    assert.match(html, /kindPointerDown\(\$event, kind\)/);
     assert.match(html, /lo-kind-btn__grip/);
-    assert.match(js, /pull: 'clone'/);
-    assert.match(js, /_dropKind/);
+    assert.match(js, /function kindDropIndex/);
+    assert.match(js, /lo-drop-line/);
     const desktop = html.slice(html.indexOf('@media (min-width: 1024px)'));
     const paletteRule = desktop.match(/\.lo-palette \{[^}]+\}/);
     assert.ok(paletteRule, 'the desktop palette rule is present');

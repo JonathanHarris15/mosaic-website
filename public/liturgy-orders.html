@@ -97,6 +97,7 @@
                     <template x-for="kind in kinds" :key="kind">
                         <button type="button" class="lo-kind-btn" :disabled="!editing"
                                 :data-kind="kind"
+                                @pointerdown="kindPointerDown($event, kind)"
                                 @click="placeKindFromTile(kind)"
                                 :aria-label="tileLabel(kind)">
                             <span class="material-symbols-outlined lo-kind-btn__grip" x-show="editing" aria-hidden="true">drag_indicator</span>
@@ -478,11 +479,13 @@
         .lo-kind-btn__grip { font-size: 16px; color: var(--outline); flex: 0 0 auto; }
         .lo-kind-btn:active:not(:disabled) { cursor: grabbing; }
         .lo-kind-btn:disabled { opacity: .55; cursor: default; }
-        .lo-list .sortable-ghost.lo-kind-btn {
-            height: 6px; min-height: 6px; padding: 0; overflow: hidden;
-            border: 0; border-radius: 0; background: var(--secondary); opacity: 1;
+        .lo-kind-ghost {
+            position: fixed; z-index: 40; margin: 0; opacity: .92; pointer-events: none;
         }
-        .lo-list .sortable-ghost.lo-kind-btn span { display: none; }
+        .lo-drop-line {
+            position: fixed; z-index: 40; height: 3px; pointer-events: none;
+            background: var(--secondary); border-radius: 2px;
+        }
         .lo-toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); }
         .sortable-ghost { opacity: .4; }
         @media (min-width: 1024px) {

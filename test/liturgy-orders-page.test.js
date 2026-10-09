@@ -61,6 +61,21 @@ test('a failed read does not save the stand-in over the congregation\'s orders',
     assert.equal(saved, false);
 });
 
+test('a drop index is the first row whose middle is below the pointer', async () => {
+    const { kindDropIndex } = require('../public/liturgy-orders.js');
+    const rows = [
+        { top: 0, bottom: 40 },
+        { top: 40, bottom: 80 },
+        { top: 80, bottom: 120 },
+    ];
+    assert.equal(kindDropIndex(0, rows), 0);
+    assert.equal(kindDropIndex(19, rows), 0);
+    assert.equal(kindDropIndex(20, rows), 1);
+    assert.equal(kindDropIndex(70, rows), 2);
+    assert.equal(kindDropIndex(200, rows), 3);
+    assert.equal(kindDropIndex(10, []), 0);
+});
+
 test('a chosen index places the kind there even when another element is selected', async () => {
     const page = await loadedPage();
     const ids = page.selectedOrder.elementIds.slice();
