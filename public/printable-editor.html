@@ -529,7 +529,7 @@
                     <button type="button" :aria-pressed="data.mode === 'live'" @click="setDataMode('live')">Live</button>
                     <button type="button" :aria-pressed="data.mode === 'standins'" @click="setDataMode('standins')">Stand-ins</button>
                 </span>
-                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Refresh data" @click="refreshData()" :disabled="data.loading">
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Refresh data" aria-label="Refresh data" @click="reloadData()" :disabled="data.loading">
                     <span class="material-symbols-outlined" :class="data.loading ? 'pe-spin' : ''">refresh</span>
                 </button>
             </div>
@@ -553,49 +553,8 @@
                     </template>
                 </section>
 
-                <section class="pe-drawer__section pe-drawer__cta" x-show="showRepeatOffer" aria-label="Repeat a box">
-                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">repeat</span>Repeat a box</h3>
-                    <template x-if="canStartIteration">
-                        <div>
-                            <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startIteration()">
-                                <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Make this element iterated</span>
-                            </button>
-                            <p class="pe-hint">This box is drawn once per row. Pick a list below and the query builder opens with its filters.</p>
-                        </div>
-                    </template>
-                    <p class="pe-hint" x-show="!canStartIteration">Select the box that should repeat. A text takes one field from This Sunday. The query builder opens once the box is repeating.</p>
-                    <div class="pe-quick" role="group" aria-label="Lists to repeat">
-                        <template x-for="list in sundayQuickLists" :key="'quick-' + list.key">
-                            <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="startQuickList(list.key)">
-                                <span class="m-btn__label" x-text="list.label"></span>
-                            </button>
-                        </template>
-                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startIteration()">All lists…</button>
-                    </div>
-                </section>
-
-                <section class="pe-drawer__section pe-drawer__cta" x-show="canStartSubIteration">
-                    <button type="button" class="m-btn m-btn--secondary pe-drawer__iter" @click="startSubIteration()">
-                        <span class="material-symbols-outlined">account_tree</span><span class="m-btn__label">Make this a sub-iteration</span>
-                    </button>
-                    <p class="pe-hint">This box lists a related row of the card it sits in — the children of this household, not a second directory. A child that already has a field wired stays a field of the parent row.</p>
-                </section>
-
-                <section class="pe-drawer__section pe-drawer__section--item" x-show="showParentRowFields">
-                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">drag_pan</span>This row</h3>
-                    <p class="pe-hint">Drag a field onto the selected element to fill it from each row of <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
-                    <div class="pe-chips">
-                        <template x-for="f in itemFields" :key="'parent-item-' + f.key">
-                            <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
-                                  @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
-                                <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
-                            </span>
-                        </template>
-                    </div>
-                </section>
-
-                <section class="pe-drawer__section pe-query" x-show="showQueryBuilder">
-                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined">filter_alt</span>Query</h3>
+                <section class="pe-drawer__section pe-query" aria-label="Query builder" x-effect="ensureQueryPreview()">
+                    <h3 class="pe-drawer__title"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Query builder</h3>
                     <template x-if="queryLocked">
                         <div class="pe-query__locked">
                             <p class="pe-hint"><strong>This list is not yours to query.</strong> The page still draws the rows you may read. You cannot change or recreate this query.</p>
@@ -603,7 +562,10 @@
                     </template>
                     <template x-if="!queryLocked">
                         <div>
-                            <p class="pe-hint" x-show="!querySourceKey">Pick the list this box stands for. Everything iterable the site can tell a Printable is here.</p>
+                            <p class="pe-hint" x-show="queryScope === 'own' && !querySourceKey">Pick the list this box repeats over. The box is drawn once per row.</p>
+                            <p class="pe-hint" x-show="queryScope === 'own' && querySourceKey">This box repeats over the list below. Its filters are saved on the box.</p>
+                            <p class="pe-hint" x-show="queryScope === 'row'">Inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>. Drag a field of one row onto an element inside it.</p>
+                            <p class="pe-hint" x-show="queryScope === 'browse'">Anything the site keeps that you may read. A field you drag onto the page carries the settings below.</p>
                             <div class="m-dropdown pe-query__pick"
                                  @click.outside="data.queryMenuOpen = false"
                                  @keydown.escape.window="data.queryMenuOpen = false">
@@ -611,12 +573,12 @@
                                         :aria-expanded="data.queryMenuOpen" aria-haspopup="listbox"
                                         @click="data.queryMenuOpen = !data.queryMenuOpen">
                                     <span x-text="querySourceLabel"></span>
-                                    <span class="material-symbols-outlined" x-text="data.queryMenuOpen ? 'expand_less' : 'expand_more'"></span>
+                                    <span class="material-symbols-outlined" aria-hidden="true" x-text="data.queryMenuOpen ? 'expand_less' : 'expand_more'"></span>
                                 </button>
-                                <div class="m-dropdown__panel" role="listbox" x-show="data.queryMenuOpen" x-cloak x-transition.opacity.duration.120ms>
-                                    <span class="m-search pe-query__find"><span class="material-symbols-outlined">search</span><input type="text" placeholder="Find a list" x-model="data.search" /></span>
+                                <div class="m-dropdown__panel" role="listbox" aria-label="What to read" x-show="data.queryMenuOpen" x-cloak x-transition.opacity.duration.120ms>
+                                    <span class="m-search pe-query__find"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="text" placeholder="Find data…" aria-label="Find data" autocomplete="off" x-model="data.search" /></span>
                                     <template x-for="region in queryCatalogRegions" :key="'qreg-' + region.name">
-                                        <div>
+                                        <div role="group" :aria-label="region.name">
                                             <div class="m-dropdown__group" x-text="region.name"></div>
                                             <template x-for="src in region.sources" :key="'qsrc-' + src.key">
                                                 <button type="button" class="m-dropdown__opt"
@@ -625,194 +587,227 @@
                                                         :title="src.blurb"
                                                         @click="setQuerySource(src.key); data.queryMenuOpen = false; data.search = ''">
                                                     <span x-text="src.label"></span>
+                                                    <span class="m-badge m-badge--neutral" x-text="src.shape === 'list' ? 'List' : 'One'"></span>
                                                 </button>
                                             </template>
                                         </div>
                                     </template>
-                                    <p class="pe-hint pe-query__empty" x-show="!queryCatalogRegions.length">No list matches that search.</p>
+                                    <p class="pe-hint pe-query__empty" x-show="!queryCatalogRegions.length">Nothing matches that search.</p>
                                 </div>
                             </div>
-                            <p class="pe-hint" x-show="repeatSource" x-text="repeatSource ? repeatSource.blurb : ''"></p>
-                            <template x-for="spec in repeatParamSpecs" :key="'qspec-' + spec.key">
+                            <p class="pe-hint" x-show="querySource" x-text="querySource ? querySource.blurb : ''"></p>
+                            <template x-for="spec in querySpecs" :key="'qspec-' + querySourceKey + '-' + spec.key">
                                 <div>
                                     <label class="pe-f" x-show="spec.kind === 'choice'"><span x-text="spec.label"></span>
-                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key); }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                            <template x-for="o in spec.options" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
+                                        <select class="pe-in" x-data="{ get v() { return queryParam(spec.key); }, set v(val) { setQueryParam(spec.key, val); } }" x-model="v">
+                                            <template x-for="o in spec.options" :key="o.value"><option :value="o.value" :selected="o.value === queryParam(spec.key)" x-text="o.label"></option></template>
                                         </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'text'"><span x-text="spec.label"></span>
-                                        <input class="pe-in" :value="repeatParam(spec.key) || ''" @change="setRepeatParam(spec.key, $event.target.value)" :placeholder="spec.placeholder || 'any'" /></label>
+                                        <input class="pe-in" :value="queryParam(spec.key) || ''" @change="setQueryParam(spec.key, $event.target.value)" :placeholder="spec.placeholder || 'any'" /></label>
                                     <label class="pe-f pe-f--check" x-show="spec.kind === 'bool'"><span x-text="spec.label"></span>
-                                        <input type="checkbox" :checked="!!repeatParam(spec.key)" @change="setRepeatParam(spec.key, $event.target.checked)" /></label>
+                                        <input type="checkbox" :checked="!!queryParam(spec.key)" @change="setQueryParam(spec.key, $event.target.checked)" /></label>
                                     <div class="pe-f" x-show="spec.kind === 'when'"><span x-text="spec.label"></span>
                                         <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'last'" @click="setRepeatParam(spec.key, { mode: 'last' })">Last</button>
-                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'this'" @click="setRepeatParam(spec.key, { mode: 'this' })">This</button>
-                                            <button type="button" :aria-pressed="whenMode(repeatParam(spec.key)) === 'next'" @click="setRepeatParam(spec.key, { mode: 'next' })">Next</button>
-                                            <input type="date" class="pe-in pe-in--date" :value="(repeatParam(spec.key) || {}).date || ''" @change="setRepeatParam(spec.key, { mode: 'date', date: $event.target.value })" />
+                                            <button type="button" :aria-pressed="whenMode(queryParam(spec.key)) === 'last'" @click="setQueryParam(spec.key, { mode: 'last' })">Last</button>
+                                            <button type="button" :aria-pressed="whenMode(queryParam(spec.key)) === 'this'" @click="setQueryParam(spec.key, { mode: 'this' })">This</button>
+                                            <button type="button" :aria-pressed="whenMode(queryParam(spec.key)) === 'next'" @click="setQueryParam(spec.key, { mode: 'next' })">Next</button>
+                                            <input type="date" class="pe-in pe-in--date" aria-label="A Sunday by date" :value="(queryParam(spec.key) || {}).date || ''" @change="setQueryParam(spec.key, { mode: 'date', date: $event.target.value })" />
+                                        </span></div>
+                                    <div class="pe-f" x-show="spec.kind === 'when-event'"><span x-text="spec.label"></span>
+                                        <span class="pe-seg pe-seg--text pe-seg--tiny">
+                                            <button type="button" :aria-pressed="whenMode(queryParam(spec.key)) !== 'date'" @click="setQueryParam(spec.key, { mode: 'next' })">Next date</button>
+                                            <input type="date" class="pe-in pe-in--date" aria-label="The first date on or after" title="The first date on or after" :value="(queryParam(spec.key) || {}).date || ''" @change="setQueryParam(spec.key, { mode: 'date', date: $event.target.value })" />
                                         </span></div>
                                     <div x-show="spec.kind === 'range'">
                                         <div class="pe-f"><span x-text="spec.label"></span>
                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'weeks'" @click="setRangeMode(spec, 'weeks')" x-text="rangeUnitLabel(spec)"></button>
-                                                <button type="button" x-show="spec.unit !== 'Sundays'" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'count'" @click="setRangeMode(spec, 'count')">Next dates</button>
-                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'relative'" @click="setRangeMode(spec, 'relative')">From today</button>
-                                                <button type="button" :aria-pressed="rangeMode(repeatParam(spec.key)) === 'static'" @click="setRangeMode(spec, 'static')">Fixed dates</button>
+                                                <button type="button" :aria-pressed="rangeMode(queryParam(spec.key)) === 'weeks'" @click="setRangeMode(spec, 'weeks')" x-text="rangeUnitLabel(spec)"></button>
+                                                <button type="button" x-show="spec.unit !== 'Sundays'" :aria-pressed="rangeMode(queryParam(spec.key)) === 'count'" @click="setRangeMode(spec, 'count')">Next dates</button>
+                                                <button type="button" :aria-pressed="rangeMode(queryParam(spec.key)) === 'relative'" @click="setRangeMode(spec, 'relative')">From today</button>
+                                                <button type="button" :aria-pressed="rangeMode(queryParam(spec.key)) === 'static'" @click="setRangeMode(spec, 'static')">Fixed dates</button>
                                             </span></div>
-                                        <div x-show="rangeMode(repeatParam(spec.key)) === 'weeks'">
+                                        <div x-show="rangeMode(queryParam(spec.key)) === 'weeks'">
                                             <label class="pe-f"><span x-text="'How many ' + (spec.unit || 'weeks')">How many</span>
-                                                <input class="pe-in" type="number" min="1" max="52" step="1" :value="(repeatParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
+                                                <input class="pe-in" type="number" min="1" max="52" step="1" :value="(queryParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
                                             <div class="pe-f"><span>From which Sunday</span>
                                                 <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'last'" @click="setRangePart(spec, 'start', { mode: 'last' })">Last</button>
-                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'this'" @click="setRangePart(spec, 'start', { mode: 'this' })">This</button>
-                                                    <button type="button" :aria-pressed="whenMode((repeatParam(spec.key) || {}).start) === 'next'" @click="setRangePart(spec, 'start', { mode: 'next' })">Next</button>
-                                                    <input type="date" class="pe-in pe-in--date" :value="((repeatParam(spec.key) || {}).start || {}).date || ''" @change="setRangePart(spec, 'start', { mode: 'date', date: $event.target.value })" />
+                                                    <button type="button" :aria-pressed="whenMode((queryParam(spec.key) || {}).start) === 'last'" @click="setRangePart(spec, 'start', { mode: 'last' })">Last</button>
+                                                    <button type="button" :aria-pressed="whenMode((queryParam(spec.key) || {}).start) === 'this'" @click="setRangePart(spec, 'start', { mode: 'this' })">This</button>
+                                                    <button type="button" :aria-pressed="whenMode((queryParam(spec.key) || {}).start) === 'next'" @click="setRangePart(spec, 'start', { mode: 'next' })">Next</button>
+                                                    <input type="date" class="pe-in pe-in--date" aria-label="The first Sunday by date" :value="((queryParam(spec.key) || {}).start || {}).date || ''" @change="setRangePart(spec, 'start', { mode: 'date', date: $event.target.value })" />
                                                 </span></div>
                                             <p class="pe-hint" x-text="rangeWords(spec)"></p>
                                         </div>
-                                        <div x-show="rangeMode(repeatParam(spec.key)) === 'count'">
+                                        <div x-show="rangeMode(queryParam(spec.key)) === 'count'">
                                             <label class="pe-f"><span>How many dates</span>
-                                                <input class="pe-in" type="number" min="1" max="24" step="1" :value="(repeatParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
+                                                <input class="pe-in" type="number" min="1" max="24" step="1" :value="(queryParam(spec.key) || {}).count" @change="setRangePart(spec, 'count', Number($event.target.value))" /></label>
                                             <p class="pe-hint" x-text="rangeWords(spec)"></p>
                                         </div>
-                                        <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'relative'">
-                                            <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).fromDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { fromDays: Number($event.target.value) }))" /></label>
-                                            <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(repeatParam(spec.key) || {}).toDays" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { toDays: Number($event.target.value) }))" /></label>
+                                        <div class="pe-grid2" x-show="rangeMode(queryParam(spec.key)) === 'relative'">
+                                            <label class="pe-f"><span>From (days)</span><input class="pe-in" type="number" :value="(queryParam(spec.key) || {}).fromDays" @change="setRangePart(spec, 'fromDays', Number($event.target.value))" /></label>
+                                            <label class="pe-f"><span>To (days)</span><input class="pe-in" type="number" :value="(queryParam(spec.key) || {}).toDays" @change="setRangePart(spec, 'toDays', Number($event.target.value))" /></label>
                                         </div>
-                                        <div class="pe-grid2" x-show="rangeMode(repeatParam(spec.key)) === 'static'">
-                                            <label class="pe-f"><span>From</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).from || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { from: $event.target.value }))" /></label>
-                                            <label class="pe-f"><span>To</span><input class="pe-in" type="date" :value="(repeatParam(spec.key) || {}).to || ''" @change="setRepeatParam(spec.key, Object.assign({}, repeatParam(spec.key), { to: $event.target.value }))" /></label>
+                                        <div class="pe-grid2" x-show="rangeMode(queryParam(spec.key)) === 'static'">
+                                            <label class="pe-f"><span>From</span><input class="pe-in" type="date" :value="(queryParam(spec.key) || {}).from || ''" @change="setRangePart(spec, 'from', $event.target.value)" /></label>
+                                            <label class="pe-f"><span>To</span><input class="pe-in" type="date" :value="(queryParam(spec.key) || {}).to || ''" @change="setRangePart(spec, 'to', $event.target.value)" /></label>
                                         </div>
                                     </div>
                                     <label class="pe-f" x-show="spec.kind === 'series'"><span x-text="spec.label"></span>
-                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                            <option value="">Every event</option>
-                                            <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
+                                        <select class="pe-in" x-data="{ get v() { return queryParam(spec.key) || ''; }, set v(val) { setQueryParam(spec.key, val); } }" x-model="v">
+                                            <option value="" x-text="specEmptyLabel(spec)"></option>
+                                            <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" :selected="sr.id === queryParam(spec.key)" x-text="sr.name"></option></template>
                                         </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'role'"><span x-text="spec.label"></span>
-                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                            <option value="">No role</option>
-                                            <template x-for="r in rolesFor(repeatParam('seriesId'))" :key="r.slug"><option :value="r.slug" x-text="r.name"></option></template>
+                                        <select class="pe-in" x-data="{ get v() { return queryParam(spec.key) || ''; }, set v(val) { setQueryParam(spec.key, val); } }" x-model="v">
+                                            <option value="" x-text="specEmptyLabel(spec)"></option>
+                                            <template x-for="r in rolesFor(queryParam('seriesId'))" :key="r.slug"><option :value="r.slug" :selected="r.slug === queryParam(spec.key)" x-text="r.name"></option></template>
                                         </select></label>
                                     <label class="pe-f" x-show="spec.kind === 'form'"><span x-text="spec.label"></span>
-                                        <select class="pe-in" x-data="{ get v() { return repeatParam(spec.key) || ''; }, set v(val) { setRepeatParam(spec.key, val); } }" x-model="v">
-                                            <option value="">Choose a form</option>
-                                            <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" x-text="f.title"></option></template>
+                                        <select class="pe-in" x-data="{ get v() { return queryParam(spec.key) || ''; }, set v(val) { setQueryParam(spec.key, val); } }" x-model="v">
+                                            <option value="" x-text="specEmptyLabel(spec)"></option>
+                                            <template x-for="f in data.options.forms" :key="f.id"><option :value="f.id" :selected="f.id === queryParam(spec.key)" x-text="f.title"></option></template>
                                         </select></label>
                                 </div>
                             </template>
-                            <p class="pe-query__count" x-show="repeatPreview.count !== null" x-text="repeatPreview.count + ' row' + (repeatPreview.count === 1 ? '' : 's') + ' today'"></p>
-                            <ul class="pe-query__preview" x-show="repeatPreview.names.length">
-                                <template x-for="(name, i) in repeatPreview.names" :key="'prev-' + i"><li x-text="name"></li></template>
+
+                            <p class="pe-hint" x-show="queryResults.loading">Reading today's rows…</p>
+                            <p class="pe-drawer__error" x-show="queryResults.error" x-text="queryResults.error"></p>
+                            <p class="pe-query__count" x-show="queryResults.count !== null && queryResults.count !== undefined" x-text="queryResults.count + ' row' + (queryResults.count === 1 ? '' : 's') + ' today'"></p>
+                            <ul class="pe-query__preview" x-show="queryResults.names.length">
+                                <template x-for="(name, i) in queryResults.names" :key="'prev-' + i"><li x-text="name"></li></template>
                             </ul>
-                            <p class="pe-hint" x-show="repeatContext && repeatSource">Drag a field onto an element inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>.</p>
-                            <div class="pe-chips" x-show="itemFields.length">
-                                <template x-for="f in itemFields" :key="'item-' + f.key">
-                                    <span class="pe-chip" draggable="true" :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
-                                          @dragstart="onChipDragStart($event, 'item', repeatSource, f)" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
-                                    </span>
-                                </template>
-                            </div>
+                            <ul class="pe-query__notes" x-show="queryResults.warnings.length">
+                                <template x-for="(w, i) in queryResults.warnings" :key="'qwarn-' + i"><li x-text="w"></li></template>
+                            </ul>
+
+                            <template x-if="queryIterateOffer === 'iterate' || queryIterateOffer === 'sub'">
+                                <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" @click="iterateSelectedBox()">
+                                    <span class="material-symbols-outlined" aria-hidden="true" x-text="queryIterateOffer === 'sub' ? 'account_tree' : 'repeat'"></span>
+                                    <span class="m-btn__label" x-text="queryIterateOffer === 'sub' ? 'Make this a sub-iteration' : 'Iterate the selected box over this'"></span>
+                                </button>
+                            </template>
+                            <p class="pe-hint" x-show="queryIterateOffer === 'sub'">This box lists a related row of the card it sits in, not a second whole list. A child that already has a field wired stays a field of the parent row.</p>
+                            <p class="pe-hint" x-show="queryIterateOffer === 'needs-box'">To list these rows, select the box that should repeat (right-click › Wrap in a box). What a row carries is below.</p>
+                            <p class="pe-hint" x-show="queryIterateOffer === 'needs-parent'">This list belongs to one row of its parent. Select an empty box inside that card.</p>
+                            <p class="pe-hint" x-show="queryIterateOffer === 'nested'">Inside this card a box lists the card's related rows, not a second whole list. They are first in the menu.</p>
+
+                            <template x-if="queryIsSunday">
+                                <div class="pe-sun">
+                                    <div class="pe-sun__group">
+                                        <p class="pe-sun__label">Service</p>
+                                        <div class="pe-chips">
+                                            <template x-for="f in querySundayGroups.service" :key="'sun-' + f.key">
+                                                <span class="pe-chip" draggable="true" tabindex="0"
+                                                      :data-chip="chipKey('global', 'sunday', f.key)"
+                                                      :title="f.value || f.label"
+                                                      @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
+                                                    <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
+                                                    <span class="pe-chip__name" x-text="f.label"></span>
+                                                    <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="pe-sun__group" x-show="querySundayGroups.hymns.length">
+                                        <p class="pe-sun__label">Hymns</p>
+                                        <div class="pe-chips">
+                                            <template x-for="f in querySundayGroups.hymns" :key="'hymn-' + f.key">
+                                                <span class="pe-chip" draggable="true" tabindex="0"
+                                                      :data-chip="chipKey('global', 'sunday', f.key)"
+                                                      :title="f.value || f.label"
+                                                      @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">music_note</span>
+                                                    <span class="pe-chip__name" x-text="f.label"></span>
+                                                    <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="pe-sun__group pe-sun__group--scripture" x-show="querySundayGroups.scripture.length" aria-label="Scripture">
+                                        <p class="pe-sun__label">Scripture</p>
+                                        <p class="pe-hint">Reference is the citation as typed. Words are the verses, styled, with the citation line and the short copyright.</p>
+                                        <template x-for="ref in querySundayGroups.scripture" :key="'scr-' + ref.key">
+                                            <div class="pe-scripture-row">
+                                                <div class="pe-scripture-row__meta">
+                                                    <strong x-text="ref.label"></strong>
+                                                    <span class="pe-typecard__live" x-text="ref.citation || 'Nothing entered'"></span>
+                                                </div>
+                                                <span class="pe-chip" draggable="true" tabindex="0"
+                                                      :data-chip="scriptureChipKey(ref, 'citation')"
+                                                      @dragstart="onScriptureChipDragStart($event, ref, 'citation')" @dragend="onChipDragEnd()">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Reference
+                                                </span>
+                                                <span class="pe-chip" draggable="true" tabindex="0"
+                                                      :data-chip="scriptureChipKey(ref, 'passage')"
+                                                      @dragstart="onScriptureChipDragStart($event, ref, 'passage')" @dragend="onChipDragEnd()">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Words
+                                                </span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="!queryIsSunday && queryFields.length && queryChipScope === 'inert'">
+                                <div class="pe-sun__group">
+                                    <p class="pe-sun__label">What a row carries</p>
+                                    <div class="pe-chips pe-chips--inert">
+                                        <template x-for="f in queryFields" :key="'qf-inert-' + f.key">
+                                            <span class="pe-chip pe-chip--inert"><span class="material-symbols-outlined" aria-hidden="true" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!queryIsSunday && queryFields.length && queryChipScope === 'item'">
+                                <div class="pe-sun__group">
+                                    <p class="pe-sun__label">One row</p>
+                                    <div class="pe-chips">
+                                        <template x-for="f in queryFields" :key="'qf-item-' + f.key">
+                                            <span class="pe-chip" draggable="true" tabindex="0"
+                                                  :data-chip="chipKey('item', repeatContext.repeat.source, f.key)"
+                                                  @dragstart="onChipDragStart($event, 'item', { key: repeatContext.repeat.source }, f)" @dragend="onChipDragEnd()">
+                                                <span class="material-symbols-outlined" aria-hidden="true" x-text="kindIcon(f.kind)"></span><span class="pe-chip__name" x-text="f.label"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!queryIsSunday && queryFields.length && queryChipScope === 'global'">
+                                <div class="pe-sun__group">
+                                    <p class="pe-sun__label">Fields</p>
+                                    <div class="pe-chips">
+                                        <template x-for="f in queryFields" :key="'qf-global-' + f.key">
+                                            <span class="pe-chip" draggable="true" tabindex="0"
+                                                  :data-chip="chipKey('global', querySourceKey, f.key)"
+                                                  :title="f.value || f.label"
+                                                  @dragstart="onChipDragStart($event, 'global', querySourceKey, f)" @dragend="onChipDragEnd()">
+                                                <span class="material-symbols-outlined" aria-hidden="true" x-text="kindIcon(f.kind)"></span>
+                                                <span class="pe-chip__name" x-text="f.label"></span>
+                                                <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </section>
 
-                <section class="pe-drawer__section" x-show="showScalarInserts" aria-label="This Sunday">
-                    <article class="pe-typecard pe-sunday">
-                        <div class="pe-typecard__head">
-                            <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
-                            <strong>This Sunday</strong>
-                        </div>
-                        <p class="pe-hint" x-show="selectedKind === 'text' || selectedKind === 'image'">Drag a field onto this element. It reads the Sunday in the header.</p>
-                        <p class="pe-hint" x-show="selectedKind === 'box'">Drag a field onto a text inside this box. A hymn name, the theme, and who is leading are here.</p>
-                        <p class="pe-hint" x-show="!selectedKind">Select a text, then drag a field onto it.</p>
-                        <div class="pe-sun__group">
-                            <p class="pe-sun__label">Service</p>
-                            <div class="pe-chips">
-                                <template x-for="f in sundayServiceChips" :key="'sun-' + f.key">
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="chipKey('global', 'sunday', f.key)"
-                                          :title="f.value || f.label"
-                                          @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
-                                        <span class="pe-chip__name" x-text="f.label"></span>
-                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                    </span>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="pe-sun__group">
-                            <p class="pe-sun__label">Hymns</p>
-                            <div class="pe-chips">
-                                <template x-for="f in sundayHymnChips" :key="'hymn-' + f.key">
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="chipKey('global', 'sunday', f.key)"
-                                          :title="f.value || f.label"
-                                          @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" aria-hidden="true">music_note</span>
-                                        <span class="pe-chip__name" x-text="f.label"></span>
-                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                    </span>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="pe-sun__group" x-show="sundayTypedChips.length">
-                            <p class="pe-sun__label">Booklet text</p>
-                            <div class="pe-chips">
-                                <template x-for="f in sundayTypedChips" :key="'typed-' + f.key">
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="chipKey('global', 'sunday_typed', f.key)"
-                                          :title="f.value || f.label"
-                                          @dragstart="onSundayChipDragStart($event, 'sunday_typed', f)" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
-                                        <span class="pe-chip__name" x-text="f.label"></span>
-                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                    </span>
-                                </template>
-                            </div>
-                        </div>
-                    </article>
-                </section>
-
-                <section class="pe-drawer__section pe-scalars" x-show="showScalarInserts" aria-label="Single values for the page">
-                    <div class="pe-scalars-divider">Single values</div>
+                <details class="pe-part pe-part--fill" open>
+                    <summary class="pe-drawer__title pe-part__head">
+                        <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                        <span>Fill-in library</span>
+                        <span class="pe-part__sum">Blanks a person types</span>
+                        <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
+                    </summary>
                     <div class="pe-typecards">
-                        <details class="pe-fold">
-                            <summary class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-                                <strong>Scripture references</strong>
-                                <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
-                            </summary>
-                            <div class="pe-fold__body">
-                            <p class="pe-hint">This Sunday's references. Reference is the citation. Words are the verses, styled, with the citation line and the short copyright.</p>
-                            <template x-for="ref in scriptureRefs" :key="'scr-' + ref.key">
-                                <div class="pe-scripture-row">
-                                    <div class="pe-scripture-row__meta">
-                                        <strong x-text="ref.label"></strong>
-                                        <span class="pe-typecard__live" x-text="ref.citation || 'Nothing entered'"></span>
-                                    </div>
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="scriptureChipKey(ref, 'citation')"
-                                          @dragstart="onScriptureChipDragStart($event, ref, 'citation')" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Reference
-                                    </span>
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="scriptureChipKey(ref, 'passage')"
-                                          @dragstart="onScriptureChipDragStart($event, ref, 'passage')" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Words
-                                    </span>
-                                </div>
-                            </template>
-                            </div>
-                        </details>
-                        <article class="pe-typecard">
+                        <article class="pe-typecard" aria-label="Filled on the event">
                             <div class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                                <span class="material-symbols-outlined" aria-hidden="true">event_note</span>
                                 <strong>Filled on the event</strong>
                             </div>
                             <p class="pe-hint">A blank the event fills in for that date. Drag it onto the page. The words, the picture, or the list are typed where this printable is linked.</p>
-                            <div class="pe-f"><span>Add</span>
+                            <div class="pe-f" x-show="canEdit"><span>Add</span>
                                 <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Add a field filled on the event">
                                     <button type="button" @click="addEventInput('text')">Text</button>
                                     <button type="button" @click="addEventInput('image')">Image</button>
@@ -866,13 +861,91 @@
                                 </div>
                             </template>
                         </article>
-                        <details class="pe-fold">
-                            <summary class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">tune</span>
-                                <strong>Date, page, and files</strong>
-                                <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
-                            </summary>
-                            <div class="pe-fold__body pe-typecards">
+
+                        <article class="pe-typecard pe-booklet" aria-label="Sunday booklet text">
+                            <div class="pe-typecard__head">
+                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                                <strong>Sunday booklet text</strong>
+                            </div>
+                            <p class="pe-hint">Typed once for a Sunday — the prayer country, the kids lesson, the announcements. Every printable wired to it reads the same words.</p>
+                            <div class="pe-f"><span>Which Sunday</span>
+                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Which Sunday's booklet text">
+                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'last'" @click="setTypedWhen({ mode: 'last' })">Last</button>
+                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'this'" @click="setTypedWhen({ mode: 'this' })">This</button>
+                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'next'" @click="setTypedWhen({ mode: 'next' })">Next</button>
+                                    <input type="date" class="pe-in pe-in--date" aria-label="A Sunday by date" :value="(typedWhen || {}).date || ''" @change="setTypedWhen({ mode: 'date', date: $event.target.value })" />
+                                </span>
+                            </div>
+                            <div class="pe-chips">
+                                <template x-for="f in sundayTypedChips" :key="'typed-' + f.key">
+                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                          :data-chip="chipKey('global', 'sunday_typed', f.key)"
+                                          :title="f.value || f.label"
+                                          @dragstart="onChipDragStart($event, 'global', 'sunday_typed', f)" @dragend="onChipDragEnd()">
+                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
+                                        <span class="pe-chip__name" x-text="f.label"></span>
+                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                    </span>
+                                </template>
+                            </div>
+                            <p class="pe-hint">Each announcement as its own row, and the kids questions one by one, are lists: find them in the query builder.</p>
+                            <details class="pe-fold pe-booklet__form" x-show="canEdit">
+                                <summary class="pe-typecard__head">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                    <strong x-text="'Type the text for ' + (data.typed.date ? formatTypedDate(data.typed.date) : 'this Sunday')"></strong>
+                                    <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
+                                </summary>
+                                <template x-if="canEdit && data.typed.draft">
+                                    <div class="pe-typed">
+                                        <p class="pe-hint">Layout stays on the page; next week reads the next Sunday.</p>
+                                        <p class="pe-typed__h">Prayer country</p>
+                                        <label class="pe-f"><span>Country</span><input class="pe-in" x-model="data.typed.draft.prayerNation" /></label>
+                                        <label class="pe-f"><span>Continent</span><input class="pe-in" x-model="data.typed.draft.prayerContinent" /></label>
+                                        <label class="pe-f"><span>Capital</span><input class="pe-in" x-model="data.typed.draft.prayerCapital" /></label>
+                                        <label class="pe-f"><span>Population</span><input class="pe-in" x-model="data.typed.draft.prayerPopulation" /></label>
+                                        <label class="pe-f"><span>Language</span><input class="pe-in" x-model="data.typed.draft.prayerLanguage" /></label>
+                                        <label class="pe-f"><span>Total languages</span><input class="pe-in" x-model="data.typed.draft.prayerTotalLanguages" /></label>
+                                        <label class="pe-f"><span>Literacy</span><input class="pe-in" x-model="data.typed.draft.prayerLiteracy" /></label>
+                                        <label class="pe-f"><span>Christian</span><input class="pe-in" x-model="data.typed.draft.prayerChristian" /></label>
+                                        <label class="pe-f"><span>Evangelical</span><input class="pe-in" x-model="data.typed.draft.prayerEvangelical" /></label>
+                                        <label class="pe-f"><span>Un-evangelized</span><input class="pe-in" x-model="data.typed.draft.prayerUnevangelized" /></label>
+                                        <label class="pe-f"><span>Prompts</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.prayerPrompts" placeholder="One prompt per line"></textarea></label>
+                                        <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://…" /></label>
+                                        <input type="file" accept="image/*" class="pe-typed__file" aria-label="Upload a country map" @change="onTypedCountryImage($event)" />
+                                        <p class="pe-hint">Upload stores the image in Storage (max 8 MB) and keeps the https URL on this Sunday. A pasted https URL is fine. Large data URLs are refused.</p>
+                                        <p class="pe-typed__h">Mosaic Kids</p>
+                                        <label class="pe-f"><span>Lesson</span><input class="pe-in" x-model="data.typed.draft.kidsLessonTitle" /></label>
+                                        <label class="pe-f"><span>Verse</span><input class="pe-in" x-model="data.typed.draft.kidsLessonVerse" /></label>
+                                        <label class="pe-f"><span>Summary</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsSummary" placeholder="One point per line"></textarea></label>
+                                        <label class="pe-f"><span>Questions</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsQuestions" placeholder="One question per line"></textarea></label>
+                                        <p class="pe-typed__h">Announcements</p>
+                                        <template x-for="(item, i) in data.typed.draft.announcements" :key="'ann-' + i">
+                                            <div class="pe-typed__ann">
+                                                <label class="pe-f"><span>Title</span><input class="pe-in" x-model="item.title" /></label>
+                                                <label class="pe-f"><span>Body</span><textarea class="pe-in pe-ta" rows="2" x-model="item.content"></textarea></label>
+                                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="removeTypedAnnouncement(i)">Remove</button>
+                                            </div>
+                                        </template>
+                                        <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-typed__add" @click="addTypedAnnouncement()">Add an announcement</button>
+                                        <button type="button" class="m-btn m-btn--primary m-btn--sm pe-typed__save" @click="saveTypedDraft()" :disabled="data.typed.saving">
+                                            <span class="m-btn__label" x-text="data.typed.saving ? 'Saving…' : 'Save this Sunday'"></span>
+                                        </button>
+                                        <p class="pe-hint" x-show="data.typed.status" x-text="data.typed.status" aria-live="polite"></p>
+                                    </div>
+                                </template>
+                            </details>
+                        </article>
+                    </div>
+                </details>
+
+                <details class="pe-part pe-part--general">
+                    <summary class="pe-drawer__title pe-part__head">
+                        <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+                        <span>General live data</span>
+                        <span class="pe-part__sum">Date · page number · brand files</span>
+                        <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="pe-typecards">
                         <article class="pe-typecard">
                             <div class="pe-typecard__head">
                                 <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
@@ -930,7 +1003,7 @@
                                 <span class="material-symbols-outlined" aria-hidden="true">drive_folder_upload</span>
                                 <strong>Brand assets</strong>
                             </div>
-                            <label class="m-btn m-btn--secondary m-btn--sm pe-upload pe-typecard__upload">
+                            <label class="m-btn m-btn--secondary m-btn--sm pe-upload pe-typecard__upload" x-show="canEdit">
                                 <span class="material-symbols-outlined" aria-hidden="true">upload</span>
                                 <span class="m-btn__label">Upload image or font…</span>
                                 <input type="file" accept="image/*,.woff2,.woff,.ttf,.otf" aria-label="Upload brand asset" @change="uploadBrandAsset($event)" />
@@ -954,10 +1027,8 @@
                                 </div>
                             </template>
                         </article>
-                            </div>
-                        </details>
                     </div>
-                </section>
+                </details>
 
                 <section class="pe-drawer__section pe-drawer__section--warn" x-show="data.warnings.length">
                     <button type="button" class="pe-drawer__title pe-drawer__title--toggle"
@@ -977,118 +1048,7 @@
                         </template>
                     </div>
                 </section>
-                <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (showQueryBuilder || showParentRowFields || selectedBindings.length)">Every wired field has a value today.</p>
-
-                <div x-show="showCatalog">
-
-                    <template x-for="region in regions" :key="region.name">
-                        <section class="pe-drawer__section">
-                            <h3 class="pe-drawer__title" x-text="region.name"></h3>
-                            <template x-for="src in region.sources" :key="src.key">
-                                <div class="pe-src" :class="data.open[src.key] ? 'is-open' : ''">
-                                    <button type="button" class="pe-src__row" @click="toggleSource(src.key)">
-                                        <span class="material-symbols-outlined" x-text="src.shape === 'list' ? 'list' : 'data_object'"></span>
-                                        <span class="pe-src__body"><span class="pe-src__label" x-text="src.label"></span><span class="pe-src__blurb" x-show="!data.open[src.key]" x-text="src.blurb"></span></span>
-                                        <span class="material-symbols-outlined pe-src__chev">expand_more</span>
-                                    </button>
-                                    <div class="pe-src__detail" x-show="data.open[src.key]">
-                                        <p class="pe-src__blurb" x-text="src.blurb"></p>
-                                        <!-- A list: iterate an element over it -->
-                                        <template x-if="src.shape === 'list'">
-                                            <div>
-                                                <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-src__iter" :disabled="selectedKind !== 'box'" @click="makeIterated(); chooseList(src)">
-                                                    <span class="material-symbols-outlined">repeat</span><span class="m-btn__label">Iterate the selected element over this</span>
-                                                </button>
-                                                <p class="pe-hint" x-show="selectedKind !== 'box'">Select a box on the page first — a box is what stands for a row.</p>
-                                                <p class="pe-hint">Fields of a row:</p>
-                                                <div class="pe-chips pe-chips--inert">
-                                                    <template x-for="f in fieldsOf(src)" :key="src.key + '-' + f.key"><span class="pe-chip pe-chip--inert"><span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span></span></template>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        <!-- A single: its params, then its fields as chips -->
-                                        <template x-if="src.shape === 'single'">
-                                            <div>
-                                                <template x-for="param in (src.params || [])" :key="src.key + '-' + param.key">
-                                                    <div>
-                                                        <div class="pe-f" x-show="param.kind === 'when'"><span x-text="param.label"></span>
-                                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'last'" @click="setSourceWhen(src, param.key, { mode: 'last' })">Last</button>
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'this'" @click="setSourceWhen(src, param.key, { mode: 'this' })">This</button>
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) === 'next'" @click="setSourceWhen(src, param.key, { mode: 'next' })">Next</button>
-                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="setSourceWhen(src, param.key, { mode: 'date', date: $event.target.value })" />
-                                                            </span></div>
-                                                        <div class="pe-f" x-show="param.kind === 'when-event'"><span x-text="param.label"></span>
-                                                            <span class="pe-seg pe-seg--text pe-seg--tiny">
-                                                                <button type="button" :aria-pressed="whenMode(sourceParams(src)[param.key]) !== 'date'" @click="sourceParams(src)[param.key] = { mode: 'next' }">Next date</button>
-                                                                <input type="date" class="pe-in pe-in--date" :value="(sourceParams(src)[param.key] || {}).date || ''" @change="sourceParams(src)[param.key] = { mode: 'date', date: $event.target.value }" title="The first date on or after" />
-                                                            </span></div>
-                                                        <label class="pe-f" x-show="param.kind === 'series'"><span x-text="param.label"></span>
-                                                            <select class="pe-in" x-model="sourceParams(src)[param.key]">
-                                                                <option value="">Choose an event</option>
-                                                                <template x-for="sr in data.options.series" :key="sr.id"><option :value="sr.id" x-text="sr.name"></option></template>
-                                                            </select></label>
-                                                        <label class="pe-f" x-show="param.kind === 'role'"><span x-text="param.label"></span>
-                                                            <select class="pe-in" x-model="sourceParams(src)[param.key]">
-                                                                <option value="">Choose a role</option>
-                                                                <template x-for="r in rolesFor(sourceParams(src).seriesId)" :key="r.slug"><option :value="r.slug" x-text="r.name"></option></template>
-                                                            </select></label>
-                                                    </div>
-                                                </template>
-                                                <div class="pe-chips">
-                                                    <template x-for="f in fieldsOf(src)" :key="src.key + '-' + f.key">
-                                                        <span class="pe-chip" draggable="true" :data-chip="chipKey('global', src.key, f.key)"
-                                                              @dragstart="onChipDragStart($event, 'global', src, f)" @dragend="onChipDragEnd()">
-                                                            <span class="material-symbols-outlined" x-text="kindIcon(f.kind)"></span><span x-text="f.label"></span>
-                                                        </span>
-                                                    </template>
-                                                </div>
-                                                <template x-if="src.key === 'sunday_typed' && canEdit && data.typed.draft">
-                                                <div class="pe-typed">
-                                                    <p class="pe-hint">Type these once for <strong x-text="data.typed.date ? formatTypedDate(data.typed.date) : 'this Sunday'"></strong>. Layout stays on the page; next week reads the next Sunday.</p>
-                                                    <p class="pe-typed__h">Prayer country</p>
-                                                    <label class="pe-f"><span>Country</span><input class="pe-in" x-model="data.typed.draft.prayerNation" /></label>
-                                                    <label class="pe-f"><span>Continent</span><input class="pe-in" x-model="data.typed.draft.prayerContinent" /></label>
-                                                    <label class="pe-f"><span>Capital</span><input class="pe-in" x-model="data.typed.draft.prayerCapital" /></label>
-                                                    <label class="pe-f"><span>Population</span><input class="pe-in" x-model="data.typed.draft.prayerPopulation" /></label>
-                                                    <label class="pe-f"><span>Language</span><input class="pe-in" x-model="data.typed.draft.prayerLanguage" /></label>
-                                                    <label class="pe-f"><span>Total languages</span><input class="pe-in" x-model="data.typed.draft.prayerTotalLanguages" /></label>
-                                                    <label class="pe-f"><span>Literacy</span><input class="pe-in" x-model="data.typed.draft.prayerLiteracy" /></label>
-                                                    <label class="pe-f"><span>Christian</span><input class="pe-in" x-model="data.typed.draft.prayerChristian" /></label>
-                                                    <label class="pe-f"><span>Evangelical</span><input class="pe-in" x-model="data.typed.draft.prayerEvangelical" /></label>
-                                                    <label class="pe-f"><span>Un-evangelized</span><input class="pe-in" x-model="data.typed.draft.prayerUnevangelized" /></label>
-                                                    <label class="pe-f"><span>Prompts</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.prayerPrompts" placeholder="One prompt per line"></textarea></label>
-                                                    <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://…" /></label>
-                                                    <input type="file" accept="image/*" class="pe-typed__file" @change="onTypedCountryImage($event)" />
-                                                    <p class="pe-hint">Upload stores the image in Storage (max 8 MB) and keeps the https URL on this Sunday. A pasted https URL is fine. Large data URLs are refused.</p>
-                                                    <p class="pe-typed__h">Mosaic Kids</p>
-                                                    <label class="pe-f"><span>Lesson</span><input class="pe-in" x-model="data.typed.draft.kidsLessonTitle" /></label>
-                                                    <label class="pe-f"><span>Verse</span><input class="pe-in" x-model="data.typed.draft.kidsLessonVerse" /></label>
-                                                    <label class="pe-f"><span>Summary</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsSummary" placeholder="One point per line"></textarea></label>
-                                                    <label class="pe-f"><span>Questions</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsQuestions" placeholder="One question per line"></textarea></label>
-                                                    <p class="pe-typed__h">Announcements</p>
-                                                    <template x-for="(item, i) in data.typed.draft.announcements" :key="'ann-' + i">
-                                                        <div class="pe-typed__ann">
-                                                            <label class="pe-f"><span>Title</span><input class="pe-in" x-model="item.title" /></label>
-                                                            <label class="pe-f"><span>Body</span><textarea class="pe-in pe-ta" rows="2" x-model="item.content"></textarea></label>
-                                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="removeTypedAnnouncement(i)">Remove</button>
-                                                        </div>
-                                                    </template>
-                                                    <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-typed__add" @click="addTypedAnnouncement()">Add an announcement</button>
-                                                    <button type="button" class="m-btn m-btn--primary m-btn--sm pe-typed__save" @click="saveTypedDraft()" :disabled="data.typed.saving">
-                                                        <span class="m-btn__label" x-text="data.typed.saving ? 'Saving…' : 'Save this Sunday'"></span>
-                                                    </button>
-                                                    <p class="pe-hint" x-show="data.typed.status" x-text="data.typed.status"></p>
-                                                </div>
-                                                </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-                        </section>
-                    </template>
-                </div>
+                <p class="pe-hint pe-drawer__ok" x-show="data.loaded && !data.warnings.length && !data.loading && (queryRepeatNode || selectedBindings.length)">Every wired field has a value today.</p>
             </div>
         </aside>
 
@@ -1400,13 +1360,10 @@
         .pe-panel--right:empty { display: flex; }
         .pe-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 12px 6px; }
         .pe-drawer__head .pe-h { margin: 0; flex: 1; }
-        .pe-drawer__search { padding: 0 12px 8px; border-bottom: 1px solid var(--outline-variant); }
-        .pe-drawer__search .m-search { width: 100%; }
         .pe-drawer__body { flex: 1; overflow: auto; padding: 8px 12px 16px; }
         .pe-drawer__body.is-menu-open { overflow: visible; }
         .pe-drawer__error { color: var(--error); font-size: 12px; margin: 4px 0 8px; }
         .pe-drawer__section { margin-bottom: 14px; }
-        .pe-drawer__section--item { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); }
         .pe-query { padding: 8px 10px; border: 1px solid var(--tertiary); border-radius: var(--radius); background: var(--surface-container-lowest); overflow: visible; position: relative; z-index: 8; }
         .pe-query__pick { margin: 4px 0 8px; }
         .pe-query__find { width: 100%; margin-bottom: 4px; }
@@ -1419,22 +1376,22 @@
         .pe-query__count { margin: 8px 0 4px; font: 600 12px var(--font-sans); color: var(--on-surface); }
         .pe-query__preview { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 12px; line-height: 1.4; }
         .pe-query__preview li { margin: 0; }
+        .pe-query__notes { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 11.5px; line-height: 1.35; list-style: disc; }
+        .pe-query__pick .m-dropdown__opt { font-size: 13px; padding: 7px 10px; }
+        .pe-query__pick .m-dropdown__opt .m-badge { flex: 0 0 auto; font-size: 10.5px; padding: 0 6px; }
+        /* The drawer's second and third parts fold; the query builder never does. */
+        .pe-part { margin-bottom: 14px; }
+        .pe-part__head { cursor: pointer; list-style: none; }
+        .pe-part__head::-webkit-details-marker { display: none; }
+        .pe-part__head:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .pe-part__sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font: 400 11px var(--font-sans); letter-spacing: 0; text-transform: none; }
+        .pe-part[open] > .pe-part__head .pe-src__chev { transform: rotate(180deg); }
+        .pe-booklet > .pe-chips { margin-bottom: 4px; }
+        .pe-booklet__form { margin-top: 6px; }
         .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
         .pe-drawer__ok { color: var(--success); }
-        .pe-query__region { margin: 8px 0 10px; }
-        .pe-src--pick { display: block; width: 100%; text-align: left; cursor: pointer; padding: 0; font: inherit; color: inherit; }
-        .pe-src--pick.is-picked { border-color: var(--tertiary); box-shadow: 0 0 0 1px var(--tertiary); }
-        .pe-src { border: 1px solid var(--outline-variant); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface-container-lowest); overflow: hidden; }
-        .pe-src__row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
-        .pe-src__row:hover { background: var(--surface-container); }
-        .pe-src__row > .material-symbols-outlined { font-size: 18px; color: var(--primary); flex: 0 0 auto; }
-        .pe-src__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-        .pe-src__label { font: 600 13px var(--font-sans); color: var(--on-surface); }
-        .pe-src__blurb { font-size: 11.5px; line-height: 1.35; color: var(--on-surface-variant); }
         .pe-src__chev { font-size: 18px; color: var(--on-surface-variant); transition: transform var(--duration) var(--ease-standard); }
-        .pe-src.is-open .pe-src__chev { transform: rotate(180deg); }
-        .pe-src__detail { padding: 4px 10px 10px; border-top: 1px solid var(--outline-variant); }
         .pe-typed { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--outline-variant); display: flex; flex-direction: column; gap: 6px; }
         .pe-typed__h { margin: 8px 0 0; font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-typed__ann { padding: 6px 0; border-bottom: 1px solid var(--outline-variant); }
@@ -1442,9 +1399,6 @@
         .pe-typed__file { font-size: 11px; }
         .pe-src__iter { width: 100%; justify-content: center; margin: 6px 0; height: auto; min-height: 34px; padding: 7px 10px; white-space: normal; }
         .pe-src__iter .m-btn__label { white-space: normal; text-align: center; line-height: 1.25; }
-        .pe-src--pick { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
-        .pe-src--pick:hover { border-color: var(--primary); background: var(--surface-container); }
-        .pe-src--pick > .material-symbols-outlined { color: var(--primary); }
         .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
         .pe-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 8px 4px 6px; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container-lowest); font: 500 12px var(--font-sans); color: var(--on-surface); cursor: grab; user-select: none; }
         .pe-chip:hover { border-color: var(--tertiary); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
@@ -1456,7 +1410,6 @@
         .pe-chip--inert { cursor: default; opacity: .7; }
         .pe-sun__group { margin-top: 8px; }
         .pe-sun__label { margin: 0 0 4px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
-        .pe-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         .pe-fold {
             padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
             background: var(--surface-container-lowest);
@@ -1469,10 +1422,6 @@
         .pe-fold > summary:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
         .pe-fold__body { margin-top: 6px; }
         .pe-chip--inert:hover { border-color: var(--outline-variant); box-shadow: none; }
-        .pe-scalars-divider {
-            margin: 8px 0 6px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase;
-            color: var(--on-surface-variant);
-        }
         .pe-typecards { display: flex; flex-direction: column; gap: 6px; }
         .pe-typecard {
             padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);
@@ -1530,8 +1479,6 @@
         .pe-in--date { flex: 1 1 92px; width: auto; min-width: 92px; height: 24px; font-size: 11px; padding: 0 4px; }
         .pe-bound-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--tertiary); border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--tertiary); pointer-events: none; z-index: 4; }
         .pe-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 70; overflow: visible; }
-        .pe-drawer__cta { padding: 10px; border: 1px dashed var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); }
-        .pe-drawer__iter { width: 100%; justify-content: flex-start; }
         .pe-wires path { fill: none; stroke: var(--tertiary); stroke-width: 2; stroke-linecap: round; }
         .pe-wires path.is-live { stroke-dasharray: 6 5; animation: pe-dash .6s linear infinite; }
         .pe-wires path.is-enter { animation: pe-wire-in .45s ease-out; }

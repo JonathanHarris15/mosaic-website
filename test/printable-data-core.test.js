@@ -232,6 +232,33 @@ test('children of a household are a related list of that household, not a top-le
     assert.ok(Data.needsFor('household_children', {}, TODAY).families);
 });
 
+test('MS-730: the query builder offers every source a level may read, single and list, and nothing typed or inserted', () => {
+    const member = Data.querySourcesFor('member').map(s => s.key);
+    ['people', 'households', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',
+        'sunday_kids_questions', 'sundays', 'event_dates'].forEach(key => {
+        assert.ok(member.includes(key), key + ' is in a member\'s query builder');
+    });
+    assert.ok(member.includes('sunday') && Data.sourceByKey('sunday').shape === 'single', 'a single is queried too');
+    ['sunday_typed', 'insert_date', 'insert_page_number'].forEach(key => {
+        assert.ok(!member.includes(key), key + ' has no records to query');
+    });
+    assert.ok(!member.includes('household_children'), 'a related list waits for its parent row');
+    assert.ok(!member.includes('role_holder') && !member.includes('form_answers'), 'editor sources stay off a member\'s builder');
+    const editor = Data.querySourcesFor('editor').map(s => s.key);
+    assert.ok(editor.includes('role_holder') && editor.includes('form_answers'));
+    const viewer = Data.querySourcesFor('viewer').map(s => s.key);
+    assert.ok(!viewer.includes('people') && !viewer.includes('households'), 'the directory is above a viewer');
+    member.forEach(key => assert.ok(Data.mayQuery('member', key), key + ' passes the same gate as a saved query'));
+    const inHouse = Data.querySourcesFor('member', 'households').map(s => s.key);
+    assert.equal(inHouse[0], 'household_children', 'inside a household card its children come first');
+    assert.equal(Data.sourceByKey('households').row, 'household', 'one row of households is called a household');
+    assert.equal(Data.sourceByKey('sunday_typed').blank, true, 'booklet text is typed, so it is a blank');
+    const role = Data.querySpecsFor('role_holder', 'editor');
+    assert.ok(role.find(s => s.key === 'seriesId').required && role.find(s => s.key === 'roleSlug').required,
+        'who holds a role reads nothing until both are chosen');
+    assert.ok(Data.querySpecsFor('form_answers', 'editor').find(s => s.key === 'formId').required);
+});
+
 test('households can be kept to those with children', () => {
     const any = Data.resolve('households', { membership: 'everyone' }, FAMILY_WITH_KIDS(), { today: TODAY, level: 'member' });
     assert.ok(any.rows.some(r => r.name === 'The Carter household'));

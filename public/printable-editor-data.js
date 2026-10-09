@@ -4,8 +4,13 @@
 // Mixed into the editor's Alpine object by printable-editor.js, so `this` is
 // the editor. It owns:
 //
-//   • the DRAWER on the right — what the catalog offers this viewer, grouped
-//     by region, with each source's params and its fields as draggable chips;
+//   • the DRAWER on the right, in three parts (MS-730):
+//       – the QUERY BUILDER: every catalog source this viewer may read,
+//         single or list — pick one, set its params and filters, drag its
+//         fields; a list meeting a selected box iterates that box;
+//       – the FILL-IN LIBRARY: blanks a person types — fields filled on
+//         the event, and the Sunday booklet text with its form;
+//       – GENERAL LIVE DATA: the date, the page number, brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
 //     the chip to the cursor and, once bound, from the chip to the element
 //     whenever that element is selected;
@@ -39,13 +44,25 @@
             && elRect.top < viewRect.bottom;
     }
 
-    // Every iterable list the catalog used to list, grouped the way the
-    // query builder shows them. Related lists (`of`) sit first, as
-    // "Of this household", and only if the caller passed them in.
-    function groupQueryLists(lists, search) {
+    // Which part of the drawer a catalog source lives in. Every source has
+    // exactly one home, so the same data is never two ways to the page: a
+    // record the site keeps is queried, a blank is filled in, and a scalar
+    // insert is general live data.
+    function drawerPartOf(source) {
+        if (!source) return '';
+        if (source.scalar) return 'general';
+        if (source.blank) return 'fill';
+        return 'query';
+    }
+
+    // The query builder's menu: the sources it was handed, grouped by
+    // region. Related lists (`of`) sit first, under what one row of their
+    // parent is called — "Of this household" — and only if the caller
+    // passed them in. A blank or a scalar insert is never in the menu.
+    function groupQuerySources(sources, search, parent) {
         const q = String(search || '').trim().toLowerCase();
-        const filtered = (lists || []).filter(s => {
-            if (!s || s.shape === 'single') return false;
+        const filtered = (sources || []).filter(s => {
+            if (!s || drawerPartOf(s) !== 'query') return false;
             if (!q) return true;
             const hay = [s.label, s.region, s.blurb]
                 .concat((s.fields || []).map(f => f.label))
@@ -62,8 +79,69 @@
             byRegion[s.region].push(s);
         });
         const regions = order.map(r => ({ name: r, sources: byRegion[r] }));
-        if (related.length) regions.unshift({ name: 'Of this household', sources: related });
+        if (related.length) {
+            const row = (parent && parent.row) || 'row';
+            regions.unshift({ name: 'Of this ' + row, sources: related, related: true });
+        }
         return regions;
+    }
+
+    // What the query builder is looking at, from the selection.
+    //   own    — the selected box repeats: the builder is that box's query,
+    //            and picking a list changes what it repeats over.
+    //   row    — the selection sits in an iterated card: the builder shows
+    //            that card's list, so the fields of one row are at hand.
+    //   browse — anything else: the drawer holds the params, and a chip
+    //            carries them onto the element it lands on.
+    // An unbound box inside a card with related lists browses the first of
+    // them, so the sub-iteration is one press away. A pick made while this
+    // selection is chosen wins over the card.
+    function querySubject(o) {
+        const opts = o || {};
+        if (opts.ownRepeat) return { scope: 'own', source: opts.ownRepeat.source || '' };
+        const ctx = opts.context || null;
+        const pick = opts.pick || '';
+        const pickedHere = !!pick && (opts.pickedFor || null) === (opts.selectionId || null);
+        if (ctx && !pickedHere) {
+            if (opts.related && opts.related.length) return { scope: 'browse', source: opts.related[0] };
+            return { scope: 'row', source: ctx.source || '' };
+        }
+        if (ctx && pick === ctx.source) return { scope: 'row', source: pick };
+        return { scope: 'browse', source: pick };
+    }
+
+    // The source the builder opens on: the one this printable already reads
+    // most, so a booklet opens on its Sunday and a directory on its people.
+    // Ties go to the catalog's order; a printable that reads nothing opens
+    // on nothing picked.
+    function defaultQuerySource(project, keys) {
+        const offered = keys || [];
+        const counts = {};
+        const visit = nodes => (nodes || []).forEach(node => {
+            if (!node) return;
+            if (node.repeat && node.repeat.source) counts[node.repeat.source] = (counts[node.repeat.source] || 0) + 1;
+            Object.keys(node.bind || {}).forEach(prop => {
+                const b = node.bind[prop];
+                if (b && b.scope === 'global' && b.source) counts[b.source] = (counts[b.source] || 0) + 1;
+            });
+            visit(node.children);
+        });
+        ((project && project.pages) || []).forEach(page => visit(page && page.nodes));
+        let best = '';
+        offered.forEach(key => {
+            if ((counts[key] || 0) > (counts[best] || 0)) best = key;
+        });
+        return best;
+    }
+
+    // What an empty choice in a picker says: a required param asks for one,
+    // an optional one means every event, no role, or no form yet.
+    function specEmptyLabel(spec) {
+        const s = spec || {};
+        if (s.kind === 'series') return s.required ? 'Choose an event' : 'Every event';
+        if (s.kind === 'role') return s.required ? 'Choose a role' : 'No role';
+        if (s.kind === 'form') return 'Choose a form';
+        return '';
     }
 
     // What the query preview calls a row: a name, a slot, a date in words —
@@ -168,22 +246,13 @@
         return 0;
     }
 
-    // Lists a Sunday guide repeats, offered before the full query builder.
-    // Picking one iterates the selected box and opens the builder on it.
-    const SUNDAY_QUICK_LISTS = [
-        { key: 'sunday_announcements', label: 'Announcements' },
-        { key: 'sunday_hymns', label: 'Hymn pages' },
-        { key: 'sunday_rows', label: 'Order of service' },
-        { key: 'sunday_kids_questions', label: 'Kids questions' },
-        { key: 'sundays', label: 'Sundays' },
-    ];
-
-    // What "This Sunday" shows as chips. Scripture stays on its own card.
-    // Extra date formats stay off — longDate is the one the guide prints.
-    // `fillFields` is the typed-on-the-Sunday set (prayer, Mosaic Kids).
-    // Chips follow the Liturgy Order This Sunday uses (ADR 0080): identity
-    // fields, then that order's placements under their order names. Without
-    // a catalog, Standard is the order.
+    // The chips the query builder shows for A Sunday, grouped Service,
+    // Hymns and Scripture. Extra date formats stay off — longDate is the
+    // one the guide prints. `fillFields` is the typed-on-the-Sunday set
+    // (prayer, Mosaic Kids), which the Fill-in library offers. Chips follow
+    // the Liturgy Order that Sunday uses (ADR 0080): identity fields, then
+    // that order's placements under their order names. Without a catalog,
+    // Standard is the order.
     function sundayDrawerFields(Data, Passage, fillFields, options) {
         const Liturgy = global.LiturgyOrderCore;
         const liturgy = options && options.liturgy;
@@ -241,9 +310,15 @@
                 service.push(chip);
             });
         }
-        const typedSkip = { announcements: true, announcementCount: true };
-        const typed = (fillFields || []).filter(f => f && !typedSkip[f.key]);
-        return { service: service, hymns: hymns, typed: typed, scripture: scripture };
+        return { service: service, hymns: hymns, typed: typedChipFields(fillFields), scripture: scripture };
+    }
+
+    // The Sunday booklet fields offered as chips. Announcements are a list
+    // — the query builder iterates them — so the joined field and its
+    // count stay off.
+    function typedChipFields(fields) {
+        const skip = { announcements: true, announcementCount: true };
+        return (fields || []).filter(f => f && !skip[f.key]);
     }
 
     function chipPreview(kind, raw) {
@@ -260,11 +335,15 @@
         wireKey: wireKey,
         firstLaidOutChip: firstLaidOutChip,
         drawerScrollDelta: drawerScrollDelta,
-        groupQueryLists: groupQueryLists,
+        drawerPartOf: drawerPartOf,
+        groupQuerySources: groupQuerySources,
+        querySubject: querySubject,
+        defaultQuerySource: defaultQuerySource,
+        specEmptyLabel: specEmptyLabel,
         previewName: previewName,
         syncWirePaths: syncWirePaths,
-        SUNDAY_QUICK_LISTS: SUNDAY_QUICK_LISTS,
         sundayDrawerFields: sundayDrawerFields,
+        typedChipFields: typedChipFields,
         chipPreview: chipPreview,
     };
     global.PrintableEditorWires = PrintableEditorWires;
@@ -285,6 +364,10 @@
             kidsLessonTitle: '', kidsLessonVerse: '', kidsSummary: '',
             kidsQuestions: '', announcements: [{ title: '', content: '' }],
         };
+    }
+
+    function emptyQueryPreview() {
+        return { key: '', loading: false, count: null, names: [], row: {}, warnings: [], service: null, liturgy: null, error: '' };
     }
 
     function initialViewDate() {
@@ -332,14 +415,16 @@
                 loaded: false,
                 error: '',
                 search: '',
-                queryMenuOpen: false,  // the list picker dropdown
+                queryMenuOpen: false,  // the source picker dropdown
                 warningsOpen: true,    // "Not all data could be pulled" is open until folded
-                open: {},              // sourceKey -> expanded in the drawer
-                params: {},            // sourceKey -> the params chips carry (single sources)
+                params: {},            // sourceKey -> the params a browsed source's chips carry
                 options: { series: [], roles: [], forms: [] },
                 warnings: [],
-                picking: false,        // choosing a list for the selected element
-                typed: { date: '', draft: emptyTypedDraft(), saving: false, status: '' },
+                // The query builder's own pick, and the selection it was
+                // made for (see querySubject). The preview is what that
+                // pick reads today, fetched for the builder alone.
+                query: { source: '', pickedFor: null, preview: emptyQueryPreview() },
+                typed: { date: '', draft: emptyTypedDraft(), row: {}, saving: false, status: '' },
                 assetUploadError: '',
             },
             layout: [],                // what the canvas draws: stored pages, overflow continuations included
@@ -367,6 +452,9 @@
                     const src = Data.sourceByKey(key);
                     if (src && !this.data.params[key]) this.data.params[key] = Data.defaultParams(src);
                 });
+                if (!this.data.query.source) {
+                    this.data.query.source = defaultQuerySource(this.project, Data.querySourcesFor(this.permissionLevel).map(s => s.key));
+                }
                 this.data.loading = true;
                 try {
                     this.data.options = await global.PrintableDataStore.loadOptions(db, this.viewer());
@@ -375,6 +463,7 @@
                 }
                 this.bindWireTracking();
                 await this.refreshData();
+                this.loadTypedDraft();
             },
 
             // The chip end of a wire lives in the drawer; without a scroll
@@ -393,6 +482,14 @@
             // One fetch of everything the project reads, then a resolver the
             // canvas draws through. Called on open, on Refresh, and when a
             // list's params change (its needs may have changed).
+            // The drawer's Refresh: today's data again, and the query
+            // builder's preview with it.
+            reloadData() {
+                ui.previews = {};
+                this.data.query.preview = emptyQueryPreview();
+                return this.refreshData();
+            },
+
             async refreshData() {
                 if (!this.project || !this.template) return;
                 this.data.loading = true;
@@ -483,24 +580,6 @@
 
             // ── The drawer ───────────────────────────────────────────────
 
-            get regions() {
-                const q = this.data.search.trim().toLowerCase();
-                const sources = Data.sourcesFor(this.permissionLevel).filter(s => {
-                    if (s.of && !q) return false;
-                    if (!q) return true;
-                    const hay = (s.label + ' ' + s.region + ' ' + s.fields.map(f => f.label).join(' ')).toLowerCase();
-                    return hay.includes(q);
-                });
-                const byRegion = {};
-                const order = [];
-                sources.forEach(s => {
-                    if (s.scalar) return;
-                    if (!byRegion[s.region]) { byRegion[s.region] = []; order.push(s.region); }
-                    byRegion[s.region].push(s);
-                });
-                return order.map(r => ({ name: r, sources: byRegion[r] }));
-            },
-
             // The iterated element the selection sits in (itself, or an
             // ancestor), if any.
             get repeatContext() {
@@ -550,38 +629,292 @@
                 return this.listSources.filter(s => !s.of);
             },
 
-            // The catalog of iterable lists, shown inside the query
-            // builder — that is how you pick what the box stands for.
-            get queryCatalogRegions() {
-                return groupQueryLists(this.listSources, this.data.search);
+            // ── The query builder ────────────────────────────────────────
+            // One builder for every source this viewer may read. What it
+            // shows follows the selection (see querySubject): a repeating
+            // box is its own query, a card's inside reads that card's rows,
+            // and anything else browses a pick the drawer remembers.
+
+            get querySubject() {
+                const node = this.selectedNode;
+                const own = node && node.repeat ? node.repeat : null;
+                const ctx = !own && this.repeatContext ? this.repeatContext.repeat : null;
+                const related = this.canStartSubIteration ? this.relatedListSources.map(s => s.key) : [];
+                return PrintableEditorWires.querySubject({
+                    ownRepeat: own,
+                    context: ctx,
+                    related: related,
+                    pick: this.data.query.source,
+                    pickedFor: this.data.query.pickedFor,
+                    selectionId: (this.selection && this.selection.nodeId) || null,
+                });
+            },
+
+            get queryScope() {
+                return this.querySubject.scope;
             },
 
             get querySourceKey() {
-                const t = this.queryTarget;
-                return (t && t.repeat && t.repeat.source) || '';
+                return this.querySubject.source;
+            },
+
+            // The catalog entry, as this viewer may see it. Null for a list
+            // above them (a locked query) and for an event list, which is
+            // not a catalog source.
+            get querySource() {
+                const key = this.querySourceKey;
+                if (!key) return null;
+                return Data.sourcesFor(this.permissionLevel).find(s => s.key === key) || null;
+            },
+
+            // The Repeat the builder reads and writes: the selected box's,
+            // or the card's while the builder shows that card's rows.
+            get queryRepeatNode() {
+                const scope = this.queryScope;
+                if (scope === 'own') return this.selectedNode;
+                if (scope === 'row') return this.repeatContext;
+                return null;
+            },
+
+            // What the menu offers. A repeating box picks among lists —
+            // related ones first when it sits in their parent. Browsing
+            // offers every source this viewer may read, singles too.
+            get queryOffered() {
+                if (this.queryScope === 'own') return this.listSources;
+                const card = this.repeatContext;
+                return Data.querySourcesFor(this.permissionLevel, card && card.repeat ? card.repeat.source : null);
+            },
+
+            get queryCatalogRegions() {
+                const offered = this.queryOffered;
+                const parentKey = this.queryScope === 'own'
+                    ? (this.enclosingRepeat && this.enclosingRepeat.repeat.source)
+                    : (this.repeatContext && this.repeatContext.repeat.source);
+                return groupQuerySources(offered, this.data.search, parentKey ? Data.sourceByKey(parentKey) : null);
             },
 
             get querySourceLabel() {
                 const key = this.querySourceKey;
-                if (!key) return 'Pick a list';
-                const src = this.listSources.find(s => s.key === key)
-                    || Data.sourceByKey(key);
+                if (!key) return this.queryScope === 'own' ? 'Pick a list' : 'Pick what to read';
+                if (key === 'event_list') {
+                    const Link = linkFields();
+                    const r = this.queryRepeatNode;
+                    const input = Link && r && Link.inputById(this.project, r.repeat.params && r.repeat.params.inputId);
+                    return (input ? input.label : 'A list') + ' · filled on the event';
+                }
+                const src = this.querySource || Data.sourceByKey(key);
                 return (src && src.label) || key;
             },
 
             get queryLocked() {
-                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
-                return !!(r && r.repeat.source && !Data.mayQuery(this.permissionLevel, r.repeat.source));
+                const r = this.queryRepeatNode;
+                const key = r && r.repeat && r.repeat.source;
+                return !!(key && key !== 'event_list' && !Data.mayQuery(this.permissionLevel, key));
             },
 
-            // The catalog of every list is not how you start. Pick an
-            // element, make it iterated, then the query builder opens.
-            get showCatalog() {
-                return false;
+            // The params and filters this viewer may set on the pick.
+            get querySpecs() {
+                const src = this.querySource;
+                if (!src || this.queryLocked) return [];
+                return Data.querySpecsFor(src, this.permissionLevel, this.data && this.data.options);
             },
 
-            get showScalarInserts() {
-                return this.canEdit && !this.data.picking;
+            // The params a browsed source's chips carry, defaults filled in.
+            browseParams(key) {
+                const src = Data.sourceByKey(key);
+                if (!src) return {};
+                return Object.assign(Data.defaultParams(src), this.data.params[key] || {});
+            },
+
+            queryParam(key) {
+                const r = this.queryRepeatNode;
+                const src = this.querySource || Data.sourceByKey(this.querySourceKey);
+                if (!src) return undefined;
+                if (r) return Object.assign(Data.defaultParams(src), r.repeat.params || {})[key];
+                return this.browseParams(src.key)[key];
+            },
+
+            // A box's query is stored on its Repeat. A browsed pick is the
+            // drawer's: it changes what the next chip carries, and nothing
+            // already wired.
+            setQueryParam(key, value) {
+                if (!this.querySpecs.some(s => s.key === key)) return;
+                if (this.queryRepeatNode) { this.setRepeatParam(key, value); return; }
+                const src = this.querySource;
+                if (!src) return;
+                this.data.params[src.key] = Object.assign({}, this.browseParams(src.key), { [key]: value });
+            },
+
+            // Picking from the menu. A repeating box now repeats over that
+            // list; otherwise the pick is browsed, and remembered for this
+            // selection so a card's rows do not take it back.
+            setQuerySource(key) {
+                if (!key) return;
+                if (this.queryScope === 'own') {
+                    const list = this.listSources.find(s => s.key === key);
+                    if (list) this.chooseList(list);
+                    return;
+                }
+                if (!this.queryOffered.some(s => s.key === key)) return;
+                this.data.query.source = key;
+                this.data.query.pickedFor = (this.selection && this.selection.nodeId) || null;
+            },
+
+            // The chips the pick offers.
+            //   item   — fields of one row, dropped inside the repeating box;
+            //   global — fields of a single, carrying the browsed params;
+            //   inert  — a browsed list's fields, shown so you know what a
+            //            row carries before a box repeats over it.
+            get queryChipScope() {
+                const scope = this.queryScope;
+                if (scope === 'own' || scope === 'row') return 'item';
+                const src = this.querySource;
+                if (!src) return '';
+                return src.shape === 'list' ? 'inert' : 'global';
+            },
+
+            get queryFields() {
+                const chipScope = this.queryChipScope;
+                if (!chipScope || this.queryLocked) return [];
+                if (chipScope === 'item') return this.itemFields;
+                const src = this.querySource;
+                const row = this.data.query.preview.row || {};
+                return Data.fieldsFor(src, this.browseParams(src.key), this.data.options)
+                    .filter(f => !f.minLevel || Data.mayRead(this.permissionLevel, f.minLevel))
+                    .map(f => chipScope === 'global'
+                        ? Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) })
+                        : f);
+            },
+
+            // A Sunday's fields, grouped by the order that Sunday follows.
+            get queryIsSunday() {
+                return this.queryChipScope === 'global' && this.querySourceKey === 'sunday';
+            },
+
+            get querySundayGroups() {
+                if (!this.queryIsSunday) return { service: [], hymns: [], scripture: [] };
+                const groups = this.sundayDrawer();
+                const row = this.data.query.preview.row || {};
+                const chips = list => list.map(f => Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) }));
+                return {
+                    service: chips(groups.service),
+                    hymns: chips(groups.hymns),
+                    scripture: groups.scripture.map(f => ({
+                        key: f.key,
+                        label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
+                        citation: row[f.key] ? String(row[f.key]) : '',
+                    })),
+                };
+            },
+
+            // How many rows the pick reads today, and the first few by
+            // name. A box's query is read off the live resolver; a browsed
+            // list off the builder's own preview.
+            get queryResults() {
+                if (this.queryRepeatNode) {
+                    const p = this.repeatPreview;
+                    return { count: p.count, names: p.names, warnings: [], loading: false, error: '' };
+                }
+                const pv = this.data.query.preview;
+                const src = this.querySource;
+                const isList = !!(src && src.shape === 'list');
+                return {
+                    count: isList ? pv.count : null,
+                    names: isList ? pv.names : [],
+                    warnings: pv.warnings || [],
+                    loading: !!pv.loading,
+                    error: pv.error || '',
+                };
+            },
+
+            // What a browsed list offers the selection. A box with no
+            // Repeat may iterate it; a related list only from inside its
+            // parent card, as a sub-iteration.
+            get queryIterateOffer() {
+                const src = this.querySource;
+                if (this.queryScope !== 'browse' || !src || src.shape !== 'list') return '';
+                const node = this.selectedNode;
+                if (!node || Core.kindOf(node) !== 'box' || node.repeat) return 'needs-box';
+                if (src.of) {
+                    return this.canStartSubIteration && this.relatedListSources.some(s => s.key === src.key)
+                        ? 'sub' : 'needs-parent';
+                }
+                return this.canStartIteration ? 'iterate' : 'nested';
+            },
+
+            // The selected box repeats over the browsed list, with the
+            // params already set on it.
+            iterateSelectedBox() {
+                const offer = this.queryIterateOffer;
+                if (offer !== 'iterate' && offer !== 'sub') return;
+                const src = this.querySource;
+                const node = this.selectedNode;
+                const page = this.currentPage;
+                if (!src || !node || !page) return;
+                const params = JSON.parse(JSON.stringify(this.browseParams(src.key)));
+                const repeat = { source: src.key, params: params, layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' };
+                this.replacePage(Core.updateNode(page, node.id, { repeat: repeat }));
+                this.commit();
+                this.renderAll();
+                this.readProps();
+                this.refreshData();
+                this.flash((node.name || this.tagLabel(node)) + ' repeats over ' + src.label + '.');
+            },
+
+            // Asked for by the builder's section whenever what it shows
+            // changes: a browsed pick reads today's rows for itself, so a
+            // chip can say what it holds before anything is wired to it.
+            ensureQueryPreview() {
+                const subject = this.querySubject;
+                const src = subject.scope === 'browse' && subject.source ? this.querySource : null;
+                if (!src || !this.project) {
+                    if (this.data.query.preview.key) this.data.query.preview = emptyQueryPreview();
+                    return;
+                }
+                const params = this.browseParams(src.key);
+                const key = src.key + '|' + JSON.stringify(params) + '|' + this.viewDate;
+                if (this.data.query.preview.key === key) return;
+                return this.loadQueryPreview(src, params, key);
+            },
+
+            async loadQueryPreview(src, params, key) {
+                this.data.query.preview = Object.assign(emptyQueryPreview(), { key: key, loading: true });
+                const Store = global.PrintableDataStore;
+                ui.previews = ui.previews || {};
+                try {
+                    let out = ui.previews[key];
+                    if (!out) {
+                        if (!Store || typeof db === 'undefined') throw new Error('no store');
+                        const bundle = await Store.fetch(db, Data.needsFor(src.key, params, this.viewDate), this.viewer());
+                        const res = Data.resolve(src.key, params, bundle, { today: this.viewDate, level: this.permissionLevel, canEdit: this.canEdit });
+                        const date = params.when && src.params && src.params.some(p => p.kind === 'when')
+                            ? Data.resolveWhen(params.when, this.viewDate) : '';
+                        out = {
+                            rows: res.rows || [],
+                            warnings: res.warnings || [],
+                            service: (date && bundle.services && bundle.services[date]) || null,
+                            liturgy: bundle.liturgy || null,
+                        };
+                        ui.previews[key] = out;
+                    }
+                    if (this.data.query.preview.key !== key) return;
+                    const isList = src.shape === 'list';
+                    this.data.query.preview = {
+                        key: key,
+                        loading: false,
+                        count: isList ? out.rows.length : null,
+                        names: isList ? out.rows.slice(0, 8).map(previewName) : [],
+                        row: isList ? {} : (out.rows[0] || {}),
+                        warnings: out.warnings.slice(0, 3),
+                        service: out.service,
+                        liturgy: out.liturgy,
+                        error: '',
+                    };
+                } catch (e) {
+                    if (this.data.query.preview.key !== key) return;
+                    if (e && e.message !== 'no store') console.error(e);
+                    this.data.query.preview = Object.assign(emptyQueryPreview(), { key: key, error: 'Today\'s values did not load. The fields still wire.' });
+                }
             },
 
             get currentPageIndex() {
@@ -779,16 +1112,12 @@
                 return !!(n && n.repeat);
             },
 
-            // A box with no Repeat of its own: the drawer offers one
-            // button, not the old list of sources.
-            get showRepeatOffer() {
-                if (!this.canEdit || this.data.picking || this.showQueryBuilder || this.canStartSubIteration) return false;
-                return true;
-            },
-
+            // A box with no Repeat may repeat over a top-level list —
+            // except inside a card whose list has related lists, where an
+            // inner box lists a row of that card instead (ADR 0072).
             get canStartIteration() {
                 const n = this.selectedNode;
-                if (!n || Core.kindOf(n) !== 'box' || n.repeat || this.data.picking) return false;
+                if (!n || Core.kindOf(n) !== 'box' || n.repeat) return false;
                 if (this.repeatContext && this.relatedListSources.length) return false;
                 return true;
             },
@@ -799,29 +1128,28 @@
             // a nested list; a text or image cannot stand for a row.
             get canStartSubIteration() {
                 const n = this.selectedNode;
-                if (!n || Core.kindOf(n) !== 'box' || n.repeat || this.data.picking) return false;
+                if (!n || Core.kindOf(n) !== 'box' || n.repeat) return false;
                 if (!this.repeatContext || n.id === this.repeatContext.id) return false;
                 if (this.selectedBindings.length) return false;
                 return this.relatedListSources.length > 0;
             },
 
-            get showQueryBuilder() {
-                const n = this.selectedNode;
-                if (n && n.repeat) return true;
-                return !!(this.data.picking && n && Core.kindOf(n) === 'box');
-            },
-
-            // Row-field chips stay available on a child of an iterated
-            // card even when that child's query builder is not open.
-            get showParentRowFields() {
-                return !!(this.repeatContext && this.itemFields.length && !this.hasOwnRepeat);
+            // The Repeat a repeating node sits inside, if any.
+            repeatAround(node) {
+                const page = node && this.pageOfNode(node.id);
+                if (!page) return null;
+                const chain = Core.ancestorsOf(page, node.id);
+                for (let i = chain.length - 1; i >= 0; i--) {
+                    if (chain[i].repeat && chain[i].repeat.source) return chain[i];
+                }
+                return null;
             },
 
             get repeatPreview() {
                 const r = this.repeatContext;
                 const res = this.resolver;
                 if (!r || !res || !r.repeat.source) return { count: null, names: [] };
-                const parent = this.enclosingRepeat;
+                const parent = this.repeatAround(r);
                 const parentRow = parent && (res.rowsFor(parent) || [])[0];
                 const rows = res.rowsFor(r, parentRow) || [];
                 return {
@@ -843,29 +1171,12 @@
                     .filter(f => !f.minLevel || Data.mayRead(this.permissionLevel, f.minLevel));
             },
 
-            sourceParams(source) {
-                if (!this.data.params[source.key]) this.data.params[source.key] = Data.defaultParams(source);
-                return this.data.params[source.key];
-            },
-
-            setSourceWhen(source, paramKey, when) {
-                this.sourceParams(source)[paramKey] = when;
-                if (source.key === 'sunday_typed') this.loadTypedDraft();
+            specEmptyLabel(spec) {
+                return specEmptyLabel(spec);
             },
 
             formatTypedDate(date) {
                 return Data.formatDate(date, 'medium');
-            },
-
-            fieldsOf(source) {
-                return Data.fieldsFor(source, this.sourceParams(source), this.data.options)
-                    .filter(f => !f.minLevel || Data.mayRead(this.permissionLevel, f.minLevel));
-            },
-
-            toggleSource(key) {
-                this.data.open[key] = !this.data.open[key];
-                if (key === 'sunday_typed' && this.data.open[key]) this.loadTypedDraft();
-                this.$nextTick(() => this.refreshWires());
             },
 
             kindIcon(kind) {
@@ -886,9 +1197,12 @@
                 return scope + '|' + source + '|' + field;
             },
 
-            onChipDragStart(e, scope, source, field) {
-                const params = scope === 'item' ? null : JSON.parse(JSON.stringify(this.sourceParams(source)));
-                this.dragField = { scope: scope, source: source.key || source, field: field.key, kind: field.kind, params: params, label: field.label };
+            // A chip carries the params it was shown with: the builder's for
+            // a browsed source, the wire's own for a chip already wired.
+            onChipDragStart(e, scope, source, field, carried) {
+                const key = (source && source.key) || source;
+                const params = scope === 'item' ? null : JSON.parse(JSON.stringify(carried || this.browseParams(key)));
+                this.dragField = { scope: scope, source: key, field: field.key, kind: field.kind, params: params, label: field.label };
                 this.dropTarget = null;
                 try { e.dataTransfer.setData('text/plain', field.key); e.dataTransfer.effectAllowed = 'link'; } catch (err) { /* older browsers */ }
                 const chip = e.currentTarget;
@@ -1274,29 +1588,9 @@
 
             // ── Iteration ────────────────────────────────────────────────
 
-            startIteration() {
-                this.makeIterated();
-            },
-
-            // A Sunday list, without opening the whole catalog first.
-            // The query builder then holds the filters for that list.
-            startQuickList(key) {
-                const src = Data.sourceByKey(key);
-                const node = this.selectedNode;
-                if (!src || !node || Core.kindOf(node) !== 'box') {
-                    this.flash('Select the box that should repeat. Right-click the words and choose Wrap in a box.');
-                    return;
-                }
-                if (!node.repeat) this.makeIterated();
-                this.chooseList(src);
-            },
-
-            startSubIteration() {
-                this.makeIterated();
-            },
-
-            // From the context menu or the drawer: the element becomes
-            // iterated, and the query builder opens — not the catalog.
+            // From the context menu: the box becomes iterated over nothing
+            // yet, and the query builder opens its menu on the lists it may
+            // repeat over.
             makeIterated() {
                 const node = this.selectedNode;
                 if (!node) return;
@@ -1304,7 +1598,6 @@
                     this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
                     return;
                 }
-                this.data.picking = true;
                 if (!node.repeat) {
                     const page = this.currentPage;
                     this.replacePage(Core.updateNode(page, node.id, { repeat: { source: '', params: {}, layout: { direction: 'column', perLine: 1, gap: 12, maxPerPage: 0 }, overflow: 'clip' } }));
@@ -1312,13 +1605,17 @@
                     this.renderAll();
                     this.readProps();
                 }
+                this.data.search = '';
+                this.data.queryMenuOpen = true;
             },
 
+            // A repeating box changes the list it repeats over. Params the
+            // box already set survive only when the list is the same.
             chooseList(source) {
                 const page = this.currentPage;
-                const node = this.queryTarget || this.selectedNode;
-                if (!page || !node) return;
-                if (Core.kindOf(node) !== 'box') return;
+                const node = this.selectedNode;
+                if (!page || !node || !source) return;
+                if (Core.kindOf(node) !== 'box' || !node.repeat) return;
                 const same = node.repeat && node.repeat.source === source.key;
                 const params = same
                     ? Object.assign({}, Data.defaultParams(source.key), node.repeat.params || {})
@@ -1328,23 +1625,9 @@
                     params: params,
                 });
                 this.replacePage(Core.updateNode(page, node.id, { repeat: repeat }));
-                this.data.picking = false;
                 this.commit();
                 this.readProps();
                 this.refreshData();
-            },
-
-            setQuerySource(key) {
-                if (!key) return;
-                const src = this.listSources.find(s => s.key === key);
-                if (!src) return;
-                const target = this.queryTarget;
-                if (!target || Core.kindOf(target) !== 'box') {
-                    this.flash('Iterate a box — put this element in one first (right-click › Wrap in a box).');
-                    return;
-                }
-                if (!target.repeat) this.makeIterated();
-                this.chooseList(src);
             },
 
             stopIterating() {
@@ -1360,34 +1643,18 @@
                     next = Core.updateNode(next, n.id, { bind: Object.keys(kept).length ? kept : null });
                 });
                 this.replacePage(next);
-                this.data.picking = false;
                 this.commit();
                 this.renderAll();
                 this.readProps();
             },
 
-            // The params a list carries, only those this viewer may query.
-            get repeatParamSpecs() {
-                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
-                if (!r || !r.repeat.source || this.queryLocked) return [];
-                return Data.querySpecsFor(r.repeat.source, this.permissionLevel, this.data && this.data.options);
-            },
-
-            repeatParam(key) {
-                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
-                const src = r && r.repeat.source
-                    ? (Data.sourcesFor(this.permissionLevel).find(s => s.key === r.repeat.source) || Data.sourceByKey(r.repeat.source))
-                    : this.repeatSource;
-                if (!r || !src) return undefined;
-                const p = Object.assign(Data.defaultParams(src), r.repeat.params || {});
-                return p[key];
-            },
-
+            // The builder's params land on the Repeat it is showing. A
+            // query above this viewer stays as it was saved, and still runs.
             setRepeatParam(key, value) {
-                const r = this.queryTarget && this.queryTarget.repeat ? this.queryTarget : this.repeatContext;
+                const r = this.queryRepeatNode;
                 const page = this.pageOfNode(r && r.id);
                 if (!r || !page || this.queryLocked) return;
-                if (!Data.querySpecsFor(r.repeat.source, this.permissionLevel, this.data && this.data.options).some(s => s.key === key)) return;
+                if (!this.querySpecs.some(s => s.key === key)) return;
                 const params = Object.assign({}, r.repeat.params || {}, { [key]: value });
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { params: params }) }));
                 this.commit();
@@ -1452,17 +1719,17 @@
             // for that way of counting. Pressing the way it already counts
             // keeps the numbers the editor chose.
             setRangeMode(spec, mode) {
-                if (this.rangeMode(this.repeatParam(spec.key)) === mode) return;
-                this.setRepeatParam(spec.key, Data.rangeForMode(spec, mode));
+                if (this.rangeMode(this.queryParam(spec.key)) === mode) return;
+                this.setQueryParam(spec.key, Data.rangeForMode(spec, mode));
             },
 
             setRangePart(spec, key, value) {
-                this.setRepeatParam(spec.key, Object.assign({}, this.repeatParam(spec.key), { [key]: value }));
+                this.setQueryParam(spec.key, Object.assign({}, this.queryParam(spec.key), { [key]: value }));
             },
 
             // "For the 5 Sundays from this Sunday." — the range read back.
             rangeWords(spec) {
-                const words = Data.describeRange(this.repeatParam(spec.key), spec.unit);
+                const words = Data.describeRange(this.queryParam(spec.key), spec.unit);
                 return words.charAt(0).toUpperCase() + words.slice(1) + '.';
             },
 
@@ -1485,14 +1752,49 @@
             },
 
             // ── Sunday booklet text (MS-588) ─────────────────────────────
-            // Typed once on the Sunday; every bound Printable reads it.
-            // The form lives in the existing data drawer — no new editor.
+            // Typed once on the Sunday; every bound Printable reads it. It is
+            // a blank, so it lives in the Fill-in library: which Sunday, its
+            // chips, and the form that fills them.
 
             typedSundayDate() {
-                const src = Data.sourceByKey('sunday_typed');
                 const clock = this.viewDate || Data.toDateStr(new Date());
-                if (!src) return clock;
-                return Data.resolveWhen(this.sourceParams(src).when, clock);
+                if (!Data.sourceByKey('sunday_typed')) return clock;
+                return Data.resolveWhen(this.browseParams('sunday_typed').when, clock);
+            },
+
+            get typedWhen() {
+                return this.browseParams('sunday_typed').when;
+            },
+
+            // Another Sunday's text: its chips carry that Sunday, and the
+            // form opens on what was typed for it.
+            setTypedWhen(when) {
+                if (!when || !when.mode) return;
+                this.data.params.sunday_typed = Object.assign({}, this.browseParams('sunday_typed'), { when: when });
+                this.loadTypedDraft();
+            },
+
+            get sundayTypedChips() {
+                const row = this.data.typed.row || {};
+                return typedChipFields(Data.fieldsFor('sunday_typed')).map(f => ({
+                    key: f.key,
+                    label: f.label,
+                    kind: f.kind,
+                    value: chipPreview(f.kind, row[f.key]),
+                }));
+            },
+
+            // What the chips say today: the typed text of that Sunday, read
+            // the way a wire would read it.
+            typedRowFor(date, service) {
+                try {
+                    const res = Data.resolve('sunday_typed', { when: { mode: 'date', date: date } }, { services: { [date]: service } }, {
+                        today: this.viewDate, level: this.permissionLevel,
+                    });
+                    return (service && res.rows && res.rows[0]) || {};
+                } catch (e) {
+                    return {};
+                }
             },
 
             setViewDate(date) {
@@ -1518,60 +1820,24 @@
                 return href;
             },
 
-            // ── Scripture references (this Sunday, as chips) ─────────────
+            // ── A Sunday's fields, grouped by its order ──────────────────
 
-            resolvedSundayRow(sourceKey) {
-                if (!ui.bundle || !Data) return {};
-                try {
-                    const res = Data.resolve(sourceKey, { when: { mode: 'this' } }, ui.bundle, {
-                        today: this.viewDate,
-                        level: this.permissionLevel || 'editor',
-                    });
-                    return (res.rows && res.rows[0]) || {};
-                } catch (e) {
-                    return {};
-                }
-            },
-
+            // The Sunday the builder is browsing decides the order its chips
+            // follow (ADR 0080): the builder's own read of it when there is
+            // one, else whatever the page already fetched for that date.
             sundayDrawer() {
                 const fill = (global.SundayTypedCore && global.SundayTypedCore.FIELDS) || [];
-                const liturgy = this.data && this.data.options && this.data.options.liturgy;
-                let service = null;
-                if (ui.bundle && ui.bundle.services && Data) {
-                    const date = Data.resolveWhen({ mode: 'this' }, this.viewDate);
+                const pv = this.data && this.data.query && this.data.query.preview;
+                const fromPreview = !!(pv && pv.key && pv.key.indexOf('sunday|') === 0 && (pv.service || pv.liturgy));
+                const liturgy = (fromPreview && pv.liturgy) || (this.data && this.data.options && this.data.options.liturgy);
+                let service = fromPreview ? pv.service : null;
+                if (!service && ui.bundle && ui.bundle.services && Data) {
+                    const date = Data.resolveWhen(this.browseParams('sunday').when, this.viewDate);
                     service = ui.bundle.services[date] || null;
                 }
                 return PrintableEditorWires.sundayDrawerFields(Data, global.ScripturePassage, fill, {
                     liturgy: liturgy,
                     service: service,
-                });
-            },
-
-            sundayChips(fields, row) {
-                return (fields || []).map(f => ({
-                    key: f.key,
-                    label: f.label,
-                    kind: f.kind,
-                    value: PrintableEditorWires.chipPreview(f.kind, row && row[f.key]),
-                }));
-            },
-
-            get sundayServiceChips() {
-                return this.sundayChips(this.sundayDrawer().service, this.resolvedSundayRow('sunday'));
-            },
-
-            get sundayHymnChips() {
-                return this.sundayChips(this.sundayDrawer().hymns, this.resolvedSundayRow('sunday'));
-            },
-
-            get sundayTypedChips() {
-                return this.sundayChips(this.sundayDrawer().typed, this.resolvedSundayRow('sunday_typed'));
-            },
-
-            get sundayQuickLists() {
-                return PrintableEditorWires.SUNDAY_QUICK_LISTS.filter(item => {
-                    const src = Data.sourceByKey(item.key);
-                    return src && (!src.minLevel || Data.mayRead(this.permissionLevel, src.minLevel));
                 });
             },
 
@@ -1581,24 +1847,16 @@
                 this.onChipDragStart(e, 'global', src, field);
             },
 
-            get scriptureRefs() {
-                const row = this.resolvedSundayRow('sunday');
-                const fields = this.sundayDrawer().scripture || [];
-                return fields.map(f => ({
-                    key: f.key,
-                    label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
-                    citation: row[f.key] ? String(row[f.key]) : '',
-                }));
-            },
-
-            onScriptureChipDragStart(e, ref, mode) {
+            // A scripture chip carries the Sunday the builder is on, so a
+            // reading for next Sunday stays next Sunday's once wired.
+            onScriptureChipDragStart(e, ref, mode, params) {
                 const Passage = global.ScripturePassage;
                 const field = {
                     scope: 'global',
                     source: 'sunday',
                     field: ref.key,
                     kind: 'text',
-                    params: { when: { mode: 'this' } },
+                    params: JSON.parse(JSON.stringify(params || this.browseParams('sunday'))),
                     label: ref.label + (mode === 'passage' ? ' (words)' : ' (reference)'),
                 };
                 if (mode === 'passage' && Passage) {
@@ -1678,7 +1936,7 @@
                 if (!b) return;
                 const liturgy = this.data && this.data.options && this.data.options.liturgy;
                 if (b.source === 'sunday' && Data.isScriptureField && Data.isScriptureField(b.field, liturgy)) {
-                    this.onScriptureChipDragStart(e, { key: b.field, label: chip.label }, b.reading === 'passage' ? 'passage' : 'citation');
+                    this.onScriptureChipDragStart(e, { key: b.field, label: chip.label }, b.reading === 'passage' ? 'passage' : 'citation', b.params);
                     return;
                 }
                 if (b.scope === 'asset') return;
@@ -1689,7 +1947,7 @@
                     : (Data.sourceByKey(b.source) || { key: b.source });
                 this.onChipDragStart(e, b.scope === 'item' ? 'item' : 'global', source, {
                     key: b.field, kind: chip.kind || 'text', label: chip.label,
-                });
+                }, b.scope === 'item' ? null : (b.params || {}));
             },
 
             // ── Filled on the event ──────────────────────────────────────
@@ -1859,8 +2117,10 @@
                         }
                     } catch (e) { service = null; }
                 }
+                if (date !== this.typedSundayDate()) return;
                 this.data.typed.date = date;
                 this.data.typed.draft = Typed.toDraft(Typed.fromService(service));
+                this.data.typed.row = this.typedRowFor(date, service);
                 this.data.typed.status = '';
             },
 
@@ -1939,6 +2199,7 @@
                     const cur = ui.bundle.services[date] || {};
                     ui.bundle.services[date] = Object.assign({}, cur, { typedContent: Typed.normalise(content) });
                     this.data.typed.date = date;
+                    this.data.typed.row = this.typedRowFor(date, ui.bundle.services[date]);
                     this.data.typed.status = 'Saved for ' + Data.formatDate(date, 'medium') + '. Bound pages will read it.';
                     this.rebindData();
                     this.renderAll();
