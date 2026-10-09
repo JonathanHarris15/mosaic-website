@@ -2772,7 +2772,11 @@ auth.onAuthStateChanged(async (user) => {
             // Needed before the first edit, so an element decided here records
             // who decided it (MS-246).
             currentIdentity = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
-            if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+            // MS-719 (ADR 0081): services.builder.edit on the MS-695 map
+            // (legacy fallback for an account not yet migrated) — the same
+            // question the Order of Service edit path asks — not a list of
+            // level strings that left out the Pastoral Assistant.
+            if (AccessCore.canFixSundayService(userData)) {
                 // ⚠ EDITING RIGHTS FIRST, ALWAYS.
                 //
                 // This whole block sits inside a try/catch. Anything that
