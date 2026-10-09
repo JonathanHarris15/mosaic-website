@@ -24,27 +24,33 @@
      of Service; this page decides what the orders are. -->
 <body class="m-page m-page--tool lo-page" x-data="liturgyOrdersPage()" x-init="init()" x-cloak>
 
-    <header class="m-header lo-header">
+    <header class="m-header m-header--tool lo-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a class="m-back" id="back" :href="backHref">
                     <span class="material-symbols-outlined">chevron_left</span>
-                    <span class="m-back__label" x-text="backLabel">Services</span>
+                    <span class="m-back__label" x-text="backLabel">Order of Service</span>
                 </a>
-                <div class="m-header__titles"><h1 class="m-header__title">Liturgy Orders</h1></div>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title m-header__title--serif">Liturgy Orders</h1>
+                </div>
             </div>
-            <div class="m-header__actions" x-show="editing">
-                <span class="lo-unsaved" x-show="dirty">Unsaved changes</span>
-                <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="dirty" @click="discard()">
+            <div class="m-header__actions lo-header__actions">
+                <span class="lo-unsaved" x-show="editing && dirty">Unsaved changes</span>
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="editing && dirty" @click="discard()">
                     <span class="m-btn__label">Discard</span>
                 </button>
-                <button type="button" id="liturgy-orders-save" class="m-btn m-btn--primary m-btn--sm" :disabled="!dirty || saving" @click="save()">
+                <button type="button" id="liturgy-orders-save" class="m-btn m-btn--primary m-btn--sm"
+                        x-show="editing" :disabled="!dirty || saving" @click="save()">
                     <span class="material-symbols-outlined" x-text="saving ? 'progress_activity' : 'save'"></span>
                     <span class="m-btn__label" x-text="saving ? 'Saving…' : 'Save'"></span>
                 </button>
+                <a href="profile.html" class="lo-header__avatar" x-show="userInitials" :title="userName">
+                    <span class="m-avatar m-avatar--sm" x-text="userInitials"></span>
+                </a>
             </div>
-            <div class="m-header__rule"></div>
-            <div class="m-header__auth" id="auth-container"></div>
+            <div class="m-header__rule" x-show="false"></div>
+            <div class="m-header__auth lo-header__auth-fallback" id="auth-container" x-show="!userInitials"></div>
         </div>
     </header>
 
@@ -308,12 +314,29 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
     <style>
-        .lo-page.m-page--tool { --lo-header-h: 64px; }
-        .lo-page .m-page__body { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
-        .lo-header .m-header__title { font-family: var(--font-display); letter-spacing: .02em; color: var(--primary); }
+        .lo-page.m-page--tool {
+            --lo-header-h: 56px; width: 100%; max-width: none; margin: 0;
+        }
+        .lo-page.m-page--tool > .m-header,
+        .lo-page.m-page--tool > .lo-tabs,
+        .lo-page.m-page--tool > .m-page__body {
+            width: 100%; max-width: none; margin-left: 0; margin-right: 0;
+        }
+        .lo-page .m-page__body {
+            flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column;
+            padding: 0 !important; max-width: none !important; width: 100%; margin: 0 !important;
+        }
+        .lo-header { --m-header-pad: 16px; }
+        .lo-header .m-header__title {
+            font-family: var(--font-serif); font-size: 24px; font-weight: 400;
+            letter-spacing: .01em; color: var(--on-surface);
+        }
+        .lo-header__actions { gap: var(--space-sm); }
+        .lo-header__avatar { display: inline-flex; flex: 0 0 auto; text-decoration: none; }
+        .lo-header__auth-fallback:empty { display: none; }
         .lo-unsaved { font-size: 13px; color: var(--on-surface-variant); margin-right: var(--space-xs); }
         .lo-tabs {
-            flex: 0 0 auto; display: flex; align-items: flex-end; gap: 4px; padding: 0 var(--space-lg);
+            flex: 0 0 auto; display: flex; align-items: flex-end; gap: 4px; padding: 0 16px;
             background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant);
         }
         .lo-tab {
@@ -334,13 +357,13 @@
             grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
             gap: 0; overflow: hidden;
         }
-        .lo-workspace > .m-notice { margin: var(--space-sm) var(--space-lg) 0; }
+        .lo-workspace > .m-notice { margin: var(--space-sm) 16px 0; }
         .lo-palette {
             display: none;
         }
         .lo-canvas {
             min-height: 0; display: flex; flex-direction: column; gap: var(--space-md);
-            padding: var(--space-lg) var(--space-lg) 0; overflow: hidden;
+            padding: 20px 16px 0; overflow: hidden;
         }
         .lo-canvas__head { display: flex; align-items: flex-end; gap: var(--space-sm); }
         .lo-canvas__titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -400,12 +423,18 @@
         .lo-textarea { height: auto; padding-top: 10px; resize: vertical; }
         .lo-prayer { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--outline-variant); }
         .lo-person { display: flex; flex-direction: column; gap: 8px; }
-        .lo-person__line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .lo-person__line {
+            display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0;
+        }
         .lo-person__n {
-            flex: 0 0 64px; font-size: 12px; font-weight: 600; letter-spacing: .1em;
+            flex: 0 0 72px; white-space: nowrap; font-size: 11px; font-weight: 600; letter-spacing: .12em;
             text-transform: uppercase; color: var(--on-surface-variant);
         }
-        .lo-person__line .m-seg { flex: 1 1 180px; }
+        .lo-person__line > .m-seg { flex: 1 1 0; min-width: 0; }
+        .lo-person__line > .m-icon-btn { flex: 0 0 auto; }
+        .lo-inspector .m-seg__opt {
+            padding-left: 6px; padding-right: 6px; font-size: 10.5px; letter-spacing: .08em;
+        }
         .lo-person__add {
             align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-xs);
             min-height: 36px; padding: 0 var(--space-sm); background: transparent; border: 0;
@@ -429,17 +458,24 @@
         .sortable-ghost { opacity: .4; }
         @media (min-width: 1024px) {
             .lo-workspace {
-                grid-template-columns: 200px minmax(0, 1fr) 380px;
+                grid-template-columns: 160px minmax(0, 1fr) 300px;
                 grid-template-rows: minmax(0, 1fr);
+                height: 100%;
             }
+            .lo-palette, .lo-canvas, .lo-inspector { min-height: 0; }
             .lo-workspace > .m-notice { grid-column: 1 / -1; }
             .lo-palette {
-                display: flex; flex-direction: column; gap: 10px; padding: 20px 14px;
+                display: flex; flex-direction: column; gap: 10px; padding: 20px 10px 20px 0;
                 border-right: 1px solid var(--outline-variant); background: var(--surface-container-low);
                 min-height: 0; overflow: auto;
             }
-            .lo-inspector { border-top: 0; border-left: 1px solid var(--outline-variant); }
-            .lo-canvas { padding-top: 20px; }
+            .lo-inspector {
+                border-top: 0; border-left: 1px solid var(--outline-variant);
+                min-height: 0; max-height: 100%; overflow: hidden;
+            }
+            .lo-inspector__scroll { padding: 22px 16px 22px 18px; overflow-y: auto; }
+            .lo-canvas { padding: 20px 16px 0 12px; }
+            .lo-list { margin-bottom: 16px; }
         }
         @media (max-width: 1023px) {
             .lo-palette {

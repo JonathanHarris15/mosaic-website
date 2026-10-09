@@ -92,7 +92,9 @@ function liturgyOrdersPage() {
         get backHref() {
             return this.date ? 'service-builder.html?date=' + encodeURIComponent(this.date) : 'service-calendar.html';
         },
-        get backLabel() { return this.date ? 'Order of Service' : 'Services'; },
+        get backLabel() { return 'Order of Service'; },
+        userName: '',
+        userInitials: '',
         get dirty() { return JSON.stringify(this.catalog) !== this.baseline; },
 
         // Standard first, then by name — the order every other page lists them in.
@@ -172,6 +174,10 @@ function liturgyOrdersPage() {
                 try {
                     const userData = await getUserData(user.uid);
                     this.canEdit = AccessCore.pageFlags(userData).canWriteEditor;
+                    const name = (userData && userData.name) || user.displayName || 'Editor';
+                    this.userName = name;
+                    const Dest = window.MosaicDestinations;
+                    this.userInitials = Dest ? Dest.initials(name) : name.trim().charAt(0).toUpperCase() || '?';
                 } catch (e) {
                     this.canEdit = false;
                 }

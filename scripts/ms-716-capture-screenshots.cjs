@@ -44,9 +44,19 @@ async function main() {
 
     await openEditor(page);
     await selectPastoralPrayer(page);
-    await page.screenshot({ path: path.join(OUT, 'editor-pastoral-prayer-1280.png'), fullPage: true });
-    await page.screenshot({ path: path.join(ARTIFACTS, 'ms-716-editor-pastoral-prayer.png'), fullPage: true });
+    await page.screenshot({ path: path.join(OUT, 'editor-pastoral-prayer-1280.png') });
+    await page.screenshot({ path: path.join(ARTIFACTS, 'ms-716-editor-pastoral-prayer.png') });
     note('Captured editor + Pastoral Prayer at 1280×800');
+
+    await selectPastoralPrayer(page);
+    const reqBox = page.locator('.lo-prayer label.m-check', { hasText: 'Send prayer requests' }).locator('input');
+    if (await reqBox.count()) await reqBox.check();
+    await page.locator('.lo-inspector__scroll').evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+    });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(OUT, 'inspector-bottom-1280.png') });
+    note('Captured inspector bottom (days, message, response) at 1280×800');
 
     if (fs.existsSync(DESIGN)) {
         const designPage = await context.newPage();
@@ -91,8 +101,9 @@ async function main() {
 
     await selectPastoralPrayer(page);
     await page.locator('.lo-inspector .m-seg__opt', { hasText: 'A woman' }).nth(1).click();
+    await page.locator('#prayer-response').scrollIntoViewIfNeeded();
     await page.locator('.lo-days__input').fill('7');
-    await page.locator('.lo-days button', { hasText: 'Add' }).click();
+    await page.locator('.lo-days__list button.m-btn', { hasText: 'Add' }).click();
     await page.locator('.lo-days__list .m-token', { hasText: '7' }).locator('button').click();
 
     await page.locator('#prayer-message').fill('Hello {name} — {link}');
