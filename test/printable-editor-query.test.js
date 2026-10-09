@@ -91,7 +91,7 @@ test('the query builder menu is every source this viewer may read, single or lis
     });
     assert.ok(!regions.some(r => r.related), 'no "Of this" group outside a card');
     const all = PrintableEditorWires.groupQuerySources(Data.SOURCES, '');
-    assert.ok(!all.flatMap(r => r.sources).some(s => s.scalar || s.blank), 'a blank or an insert never reaches the menu');
+    assert.ok(!all.flatMap(r => r.sources).some(s => s.scalar || s.blank || s.noDrawer), 'an insert or noDrawer source never reaches the menu');
     const byField = PrintableEditorWires.groupQuerySources(offered, 'preacher').flatMap(r => r.sources.map(s => s.key));
     assert.ok(byField.includes('sunday'), 'searching a field label finds the source that carries it');
     assert.ok(!byField.includes('people'));
@@ -225,7 +225,7 @@ test('a chip off the drawer body is not a wire landing, and scroll never pins it
         'every redraw must not scroll the chip back into the drawer');
 });
 
-test('a Sunday in the query builder shows Service, Hymns and Scripture; its booklet text is in the Fill-in library', () => {
+test('a Sunday in the query builder shows Service, Hymns and Scripture; fill-ins are a list of blanks', () => {
     const Data = require('../public/printable-data-core.js');
     const Typed = require('../public/sunday-typed-core.js');
     require('../public/scripture-passage.js');
@@ -238,9 +238,6 @@ test('a Sunday in the query builder shows Service, Hymns and Scripture; its book
     assert.ok(!fields.service.some(f => f.key === 'keyVerse'), 'scripture stays in its own group');
     assert.ok(!fields.service.some(f => f.key === 'sermon'));
     assert.ok(!fields.hymns.some(f => f.key === 'date'));
-    assert.ok(fields.typed.some(f => f.key === 'prayerNation'));
-    assert.ok(fields.typed.some(f => f.key === 'kidsLessonTitle'));
-    assert.ok(!fields.typed.some(f => f.key === 'announcements'), 'announcements are a list in the builder');
     assert.ok(fields.scripture.some(f => f.key === 'keyVerse'), 'key verse is a scripture chip');
     assert.ok(fields.scripture.some(f => f.key === 'sermon'), 'Standard\'s sermon is a scripture chip');
     assert.equal(Wires.chipPreview('text', 'How Rich a Treasure We Possess'), 'How Rich a Treasure We Possess');
@@ -258,8 +255,8 @@ test('a Sunday in the query builder shows Service, Hymns and Scripture; its book
     assert.match(query, /onScriptureChipDragStart\(\$event, ref, 'passage'\)[\s\S]*Words/);
     assert.doesNotMatch(fill, /onScriptureChipDragStart/, 'scripture is not a blank');
     assert.doesNotMatch(general, /onScriptureChipDragStart/, 'scripture is not a page insert');
-    assert.match(fill, /sundayTypedChips/, 'booklet text chips live with the form that fills them');
-    assert.match(fill, /onEventChipDragStart/, 'event blanks are in the Fill-in library');
+    assert.doesNotMatch(fill, /Sunday booklet|sundayTypedChips|pe-booklet/, 'no pamphlet-specific fill-in card');
+    assert.match(fill, /onEventChipDragStart/, 'fill-in entries are in the Fill-in library');
     assert.match(fill, /addEventInput\('list'\)/);
     assert.doesNotMatch(query, /sundayTypedChips/);
     assert.match(general, /onScalarChipDragStart\(\$event, 'insert_date', 'value'\)/);
@@ -306,16 +303,16 @@ test('This Sunday chips follow the order the Sunday uses, not the seed names', (
     assert.ok(!Data.isScriptureField('prayerOfPraise', liturgy));
 });
 
-test('every catalog source has exactly one home in the drawer', () => {
+test('every catalog source is query, general live data, or off the drawer', () => {
     const Data = require('../public/printable-data-core.js');
     const { PrintableEditorWires } = require('../public/printable-editor-data.js');
     const homes = {};
     Data.SOURCES.forEach(s => {
         const part = PrintableEditorWires.drawerPartOf(s);
-        assert.ok(['query', 'fill', 'general'].includes(part), s.key + ' has a home');
+        assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, 'fill');
+    assert.equal(homes.sunday_typed, '', 'legacy typed Sunday fields are not a drawer card');
     assert.equal(homes.insert_date, 'general');
     assert.equal(homes.insert_page_number, 'general');
     ['people', 'households', 'household_children', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',

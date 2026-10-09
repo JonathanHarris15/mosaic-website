@@ -252,24 +252,25 @@ test('MS-730: the query builder offers every source a level may read, single and
     const inHouse = Data.querySourcesFor('member', 'households').map(s => s.key);
     assert.equal(inHouse[0], 'household_children', 'inside a household card its children come first');
     assert.equal(Data.sourceByKey('households').row, 'household', 'one row of households is called a household');
-    assert.equal(Data.sourceByKey('sunday_typed').blank, true, 'booklet text is typed, so it is a blank');
+    assert.equal(Data.sourceByKey('sunday_typed').noDrawer, true, 'legacy typed Sunday fields stay out of the drawer');
+    assert.equal(Data.drawerPartOf('sunday_typed'), '', 'pamphlet blanks are fill-ins on the event, not a catalog card');
     const role = Data.querySpecsFor('role_holder', 'editor');
     assert.ok(role.find(s => s.key === 'seriesId').required && role.find(s => s.key === 'roleSlug').required,
         'who holds a role reads nothing until both are chosen');
     assert.ok(Data.querySpecsFor('form_answers', 'editor').find(s => s.key === 'formId').required);
 });
 
-test('MS-730: every catalog source has exactly one drawer part', () => {
+test('MS-730: every catalog source is query, general, or off the drawer', () => {
     const homes = {};
     Data.SOURCES.forEach(s => {
         const part = Data.drawerPartOf(s);
-        assert.ok(['query', 'fill', 'general'].includes(part), s.key + ' has a home');
+        assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, 'fill');
+    assert.equal(homes.sunday_typed, '');
     assert.equal(homes.insert_date, 'general');
     assert.equal(homes.insert_page_number, 'general');
-    Data.SOURCES.filter(s => !s.blank && !s.scalar).forEach(s => {
+    Data.SOURCES.filter(s => !s.noDrawer && !s.scalar && !s.blank).forEach(s => {
         assert.equal(homes[s.key], 'query', s.key + ' is queried');
     });
     assert.equal(Data.drawerPartOf('missing'), '');

@@ -23,10 +23,11 @@
 // the lowest Permission Level that may read it.
 //
 // The drawer's query builder offers every source a level may read, single
-// or list (`querySourcesFor`), except two kinds that are not records the
-// site keeps: a **scalar** insert (the date, the page number) and a
-// **blank** — values a person types, which the drawer's Fill-in library
-// offers with the form they are typed in.
+// or list (`querySourcesFor`), except kinds that are not queried there: a
+// **scalar** insert (the date, the page number — General live data) and a
+// source marked **noDrawer** (kept for resolving stored wires; not offered
+// to author in the drawer). Fill-ins a person types live on the printable
+// as event blanks, not as catalog sources.
 //
 // ⚠ THE CATALOG IS THE PERMISSION BOUNDARY'S FIRST HALF. Nothing elder-only
 // is a *source* in it at all — not a Shepherding Note, not a Prayer Request,
@@ -485,8 +486,11 @@
             ],
         },
         {
-            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', blank: true, minLevel: 'viewer',
-            blurb: 'What an editor types once for this Sunday — country facts for the prayer page, Mosaic Kids lesson, and announcements. Every bound Printable reads the same fields.',
+            // Kept so a stored wire still resolves. Not offered in the data
+            // drawer — pamphlet blanks are fill-ins on the linked event, not
+            // a catalog source named for one kind of printable.
+            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', noDrawer: true, minLevel: 'viewer',
+            blurb: 'Legacy typed Sunday fields. New printables use fill-ins on the linked event instead.',
             params: [WHEN_PARAM],
             fields: (typedCore() && typedCore().FIELDS) || [
                 { key: 'prayerNation', label: 'Prayer country', kind: 'text' },
@@ -666,20 +670,21 @@
         return sourcesFor(level).filter(s => s.shape === 'list' && s.of === parentKey);
     }
 
-    // Which part of the data drawer a catalog source lives in. Every source
-    // has exactly one home, so a new source lands without drawer markup:
-    // query by default; `blank` → Fill-in library; `scalar` → General live data.
+    // Which part of the data drawer a catalog source lives in. Query by
+    // default; `scalar` → General live data; `noDrawer` → nowhere (legacy
+    // resolve only). Fill-ins are not catalog sources — they are blanks on
+    // the printable, listed in the Fill-in library.
     function drawerPartOf(source) {
         const s = typeof source === 'string' ? sourceByKey(source) : source;
         if (!s) return '';
+        if (s.noDrawer) return '';
         if (s.scalar) return 'general';
-        if (s.blank) return 'fill';
         return 'query';
     }
 
     // What the query builder offers this level: every source it may read,
     // single or list, related lists first and only inside their parent.
-    // A scalar insert and a blank are not queried — they have no records.
+    // Scalars and noDrawer sources are not queried here.
     function querySourcesFor(level, parentKey) {
         const all = sourcesFor(level).filter(s => drawerPartOf(s) === 'query');
         const related = parentKey ? all.filter(s => s.of === parentKey) : [];

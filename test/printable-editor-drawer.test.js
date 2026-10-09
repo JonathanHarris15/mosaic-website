@@ -351,25 +351,10 @@ test('an event_list Repeat is not retargeted by the query menu', () => {
     assert.equal(ed.selectedNode.repeat.source, 'event_list', 'the menu cannot replace a fill-in list');
 });
 
-test('the Fill-in library\'s booklet text: which Sunday, its chips, and a chip that carries that Sunday', async () => {
-    const { ed } = editor({ nodes: [text('country')], select: 'country' });
-    const keys = ed.sundayTypedChips.map(f => f.key);
-    assert.ok(keys.includes('prayerNation') && keys.includes('kidsLessonTitle'));
-    assert.ok(!keys.includes('announcements') && !keys.includes('announcementCount'), 'announcements are a list in the builder');
-    assert.equal(ed.typedSundayDate(), '2026-10-11', 'this Sunday by default');
-    ed.setTypedWhen({ mode: 'next' });
-    await Promise.resolve();
-    assert.equal(ed.typedSundayDate(), '2026-10-18');
-    assert.equal(ed.data.typed.date, '2026-10-18', 'the form opens on that Sunday');
-    ed.onChipDragStart(dragEvent(), 'global', 'sunday_typed', ed.sundayTypedChips.find(f => f.key === 'prayerNation'));
-    assert.deepEqual(ed.dragField.params, { when: { mode: 'next' } });
-    assert.ok(!ed.queryOffered.some(s => s.key === 'sunday_typed'), 'booklet text has one home');
-    const row = ed.typedRowFor('2026-10-18', { typedContent: { pastoralPrayer: { nation: 'Peru' }, mosaicKids: { lessonTitle: 'Noah builds' } } });
-    assert.equal(row.prayerNation, 'Peru');
-    assert.equal(row.kidsLessonTitle, 'Noah builds');
-    assert.deepEqual(ed.typedRowFor('2026-10-18', null), {}, 'nothing planned shows no values');
-    ed.data.typed.row = row;
-    assert.equal(ed.sundayTypedChips.find(f => f.key === 'prayerNation').value, 'Peru', 'a chip says what was typed');
+test('sunday_typed is not offered in the query builder', () => {
+    const { ed } = editor({ nodes: [text('t')], select: 't' });
+    assert.ok(!ed.queryOffered.some(s => s.key === 'sunday_typed'));
+    assert.equal(Data.drawerPartOf('sunday_typed'), '');
 });
 
 test('re-dragging a wired chip carries the wire\'s own params, not the builder\'s', () => {
