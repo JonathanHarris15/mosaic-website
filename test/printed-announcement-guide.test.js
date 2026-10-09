@@ -96,7 +96,8 @@ test('the classic guide draws printed prose as plain text and saves the typed el
     assert.match(page, /whitespace-pre-line/);
     assert.match(page, /x-text="item\.prose"/);
     assert.match(page, /x-for="\(item, i\) in selectedElement\.items"/);
-    assert.match(script, /elements: JSON\.parse\(JSON\.stringify\(this\.elements\)\)/);
+    // MS-721: the typed elements are copied once and that copy is written.
+    assert.match(script, /const elements = JSON\.parse\(JSON\.stringify\(this\.elements\)\);[\s\S]*?guide: \{\s*elements,/);
     assert.match(script, /clone\(this\.elements\.find\(el => el\.type === 'announcements'\)\)/);
     assert.match(script, /data\.guide\.elements/);
     assert.match(page, /printed-announcement-lines\.js/);

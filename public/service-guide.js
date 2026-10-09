@@ -23,7 +23,13 @@ function guideEditor() {
         permissionLevel: 'viewer',
         hasChanges: false,
         _saveTimer: null,
-        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
+        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved' | 'failed'
+        // ADR 0081 / MS-721: the week's guide is one document, so a change
+        // made elsewhere is taken only while this copy has nothing unsaved;
+        // otherwise the page says "Changed elsewhere" and offers Reload.
+        changedElsewhere: false,
+        _live: null,
+        _adoptedFp: null,
         imageNote: '',
         selectedElement: null,
         zoomLevel: 1.0,
@@ -68,20 +74,21 @@ function guideEditor() {
                 if (self.permissionLevel === 'admin' || self.permissionLevel === 'editor') {
                     self.initSortable();
                 }
+                self.startLive();
                 self.loading = false;
 
                 // Only watch for changes if user has permission
                 if (self.permissionLevel === 'admin' || self.permissionLevel === 'editor') {
                     // Watch for changes after initial load
                     self.$watch('elements', (val) => {
-                        if (!self.loading) {
+                        if (!self.loading && !self.isAdoptedEcho()) {
                             self.hasChanges = true;
                             self.scheduleSave();
                         }
                     }, { deep: true });
 
                     self.$watch('selectedElement', (newVal, oldVal) => {
-                        if (!self.loading && newVal && oldVal && newVal.id === oldVal.id) {
+                        if (!self.loading && newVal && oldVal && newVal.id === oldVal.id && !self.isAdoptedEcho()) {
                             self.hasChanges = true;
                             self.scheduleSave();
                         }
@@ -318,6 +325,7 @@ function guideEditor() {
                 this.service = data;
                 if (data.guide && data.guide.elements) {
                     this.elements = data.guide.elements;
+                    this._loadedElements = JSON.parse(JSON.stringify(data.guide.elements));
                 }
                 if (this.service.keyVerse) {
                     this.getESVPlainText(this.service.keyVerse).then(text => {
@@ -477,10 +485,11 @@ function guideEditor() {
         },
 
         // Saves itself 1.5s after the last edit, the same debounce the elder
-        // documents use. The Save Progress button remains for anyone who wants
-        // the write now rather than in a second and a half.
+        // documents use. MS-721: there is no Save button now; a failed save
+        // says "Not saved" with Retry.
         scheduleSave() {
-            this.saveStatus = 'unsaved';
+            if (this._live) this._live.edited();
+            else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
@@ -511,21 +520,80 @@ function guideEditor() {
 
         async save() {
             clearTimeout(this._saveTimer);
-            this.saveStatus = 'saving';
+            const ticket = this._live ? this._live.saving() : 0;
+            if (!this._live) this.saveStatus = 'saving';
+            const elements = JSON.parse(JSON.stringify(this.elements));
             try {
                 await db.collection('services').doc(this.date).update({
                     guide: {
-                        elements: JSON.parse(JSON.stringify(this.elements)),
+                        elements,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }
                 });
-                this.hasChanges = false;
-                this.saveStatus = 'saved';
+                if (this._live) this._live.saved(ticket, { guide: { elements } });
+                else { this.hasChanges = false; this.saveStatus = 'saved'; }
             } catch (error) {
                 console.error("Error saving guide config:", error);
-                this.saveStatus = 'unsaved';
+                // "Not saved" + Retry; the next edit tries again on its own.
+                if (this._live) this._live.failed(ticket, error);
+                else this.saveStatus = 'failed';
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ────────────────────────────────────────
+        guideFingerprint(data) {
+            const g = (data && data.guide) || {};
+            return JSON.stringify(g.elements || null);
+        },
+        isAdoptedEcho() {
+            if (this._adoptedFp == null) return false;
+            // Not consumed: both watchers (elements, selectedElement) see the
+            // same adoption, and any real edit changes the fingerprint.
+            return JSON.stringify(this.elements) === this._adoptedFp;
+        },
+        startLive() {
+            if (typeof DocLive === 'undefined' || this._live) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => self.guideFingerprint(d),
+                onAdopt: (d) => self.adoptGuide(d),
+                onChange: (st) => {
+                    self.saveStatus = st.status;
+                    self.changedElsewhere = st.changedElsewhere;
+                    self.hasChanges = st.status !== 'saved';
+                },
+            });
+            this._live.loaded({ guide: { elements: this._loadedElements || null } });
+            if (typeof MosaicLiveRead === 'undefined') return;
+            this._unwatch = MosaicLiveRead.watch(db.collection('services').doc(this.date), (snap) => {
+                if (!snap || !snap.exists) return;
+                const raw = snap.data() || {};
+                const pendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                // The order of service is not edited here: it always follows.
+                if (!pendingWrites) {
+                    const fresh = self.normalizeServiceData(raw);
+                    delete fresh.guide;
+                    self.service = Object.assign({}, self.service, fresh);
+                }
+                self._live.remote(raw, { pendingWrites });
+            }, { onError: (e) => console.warn('Service guide is not following live changes:', e && e.message) });
+        },
+        adoptGuide(data) {
+            const g = (data && data.guide) || {};
+            if (!Array.isArray(g.elements)) return;
+            const next = JSON.parse(JSON.stringify(g.elements));
+            this._adoptedFp = JSON.stringify(next);
+            clearTimeout(this._saveTimer);
+            this.elements = next;
+            if (this.selectedElement) {
+                this.selectedElement = this.elements.find(el => el.id === this.selectedElement.id) || null;
+            }
+        },
+        reloadGuide() {
+            if (this._live) this._live.reload();
+        },
+        retrySave() { return this.save(); },
+        get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
         // Build the print booklet by cloning the live-preview pages into
         // imposition order, so the PDF is identical to what's on screen.

@@ -45,6 +45,8 @@
     <script src="printed-announcement-lines.js"></script>
     <script src="printed-announcement-guide.js"></script>
     <!-- Page logic -->
+    <script src="live-read.js"></script>
+    <script src="doc-live-core.js"></script>
     <script src="service-guide-editor.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <style>
@@ -118,19 +120,26 @@
                     <span class="m-chip-dot m-chip-dot--pulse"></span>
                     <span class="m-btn__label" x-text="resolved.total + ' Pages (target ' + resolved.target + ')'"></span>
                 </span>
-                <span x-show="hasChanges" x-cloak class="m-badge m-badge--warning m-header__chip">
-                    <span class="m-chip-dot m-chip-dot--pulse"></span>
-                    <span class="m-btn__label">Unsaved</span>
+                <!-- ADR 0081 / MS-721: saves itself; no Save button. -->
+                <span x-show="canEdit" x-cloak data-live-chip :data-state="saveStatus"
+                      class="m-badge m-header__chip"
+                      :class="saveStatus === 'failed' ? 'm-badge--error' : (saveStatus === 'unsaved' ? 'm-badge--warning' : (saveStatus === 'saving' ? 'm-badge--neutral' : 'm-badge--success'))">
+                    <span class="m-btn__label" x-text="chipText"></span>
                 </span>
+                <button x-show="saveStatus === 'failed'" x-cloak data-live-retry @click="retrySave()" class="m-btn m-btn--quiet m-btn--sm">
+                    <span class="m-btn__label">Retry</span>
+                </button>
+                <span x-show="changedElsewhere" x-cloak data-changed-elsewhere class="m-badge m-badge--neutral m-header__chip">
+                    <span class="m-btn__label">Changed elsewhere — reload to see it</span>
+                </span>
+                <button x-show="changedElsewhere" x-cloak data-live-reload @click="reloadGuide()" class="m-btn m-btn--quiet m-btn--sm">
+                    <span class="m-btn__label">Reload</span>
+                </button>
                 <a :href="'service-builder.html?date=' + date" class="m-btn m-btn--secondary m-btn--sm"
                    title="Edit the Order of Service (liturgy, hymns, people)">
                     <span class="material-symbols-outlined">edit_note</span>
                     <span class="m-btn__label">Order of Service</span>
                 </a>
-                <button x-show="canEdit" @click="save(true)" :disabled="saving" class="m-btn m-btn--primary m-btn--sm">
-                    <span class="material-symbols-outlined">save</span>
-                    <span class="m-btn__label" x-text="saving ? 'Saving…' : 'Save'"></span>
-                </button>
                 <button @click="printGuide()" class="m-btn m-btn--secondary m-btn--sm">
                     <span class="material-symbols-outlined">print</span>
                     <span class="m-btn__label">Print PDF</span>
@@ -367,26 +376,11 @@
                         </div>
                     </template>
                 </button>
-                <div class="mt-2 flex flex-col items-center gap-1">
-                    <template x-if="saveStatus === 'saving'">
-                        <span class="m-badge m-badge--neutral">
-                            <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-                            <span class="m-btn__label">Saving…</span>
-                        </span>
-                    </template>
-                    <template x-if="saveStatus === 'saved'">
-                        <span class="m-badge m-badge--success">
-                            <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                            <span class="m-btn__label">Saved</span>
-                        </span>
-                    </template>
-                    <template x-if="saveStatus === 'unsaved'">
-                        <span class="m-badge m-badge--warning">
-                            <span class="m-chip-dot m-chip-dot--pulse"></span>
-                            <span class="m-btn__label">Unsaved changes</span>
-                        </span>
-                    </template>
-                    <button @click="save(true)" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
+                <div class="mt-2 flex flex-col items-center gap-1" x-show="canEdit">
+                    <span class="m-badge" data-live-chip-foot
+                          :class="saveStatus === 'failed' ? 'm-badge--error' : (saveStatus === 'unsaved' ? 'm-badge--warning' : (saveStatus === 'saving' ? 'm-badge--neutral' : 'm-badge--success'))">
+                        <span class="m-btn__label" x-text="chipText"></span>
+                    </span>
                 </div>
             </div>
         </aside>
