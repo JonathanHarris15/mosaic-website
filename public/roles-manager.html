@@ -899,8 +899,8 @@
                                         <li class="m-locked-role">
                                             <span class="material-symbols-outlined m-locked-role__lock">lock</span>
                                             <span class="m-locked-role__name" x-text="role.name"></span>
-                                            <span x-show="canManageRoles" class="m-unitfield m-unitfield--sm">
-                                                <template x-if="canManageRoles">
+                                            <span x-show="canSetLiturgicalRest" class="m-unitfield m-unitfield--sm">
+                                                <template x-if="canSetLiturgicalRest">
                                                 <input type="number" min="0" step="0.25"
                                                        :value="liturgicalIntensity(role.slug)"
                                                        @change="setLiturgicalIntensity(role.slug, $event.target.value)"
@@ -908,7 +908,7 @@
                                                 </template>
                                                 <span class="m-unitfield__unit" x-text="liturgicalRestUnit(role.slug)"></span>
                                             </span>
-                                            <span x-show="!canManageRoles" class="rm-readonly" data-readonly="liturgical"
+                                            <span x-show="!canSetLiturgicalRest" class="rm-readonly" data-readonly="liturgical"
                                                   x-text="liturgicalIntensity(role.slug) + ' ' + liturgicalRestUnit(role.slug)"></span>
                                         </li>
                                     </template>
@@ -970,7 +970,7 @@
                                 </div>
 
                                 <div class="rm-cols rm-cols--people">
-                                    <div class="rm-group" x-show="canManageRoles">
+                                    <div class="rm-group" x-show="canSetDoesNotServe">
                                         <span class="m-label">Add somebody</span>
                                         <div class="m-search">
                                             <span class="material-symbols-outlined">search</span>
@@ -1006,7 +1006,7 @@
                                             <template x-for="p in nonServers" :key="p.id">
                                                 <li class="rm-person">
                                                     <span class="rm-person__name" x-text="p.name || 'Someone no longer in the directory'"></span>
-                                                    <button type="button" x-show="canManageRoles" @click="setDoesNotServe(p.id, false)"
+                                                    <button type="button" x-show="canSetDoesNotServe" @click="setDoesNotServe(p.id, false)"
                                                             :disabled="savingNonServer === p.id"
                                                             title="Put them back on the rotas"
                                                             class="m-icon-btn m-icon-btn--ghost">
