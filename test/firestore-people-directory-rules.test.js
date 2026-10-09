@@ -202,7 +202,7 @@ test('Away is still narrower than the directory', () => {
     // while the directory sits at any-account. If these two ever converge,
     // somebody has widened Away by accident.
     const away = blockFor(/match \/away\/\{stretchId\}\s*\{([\s\S]*?)\n      \}/);
-    assert.match(away, /isEditor\(\)/);
+    assert.match(away, /editsWith\('calendar\.away\.edit'\)/); // MS-722
     assert.match(away, /personId == myPersonId\(\)/);
     assert.doesNotMatch(
         away,

@@ -83,7 +83,7 @@ test('no client may create, edit or delete a cover entry — editors included', 
 
 test('an occurrence is still editor-only to write', () => {
     assert.match(occurrencesBlock(),
-        /allow create, update, delete: if isEditor\(\)/,
+        /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/,
         'members write through a callable; opening this would let one restamp ' +
         'visibility or participantIds');
 });
@@ -103,7 +103,7 @@ test('the cross-Event roster query is still clamped to your own rows', () => {
 });
 
 test('the roster subcollection is still editor-only to write', () => {
-    assert.match(rosterBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(rosterBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 // ── The stamp the rule depends on ────────────────────────────────────────────

@@ -92,7 +92,8 @@ test('roles and events are writable by editors only', () => {
             new RegExp('match /' + collection + '/\\{[^}]+\\}\\s*\\{([\\s\\S]*?)\\n    \\}')
         );
         assert.ok(block, 'no rule block for /' + collection);
-        assert.match(block[1], /allow create, update, delete: if isEditor\(\)/);
+        // MS-722: the level names, OR the MS-695 key Admin Accounts grants.
+        assert.match(block[1], /allow create, update, delete: if editsWith\('(roles\.manager|calendar\.events)\.edit'\)/);
     });
 });
 

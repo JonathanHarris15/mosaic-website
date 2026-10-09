@@ -33,7 +33,7 @@ const templatesBlock = () => blockFor(/match \/printable_templates\/\{templateId
 
 test('a Printable is written by editors and above, and nobody below', () => {
     const block = code(printablesBlock());
-    assert.match(block, /allow write: if isEditor\(\);/);
+    assert.match(block, /allow write: if editsWith\('printables\.edit'\);/);
     assert.doesNotMatch(block, /if true/, 'a Printable is not world-readable');
     assert.doesNotMatch(block, /request\.auth != null/,
         'request.auth != null accepts an anonymous token anybody can mint; isSignedIn() is the floor');
@@ -48,13 +48,13 @@ test('a member reads a Printable only when an editor marked it visible to member
 test('a Printable folder is editor-and-above, the same ladder as the Forms library', () => {
     const block = code(foldersBlock());
     assert.match(block, /allow read: if readsAsEditor\(\);/);
-    assert.match(block, /allow write: if isEditor\(\);/);
+    assert.match(block, /allow write: if editsWith\('printables\.edit'\);/);
     assert.doesNotMatch(block, /if true/);
 });
 
 test('a custom page template is editor-and-above, like the projects it seeds', () => {
     const block = code(templatesBlock());
     assert.match(block, /allow read: if readsAsEditor\(\);/);
-    assert.match(block, /allow write: if isEditor\(\);/);
+    assert.match(block, /allow write: if editsWith\('printables\.edit'\);/);
     assert.doesNotMatch(block, /if true/);
 });

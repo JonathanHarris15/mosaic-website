@@ -48,6 +48,16 @@ service cloud.firestore {
       );
     }
 
+    // MS-722 (ADR 0081): a write door names the MS-695 permission key that
+    // Admin Accounts grants for the page that writes there, so a custom
+    // level built from Member plus that key (Admin → Accounts) can do what
+    // its page offers. The level names isEditor() always admitted stay as
+    // an OR — nobody loses a door they had. WRITE paths only; reads are
+    // untouched. Signed out is still no: hasPermission needs a user doc.
+    function editsWith(key) {
+      return isEditor() || hasPermission(key);
+    }
+
     // Helper to check if user is a member or above. The floor of the `member`
     // visibility rung (MS-99): a viewer is signed in but sees only public things.
     function isMember() {
@@ -254,7 +264,7 @@ service cloud.firestore {
 
     match /hymns/{hymnId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('hymns.edit');
     }
     
     match /tags/{tagId} {
@@ -269,7 +279,7 @@ service cloud.firestore {
     // NOT here — they are code-defined and locked, so there is nothing to store.
     match /roles/{roleId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('roles.manager.edit');
     }
 
     // ── Events, occurrences, and the five-rung visibility ladder ────────────
@@ -345,7 +355,7 @@ service cloud.firestore {
       allow read: if isKiosk()
         || eventId == 'sunday_service'
         || rankCanSee(stampedVisibility());
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('calendar.events.edit');
 
       // Event announcement words (MS-621). Whoever can already read the
       // series — its standing description — can read the title and the prose.
@@ -356,7 +366,7 @@ service cloud.firestore {
         allow read: if isKiosk()
           || eventId == 'sunday_service'
           || rankCanSee(get(/databases/$(database)/documents/events/$(eventId)).data.visibility);
-        allow create, update, delete: if isEditor();
+        allow create, update, delete: if editsWith('calendar.events.edit');
       }
 
       // How the announcement goes out: the way, when, and the tag ids.
@@ -373,7 +383,7 @@ service cloud.firestore {
                 || eventId == 'sunday_service'
                 || rankCanSee(get(/databases/$(database)/documents/events/$(eventId)).data.visibility)))
           || isEditor();
-        allow create, update, delete: if isEditor();
+        allow create, update, delete: if editsWith('calendar.events.edit');
       }
     }
 
@@ -393,7 +403,7 @@ service cloud.firestore {
       allow read: if isKiosk()
         || rankCanSee(stampedVisibility())
         || (stampedVisibility() == 'participant' && isEventParticipant());
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('calendar.events.edit');
 
       // Attendance (MS-318, ADR-0042): who was physically here. Written live
       // by a Kiosk; document id is the Person id, so a second mark overwrites.
@@ -423,7 +433,7 @@ service cloud.firestore {
           || (request.auth != null
               && get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.rosterShared == true
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
-        allow create, update, delete: if isEditor();
+        allow create, update, delete: if editsWith('calendar.events.edit');
       }
 
       // Event Attachments (MS-287): a file attached to this occurrence — a
@@ -438,7 +448,7 @@ service cloud.firestore {
           || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
               && request.auth != null
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
-        allow create, update, delete: if isEditor();
+        allow create, update, delete: if editsWith('calendar.events.edit');
       }
 
       // An Event Document — one WRITTEN here rather than uploaded — sits on the
@@ -456,7 +466,7 @@ service cloud.firestore {
           || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
               && request.auth != null
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
-        allow create, update, delete: if isEditor();
+        allow create, update, delete: if editsWith('calendar.events.edit');
       }
 
       // Event announcement words on a ONE-OFF. The occurrence is the event,
@@ -471,7 +481,7 @@ service cloud.firestore {
             || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
                 && request.auth != null
                 && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds));
-        allow create, update, delete: if isEditor() && oneOffOccurrence();
+        allow create, update, delete: if editsWith('calendar.events.edit') && oneOffOccurrence();
       }
 
       match /announcement_going_out/{announcementId} {
@@ -483,7 +493,7 @@ service cloud.firestore {
                       || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
                           && request.auth != null
                           && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds))));
-        allow create, update, delete: if isEditor() && oneOffOccurrence();
+        allow create, update, delete: if editsWith('calendar.events.edit') && oneOffOccurrence();
       }
     }
 
@@ -553,7 +563,7 @@ service cloud.firestore {
 
     match /services/{dateId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
 
     // How many times each scripture reference has been used in an Order of
@@ -597,11 +607,11 @@ service cloud.firestore {
     }
     match /liturgy_elements/{elementId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
     match /liturgy_orders/{orderId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
     // Asset Library — reusable images (logos, QR codes) referenced by URL in pages.
     // Bytes live in Storage; this holds metadata + the public download URL.
@@ -724,7 +734,7 @@ service cloud.firestore {
       match /away/{stretchId} {
         allow read: if readsAsEditor()
           || (request.auth != null && personId == myPersonId());
-        allow create, update, delete: if isEditor()
+        allow create, update, delete: if editsWith('calendar.away.edit')
           || (request.auth != null && personId == myPersonId());
       }
     }
@@ -977,7 +987,7 @@ service cloud.firestore {
     // anonymous visitor can open.
     match /presence/{uid} {
       allow read: if readsAsEditor();
-      allow write, delete: if isEditor() && request.auth.uid == uid;
+      allow write, delete: if editsWith('services.builder.edit') && request.auth.uid == uid;
     }
 
     // Who is on a Shepherding page, and which note, Task or details editor they
@@ -1164,7 +1174,7 @@ service cloud.firestore {
     match /printables/{printableId} {
       allow read: if readsAsEditor()
         || (isMember() && ('memberVisible' in resource.data) && resource.data.memberVisible == true);
-      allow write: if isEditor();
+      allow write: if editsWith('printables.edit');
     }
 
     // Where a Printable is filed: a name and the folder it sits in, and
@@ -1173,14 +1183,14 @@ service cloud.firestore {
     // moment write two different records.
     match /printable_folders/{folderId} {
       allow read: if readsAsEditor();
-      allow write: if isEditor();
+      allow write: if editsWith('printables.edit');
     }
 
     // A custom page template (MS-393): a page somebody built, kept to start
     // the next project from. Editor and above, like the projects it seeds.
     match /printable_templates/{templateId} {
       allow read: if readsAsEditor();
-      allow write: if isEditor();
+      allow write: if editsWith('printables.edit');
     }
 
     // One person's answers. Editors read them on the Responses tab; the
