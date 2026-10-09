@@ -63,7 +63,11 @@
         const n = needs || {};
         const v = viewer || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
-        const bundle = { people: [], families: [], households: [], services: {}, hymns: {}, series: [], occurrences: [], roles: [], forms: [], responses: [], printedEventsBySunday: {}, liturgy: null };
+        const bundle = {
+            people: [], families: [], households: [], services: {}, hymns: {},
+            series: [], occurrences: [], roles: [], forms: [], responses: [],
+            printedEventsBySunday: {}, liturgy: null, prayerRequests: {},
+        };
         const jobs = [];
 
         const liturgy = (n.liturgy || n.hymns) ? loadLiturgy(db) : Promise.resolve(null);
@@ -144,8 +148,56 @@
         }
 
         await Promise.all(jobs);
+
+        // Prayer requests after services are in: subjects come from the liturgy.
+        if (n.prayerRequests && n.prayerRequests.length && readsPrayerRequests(v)) {
+            await loadPrayerRequests(db, bundle, n.prayerRequests);
+        }
+
+        // Migrated booklet fills: empty occurrence slots ← typedContent.
+        if (bundle.eventInputs && n.eventInputs && n.eventInputs.date) {
+            const Migrate = global.PrintableLegacyMigrate;
+            const Typed = global.SundayTypedCore;
+            const svc = bundle.services && bundle.services[n.eventInputs.date];
+            if (Migrate && Typed && svc) {
+                bundle.eventInputs = Migrate.mergeEventWithTyped(
+                    bundle.eventInputs,
+                    Typed.fromService(svc)
+                );
+            }
+        }
+
         if (n.passages && n.passages.length) await fetchPassages(bundle, n.passages);
         return bundle;
+    }
+
+    function readsPrayerRequests(viewer) {
+        const level = (viewer && viewer.level) || '';
+        return ['elder', 'super_admin', 'admin', 'pastoral_assistant'].indexOf(level) !== -1;
+    }
+
+    async function loadPrayerRequests(db, bundle, dates) {
+        const Data = global.PrintableDataCore;
+        const bag = bundle.prayerRequests || {};
+        const wanted = [];
+        (dates || []).forEach(date => {
+            const s = bundle.services && bundle.services[date];
+            if (!s || !Data || !Data.prayerSubjectsOf) return;
+            Data.prayerSubjectsOf(s, bundle.liturgy).forEach(sub => {
+                if (sub && sub.personId) wanted.push({ personId: sub.personId, date: date });
+            });
+        });
+        await Promise.all(wanted.map(async w => {
+            const doc = await safely(
+                db.collection('people').doc(w.personId).collection('prayer_requests').doc(w.date).get(),
+                null
+            );
+            if (doc && doc.exists) {
+                bag[w.personId + '/' + w.date] = doc.data();
+                bag[w.personId] = doc.data();
+            }
+        }));
+        bundle.prayerRequests = bag;
     }
 
     // Values typed on the event this Printable is linked to, for this date.

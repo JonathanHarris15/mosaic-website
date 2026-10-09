@@ -8,8 +8,8 @@
 //       – the QUERY BUILDER: every catalog source this viewer may read,
 //         single or list — pick one, set its params and filters, drag its
 //         fields; a list meeting a selected box iterates that box;
-//       – the FILL-IN LIBRARY: blanks a person types — fields filled on
-//         the event, and the Sunday booklet text with its form;
+//       – the FILL-IN LIBRARY: blanks this printable defines; values are
+//         typed where it is linked (any event, any printable);
 //       – GENERAL LIVE DATA: the date, the page number, brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
 //     the chip to the cursor and, once bound, from the chip to the element
@@ -50,15 +50,15 @@
     function drawerPartOf(source) {
         if (Data && typeof Data.drawerPartOf === 'function') return Data.drawerPartOf(source);
         if (!source || typeof source === 'string') return '';
+        if (source.noDrawer || source.blank) return '';
         if (source.scalar) return 'general';
-        if (source.blank) return 'fill';
         return 'query';
     }
 
     // The query builder's menu: the sources it was handed, grouped by
     // region. Related lists (`of`) sit first, under what one row of their
     // parent is called — "Of this household" — and only if the caller
-    // passed them in. A blank or a scalar insert is never in the menu.
+    // passed them in. Scalars and noDrawer sources are never in the menu.
     function groupQuerySources(sources, search, parent) {
         const q = String(search || '').trim().toLowerCase();
         const filtered = (sources || []).filter(s => {
@@ -470,7 +470,6 @@
                 }
                 this.bindWireTracking();
                 await this.refreshData();
-                this.loadTypedDraft();
             },
 
             // The chip end of a wire lives in the drawer; without a scroll

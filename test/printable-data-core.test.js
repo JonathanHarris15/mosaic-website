@@ -17,7 +17,7 @@ const TODAY = '2026-09-03'; // a Thursday
 
 // ── The catalog ──────────────────────────────────────────────────────────────
 
-test('a member sees a strict subset of what an editor sees, and nothing elder-only exists', () => {
+test('a member sees a strict subset of what an editor sees; prayer requests are the elder-only exception', () => {
     const member = Data.sourcesFor('member');
     const editor = Data.sourcesFor('editor');
     const mKeys = member.map(s => s.key);
@@ -30,10 +30,21 @@ test('a member sees a strict subset of what an editor sees, and nothing elder-on
     const editorPeople = editor.find(s => s.key === 'people').fields.map(f => f.key);
     assert.ok(!memberPeople.includes('stage'), 'the Membership Track is pastoral, not congregational');
     assert.ok(editorPeople.includes('stage'));
-    Data.SOURCES.forEach(s => assert.ok(!['elder', 'super_admin'].includes(s.minLevel), s.key + ' is elder-only and must not be in the catalog'));
-    // "Pastoral Prayer" is a Liturgy Element — the slot in the service every
-    // bulletin prints (ADR-0080) — not the pastoral record.
-    const text = JSON.stringify(Data.SOURCES).toLowerCase().split('pastoral prayer').join('');
+    // Pastoral prayer requests sit on the order of service; elders (and
+    // pastoral assistants) may query them. Nothing else is elder-only.
+    Data.SOURCES.forEach(s => {
+        if (s.key === 'sunday_prayer_requests') {
+            assert.equal(s.minLevel, 'elder');
+            return;
+        }
+        assert.ok(!['elder', 'super_admin'].includes(s.minLevel), s.key + ' is elder-only and must not be in the catalog');
+    });
+    assert.ok(Data.sourcesFor('elder').some(s => s.key === 'sunday_prayer_requests'));
+    assert.ok(!Data.sourcesFor('editor').some(s => s.key === 'sunday_prayer_requests'));
+    // Shepherding notes and relationships stay out. "Pastoral Prayer" is the
+    // liturgy slot (ADR-0080); strip that phrase before scanning.
+    const text = JSON.stringify(Data.SOURCES.filter(s => s.key !== 'sunday_prayer_requests'))
+        .toLowerCase().split('pastoral prayer').join('');
     ['shepherding', 'prayer_request', 'pastoral', 'relationship'].forEach(w => assert.ok(!text.includes(w), 'the catalog mentions ' + w));
 });
 
@@ -239,37 +250,41 @@ test('MS-730: the query builder offers every source a level may read, single and
         assert.ok(member.includes(key), key + ' is in a member\'s query builder');
     });
     assert.ok(member.includes('sunday') && Data.sourceByKey('sunday').shape === 'single', 'a single is queried too');
-    ['sunday_typed', 'insert_date', 'insert_page_number'].forEach(key => {
-        assert.ok(!member.includes(key), key + ' has no records to query');
+    ['sunday_typed', 'insert_date', 'insert_page_number', 'sunday_prayer_requests'].forEach(key => {
+        assert.ok(!member.includes(key), key + ' is not in a member\'s query builder');
     });
     assert.ok(!member.includes('household_children'), 'a related list waits for its parent row');
     assert.ok(!member.includes('role_holder') && !member.includes('form_answers'), 'editor sources stay off a member\'s builder');
     const editor = Data.querySourcesFor('editor').map(s => s.key);
     assert.ok(editor.includes('role_holder') && editor.includes('form_answers'));
+    assert.ok(!editor.includes('sunday_prayer_requests'), 'prayer requests stay elder-and-above');
+    const elder = Data.querySourcesFor('elder').map(s => s.key);
+    assert.ok(elder.includes('sunday_prayer_requests'), 'elders query pastoral prayer requests');
     const viewer = Data.querySourcesFor('viewer').map(s => s.key);
     assert.ok(!viewer.includes('people') && !viewer.includes('households'), 'the directory is above a viewer');
     member.forEach(key => assert.ok(Data.mayQuery('member', key), key + ' passes the same gate as a saved query'));
     const inHouse = Data.querySourcesFor('member', 'households').map(s => s.key);
     assert.equal(inHouse[0], 'household_children', 'inside a household card its children come first');
     assert.equal(Data.sourceByKey('households').row, 'household', 'one row of households is called a household');
-    assert.equal(Data.sourceByKey('sunday_typed').blank, true, 'booklet text is typed, so it is a blank');
+    assert.equal(Data.sourceByKey('sunday_typed').noDrawer, true, 'legacy typed Sunday fields stay out of the drawer');
+    assert.equal(Data.drawerPartOf('sunday_typed'), '', 'pamphlet blanks are fill-ins on the event, not a catalog card');
     const role = Data.querySpecsFor('role_holder', 'editor');
     assert.ok(role.find(s => s.key === 'seriesId').required && role.find(s => s.key === 'roleSlug').required,
         'who holds a role reads nothing until both are chosen');
     assert.ok(Data.querySpecsFor('form_answers', 'editor').find(s => s.key === 'formId').required);
 });
 
-test('MS-730: every catalog source has exactly one drawer part', () => {
+test('MS-730: every catalog source is query, general, or off the drawer', () => {
     const homes = {};
     Data.SOURCES.forEach(s => {
         const part = Data.drawerPartOf(s);
-        assert.ok(['query', 'fill', 'general'].includes(part), s.key + ' has a home');
+        assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, 'fill');
+    assert.equal(homes.sunday_typed, '');
     assert.equal(homes.insert_date, 'general');
     assert.equal(homes.insert_page_number, 'general');
-    Data.SOURCES.filter(s => !s.blank && !s.scalar).forEach(s => {
+    Data.SOURCES.filter(s => !s.noDrawer && !s.scalar && !s.blank).forEach(s => {
         assert.equal(homes[s.key], 'query', s.key + ' is queried');
     });
     assert.equal(Data.drawerPartOf('missing'), '');
@@ -443,13 +458,16 @@ test('dotted liturgy keys on an old record are folded back before reading', () =
     assert.equal(r.rows[0].hymn1, 'Doxology');
 });
 
-test('order of service rows walk the Sunday\'s order, skip empty elements and removed hymns', () => {
+test('order of service rows walk the Sunday\'s order; empty slots optional; removed hymns stay out', () => {
     // The people prayed for are the Sunday's own fields (prayerMale /
     // prayerFemale on the single Sunday), not elements of its order.
-    const r = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
-    assert.deepEqual(r.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
-    assert.equal(r.rows[0].number, 1);
+    const filled = Data.resolve('sunday_rows', { includeEmpty: false }, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(filled.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
+    assert.deepEqual(filled.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
+    assert.equal(filled.rows[0].number, 1);
+    const all = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
+    assert.ok(all.rows.length > filled.rows.length, 'empty slots stay by default so the full order prints');
+    assert.ok(all.rows.every(x => x.kind), 'each row names its kind');
     assert.equal(Data.needsFor('sunday_rows', {}, TODAY).liturgy, true, 'the store brings the orders');
 });
 
@@ -477,7 +495,7 @@ const WITH_ORDERS = () => {
 };
 
 test('order of service rows follow the order the Sunday names, with who carries an element', () => {
-    const r = Data.resolve('sunday_rows', {}, WITH_ORDERS(), { today: TODAY });
+    const r = Data.resolve('sunday_rows', { includeEmpty: false }, WITH_ORDERS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon']);
     assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn of Praise', 'Lord\'s Supper', 'Baptism', 'Sermon']);
     assert.equal(r.rows[3].value, 'Ada Example, Ben Example', 'a people element lists its people');

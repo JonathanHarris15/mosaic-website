@@ -802,18 +802,14 @@
                     <summary class="pe-drawer__title pe-part__head">
                         <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
                         <span>Fill-in library</span>
-                        <span class="pe-part__sum">Blanks a person types</span>
+                        <span class="pe-part__sum">Blanks filled where this printable is linked</span>
                         <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
                     </summary>
                     <div class="pe-typecards">
-                        <article class="pe-typecard" aria-label="Filled on the event">
-                            <div class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">event_note</span>
-                                <strong>Filled on the event</strong>
-                            </div>
-                            <p class="pe-hint">A blank the event fills in for that date. Drag it onto the page. The words, the picture, or the list are typed where this printable is linked.</p>
+                        <article class="pe-typecard" aria-label="Fill-in entries">
+                            <p class="pe-hint">Blanks this printable asks for. Drag one onto the page. A person types the value on the linked event for that date — not in this drawer. Any printable, any event.</p>
                             <div class="pe-f" x-show="canEdit"><span>Add</span>
-                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Add a field filled on the event">
+                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Add a fill-in">
                                     <button type="button" @click="addEventInput('text')">Text</button>
                                     <button type="button" @click="addEventInput('image')">Image</button>
                                     <button type="button" @click="addEventInput('number')">Number</button>
@@ -821,7 +817,7 @@
                                     <button type="button" @click="addEventInput('list')">List</button>
                                 </span>
                             </div>
-                            <p class="pe-empty" x-show="!eventInputs.length">No fields yet. A text, an image, or a list of players — whatever this date should supply.</p>
+                            <p class="pe-empty" x-show="!eventInputs.length">No fill-ins yet. Add a text, image, number, date, or list — whatever this printable needs from the date it is linked to.</p>
                             <template x-for="input in eventInputs" :key="'ev-' + input.id">
                                 <div class="pe-event-field">
                                     <label class="pe-f"><span x-text="eventKindLabel(input.kind)"></span>
@@ -865,80 +861,6 @@
                                     </div>
                                 </div>
                             </template>
-                        </article>
-
-                        <article class="pe-typecard pe-booklet" aria-label="Sunday booklet text">
-                            <div class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-                                <strong>Sunday booklet text</strong>
-                            </div>
-                            <p class="pe-hint">Typed once for a Sunday — the prayer country, the kids lesson, the announcements. Every printable wired to it reads the same words.</p>
-                            <div class="pe-f"><span>Which Sunday</span>
-                                <span class="pe-seg pe-seg--text pe-seg--tiny" role="group" aria-label="Which Sunday's booklet text">
-                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'last'" @click="setTypedWhen({ mode: 'last' })">Last</button>
-                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'this'" @click="setTypedWhen({ mode: 'this' })">This</button>
-                                    <button type="button" :aria-pressed="whenMode(typedWhen) === 'next'" @click="setTypedWhen({ mode: 'next' })">Next</button>
-                                    <input type="date" class="pe-in pe-in--date" aria-label="A Sunday by date" :value="(typedWhen || {}).date || ''" @change="setTypedWhen({ mode: 'date', date: $event.target.value })" />
-                                </span>
-                            </div>
-                            <div class="pe-chips">
-                                <template x-for="f in sundayTypedChips" :key="'typed-' + f.key">
-                                    <span class="pe-chip" draggable="true" tabindex="0"
-                                          :data-chip="chipKey('global', 'sunday_typed', f.key)"
-                                          :title="f.value || f.label"
-                                          @dragstart="onChipDragStart($event, 'global', 'sunday_typed', f)" @dragend="onChipDragEnd()">
-                                        <span class="material-symbols-outlined" x-text="kindIcon(f.kind)" aria-hidden="true"></span>
-                                        <span class="pe-chip__name" x-text="f.label"></span>
-                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                    </span>
-                                </template>
-                            </div>
-                            <p class="pe-hint">Each announcement as its own row, and the kids questions one by one, are lists: find them in the query builder.</p>
-                            <details class="pe-fold pe-booklet__form" x-show="canEdit">
-                                <summary class="pe-typecard__head">
-                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                                    <strong x-text="'Type the text for ' + (data.typed.date ? formatTypedDate(data.typed.date) : 'this Sunday')"></strong>
-                                    <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
-                                </summary>
-                                <template x-if="canEdit && data.typed.draft">
-                                    <div class="pe-typed">
-                                        <p class="pe-hint">Layout stays on the page; next week reads the next Sunday.</p>
-                                        <p class="pe-typed__h">Prayer country</p>
-                                        <label class="pe-f"><span>Country</span><input class="pe-in" x-model="data.typed.draft.prayerNation" /></label>
-                                        <label class="pe-f"><span>Continent</span><input class="pe-in" x-model="data.typed.draft.prayerContinent" /></label>
-                                        <label class="pe-f"><span>Capital</span><input class="pe-in" x-model="data.typed.draft.prayerCapital" /></label>
-                                        <label class="pe-f"><span>Population</span><input class="pe-in" x-model="data.typed.draft.prayerPopulation" /></label>
-                                        <label class="pe-f"><span>Language</span><input class="pe-in" x-model="data.typed.draft.prayerLanguage" /></label>
-                                        <label class="pe-f"><span>Total languages</span><input class="pe-in" x-model="data.typed.draft.prayerTotalLanguages" /></label>
-                                        <label class="pe-f"><span>Literacy</span><input class="pe-in" x-model="data.typed.draft.prayerLiteracy" /></label>
-                                        <label class="pe-f"><span>Christian</span><input class="pe-in" x-model="data.typed.draft.prayerChristian" /></label>
-                                        <label class="pe-f"><span>Evangelical</span><input class="pe-in" x-model="data.typed.draft.prayerEvangelical" /></label>
-                                        <label class="pe-f"><span>Un-evangelized</span><input class="pe-in" x-model="data.typed.draft.prayerUnevangelized" /></label>
-                                        <label class="pe-f"><span>Prompts</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.prayerPrompts" placeholder="One prompt per line"></textarea></label>
-                                        <label class="pe-f"><span>Country map</span><input class="pe-in" x-model="data.typed.draft.prayerCountryImage" placeholder="https://…" /></label>
-                                        <input type="file" accept="image/*" class="pe-typed__file" aria-label="Upload a country map" @change="onTypedCountryImage($event)" />
-                                        <p class="pe-hint">Upload stores the image in Storage (max 8 MB) and keeps the https URL on this Sunday. A pasted https URL is fine. Large data URLs are refused.</p>
-                                        <p class="pe-typed__h">Mosaic Kids</p>
-                                        <label class="pe-f"><span>Lesson</span><input class="pe-in" x-model="data.typed.draft.kidsLessonTitle" /></label>
-                                        <label class="pe-f"><span>Verse</span><input class="pe-in" x-model="data.typed.draft.kidsLessonVerse" /></label>
-                                        <label class="pe-f"><span>Summary</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsSummary" placeholder="One point per line"></textarea></label>
-                                        <label class="pe-f"><span>Questions</span><textarea class="pe-in pe-ta" rows="3" x-model="data.typed.draft.kidsQuestions" placeholder="One question per line"></textarea></label>
-                                        <p class="pe-typed__h">Announcements</p>
-                                        <template x-for="(item, i) in data.typed.draft.announcements" :key="'ann-' + i">
-                                            <div class="pe-typed__ann">
-                                                <label class="pe-f"><span>Title</span><input class="pe-in" x-model="item.title" /></label>
-                                                <label class="pe-f"><span>Body</span><textarea class="pe-in pe-ta" rows="2" x-model="item.content"></textarea></label>
-                                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="removeTypedAnnouncement(i)">Remove</button>
-                                            </div>
-                                        </template>
-                                        <button type="button" class="m-btn m-btn--secondary m-btn--sm pe-typed__add" @click="addTypedAnnouncement()">Add an announcement</button>
-                                        <button type="button" class="m-btn m-btn--primary m-btn--sm pe-typed__save" @click="saveTypedDraft()" :disabled="data.typed.saving">
-                                            <span class="m-btn__label" x-text="data.typed.saving ? 'Saving…' : 'Save this Sunday'"></span>
-                                        </button>
-                                        <p class="pe-hint" x-show="data.typed.status" x-text="data.typed.status" aria-live="polite"></p>
-                                    </div>
-                                </template>
-                            </details>
                         </article>
                     </div>
                 </details>
@@ -1194,6 +1116,9 @@
     <script src="access-core.js"></script>
     <script src="mobile/destinations.js"></script>
     <script src="filing-core.js"></script>
+    <script src="printable-link-core.js"></script>
+    <script src="sunday-typed-core.js"></script>
+    <script src="printable-legacy-migrate-core.js"></script>
     <script src="printable-core.js"></script>
     <script src="printable-dom.js"></script>
     <script src="printable-store.js"></script>
@@ -1201,7 +1126,6 @@
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="image-intake.js"></script>
-    <script src="sunday-typed-core.js"></script>
     <script src="event-announcement-core.js"></script>
     <script src="event-announcement-store.js"></script>
     <script src="printed-announcement-lines.js"></script>
@@ -1211,7 +1135,6 @@
     <script src="liturgy-order-store.js"></script>
     <script src="printable-data-core.js"></script>
     <script src="scripture-passage.js"></script>
-    <script src="printable-link-core.js"></script>
     <script src="event-attachments-core.js"></script>
     <script src="printable-data-store.js"></script>
     <script src="printable-render-core.js"></script>
@@ -1391,8 +1314,6 @@
         .pe-part__head:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
         .pe-part__sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font: 400 11px var(--font-sans); letter-spacing: 0; text-transform: none; }
         .pe-part[open] > .pe-part__head .pe-src__chev { transform: rotate(180deg); }
-        .pe-booklet > .pe-chips { margin-bottom: 4px; }
-        .pe-booklet__form { margin-top: 6px; }
         .pe-drawer__title { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-drawer__title .material-symbols-outlined { font-size: 16px; }
         .pe-drawer__ok { color: var(--success); }
