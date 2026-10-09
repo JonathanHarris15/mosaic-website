@@ -183,6 +183,8 @@
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="event-announcement-core.js"></script>
     <script src="printed-announcement-lines.js"></script>
     <script src="event-tell-core.js"></script>
@@ -357,7 +359,7 @@
                                 <span x-text="t.label"></span>
                                 <!-- Work not yet pressed into the record. Amber,
                                      because red means somebody declined. -->
-                                <span x-show="t.id === 'event' && seriesDetailsChanged" class="m-tabs__dot"></span>
+                                <span x-show="t.id === 'event' && seriesChip !== 'saved'" class="m-tabs__dot"></span>
                             </button>
                         </template>
                     </div>
@@ -893,7 +895,7 @@
                                     <div class="re-fields" x-show="isEditor">
                                         <label class="m-field">
                                             <span class="m-label">What is it</span>
-                                            <input type="text" class="m-input re-focus" x-model="seriesDraft.name"
+                                            <input type="text" class="m-input re-focus" :value="seriesDraft.name" @input="editSeries('name', $event.target.value)" @blur="saveSeriesDetails()" @keydown.enter.prevent="saveSeriesDetails()" @keydown.escape="revertSeries('name')"
                                                    :disabled="isSundaySeries" placeholder="Midweek Gathering" />
                                             <p x-show="isSundaySeries" class="m-settled m-settled--sm" style="margin-top:6px">
                                                 The Sunday Service keeps its name — everything else in the app
@@ -910,32 +912,31 @@
                                             </label>
                                             <label class="m-field">
                                                 <span class="m-label">Where</span>
-                                                <input type="text" class="m-input re-focus" x-model="seriesDraft.location"
+                                                <input type="text" class="m-input re-focus" :value="seriesDraft.location" @input="editSeries('location', $event.target.value)" @blur="saveSeriesDetails()" @keydown.enter.prevent="saveSeriesDetails()" @keydown.escape="revertSeries('location')"
                                                        placeholder="The hall" />
                                             </label>
                                         </div>
 
                                         <label class="m-field">
                                             <span class="m-label">What it's for</span>
-                                            <textarea rows="3" class="m-input re-focus" x-model="seriesDraft.description"
+                                            <textarea rows="3" class="m-input re-focus" :value="seriesDraft.description" @input="editSeries('description', $event.target.value)" @blur="saveSeriesDetails()" @keydown.escape="revertSeries('description')"
                                                       placeholder="A short line for anyone who has not been before."></textarea>
                                         </label>
 
-                                        <!-- The time saves on change; the typed fields need
-                                             a press, because a name is half-typed for most
-                                             of the time somebody is typing it. -->
-                                        <div class="re-saverow" x-show="seriesDetailsChanged">
-                                            <span class="re-saverow__said">
-                                                <span class="m-tabs__dot"></span>
-                                                Not saved yet.
-                                            </span>
-                                            <button @click="startSeriesDraft()"
+                                        <!-- MS-721 (ADR 0081): the typed fields save themselves too
+                                             now; the chip says where they are. -->
+                                        <div class="re-saverow" data-live-series>
+                                            <span x-show="seriesChip === 'failed' && seriesError"
+                                                  class="re-saverow__said" style="color:var(--error, #b3261e)"
+                                                  x-text="seriesError"></span>
+                                            <span x-show="!isSundaySeries && !String(seriesDraft.name || '').trim()" data-live-invalid
+                                                  class="re-saverow__said" style="color:var(--error, #b3261e)">An event needs a name. Not saved until it has one.</span>
+                                            <span data-live-chip :data-state="seriesChip" class="re-saverow__said"
+                                                  x-text="seriesChipText(seriesChip)"></span>
+                                            <button type="button" x-show="seriesChip === 'failed'" data-live-retry
+                                                    @click="saveSeriesDetails()"
                                                     class="m-btn m-btn--quiet m-btn--sm re-motion re-focus">
-                                                <span class="m-btn__label">Undo</span>
-                                            </button>
-                                            <button @click="saveSeriesDetails()" :disabled="!seriesDetailsValid || saving"
-                                                    class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
-                                                <span class="m-btn__label">Save details</span>
+                                                <span class="m-btn__label">Retry</span>
                                             </button>
                                         </div>
                                     </div>
