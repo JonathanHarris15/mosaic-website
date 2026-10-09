@@ -35,9 +35,14 @@ Any page where you can change what you are looking at follows five rules.
 3. **Gated on the MS-695 permission for that surface.** The check goes through
    an `AccessCore` helper that reads the permission map, with a legacy-level
    fallback for accounts that have not been migrated. Never a list of level
-   strings. Firestore rules stay the backstop. Where a rule still checks a
-   level list, the page records the gap as an open decision rather than
-   patching the rules in passing.
+   strings. Firestore rules stay the backstop, and the page asks the
+   `AccessCore` helper that mirrors the write rule on that collection (one
+   key per surface, e.g. `canEditEvents`), so the UI offers exactly what the
+   rule lets land. Each page moves to its own key as it converts. Pages do
+   not re-implement permission resolution; when the rules change, AccessCore
+   changes with them. Where a rule still checks only a level list, the page
+   records the gap as an open decision rather than patching the rules in
+   passing.
 4. **Live.** The page listens with `MosaicLiveRead.watch` (a listener on the
    web; on the phone, a listener with a re-read fallback). A field this editor
    has not touched takes the incoming value. A field this editor has changed
