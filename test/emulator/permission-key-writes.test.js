@@ -57,7 +57,7 @@ const DOORS = [
   ["guide_templates", "services.builder.edit", (u, t) => `guide_templates/g-${t}`],
   ["guide_assets", "services.builder.edit", (u, t) => `guide_assets/a-${t}`],
   ["people (create)", "directory.edit_identity", (u, t) => `people/p-${t}`],
-  ["people/away (someone else's)", "calendar.away.edit",]
+  ["people/away (someone else's)", "calendar.away.edit",
     (u, t) => `people/${PERSON}/away/s-${t}`],
   ["printables", "printables.edit", (u, t) => `printables/p-${t}`],
   ["printable_folders", "printables.edit",
