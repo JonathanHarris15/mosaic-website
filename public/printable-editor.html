@@ -818,6 +818,7 @@
                                 </span>
                             </div>
                             <p class="pe-empty" x-show="!eventInputs.length">No fill-ins yet. Add a text, image, number, date, or list — whatever this printable needs from the date it is linked to.</p>
+                            <div class="pe-fill-list" x-show="eventInputs.length">
                             <template x-for="input in eventInputs" :key="'ev-' + input.id">
                                 <div class="pe-event-field">
                                     <label class="pe-f"><span x-text="eventKindLabel(input.kind)"></span>
@@ -861,6 +862,7 @@
                                     </div>
                                 </div>
                             </template>
+                            </div>
                         </article>
                     </div>
                 </details>
@@ -1365,7 +1367,18 @@
         .pe-scripture-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid var(--outline-variant); }
         .pe-scripture-row__meta { flex: 1 1 100%; min-width: 0; }
         .pe-scripture-row__meta strong { display: block; font-size: 12px; color: var(--on-surface); }
-        .pe-event-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--outline-variant); }
+        /* Each fill-in is its own block — not a hairline stack. */
+        .pe-fill-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .pe-event-field {
+            margin: 0;
+            padding: 10px 10px 8px;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+        .pe-event-field + .pe-event-field { /* gap from .pe-fill-list */ }
+        .pe-event-field > .pe-f:last-of-type { margin-bottom: 0; }
+        .pe-event-field .pe-typecard__foot { margin-top: 8px; }
         .pe-event-col { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
         .pe-event-col .pe-in { flex: 1; min-width: 0; }
         .pe-empty {
