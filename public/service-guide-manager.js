@@ -18,10 +18,12 @@
 
 // The three editors on this page that save themselves (MS-721).
 const LIVE_KINDS = {
+    // `markup` fields save on blur / close only, never on the typing
+    // debounce: half-typed HTML or CSS must not reach this week's guide.
     page: { slot: 'editingPage', list: 'pageTemplates', store: 'pageTemplates', collection: 'page_templates', create: 'savePageTemplate',
-        fields: ['name', 'stylePresetId', 'isFiller', 'emitsPages', 'html', 'css'] },
+        fields: ['name', 'stylePresetId', 'isFiller', 'emitsPages', 'html', 'css'], markup: ['html', 'css'] },
     preset: { slot: 'editingPreset', list: 'stylePresets', store: 'stylePresets', collection: 'style_presets', create: 'saveStylePreset',
-        fields: ['name', 'css'] },
+        fields: ['name', 'css'], markup: ['css'] },
     template: { slot: 'editingTemplate', list: 'guideTemplates', store: 'guideTemplates', collection: 'guide_templates', create: 'saveGuideTemplate',
         fields: ['name', 'numberStartPage', 'isDefault', 'pages'] },
 };
@@ -629,6 +631,7 @@ function guideManager() {
         liveError: { page: '', preset: '', template: '' },
         liveFaults: { page: {}, preset: {}, template: {} },
         liveSyncing: false,
+        liveCreating: { page: null, preset: null, template: null },
         pageSaveAnyway: false,
 
         liveChipText(kind) {
@@ -672,22 +675,66 @@ function guideManager() {
             const same = (a, b) => (typeof a === 'string' || typeof b === 'string')
                 ? String(a == null ? '' : a) === String(b == null ? '' : b)
                 : JSON.stringify(a) === JSON.stringify(b);
-            this.live[kind] = LiveFields.create({
-                fields: LIVE_KINDS[kind].fields,
-                initial: this.liveValues(kind, doc),
+            this.live[kind] = this.livePair(kind, doc, same);
+            this.watchLive(kind);
+        },
+
+        // Two controllers behind one face: simple fields (names, toggles)
+        // save on the 1.5 s debounce; markup fields wait for blur / close.
+        livePair(kind, doc, same) {
+            const spec = LIVE_KINDS[kind];
+            const markup = spec.markup || [];
+            const groups = [
+                { fields: spec.fields.filter(f => markup.indexOf(f) === -1), extra: {} },
+                // No timer: the debounce never fires for markup.
+                { fields: markup, extra: { setTimeout: () => null, clearTimeout: () => {} } },
+            ].filter(g => g.fields.length);
+            const initial = this.liveValues(kind, doc);
+            const states = [];
+            const RANK = { failed: 3, saving: 2, unsaved: 1, saved: 0 };
+            const combined = () => {
+                const out = { status: 'saved', error: '', invalid: {}, dirty: [], draft: {} };
+                states.forEach(st => {
+                    if (!st) return;
+                    if (RANK[st.status] > RANK[out.status]) out.status = st.status;
+                    if (st.error && !out.error) out.error = st.error;
+                    Object.assign(out.invalid, st.invalid || {});
+                    out.dirty = out.dirty.concat(st.dirty || []);
+                    Object.assign(out.draft, st.draft || {});
+                });
+                return out;
+            };
+            const emit = () => {
+                const st = combined();
+                this.liveChip[kind] = st.status;
+                this.liveError[kind] = st.error;
+                this.liveFaults[kind] = st.dirty.length ? st.invalid : {};
+            };
+            const ctrls = groups.map((g, i) => LiveFields.create(Object.assign({
+                fields: g.fields,
+                initial: Object.fromEntries(g.fields.map(f => [f, initial[f]])),
                 same,
                 validate: (draft) => {
-                    const faults = this.liveFaultsFor(kind, draft);
-                    return Object.keys(faults).length ? faults : null;
+                    const open = this[spec.slot];
+                    const all = this.liveFaultsFor(kind, Object.assign(this.liveValues(kind, open), draft));
+                    const mine = {};
+                    Object.keys(all).forEach(k => { if (g.fields.indexOf(k) !== -1) mine[k] = all[k]; });
+                    return Object.keys(mine).length ? mine : null;
                 },
                 save: (patch) => this.saveLive(kind, patch),
-                onChange: (state) => {
-                    this.liveChip[kind] = state.status;
-                    this.liveError[kind] = state.error || '';
-                    this.liveFaults[kind] = state.dirty.length ? (state.invalid || {}) : {};
-                },
-            });
-            this.watchLive(kind);
+                onChange: (state) => { states[i] = state; emit(); },
+            }, g.extra)));
+            ctrls.forEach((c, i) => { states[i] = c.state; });
+            return {
+                edit: (f, v) => ctrls.forEach(c => c.edit(f, v)),
+                revert: (f) => ctrls.forEach(c => c.revert(f)),
+                remote: (values, meta) => ctrls.forEach(c => c.remote(values, meta)),
+                flush: async () => (await Promise.all(ctrls.map(c => c.flush()))).every(Boolean),
+                retry: () => Promise.all(ctrls.map(c => c.state.status === 'failed' ? c.retry() : true)),
+                dispose: () => ctrls.forEach(c => c.dispose()),
+                dirtyFields: () => [].concat(...ctrls.map(c => c.dirtyFields())),
+                get state() { return combined(); },
+            };
         },
 
         // Put whatever the editor holds into the controller.
@@ -739,11 +786,15 @@ function guideManager() {
             const doc = this[spec.slot];
             const list = this[spec.list];
             try {
+                if (!doc.id && this.liveCreating[kind]) await this.liveCreating[kind];
                 if (!doc.id) {
-                    // First save of a new item creates it, whole.
+                    // First save of a new item creates it, whole. Both
+                    // controllers may save at once; only one creates.
                     const whole = Object.assign({}, doc, this.liveValues(kind, doc));
                     if (kind === 'template') whole.targetPageCount = Number(doc.targetPageCount) > 0 ? Number(doc.targetPageCount) : 16;
-                    const id = await GuideStore[spec.create](db, whole, this.catalog);
+                    this.liveCreating[kind] = GuideStore[spec.create](db, whole, this.catalog);
+                    let id;
+                    try { id = await this.liveCreating[kind]; } finally { this.liveCreating[kind] = null; }
                     doc.id = id;
                     list.push(Object.assign({}, whole, { id }));
                     list.sort(byName);

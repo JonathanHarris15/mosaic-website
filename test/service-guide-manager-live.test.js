@@ -50,17 +50,58 @@ function mount({ fail = false } = {}) {
     return { comp, calls, push: (data, pending) => watcher({ exists: true, data: () => data, metadata: { hasPendingWrites: !!pending } }) };
 }
 
-test('editing a Page Template saves only the changed field after the debounce', async () => {
+test('a Page Template name saves on the debounce; its CSS does not', async () => {
     const { comp, calls } = mount();
     comp.editPage(comp.pageTemplates[0]);
+    comp.editingPage.name = 'Front Cover';
     comp.editingPage.css = 'h1{color:red}';
     comp.syncLive('page');
     assert.strictEqual(comp.liveChip.page, 'unsaved');
     await wait(1700);
-    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls.length, 1, 'only the simple field went on the timer');
     assert.deepStrictEqual(calls[0].slice(0, 3), ['patch', 'pageTemplates', 'p1']);
-    assert.strictEqual(calls[0][3], JSON.stringify({ css: 'h1{color:red}' }));
+    assert.strictEqual(calls[0][3], JSON.stringify({ name: 'Front Cover' }));
+    assert.strictEqual(comp.liveChip.page, 'unsaved', 'the CSS is still waiting');
+});
+
+test('MS-721 lead call: page HTML / CSS save on blur or close only, never mid-typing', async () => {
+    const { comp, calls } = mount();
+    comp.editPage(comp.pageTemplates[0]);
+    comp.editingPage.html = '<div>half';
+    comp.syncLive('page');
+    await wait(1700);
+    assert.strictEqual(calls.length, 0, 'half-typed markup did not leave');
+    comp.editingPage.html = '<div>whole</div>';
+    await comp.savePage(); // focusout
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0][3], JSON.stringify({ html: '<div>whole</div>' }));
     assert.strictEqual(comp.liveChip.page, 'saved');
+    comp.editingPage.css = 'p{}';
+    comp.syncLive('page');
+    comp.closePage(); // close flushes
+    await wait(10);
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(calls[1][3], JSON.stringify({ css: 'p{}' }));
+});
+
+test('a Style Preset CSS waits for blur too', async () => {
+    const { comp, calls } = mount();
+    comp.editPreset(comp.stylePresets[0]);
+    comp.editingPreset.css = 'a{color:blue}';
+    comp.syncLive('preset');
+    await wait(1700);
+    assert.strictEqual(calls.length, 0);
+    await comp.savePreset();
+    assert.strictEqual(calls.length, 1);
+});
+
+test('a new item saved by both halves at once is created only once', async () => {
+    const { comp, calls } = mount();
+    comp.newPreset();
+    comp.editingPreset.name = 'Advent';
+    comp.editingPreset.css = 'x{}';
+    await comp.savePreset();
+    assert.strictEqual(calls.filter(c => c[0] === 'createPreset').length, 1);
 });
 
 test('a page with validation problems waits until "Save anyway"', async () => {
