@@ -81,13 +81,14 @@ elders-only.
 - An account's access is readable in one place. The level string on a saved
   account is a label for the rung, not a second grant.
 - **A preset that is missing a key a rung needs becomes visible as lost
-  access.** `PermissionCatalog.EDITOR_SURFACE_KEYS` does not contain
-  `calendar.events.edit`, so an account saved onto the Editor level has a map
-  that never had it, and under this decision it loses the nine calendar doors
-  the level string used to carry. Either the preset grows the key and the
-  saved maps are backfilled, or those accounts move to a level that has it.
-  Changing the preset alone is not enough: the rules read the map that was
-  saved, not the preset it was built from.
+  access.** The Editor preset used to leave `calendar.events.edit` off
+  `EDITOR_SURFACE_KEYS`, so an account saved onto that level had a map that
+  never had it, and under this decision it lost the nine calendar doors the
+  level string used to carry. Helm chose option A (2026-10-09): the key is
+  now on the Editor (and Admin) preset, and saved Editor maps that still
+  equal that old preset are backfilled. Changing the preset alone is not
+  enough — the rules read the map that was saved — which is why the
+  backfill exists (`scripts/backfill-editor-calendar-key.js`).
 - A rules change that narrows access is audited against the real congregation
   before it ships — every account's write access per collection, before and
   after, and whether a real person uses what they would lose.

@@ -274,9 +274,13 @@
     const SHEP_DECIDE_KEYS = CATEGORIES.find(c => c.id === 'shep_decide').keys
         .filter(k => k !== 'shep.count_as_elder' && k !== 'shep.elder_assignment.be_assignee');
 
+    // MS-725 (Helm, option A): calendar.events.edit belongs on the Editor
+    // preset. Editors have always edited Events; leaving the key off meant a
+    // saved Editor map lost those doors the moment editsWith became keys-only.
     const EDITOR_SURFACE_KEYS = Object.freeze([
         'directory.edit_identity',
         'calendar.view',
+        'calendar.events.edit',
         'calendar.away.view',
         'calendar.away.edit',
         'services.builder.view',

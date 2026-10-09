@@ -11,13 +11,9 @@ const Levels = require('../public/account-levels-core.js');
 // so a saved permission map is the whole answer, and only an account that has
 // never been through Admin → Accounts falls back to the editor level names.
 //
-// ⚠ THE EDITOR PRESET DOES NOT CARRY calendar.events.edit. That is not an
-// oversight in this test: PermissionCatalog.EDITOR_SURFACE_KEYS leaves it out,
-// so an account SAVED onto the Editor level has a map that never had the key
-// and the rules refuse it. MS-725's prod audit found three such accounts, and
-// ADR 0082 records the two ways out (grow the preset and backfill the saved
-// maps, or move those accounts to a level that has the key). Until one of them
-// happens this is what the rules do, and the page must say the same thing.
+// Helm option A: the Editor preset now carries calendar.events.edit, so a
+// newly saved Editor map admits the calendar doors. Accounts saved before
+// that change still have the old map until the backfill runs.
 
 const saved = (preset) => Levels.userWriteFromLevel(
     Levels.accountLevelIdForPreset(preset));
@@ -28,13 +24,11 @@ const custom = (perms, level) => Object.assign(
         permissions: Object.assign({}, Levels.buildPresetPermissions('member'), perms),
     }), level ? { permissionLevel: level, role: level } : {});
 
-test('saved presets: the map decides, not the level name', () => {
-    for (const p of ['elder', 'super_admin', 'pastoral_assistant']) {
+test('saved presets: the map decides', () => {
+    for (const p of ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']) {
         assert.equal(Access.canEditEvents(saved(p)), true, p);
     }
-    // Editor and Admin share editorOperationalBundle, which has no
-    // calendar.events.edit.
-    for (const p of ['editor', 'admin', 'member', 'viewer', 'kiosk']) {
+    for (const p of ['member', 'viewer', 'kiosk']) {
         assert.equal(Access.canEditEvents(saved(p)), false, p);
     }
 });
