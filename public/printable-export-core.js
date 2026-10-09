@@ -25,6 +25,7 @@
     // liturgy card, or any other Printable that does not wire these
     // (and has no bookletExport flag) prints as-laid-out.
     const SUNDAY_BOOKLET_SOURCES = Object.freeze(['sunday_typed', 'sunday_hymns']);
+    const LEGACY_FILL_PREFIX = 'legacy_';
 
     function blankPadCount(n) {
         const count = Number(n) || 0;
@@ -79,25 +80,31 @@
     function walkSources(nodes, visit) {
         (nodes || []).forEach(node => {
             if (!node) return;
-            if (node.repeat && node.repeat.source) visit(node.repeat.source);
+            if (node.repeat && node.repeat.source) visit(node.repeat.source, node.repeat);
             Object.keys(node.bind || {}).forEach(prop => {
                 const b = node.bind[prop];
-                if (b && b.source) visit(b.source);
+                if (b && b.source) visit(b.source, b);
             });
             if (node.children) walkSources(node.children, visit);
         });
     }
 
     // Sunday booklet path: the same binds MS-481 added for the real
-    // Sunday guide, or an explicit flag when those wires are not yet on
-    // the tree. Nothing else is a booklet — a 1-page directory is not.
+    // Sunday guide, migrated legacy_* event fill-ins, or an explicit flag.
+    // Nothing else is a booklet — a 1-page directory is not.
     function isSundayBookletPath(project) {
         if (!project || typeof project !== 'object') return false;
         if (project.bookletExport === true) return true;
+        if ((project.inputs || []).some(i => i && String(i.id || '').indexOf(LEGACY_FILL_PREFIX) === 0)) {
+            return true;
+        }
         let found = false;
         (project.pages || []).forEach(page => {
-            walkSources(page && page.nodes, source => {
+            walkSources(page && page.nodes, (source, bind) => {
                 if (SUNDAY_BOOKLET_SOURCES.indexOf(source) !== -1) found = true;
+                if (source === 'event_field' && bind && String(bind.field || '').indexOf(LEGACY_FILL_PREFIX) === 0) {
+                    found = true;
+                }
             });
         });
         return found;

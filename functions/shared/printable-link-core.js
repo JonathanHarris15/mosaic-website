@@ -15,10 +15,8 @@
 // linked to holds the values, and the Printable reads them when it is
 // opened from that date.
 //
-// A wire to Sunday booklet text is not one of these blanks. Prayer country
-// and Mosaic Kids are typed on the preview, in the spot the page already
-// uses (printable-fill-core.js), not as a second form beside the link.
-// This module only names the blanks the printable's author added.
+// Legacy sunday_typed wires are rewritten to event fill-ins on load
+// (printable-legacy-migrate-core.js). This module only names the blanks.
 //
 // Pure. No Firestore, no DOM. The event page draws the form; the store
 // fetches the values; Printable Live reads them.

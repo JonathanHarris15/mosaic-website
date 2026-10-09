@@ -316,7 +316,7 @@ test('every catalog source is query, general live data, or off the drawer', () =
     assert.equal(homes.insert_date, 'general');
     assert.equal(homes.insert_page_number, 'general');
     ['people', 'households', 'household_children', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',
-        'sunday_kids_questions', 'sundays', 'event_dates', 'role_holder', 'form_answers'].forEach(k => {
+        'sunday_kids_questions', 'sunday_prayer_requests', 'sundays', 'event_dates', 'role_holder', 'form_answers'].forEach(k => {
         assert.equal(homes[k], 'query', k + ' is queried');
     });
 });

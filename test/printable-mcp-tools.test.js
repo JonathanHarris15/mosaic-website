@@ -405,11 +405,15 @@ describe('what a Printable may be told, and by whom', () => {
             `member ${forMember} should see fewer sources than editor ${forEditor}`);
     });
 
-    test('nothing elder-only is offered at any level', () => {
+    test('nothing elder-only is offered except Pastoral prayer subjects', () => {
         // "Pastoral Prayer" is a Liturgy Element — the slot in the service
-        // every bulletin prints (ADR-0080) — not the pastoral record.
-        const all = JSON.stringify(Printables.dataCatalog('super_admin', {}));
-        assert.doesNotMatch(all, /shepherding|prayer request|pastoral(?! prayer)/i);
+        // every bulletin prints (ADR-0080). Pastoral prayer subjects are the
+        // one elder-only catalog source (same words as the order of service).
+        const cat = Printables.dataCatalog('super_admin', {});
+        assert.ok(cat.sources.some(s => s.key === 'sunday_prayer_requests'));
+        const rest = JSON.stringify(cat.sources.filter(s => s.key !== 'sunday_prayer_requests'));
+        assert.doesNotMatch(rest, /shepherding|prayer request|pastoral(?! prayer)/i);
+        assert.ok(!Printables.dataCatalog('editor', {}).sources.some(s => s.key === 'sunday_prayer_requests'));
     });
 
     test('it explains how to wire a field and how to repeat a box', () => {

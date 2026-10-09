@@ -106,13 +106,17 @@ const MODULES = [
     // Blanks a Printable asks an event to fill. printable-core.js normalises
     // them on every save, so the copy has to sit beside it.
     'printable-link-core.js',
+    // MS-730. Rewrites sunday_typed wires to event fill-ins on load.
+    // printable-core.js requires it, so the copy travels with the record.
+    'printable-legacy-migrate-core.js',
     // The Printables tools. printable-core.js carries the whole record shape
     // and, more to the point, the HTML parser: an assistant writes a page as
     // markup and the SAME strict parser the code view uses turns it into
     // elements, so a tool cannot accept markup the editor would refuse.
     // printable-data-core.js is the catalog an assistant reads to know which
     // fields it may wire, and it is the permission boundary's first half — it
-    // holds nothing elder-only, which is exactly why it is safe to hand over.
+    // holds nothing elder-only (except Pastoral prayer subjects), which is
+    // exactly why it is safe to hand over.
     'printable-core.js',
     // MS-688. The standing instructions an assistant reads before it
     // changes a Printable. Shipped with the tools, not written on the

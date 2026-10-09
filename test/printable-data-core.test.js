@@ -17,7 +17,7 @@ const TODAY = '2026-09-03'; // a Thursday
 
 // ── The catalog ──────────────────────────────────────────────────────────────
 
-test('a member sees a strict subset of what an editor sees, and nothing elder-only exists', () => {
+test('a member sees a strict subset of what an editor sees; prayer requests are the elder-only exception', () => {
     const member = Data.sourcesFor('member');
     const editor = Data.sourcesFor('editor');
     const mKeys = member.map(s => s.key);
@@ -30,10 +30,21 @@ test('a member sees a strict subset of what an editor sees, and nothing elder-on
     const editorPeople = editor.find(s => s.key === 'people').fields.map(f => f.key);
     assert.ok(!memberPeople.includes('stage'), 'the Membership Track is pastoral, not congregational');
     assert.ok(editorPeople.includes('stage'));
-    Data.SOURCES.forEach(s => assert.ok(!['elder', 'super_admin'].includes(s.minLevel), s.key + ' is elder-only and must not be in the catalog'));
-    // "Pastoral Prayer" is a Liturgy Element — the slot in the service every
-    // bulletin prints (ADR-0080) — not the pastoral record.
-    const text = JSON.stringify(Data.SOURCES).toLowerCase().split('pastoral prayer').join('');
+    // Pastoral prayer requests sit on the order of service; elders (and
+    // pastoral assistants) may query them. Nothing else is elder-only.
+    Data.SOURCES.forEach(s => {
+        if (s.key === 'sunday_prayer_requests') {
+            assert.equal(s.minLevel, 'elder');
+            return;
+        }
+        assert.ok(!['elder', 'super_admin'].includes(s.minLevel), s.key + ' is elder-only and must not be in the catalog');
+    });
+    assert.ok(Data.sourcesFor('elder').some(s => s.key === 'sunday_prayer_requests'));
+    assert.ok(!Data.sourcesFor('editor').some(s => s.key === 'sunday_prayer_requests'));
+    // Shepherding notes and relationships stay out. "Pastoral Prayer" is the
+    // liturgy slot (ADR-0080); strip that phrase before scanning.
+    const text = JSON.stringify(Data.SOURCES.filter(s => s.key !== 'sunday_prayer_requests'))
+        .toLowerCase().split('pastoral prayer').join('');
     ['shepherding', 'prayer_request', 'pastoral', 'relationship'].forEach(w => assert.ok(!text.includes(w), 'the catalog mentions ' + w));
 });
 
@@ -239,13 +250,16 @@ test('MS-730: the query builder offers every source a level may read, single and
         assert.ok(member.includes(key), key + ' is in a member\'s query builder');
     });
     assert.ok(member.includes('sunday') && Data.sourceByKey('sunday').shape === 'single', 'a single is queried too');
-    ['sunday_typed', 'insert_date', 'insert_page_number'].forEach(key => {
-        assert.ok(!member.includes(key), key + ' has no records to query');
+    ['sunday_typed', 'insert_date', 'insert_page_number', 'sunday_prayer_requests'].forEach(key => {
+        assert.ok(!member.includes(key), key + ' is not in a member\'s query builder');
     });
     assert.ok(!member.includes('household_children'), 'a related list waits for its parent row');
     assert.ok(!member.includes('role_holder') && !member.includes('form_answers'), 'editor sources stay off a member\'s builder');
     const editor = Data.querySourcesFor('editor').map(s => s.key);
     assert.ok(editor.includes('role_holder') && editor.includes('form_answers'));
+    assert.ok(!editor.includes('sunday_prayer_requests'), 'prayer requests stay elder-and-above');
+    const elder = Data.querySourcesFor('elder').map(s => s.key);
+    assert.ok(elder.includes('sunday_prayer_requests'), 'elders query pastoral prayer requests');
     const viewer = Data.querySourcesFor('viewer').map(s => s.key);
     assert.ok(!viewer.includes('people') && !viewer.includes('households'), 'the directory is above a viewer');
     member.forEach(key => assert.ok(Data.mayQuery('member', key), key + ' passes the same gate as a saved query'));
@@ -444,13 +458,16 @@ test('dotted liturgy keys on an old record are folded back before reading', () =
     assert.equal(r.rows[0].hymn1, 'Doxology');
 });
 
-test('order of service rows walk the Sunday\'s order, skip empty elements and removed hymns', () => {
+test('order of service rows walk the Sunday\'s order; empty slots optional; removed hymns stay out', () => {
     // The people prayed for are the Sunday's own fields (prayerMale /
     // prayerFemale on the single Sunday), not elements of its order.
-    const r = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
-    assert.deepEqual(r.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
-    assert.equal(r.rows[0].number, 1);
+    const filled = Data.resolve('sunday_rows', { includeEmpty: false }, SUNDAYS(), { today: TODAY });
+    assert.deepEqual(filled.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
+    assert.deepEqual(filled.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
+    assert.equal(filled.rows[0].number, 1);
+    const all = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
+    assert.ok(all.rows.length > filled.rows.length, 'empty slots stay by default so the full order prints');
+    assert.ok(all.rows.every(x => x.kind), 'each row names its kind');
     assert.equal(Data.needsFor('sunday_rows', {}, TODAY).liturgy, true, 'the store brings the orders');
 });
 
@@ -478,7 +495,7 @@ const WITH_ORDERS = () => {
 };
 
 test('order of service rows follow the order the Sunday names, with who carries an element', () => {
-    const r = Data.resolve('sunday_rows', {}, WITH_ORDERS(), { today: TODAY });
+    const r = Data.resolve('sunday_rows', { includeEmpty: false }, WITH_ORDERS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon']);
     assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn of Praise', 'Lord\'s Supper', 'Baptism', 'Sermon']);
     assert.equal(r.rows[3].value, 'Ada Example, Ben Example', 'a people element lists its people');

@@ -347,10 +347,20 @@
 
     // ── The record ───────────────────────────────────────────────────────────
 
+    function legacyMigrate() {
+        if (typeof globalThis !== 'undefined' && globalThis.PrintableLegacyMigrate) {
+            return globalThis.PrintableLegacyMigrate;
+        }
+        if (typeof require === 'function') {
+            try { return require('./printable-legacy-migrate-core.js'); } catch (e) { return null; }
+        }
+        return null;
+    }
+
     function buildPrintable(spec) {
         const s = spec || {};
         const template = s.template ? buildTemplate(s.template) : null;
-        return {
+        const built = {
             version: RECORD_VERSION,
             name: normaliseName(s.name),
             folderId: s.folderId || null,
@@ -373,6 +383,13 @@
             // values live on the occurrence; the names live here.
             inputs: linkedInputs(s.inputs),
         };
+        // sunday_typed wires become event fill-ins (MS-730). Idempotent.
+        const Migrate = legacyMigrate();
+        if (Migrate && typeof Migrate.migrateProject === 'function') {
+            const out = Migrate.migrateProject(built);
+            return out.project || built;
+        }
+        return built;
     }
 
     function linkedInputs(list) {

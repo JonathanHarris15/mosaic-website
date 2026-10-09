@@ -29,14 +29,15 @@
 // to author in the drawer). Fill-ins a person types live on the printable
 // as event blanks, not as catalog sources.
 //
-// ⚠ THE CATALOG IS THE PERMISSION BOUNDARY'S FIRST HALF. Nothing elder-only
-// is a *source* in it at all — not a Shepherding Note, not a Prayer Request,
-// not a relationship — so the drawer cannot offer a list the rules would
-// refuse. A *filter* on a source may sit higher (the Membership Track, inactive
-// people): the query builder hides it from anyone who may not query it, and a
-// stored query still runs for them. The second half is `firestore.rules`,
-// which still refuses a read this module merely omits. `sourcesFor(level)` is
-// what the drawer draws from.
+// ⚠ THE CATALOG IS THE PERMISSION BOUNDARY'S FIRST HALF. Shepherding Notes and
+// relationships are not sources. Pastoral Prayer Requests are the one elder-
+// only list offered here (minLevel elder; a Pastoral Assistant reads as elder):
+// they already sit on the order of service, and a Printable of that service
+// needs the same words. A *filter* on a source may sit higher (the Membership
+// Track, inactive people): the query builder hides it from anyone who may not
+// query it, and a stored query still runs for them. The second half is
+// `firestore.rules`, which still refuses a read this module merely omits.
+// `sourcesFor(level)` is what the drawer draws from.
 //
 // The **resolvers** turn what the store fetched (plain records) into rows of
 // field values. They are pure: they take today's date as an argument, never
@@ -457,12 +458,18 @@
         },
         {
             key: 'sunday_rows', region: 'Sunday', label: 'Order of service, as rows', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per element of the Sunday\'s liturgy order, in that order, with its name and what is planned. Empty elements are left out.',
-            params: [WHEN_PARAM],
+            blurb: 'One row per element of the Sunday\'s liturgy order, in that order, with its name, what is planned, who carries it, and any prayer message or response on the order. Empty slots stay unless turned off.',
+            params: [
+                WHEN_PARAM,
+                { key: 'includeEmpty', label: 'Include empty slots', kind: 'bool', default: true },
+            ],
             fields: [
                 { key: 'label', label: 'Slot', kind: 'text' },
                 { key: 'value', label: 'What is planned', kind: 'text' },
                 { key: 'carriedBy', label: 'Who carries it', kind: 'text' },
+                { key: 'kind', label: 'Kind', kind: 'text' },
+                { key: 'message', label: 'Prayer message', kind: 'text' },
+                { key: 'response', label: 'Prayer response', kind: 'text' },
                 { key: 'number', label: 'Row number', kind: 'number' },
             ],
         },
@@ -486,16 +493,28 @@
             ],
         },
         {
-            // Kept so a stored wire still resolves. Not offered in the data
-            // drawer — pamphlet blanks are fill-ins on the linked event, not
-            // a catalog source named for one kind of printable.
+            // Resolve-only for unmigrated wires / typedContent read-through.
+            // Not offered in the drawer — use Fill-in library + query lists.
             key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', noDrawer: true, minLevel: 'viewer',
-            blurb: 'Legacy typed Sunday fields. New printables use fill-ins on the linked event instead.',
+            blurb: 'Legacy typed Sunday fields. Migrated printables use event fill-ins instead.',
             params: [WHEN_PARAM],
             fields: (typedCore() && typedCore().FIELDS) || [
                 { key: 'prayerNation', label: 'Prayer country', kind: 'text' },
                 { key: 'kidsLessonTitle', label: 'Mosaic Kids lesson', kind: 'text' },
                 { key: 'announcements', label: 'Announcements', kind: 'text' },
+            ],
+        },
+        {
+            key: 'sunday_prayer_requests', region: 'Sunday', label: 'Pastoral prayer subjects', shape: 'list', minLevel: 'elder',
+            blurb: 'Who is being prayed for that Sunday and what they asked the church to pray — the same subjects on the order of service. Elders and pastoral assistants only.',
+            params: [WHEN_PARAM],
+            fields: [
+                { key: 'name', label: 'Name', kind: 'text' },
+                { key: 'request', label: 'What they asked', kind: 'text' },
+                { key: 'who', label: 'Who (man, woman, anyone)', kind: 'text' },
+                { key: 'slot', label: 'Prayer on the order', kind: 'text' },
+                { key: 'label', label: 'Pastoral prayer label', kind: 'text' },
+                { key: 'number', label: 'Number', kind: 'number' },
             ],
         },
         {
@@ -1046,9 +1065,9 @@
         return { rows: [sundayRow(date, s, undefined, data.liturgy)], warnings: warnings, date: date };
     }
 
-    // The Sunday's liturgy order, walked: one row per element with something
-    // planned. A dropped hymn is not a row. Who carries an element rides on
-    // its row rather than being a row of its own.
+    // The Sunday's liturgy order, walked: one row per element. A dropped hymn
+    // is not a row. Who carries an element rides on its row. Empty slots stay
+    // when includeEmpty is on (the default), so a full order prints.
     function resolveSundayRows(params, data, ctx) {
         const p = Object.assign(defaultParams('sunday_rows'), params || {});
         const date = resolveWhen(p.when, ctx.today);
@@ -1056,16 +1075,86 @@
         if (!s) return { rows: [], warnings: ['Nothing is planned yet for ' + formatDate(date) + '.'], date: date };
         const cat = catalogOrSeed(data.liturgy);
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
+        const includeEmpty = p.includeEmpty !== false;
         const rows = [];
         Liturgy.elementsFor(s, cat).forEach(el => {
             if ((el.kind === 'hymn' || el.primitive === 'song') && removed.indexOf(el.id) !== -1) return;
             const stored = slotText(Liturgy.valueOf(s, el));
             const value = el.kind === 'other' ? (stored || el.name) : stored;
-            if (!value) return;
+            if (!value && !includeEmpty) return;
             const carrier = Liturgy.carrierOf(s, el);
-            rows.push({ _id: el.id, label: Liturgy.elementDisplayName(el), value: value, carriedBy: carrier ? carrier.name : '', number: rows.length + 1 });
+            rows.push({
+                _id: el.id,
+                label: Liturgy.elementDisplayName(el),
+                value: value || '',
+                carriedBy: carrier ? carrier.name : '',
+                kind: el.kind || '',
+                message: el.kind === 'prayer' ? String(el.message || '') : '',
+                response: el.kind === 'prayer' ? String(el.response || '') : '',
+                number: rows.length + 1,
+            });
         });
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };
+    }
+
+    // Subjects named on that Sunday's pastoral prayers, with their request text.
+    function prayerSubjectsOf(service, catalog) {
+        const s = service || {};
+        const lit = s.liturgy || {};
+        const cat = catalogOrSeed(catalog);
+        const label = slotText(lit.prayerLabel) || 'Pastoral Prayer';
+        const out = [];
+        const push = (person, who, slot, id) => {
+            if (!person || !person.id) return;
+            out.push({
+                personId: person.id,
+                name: person.name || '',
+                who: who || '',
+                slot: slot || label,
+                label: label,
+                _id: id || person.id,
+            });
+        };
+        push(lit.prayerMale, 'man', label + ' (man)', 'male');
+        push(lit.prayerFemale, 'woman', label + ' (woman)', 'female');
+        Liturgy.elementsFor(s, cat).forEach(el => {
+            if (!el || el.kind !== 'prayer' || !el.requests) return;
+            const list = lit[el.id];
+            if (!Array.isArray(list)) return;
+            const people = el.requests.people || [];
+            list.forEach((person, i) => {
+                const line = people[i] || {};
+                const who = line.who === 'male' ? 'man' : (line.who === 'female' ? 'woman' : (line.who || 'anyone'));
+                push(person, who, Liturgy.elementDisplayName(el), person && person.id);
+            });
+        });
+        return out;
+    }
+
+    function resolveSundayPrayerRequests(params, data, ctx) {
+        const p = Object.assign(defaultParams('sunday_prayer_requests'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const s = serviceAt(data, date);
+        if (!s) return { rows: [], warnings: ['Nothing is planned yet for ' + formatDate(date) + '.'], date: date };
+        const subjects = prayerSubjectsOf(s, data.liturgy);
+        const bag = data.prayerRequests || {};
+        const rows = subjects.map((sub, i) => {
+            const req = bag[sub.personId + '/' + date] || bag[sub.personId] || {};
+            const text = String((req && (req.prayerRequest || req.text)) || '').trim();
+            return {
+                _id: sub._id || sub.personId,
+                name: sub.name,
+                request: text,
+                who: sub.who,
+                slot: sub.slot,
+                label: sub.label,
+                number: i + 1,
+            };
+        });
+        const warnings = [];
+        if (!rows.length) warnings.push('Nobody is named for pastoral prayer on ' + formatDate(date) + '.');
+        else if (rows.every(r => !r.request)) warnings.push('Prayer requests for ' + formatDate(date) + ' are still empty.');
+        return { rows: rows, warnings: warnings, date: date };
     }
 
     function resolveSundayHymns(params, data, ctx) {
@@ -1504,6 +1593,7 @@
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
         sunday_typed: resolveSundayTyped,
+        sunday_prayer_requests: resolveSundayPrayerRequests,
         sunday_announcements: resolveSundayAnnouncements,
         sunday_kids_questions: resolveSundayKidsQuestions,
         sundays: resolveSundays,
@@ -1545,6 +1635,7 @@
             case 'households': return { people: true, families: true, households: true };
             case 'household_children': return { people: true, families: true, households: true };
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true };
+            case 'sunday_prayer_requests': return { services: [resolveWhen(p.when, t)], liturgy: true, prayerRequests: [resolveWhen(p.when, t)] };
             case 'sunday_typed':
             case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
@@ -1646,6 +1737,7 @@
         insertPageNumberDisplay,
         describeInsertDate,
         scalarDateParams,
+        prayerSubjectsOf,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
