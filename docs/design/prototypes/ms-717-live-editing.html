@@ -43,7 +43,9 @@
         table.roles { width: 100%; border-collapse: collapse; font-size: 13.5px; }
         table.roles th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b5a40; padding: 6px 10px; border-bottom: 1px solid #e6dccb; }
         table.roles td { padding: 4px 10px; border-bottom: 1px solid #efe6d6; }
-        .states { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+        .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .retry { margin-left: 6px; font: inherit; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid #7a2e2e; background: #fff; color: #7a2e2e; cursor: pointer; }
+        .elsewhere { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #4a3f2e; background: #f3ead9; border: 1px solid #d9ccb6; border-radius: 10px; padding: 6px 10px; margin-top: 6px; }
         .state { background: var(--surface, #FBF7F0); border: 1px solid #d9ccb6; border-radius: 12px; padding: 10px; font-size: 12px; color: #333; }
         .state b { display: block; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b5a40; }
         .controls { display: flex; gap: 8px; margin: 8px 0 0; flex-wrap: wrap; }
@@ -60,7 +62,7 @@
     <div class="pair">
         <div class="frame">
             <div class="frame-cap"><span>Editor: Eddie</span><span>calendar-event.html?id=…</span></div>
-            <div class="bar"><span class="material-symbols-outlined" style="color:#1d2b4f">chevron_left</span><span class="title" id="ev-title-head">Harvest Supper</span><span class="chip saved" id="chip"><span class="material-symbols-outlined">check_circle</span><span>Saved</span></span></div>
+            <div class="bar"><span class="material-symbols-outlined" style="color:#1d2b4f">chevron_left</span><span class="title" id="ev-title-head">Harvest Supper</span><span class="chip saved" id="chip"><span class="material-symbols-outlined">check_circle</span><span>Saved</span></span><button class="retry" id="retry" hidden>Retry</button></div>
             <div class="body" id="ev-editor">
                 <label for="f-name">What</label><input class="live" id="f-name" data-field="name" />
                 <label for="f-date">Date</label><input class="live" id="f-date" data-field="date" type="date" />
@@ -108,7 +110,8 @@
         <div class="state"><b>Untouched</b><span class="chip saved"><span class="material-symbols-outlined">check_circle</span>Saved</span><p>Nothing pending.</p></div>
         <div class="state"><b>Typing</b><span class="chip unsaved"><span class="m-chip-dot m-chip-dot--pulse"></span>Unsaved changes</span><p>The field is amber-edged. It saves 1.5 s after you stop, or on blur or Enter.</p></div>
         <div class="state"><b>Writing</b><span class="chip saving"><span class="material-symbols-outlined">sync</span>Saving…</span><p>Only the changed fields, by dot-path update().</p></div>
-        <div class="state"><b>Failed</b><span class="chip failed"><span class="material-symbols-outlined">cloud_off</span>Not saved</span><p>The change is kept, and the next edit retries. The chip says why on hover.</p></div>
+        <div class="state"><b>Failed</b><span class="chip failed"><span class="material-symbols-outlined">cloud_off</span>Not saved</span><p>The change is kept. <button class="retry" type="button">Retry</button> sends it now; the next edit also retries. The chip says why on hover.</p></div>
+        <div class="state"><b>Changed elsewhere</b><span class="elsewhere">Changed elsewhere — reload to see it <button class="retry" type="button" style="border-color:#1d2b4f;color:#1d2b4f">Reload</button></span><p>Whole-document pages (Service Guide, Printables, Forms, documents) only. A clean copy follows live; a copy with unsaved work keeps it until you choose Reload. No per-element merging.</p></div>
         <div class="state"><b>Held</b><span class="held"><span class="av">ED</span>Edna</span><p>Someone is in this box (ADR 0035). It cannot be opened until they leave.</p></div>
         <div class="state"><b>Arrived</b><span class="live arrived" style="display:inline-block;width:auto">Fellowship hall</span><p>A remote value lands in a field you had not touched, with a brief tint.</p></div>
     </div>
@@ -122,9 +125,10 @@ const chip = document.getElementById('chip');
 const LABELS = { name: 'What', date: 'Date', endDate: 'Last day', time: 'Time', location: 'Where', description: 'About' };
 function setStatus(s) {
     status = s;
-    const map = { saved: ['saved', 'check_circle', 'Saved'], unsaved: ['unsaved', null, 'Unsaved changes'], saving: ['saving', 'sync', 'Saving…'], failed: ['failed', 'cloud_off', 'Not saved — offline. Kept; will retry.'] };
+    const map = { saved: ['saved', 'check_circle', 'Saved'], unsaved: ['unsaved', null, 'Unsaved changes'], saving: ['saving', 'sync', 'Saving…'], failed: ['failed', 'cloud_off', 'Not saved'] };
     const [cls, icon, text] = map[s];
-    chip.className = 'chip ' + cls;
+    chip.className = 'chip ' + cls; chip.title = s === 'failed' ? 'Offline. Your change is kept; Retry, or keep typing.' : '';
+    document.getElementById('retry').hidden = s !== 'failed';
     chip.innerHTML = (icon ? '<span class="material-symbols-outlined">' + icon + '</span>' : '<span class="m-chip-dot m-chip-dot--pulse"></span>') + '<span>' + text + '</span>';
     dump();
 }
@@ -169,6 +173,7 @@ function remote(patch) {
 }
 document.getElementById('sim-remote').onclick = () => remote({ location: 'Fellowship hall' });
 document.getElementById('sim-remote-name').onclick = () => { const i = document.getElementById('f-name'); i.focus(); i.value = 'Harvest Supper & Hymn Sing'; i.dispatchEvent(new Event('input')); remote({ name: 'Harvest Supper (moved)' }); };
+document.getElementById('retry').onclick = () => flush();
 document.getElementById('sim-fail').onclick = () => { failNext = true; dump(); };
 document.getElementById('sim-escape').onclick = () => { const i = document.activeElement && document.activeElement.classList.contains('live') ? document.activeElement : document.getElementById('f-name'); revert(i); };
 // Roles table: same chip behaviour, condensed.
@@ -180,7 +185,7 @@ const q = new URLSearchParams(location.search).get('state');
 if (q === 'typing') { const i = document.getElementById('f-loc'); i.value = 'The hall (side door)'; i.dispatchEvent(new Event('input')); clearTimeout(timer); }
 if (q === 'arrived') { remote({ location: 'Fellowship hall' }); }
 if (q === 'invalid') { const i = document.getElementById('f-end'); i.value = '2026-10-10'; i.dispatchEvent(new Event('input')); clearTimeout(timer); }
-if (q === 'failed') { setStatus('failed'); }
+if (q === 'failed') { const i = document.getElementById('f-loc'); i.value = 'The hall (side door)'; i.dispatchEvent(new Event('input')); clearTimeout(timer); setStatus('failed'); }
 </script>
 </body>
 </html>
