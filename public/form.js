@@ -23,6 +23,11 @@ function formPage() {
         // "write it now", and a failed autosave is quiet while a failed press
         // is not.
         saveState: 'saved',       // saved | unsaved | saving | failed
+        // ADR 0081 / MS-721: one document — a change made elsewhere is taken
+        // only while this copy has nothing unsaved; otherwise "Changed
+        // elsewhere — reload to see it" with Reload.
+        changedElsewhere: false,
+        _live: null,
         saveTimer: null,
         SAVE_DEBOUNCE: 1500,
         copied: false,
@@ -197,6 +202,7 @@ function formPage() {
                     this.form.createdAt = form.createdAt || null;
                     this.form.createdBy = form.createdBy || null;
                     this.form.createdByName = form.createdByName || null;
+                    this.startLive(form);
                     this.responses = await FormsStore.loadResponses(db, this.formId, this.isElder);
                     this.loadTags();
                 } catch (e) {
@@ -281,26 +287,69 @@ function formPage() {
 
         // ── Saving ───────────────────────────────────────────────────────────
         touch() {
-            this.saveState = 'unsaved';
+            if (this._live) this._live.edited(); else this.saveState = 'unsaved';
             clearTimeout(this.saveTimer);
-            this.saveTimer = setTimeout(() => this.save(false), this.SAVE_DEBOUNCE);
+            this.saveTimer = setTimeout(() => this.save(false).catch(() => {}), this.SAVE_DEBOUNCE);
         },
 
         async save(pressed) {
             clearTimeout(this.saveTimer);
             if (!this.form) return;
-            this.saveState = 'saving';
+            const ticket = this._live ? this._live.saving() : 0;
+            if (!this._live) this.saveState = 'saving';
+            const written = JSON.parse(JSON.stringify(this.form));
             try {
-                await FormsStore.saveForm(db, firebase, this.currentUser, this.formId, this.form);
-                this.saveState = 'saved';
+                await FormsStore.saveForm(db, firebase, this.currentUser, this.formId, written);
+                if (this._live) this._live.saved(ticket, written); else this.saveState = 'saved';
             } catch (e) {
-                // A failed autosave is silent and the next edit retries; a save
-                // you PRESSED reports, and never re-arms itself, because
-                // retrying a refused write on a timer is a loop with no end.
-                this.saveState = pressed ? 'failed' : 'unsaved';
+                // "Not saved" + Retry, and the next edit tries again. Never
+                // re-armed on a timer: retrying a refused write on a timer is
+                // a loop with no end.
+                if (this._live) this._live.failed(ticket, e); else this.saveState = 'failed';
                 if (pressed) this.problem = 'That did not save. What is on screen is still here — try again.';
+                throw e;
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ──────────────────────────────────────
+        // Compared: the template as the store writes it, minus published /
+        // closed (their own explicit writes, always followed).
+        formFingerprint(data) {
+            const r = FormsCore.buildFormTemplate(data || {});
+            delete r.published; delete r.closed;
+            return JSON.stringify(r);
+        },
+        startLive(record) {
+            if (typeof DocLive === 'undefined' || this._live) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => self.formFingerprint(d),
+                onAdopt: (d) => self.adoptForm(d),
+                onChange: (st) => { self.saveState = st.status; self.changedElsewhere = st.changedElsewhere; },
+            });
+            this._live.loaded(record);
+            if (typeof MosaicLiveRead === 'undefined') return;
+            this._unwatch = MosaicLiveRead.watch(db.collection('forms').doc(this.formId), (snap) => {
+                if (!snap || !snap.exists || !self.form) return;
+                const data = snap.data() || {};
+                const pendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                if (!pendingWrites) {
+                    self.form.published = data.published === true;
+                    self.form.closed = data.closed === true;
+                }
+                self._live.remote(data, { pendingWrites });
+            }, { onError: (e) => console.warn('Form is not following live changes:', e && e.message) });
+        },
+        adoptForm(data) {
+            clearTimeout(this.saveTimer);
+            const next = FormsCore.buildFormTemplate(data);
+            next.createdAt = data.createdAt || null;
+            next.createdBy = data.createdBy || null;
+            next.createdByName = data.createdByName || null;
+            this.form = next;
+        },
+        reloadForm() { if (this._live) this._live.reload(); },
+        retrySave() { return this.save(false).catch(() => {}); },
 
         // ── Questions ────────────────────────────────────────────────────────
         newId() {

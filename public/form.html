@@ -29,9 +29,15 @@
                 </a>
                 <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
             </div>
-            <span class="m-badge m-header__chip"
+            <!-- ADR 0081 / MS-721: saves itself; no Save button. -->
+            <span class="m-badge m-header__chip" data-live-chip :data-state="saveState"
                   :class="saveState === 'failed' ? 'm-badge--error' : (saveState === 'saved' ? 'm-badge--success' : 'm-badge--warning')"
                   x-show="!loading && form" x-text="saveLabel"></span>
+            <button type="button" x-show="!loading && form && saveState === 'failed'" x-cloak data-live-retry
+                    class="m-btn m-btn--quiet m-btn--sm" @click="retrySave()">Retry</button>
+            <span x-show="changedElsewhere" x-cloak data-changed-elsewhere class="m-badge m-badge--neutral m-header__chip">Changed elsewhere — reload to see it</span>
+            <button type="button" x-show="changedElsewhere" x-cloak data-live-reload
+                    class="m-btn m-btn--quiet m-btn--sm" @click="reloadForm()">Reload</button>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
         </div>
@@ -75,7 +81,6 @@
                         </button>
                         <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="!isDocument && form.published && !isClosed" @click="setClosed(true)">Close form</button>
                         <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="!isDocument && form.closed" @click="setClosed(false)">Reopen</button>
-                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)">Save</button>
                     </div>
 
                     <!-- ⚠ THE QUESTION IS ASKED WHERE THE BUTTON WAS, replacing
@@ -584,6 +589,8 @@
     <script src="filing-core.js"></script>
     <script src="form-folders-core.js"></script>
     <script src="forms-store.js"></script>
+    <script src="live-read.js"></script>
+    <script src="doc-live-core.js"></script>
     <script src="form.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 
