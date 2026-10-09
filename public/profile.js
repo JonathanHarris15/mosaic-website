@@ -120,6 +120,7 @@ async function initMyInfo(personId) {
     const form = document.getElementById('my-info-form');
     if (!panel || !form) return;
     let sexWasUnset = true;
+    let loaded = null;
     try {
         // ⚠ FOUR READS, AND ONLY ONE OF THEM FEEDS ANOTHER. This page used to
         // fetch your Person, then the directory, then your outstanding requests,
@@ -135,6 +136,7 @@ async function initMyInfo(personId) {
         const snap = await db.collection('people').doc(personId).get();
         if (!snap.exists) return;
         const p = snap.data() || {};
+        loaded = p;
         const contact = p.contact || {};
         document.getElementById('my-email').value = contact.email || '';
         document.getElementById('my-phone').value = contact.phone || '';
@@ -165,69 +167,97 @@ async function initMyInfo(personId) {
         return;
     }
 
-    async function saveMyInfo() {
-        const status = document.getElementById('my-info-status');
-        status.textContent = 'Saving…';
-        status.className = 'text-[11px] font-body-md text-primary animate-pulse';
-        // The self-editable field policy lives in ShepherdingCore so the client
-        // and the Firestore rules share one allow-list — never membership, tags
-        // or shepherding, and sex only while unset.
-        const updates = ShepherdingCore.buildSelfEditUpdate(
-            { sex: sexWasUnset ? null : 'set' },
-            {
-                email: document.getElementById('my-email').value,
-                phone: document.getElementById('my-phone').value,
-                address: document.getElementById('my-address').value,
-                birthday: document.getElementById('my-birthday').value,
-                sex: document.getElementById('my-sex').value,
-            }
-        );
-        updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-        try {
-            await db.collection('people').doc(personId).update(updates);
+    // ── Contact details are live (ADR 0081, MS-721) ─────────────────────
+    // Email, phone, address and birthday save themselves — the debounce,
+    // or at once on blur / Enter; Escape puts the box back — and follow
+    // the Person, so a fix an editor makes lands in a box you have not
+    // touched. "Not saved" keeps your typing and offers Retry. There is no
+    // Save button: sex is the one explicit thing left (see setMySex).
+    if (!loaded) return;
+    const ref = db.collection('people').doc(personId);
+    const status = document.getElementById('my-info-status');
+    const retry = document.getElementById('my-info-retry');
+    const inputOf = (f) => document.getElementById(MyInfoLive.INPUT_IDS[f]);
+    const live = LiveFields.create({
+        fields: MyInfoLive.FIELDS,
+        initial: MyInfoLive.valuesFrom(loaded),
+        save: async (patch) => {
+            const updates = MyInfoLive.patchFor(patch);
+            updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await ref.update(updates);
             // Your email is one of the fields the directory cache holds.
             forgetPeopleCache();
-            status.textContent = 'Saved.';
-            status.className = 'text-[11px] font-body-md text-green-600';
-            if (sexWasUnset && updates.sex) {
-                sexWasUnset = false;
-                document.getElementById('my-sex').disabled = true;
-                document.getElementById('my-sex-locked').classList.remove('hidden');
+            return MyInfoLive.storedFrom(patch);
+        },
+        onChange: (state) => {
+            if (status) {
+                status.textContent = LiveFields.chipText(state.status);
+                status.className = MyInfoLive.chipClass(state.status);
+                status.setAttribute('data-state', state.status);
             }
-            setTimeout(() => { status.textContent = ''; }, 4000);
-        } catch (err) {
-            console.error('Error saving my info:', err);
-            status.textContent = 'Save failed: ' + err.message;
-            status.className = 'text-[11px] font-body-md text-error';
-        }
-    }
-
-    // Your details save themselves 1.5s after you stop typing, the same debounce
-    // the elder documents use. The button stays for anyone who wants to press
-    // something — it writes now instead of waiting out the timer.
-    //
-    // Sex is set-once, so it is deliberately NOT on the timer: picking it from a
-    // dropdown by accident and having that stick a second later is a door that
-    // only an editor can reopen. That one still waits for the button.
-    let saveTimer = null;
-    const debouncedFields = ['my-email', 'my-phone', 'my-address', 'my-birthday'];
-    debouncedFields.forEach((id) => {
-        const field = document.getElementById(id);
-        if (!field) return;
-        field.addEventListener('input', () => {
-            const status = document.getElementById('my-info-status');
-            status.textContent = 'Unsaved changes';
-            status.className = 'text-[11px] font-body-md text-on-surface-variant';
-            clearTimeout(saveTimer);
-            saveTimer = setTimeout(saveMyInfo, 1500);
+            if (retry) retry.classList.toggle('hidden', state.status !== 'failed');
+            // Boxes you are not typing in follow the draft (remote changes,
+            // Escape). The one with the cursor is left alone.
+            MyInfoLive.FIELDS.forEach((f) => {
+                const el = inputOf(f);
+                if (el && el !== document.activeElement && el.value !== (state.draft[f] || '')) {
+                    el.value = state.draft[f] || '';
+                }
+            });
+        },
+    });
+    if (status) { status.textContent = LiveFields.chipText('saved'); status.className = MyInfoLive.chipClass('saved'); }
+    MyInfoLive.FIELDS.forEach((f) => {
+        const el = inputOf(f);
+        if (!el) return;
+        el.addEventListener('input', () => live.edit(f, el.value));
+        el.addEventListener('change', () => live.edit(f, el.value));
+        el.addEventListener('blur', () => { live.flush(); });
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); live.flush(); }
+            if (e.key === 'Escape') { live.revert(f); el.value = live.state.draft[f] || ''; }
         });
     });
+    if (retry) retry.addEventListener('click', () => live.retry());
+    form.addEventListener('submit', (e) => { e.preventDefault(); live.flush(); });
+    if (typeof MosaicLiveRead !== 'undefined') {
+        MosaicLiveRead.watch(ref, (doc) => {
+            if (!doc || !doc.exists) return;
+            const data = doc.data() || {};
+            live.remote(MyInfoLive.valuesFrom(data), { pendingWrites: !!(doc.metadata && doc.metadata.hasPendingWrites) });
+            if (data.sex && sexWasUnset) lockSex();
+        }, { onError: (e) => console.warn('My info is not following live changes:', e && e.message) });
+    }
+    window.addEventListener('beforeunload', () => { live.flush(); });
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        clearTimeout(saveTimer);
-        saveMyInfo();
-    });
+    // ── Sex: set once, on purpose ────────────────────────────────────────
+    // Not live: a dropdown picked by accident and stuck a second later is a
+    // door only an editor can reopen. It asks, then writes.
+    function lockSex() {
+        sexWasUnset = false;
+        document.getElementById('my-sex').disabled = true;
+        document.getElementById('my-sex-locked').classList.remove('hidden');
+        const btn = document.getElementById('my-sex-set');
+        if (btn) btn.classList.add('hidden');
+    }
+    const sexSet = document.getElementById('my-sex-set');
+    if (sexSet) {
+        if (!sexWasUnset) sexSet.classList.add('hidden');
+        sexSet.addEventListener('click', async () => {
+            const value = document.getElementById('my-sex').value;
+            if (!value || !sexWasUnset) return;
+            if (!window.confirm('Set this now? Only the office can change it afterwards.')) return;
+            const sexStatus = document.getElementById('my-sex-status');
+            try {
+                await ref.update({ sex: value, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                lockSex();
+                if (sexStatus) sexStatus.textContent = '';
+            } catch (err) {
+                console.error('Error saving sex:', err);
+                if (sexStatus) { sexStatus.textContent = 'Not saved: ' + err.message; sexStatus.className = 'text-[10px] text-error'; }
+            }
+        });
+    }
 }
 
 // --- MY DIRECTORY PHOTO (ADR-0029) ---
