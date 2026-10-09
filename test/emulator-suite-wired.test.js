@@ -36,6 +36,12 @@ test('the emulator suite still covers the MS-725 rules doors', () => {
     const writes = read('test/emulator/permission-key-writes.test.js');
     assert.match(writes, /saved map with the key revoked may not, even as editor/,
         'revoking a key on a saved editor is no longer exercised');
+    assert.match(writes, /style_presets/,
+        'the Service Guide collections are no longer exercised');
+    assert.match(writes, /people \(create\)/,
+        'Add person is no longer exercised');
+    assert.match(writes, /app_config writes with the admin dashboard key/,
+        'admin settings are no longer exercised');
     const reads = read('test/emulator/presence-read.test.js');
     assert.match(reads, /services\.builder\.edit-only custom level can read presence/,
         'the presence-read exception is no longer exercised');

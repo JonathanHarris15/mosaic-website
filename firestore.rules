@@ -71,6 +71,15 @@ service cloud.firestore {
       return hasPermission(key) || (!usesPermissionMap() && isEditor());
     }
 
+    // MS-727: the same shape as editsWith, on the admin ladder. app_config
+    // was isAdmin() (admin / super_admin by name). A custom level holding
+    // admin.dashboard.access can now write what the Admin Dashboard offers;
+    // a leftover account with no map still uses the level names. Using
+    // editsWith here would let every leftover editor in — the wrong OR.
+    function editsAsAdmin(key) {
+      return hasPermission(key) || (!usesPermissionMap() && isAdmin());
+    }
+
     // Helper to check if user is a member or above. The floor of the `member`
     // visibility rung (MS-99): a viewer is signed in but sees only public things.
     function isMember() {
@@ -608,15 +617,15 @@ service cloud.firestore {
     // is covered by the services rule above. Components ship in code, not here.
     match /style_presets/{presetId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
     match /page_templates/{templateId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
     match /guide_templates/{templateId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
     match /liturgy_elements/{elementId} {
       allow read: if true;
@@ -630,7 +639,7 @@ service cloud.firestore {
     // Bytes live in Storage; this holds metadata + the public download URL.
     match /guide_assets/{assetId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
+      allow create, update, delete: if editsWith('services.builder.edit');
     }
 
     // ── The People's Directory (MS-197, ADR-0031) ───────────────────────────
@@ -656,8 +665,11 @@ service cloud.firestore {
       // Kiosk is signed in (ADR-0041). isKiosk() is named so a later tightening
       // cannot drop the foyer machine without noticing the helper sitting here.
       allow read: if isSignedIn() || isKiosk();
-      allow create, delete: if isEditor();
+      // MS-727: Add person is directory.edit_identity (the page gate).
+      // Delete stays on the editor ladder — out of this ticket's scope.
+      allow create: if editsWith('directory.edit_identity');
       allow create: if isKiosk();
+      allow delete: if isEditor();
       allow update: if isEditor();
 
       // MS-709: a greeter fixes a name at the desk (ADR-0075). The name and
@@ -972,7 +984,11 @@ service cloud.firestore {
     // SMS message templates and the automation kill switch). The server reads
     // these via the admin SDK.
     match /app_config/{configId} {
-      allow read, write: if isAdmin();
+      // MS-727: the Admin Dashboard is gated on admin.dashboard.access.
+      // Read and write stay together on this collection so a custom level
+      // that may edit wording can also load it. Nothing else about reads
+      // changes. The leftover ladder is isAdmin(), not isEditor().
+      allow read, write: if editsAsAdmin('admin.dashboard.access');
     }
 
     // Notification log (ADR-0009, renamed by ADR-0036). Written only by the

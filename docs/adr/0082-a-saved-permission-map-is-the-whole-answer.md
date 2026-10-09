@@ -92,3 +92,8 @@ elders-only.
 - A rules change that narrows access is audited against the real congregation
   before it ships — every account's write access per collection, before and
   after, and whether a real person uses what they would lose.
+- **The leftover ladder is the one the door already used.** `editsWith` keeps
+  `isEditor()`. Admin settings (`app_config`) used `isAdmin()`, so MS-727's
+  `editsAsAdmin(key)` is the same shape on that ladder — a leftover editor
+  does not gain the Admin Dashboard. Service Guide collections and Add person
+  were already editor writes, so they use `editsWith`.
