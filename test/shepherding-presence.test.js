@@ -118,8 +118,13 @@ test('nobody can write somebody else\'s Shepherding presence', () => {
     assert.match(b, /allow write, delete: if readsAsElder\(\) && request\.auth\.uid == uid;/);
 });
 
-test('the Order of Service presence rule is unchanged', () => {
+// MS-725: the Order of Service's presence read grew one clause — whoever may
+// write a Sunday may read who else is in it. The two collections stay apart,
+// which is the point of there being two: the service key reaches this one and
+// never the Shepherding one.
+test('the Order of Service presence rule admits the service key, and nothing more', () => {
     const b = block('presence');
-    assert.match(b, /allow read: if readsAsEditor\(\);/);
+    assert.match(b, /allow read: if readsAsEditor\(\) \|\| hasPermission\('services\.builder\.edit'\);/);
     assert.match(b, /allow write, delete: if editsWith\('services\.builder\.edit'\) && request\.auth\.uid == uid;/);
+    assert.doesNotMatch(block('shepherding_presence'), /services\.builder\.edit/);
 });
