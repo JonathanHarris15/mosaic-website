@@ -88,8 +88,15 @@ window.RolesManager = () => ({
 
     // Editor and above. The card is hidden from everyone else, but a URL can
     // always be typed, so the page gates itself as well.
+    // Writing a Role is roles.manager.edit (firestore.rules
+    // editsWith('roles.manager.edit'), MS-722) — asked through AccessCore,
+    // which answers for legacy level strings from their preset.
     mayManageRoles(permissionLevel) {
-        return AccessCore.writesAsEditor(permissionLevel);
+        return AccessCore.hasPermission(permissionLevel, 'roles.manager.edit');
+    },
+
+    get canManageRoles() {
+        return this.mayManageRoles(this.account || this.currentPermissionLevel);
     },
     mayOpenRoles(account) {
         return AccessCore.readsAsEditor(account);
@@ -116,6 +123,9 @@ window.RolesManager = () => ({
 
     async init() {
         this.listenForShellBack();
+        // Alpine: every change to the Role being edited feeds the live
+        // editor (MS-721). Deep, so a slot or rule change counts.
+        if (typeof this.$watch === 'function') this.$watch('draft', () => this.syncLiveRole());
         auth.onAuthStateChanged(async (user) => {
             if (!user) {
                 window.location.href = this.signInHref;
@@ -465,6 +475,7 @@ window.RolesManager = () => ({
         });
         this.draftId = role.id;
         this.saveAttempted = false;
+        this.startLiveRole();
         // One pane: opening a Role takes it back off whichever church-wide
         // destination was showing.
         this.pane = 'role';
@@ -485,10 +496,129 @@ window.RolesManager = () => ({
     },
 
     cancelEdit() {
+        this.stopLiveRole();
         this.draft = null;
         this.draftId = null;
         this.saveAttempted = false;
         this.resetRuleForm();
+    },
+
+    // ── A Role saves itself (MS-721, ADR 0081) ──────────────────────────────
+    //
+    // No Save or Cancel. Every change — name, description, rest, doubling up,
+    // a slot, a rule — saves 1.5 s after the last one (blur and Enter at
+    // once), only the fields that changed, with update(). The chip says where
+    // it is; an invalid Role does not save and lists its problems; a refused
+    // save says Not saved with a Retry, and the next change retries. Another
+    // editor's change lands in any field this editor is not changing.
+
+    liveRole: null,
+    stopRoleWatch: null,
+    roleChip: 'saved',
+    roleError: '',
+
+    roleChipText(status) {
+        return window.LiveFields ? window.LiveFields.chipText(status) : '';
+    },
+
+    startLiveRole() {
+        this.stopLiveRole();
+        const LF = window.LiveFields;
+        if (!LF || !this.draft || !this.draftId || !this.canManageRoles) return;
+        const id = this.draftId;
+        const FIELDS = ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'restrictions'];
+        const norm = v => (typeof v === 'string' ? v.trim() : JSON.stringify(v == null ? null : v));
+        const clone = v => (v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
+        const initial = {};
+        FIELDS.forEach(f => { initial[f] = clone(this.draft[f]); });
+        this.liveRole = LF.create({
+            fields: FIELDS,
+            initial,
+            same: (a, b) => norm(a) === norm(b),
+            validate: () => (this.draft && this.draftErrors.length ? { role: this.draftErrors.join(' ') } : null),
+            save: async (patch) => {
+                const definition = this.definitionFromDraft();
+                const out = {};
+                Object.keys(patch).forEach(f => { out[f] = definition[f]; });
+                const stored = this.roleDefinitions.find(d => d.id === id) || {};
+                if (!stored.slug) out.slug = definition.slug;
+                try {
+                    await db.collection('roles').doc(id).update(out);
+                } catch (e) {
+                    this.showToast('Not saved — ' + ((e && e.message) || 'that change could not be saved'), 'error');
+                    throw e;
+                }
+                this.roleDefinitions = this.roleDefinitions
+                    .map(def => (def.id === id ? Object.assign({}, def, out) : def))
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                return out;
+            },
+            onChange: (st) => {
+                // Not while the page is handing its own fields over: a field
+                // not yet handed over would read as "different" and be put
+                // back. Adoption is for saves and other editors.
+                if (this.draft && this.draftId === id && !this.syncingRole) {
+                    Object.keys(st.draft).forEach(f => {
+                        if (JSON.stringify(this.draft[f]) !== JSON.stringify(st.draft[f])) this.draft[f] = clone(st.draft[f]);
+                    });
+                }
+                this.roleChip = st.status;
+                this.roleError = st.error;
+                this.saveAttempted = Object.keys(st.invalid).length > 0 && st.dirty.length > 0;
+            },
+        });
+        const Live = window.MosaicLiveRead;
+        if (Live && typeof db !== 'undefined' && db && typeof db.collection === 'function') {
+            try {
+                this.stopRoleWatch = Live.watch(db.collection('roles').doc(id), (snap) => {
+                    if (!snap || !snap.exists || !this.liveRole || this.draftId !== id) return;
+                    const data = snap.data() || {};
+                    const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                    this.liveRole.remote(data, { pendingWrites: pending });
+                    if (!pending) {
+                        this.roleDefinitions = this.roleDefinitions
+                            .map(def => (def.id === id ? Object.assign({ id }, def, data) : def));
+                    }
+                }, { onError: (e) => console.warn('This Role is not live:', e) });
+            } catch (e) {
+                console.warn('This Role is not live:', e);
+            }
+        }
+    },
+
+    // Called by the Alpine $watch on `draft` and before any flush, so a change
+    // made by a slot or rule helper (which replace `draft`) is seen too.
+    syncingRole: false,
+
+    syncLiveRole() {
+        if (!this.liveRole || !this.draft) return;
+        this.syncingRole = true;
+        try {
+            ['name', 'description', 'intensity', 'allowsAnotherRole', 'slots', 'restrictions'].forEach(f => {
+                const v = this.draft[f];
+                this.liveRole.edit(f, v == null || typeof v !== 'object' ? v : JSON.parse(JSON.stringify(v)));
+            });
+        } finally {
+            this.syncingRole = false;
+        }
+    },
+
+    revertRole(field) {
+        if (this.liveRole) this.liveRole.revert(field);
+    },
+
+    // Leaving a Role (another one opened, or the pane closed) sends what is
+    // waiting first; a change is never dropped by moving on.
+    stopLiveRole() {
+        if (this.liveRole) {
+            this.syncLiveRole();
+            if (this.liveRole.dirtyFields().length) this.liveRole.flush();
+            this.liveRole.dispose();
+            this.liveRole = null;
+        }
+        if (this.stopRoleWatch) { this.stopRoleWatch(); this.stopRoleWatch = null; }
+        this.roleChip = 'saved';
+        this.roleError = '';
     },
 
     resetRuleForm() {
@@ -1112,18 +1242,13 @@ window.RolesManager = () => ({
         return errors;
     },
 
-    async saveDraft() {
-        if (!this.draft || !this.draftId) return;
-        this.saveAttempted = true;
-        if (this.draftErrors.length) {
-            this.showToast('This Role can\'t be saved yet — see the problems listed', 'error');
-            return;
-        }
-
+    // The document a Role is: what saveDraft writes whole, and what the live
+    // editor picks the changed fields from (MS-721).
+    definitionFromDraft() {
         // Written whole, not merged: a rule the editor removed has to disappear
         // from the stored document too. The slug is carried across untouched —
         // renaming must never move a Role's serve history.
-        const definition = {
+        return {
             name: this.draft.name.trim(),
             // Carried across, never recomputed. Only a definition that somehow
             // stored none falls back to deriving one — which is what every read
@@ -1145,6 +1270,21 @@ window.RolesManager = () => ({
             // problem. `newDefinition` is the list; the paired test walks it.
             description: String(this.draft.description || '').trim(),
         };
+    },
+
+    async saveDraft() {
+        if (!this.draft || !this.draftId) return;
+        // Only roles.manager.edit writes a Role (the rule refuses anyone else).
+        if (!this.canManageRoles) return;
+        // Live (MS-721): this is Retry, or a flush — save what changed now.
+        if (this.liveRole) { this.syncLiveRole(); return this.liveRole.flush(); }
+        this.saveAttempted = true;
+        if (this.draftErrors.length) {
+            this.showToast('This Role can\'t be saved yet — see the problems listed', 'error');
+            return;
+        }
+
+        const definition = this.definitionFromDraft();
 
         try {
             await db.collection('roles').doc(this.draftId).set(definition);

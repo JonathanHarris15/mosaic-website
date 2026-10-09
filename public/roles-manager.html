@@ -310,6 +310,8 @@
     <!-- Liturgical intensity lives on the Sunday Service series, never in
          /roles — this page needs EventsCore to read and write it. -->
     <script src="events-core.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="roles-manager.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -518,12 +520,16 @@
                                     </div>
                                 </div>
                                 <div class="rm-pane__acts">
-                                    <button @click="deleteRole(draftRole)" class="m-btn m-btn--danger-outline m-btn--sm">
+                                    <button x-show="canManageRoles" @click="deleteRole(draftRole)" class="m-btn m-btn--danger-outline m-btn--sm">
                                         <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
                                         <span class="m-btn__label">Delete</span>
                                     </button>
-                                    <button @click="cancelEdit()" class="m-btn m-btn--secondary m-btn--sm">Cancel</button>
-                                    <button @click="saveDraft()" class="m-btn m-btn--primary m-btn--sm">Save</button>
+                                    <!-- MS-721 (ADR 0081): a Role saves itself. -->
+                                    <span data-live-chip :data-state="roleChip" class="rm-hint" style="margin:0"
+                                          :style="roleChip === 'failed' ? 'color:var(--error,#b3261e)' : ''"
+                                          x-text="roleChipText(roleChip)"></span>
+                                    <button type="button" x-show="roleChip === 'failed'" data-live-retry @click="saveDraft()"
+                                            class="m-btn m-btn--secondary m-btn--sm">Retry</button>
                                 </div>
                             </div>
 
@@ -547,6 +553,7 @@
                                         <div class="rm-group">
                                             <label class="m-label" for="rm-name">Name</label>
                                             <input id="rm-name" type="text" class="m-input" x-model="draft.name"
+                                                   @blur="saveDraft()" @keydown.enter.prevent="saveDraft()" @keydown.escape="revertRole('name')"
                                                    :class="saveAttempted && !draft.name.trim() ? 'm-input--invalid' : ''"
                                                    :aria-invalid="saveAttempted && !draft.name.trim() ? 'true' : null" />
                                             <p class="rm-hint">Renaming changes the label only — the Role keeps its serve history.</p>
@@ -565,6 +572,7 @@
                                             <label class="m-label" for="rm-desc">What it involves</label>
                                             <textarea id="rm-desc" class="m-input" rows="6"
                                                       x-model="draft.description"
+                                                      @blur="saveDraft()" @keydown.escape="revertRole('description')"
                                                       :maxlength="descriptionLimit"
                                                       placeholder="Arrive by 9:15, put the urns on, and set out the mugs on the side table."></textarea>
                                             <p class="rm-hint" :class="descriptionLeft < 0 ? 'rm-hint--error' : ''">
@@ -801,8 +809,10 @@
                             </div>
 
                             <div class="rm-editor-actions">
-                                <button @click="cancelEdit()" class="m-btn m-btn--secondary">Cancel</button>
-                                <button @click="saveDraft()" class="m-btn m-btn--primary">Save Role</button>
+                                <span x-show="roleChip === 'failed' && roleError" class="rm-hint rm-hint--error" x-text="roleError"></span>
+                                <span data-live-chip :data-state="roleChip" class="rm-hint" style="margin:0" x-text="roleChipText(roleChip)"></span>
+                                <button type="button" x-show="roleChip === 'failed'" data-live-retry @click="saveDraft()"
+                                        class="m-btn m-btn--secondary">Retry</button>
                             </div>
                         </div>
                     </template>
