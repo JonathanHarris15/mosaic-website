@@ -384,3 +384,32 @@ test('presence is read through the live-read helper when one is given', () => {
     assert.ok(watched[0].fallbackEveryMs <= 3000, 'presence is person-scoped and re-reads fast');
     store.stop();
 });
+
+test('MS-722: a refused presence read leaves the faces empty without a console warning', () => {
+    const warned = [];
+    const realWarn = console.warn;
+    console.warn = (...a) => warned.push(a);
+    try {
+        for (const [err, shouldWarn] of [
+            [Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }), false],
+            [new Error('unavailable: offline'), true],
+        ]) {
+            warned.length = 0;
+            let onError = null;
+            const changes = [];
+            const store = createPresenceStore({ collection: 'presence' });
+            store.start({
+                db: fakeDb().db, uid: ME, identity: null, surface: 'service-calendar', pageKey: null,
+                stamp: () => null, now: () => NOW, setInterval: () => 1, clearInterval: () => {},
+                onChange: e => changes.push(e),
+                watch: (ref, onNext, opts) => { onError = opts.onError; return () => {}; },
+            });
+            onError(err);
+            assert.deepStrictEqual(changes[changes.length - 1], [], 'the faces did not empty');
+            assert.strictEqual(warned.length > 0, shouldWarn, err.message);
+            store.stop();
+        }
+    } finally {
+        console.warn = realWarn;
+    }
+});

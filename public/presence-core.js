@@ -274,6 +274,11 @@ function createPresenceStore(config) {
         }
     }
 
+    function isRefusal(e) {
+        return !!e && (e.code === 'permission-denied'
+            || /insufficient permissions/i.test(String(e.message || '')));
+    }
+
     function liveReadWatch() {
         if (typeof MosaicLiveRead !== 'undefined' && MosaicLiveRead && MosaicLiveRead.watch) {
             return function (ref, onNext, opts) { return MosaicLiveRead.watch(ref, onNext, opts); };
@@ -320,7 +325,14 @@ function createPresenceStore(config) {
         function onError(e) {
             // Presence failing must not take the page with it. Without it you
             // simply cannot see the others — the editing still works.
-            console.warn('Presence is unavailable:', e);
+            //
+            // A REFUSAL IS EXPECTED, NOT A FAULT (MS-722). A level that may
+            // write a Sunday (services.builder.edit) but not read as an
+            // editor is refused the faces by rule — reads were deliberately
+            // left alone. The row of faces just stays empty; saying so in the
+            // console on every page load would be noise about a decision.
+            if (!isRefusal(e)) console.warn('Presence is unavailable:', e);
+            state.readRefused = isRefusal(e);
             state.entries = [];
             state.onChange([]);
         }
