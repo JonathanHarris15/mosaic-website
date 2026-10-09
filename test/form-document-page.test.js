@@ -164,7 +164,8 @@ test('a failed save says so and keeps what is on screen', async () => {
     });
     await page.save();
 
-    assert.strictEqual(page.saveStatus, 'unsaved', 'a failed save reported itself as saved');
+    // MS-721: a failed save is "Not saved" (+ Retry), not "Unsaved changes".
+    assert.strictEqual(page.saveStatus, 'failed', 'a failed save reported itself as saved');
     assert.strictEqual(page.answers.why, 'Moved here', 'a failed save threw away what was typed');
     assert.match(page.problem, /still here/);
 });
@@ -201,11 +202,11 @@ test('the shared controls are mounted at the end of the body', () => {
     assert.ok(mountAt > MARKUP.indexOf('<body'), 'the mount is still in the head');
 });
 
-test('it shows the same three save states as the other document editors', () => {
-    ['saving', 'saved', 'unsaved'].forEach(state => {
-        assert.ok(MARKUP.includes("saveStatus === '" + state + "'"),
-            'the ' + state + ' state is not shown');
-    });
+test('it shows the same save chip as the other document editors (MS-721: + Not saved / Retry)', () => {
+    assert.ok(MARKUP.includes('data-live-chip :data-state="saveStatus"'), 'no live chip');
+    assert.ok(MARKUP.includes('x-text="chipText"'), 'the chip does not say the state');
+    assert.ok(MARKUP.includes("x-show=\"saveStatus === 'failed'\""), 'no Retry for a failed save');
+    assert.ok(MARKUP.includes('@click="reloadDocument()"'), 'no Reload for a change made elsewhere');
 });
 
 test('the library opens a form document on this page', () => {

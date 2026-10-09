@@ -86,24 +86,19 @@
                     <span class="m-btn__label" x-text="exportingWord ? 'Making…' : 'Word'"></span>
                 </button>
 
-                <template x-if="isEditor && saveStatus === 'saving'">
-                    <span class="m-badge m-badge--neutral m-header__chip">
-                        <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-                        <span class="m-btn__label">Saving…</span>
-                    </span>
-                </template>
-                <template x-if="isEditor && saveStatus === 'saved'">
-                    <span class="m-badge m-badge--success m-header__chip">
-                        <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                        <span class="m-btn__label">Saved</span>
-                    </span>
-                </template>
-                <template x-if="isEditor && saveStatus === 'unsaved'">
-                    <span class="m-badge m-badge--warning m-header__chip">
-                        <span class="m-chip-dot m-chip-dot--pulse"></span>
-                        <span class="m-btn__label">Unsaved changes</span>
-                    </span>
-                </template>
+                <!-- ADR 0081 / MS-721: saves itself; chip, Retry, Changed elsewhere + Reload. -->
+                <span x-show="isEditor" x-cloak data-live-chip :data-state="saveStatus"
+                      class="m-badge m-header__chip"
+                      :class="saveStatus === 'failed' ? 'm-badge--error' : (saveStatus === 'unsaved' ? 'm-badge--warning' : (saveStatus === 'saving' ? 'm-badge--neutral' : 'm-badge--success'))">
+                    <span class="m-btn__label" x-text="chipText"></span>
+                </span>
+                <button type="button" x-show="isEditor && saveStatus === 'failed'" x-cloak data-live-retry
+                        class="m-btn m-btn--quiet m-btn--sm" @click="retrySave()"><span class="m-btn__label">Retry</span></button>
+                <span x-show="changedElsewhere" x-cloak data-changed-elsewhere class="m-badge m-badge--neutral m-header__chip">
+                    <span class="m-btn__label">Changed elsewhere — reload to see it</span>
+                </span>
+                <button type="button" x-show="changedElsewhere" x-cloak data-live-reload
+                        class="m-btn m-btn--quiet m-btn--sm" @click="reloadDocument()"><span class="m-btn__label">Reload</span></button>
                 <!-- A member reading somebody else's document is told so once,
                      rather than being shown a toolbar that does nothing. -->
                 <template x-if="!isEditor && !loading">
@@ -175,6 +170,8 @@
     <script src="document-docx.js"></script>
     <!-- Loads the VENDORED TipTap bundle, not esm.sh. -->
     <script src="tiptap-editor-loader.js"></script>
+    <script src="live-read.js"></script>
+    <script src="doc-live-core.js"></script>
     <script src="event-document.js"></script>
     <!-- Fills the data-document-toolbar placeholders above with the one
          shared editing surface. Must run AFTER them and BEFORE Alpine. -->

@@ -884,6 +884,11 @@ document.addEventListener('alpine:init', () => {
         title: '',
 
         saveStatus: 'saved',
+        // ADR 0081 / MS-721: one document — a change made elsewhere is taken
+        // only while this copy has nothing unsaved; otherwise "Changed
+        // elsewhere — reload to see it" with Reload.
+        changedElsewhere: false,
+        _live: null,
         _saveTimer: null,
         editorUpdated: 0,
 
@@ -991,7 +996,7 @@ document.addEventListener('alpine:init', () => {
 
                 await this.loadDoc();
                 this.loading = false;
-                this.$nextTick(() => this.initEditor());
+                this.$nextTick(() => { this.initEditor(); this.startLive(); });
             });
         },
 
@@ -1169,7 +1174,13 @@ document.addEventListener('alpine:init', () => {
                         return false;
                     },
                 },
-                onTransaction() { self.editorUpdated++; self.scheduleSave(); },
+                // Only a change to the document is an edit — moving the
+                // cursor used to arm a save (and, with live reads, would have
+                // held back every change made elsewhere).
+                onTransaction({ transaction }) {
+                    self.editorUpdated++;
+                    if (!transaction || transaction.docChanged) self.scheduleSave();
+                },
             });
         },
 
@@ -1526,33 +1537,63 @@ document.addEventListener('alpine:init', () => {
         // ── Auto-save ─────────────────────────────────────────────────────────
 
         onTitleInput() {
-            this.saveStatus = 'unsaved';
             this.scheduleSave();
         },
 
         scheduleSave() {
-            this.saveStatus = 'unsaved';
+            if (this._adopting) return;
+            if (this._live) this._live.edited(); else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
 
         async save() {
             if (!_docEditor || !this.docId) return;
-            this.saveStatus = 'saving';
+            clearTimeout(this._saveTimer);
+            const ticket = this._live ? this._live.saving() : 0;
+            const written = { title: this.title.trim() || 'Untitled Document', contentJson: _docEditor.getJSON() };
             try {
-                await db.collection('elder_documents').doc(this.docId).update({
-                    title:          this.title.trim() || 'Untitled Document',
-                    contentJson:    _docEditor.getJSON(),
+                await db.collection('elder_documents').doc(this.docId).update(Object.assign({}, written, {
                     updatedAt:      firebase.firestore.FieldValue.serverTimestamp(),
                     updatedByName:  this.currentUserName,
-                });
-                this.saveStatus = 'saved';
+                }));
+                if (this._live) this._live.saved(ticket, written); else this.saveStatus = 'saved';
             } catch (e) {
                 console.error('Error saving:', e);
-                this.saveStatus = 'unsaved';
-                this.showToast('Error saving document', 'error');
+                // "Not saved" + Retry in the header; the next edit tries again.
+                if (this._live) this._live.failed(ticket, e); else this.saveStatus = 'failed';
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ───────────────────────────────────────────
+        startLive() {
+            if (typeof DocLive === 'undefined' || this._live || !this.doc) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => JSON.stringify({ t: ((d && d.title) || '').trim() || 'Untitled Document', c: (d && d.contentJson) || null }),
+                onAdopt: (d) => {
+                    clearTimeout(self._saveTimer);
+                    self.title = d.title || '';
+                    _currentDocTitle = self.title;
+                    self.doc = Object.assign({}, self.doc, d);
+                    if (_docEditor) {
+                        self._adopting = true;
+                        try { _docEditor.commands.setContent(d.contentJson || '', false); }
+                        finally { self._adopting = false; }
+                    }
+                },
+                onChange: (st) => { self.saveStatus = st.status; self.changedElsewhere = st.changedElsewhere; },
+            });
+            this._live.loaded(this.doc);
+            if (typeof MosaicLiveRead === 'undefined') return;
+            MosaicLiveRead.watch(db.collection('elder_documents').doc(this.docId), (snap) => {
+                if (!snap || !snap.exists) return;
+                self._live.remote(snap.data() || {}, { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) });
+            }, { onError: (e) => console.warn('This document is not following live changes:', e && e.message) });
+        },
+        reloadDocument() { if (this._live) this._live.reload(); },
+        retrySave() { return this.save(); },
+        get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
         formatDate(ts) {
             if (!ts) return '';
