@@ -502,27 +502,26 @@
                 </p>
                 <label class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Text message</span>
-                    <textarea x-model="eventAnnouncementWording.text" rows="4"
+                    <textarea :value="eventAnnouncementWording.text" @input="editWording('text', $event.target.value)" @blur="saveEventAnnouncementWording()" @keydown.escape="revertWording('text')" data-live-wording="text" rows="4"
                         class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
                 </label>
                 <label class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Push title</span>
-                    <input type="text" x-model="eventAnnouncementWording.pushTitle"
+                    <input type="text" :value="eventAnnouncementWording.pushTitle" @input="editWording('pushTitle', $event.target.value)" @blur="saveEventAnnouncementWording()" @keydown.escape="revertWording('pushTitle')" data-live-wording="pushTitle"
                         class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
                 </label>
                 <label class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Push body</span>
-                    <textarea x-model="eventAnnouncementWording.pushBody" rows="3"
+                    <textarea :value="eventAnnouncementWording.pushBody" @input="editWording('pushBody', $event.target.value)" @blur="saveEventAnnouncementWording()" @keydown.escape="revertWording('pushBody')" data-live-wording="pushBody" rows="3"
                         class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"></textarea>
                 </label>
                 <div class="flex items-center justify-end gap-sm">
                     <button @click="resetEventAnnouncementWording()" class="m-btn m-btn--quiet m-btn--sm">
                         Reset to defaults
                     </button>
-                    <button @click="saveEventAnnouncementWording()" :disabled="eventAnnouncementSaving"
-                        class="px-lg py-sm font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                        <span x-text="eventAnnouncementSaving ? 'Saving…' : 'Save wording'"></span>
-                    </button>
+                    <span data-live-chip class="font-label-md text-label-md text-on-surface-variant" :class="wordingChip === 'failed' ? 'text-error' : ''" x-text="wordingChipText" aria-live="polite"></span>
+                    <button x-show="wordingChip === 'failed'" data-live-retry type="button" @click="wordingLive && wordingLive.retry()"
+                        class="m-btn m-btn--quiet m-btn--sm">Retry</button>
                 </div>
             </div>
         </section>
@@ -1144,6 +1143,8 @@
     <script src="notification-admin-core.js"></script>
     <script src="admin-account-levels.js"></script>
     <script src="admin-accounts.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="admin-dashboard.js"></script>
 </body>
 </html>
