@@ -427,7 +427,7 @@
             // draws the event straight back.
             pendingDelete: false,
 
-            get canDelete() { return this.isEditor && this.isOneOff && !cfg.rolesOnly; },
+            get canDelete() { return this.editsEvent && this.isOneOff && !cfg.rolesOnly; },
 
             // Named, and honest about the two things people ask when they hover
             // over a delete: does anyone find out, and what happens to the
@@ -723,10 +723,24 @@
                 return AccessCore.writesAsEditor(this.account || this.rank);
             },
 
+            // MS-721 lead call: the Event's own writes (details, who can see
+            // it, colour, pattern, name tags, files, delete) are what
+            // firestore.rules editsWith('calendar.events.edit') allows, so
+            // they are offered to anyone holding that key, not only the
+            // editor ladder. The roster and the rota stay on isEditor: they
+            // need the editor reads (people, roles, fairness) as well.
+            get editsEvent() {
+                return AccessCore.canEditEvents(this.account || this.rank);
+            },
+
+            get canEditPrintables() {
+                return AccessCore.hasPermission(this.account || this.rank, 'printables.edit');
+            },
+
             // Attaching or removing a file is editor-only; SEEING what is
             // attached is not — the Files tab is open to anyone who can already
             // see the Event, same gate as its description (MS-287's PRD).
-            get canManageAttachments() { return this.isEditor; },
+            get canManageAttachments() { return this.editsEvent; },
 
             get isSunday() {
                 return this.occurrence && this.occurrence.seriesId === Core.SUNDAY_SERVICE_ID;
@@ -889,7 +903,7 @@
             // while its order of service sat untouched under its own date, so one
             // Sunday would say two different things.
             get patternEditable() {
-                return this.isEditor && !!this.series && !this.isSunday;
+                return this.editsEvent && !!this.series && !this.isSunday;
             },
 
             // The Event above this date. A one-off has none — it IS the Event.
@@ -907,7 +921,7 @@
                 // A one-off has no pattern to leave alone — you just change its
                 // date. The Sunday Service keeps its order of service under its
                 // own date, so moving the Event would split one Sunday in two.
-                return this.isEditor
+                return this.editsEvent
                     && !!this.series
                     && !this.isSunday
                     && !!(this.series.recurrence || {}).freq
@@ -1621,7 +1635,7 @@
 
             get visibilityLadder() { return View.visibilityLadder(); },
             get visibility() { return Core.visibilityOf(this.occurrence); },
-            get visibilityEditable() { return Core.isVisibilityEditable(this.occurrence) && this.isEditor; },
+            get visibilityEditable() { return Core.isVisibilityEditable(this.occurrence) && this.editsEvent; },
             rosterToggleApplies(level) { return View.rosterToggleApplies(level); },
 
             async setVisibility(level) {
@@ -1684,7 +1698,7 @@
             },
 
             async setNeedsNameTags(value) {
-                if (!this.isEditor || !this.occurrence) return;
+                if (!this.editsEvent || !this.occurrence) return;
                 const on = value === true;
                 await Store.setNeedsNameTags(db, {
                     occurrenceId: this.occurrence.id,
@@ -2076,7 +2090,7 @@
                     loading: false, saving: false, error: '', status: '',
                     hasFields: false, sections: [], drafts: {},
                 };
-                if (!Link || !this.isEditor) { this.linkFill = blank; return; }
+                if (!Link || !this.editsEvent) { this.linkFill = blank; return; }
                 const spec = Link.formFor(this.printables || []);
                 const stored = (this.occurrence && this.occurrence.printableInputs) || {};
                 const drafts = {};
@@ -2109,7 +2123,7 @@
             async uploadLinkImage(printableId, inputId, event) {
                 const file = event.target.files && event.target.files[0];
                 if (event.target) event.target.value = '';
-                if (!file || !this.isEditor) return;
+                if (!file || !this.editsEvent) return;
                 const id = (typeof PrintableCore !== 'undefined' && PrintableCore.newId)
                     ? PrintableCore.newId('img') : String(Date.now());
                 const safe = String(file.name || 'image').replace(/[^\w.-]+/g, '_');
@@ -2137,7 +2151,7 @@
 
             async saveLinkFill() {
                 const Link = typeof PrintableLinkCore !== 'undefined' ? PrintableLinkCore : null;
-                if (!Link || !this.isEditor || !this.occurrence || this.linkFill.saving) return;
+                if (!Link || !this.editsEvent || !this.occurrence || this.linkFill.saving) return;
                 this.linkFill.saving = true;
                 this.linkFill.error = '';
                 this.linkFill.status = '';
@@ -2169,7 +2183,7 @@
                 }
             },
 
-            get canLinkPrintables() { return this.isEditor && !!this.series && this.printablesAvailable; },
+            get canLinkPrintables() { return this.editsEvent && !!this.series && this.printablesAvailable; },
 
             // `when` is 'from' (this occurrence's date) or 'before' (the
             // previous Sunday, on a Sunday — ADR 0078).
@@ -2264,7 +2278,7 @@
             },
 
             async setMembersMayView(p, on) {
-                if (!this.isEditor) return;
+                if (!this.canEditPrintables) return;
                 try {
                     await PrintableStore.setMemberVisible(db, firebase, firebase.auth().currentUser, p.id, on);
                     p.memberVisible = on === true;
@@ -2521,7 +2535,7 @@
             // what firestore.rules editsWith('calendar.events.edit') allows
             // (MS-722), so the boxes are offered only where the write lands.
             get canEditDetails() {
-                return this.isEditor && AccessCore.canEditEvents(this.account || this.rank);
+                return this.editsEvent;
             },
 
             detailsChipText(status) {

@@ -673,7 +673,7 @@
                                     <span class="m-row__title" x-text="p.name"></span>
                                     <span class="m-row__sub" x-text="snapshotBusy === p.id ? snapshotProgress : printableSub(p)"></span>
                                 </a>
-                                <label x-show="isEditor" class="m-check cal-printable__toggle" title="Members may view: members can open the read-only page of this printable">
+                                <label x-show="canEditPrintables" class="m-check cal-printable__toggle" title="Members may view: members can open the read-only page of this printable">
                                     <input type="checkbox" :checked="p.memberVisible" @change="setMembersMayView(p, $event.target.checked)" />
                                     <span>Members may view</span>
                                 </label>
@@ -976,7 +976,7 @@
                          is true of every date, so it is decided once on the Event.
                          A ladder here would change every date from a screen that
                          looks like it is about one of them. -->
-                    <section x-show="isEditor && isOneOff"
+                    <section x-show="editsEvent && isOneOff"
                              class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
                         <div class="mt-sm flex flex-col">
@@ -1032,7 +1032,7 @@
                          kiosk and nothing happened, because no event had ever
                          been able to say it wanted tags.
                          Name tags are not a visibility setting anyway. -->
-                    <section x-show="isEditor" class="m-card">
+                    <section x-show="editsEvent" class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Name tags</h3>
                         <div class="mt-sm">
                             <label class="flex items-start gap-2 cursor-pointer">
@@ -1051,7 +1051,7 @@
 
                     <!-- Colour on the calendar. Also the Event's, not one date's —
                          a colour set here would restyle every other date. -->
-                    <section x-show="isEditor && colourEditable"
+                    <section x-show="editsEvent && colourEditable"
                              class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
@@ -1091,7 +1091,7 @@
                          pattern to change — and skipping one here would mark the
                          Event off while its order of service sat untouched under
                          its own date, so one Sunday would say two things. -->
-                    <section x-show="isEditor && patternEditable"
+                    <section x-show="editsEvent && patternEditable"
                              class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2"

@@ -865,7 +865,7 @@
                                                 <span class="m-row__title" x-text="p.name"></span>
                                                 <span class="m-row__sub" x-text="p.memberVisible ? 'Members may view' : 'Editors only'"></span>
                                             </a>
-                                            <label x-show="isEditor" class="m-check" title="Members may view">
+                                            <label x-show="canEditPrintables" class="m-check" title="Members may view">
                                                 <input type="checkbox" :checked="p.memberVisible" @change="setSeriesPrintableMembers(p, $event.target.checked)" />
                                                 <span>Members may view</span>
                                             </label>
@@ -1111,7 +1111,7 @@
                          page drew them twice. Editor-only (MS-287): the Dates
                          tab now shares this pane with a member, and this
                          footer is the drafting door a member may never open. -->
-                    <div class="m-actionbar re-desktop-only" x-show="isEditor && hasRoles">
+                    <div class="m-actionbar re-desktop-only" x-show="editorLanes && hasRoles">
                         <div class="m-actionbar__said">
                             <template x-if="!range">
                                 <p class="m-actionbar__note">
@@ -1167,7 +1167,7 @@
                     </div>
 
                     <!-- The phone gets the reason rather than a dead button. -->
-                    <div class="m-actionbar re-phone-only" x-show="isEditor && hasRoles">
+                    <div class="m-actionbar re-phone-only" x-show="editorLanes && hasRoles">
                         <div class="m-actionbar__said">
                             <p class="m-actionbar__note">
                                 Drafting a rota is a wide grid of dates against roles, so it waits for a

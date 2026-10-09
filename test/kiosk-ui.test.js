@@ -357,7 +357,7 @@ test('the name-tag setting can be reached on a repeating event, not just a one-o
     const section = html.slice(openedAt, at);
     assert.ok(!/isOneOff/.test(section),
         'the name-tag setting must not be shut behind isOneOff: ' + section.slice(0, 120));
-    assert.match(section, /x-show="isEditor"/);
+    assert.match(section, /x-show="editsEvent"/);
 });
 
 test('name tags are their own setting, not a visibility one', () => {

@@ -187,7 +187,7 @@
                     // be a page-load spent on nothing.
                     await Promise.all([
                         this.loadSeries(),
-                        this.isEditor ? this.loadDirectory() : Promise.resolve(),
+                        this.editorLanes ? this.loadDirectory() : Promise.resolve(),
                     ]);
                 } catch (e) {
                     console.error('Could not read the recurring events:', e);
@@ -300,13 +300,21 @@
 
             // MS-721 (ADR 0081): the page's writes are the Event's — series,
             // dates and their rosters, all behind editsWith('calendar.events.edit')
-            // in firestore.rules — so editor mode asks AccessCore.canEditEvents
-            // (and the editor ladder, which this page's directory reads need)
-            // rather than a list of level names.
+            // in firestore.rules — so editor mode asks AccessCore.canEditEvents,
+            // the same key the rule names (lead call: a Member level holding
+            // only calendar.events.edit is offered editing).
             get isEditor() {
                 if (!this.rank) return false;
-                const who = this.account || this.rank;
-                return AccessCore.writesAsEditor(who) && AccessCore.canEditEvents(who);
+                return AccessCore.canEditEvents(this.account || this.rank);
+            },
+            // The lanes that also need the editor READS (the directory, the
+            // rota grid, roles & rules, who can see it) stay on the ladder too.
+            get editorLanes() {
+                if (!this.isEditor) return false;
+                return AccessCore.readsAsEditor(this.account || this.rank);
+            },
+            get canEditPrintables() {
+                return !!this.rank && AccessCore.hasPermission(this.account || this.rank, 'printables.edit');
             },
             get signedOut() { return !this.loading && !this.rank; },
 
@@ -353,7 +361,7 @@
                 // them to wait on. The Dates tab is everyone's, and reads its
                 // own fixed window regardless of role.
                 await Promise.all([
-                    this.isEditor ? this.loadWindow() : Promise.resolve(),
+                    this.editorLanes ? this.loadWindow() : Promise.resolve(),
                     this.loadUpcomingWindow(),
                 ]);
 
@@ -362,7 +370,7 @@
                 // Safe to run every time: it writes only when something is
                 // actually wrong. It used to happen on the way into the second
                 // page, which no longer exists.
-                if (this.isEditor && id === Core.SUNDAY_SERVICE_ID) await this.reconcileSunday();
+                if (this.editorLanes && id === Core.SUNDAY_SERVICE_ID) await this.reconcileSunday();
                 await this.loadAnnouncements();
                 await this.loadLinkedPrintables();
             },
@@ -411,7 +419,7 @@
             },
 
             printableOpenHref(p) {
-                const page = this.isEditor ? 'printable-editor.html?id=' : 'printable-view.html?id=';
+                const page = this.canEditPrintables ? 'printable-editor.html?id=' : 'printable-view.html?id=';
                 return page + encodeURIComponent(p.id);
             },
 
@@ -441,7 +449,7 @@
             },
 
             async setSeriesPrintableMembers(p, on) {
-                if (!this.isEditor || !p) return;
+                if (!this.canEditPrintables || !p) return;
                 try {
                     await PrintableStore.setMemberVisible(db, firebase, firebase.auth().currentUser, p.id, on);
                     p.memberVisible = on === true;
@@ -506,7 +514,7 @@
                     { id: 'roles', label: 'Roles & rules', editorOnly: true },
                     { id: 'who', label: 'Who can see it', editorOnly: true },
                 ];
-                return this.isEditor ? all : all.filter(t => !t.editorOnly);
+                return this.editorLanes ? all : all.filter(t => !t.editorOnly);
             },
 
             // The rung the pane's badge says, in the ladder's own words.
