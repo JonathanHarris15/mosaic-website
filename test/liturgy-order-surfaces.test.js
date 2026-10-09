@@ -40,7 +40,8 @@ test('a failed read keeps the orders on screen and does not treat Standard as a 
     const html = read('liturgy-orders.html');
     const js = read('liturgy-orders.js');
     assert.match(html, /class="lo-workspace" x-show="!loading"/);
-    assert.match(html, /m-header__actions" x-show="editing"/);
+    assert.match(html, /class="m-header__actions lo-header__actions"/);
+    assert.match(html, /id="liturgy-orders-save"[^>]*x-show="editing"/);
     assert.match(js, /permissions problem, not a connection problem/);
     assert.match(js, /this\.baseline = JSON\.stringify\(catalog\)/);
 });
