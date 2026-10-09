@@ -27,3 +27,7 @@ test('prune deletes only channels whose PR is closed', () => {
 test('neither workflow deploys the live site', () => {
     for (const s of [CLEAN, PREVIEW]) assert.ok(!/firebase deploy\b/.test(s.replace(/#.*$/gm, '')));
 });
+test('a failed preview deploy prints what Firebase said', () => {
+    assert.match(PREVIEW, /2> "\$\{RUNNER_TEMP\}\/channel\.err"/);
+    assert.match(PREVIEW, /cat "\$\{RUNNER_TEMP\}\/channel\.err"/);
+});

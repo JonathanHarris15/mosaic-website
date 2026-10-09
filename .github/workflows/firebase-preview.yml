@@ -82,12 +82,21 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="pr-${{ github.event.pull_request.number }}"
-          npx firebase hosting:channel:deploy "${CHANNEL}" \
+          # Firebase's answer is printed when it fails, so the next failure
+          # says why (a full channel quota looked like a bare exit 1).
+          if ! npx firebase hosting:channel:deploy "${CHANNEL}" \
             --only church \
             --expires 7d \
             --project mosaic-hymn-database \
             --non-interactive \
-            --json > "${RUNNER_TEMP}/channel.json"
+            --json > "${RUNNER_TEMP}/channel.json" 2> "${RUNNER_TEMP}/channel.err"; then
+            echo "--- firebase stdout (json) ---"; cat "${RUNNER_TEMP}/channel.json" || true
+            echo "--- firebase stderr ---"; cat "${RUNNER_TEMP}/channel.err" || true
+            [ -f firebase-debug.log ] && { echo "--- firebase-debug.log (tail) ---"; tail -n 60 firebase-debug.log; }
+            MSG="$(node -e 'try{const j=require(process.argv[1]);process.stdout.write(String(j.error||j.message||"").slice(0,300))}catch(e){}' "${RUNNER_TEMP}/channel.json")"
+            echo "::error::Preview channel deploy failed: ${MSG:-see log above}. If this is the channel quota, run the 'Firebase Hosting preview cleanup' workflow (workflow_dispatch)."
+            exit 1
+          fi
           URL="$(node -e 'const r=require(process.argv[1]).result||{};const s=Object.values(r)[0]||{};process.stdout.write(s.url||"")' "${RUNNER_TEMP}/channel.json")"
           if [ -z "${URL}" ]; then
             cat "${RUNNER_TEMP}/channel.json"
