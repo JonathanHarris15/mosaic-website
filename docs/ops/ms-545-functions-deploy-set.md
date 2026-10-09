@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,firestore:rules
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules
 ```
 
 | Target | Why it is in the set |
@@ -27,6 +27,7 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:notificationRevokeToken` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Deletes one device token. Admin-gated, and refused without `confirm: true`. |
 | `functions:notificationTestPush` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Pushes to the **caller's own** devices only; the address is `request.auth.uid` and the only payload field read is `confirm`. |
 | `functions:translateLiturgy` | Liturgy translation. Export name in `functions/index.js` (`onCall`). The Order of Service switch and the Word import both call it. It asks Jev with `TYPESAFE_API_KEY`. Without this target those pages still translate, by kind and position. |
+| `functions:oosUpdateLiturgy` | Order of Service liturgy writes (MS-262 / MS-695). Export name in `functions/index.js` (`onCall`). MCP `oos_update_liturgy` and any callable path that saves a Sunday's liturgy slots go through it. Without this target the MS-695 `services.builder.edit` gate fix (#203) and the #202 error message never reach production. |
 
 There is deliberately **no** `functions:notificationDevices`. The device list
 rides on `notificationOverview` because on the server both halves are the same
@@ -99,7 +100,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,firestore:rules`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits
