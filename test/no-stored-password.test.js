@@ -189,6 +189,21 @@ const ALLOWED = [
         line: 'password: account.password,',
         why: 'handed to admin.auth().createUser — the users document written beside it has no password field',
     },
+    {
+        file: 'public/emulator-connect.js',
+        line: "password: 'ms716-emulator-pass',",
+        why: 'localhost-only emulator login handed to signInWithEmailAndPassword, never written to Firestore',
+    },
+    {
+        file: 'scripts/seed-liturgy-orders-emulator.js',
+        line: "password: 'ms716-emulator-pass'",
+        why: 'emulator-only seed handed to admin.auth().createUser; refuses to run without emulator env vars',
+    },
+    {
+        file: 'scripts/seed-liturgy-orders-emulator.js',
+        line: 'password: spec.password',
+        why: 'emulator-only seed handed to admin.auth().createUser/updateUser',
+    },
 ];
 
 function passwordKeyOccurrences() {

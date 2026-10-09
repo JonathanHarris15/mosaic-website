@@ -1,0 +1,9 @@
+Captured editor + Pastoral Prayer at 1280×900
+Insert-after: count 14 → 15
+Remove: inserted Other row taken out
+Reload persistence: days=["7","5","3"] message saved
+Pastoral Prayer id stable after edits
+Captured inspector bottom at 1280×900 (days, message, response visible)
+Captured design bundle reference at 1280×900
+Captured viewer read-only state
+Captured mobile shell at 390×844

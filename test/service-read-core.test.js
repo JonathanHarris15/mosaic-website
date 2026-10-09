@@ -28,7 +28,7 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         assert.deepStrictEqual(fields(s), Liturgy.STANDARD_ORDER.elementIds.slice());
         assert.deepStrictEqual(s.liturgyOrder, { id: 'standard', name: 'Standard' });
         const closing = s.liturgy.find((r) => r.field === 'hymnEnd1');
-        assert.strictEqual(closing.label, 'Closing Hymn');
+        assert.strictEqual(closing.label, 'Hymn of Response');
         assert.strictEqual(closing.primitive, 'song');
         assert.deepStrictEqual(closing.value, { name: 'A Closing Song', id: 'h-9' });
         assert.deepStrictEqual(s.liturgy.filter((r) => r.filled).map((r) => r.field),

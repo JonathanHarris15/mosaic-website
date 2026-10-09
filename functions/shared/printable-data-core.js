@@ -335,7 +335,7 @@
 
     function elementName(catalog, id) {
         const el = Liturgy.elementById(catalogOrSeed(catalog), id);
-        return el ? el.name : id;
+        return el ? Liturgy.elementDisplayName(el) : id;
     }
 
     const SOURCES = [
@@ -1013,7 +1013,7 @@
             const value = el.kind === 'other' ? (stored || el.name) : stored;
             if (!value) return;
             const carrier = Liturgy.carrierOf(s, el);
-            rows.push({ _id: el.id, label: el.name, value: value, carriedBy: carrier ? carrier.name : '', number: rows.length + 1 });
+            rows.push({ _id: el.id, label: Liturgy.elementDisplayName(el), value: value, carriedBy: carrier ? carrier.name : '', number: rows.length + 1 });
         });
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };
     }

@@ -326,7 +326,7 @@ test('the header keeps the identity columns and names each element once', () => 
     assert.strictEqual(names[names.length - 1], 'Actions');
     assert.deepStrictEqual(names.slice(7, -1), sb.liturgyColumns().map(c => sb.escapeHtml(c.label)));
     assert.ok(names.includes(sb.escapeHtml('Communion · Lord\'s Supper')), 'a column only Communion uses names Communion');
-    assert.ok(names.includes('Hymn 1'), 'a shared hymn stays the hymn, with no order in front of it');
+    assert.ok(names.includes('Hymn of Praise'), 'a shared hymn stays the hymn, with no order in front of it');
     assert.doesNotMatch(row, /liturgy-carrier/,
         'a person is the element\'s own field, not a second line under every row');
 });

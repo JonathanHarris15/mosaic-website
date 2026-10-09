@@ -338,3 +338,13 @@ schema or refused, and the one reused id, `hymn2`, meant a different moment.
 
 The fixed lists (`LiturgySaveCore.HYMN_FIELDS`/`TEXT_FIELDS`,
 `ServiceNoteCore.NOTE_KEYS`) remain only as what a Sunday with no catalog has.
+
+## Amendment (MS-716, 2026-10-09) — a hymn carries an optional display name
+
+A hymn placement may carry a **display name** on the order (for example
+"Opening Hymn" or "Hymn of Praise"). It is optional: a blank name reads and
+shows as **Hymn** on the Liturgy Orders list, in printables' hymn picker
+labels, and in MCP refusal lists that name the order's elements. Renaming
+only changes `name`; the element **id** is fixed once placed. The Sunday
+still chooses the hymn itself through the hymn picker — the display name is
+not the book title.

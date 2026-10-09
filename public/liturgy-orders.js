@@ -55,6 +55,14 @@ function stripAlpine(node) {
     });
 }
 
+const KIND_ICONS = Object.freeze({
+    hymn: 'music_note',
+    scripture: 'menu_book',
+    prayer: 'volunteer_activism',
+    person: 'person',
+    other: 'more_horiz',
+});
+
 function liturgyOrdersPage() {
     const Core = window.LiturgyOrderCore;
     return {
@@ -84,7 +92,9 @@ function liturgyOrdersPage() {
         get backHref() {
             return this.date ? 'service-builder.html?date=' + encodeURIComponent(this.date) : 'service-calendar.html';
         },
-        get backLabel() { return this.date ? 'Order of Service' : 'Services'; },
+        get backLabel() { return 'Order of Service'; },
+        userName: '',
+        userInitials: '',
         get dirty() { return JSON.stringify(this.catalog) !== this.baseline; },
 
         // Standard first, then by name — the order every other page lists them in.
@@ -100,11 +110,20 @@ function liturgyOrdersPage() {
         // must not be written back over orders this page did not read.
         get editing() { return this.canEdit && !this.problem && !this.loading; },
         get orderElements() { return Core.elementsOf(this.selectedOrder, this.catalog); },
-        get proseElement() {
+        get inspectorElement() {
             if (!this.selectedElementId) return null;
             const el = Core.elementById(this.catalog, this.selectedElementId);
-            if (!el || el.kind !== 'prayer' || !el.requests) return null;
+            if (!el || this.selectedOrder.elementIds.indexOf(el.id) === -1) return null;
             return el;
+        },
+        get inspectorIndex() {
+            const el = this.inspectorElement;
+            if (!el) return -1;
+            return this.selectedOrder.elementIds.indexOf(el.id);
+        },
+        get placeHint() {
+            const i = this.inspectorIndex;
+            return i >= 0 ? 'Add after No. ' + (i + 1) : 'Add to the end';
         },
         get addable() {
             const inOrder = new Set(this.selectedOrder.elementIds);
@@ -112,7 +131,29 @@ function liturgyOrdersPage() {
         },
 
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
+        kindIcon(kind) { return KIND_ICONS[kind] || 'help'; },
         takesName(kind) { return Core.kindTakesName(kind); },
+        displayName(el) { return Core.elementDisplayName(el); },
+        orderSubtitle(order) {
+            const o = order || this.selectedOrder;
+            const n = o.elementIds.length;
+            let text = n + ' element' + (n === 1 ? '' : 's');
+            if (o.id === Core.STANDARD_ORDER_ID) text += ' · the default, cannot be deleted';
+            return text;
+        },
+        elementMeta(el) {
+            if (!el || el.kind !== 'prayer') return '';
+            const parts = [];
+            if (el.prayedByOther) parts.push('Another may pray it');
+            if (el.requests) {
+                const count = (el.requests.people || []).length;
+                const days = (Array.isArray(el.noticeDays) ? el.noticeDays : []).slice().sort((a, b) => b - a);
+                let line = count + ' request' + (count === 1 ? '' : 's');
+                line += days.length ? ' · days ' + days.join(', ') : ' · no days';
+                parts.push(line);
+            }
+            return parts.join(' · ');
+        },
         usedBy(elementId) {
             const names = this.orders.filter(o => o.elementIds.indexOf(elementId) !== -1).map(o => o.name);
             return names.length ? 'In ' + names.join(', ') : 'In no order';
@@ -125,10 +166,18 @@ function liturgyOrdersPage() {
                 if (this.editing && this.dirty) { e.preventDefault(); e.returnValue = ''; }
             });
             auth.onAuthStateChanged(async (user) => {
+                if (!user && typeof window.MosaicEmulatorSignIn === 'function') {
+                    try { await window.MosaicEmulatorSignIn(); return; }
+                    catch (e) { /* fall through to redirect */ }
+                }
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
                     const userData = await getUserData(user.uid);
                     this.canEdit = AccessCore.pageFlags(userData).canWriteEditor;
+                    const name = (userData && userData.name) || user.displayName || 'Editor';
+                    this.userName = name;
+                    const Dest = window.MosaicDestinations;
+                    this.userInitials = Dest ? Dest.initials(name) : name.trim().charAt(0).toUpperCase() || '?';
                 } catch (e) {
                     this.canEdit = false;
                 }
@@ -180,7 +229,11 @@ function liturgyOrdersPage() {
         selectOrder(id) {
             this.selectedOrderId = id;
             this.orderName = this.selectedOrder.name;
+            this.selectedElementId = '';
             this.editProblem = '';
+        },
+        selectElement(id) {
+            this.selectedElementId = id;
         },
 
         // An empty order, named so it does not collide with one already open,
@@ -220,7 +273,14 @@ function liturgyOrdersPage() {
         // be placed again: each place is its own instance.
         placeKind(kind, index) {
             if (!kind) return;
-            this._apply(cat => Core.placeKind(cat, this.selectedOrder.id, kind, index).catalog);
+            let at = index;
+            if (at === undefined && this.inspectorIndex >= 0) at = this.inspectorIndex + 1;
+            let made = null;
+            if (!this._apply(cat => {
+                made = Core.placeKind(cat, this.selectedOrder.id, kind, at);
+                return made.catalog;
+            })) return;
+            if (made && made.element) this.selectedElementId = made.element.id;
         },
 
         removeFromOrder(elementId) {
@@ -236,14 +296,16 @@ function liturgyOrdersPage() {
             const which = event && event.currentTarget && event.currentTarget.dataset.move;
             const id = this.selectedOrder.elementIds[index];
             if (!this._apply(cat => Core.moveInOrder(cat, this.selectedOrder.id, index, to))) return;
-            this.$nextTick(() => {
-                const btn = document.querySelector('[data-order-row="' + id + '"] [data-move="' + which + '"]');
-                if (btn && !btn.disabled) btn.focus();
-                else {
-                    const other = document.querySelector('[data-order-row="' + id + '"] [data-move]:not([disabled])');
-                    if (other) other.focus();
-                }
-            });
+            if (typeof document !== 'undefined') {
+                this.$nextTick(() => {
+                    const btn = document.querySelector('[data-order-row="' + id + '"] [data-move="' + which + '"]');
+                    if (btn && !btn.disabled) btn.focus();
+                    else {
+                        const other = document.querySelector('[data-order-row="' + id + '"] [data-move]:not([disabled])');
+                        if (other) other.focus();
+                    }
+                });
+            }
         },
 
         // Sortable moves the DOM; Alpine owns it. Put the row back where it
@@ -252,54 +314,17 @@ function liturgyOrdersPage() {
         // element itself stays in the collection.
         initSortable() {
             if (!this.editing || typeof Sortable === 'undefined') return;
-            const shared = {
-                animation: 150,
-                group: { name: 'liturgy-library', pull: true, put: false },
-            };
-            const library = document.getElementById('element-library');
-            if (library && !this._librarySortable) {
-                // The row itself is the handle. Add stays a click: the filter
-                // lets that event through instead of starting a drag.
-                this._librarySortable = Sortable.create(library, Object.assign({}, shared, {
-                    sort: false,
-                    draggable: '[data-library-item]',
-                    filter: 'button, input, select, label, a',
-                    preventOnFilter: false,
-                    group: { name: 'liturgy-library', pull: 'clone', put: false },
-                    // The clone is a copy of an Alpine row. Leave the directives
-                    // on it and Alpine evaluates `kind` outside the loop.
-                    onClone: (evt) => stripAlpine(evt.clone),
-                }));
-            }
             const list = document.getElementById('order-elements');
             if (list && !this._orderSortable) {
                 this._orderSortable = Sortable.create(list, {
                     animation: 150,
-                    group: { name: 'liturgy-library', pull: true, put: true },
-                    handle: '.m-row__handle',
+                    handle: '.lo-row__handle',
                     draggable: '[data-order-row]',
                     filter: '.m-empty',
                     onStart: (evt) => {
                         evt.item.dataset.dragFrom = String(indexInList(evt.from, evt.item));
                     },
-                    onAdd: (evt) => {
-                        const kind = evt.item.getAttribute('data-kind');
-                        const to = indexInList(evt.to, evt.item);
-                        // The drop is the library row itself. Take that node
-                        // and Sortable's clone back out, then draw the five
-                        // kinds again if one is missing. Alpine owns the list.
-                        if (evt.clone) evt.clone.remove();
-                        evt.item.remove();
-                        evt.from.querySelectorAll(':scope > *').forEach((node) => {
-                            if (node.tagName === 'TEMPLATE' || node.hasAttribute('data-library-item')) return;
-                            node.remove();
-                        });
-                        const missing = this.kinds.some((k) => !evt.from.querySelector('[data-kind="' + k + '"]'));
-                        if (missing) this.kinds = this.kinds.slice();
-                        if (kind) this.placeKind(kind, to);
-                    },
                     onEnd: (evt) => {
-                        if (evt.from !== evt.to) return;
                         const from = Number(evt.item.dataset.dragFrom);
                         const to = indexInList(evt.to, evt.item);
                         delete evt.item.dataset.dragFrom;
@@ -321,11 +346,9 @@ function liturgyOrdersPage() {
             return ((el.requests && el.requests.people) || []).map(person => ({ who: person.who }));
         },
         toggleRequests(el, on) {
-            this.updateElement(el.id, {
-                requests: on ? { people: [{ who: 'either' }] } : null,
-            });
-            if (on) this.showProse(el);
-            else if (this.selectedElementId === el.id) this.selectedElementId = '';
+            const patch = { requests: on ? { people: [{ who: 'either' }] } : null };
+            if (on) patch.noticeDays = Core.DEFAULT_NOTICE_LIST.slice();
+            this.updateElement(el.id, patch);
         },
         addPerson(el) {
             const people = this.peopleCopy(el);
@@ -369,20 +392,6 @@ function liturgyOrdersPage() {
             const days = (el.noticeDays || []).filter(value => value !== day);
             this.updateElement(el.id, { noticeDays: days });
         },
-        openProse(el, event) {
-            if (!this.editing || !el || !el.requests) return;
-            if (event && event.target && event.target.closest('button, a, input, select, textarea, label')) return;
-            this.showProse(el);
-        },
-        showProse(el) {
-            if (!el) return;
-            this.selectedElementId = el.id;
-            this.$nextTick(() => {
-                const field = document.getElementById('prayer-message');
-                if (field) field.focus();
-            });
-        },
-
         renameElement(id, event) {
             const el = Core.elementById(this.catalog, id);
             if (!el || event.target.value === el.name) return;
@@ -432,5 +441,9 @@ function liturgyOrdersPage() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { liturgyOrdersPage, describeLiturgyLoadFailure };
+    module.exports = {
+        liturgyOrdersPage,
+        describeLiturgyLoadFailure,
+        KIND_ICONS,
+    };
 }

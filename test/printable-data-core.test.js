@@ -400,7 +400,7 @@ test('order of service rows walk the Sunday\'s order, skip empty elements and re
     // The people prayed for are the Sunday's own fields (prayerMale /
     // prayerFemale on the single Sunday), not elements of its order.
     const r = Data.resolve('sunday_rows', {}, SUNDAYS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn 1', 'Sermon']);
+    assert.deepEqual(r.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
     assert.deepEqual(r.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
     assert.equal(r.rows[0].number, 1);
     assert.equal(Data.needsFor('sunday_rows', {}, TODAY).liturgy, true, 'the store brings the orders');
@@ -432,7 +432,7 @@ const WITH_ORDERS = () => {
 test('order of service rows follow the order the Sunday names, with who carries an element', () => {
     const r = Data.resolve('sunday_rows', {}, WITH_ORDERS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon']);
-    assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn 1', 'Lord\'s Supper', 'Baptism', 'Sermon']);
+    assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn of Praise', 'Lord\'s Supper', 'Baptism', 'Sermon']);
     assert.equal(r.rows[3].value, 'Ada Example, Ben Example', 'a people element lists its people');
     assert.equal(r.rows[2].carriedBy, 'Cal Example');
     assert.equal(r.rows[0].carriedBy, '', 'an element nobody carries says nothing');
@@ -455,7 +455,7 @@ test('a Sunday\'s fields are one per element, the existing keys and a new elemen
 
 test('the hymn sheets are the song elements of the Sunday\'s order', () => {
     const r = Data.resolve('sunday_hymns', {}, WITH_ORDERS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x.slot), ['Offertory', 'Hymn 1']);
+    assert.deepEqual(r.rows.map(x => x.slot), ['Offertory', 'Hymn of Praise']);
     assert.deepEqual(r.rows.map(x => x.name), ['Doxology', 'A Literal Hymn']);
     assert.equal(Data.needsFor('sunday_hymns', {}, TODAY).liturgy, true);
 });
@@ -487,8 +487,8 @@ test('the hymns of a Sunday can be kept to one hymn, so its pages can sit on a p
     assert.deepEqual(prep.warnings, [], 'another hymn\'s missing music is not this list\'s warning');
     const dropped = Data.resolve('sunday_hymns', { slot: 'hymnEnd2' }, SUNDAYS(), { today: TODAY });
     assert.equal(dropped.rows.length, 0, 'a hymn the Sunday has dropped has no pages');
-    assert.match(dropped.warnings[0], /final hymn/i);
-    assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · Closing Hymn',
+    assert.match(dropped.warnings[0], /closing hymn/i);
+    assert.equal(Data.describeParams('sunday_hymns', { slot: 'hymnEnd1' }), 'this Sunday · Hymn of Response',
         'an element is named as the congregation named it');
 });
 

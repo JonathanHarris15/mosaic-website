@@ -57,6 +57,6 @@ node scripts/patch-liturgy-order.js --project mosaic-hymn-database --i-mean-prod
 
 The apply re-plans inside a transaction and writes `standard-before-<stamp>.json` and `standard-after-<stamp>.json` next to the patch. It also prints the revert command (`--revert <before file> --commit`), which puts every element's name and `hasNote` back.
 
-Only half of this can be done by hand. On the Liturgy Orders page an editor can switch on the note for Call to Worship and Call to Confession. The page cannot rename a hymn: ADR 0080 says a hymn takes no name on the order, so a hymn row shows its name and has no name box (`kindTakesName('hymn')` is false and `updateElement` ignores a hymn's name). The hymn names need this script.
+On the Liturgy Orders page an editor can switch on the note for Call to Worship and Call to Confession and rename any element, hymns included (MS-716; ADR 0080 amendment). The seven Standard hymn display names can be set in the UI or with this script for a one-shot prod patch.
 
-Once set, the names hold. The reader keeps a stored hymn name (`cleanName(src.name) || 'Hymn'`), and a later save from the Liturgy Orders page writes the element back with it. Hymns still line up by position when a Sunday moves between orders, so the names do not change how a Sunday is translated. The page shows the new names but cannot edit them. That gap against ADR 0080 is an open decision for Jonathan.
+Once set, the names hold. `elementDisplayName` reads a stored hymn name and falls back to "Hymn" when blank; ids never change on rename. A later save from the Liturgy Orders page writes the element back with its name. Hymns still line up by position when a Sunday moves between orders, so the names do not change how a Sunday is translated.

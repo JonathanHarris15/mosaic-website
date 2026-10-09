@@ -39,9 +39,9 @@ test('the calendar\'s table mode toggles orders and links the management page', 
 test('a failed read keeps the orders on screen and does not treat Standard as a draft', () => {
     const html = read('liturgy-orders.html');
     const js = read('liturgy-orders.js');
-    assert.match(html, /class="lo-stack" x-show="!loading"/);
-    assert.doesNotMatch(html, /lo-stack" x-show="!loading && !problem"/);
-    assert.match(html, /m-header__actions" x-show="editing"/);
+    assert.match(html, /class="lo-workspace" x-show="!loading"/);
+    assert.match(html, /class="m-header__actions lo-header__actions"/);
+    assert.match(html, /id="liturgy-orders-save"[^>]*x-show="editing"/);
     assert.match(js, /permissions problem, not a connection problem/);
     assert.match(js, /this\.baseline = JSON\.stringify\(catalog\)/);
 });
@@ -86,42 +86,34 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.equal(html.indexOf("'Who prays '", who + 1), -1);
 });
 
-test('the Liturgy Orders page drags the collection into the selected order', () => {
+test('the Liturgy Orders page uses tabs, a palette, a list, and an inspector', () => {
     const html = read('liturgy-orders.html');
     const js = read('liturgy-orders.js');
-    const grid = html.indexOf('class="lo-grid"');
-    const library = html.indexOf('id="element-library"');
+    const workspace = html.indexOf('class="lo-workspace"');
+    const palette = html.indexOf('class="lo-palette"');
     const order = html.indexOf('id="order-elements"');
-    assert.ok(grid !== -1 && library > grid && library < order, 'the kinds are the left panel of the order');
-    assert.match(html, /id="order-picker"/);
-    assert.match(html, /selectOrder\(\$event\.target\.value\)/);
-    assert.match(html, /aria-label="New order"/);
+    const inspector = html.indexOf('class="lo-inspector"');
+    assert.ok(workspace !== -1 && palette > workspace && order > palette && inspector > order);
+    assert.match(html, /class="lo-tabs"/);
+    assert.match(html, /selectOrder\(o\.id\)/);
     assert.match(html, /addOrder\(\)/);
     assert.match(html, /placeKind\(kind\)/);
     assert.match(html, /Send prayer requests/);
-    assert.match(html, /Add another person/);
+    assert.match(html, /Add a person/);
     assert.match(html, /Days before the Sunday/);
     assert.match(html, /id="prayer-message"/);
     assert.match(html, /id="prayer-response"/);
-    assert.match(html, /Write the message/);
     assert.doesNotMatch(html, /Days in advance/);
     assert.doesNotMatch(html, /How many/);
-    assert.match(html, /Can be prayed by someone other than the service leader/);
-    assert.doesNotMatch(html, /Prayed by someone other than the service leader/);
-    assert.match(html, /A name here, and a reference on the Sunday/);
-    assert.match(html, /class="m-page m-page--tool"/);
-    assert.match(html, /class="m-section lo-kinds"/);
-    assert.match(html, /class="m-section lo-order"/);
-    assert.match(html, /#order-elements \{[^}]*overflow-y: auto/);
+    assert.match(html, /Someone other than the service leader may pray it/);
+    assert.match(js, /cannot be deleted/);
+    assert.match(html, /class="m-page m-page--tool lo-page"/);
+    assert.match(html, /\.lo-list \{[^}]*overflow-y: auto/);
     assert.match(js, /function indexInList/);
-    const onAdd = js.slice(js.indexOf('onAdd:'), js.indexOf('onEnd:'));
-    assert.match(onAdd, /indexInList\(evt\.to, evt\.item\)/);
-    assert.doesNotMatch(onAdd, /newDraggableIndex/);
-    const librarySortable = js.slice(js.indexOf("getElementById('element-library')"), js.indexOf("getElementById('order-elements')"));
-    assert.match(librarySortable, /pull: 'clone'/);
-    assert.match(librarySortable, /preventOnFilter: false/);
-    assert.doesNotMatch(librarySortable, /handle:/, 'the kind row itself drags');
-    assert.match(js, /placeKind\(kind, to\)/);
+    assert.match(js, /elementMeta\(el\)/);
+    assert.match(js, /placeHint/);
+    assert.match(js, /lo-row__handle/);
+    assert.match(js, /AccessCore\.pageFlags/);
 });
 
 test('the management page loads the order core before its own script', () => {
