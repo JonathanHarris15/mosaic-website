@@ -63,8 +63,20 @@
         else main.insertBefore(line, main.firstChild);
     }
 
+    // MS-723: auth.js declares `const db` at the top of a classic script, which
+    // is a global binding but NOT a property of window — window.db was always
+    // undefined, so loadMine threw, the catch below swallowed it, and the line
+    // never showed. Ask for the binding first; window.db stays as a fallback.
+    function firestoreDb() {
+        // eslint-disable-next-line no-undef
+        if (typeof db !== 'undefined' && db) return db;
+        return window.db || null;
+    }
+
     async function count(personId, today) {
-        const mine = await window.TradesStore.loadMine(window.db, {
+        const handle = firestoreDb();
+        if (!handle) return { waiting: 0, ended: 0 };
+        const mine = await window.TradesStore.loadMine(handle, {
             personId: personId, today: today,
         });
         const rows = window.TradesView.rowsFor(mine.all, {

@@ -91,29 +91,6 @@ function calendarPage() {
         activePersonCellCleanup: null,
         saving: false,
 
-        async saveVerseSelection(dateKey, field, val) {
-            this.saving = true;
-            try {
-                const updates = {
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    [`liturgy.${field}`]: val
-                };
-                await db.collection('services').doc(dateKey).set(updates, { merge: true });
-                
-                if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
-                if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
-                serviceDataMap[dateKey].liturgy[field] = val;
-                
-                // Success - re-inject to update UI
-                injectServiceData(serviceDataMap);
-            } catch (err) {
-                console.error('Error saving verse selection:', err);
-                alert('Failed to save.');
-            } finally {
-                this.saving = false;
-            }
-        },
-
         // --- Pastoral Prayer Suggestions ---
         prayerSuggestions: { males: [], females: [] },
 
