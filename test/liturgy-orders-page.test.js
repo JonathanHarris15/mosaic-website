@@ -1,7 +1,4 @@
-// A failed catalog read on the Liturgy Orders page. The preview (and any
-// site whose rules do not yet allow liturgy_elements / liturgy_orders) gets
-// permission-denied. That is not a dropped connection, and it must not look
-// like an unsaved draft of Standard.
+// Liturgy Orders page — catalog load failures and MS-716 editor interactions.
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -13,6 +10,7 @@ function pageWith(load) {
     global.window.LiturgyOrderCore = Core;
     global.db = global.db || {};
     global.LiturgyOrderStore = { load: load, save: async () => { throw new Error('save should not run'); } };
+    delete require.cache[require.resolve('../public/liturgy-orders.js')];
     const { liturgyOrdersPage } = require('../public/liturgy-orders.js');
     const page = liturgyOrdersPage();
     page.$nextTick = (fn) => { if (typeof fn === 'function') fn(); };
@@ -24,6 +22,19 @@ function denied() {
     const error = new Error('Missing or insufficient permissions.');
     error.code = 'permission-denied';
     return error;
+}
+
+async function loadedPage() {
+    const catalog = Core.standardCatalog();
+    const page = pageWith(async () => ({
+        catalog,
+        stored: {
+            elementIds: catalog.elements.map(el => el.id),
+            orderIds: catalog.orders.map(o => o.id),
+        },
+    }));
+    await page.load();
+    return page;
 }
 
 test('a permission-denied read shows Standard and does not call it a connection problem', async () => {
@@ -50,28 +61,99 @@ test('a failed read does not save the stand-in over the congregation\'s orders',
     assert.equal(saved, false);
 });
 
-test('placing a kind inserts one instance of that kind', async () => {
-    const catalog = Core.standardCatalog();
-    const page = pageWith(async () => ({
-        catalog: catalog,
-        stored: {
-            elementIds: catalog.elements.map(el => el.id),
-            orderIds: catalog.orders.map(o => o.id),
-        },
-    }));
-    await page.load();
-    const before = page.selectedOrder.elementIds.length;
-    page.placeKind('other', 0);
-    const id = page.selectedOrder.elementIds[0];
-    const el = Core.elementById(page.catalog, id);
-    assert.equal(el.kind, 'other');
-    assert.equal(el.name, 'Other');
-    assert.equal(page.catalog.elements.filter(item => item.id === id).length, 1);
+test('insert-after places a new kind after the selected element', async () => {
+    const page = await loadedPage();
+    const ids = page.selectedOrder.elementIds.slice();
+    const anchor = ids[2];
+    page.selectElement(anchor);
+    const before = ids.length;
+    page.placeKind('other');
     assert.equal(page.selectedOrder.elementIds.length, before + 1);
+    assert.equal(page.selectedOrder.elementIds[3], page.selectedElementId);
+    const el = Core.elementById(page.catalog, page.selectedElementId);
+    assert.equal(el.kind, 'other');
+});
+
+test('drag reorder moves an element in the order', async () => {
+    const page = await loadedPage();
+    const from = 1;
+    const to = 4;
+    const id = page.selectedOrder.elementIds[from];
+    page._apply(cat => Core.moveInOrder(cat, page.selectedOrder.id, from, to));
+    assert.equal(page.selectedOrder.elementIds[to], id);
+});
+
+test('up and down in the inspector reorder the list', async () => {
+    const page = await loadedPage();
+    const id = page.selectedOrder.elementIds[3];
+    page.selectElement(id);
+    page.move(3, 1, { currentTarget: { dataset: { move: 'down' } } });
+    assert.equal(page.selectedOrder.elementIds[4], id);
+    page.move(4, -1, { currentTarget: { dataset: { move: 'up' } } });
+    assert.equal(page.selectedOrder.elementIds[3], id);
+});
+
+test('remove takes an element out of the order', async () => {
+    const page = await loadedPage();
+    const id = page.selectedOrder.elementIds[5];
+    page.selectElement(id);
+    page.removeFromOrder(id);
+    assert.equal(page.selectedOrder.elementIds.indexOf(id), -1);
+    assert.equal(page.selectedElementId, '');
+});
+
+test('rename updates the element name in the catalog', async () => {
+    const page = await loadedPage();
+    const id = page.selectedOrder.elementIds[1];
+    page.selectElement(id);
+    page.renameElement(id, { target: { value: 'Opening Hymn' } });
+    assert.equal(Core.elementById(page.catalog, id).name, 'Opening Hymn');
+});
+
+test('note toggle persists on the element', async () => {
+    const page = await loadedPage();
+    const id = page.selectedOrder.elementIds[0];
+    page.updateElement(id, { hasNote: false });
+    assert.equal(Core.elementById(page.catalog, id).hasNote, false);
+    page.updateElement(id, { hasNote: true });
+    assert.equal(Core.elementById(page.catalog, id).hasNote, true);
+});
+
+test('prayer settings, days chips, and message or response survive reload', async () => {
+    const page = await loadedPage();
     page.placeKind('prayer');
-    const prayer = Core.elementById(page.catalog, page.selectedOrder.elementIds[page.selectedOrder.elementIds.length - 1]);
-    assert.equal(prayer.kind, 'prayer');
-    assert.equal(prayer.requests, null);
+    const prayerId = page.selectedElementId;
+    page.selectElement(prayerId);
+    page.updateElement(prayerId, {
+        prayedByOther: true,
+        requests: { people: [{ who: 'male' }, { who: 'female' }] },
+        noticeDays: [5, 3, 1],
+        message: 'Hello {name}',
+        response: 'Thanks {name}',
+    });
+    const snapshot = JSON.stringify(page.catalog);
+    const page2 = pageWith(async () => ({
+        catalog: JSON.parse(snapshot),
+        stored: { elementIds: [], orderIds: ['standard'] },
+    }));
+    await page2.load();
+    const el = Core.elementById(page2.catalog, prayerId);
+    assert.equal(el.message, 'Hello {name}');
+    assert.equal(el.response, 'Thanks {name}');
+    assert.deepEqual(el.noticeDays, [5, 3, 1]);
+    assert.equal(el.requests.people.length, 2);
+    assert.match(page2.elementMeta(el), /Another may pray it/);
+    assert.match(page2.elementMeta(el), /days 5, 3, 1/);
+});
+
+test('toggleRequests seeds default notice days', async () => {
+    const page = await loadedPage();
+    page.placeKind('prayer');
+    const prayer = Core.elementById(page.catalog, page.selectedElementId);
+    page.toggleRequests(prayer, true);
+    const el = Core.elementById(page.catalog, prayer.id);
+    assert.ok(el.requests);
+    assert.deepEqual(el.noticeDays, Core.DEFAULT_NOTICE_LIST);
 });
 
 test('a successful read clears the problem and can be saved', async () => {
@@ -90,4 +172,9 @@ test('a successful read clears the problem and can be saved', async () => {
     assert.equal(page.dirty, true);
     await page.save();
     assert.equal(saved, true);
+});
+
+test('order subtitle names Standard as the default', async () => {
+    const page = await loadedPage();
+    assert.match(page.orderSubtitle(), /cannot be deleted/);
 });
