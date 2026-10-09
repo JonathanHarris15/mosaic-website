@@ -209,11 +209,15 @@
                                     </label>
 
                                     <template x-if="inspectorElement.requests">
+                                        <div class="lo-requests">
                                         <div class="lo-person">
                                             <template x-for="(person, pindex) in inspectorElement.requests.people" :key="inspectorElement.id + '-' + pindex">
                                                 <div class="lo-person__line">
-                                                    <span class="lo-person__n" x-text="'Person ' + (pindex + 1)"></span>
-                                                    <div class="m-seg m-seg--fill" role="group" :aria-label="'Who person ' + (pindex + 1) + ' is for ' + inspectorElement.name">
+                                                    <span class="lo-person__n" :aria-label="'Person ' + (pindex + 1)">
+                                                        <span class="lo-person__n-word">Person</span>
+                                                        <span class="lo-person__n-num" x-text="pindex + 1"></span>
+                                                    </span>
+                                                    <div class="m-seg m-seg--fill lo-person__seg" role="group" :aria-label="'Who person ' + (pindex + 1) + ' is for ' + inspectorElement.name">
                                                         <template x-for="opt in whoOptions" :key="opt.value">
                                                             <button type="button" class="m-seg__opt" :disabled="!editing"
                                                                     @click="setPersonWho(inspectorElement, pindex, opt.value)"
@@ -281,6 +285,7 @@
                                                       @change="updateElement(inspectorElement.id, { response: $event.target.value })"></textarea>
                                             <span class="lo-hint">Sent back when they reply.</span>
                                         </label>
+                                        </div>
                                     </template>
                                 </div>
                             </template>
@@ -315,7 +320,9 @@
 
     <style>
         .lo-page.m-page--tool {
-            --lo-header-h: 56px; width: 100%; max-width: none; margin: 0;
+            --lo-header-h: 56px; --lo-tabs-h: 46px;
+            display: flex; flex-direction: column; width: 100%; max-width: none; margin: 0;
+            height: 100dvh; max-height: 100dvh; overflow: hidden;
         }
         .lo-page.m-page--tool > .m-header,
         .lo-page.m-page--tool > .lo-tabs,
@@ -351,9 +358,9 @@
             text-transform: uppercase; color: var(--secondary);
         }
         .lo-tab--new .material-symbols-outlined { font-size: 18px; }
-        .lo-body { position: relative; flex: 1 1 auto; min-height: 0; }
+        .lo-body { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
         .lo-workspace {
-            flex: 1 1 auto; min-height: 0; display: grid;
+            flex: 1 1 0; min-height: 0; display: grid;
             grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
             gap: 0; overflow: hidden;
         }
@@ -402,14 +409,17 @@
         .lo-row__note { font-size: 17px; color: var(--secondary); flex: 0 0 auto; opacity: 1; }
         .lo-row:not(.lo-row--on) .lo-row__note { opacity: .85; }
         .lo-inspector {
-            min-height: 0; display: flex; flex-direction: column;
+            min-height: 0; display: flex; flex-direction: column; overflow: hidden;
             border-top: 1px solid var(--outline-variant); background: var(--surface-container-lowest);
         }
-        .lo-inspector__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 22px var(--space-lg); }
+        .lo-inspector__scroll {
+            flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+            padding: 22px var(--space-lg);
+        }
         .lo-inspector__empty { padding-top: 48px; }
         .lo-inspector__panel { display: flex; flex-direction: column; gap: 18px; max-width: 100%; }
         .lo-inspector__panel .m-token { font-variant-numeric: tabular-nums; }
-        .lo-inspector__head { display: flex; align-items: center; gap: 12px; }
+        .lo-inspector__head { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .lo-inspector__glyph {
             flex: 0 0 38px; height: 38px; border-radius: var(--radius);
             background: var(--secondary-container); color: var(--on-secondary-container);
@@ -417,23 +427,31 @@
         }
         .lo-inspector__glyph .material-symbols-outlined { font-size: 20px; }
         .lo-inspector__lead { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-        .lo-inspector__title { font-family: var(--font-serif); font-size: 22px; color: var(--on-surface); }
+        .lo-inspector__title {
+            flex: 1 1 auto; min-width: 0;
+            font-family: var(--font-serif); font-size: 22px; color: var(--on-surface);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         .lo-inspector__acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
         .lo-hint { display: block; margin-top: var(--space-xs); font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); white-space: normal; }
         .lo-textarea { height: auto; padding-top: 10px; resize: vertical; }
         .lo-prayer { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--outline-variant); }
+        .lo-requests { display: flex; flex-direction: column; gap: 12px; }
         .lo-person { display: flex; flex-direction: column; gap: 8px; }
         .lo-person__line {
             display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0;
         }
         .lo-person__n {
-            flex: 0 0 72px; white-space: nowrap; font-size: 11px; font-weight: 600; letter-spacing: .12em;
+            flex: 0 0 40px; display: flex; flex-direction: column; justify-content: center;
+            font-size: 10px; font-weight: 600; line-height: 1.2; letter-spacing: .12em;
             text-transform: uppercase; color: var(--on-surface-variant);
         }
-        .lo-person__line > .m-seg { flex: 1 1 0; min-width: 0; }
+        .lo-person__seg { flex: 1 1 0; min-width: 0; }
         .lo-person__line > .m-icon-btn { flex: 0 0 auto; }
-        .lo-inspector .m-seg__opt {
-            padding-left: 6px; padding-right: 6px; font-size: 10.5px; letter-spacing: .08em;
+        .lo-inspector .lo-person__seg.m-seg--fill .m-seg__opt {
+            flex: 1 1 0; min-width: 0; padding: 0 5px;
+            font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+            overflow: visible; text-overflow: clip; white-space: nowrap;
         }
         .lo-person__add {
             align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-xs);
@@ -458,11 +476,10 @@
         .sortable-ghost { opacity: .4; }
         @media (min-width: 1024px) {
             .lo-workspace {
-                grid-template-columns: 160px minmax(0, 1fr) 300px;
+                grid-template-columns: 160px minmax(0, 1fr) 320px;
                 grid-template-rows: minmax(0, 1fr);
-                height: 100%;
             }
-            .lo-palette, .lo-canvas, .lo-inspector { min-height: 0; }
+            .lo-palette, .lo-canvas, .lo-inspector { min-height: 0; height: 100%; }
             .lo-workspace > .m-notice { grid-column: 1 / -1; }
             .lo-palette {
                 display: flex; flex-direction: column; gap: 10px; padding: 20px 10px 20px 0;
@@ -471,9 +488,8 @@
             }
             .lo-inspector {
                 border-top: 0; border-left: 1px solid var(--outline-variant);
-                min-height: 0; max-height: 100%; overflow: hidden;
             }
-            .lo-inspector__scroll { padding: 22px 16px 22px 18px; overflow-y: auto; }
+            .lo-inspector__scroll { padding: 22px 16px 22px 18px; }
             .lo-canvas { padding: 20px 16px 0 12px; }
             .lo-list { margin-bottom: 16px; }
         }
