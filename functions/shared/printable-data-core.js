@@ -320,8 +320,25 @@
 
     function sundayFieldsFor(catalog) {
         return SUNDAY_IDENTITY_FIELDS.concat(catalogOrSeed(catalog).elements.map(el => ({
-            key: el.id, label: el.name, kind: 'text', element: el.kind || el.primitive,
+            key: el.id,
+            label: Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : el.name,
+            kind: 'text',
+            element: el.kind || el.primitive,
         })));
+    }
+
+    // A Sunday field that holds a scripture citation — the seed list, or any
+    // scripture placement on the congregation's orders (ADR 0080).
+    function isScriptureField(field, liturgy) {
+        if (!field) return false;
+        if (field === 'keyVerse') return true;
+        const root = typeof globalThis !== 'undefined' ? globalThis : global;
+        const Passage = root && root.ScripturePassage;
+        if (Passage && Array.isArray(Passage.FIELDS) && Passage.FIELDS.indexOf(field) !== -1) {
+            return true;
+        }
+        const el = Liturgy.elementById(catalogOrSeed(liturgy), field);
+        return !!(el && (el.kind === 'scripture' || el.primitive === 'scripture'));
     }
 
     const SUNDAY_FIELDS = sundayFieldsFor(null);
@@ -1556,6 +1573,7 @@
         SOURCES,
         HYMN_SLOTS,
         sundayFieldsFor,
+        isScriptureField,
         hymnSlotOptions,
         levelRank,
         mayRead,

@@ -62,7 +62,9 @@
             (nodes || []).forEach(node => {
                 Object.keys(node.bind || {}).forEach(prop => {
                     const b = node.bind[prop];
-                    if (!b || b.reading !== 'passage' || !Passage.isScriptureField(b.field)) return;
+                    // reading=passage is enough: a custom scripture placement
+                    // is not always on the seed Passage.FIELDS list (ADR 0080).
+                    if (!b || b.reading !== 'passage') return;
                     const source = b.scope === 'item' ? (parentRepeat && parentRepeat.source) : b.source;
                     const params = b.scope === 'item' ? (parentRepeat && parentRepeat.params) : (b.params || {});
                     if (!source) return;

@@ -141,6 +141,28 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });
 
+test('a chip off the drawer body is not a wire landing, and scroll never pins it back', () => {
+    const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
+    const drawer = { left: 0, top: 100, right: 280, bottom: 500 };
+    const land = { key: 'global|sunday|theme', rect: { left: 8, top: -40, right: 120, bottom: -10, width: 112, height: 30 } };
+    const catalog = { key: 'global|sunday|theme', rect: { left: 8, top: 200, right: 120, bottom: 230, width: 112, height: 30 } };
+    assert.equal(
+        Wires.firstLaidOutChip([land, catalog], 'global|sunday|theme', drawer),
+        catalog,
+        'the land chip above the drawer is skipped for the one still in view'
+    );
+    assert.equal(
+        Wires.firstLaidOutChip([land], 'global|sunday|theme', drawer),
+        null,
+        'nothing on screen means the wire breaks'
+    );
+    assert.match(js, /_wirePinnedFor/, 'pinning a chip is remembered per selection');
+    assert.match(js, /addEventListener\('scroll',\s*\(\)\s*=>\s*this\.refreshWires\(\)/,
+        'scroll redraws the wire without asking to pin');
+    assert.doesNotMatch(js, /scrollChipIntoDrawer\(chip\);\s*\n\s*const a = this\.pointOf/,
+        'every redraw must not scroll the chip back into the drawer');
+});
+
 test('This Sunday and Repeat a box are in the drawer, and scripture is folded', () => {
     const Data = require('../public/printable-data-core.js');
     const Typed = require('../public/sunday-typed-core.js');
@@ -157,6 +179,8 @@ test('This Sunday and Repeat a box are in the drawer, and scripture is folded', 
     assert.ok(drawer.typed.some(f => f.key === 'prayerNation'));
     assert.ok(drawer.typed.some(f => f.key === 'kidsLessonTitle'));
     assert.ok(!drawer.typed.some(f => f.key === 'announcements'));
+    assert.ok(drawer.scripture.some(f => f.key === 'keyVerse'), 'key verse is a scripture chip');
+    assert.ok(drawer.scripture.some(f => f.key === 'sermon'), 'Standard\'s sermon is a scripture chip');
     assert.deepEqual(Wires.SUNDAY_QUICK_LISTS.map(x => x.key), [
         'sunday_announcements', 'sunday_hymns', 'sunday_rows', 'sunday_kids_questions', 'sundays',
     ]);
@@ -175,4 +199,43 @@ test('This Sunday and Repeat a box are in the drawer, and scripture is folded', 
     assert.match(html, /Date, page, and files/);
     assert.match(js, /get showRepeatOffer\(/);
     assert.match(js, /get showCatalog\(\)[\s\S]*return false/);
+    assert.match(js, /sundayDrawerFields\(Data,[\s\S]*\{[\s\S]*liturgy/,
+        'This Sunday reads the loaded liturgy, not only the seed fields');
+});
+
+test('This Sunday chips follow the order the Sunday uses, not the seed names', () => {
+    const Data = require('../public/printable-data-core.js');
+    const Typed = require('../public/sunday-typed-core.js');
+    const Liturgy = require('../public/liturgy-order-core.js');
+    require('../public/scripture-passage.js');
+    const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
+    const liturgy = Liturgy.catalogFrom({
+        orders: [{
+            id: 'standard',
+            name: 'Standard',
+            elements: [
+                { id: 'preparatoryHymn', name: 'Preparatory Hymn', kind: 'hymn', hasNote: true },
+                { id: 'callToWorship', name: 'Call to Worship', kind: 'scripture', hasNote: true },
+                { id: 'hymn1', name: 'Hymn 1', kind: 'hymn', hasNote: true },
+                { id: 'hymn2', name: 'Hymn 2', kind: 'hymn', hasNote: true },
+                { id: 'prayerOfPraise', name: 'Prayer of Praise', kind: 'prayer', hasNote: true },
+                { id: 'sermon', name: 'Sermon', kind: 'scripture', hasNote: true },
+                { id: 'pastoralPrayer', name: 'Pastoral Prayer', kind: 'prayer', hasNote: true,
+                    requests: { people: [{ who: 'either' }, { who: 'either' }], noticeDays: [5, 3, 1] } },
+                { id: 'hymnEnd1', name: 'Hymn 5', kind: 'hymn', hasNote: true },
+            ],
+        }],
+    });
+    const drawer = Wires.sundayDrawerFields(Data, global.ScripturePassage, Typed.FIELDS, { liturgy: liturgy });
+    assert.equal(drawer.hymns.find(f => f.key === 'hymn1').label, 'Hymn 1');
+    assert.equal(drawer.hymns.find(f => f.key === 'hymnEnd1').label, 'Hymn 5');
+    assert.ok(drawer.service.some(f => f.key === 'prayerOfPraise' && f.label === 'Prayer of Praise'));
+    assert.ok(drawer.service.some(f => f.key === 'pastoralPrayer'));
+    assert.ok(!drawer.service.some(f => f.key === 'baptism'), 'Baptism is not on this order');
+    assert.ok(!drawer.hymns.some(f => f.label === 'Hymn of Praise'), 'seed hymn names stay off');
+    assert.ok(!drawer.scripture.some(f => f.key === 'benediction'), 'scripture off the order stays off');
+    assert.equal(drawer.scripture.find(f => f.key === 'callToWorship').label, 'Call to Worship');
+    assert.ok(Data.isScriptureField('sermon', liturgy));
+    assert.ok(Data.isScriptureField('callToWorship', liturgy));
+    assert.ok(!Data.isScriptureField('prayerOfPraise', liturgy));
 });
