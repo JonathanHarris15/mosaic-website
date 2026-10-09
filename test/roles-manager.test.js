@@ -505,7 +505,7 @@ test('a description survives a save and comes back when the Role is reopened', (
     // in any behaviour a mounted page performs — it was a missing line.
     const source = require('node:fs').readFileSync(
         require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
-    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/);
+    const written = source.match(/definitionFromDraft\(\) \{[\s\S]*?return \{([\s\S]*?)\n {8}\};/);
     assert.ok(written, 'saveDraft no longer builds the document it writes');
     assert.match(written[1], /description:/, 'a saved Role would lose its description');
 });
@@ -517,7 +517,7 @@ test('EVERY field a new Role has is written when one is saved', () => {
     // Role has; this walks it so the next field added cannot go missing quietly.
     const source = require('node:fs').readFileSync(
         require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
-    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/)[1];
+    const written = source.match(/definitionFromDraft\(\) \{[\s\S]*?return \{([\s\S]*?)\n {8}\};/)[1];
 
     Object.keys(Roles.newDefinition('Anything')).forEach(field => {
         assert.match(written, new RegExp('\\b' + field + ':'),
@@ -1741,4 +1741,104 @@ test('a write that fails changes nothing on screen', async () => {
 
     assert.deepStrictEqual(page.nonServers, []);
     assert.equal(page.savingNonServer, '', 'and the control is usable again');
+});
+
+// ── A Role saves itself (MS-721, ADR 0081) ───────────────────────────────────
+
+async function mountLive(seed, opts) {
+    let onNext = null;
+    global.LiveFields = require('../public/live-fields-core.js');
+    global.MosaicLiveRead = { watch: (ref, fn) => { onNext = fn; return () => { onNext = null; }; } };
+    try {
+        const page = await mountPage(seed, opts);
+        page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+        return { page, remote: (data, pending) => onNext && onNext({ exists: true, data: () => data, metadata: { hasPendingWrites: !!pending } }) };
+    } finally {
+        delete global.LiveFields;
+        delete global.MosaicLiveRead;
+    }
+}
+
+test('MS-721: the Role editor has no Save or Cancel — a chip and a Retry instead', () => {
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'public', 'roles-manager.html'), 'utf8');
+    assert.ok(!/>Save Role</.test(html) && !/@click="cancelEdit\(\)"/.test(html));
+    assert.ok(html.includes('data-live-chip') && html.includes('data-live-retry'));
+    assert.ok(html.includes("revertRole('name')") && html.includes("revertRole('description')"));
+    assert.ok(html.includes('src="live-fields-core.js"') && html.includes('src="live-read.js"'));
+});
+
+test('MS-721: a renamed Role writes only its name (update), keeps the slug, and the list follows', async () => {
+    const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
+    assert.ok(page.liveRole);
+    page.draft.name = 'Kids Team';
+    page.syncLiveRole();
+    assert.equal(page.roleChip, 'unsaved');
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.name, 'Kids Team');
+    assert.equal(stored('roles').r1.slug, 'kids_ministry');
+    assert.equal(stored('roles').r1.slots.length, 3, 'untouched fields stay');
+    assert.equal(page.roleChip, 'saved');
+    assert.ok(page.draft, 'the Role stays open after saving');
+    assert.equal(page.roleDefinitions.find(d => d.id === 'r1').name, 'Kids Team');
+});
+
+test('MS-721: a slot change saves the slots alone', async () => {
+    const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
+    page.addSlot();
+    page.syncLiveRole();
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.slots.length, 4);
+    assert.equal(stored('roles').r1.name, 'Kids Ministry');
+});
+
+test('MS-721: an invalid Role does not save and lists its problems', async () => {
+    const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
+    page.draft.name = '';
+    page.syncLiveRole();
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.name, 'Kids Ministry');
+    assert.equal(page.saveAttempted, true);
+    assert.ok(page.draftErrors.some(e => /name/i.test(e)));
+});
+
+test('MS-721: a refused save says Not saved, keeps the change, and Retry sends it', async () => {
+    const { page } = await mountLive({ roles: { r1: kidsDefinition() } });
+    global.db._failWritesFromNowOn();
+    page.draft.name = 'Kids Team';
+    page.syncLiveRole();
+    await page.saveDraft();
+    assert.equal(page.roleChip, 'failed');
+    assert.equal(page.draft.name, 'Kids Team');
+    assert.equal(page.toast.type, 'error');
+});
+
+test('MS-721: leaving a Role sends what was waiting', async () => {
+    const { page } = await mountLive({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
+    page.draft.description = 'Arrive by nine.';
+    page.syncLiveRole();
+    page.cancelEdit();
+    await new Promise(r => setImmediate(r));
+    assert.equal(stored('roles').r1.description, 'Arrive by nine.');
+});
+
+test('MS-721: another editor\'s change lands in fields this editor is not changing', async () => {
+    const { page, remote } = await mountLive({ roles: { r1: kidsDefinition() } });
+    page.draft.name = 'Mine';
+    page.syncLiveRole();
+    remote(Object.assign(kidsDefinition(), { name: 'Theirs', description: 'From elsewhere' }));
+    assert.equal(page.draft.name, 'Mine');
+    assert.equal(page.draft.description, 'From elsewhere');
+});
+
+test('MS-721: only roles.manager.edit gets a live editor (the rule on roles)', async () => {
+    const Levels = require('../public/account-levels-core.js');
+    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
+    const page = window.RolesManager();
+    assert.equal(page.mayManageRoles({ permissionLevel: 'member', accountLevelId: 'level_custom_x', permissions: Object.assign({}, member, { 'roles.manager.edit': true }) }), true);
+    assert.equal(page.mayManageRoles({ permissionLevel: 'member', accountLevelId: 'level_custom_x', permissions: Object.assign({}, member, { 'printables.edit': true }) }), false);
+    const { page: viewerPage } = await mountLive({ roles: { r1: kidsDefinition() } }, { rank: 'viewer' });
+    assert.equal(viewerPage.liveRole, null);
+    viewerPage.draft.name = 'Nope';
+    await viewerPage.saveDraft();
+    assert.equal(stored('roles').r1.name, 'Kids Ministry');
 });
