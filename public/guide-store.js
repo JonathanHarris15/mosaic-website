@@ -397,6 +397,21 @@
         return id;
     }
 
+    // Field-level write for a manager that saves itself (ADR 0081, MS-721):
+    // only the changed fields go, by update(). A Page Template's Entry Fields
+    // are re-derived whenever its HTML is in the patch, as savePageTemplate does.
+    async function patchGuideDoc(db, kind, id, patch, catalog) {
+        const collection = COLLECTIONS[kind];
+        if (!collection || !id) throw new Error('patchGuideDoc: unknown ' + kind + '/' + id);
+        const write = Object.assign({}, patch);
+        if (kind === 'pageTemplates' && 'html' in write) {
+            const cat = catalog || (globalThis.GuideComponents && globalThis.GuideComponents.defaultCatalog);
+            write.entryFields = Engine.deriveEntryFields(write.html || '', cat).fields;
+        }
+        await db.collection(collection).doc(id).update(stamped(write));
+        return write;
+    }
+
     // Exactly one Service Guide Template is the church default (ADR-0008 §3.4).
     async function setDefaultGuideTemplate(db, id, allGuideTemplates) {
         const batch = db.batch();
@@ -483,7 +498,7 @@
         guideHref, mergeValues,
         // adapter
         resolveServiceContext, loadCatalog, seedAll, seedIfEmpty, saveStylePreset,
-        savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,
+        savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate, patchGuideDoc,
         deleteStylePreset, deleteGuideTemplate, saveWeekGuide,
         loadAssets, saveAsset, renameAsset, deleteAsset,
     };
