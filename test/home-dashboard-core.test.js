@@ -56,9 +56,9 @@ test('blank fields are named, and an unlinked hymn is not called blank', () => {
     });
     assert.equal(ready.notReady, true);
     assert.ok(ready.blanks.indexOf('Benediction') !== -1);
-    assert.ok(ready.blanks.indexOf('Final Hymn') !== -1);
-    assert.deepEqual(ready.literals, ['Hymn 1']);
-    assert.match(ready.short, /Final Hymn and Benediction are blank/);
+    assert.ok(ready.blanks.indexOf('Closing Hymn') !== -1);
+    assert.deepEqual(ready.literals, ['Hymn of Praise']);
+    assert.match(ready.short, /Closing Hymn and Benediction are blank/);
     assert.match(ready.short, /1 hymn is not linked to the book/);
     assert.equal(ready.set, ready.total - ready.blanks.length - ready.literals.length);
 });
@@ -67,19 +67,19 @@ test('a people element counts once somebody is on it; the order says which hymns
     const withBaptism = Home.checklist({ liturgy: { baptism: [{ name: 'Ada' }] } });
     const labels = withBaptism.map(function (item) { return item.label; });
     assert.ok(labels.indexOf('Baptism') !== -1);
-    assert.ok(labels.indexOf('Hymn 2') !== -1, 'Standard still asks for Hymn 2');
+    assert.ok(labels.indexOf('Second Hymn of Praise') !== -1, 'Standard still asks for the second praise hymn');
 
     const without = Home.checklist({ liturgy: {} });
     const plain = without.map(function (item) { return item.label; });
-    assert.ok(plain.indexOf('Hymn 2') !== -1);
+    assert.ok(plain.indexOf('Second Hymn of Praise') !== -1);
     assert.ok(plain.indexOf('Baptism') === -1, 'a Sunday with nobody to baptise is not short of a baptism');
 
     const catalog = Liturgy.addOrder(Liturgy.standardCatalog(), { name: 'Baptism Sunday', copyFrom: 'standard' });
     const trimmed = Liturgy.removeFromOrder(Liturgy.removeFromOrder(catalog.catalog, catalog.order.id, 'hymn2'), catalog.order.id, 'hymnMid1');
     const baptismSunday = Home.checklist({ liturgyOrderId: catalog.order.id, liturgy: { baptism: [{ name: 'Ada' }] } }, trimmed);
     const asked = baptismSunday.map(function (item) { return item.label; });
-    assert.ok(asked.indexOf('Hymn 2') === -1);
-    assert.ok(asked.indexOf('Hymn 3') === -1);
+    assert.ok(asked.indexOf('Second Hymn of Praise') === -1);
+    assert.ok(asked.indexOf('Hymn of Assurance') === -1);
     assert.ok(asked.indexOf('Baptism') !== -1);
 });
 

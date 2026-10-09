@@ -131,6 +131,7 @@ function liturgyOrdersPage() {
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
         kindIcon(kind) { return KIND_ICONS[kind] || 'help'; },
         takesName(kind) { return Core.kindTakesName(kind); },
+        displayName(el) { return Core.elementDisplayName(el); },
         orderSubtitle(order) {
             const o = order || this.selectedOrder;
             const n = o.elementIds.length;
@@ -163,6 +164,10 @@ function liturgyOrdersPage() {
                 if (this.editing && this.dirty) { e.preventDefault(); e.returnValue = ''; }
             });
             auth.onAuthStateChanged(async (user) => {
+                if (!user && typeof window.MosaicEmulatorSignIn === 'function') {
+                    try { await window.MosaicEmulatorSignIn(); return; }
+                    catch (e) { /* fall through to redirect */ }
+                }
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
                     const userData = await getUserData(user.uid);
@@ -222,7 +227,7 @@ function liturgyOrdersPage() {
             this.editProblem = '';
         },
         selectElement(id) {
-            this.selectedElementId = this.selectedElementId === id ? '' : id;
+            this.selectedElementId = id;
         },
 
         // An empty order, named so it does not collide with one already open,

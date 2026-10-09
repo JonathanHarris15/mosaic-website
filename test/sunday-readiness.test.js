@@ -106,8 +106,8 @@ test('a hymn pulled out of the order is not work left and not work done', () => 
         removedHymns: ['hymnEnd2'],
         liturgy: { hymnEnd2: hymn('G', '7') },
     }).map(function (item) { return item.label; });
-    assert.ok(labels.indexOf('Final Hymn') === -1);
-    assert.ok(ready.blanks.indexOf('Final Hymn') === -1);
+    assert.ok(labels.indexOf('Closing Hymn') === -1);
+    assert.ok(ready.blanks.indexOf('Closing Hymn') === -1);
     assert.equal(ready.set, 2);
 });
 
@@ -121,7 +121,7 @@ test('an unlinked hymn is unfinished on both surfaces, and theme does not change
     service.keyVerse = 'Psalm 23:1';
     service.prayerPraise = { name: 'Ada', id: 'ada' };
     const door = Home.readiness(flattenServiceForSave(service));
-    assert.deepEqual(door.literals, ['Hymn 1']);
+    assert.deepEqual(door.literals, ['Hymn of Praise']);
     assert.equal(door.set, 4);
     assert.equal(editorForm(service).form.filledLabel, door.fraction);
 });

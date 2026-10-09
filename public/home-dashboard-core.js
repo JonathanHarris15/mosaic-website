@@ -186,7 +186,7 @@
             } else {
                 state = filledText(value) ? 'set' : 'blank';
             }
-            add(el.id, el.name, state);
+            add(el.id, Liturgy.elementDisplayName(el), state);
         });
 
         return items;

@@ -102,17 +102,17 @@
     const STANDARD_ELEMENTS = Object.freeze([
         seedElement('preparatoryHymn', 'Preparatory Hymn', 'hymn'),
         seedElement('callToWorship', 'Call to Worship', 'scripture'),
-        seedElement('hymn1', 'Hymn 1', 'hymn'),
-        seedElement('hymn2', 'Hymn 2', 'hymn'),
+        seedElement('hymn1', 'Hymn of Praise', 'hymn'),
+        seedElement('hymn2', 'Second Hymn of Praise', 'hymn'),
         seedElement('callToConfession', 'Call to Confession', 'scripture'),
         seedElement('assuranceOfPardon', 'Assurance of Pardon', 'scripture'),
-        seedElement('hymnMid1', 'Hymn 3', 'hymn'),
-        seedElement('hymnMid2', 'Hymn 4', 'hymn'),
+        seedElement('hymnMid1', 'Hymn of Assurance', 'hymn'),
+        seedElement('hymnMid2', 'Second Hymn of Assurance', 'hymn'),
         seedElement('scriptureReading', 'Pastoral Prayer', 'scripture'),
         seedElement('sermon', 'Sermon', 'scripture'),
         seedElement('baptism', 'Baptism', 'person'),
-        seedElement('hymnEnd1', 'Closing Hymn', 'hymn'),
-        seedElement('hymnEnd2', 'Final Hymn', 'hymn'),
+        seedElement('hymnEnd1', 'Hymn of Response', 'hymn'),
+        seedElement('hymnEnd2', 'Closing Hymn', 'hymn'),
         seedElement('benediction', 'Benediction', 'scripture'),
     ]);
 
@@ -127,8 +127,17 @@
         return KINDS.indexOf(value) !== -1;
     }
 
+    // Scripture, prayer, person, and other need a non-empty name on the order.
+    // A hymn may carry an optional display name; blank reads as "Hymn".
     function kindTakesName(kind) {
         return kind === 'scripture' || kind === 'prayer' || kind === 'person' || kind === 'other';
+    }
+
+    function elementDisplayName(el) {
+        if (!el) return '';
+        const name = cleanName(el.name);
+        if (el.kind === 'hymn') return name || KIND_LABELS.hymn;
+        return name || KIND_LABELS[el.kind] || '';
     }
 
     function prayedByOtherOf(kind, src) {
@@ -270,7 +279,8 @@
         const id = cleanName(src.id != null ? src.id : fallbackId);
         const kind = kindOf(src);
         if (!id || !kind) return null;
-        const name = cleanName(src.name) || KIND_LABELS[kind];
+        let name = cleanName(src.name);
+        if (kind !== 'hymn' && !name) name = KIND_LABELS[kind];
         return decorate({
             id: id,
             kind: kind,
@@ -737,10 +747,12 @@
         const order = next.orders.find(function (o) { return o.id === orderId; });
         if (!order) throw new Error('That order is gone.');
         const src = fields || {};
-        const name = cleanName(src.name) || KIND_LABELS[kind];
+        const rawName = cleanName(src.name);
+        const name = kind === 'hymn' ? rawName : (rawName || KIND_LABELS[kind]);
         if (kindTakesName(kind) && !name) throw new Error('An element needs a name.');
+        const idBase = kind === 'hymn' ? (rawName ? slugFor(rawName) : 'hymn') : slugFor(name);
         const element = decorate({
-            id: freshId(slugFor(name), takenIds(next)),
+            id: freshId(idBase, takenIds(next)),
             kind: kind,
             name: name,
             hasNote: src.hasNote !== false,
@@ -787,10 +799,14 @@
         const next = cloneCatalog(catalog);
         const src = patch || {};
         const apply = function (el) {
-            if (src.name !== undefined && kindTakesName(el.kind)) {
-                const name = cleanName(src.name);
-                if (!name) throw new Error('An element needs a name.');
-                el.name = name;
+            if (src.name !== undefined) {
+                if (el.kind === 'hymn') {
+                    el.name = cleanName(src.name);
+                } else if (kindTakesName(el.kind)) {
+                    const name = cleanName(src.name);
+                    if (!name) throw new Error('An element needs a name.');
+                    el.name = name;
+                }
             }
             if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
             if (el.kind === 'prayer' && src.requests !== undefined) {
@@ -928,7 +944,7 @@
             if (!el || !el.id) { problems.push('An element has no id.'); return; }
             if (ids.has(el.id)) problems.push('Two elements share the id "' + el.id + '".');
             ids.add(el.id);
-            if (!cleanName(el.name)) problems.push('An element has no name.');
+            if (!cleanName(el.name) && el.kind !== 'hymn') problems.push('An element has no name.');
             if (!isKind(el.kind) && !kindOf(el)) problems.push('"' + (el.name || el.id) + '" is not one of the elements.');
         });
         const orderIds = new Set();
@@ -994,6 +1010,7 @@
         RESERVED_IDS: RESERVED_IDS,
         isKind: isKind,
         kindTakesName: kindTakesName,
+        elementDisplayName: elementDisplayName,
         isPrimitive: function (value) { return !!KIND_FROM_PRIMITIVE[value]; },
         normaliseElement: normaliseElement,
         normaliseOrder: normaliseOrder,

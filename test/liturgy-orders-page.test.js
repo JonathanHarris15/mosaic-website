@@ -102,6 +102,24 @@ test('remove takes an element out of the order', async () => {
     assert.equal(page.selectedElementId, '');
 });
 
+test('renaming a hymn keeps its id and persists the display name', async () => {
+    const page = await loadedPage();
+    const hymnId = 'preparatoryHymn';
+    page.selectElement(hymnId);
+    page.renameElement(hymnId, { target: { value: 'Opening Hymn' } });
+    assert.equal(Core.elementById(page.catalog, hymnId).id, hymnId);
+    assert.equal(Core.elementById(page.catalog, hymnId).name, 'Opening Hymn');
+    assert.equal(page.displayName(Core.elementById(page.catalog, hymnId)), 'Opening Hymn');
+    let saved = null;
+    global.LiturgyOrderStore.save = async (_db, catalog) => {
+        saved = catalog;
+        return { elementIds: [], orderIds: ['standard'] };
+    };
+    await page.save();
+    const el = Core.elementById(saved, hymnId);
+    assert.equal(el.name, 'Opening Hymn');
+});
+
 test('rename updates the element name in the catalog', async () => {
     const page = await loadedPage();
     const id = page.selectedOrder.elementIds[1];

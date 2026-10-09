@@ -154,7 +154,7 @@
             const carrier = Liturgy.carrierOf(doc, el);
             return {
                 field: el.id,
-                label: el.name,
+                label: Liturgy.elementDisplayName(el),
                 kind: el.kind,
                 primitive: el.primitive,
                 value,

@@ -24,17 +24,17 @@ test('the Standard seed names, primitives, and flags', () => {
     assert.deepEqual(rows, [
         ['preparatoryHymn', 'Preparatory Hymn', 'song'],
         ['callToWorship', 'Call to Worship', 'scripture'],
-        ['hymn1', 'Hymn 1', 'song'],
-        ['hymn2', 'Hymn 2', 'song'],
+        ['hymn1', 'Hymn of Praise', 'song'],
+        ['hymn2', 'Second Hymn of Praise', 'song'],
         ['callToConfession', 'Call to Confession', 'scripture'],
         ['assuranceOfPardon', 'Assurance of Pardon', 'scripture'],
-        ['hymnMid1', 'Hymn 3', 'song'],
-        ['hymnMid2', 'Hymn 4', 'song'],
+        ['hymnMid1', 'Hymn of Assurance', 'song'],
+        ['hymnMid2', 'Second Hymn of Assurance', 'song'],
         ['scriptureReading', 'Pastoral Prayer', 'scripture'],
         ['sermon', 'Sermon', 'scripture'],
         ['baptism', 'Baptism', 'people'],
-        ['hymnEnd1', 'Closing Hymn', 'song'],
-        ['hymnEnd2', 'Final Hymn', 'song'],
+        ['hymnEnd1', 'Hymn of Response', 'song'],
+        ['hymnEnd2', 'Closing Hymn', 'song'],
         ['benediction', 'Benediction', 'scripture'],
     ]);
     Core.STANDARD_ELEMENTS.forEach(el => {
@@ -262,6 +262,12 @@ test('a scripture is titled on the order and the kind is called Scripture', () =
     assert.equal(Core.PRIMITIVE_LABELS.scripture, 'Scripture');
     assert.equal(Core.kindTakesName('scripture'), true);
     assert.equal(Core.kindTakesName('hymn'), false);
+    const hymn = Core.elementById(Core.standardCatalog(), 'hymn1');
+    assert.equal(hymn.name, 'Hymn of Praise');
+    assert.equal(Core.elementDisplayName(hymn), 'Hymn of Praise');
+    const blank = Core.updateElement(Core.standardCatalog(), 'hymn1', { name: '' });
+    assert.equal(Core.elementById(blank, 'hymn1').name, '');
+    assert.equal(Core.elementDisplayName(Core.elementById(blank, 'hymn1')), 'Hymn');
     const made = Core.placeKind(Core.standardCatalog(), 'standard', 'scripture', 2);
     assert.equal(made.element.name, 'Scripture');
     assert.equal(made.element.hasRole, false);
