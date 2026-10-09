@@ -54,7 +54,7 @@ test('the Sunday Service series stays readable by everyone, with no migration in
 });
 
 test('writing a series is still editor-only', () => {
-    assert.match(eventsBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(eventsBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 // ── The five rungs ────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ test('the occurrence read rule uses rank OR participation, and nothing else', ()
 });
 
 test('only an editor writes an occurrence', () => {
-    assert.match(occurrencesBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(occurrencesBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 // ── The roster subcollection ──────────────────────────────────────────────────
@@ -167,7 +167,7 @@ test('the roster is not world-readable', () => {
 });
 
 test('only an editor writes the roster — members confirming for themselves is MS-20', () => {
-    assert.match(rosterBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(rosterBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 // ── The collection-group roster read ──────────────────────────────────────────
@@ -234,7 +234,7 @@ test('a participant sees attachments on their own participant-rung Event, the on
 });
 
 test('only an editor may attach or remove a file', () => {
-    assert.match(attachmentsBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(attachmentsBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 test('a kiosk is not refused — it already sees every occurrence', () => {
@@ -272,7 +272,7 @@ test('an Event Document reads the occurrence\'s own stamp, like everything else 
 });
 
 test('only an editor may write an Event Document', () => {
-    assert.match(documentsBlock(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(documentsBlock(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
 });
 
 // ── Event announcements (MS-621) ──────────────────────────────────────────────
@@ -309,12 +309,12 @@ test('a printed week count on a series is readable on the same terms as the word
 test('a told series announcement stays editor-only, and nobody else may write how it goes out', () => {
     const block = seriesPlans();
     assert.match(block, /\|\| isEditor\(\);/);
-    assert.match(block, /allow create, update, delete: if isEditor\(\)/);
+    assert.match(block, /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
     assert.doesNotMatch(block, /readsAsEditor/);
 });
 
 test('a non-editor cannot write series announcement words', () => {
-    assert.match(seriesWords(), /allow create, update, delete: if isEditor\(\)/);
+    assert.match(seriesWords(), /allow create, update, delete: if editsWith\('calendar\.events\.edit'\)/);
     assert.doesNotMatch(seriesWords(), /readsAsEditor/);
 });
 
@@ -322,7 +322,7 @@ test('occurrence announcement words are the one-off, and a date of a series is c
     const block = occurrenceWords();
     assert.match(block, /oneOffOccurrence\(\)/);
     assert.match(block, /rankCanSee\(/);
-    assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);
+    assert.match(block, /allow create, update, delete: if editsWith\('calendar\.events\.edit'\) && oneOffOccurrence\(\)/);
     assert.doesNotMatch(block, /readsAsEditor/);
 });
 
@@ -341,6 +341,6 @@ test('a printed week count on a one-off is readable on the same terms as the wor
 test('a told occurrence announcement stays editor-only, and only a one-off may store it', () => {
     const block = occurrencePlans();
     assert.match(block, /isEditor\(\)/);
-    assert.match(block, /allow create, update, delete: if isEditor\(\) && oneOffOccurrence\(\)/);
+    assert.match(block, /allow create, update, delete: if editsWith\('calendar\.events\.edit'\) && oneOffOccurrence\(\)/);
     assert.doesNotMatch(block, /readsAsEditor/);
 });

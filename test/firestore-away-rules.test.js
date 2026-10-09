@@ -99,7 +99,7 @@ test('the person themselves can read and write their own Away', () => {
 test('editors and above can read and write an Away', () => {
     // They will keep being told in the car park, and the picker has to be able
     // to say "Sarah said she's away" while it is deciding who to offer.
-    assert.match(awayBlock(), /isEditor\(\)/);
+    assert.match(awayBlock(), /editsWith\('calendar\.away\.edit'\)/); // MS-722
 });
 
 test('the self clause is scoped to the Person in the path, not to any Person', () => {

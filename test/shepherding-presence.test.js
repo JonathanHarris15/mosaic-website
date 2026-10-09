@@ -121,5 +121,5 @@ test('nobody can write somebody else\'s Shepherding presence', () => {
 test('the Order of Service presence rule is unchanged', () => {
     const b = block('presence');
     assert.match(b, /allow read: if readsAsEditor\(\);/);
-    assert.match(b, /allow write, delete: if isEditor\(\) && request\.auth\.uid == uid;/);
+    assert.match(b, /allow write, delete: if editsWith\('services\.builder\.edit'\) && request\.auth\.uid == uid;/);
 });
