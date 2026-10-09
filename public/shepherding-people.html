@@ -198,7 +198,7 @@
                 </div>
             </div>
             <div class="m-header__actions">
-                <button type="button" @click="showAddPersonModal = true" class="m-btn m-btn--primary m-btn--sm">
+                <button type="button" x-show="canAddPerson" @click="showAddPersonModal = true" class="m-btn m-btn--primary m-btn--sm">
                     <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
                     <span class="m-btn__label">Add person</span>
                 </button>
@@ -427,8 +427,11 @@
                     <li class="group flex flex-col gap-1 px-1 py-1 rounded-lg border border-transparent hover:border-outline-variant hover:bg-surface-container transition-colors">
                         <div class="tag-row flex items-center justify-between gap-1">
                             <span x-show="editingTagId !== tag.id" class="font-body-md text-sm text-on-surface" x-text="tag.name"></span>
-                            <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
-                                   @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
+                            <input x-show="editingTagId === tag.id" type="text" :value="editingTagName"
+                                   @input="editTagName($event.target.value)"
+                                   @blur="renameTag(tag.id)"
+                                   @keydown.enter.prevent="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
+                                   data-live-tag-name
                                    :aria-label="'Rename ' + tag.name"
                                    class="flex-grow min-w-0 border border-outline-variant rounded px-2 py-1 font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
                             <span x-show="tag.locked" class="flex items-center gap-1 text-outline-variant text-xs flex-shrink-0" title="Managed by the Membership Track">
@@ -436,10 +439,11 @@
                                 <span>System</span>
                             </span>
                             <div x-show="canDecide && !tag.locked" class="tag-actions flex items-center gap-1 flex-shrink-0">
-                                <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
-                                    class="text-primary transition-colors" title="Save name">
-                                    <span class="material-symbols-outlined text-[20px]">check</span>
-                                </button>
+                                <span x-show="editingTagId === tag.id" data-live-chip class="text-xs text-on-surface-variant whitespace-nowrap"
+                                      :class="tagChip === 'failed' ? 'text-error' : ''" x-text="tagChipLabel()" aria-live="polite"></span>
+                                <button x-show="editingTagId === tag.id && tagChip === 'failed'" data-live-retry type="button"
+                                    @mousedown.prevent @click="tagLive && tagLive.retry()"
+                                    class="text-xs text-primary underline">Retry</button>
                                 <button x-show="editingTagId !== tag.id" @click="startRenameTag(tag)"
                                     class="text-outline-variant hover:text-primary transition-colors" title="Rename tag">
                                     <span class="material-symbols-outlined text-[20px]">edit</span>
@@ -467,6 +471,7 @@
                                 </button>
                             </div>
                         </div>
+                        <p x-show="editingTagId === tag.id && tagFault" x-text="tagFault" class="text-xs text-error px-1" role="alert"></p>
                         <div x-show="canDecide && mergingTagId === tag.id" class="flex flex-col gap-1 bg-surface-container-low rounded-lg p-2">
                             <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
                             <div class="flex flex-wrap gap-1">
@@ -707,6 +712,8 @@
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="person-name.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="shepherding-tags.js"></script>
     <script src="shepherding-people.js"></script>
 </body>
