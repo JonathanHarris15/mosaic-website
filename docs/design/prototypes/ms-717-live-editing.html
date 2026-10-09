@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MS-717 / MS-718 — Live editing (prototype)</title>
+    <!-- PROTOTYPE, throwaway. Real stylesheets by relative path (ui-prototype-first). -->
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <!-- Same faces fonts.css vendors, by absolute URL, so htmlpreview resolves them
+         (see ms-686-dashboard-drawer.html for why). Prototypes only. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        body { background: var(--surface-container-highest, #E8DDCD); margin: 0; font-family: 'Libre Franklin', system-ui, sans-serif; }
+        .proto-note { max-width: 1180px; margin: 16px auto 0; padding: 10px 14px; font-size: 12.5px; color: #5b4a33; background: #fff8e8; border: 1px dashed #c9a96b; border-radius: 10px; }
+        .stage { max-width: 1180px; margin: 18px auto; }
+        .stage h2 { font-family: 'Cinzel', serif; font-size: 15px; letter-spacing: .08em; color: #1d2b4f; margin: 0 0 8px; }
+        .stage p.why { font-size: 12.5px; color: #4a4a4a; margin: 0 0 10px; max-width: 80ch; }
+        .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .frame { background: var(--surface, #FBF7F0); border: 1px solid #d9ccb6; border-radius: 14px; overflow: hidden; }
+        .frame-cap { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #6b5a40; padding: 6px 12px; border-bottom: 1px solid #e6dccb; background: #f4ecdf; display: flex; justify-content: space-between; }
+        .bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #e6dccb; }
+        .bar .title { font-family: 'EB Garamond', serif; font-size: 20px; color: #1d2b4f; flex: 1; }
+        .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+        .chip.saved { background: #e3f1e6; color: #2f6b3d; }
+        .chip.unsaved { background: #fbecd2; color: #8a5a12; }
+        .chip.saving { background: #e6ecf7; color: #1d2b4f; }
+        .chip.failed { background: #f7e1e1; color: #7a2e2e; }
+        .chip .material-symbols-outlined { font-size: 14px; }
+        .body { padding: 12px 14px 16px; display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; align-items: center; font-size: 14px; }
+        .body label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b5a40; }
+        .live { border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; font: inherit; color: #1f1f1f; background: transparent; width: 100%; box-sizing: border-box; }
+        .live:hover { border-color: #d9ccb6; background: #fff; }
+        .live:focus { outline: none; border-color: #1d2b4f; background: #fff; box-shadow: 0 0 0 3px rgba(29,43,79,.12); }
+        .live.dirty { border-color: #d9a74a; background: #fffaf0; }
+        .live.arrived { animation: arrive 1.6s ease-out; }
+        @keyframes arrive { 0% { background: #dbe8ff; } 100% { background: transparent; } }
+        .ro { padding: 6px 8px; color: #1f1f1f; }
+        .err { grid-column: 2; font-size: 12px; color: #7a2e2e; }
+        .held { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #1d2b4f; background: #eef2fa; border-radius: 999px; padding: 2px 8px 2px 2px; }
+        .held .av { width: 20px; height: 20px; border-radius: 50%; background: #1d2b4f; color: #fff; font-size: 10px; display: grid; place-items: center; }
+        table.roles { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        table.roles th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b5a40; padding: 6px 10px; border-bottom: 1px solid #e6dccb; }
+        table.roles td { padding: 4px 10px; border-bottom: 1px solid #efe6d6; }
+        .states { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+        .state { background: var(--surface, #FBF7F0); border: 1px solid #d9ccb6; border-radius: 12px; padding: 10px; font-size: 12px; color: #333; }
+        .state b { display: block; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b5a40; }
+        .controls { display: flex; gap: 8px; margin: 8px 0 0; flex-wrap: wrap; }
+        .controls button { font: 600 12px 'Libre Franklin', sans-serif; border: 1px solid #1d2b4f; color: #1d2b4f; background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+        pre.state-dump { font-size: 11px; background: #fff; border: 1px solid #e6dccb; border-radius: 10px; padding: 8px 10px; margin: 8px 0 0; max-height: 140px; overflow: auto; }
+    </style>
+</head>
+<body>
+<div class="proto-note"><b>Prototype, throwaway.</b> This is ADR 0081 drawn on the real stylesheets. It is not wired to Firestore: the "server" and the "other editor" are simulated in memory, so the state is visible. Left frames are an editor. Right frames are a viewer (same layout, plain text). Desktop is dense; <code>?shell=mobile</code> keeps the same controls stacked.</div>
+
+<section class="stage">
+    <h2>1 · One-off Event Details: Save button → live page (MS-720)</h2>
+    <p class="why">Today: a Details card with a Save button. Proposed: the values are the controls, a chip in the header, a 1.5 s autosave, and blur or Enter flushes. A change by someone else lands in any field you have not touched. Your own unsaved field is left alone. An end date before the start does not save, and the field says why.</p>
+    <div class="pair">
+        <div class="frame">
+            <div class="frame-cap"><span>Editor: Eddie</span><span>calendar-event.html?id=…</span></div>
+            <div class="bar"><span class="material-symbols-outlined" style="color:#1d2b4f">chevron_left</span><span class="title" id="ev-title-head">Harvest Supper</span><span class="chip saved" id="chip"><span class="material-symbols-outlined">check_circle</span><span>Saved</span></span></div>
+            <div class="body" id="ev-editor">
+                <label for="f-name">What</label><input class="live" id="f-name" data-field="name" />
+                <label for="f-date">Date</label><input class="live" id="f-date" data-field="date" type="date" />
+                <label for="f-end">Last day</label><input class="live" id="f-end" data-field="endDate" type="date" />
+                <div class="err" id="err-end" hidden>The last day is before the first. Not saved yet.</div>
+                <label for="f-time">Time</label><input class="live" id="f-time" data-field="time" type="time" />
+                <label for="f-loc">Where</label><input class="live" id="f-loc" data-field="location" />
+                <label for="f-desc">About</label><input class="live" id="f-desc" data-field="description" />
+            </div>
+        </div>
+        <div class="frame">
+            <div class="frame-cap"><span>Viewer: Vera (no events.edit)</span><span>same page</span></div>
+            <div class="bar"><span class="material-symbols-outlined" style="color:#1d2b4f">chevron_left</span><span class="title" id="ro-title">Harvest Supper</span></div>
+            <div class="body" id="ev-viewer"></div>
+        </div>
+    </div>
+    <div class="controls">
+        <button id="sim-remote">Edna changes "Where" (remote)</button>
+        <button id="sim-remote-name">Edna changes "What" while you type it</button>
+        <button id="sim-fail">Next save fails (offline)</button>
+        <button id="sim-escape">Press Escape in the focused field</button>
+    </div>
+    <pre class="state-dump" id="dump"></pre>
+</section>
+
+<section class="stage">
+    <h2>2 · Roles manager: a row edits in place (MS-721)</h2>
+    <p class="why">Dense table: click-to-edit cells, as on the Services table. A cell someone else is in shows their face and cannot be opened. Deleting a role stays an explicit, confirmed action. It is never autosaved.</p>
+    <div class="frame">
+        <div class="frame-cap"><span>Editor</span><span>roles-manager.html</span><span class="chip saved" id="chip2"><span class="material-symbols-outlined">check_circle</span><span>Saved</span></span></div>
+        <table class="roles">
+            <thead><tr><th>Role</th><th>Needed each Sunday</th><th>Who can fill it</th><th></th></tr></thead>
+            <tbody>
+                <tr><td><input class="live" value="Greeter" data-r="1" /></td><td><input class="live" value="2" data-r="1" style="width:70px" /></td><td><input class="live" value="Members" data-r="1" /></td><td><span class="material-symbols-outlined" title="Delete… (asks first)" style="color:#7a2e2e;cursor:pointer">delete</span></td></tr>
+                <tr><td><input class="live" value="Sound" data-r="1" /></td><td><span class="held"><span class="av">ED</span>Edna is editing this</span></td><td><input class="live" value="Sound team" data-r="1" /></td><td><span class="material-symbols-outlined" style="color:#7a2e2e">delete</span></td></tr>
+                <tr><td><input class="live" value="Coffee" data-r="1" /></td><td><input class="live" value="1" data-r="1" style="width:70px" /></td><td><input class="live" value="Anyone" data-r="1" /></td><td><span class="material-symbols-outlined" style="color:#7a2e2e">delete</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="stage">
+    <h2>3 · The states, side by side</h2>
+    <div class="states">
+        <div class="state"><b>Untouched</b><span class="chip saved"><span class="material-symbols-outlined">check_circle</span>Saved</span><p>Nothing pending.</p></div>
+        <div class="state"><b>Typing</b><span class="chip unsaved"><span class="m-chip-dot m-chip-dot--pulse"></span>Unsaved changes</span><p>The field is amber-edged. It saves 1.5 s after you stop, or on blur or Enter.</p></div>
+        <div class="state"><b>Writing</b><span class="chip saving"><span class="material-symbols-outlined">sync</span>Saving…</span><p>Only the changed fields, by dot-path update().</p></div>
+        <div class="state"><b>Failed</b><span class="chip failed"><span class="material-symbols-outlined">cloud_off</span>Not saved</span><p>The change is kept, and the next edit retries. The chip says why on hover.</p></div>
+        <div class="state"><b>Held</b><span class="held"><span class="av">ED</span>Edna</span><p>Someone is in this box (ADR 0035). It cannot be opened until they leave.</p></div>
+        <div class="state"><b>Arrived</b><span class="live arrived" style="display:inline-block;width:auto">Fellowship hall</span><p>A remote value lands in a field you had not touched, with a brief tint.</p></div>
+    </div>
+</section>
+
+<script>
+// PROTOTYPE state machine: fields, saved copy, dirty set, timer. In memory only.
+const server = { name: 'Harvest Supper', date: '2026-10-15', endDate: '', time: '18:00', location: 'The hall', description: 'Bring a dish to share.' };
+let saved = Object.assign({}, server), dirty = new Set(), timer = null, failNext = false, status = 'saved', lastWrite = null;
+const chip = document.getElementById('chip');
+const LABELS = { name: 'What', date: 'Date', endDate: 'Last day', time: 'Time', location: 'Where', description: 'About' };
+function setStatus(s) {
+    status = s;
+    const map = { saved: ['saved', 'check_circle', 'Saved'], unsaved: ['unsaved', null, 'Unsaved changes'], saving: ['saving', 'sync', 'Saving…'], failed: ['failed', 'cloud_off', 'Not saved — offline. Kept; will retry.'] };
+    const [cls, icon, text] = map[s];
+    chip.className = 'chip ' + cls;
+    chip.innerHTML = (icon ? '<span class="material-symbols-outlined">' + icon + '</span>' : '<span class="m-chip-dot m-chip-dot--pulse"></span>') + '<span>' + text + '</span>';
+    dump();
+}
+function inputs() { return [...document.querySelectorAll('#ev-editor .live')]; }
+function valid() { const e = document.getElementById('f-end').value, d = document.getElementById('f-date').value; const ok = !e || e >= d; document.getElementById('err-end').hidden = ok; return ok; }
+function renderViewer() {
+    const v = document.getElementById('ev-viewer'); v.innerHTML = '';
+    for (const k of Object.keys(LABELS)) { v.insertAdjacentHTML('beforeend', '<label>' + LABELS[k] + '</label><div class="ro">' + (server[k] || '—') + '</div>'); }
+    document.getElementById('ro-title').textContent = server.name; document.getElementById('ev-title-head').textContent = saved.name;
+}
+function dump() { document.getElementById('dump').textContent = JSON.stringify({ status, dirty: [...dirty], lastWrite, server }, null, 1); }
+function schedule() { clearTimeout(timer); timer = setTimeout(flush, 1500); }
+function flush() {
+    clearTimeout(timer);
+    if (!dirty.size) return;
+    if (!valid()) { setStatus('unsaved'); return; }
+    setStatus('saving');
+    setTimeout(() => {
+        if (failNext) { failNext = false; setStatus('failed'); return; }
+        const patch = {}; for (const k of dirty) patch[k] = document.querySelector('[data-field="' + k + '"]').value;
+        Object.assign(server, patch); Object.assign(saved, patch); lastWrite = patch;
+        dirty.clear(); inputs().forEach(i => i.classList.remove('dirty'));
+        setStatus('saved'); renderViewer();
+    }, 500);
+}
+for (const i of inputs()) {
+    i.value = server[i.dataset.field] || '';
+    i.addEventListener('input', () => { const k = i.dataset.field; if (i.value === saved[k]) { dirty.delete(k); i.classList.remove('dirty'); } else { dirty.add(k); i.classList.add('dirty'); } valid(); setStatus(dirty.size ? 'unsaved' : 'saved'); schedule(); });
+    i.addEventListener('blur', flush);
+    i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); flush(); } if (e.key === 'Escape') { revert(i); } });
+}
+function revert(i) { const k = i.dataset.field; i.value = saved[k] || ''; dirty.delete(k); i.classList.remove('dirty'); valid(); setStatus(dirty.size ? 'unsaved' : 'saved'); }
+// remoteAdoptions: a field this editor has not touched takes the server's value.
+function remote(patch) {
+    Object.assign(server, patch);
+    for (const [k, v] of Object.entries(patch)) {
+        saved[k] = v;
+        if (dirty.has(k)) continue; // yours, unsaved: left alone until you save
+        const i = document.querySelector('[data-field="' + k + '"]'); i.value = v; i.classList.remove('arrived'); void i.offsetWidth; i.classList.add('arrived');
+    }
+    renderViewer(); dump();
+}
+document.getElementById('sim-remote').onclick = () => remote({ location: 'Fellowship hall' });
+document.getElementById('sim-remote-name').onclick = () => { const i = document.getElementById('f-name'); i.focus(); i.value = 'Harvest Supper & Hymn Sing'; i.dispatchEvent(new Event('input')); remote({ name: 'Harvest Supper (moved)' }); };
+document.getElementById('sim-fail').onclick = () => { failNext = true; dump(); };
+document.getElementById('sim-escape').onclick = () => { const i = document.activeElement && document.activeElement.classList.contains('live') ? document.activeElement : document.getElementById('f-name'); revert(i); };
+// Roles table: same chip behaviour, condensed.
+const chip2 = document.getElementById('chip2'); let t2 = null;
+document.querySelectorAll('[data-r]').forEach(i => i.addEventListener('input', () => { chip2.className = 'chip unsaved'; chip2.textContent = 'Unsaved changes'; clearTimeout(t2); t2 = setTimeout(() => { chip2.className = 'chip saving'; chip2.textContent = 'Saving…'; setTimeout(() => { chip2.className = 'chip saved'; chip2.innerHTML = '<span class="material-symbols-outlined">check_circle</span>Saved'; }, 500); }, 1500); }));
+renderViewer(); setStatus('saved');
+// ?state=... lets the screenshot script pose the page.
+const q = new URLSearchParams(location.search).get('state');
+if (q === 'typing') { const i = document.getElementById('f-loc'); i.value = 'The hall (side door)'; i.dispatchEvent(new Event('input')); clearTimeout(timer); }
+if (q === 'arrived') { remote({ location: 'Fellowship hall' }); }
+if (q === 'invalid') { const i = document.getElementById('f-end'); i.value = '2026-10-10'; i.dispatchEvent(new Event('input')); clearTimeout(timer); }
+if (q === 'failed') { setStatus('failed'); }
+</script>
+</body>
+</html>
