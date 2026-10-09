@@ -35,13 +35,14 @@ Any page where you can change what you are looking at follows five rules.
 3. **Gated on the MS-695 permission for that surface.** The check goes through
    an `AccessCore` helper that reads the permission map, with a legacy-level
    fallback for accounts that have not been migrated. Never a list of level
-   strings. Firestore rules stay the backstop, and the page's gate asks
-   exactly what the rule on that collection asks: since MS-722 a write rule
-   is `editsWith(key)`, the editor level names OR that surface's MS-695 key,
-   so the page asks the matching `AccessCore` helper (for example
-   `canEditEvents`). Each page moves to its own key as it converts. Where a
-   rule still checks only a level list, the page records the gap as an open
-   decision rather than patching the rules in passing.
+   strings. Firestore rules stay the backstop, and the page asks the
+   `AccessCore` helper that mirrors the write rule on that collection (one
+   key per surface, e.g. `canEditEvents`), so the UI offers exactly what the
+   rule lets land. Each page moves to its own key as it converts. Pages do
+   not re-implement permission resolution; when the rules change, AccessCore
+   changes with them. Where a rule still checks only a level list, the page
+   records the gap as an open decision rather than patching the rules in
+   passing.
 4. **Live.** The page listens with `MosaicLiveRead.watch` (a listener on the
    web; on the phone, a listener with a re-read fallback). A field this editor
    has not touched takes the incoming value. A field this editor has changed
@@ -65,22 +66,3 @@ Any page where you can change what you are looking at follows five rules.
   publish on every step (ADR 0080), and it is being redesigned under MS-716.
 - The first conversion is the Services table's gate (MS-719). It moves from a
   level-string list to `AccessCore.canFixSundayService`.
-
-## Known behaviour (accepted, Oct 8 2026)
-
-- **Revoking a key does not fully lock out an Editor-based level.** The write
-  rules keep the editor level names as an OR (Helm's guardrail on MS-722:
-  nobody loses access). `userWriteFromLevel` stores `permissionLevel: editor`
-  for any map holding `services.builder.edit`, `printables.edit` or
-  `directory.edit_identity`, so an Editor clone with, say, `hymns.edit`
-  revoked still passes `isEditor()` on `hymns`. Revoking bites fully only on
-  levels below the editor rung. Accepted by the team lead; do not change it
-  without a new decision (keys authoritative for map accounts would be the
-  change).
-- **Presence faces need an editor *read*.** A level holding
-  `services.builder.edit` alone may write a Sunday and its own presence, but
-  `/presence` is read with `readsAsEditor()`, which reads were deliberately
-  left alone. Such an account edits normally and simply sees no faces; the
-  refusal is not logged (presence-core treats `permission-denied` as
-  expected). Whether to widen the read is with Helm.
-
