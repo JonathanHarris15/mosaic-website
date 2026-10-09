@@ -1868,6 +1868,10 @@
          Calendar are the same code, not two that have to agree. -->
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <!-- calendar-event.js reads LiveFields when it starts the live Event
+         Details (MS-720). This host draws no details panel, so it only has
+         to exist; nothing is saved from here. -->
+    <script src="live-fields-core.js"></script>
     <!-- calendar-event.js reads this for the Files tab (MS-287), even though
          this host never draws that markup — the module is captured at load
          time regardless of which part of the page uses it. -->

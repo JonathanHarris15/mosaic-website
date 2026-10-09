@@ -62,6 +62,8 @@
     <script src="fairness-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <script src="live-read.js"></script>
+    <script src="live-fields-core.js"></script>
     <script src="event-announcement-core.js"></script>
     <script src="event-announcement-store.js"></script>
     <script src="image-intake.js"></script>
@@ -810,25 +812,28 @@
                          itself is refused outright by the store — its id is
                          derived from it, so "Move this one" is the operation
                          for that. -->
-                    <section x-show="isEditor && isDateOfSeries"
+                    <section x-show="canEditDetails && isDateOfSeries"
                              class="m-card">
                         <div class="flex flex-col gap-md">
                             <label class="block">
                                 <span class="m-label">Individual description</span>
-                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                <textarea :value="occurrenceDraft.description" @input="editDetail('description', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.escape="revertDetail('description')" rows="3"
                                           placeholder="Bring the trestle tables — we're eating after."
                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                  text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
                             </label>
 
-                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
-                                <button @click="startOccurrenceDraft()"
-                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
-                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
-                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
-                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
-                                               disabled:opacity-40">Save</button>
+                            <div class="flex items-center justify-end gap-sm">
+                                <span x-show="detailsChip === 'failed' && detailsError"
+                                      class="mr-auto text-[12px] text-error" x-text="detailsError"></span>
+                                <span data-live-chip :data-state="detailsChip"
+                                      class="text-[11.5px] font-label-md uppercase tracking-wider"
+                                      :class="detailsChip === 'failed' ? 'text-error' : 'text-on-surface-variant'"
+                                      x-text="detailsChipText(detailsChip)"></span>
+                                <button type="button" x-show="detailsChip === 'failed'" @click="saveOccurrenceDetails()"
+                                        data-live-retry
+                                        class="px-2 py-1 rounded-lg font-label-md text-[11px] uppercase tracking-wider
+                                               text-secondary cal-focus hover:bg-surface-container">Retry</button>
                             </div>
                         </div>
                     </section>
@@ -873,9 +878,23 @@
                          auto-id, not the date, so changing it is just a field.
                          (One date OF A SERIES is "Move this one", which has to
                          rewrite the id and leave a note behind.) -->
-                    <section x-show="isEditor && isOneOff"
-                             class="m-card">
-                        <h3 class="font-display text-[17px] text-primary">Details</h3>
+                    <section x-show="canEditDetails && isOneOff"
+                             class="m-card" data-live-details>
+                        <!-- MS-720 (ADR 0081): no Save button. It saves itself;
+                             the chip says where it is. -->
+                        <div class="flex items-center gap-sm">
+                            <h3 class="font-display text-[17px] text-primary">Details</h3>
+                            <span data-live-chip :data-state="detailsChip"
+                                  class="ml-auto text-[11.5px] font-label-md uppercase tracking-wider"
+                                  :class="detailsChip === 'failed' ? 'text-error' : 'text-on-surface-variant'"
+                                  x-text="detailsChipText(detailsChip)"></span>
+                            <button type="button" x-show="detailsChip === 'failed'" @click="saveOccurrenceDetails()"
+                                    data-live-retry
+                                    class="px-2 py-1 rounded-lg font-label-md text-[11px] uppercase tracking-wider
+                                           text-secondary cal-focus hover:bg-surface-container">Retry</button>
+                        </div>
+                        <p x-show="detailsChip === 'failed' && detailsError" class="mt-1 text-[12px] text-error"
+                           x-text="detailsError"></p>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
                             This event happens once, so this is all of it.
                         </p>
@@ -883,21 +902,23 @@
                         <div class="mt-sm flex flex-col gap-md">
                             <label class="block">
                                 <span class="m-label">What is it</span>
-                                <input type="text" x-model="occurrenceDraft.name" placeholder="Harvest Supper"
+                                <input type="text" :value="occurrenceDraft.name" @input="editDetail('name', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.enter.prevent="saveOccurrenceDetails()" @keydown.escape="revertDetail('name')" placeholder="Harvest Supper"
                                        class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                               text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                                <span x-show="!String(occurrenceDraft.name || '').trim()" data-live-invalid
+                                      class="mt-1 block text-[11.5px] text-error">An event needs a name. Not saved until it has one.</span>
                             </label>
 
                             <div class="grid grid-cols-2 gap-md">
                                 <label class="block">
                                     <span class="m-label">When</span>
-                                    <input type="date" x-model="occurrenceDraft.date"
+                                    <input type="date" :value="occurrenceDraft.date" @input="editDetail('date', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.enter.prevent="saveOccurrenceDetails()" @keydown.escape="revertDetail('date')"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                   text-[15px] text-on-surface cal-focus" />
                                 </label>
                                 <label class="block">
                                     <span class="m-label">Starts at</span>
-                                    <input type="time" x-model="occurrenceDraft.time"
+                                    <input type="time" :value="occurrenceDraft.time" @input="editDetail('time', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.enter.prevent="saveOccurrenceDetails()" @keydown.escape="revertDetail('time')"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                   text-[15px] text-on-surface cal-focus" />
                                 </label>
@@ -907,7 +928,7 @@
                                  the whole Event, so this is where its span lives. -->
                             <label class="block">
                                 <span class="m-label">Last day</span>
-                                <input type="date" x-model="occurrenceDraft.endDate" :min="occurrenceDraft.date"
+                                <input type="date" :value="occurrenceDraft.endDate" @input="editDetail('endDate', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.enter.prevent="saveOccurrenceDetails()" @keydown.escape="revertDetail('endDate')" :min="occurrenceDraft.date"
                                        class="mt-1 w-full bg-surface border rounded-lg px-3 py-2
                                               text-[15px] text-on-surface cal-focus"
                                        :class="occurrenceSpanError ? 'border-error' : 'border-outline-variant'" />
@@ -923,28 +944,18 @@
 
                             <label class="block">
                                 <span class="m-label">Where</span>
-                                <input type="text" x-model="occurrenceDraft.location" placeholder="The hall"
+                                <input type="text" :value="occurrenceDraft.location" @input="editDetail('location', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.enter.prevent="saveOccurrenceDetails()" @keydown.escape="revertDetail('location')" placeholder="The hall"
                                        class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                               text-[15px] text-on-surface placeholder:text-outline cal-focus" />
                             </label>
 
                             <label class="block">
                                 <span class="m-label">What it's for</span>
-                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                <textarea :value="occurrenceDraft.description" @input="editDetail('description', $event.target.value)" @blur="saveOccurrenceDetails()" @keydown.escape="revertDetail('description')" rows="3"
                                           placeholder="A short line for anyone who has not been before."
                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                  text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
                             </label>
-
-                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
-                                <button @click="startOccurrenceDraft()"
-                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
-                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
-                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
-                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
-                                               disabled:opacity-40">Save details</button>
-                            </div>
                         </div>
 
                         <!-- Deleting the Event itself. A one-off IS its one
