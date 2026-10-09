@@ -1849,8 +1849,7 @@ test('MS-721: without roles.manager.edit every Role control is display text', ()
     const html = rolesManagerHtml();
     // Each input that writes a Role is only rendered for the key holder…
     for (const field of ['x-model="draft.name"', 'x-model="draft.description"',
-        'x-model.number="draft.intensity"', 'x-model="draft.allowsAnotherRole"',
-        'setLiturgicalIntensity(role.slug']) {
+        'x-model.number="draft.intensity"', 'x-model="draft.allowsAnotherRole"']) {
         const at = html.indexOf(field);
         assert.ok(at !== -1, field);
         const opened = html.lastIndexOf('<template x-if="canManageRoles">', at);
@@ -1858,7 +1857,7 @@ test('MS-721: without roles.manager.edit every Role control is display text', ()
         assert.ok(opened !== -1 && opened > closed, field + ' is rendered without the key');
     }
     // …and reads as text otherwise.
-    for (const f of ['name', 'description', 'intensity', 'allowsAnotherRole', 'liturgical']) {
+    for (const f of ['name', 'description', 'intensity', 'allowsAnotherRole']) {
         assert.match(html, new RegExp(`x-show="!canManageRoles"[^>]*data-readonly="${f}"`), f);
     }
     for (const m of ['class="rm-create" x-show="canManageRoles"', 'class="rm-composer" x-show="canManageRoles"',
@@ -1872,8 +1871,25 @@ test('MS-721: the write entry points refuse without roles.manager.edit', () => {
     const js = rolesManagerJs();
     for (const fn of ['async createRole(name) {\n        if (!this.canManageRoles) return;',
         'async deleteRole(role) {\n        if (!role || !this.canManageRoles) return;',
-        'if (!personId || this.savingNonServer || !this.canManageRoles) return;',
-        'async setLiturgicalIntensity(slug, raw) {\n        if (!this.canManageRoles) return;']) {
+        'if (!personId || this.savingNonServer || !this.canSetDoesNotServe) return;',
+        'async setLiturgicalIntensity(slug, raw) {\n        if (!this.canSetLiturgicalRest) return;']) {
         assert.ok(js.indexOf(fn) !== -1, fn);
     }
+});
+
+test('MS-721: liturgical rest and "Doesn\'t serve" follow their own rules, not roles.manager.edit', () => {
+    const Levels = require('../public/account-levels-core.js');
+    const member = Levels.buildPresetPermissions(Levels.PRESET_MEMBER);
+    const custom = (k) => ({ permissionLevel: 'member', accountLevelId: 'level_custom_x', permissions: Object.assign({}, member, { [k]: true }) });
+    const html = rolesManagerHtml();
+    assert.match(html, /<template x-if="canSetLiturgicalRest">/);
+    assert.match(html, /x-show="!canSetLiturgicalRest"[^>]*data-readonly="liturgical"/);
+    assert.match(html, /class="rm-group" x-show="canSetDoesNotServe"/);
+    const js = rolesManagerJs();
+    assert.match(js, /get canSetLiturgicalRest\(\) \{\n\s+return AccessCore\.canEditEvents\(/);
+    assert.match(js, /AccessCore\.EDITOR_WRITE_LEVELS\.indexOf\(AccessCore\.permissionLevelOf\(who\)\)/);
+    // The helpers they ask, against the rule's answer:
+    assert.equal(AccessCore.canEditEvents(custom('calendar.events.edit')), true);
+    assert.equal(AccessCore.canEditEvents(custom('roles.manager.edit')), false);
+    assert.equal(AccessCore.canEditEvents('editor'), true);
 });

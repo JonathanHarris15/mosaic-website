@@ -98,6 +98,22 @@ window.RolesManager = () => ({
     get canManageRoles() {
         return this.mayManageRoles(this.account || this.currentPermissionLevel);
     },
+    // MS-721 lead call (Oct 8, 9:44 PM): two controls on this page are not
+    // Role writes, so they follow their own doors in firestore.rules rather
+    // than roles.manager.edit — read-only Roles must not take away what
+    // people can already do.
+    //  - Liturgical rest writes events/sunday_service:
+    //    editsWith('calendar.events.edit') → AccessCore.canEditEvents.
+    //  - "Doesn't serve" writes people/{id}.doesNotServe: the people rule's
+    //    isEditor() — the editor level names or a Pastoral Assistant.
+    get canSetLiturgicalRest() {
+        return AccessCore.canEditEvents(this.account || this.currentPermissionLevel);
+    },
+    get canSetDoesNotServe() {
+        const who = this.account || this.currentPermissionLevel;
+        return AccessCore.EDITOR_WRITE_LEVELS.indexOf(AccessCore.permissionLevelOf(who)) !== -1
+            || AccessCore.isPastoralAssistant(who);
+    },
     mayOpenRoles(account) {
         return AccessCore.readsAsEditor(account);
     },
@@ -839,7 +855,7 @@ window.RolesManager = () => ({
     },
 
     async setDoesNotServe(personId, value) {
-        if (!personId || this.savingNonServer || !this.canManageRoles) return;
+        if (!personId || this.savingNonServer || !this.canSetDoesNotServe) return;
         this.savingNonServer = personId;
 
         try {
@@ -1117,7 +1133,7 @@ window.RolesManager = () => ({
     },
 
     async setLiturgicalIntensity(slug, raw) {
-        if (!this.canManageRoles) return;
+        if (!this.canSetLiturgicalRest) return;
         const value = Number(raw);
         if (!Number.isFinite(value) || value < 0) {
             this.showToast('Rest between turns has to be zero or more weeks', 'error');
