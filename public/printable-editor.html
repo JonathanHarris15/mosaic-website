@@ -562,11 +562,16 @@
                     </template>
                     <template x-if="!queryLocked">
                         <div>
-                            <p class="pe-hint" x-show="queryScope === 'own' && !querySourceKey">Pick the list this box repeats over. The box is drawn once per row.</p>
-                            <p class="pe-hint" x-show="queryScope === 'own' && querySourceKey">This box repeats over the list below. Its filters are saved on the box.</p>
+                            <p class="pe-hint" x-show="queryScope === 'own' && !querySourceKey && !queryIsEventList">Pick the list this box repeats over. The box is drawn once per row.</p>
+                            <p class="pe-hint" x-show="queryScope === 'own' && querySourceKey && !queryIsEventList">This box repeats over the list below. Its filters are saved on the box.</p>
+                            <p class="pe-hint" x-show="queryIsEventList">This box repeats a list filled on the event. Drag a column onto an element inside it. Rename columns in the Fill-in library.</p>
                             <p class="pe-hint" x-show="queryScope === 'row'">Inside <strong x-text="repeatContext ? (repeatContext.name || 'the iterated box') : ''"></strong>. Drag a field of one row onto an element inside it.</p>
-                            <p class="pe-hint" x-show="queryScope === 'browse'">Anything the site keeps that you may read. A field you drag onto the page carries the settings below.</p>
-                            <div class="m-dropdown pe-query__pick"
+                            <p class="pe-hint" x-show="queryScope === 'browse' && !(selectedNode && selectedNode.repeat && data.query.browseFor === selectedNode.id)">Anything the site keeps that you may read. A field you drag onto the page carries the settings below.</p>
+                            <p class="pe-hint" x-show="queryScope === 'browse' && selectedNode && selectedNode.repeat && data.query.browseFor === selectedNode.id">Looking at other data. This box still repeats its own list — <button type="button" class="pe-linkbtn" @click="backToRows()">Back to this box's rows</button>.</p>
+                            <p class="pe-query__scope" x-show="queryScope === 'own' && querySourceKey && !queryIsEventList">
+                                <button type="button" class="pe-linkbtn" @click="browseOtherData()">Browse other data</button>
+                            </p>
+                            <div class="m-dropdown pe-query__pick" x-show="!queryIsEventList"
                                  @click.outside="data.queryMenuOpen = false"
                                  @keydown.escape.window="data.queryMenuOpen = false">
                                 <button type="button" class="m-dropdown__button"

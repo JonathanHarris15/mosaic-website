@@ -259,6 +259,26 @@ test('MS-730: the query builder offers every source a level may read, single and
     assert.ok(Data.querySpecsFor('form_answers', 'editor').find(s => s.key === 'formId').required);
 });
 
+test('MS-730: every catalog source has exactly one drawer part', () => {
+    const homes = {};
+    Data.SOURCES.forEach(s => {
+        const part = Data.drawerPartOf(s);
+        assert.ok(['query', 'fill', 'general'].includes(part), s.key + ' has a home');
+        homes[s.key] = part;
+    });
+    assert.equal(homes.sunday_typed, 'fill');
+    assert.equal(homes.insert_date, 'general');
+    assert.equal(homes.insert_page_number, 'general');
+    Data.SOURCES.filter(s => !s.blank && !s.scalar).forEach(s => {
+        assert.equal(homes[s.key], 'query', s.key + ' is queried');
+    });
+    assert.equal(Data.drawerPartOf('missing'), '');
+    assert.deepEqual(
+        Data.querySourcesFor('editor').map(s => s.key).sort(),
+        Data.SOURCES.filter(s => Data.drawerPartOf(s) === 'query' && !s.of && Data.mayQuery('editor', s.key)).map(s => s.key).sort()
+    );
+});
+
 test('households can be kept to those with children', () => {
     const any = Data.resolve('households', { membership: 'everyone' }, FAMILY_WITH_KIDS(), { today: TODAY, level: 'member' });
     assert.ok(any.rows.some(r => r.name === 'The Carter household'));

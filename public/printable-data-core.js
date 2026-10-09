@@ -658,11 +658,22 @@
         return sourcesFor(level).filter(s => s.shape === 'list' && s.of === parentKey);
     }
 
+    // Which part of the data drawer a catalog source lives in. Every source
+    // has exactly one home, so a new source lands without drawer markup:
+    // query by default; `blank` → Fill-in library; `scalar` → General live data.
+    function drawerPartOf(source) {
+        const s = typeof source === 'string' ? sourceByKey(source) : source;
+        if (!s) return '';
+        if (s.scalar) return 'general';
+        if (s.blank) return 'fill';
+        return 'query';
+    }
+
     // What the query builder offers this level: every source it may read,
     // single or list, related lists first and only inside their parent.
     // A scalar insert and a blank are not queried — they have no records.
     function querySourcesFor(level, parentKey) {
-        const all = sourcesFor(level).filter(s => !s.scalar && !s.blank);
+        const all = sourcesFor(level).filter(s => drawerPartOf(s) === 'query');
         const related = parentKey ? all.filter(s => s.of === parentKey) : [];
         const top = all.filter(s => !s.of);
         return related.concat(top);
@@ -1605,6 +1616,7 @@
         filtersFor,
         listSourcesFor,
         relatedSourcesFor,
+        drawerPartOf,
         querySourcesFor,
         fieldsFor,
         defaultParams,

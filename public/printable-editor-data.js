@@ -44,12 +44,12 @@
             && elRect.top < viewRect.bottom;
     }
 
-    // Which part of the drawer a catalog source lives in. Every source has
-    // exactly one home, so the same data is never two ways to the page: a
-    // record the site keeps is queried, a blank is filled in, and a scalar
-    // insert is general live data.
+    // Catalog home for a source. Prefer the catalog helper; fall back to the
+    // same flags when this module loads in Node before PrintableDataCore is on
+    // the global (string tests that only require the wires).
     function drawerPartOf(source) {
-        if (!source) return '';
+        if (Data && typeof Data.drawerPartOf === 'function') return Data.drawerPartOf(source);
+        if (!source || typeof source === 'string') return '';
         if (source.scalar) return 'general';
         if (source.blank) return 'fill';
         return 'query';
@@ -98,7 +98,14 @@
     // selection is chosen wins over the card.
     function querySubject(o) {
         const opts = o || {};
-        if (opts.ownRepeat) return { scope: 'own', source: opts.ownRepeat.source || '' };
+        if (opts.ownRepeat) {
+            // Browse other data: look at a single (or another list) without
+            // rewriting this box's Repeat. Cleared when the selection moves.
+            if (opts.browseFor && opts.selectionId && opts.browseFor === opts.selectionId) {
+                return { scope: 'browse', source: opts.pick || '' };
+            }
+            return { scope: 'own', source: opts.ownRepeat.source || '' };
+        }
         const ctx = opts.context || null;
         const pick = opts.pick || '';
         const pickedHere = !!pick && (opts.pickedFor || null) === (opts.selectionId || null);
@@ -423,7 +430,7 @@
                 // The query builder's own pick, and the selection it was
                 // made for (see querySubject). The preview is what that
                 // pick reads today, fetched for the builder alone.
-                query: { source: '', pickedFor: null, preview: emptyQueryPreview() },
+                query: { source: '', pickedFor: null, browseFor: '', preview: emptyQueryPreview() },
                 typed: { date: '', draft: emptyTypedDraft(), row: {}, saving: false, status: '' },
                 assetUploadError: '',
             },
@@ -638,6 +645,11 @@
             get querySubject() {
                 const node = this.selectedNode;
                 const own = node && node.repeat ? node.repeat : null;
+                const selectionId = (this.selection && this.selection.nodeId) || null;
+                // Drop browse-other when the selection leaves the box it was for.
+                if (this.data.query.browseFor && this.data.query.browseFor !== selectionId) {
+                    this.data.query.browseFor = '';
+                }
                 const ctx = !own && this.repeatContext ? this.repeatContext.repeat : null;
                 const related = this.canStartSubIteration ? this.relatedListSources.map(s => s.key) : [];
                 return PrintableEditorWires.querySubject({
@@ -646,7 +658,8 @@
                     related: related,
                     pick: this.data.query.source,
                     pickedFor: this.data.query.pickedFor,
-                    selectionId: (this.selection && this.selection.nodeId) || null,
+                    browseFor: this.data.query.browseFor,
+                    selectionId: selectionId,
                 });
             },
 
@@ -679,10 +692,20 @@
             // What the menu offers. A repeating box picks among lists —
             // related ones first when it sits in their parent. Browsing
             // offers every source this viewer may read, singles too.
+            // An event_list Repeat is not a catalog source: the menu stays
+            // shut so a pick cannot replace the fill-in list.
             get queryOffered() {
-                if (this.queryScope === 'own') return this.listSources;
+                if (this.queryScope === 'own') {
+                    const node = this.selectedNode;
+                    if (node && node.repeat && node.repeat.source === 'event_list') return [];
+                    return this.listSources;
+                }
                 const card = this.repeatContext;
                 return Data.querySourcesFor(this.permissionLevel, card && card.repeat ? card.repeat.source : null);
+            },
+
+            get queryIsEventList() {
+                return this.queryScope === 'own' && this.querySourceKey === 'event_list';
             },
 
             get queryCatalogRegions() {
@@ -747,10 +770,13 @@
 
             // Picking from the menu. A repeating box now repeats over that
             // list; otherwise the pick is browsed, and remembered for this
-            // selection so a card's rows do not take it back.
+            // selection so a card's rows do not take it back. Never retarget
+            // an event_list — that list is named in the Fill-in library.
             setQuerySource(key) {
                 if (!key) return;
                 if (this.queryScope === 'own') {
+                    const node = this.selectedNode;
+                    if (node && node.repeat && node.repeat.source === 'event_list') return;
                     const list = this.listSources.find(s => s.key === key);
                     if (list) this.chooseList(list);
                     return;
@@ -758,6 +784,24 @@
                 if (!this.queryOffered.some(s => s.key === key)) return;
                 this.data.query.source = key;
                 this.data.query.pickedFor = (this.selection && this.selection.nodeId) || null;
+            },
+
+            // Look at other catalog data without changing this box's Repeat.
+            browseOtherData() {
+                const node = this.selectedNode;
+                if (!node || !node.repeat) return;
+                this.data.query.browseFor = node.id;
+                this.data.query.pickedFor = node.id;
+                if (!this.data.query.source) {
+                    this.data.query.source = defaultQuerySource(
+                        this.project,
+                        Data.querySourcesFor(this.permissionLevel).map(s => s.key)
+                    ) || 'sunday';
+                }
+            },
+
+            backToRows() {
+                this.data.query.browseFor = '';
             },
 
             // The chips the pick offers.

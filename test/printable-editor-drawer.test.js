@@ -318,6 +318,12 @@ test('the builder opens on what the printable already reads most', () => {
 test('querySubject: a box\'s own query, a card\'s row, or a browsed pick remembered per selection', () => {
     const subject = PrintableEditorWires.querySubject;
     assert.deepEqual(subject({ ownRepeat: { source: 'people' }, pick: 'sunday' }), { scope: 'own', source: 'people' });
+    assert.deepEqual(subject({
+        ownRepeat: { source: 'people' }, pick: 'sunday', browseFor: 'box1', selectionId: 'box1',
+    }), { scope: 'browse', source: 'sunday' }, 'Browse other data looks elsewhere without rewriting the Repeat');
+    assert.deepEqual(subject({
+        ownRepeat: { source: 'people' }, pick: 'sunday', browseFor: 'box1', selectionId: 'other',
+    }), { scope: 'own', source: 'people' }, 'browse-other is only for the box it was opened on');
     assert.deepEqual(subject({ context: { source: 'households' }, pick: 'sunday', pickedFor: 'x', selectionId: 'y' }),
         { scope: 'row', source: 'households' }, 'a pick made elsewhere does not follow the selection into a card');
     assert.deepEqual(subject({ context: { source: 'households' }, pick: 'sunday', pickedFor: 'y', selectionId: 'y' }),
@@ -328,6 +334,21 @@ test('querySubject: a box\'s own query, a card\'s row, or a browsed pick remembe
         { scope: 'browse', source: 'household_children' });
     assert.deepEqual(subject({ pick: 'sunday' }), { scope: 'browse', source: 'sunday' });
     assert.deepEqual(subject({}), { scope: 'browse', source: '' });
+});
+
+test('an event_list Repeat is not retargeted by the query menu', () => {
+    const nodes = [box('row', [text('name')], { repeat: { source: 'event_list', params: { inputId: 'players' } } })];
+    const { ed } = editor({
+        nodes: nodes,
+        select: 'row',
+        inputs: [{ id: 'players', kind: 'list', label: 'Players', fields: [{ id: 'n', label: 'Name', kind: 'text' }] }],
+    });
+    assert.equal(ed.queryScope, 'own');
+    assert.equal(ed.querySourceKey, 'event_list');
+    assert.ok(ed.queryIsEventList);
+    assert.deepEqual(ed.queryOffered, [], 'no catalog list is offered over an event blank list');
+    ed.setQuerySource('people');
+    assert.equal(ed.selectedNode.repeat.source, 'event_list', 'the menu cannot replace a fill-in list');
 });
 
 test('the Fill-in library\'s booklet text: which Sunday, its chips, and a chip that carries that Sunday', async () => {
