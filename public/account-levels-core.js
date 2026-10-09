@@ -247,6 +247,74 @@
         return fromLevel || PRESET_VIEWER;
     }
 
+    // ── What the STORED users/{uid} document says (MS-725, ADR 0082) ────────
+    //
+    // firestore.rules can only read the document. It cannot run
+    // normalizeAccount(), cannot recompute a builtin rung's preset, and cannot
+    // overlay the Pastoral Assistant grant. So a UI gate that claims to mirror
+    // a rule has to be able to ask the same two narrower questions these two
+    // answer — and has to keep being able to ask them after auth.js has
+    // replaced `permissions` with the effective map and `permissionLevel` with
+    // the canonical rung.
+    //
+    // Whoever does that replacing carries the answers forward as
+    // `savedPermissions` and `storedLevel`. A raw document has neither, and
+    // falls through to its own fields, which on a raw document are the stored
+    // ones. Reading these off an already-resolved object is therefore the same
+    // as reading them off the document it came from.
+
+    /**
+     * The permission map an admin SAVED on the account, or null.
+     *
+     * Present exactly when the account has been through Admin → Accounts:
+     * assignUserAccountLevel() writes userWriteFromLevel()'s map every time.
+     * A legacy account that predates MS-695 has none, however editor-ish its
+     * level string.
+     *
+     * @param {object|string|null} value users/{uid}, or an object resolved from it
+     * @return {?object} the saved map, or null
+     */
+    function savedPermissionMap(value) {
+        if (!value || typeof value !== 'object') return null;
+        if ('savedPermissions' in value) {
+            const saved = value.savedPermissions;
+            return (saved && typeof saved === 'object') ? saved : null;
+        }
+        return (value.permissions && typeof value.permissions === 'object')
+            ? value.permissions
+            : null;
+    }
+
+    /**
+     * The permissionLevel string as stored, with the legacy `role` behind it —
+     * what the rules' own permissionLevel() helper reads. NOT the canonical
+     * rung canonicalPermissionLevel() works out.
+     * @param {object|string|null} value users/{uid}, or an object resolved from it
+     * @return {?string} the stored level
+     */
+    function storedPermissionLevel(value) {
+        if (!value || typeof value !== 'object') {
+            return typeof value === 'string' ? value : null;
+        }
+        if ('storedLevel' in value) return value.storedLevel || null;
+        return ('permissionLevel' in value)
+            ? (value.permissionLevel || null)
+            : (value.role || null);
+    }
+
+    /**
+     * The pair to carry forward when `permissions` and `permissionLevel` are
+     * about to be rewritten with resolved values.
+     * @param {object|string|null} value the stored document
+     * @return {{savedPermissions: ?object, storedLevel: ?string}} the markers
+     */
+    function storedMarkers(value) {
+        return {
+            savedPermissions: savedPermissionMap(value),
+            storedLevel: storedPermissionLevel(value),
+        };
+    }
+
     function accountLevelIdForPreset(presetKey) {
         return BUILTIN_LEVEL_IDS[presetKey] || BUILTIN_LEVEL_IDS[PRESET_VIEWER];
     }
@@ -426,6 +494,9 @@
         presetKeyFromPermissionLevel,
         levelMatchingPermissions,
         canonicalPermissionLevel,
+        savedPermissionMap,
+        storedPermissionLevel,
+        storedMarkers,
         migrateLegacyUser,
         normalizeAccount,
         effectivePermissions,

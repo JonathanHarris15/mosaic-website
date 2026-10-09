@@ -14,7 +14,8 @@ const Levels = require("../../public/account-levels-core.js");
 //
 // Per collection: a custom level holding the key may write; Member,
 // Viewer and signed-out may not; a custom level with the key revoked may
-// not. A legacy editor (no map) still may — the level names stay an OR.
+// not. MS-725: a SAVED map with the key revoked is refused even when the
+// stored level is `editor`; a legacy editor (no map) still may.
 
 const suite = H.skipReason
   ? (name) => test(name, {skip: H.skipReason}, () => {})
@@ -122,6 +123,11 @@ suite("MS-722: write doors honour the MS-695 key", () => {
     for (const k of keys) {
       users[uidFor("custom", k)] = customLevel(k, true);
       users[uidFor("revoked", k)] = customLevel(k, false);
+      // Saved through Admin → Accounts onto the Editor level, then the key
+      // unticked. The stored string is still `editor`; the map is the answer.
+      users[uidFor("editorRevoked", k)] = Object.assign(customLevel(k, false), {
+        permissionLevel: "editor", role: "editor",
+      });
     }
     await Promise.all(Object.entries(users).map(([uid, data]) =>
       db.collection("users").doc(uid).set(data)));
@@ -149,6 +155,10 @@ suite("MS-722: write doors honour the MS-695 key", () => {
       test("a custom level with the key revoked may not", async () => {
         const uid = uidFor("revoked", key);
         assert.equal(await writeAs(uid, pathOf(uid, "r")), 403);
+      });
+      test("a saved map with the key revoked may not, even as editor", async () => {
+        const uid = uidFor("editorRevoked", key);
+        assert.equal(await writeAs(uid, pathOf(uid, "x")), 403);
       });
       test("a legacy editor (no map) still may", async () => {
         assert.equal(

@@ -101,7 +101,12 @@
           permissionLevel: permissionLevel,
           pastoralAssistant: pastoralAssistant,
           accountLevelId: account.accountLevelId || null,
+          // The effective map, and — because a write gate mirrors the rules
+          // and the rules read the document — what the document itself held
+          // (MS-725, ADR 0082). app.js asks canFixSundayService of this object.
           permissions: account.permissions || null,
+          savedPermissions: account.savedPermissions || null,
+          storedLevel: account.storedLevel || null,
           roleLabel: Destinations.accountLabel(account),
           personId: data.personId || null,
           photoUrl: person.photoUrl || null,

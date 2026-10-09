@@ -51,11 +51,24 @@ service cloud.firestore {
     // MS-722 (ADR 0081): a write door names the MS-695 permission key that
     // Admin Accounts grants for the page that writes there, so a custom
     // level built from Member plus that key (Admin → Accounts) can do what
-    // its page offers. The level names isEditor() always admitted stay as
-    // an OR — nobody loses a door they had. WRITE paths only; reads are
-    // untouched. Signed out is still no: hasPermission needs a user doc.
+    // its page offers. WRITE paths only; reads are untouched. Signed out is
+    // still no: hasPermission needs a user doc.
+    //
+    // ⚠ MS-725 (ADR 0082): ONCE A MAP HAS BEEN SAVED ON THE ACCOUNT, THE KEY
+    // IS THE WHOLE ANSWER. MS-722 kept isEditor() as a plain OR so nobody
+    // lost a door, and that made the grant one-way: an account whose stored
+    // permissionLevel is `editor` kept all nineteen doors however the admin
+    // set the map, so unticking a key in Admin → Accounts changed nothing.
+    // A permission that cannot be taken away is not a permission.
+    //
+    // usesPermissionMap() is the marker, and it is the marker because it is
+    // exactly what Admin → Accounts writes: assignUserAccountLevel() stores
+    // userWriteFromLevel()'s `permissions` map on users/{uid} every time a
+    // level is assigned. An account that has never been through that screen
+    // has no map to read, so it keeps the level names — the same shape
+    // readsAsEditor(), writesTheRecord() and countsAsElder() already use.
     function editsWith(key) {
-      return isEditor() || hasPermission(key);
+      return hasPermission(key) || (!usesPermissionMap() && isEditor());
     }
 
     // Helper to check if user is a member or above. The floor of the `member`
