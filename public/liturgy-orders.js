@@ -27,11 +27,8 @@ function describeLiturgyLoadFailure(error) {
     return 'The liturgy orders did not load. Try again. Standard is shown in their place, and saving stays off until they load.';
 }
 
-// A dragged kind is a copy of an Alpine row. The copy must not carry
-// directives: Alpine would evaluate `kind` outside the loop that defined it.
 // Sortable's newDraggableIndex counts with the list the drag started in.
-// A kind dropped into the order is still a library row, so that count is 0
-// and the placement snaps to the top. The index is where the row actually sits.
+// A row's index is where it actually sits.
 function indexInList(list, item) {
     let index = 0;
     if (!list) return index;
@@ -46,6 +43,19 @@ function indexInList(list, item) {
     return index;
 }
 
+// Above the first row whose midpoint is below the pointer. Past the last
+// midpoint, the kind goes at the end. An empty order is index 0.
+function kindDropIndex(pointerY, rows) {
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const mid = row.top + (row.bottom - row.top) / 2;
+        if (pointerY < mid) return i;
+    }
+    return rows.length;
+}
+
+// The drag ghost is a copy of an Alpine tile. Leave the directives on it
+// and Alpine evaluates `kind` outside the loop that defined it.
 function stripAlpine(node) {
     [node, ...node.querySelectorAll('*')].forEach((el) => {
         [...el.attributes].forEach((attr) => {
@@ -131,6 +141,10 @@ function liturgyOrdersPage() {
         },
 
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
+        tileLabel(kind) {
+            const where = this.inspectorIndex >= 0 ? 'after the selected element' : 'to the end';
+            return 'Add ' + this.kindLabel(kind) + ' ' + where + '. Drag it to a spot in the order.';
+        },
         kindIcon(kind) { return KIND_ICONS[kind] || 'help'; },
         takesName(kind) { return Core.kindTakesName(kind); },
         displayName(el) { return Core.elementDisplayName(el); },
@@ -269,8 +283,19 @@ function liturgyOrdersPage() {
             if (this._apply(cat => Core.deleteOrder(cat, order.id))) this.selectOrder(Core.STANDARD_ORDER_ID);
         },
 
+        // A click adds after the selection, or at the end. A drag that just
+        // finished also emits click; that click is not a second insert.
+        placeKindFromTile(kind) {
+            if (this._suppressKindClick) {
+                this._suppressKindClick = false;
+                return;
+            }
+            this.placeKind(kind);
+        },
+
         // A kind from the collection, placed on this order. The same kind can
-        // be placed again: each place is its own instance.
+        // be placed again: each place is its own instance. An index from a
+        // drop is where the tile landed, and it wins over the selection.
         placeKind(kind, index) {
             if (!kind) return;
             let at = index;
@@ -308,10 +333,92 @@ function liturgyOrdersPage() {
             }
         },
 
+        // The tile stays put. A pointer past a few pixels drags a copy, and
+        // the gap line shows where the new instance will land.
+        kindPointerDown(event, kind) {
+            if (!this.editing || !kind || event.button !== 0) return;
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const tile = event.currentTarget;
+            let dragging = false;
+            const move = (e) => {
+                if (!dragging) {
+                    if (Math.hypot(e.clientX - startX, e.clientY - startY) < 4) return;
+                    dragging = true;
+                    this._suppressKindClick = true;
+                    this._beginKindDrag(tile);
+                }
+                this._moveKindDrag(e.clientX, e.clientY);
+            };
+            const up = () => {
+                document.removeEventListener('pointermove', move);
+                document.removeEventListener('pointerup', up);
+                if (!dragging) return;
+                const index = this._kindDropIndex;
+                this._endKindDrag();
+                if (index != null) this.placeKind(kind, index);
+                setTimeout(() => { this._suppressKindClick = false; }, 50);
+            };
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+        },
+
+        _beginKindDrag(tile) {
+            const ghost = tile.cloneNode(true);
+            stripAlpine(ghost);
+            ghost.classList.add('lo-kind-ghost');
+            ghost.style.width = tile.getBoundingClientRect().width + 'px';
+            document.body.appendChild(ghost);
+            const line = document.createElement('div');
+            line.className = 'lo-drop-line';
+            line.hidden = true;
+            document.body.appendChild(line);
+            this._kindGhost = ghost;
+            this._kindLine = line;
+            this._kindDropIndex = null;
+        },
+
+        _moveKindDrag(x, y) {
+            const ghost = this._kindGhost;
+            if (ghost) {
+                ghost.style.left = (x + 10) + 'px';
+                ghost.style.top = (y + 10) + 'px';
+            }
+            const list = document.getElementById('order-elements');
+            const line = this._kindLine;
+            if (!list || !line) return;
+            const rect = list.getBoundingClientRect();
+            const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+            if (!inside) {
+                line.hidden = true;
+                this._kindDropIndex = null;
+                return;
+            }
+            if (y < rect.top + 28) list.scrollTop -= 14;
+            else if (y > rect.bottom - 28) list.scrollTop += 14;
+            const rows = [...list.querySelectorAll('[data-order-row]')].filter((row) => row.getClientRects().length);
+            const index = kindDropIndex(y, rows.map((row) => {
+                const r = row.getBoundingClientRect();
+                return { top: r.top, bottom: r.bottom };
+            }));
+            const edge = index < rows.length ? rows[index].getBoundingClientRect().top : (rows.length ? rows[rows.length - 1].getBoundingClientRect().bottom : rect.top + 8);
+            this._kindDropIndex = index;
+            line.hidden = false;
+            line.style.left = rect.left + 'px';
+            line.style.top = (edge - 2) + 'px';
+            line.style.width = rect.width + 'px';
+        },
+
+        _endKindDrag() {
+            if (this._kindGhost) this._kindGhost.remove();
+            if (this._kindLine) this._kindLine.remove();
+            this._kindGhost = null;
+            this._kindLine = null;
+            this._kindDropIndex = null;
+        },
+
         // Sortable moves the DOM; Alpine owns it. Put the row back where it
         // was and let the model move it, so the two never disagree.
-        // The library clones into the order: the drop inserts an id, and the
-        // element itself stays in the collection.
         initSortable() {
             if (!this.editing || typeof Sortable === 'undefined') return;
             const list = document.getElementById('order-elements');
@@ -325,6 +432,7 @@ function liturgyOrdersPage() {
                         evt.item.dataset.dragFrom = String(indexInList(evt.from, evt.item));
                     },
                     onEnd: (evt) => {
+                        if (evt.from !== evt.to) return;
                         const from = Number(evt.item.dataset.dragFrom);
                         const to = indexInList(evt.to, evt.item);
                         delete evt.item.dataset.dragFrom;
@@ -445,5 +553,6 @@ if (typeof module !== 'undefined' && module.exports) {
         liturgyOrdersPage,
         describeLiturgyLoadFailure,
         KIND_ICONS,
+        kindDropIndex,
     };
 }

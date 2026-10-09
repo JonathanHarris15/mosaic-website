@@ -61,6 +61,43 @@ test('a failed read does not save the stand-in over the congregation\'s orders',
     assert.equal(saved, false);
 });
 
+test('a drop index is the first row whose middle is below the pointer', async () => {
+    const { kindDropIndex } = require('../public/liturgy-orders.js');
+    const rows = [
+        { top: 0, bottom: 40 },
+        { top: 40, bottom: 80 },
+        { top: 80, bottom: 120 },
+    ];
+    assert.equal(kindDropIndex(0, rows), 0);
+    assert.equal(kindDropIndex(19, rows), 0);
+    assert.equal(kindDropIndex(20, rows), 1);
+    assert.equal(kindDropIndex(70, rows), 2);
+    assert.equal(kindDropIndex(200, rows), 3);
+    assert.equal(kindDropIndex(10, []), 0);
+});
+
+test('a chosen index places the kind there even when another element is selected', async () => {
+    const page = await loadedPage();
+    const ids = page.selectedOrder.elementIds.slice();
+    page.selectElement(ids[2]);
+    page.placeKind('hymn', 0);
+    assert.equal(page.selectedOrder.elementIds[0], page.selectedElementId);
+    const el = Core.elementById(page.catalog, page.selectedElementId);
+    assert.equal(el.kind, 'hymn');
+    assert.equal(page.selectedOrder.elementIds[3], ids[2]);
+});
+
+test('a drag-finished click does not insert a second kind', async () => {
+    const page = await loadedPage();
+    const before = page.selectedOrder.elementIds.length;
+    page._suppressKindClick = true;
+    page.placeKindFromTile('other');
+    assert.equal(page.selectedOrder.elementIds.length, before);
+    assert.equal(page._suppressKindClick, false);
+    page.placeKindFromTile('other');
+    assert.equal(page.selectedOrder.elementIds.length, before + 1);
+});
+
 test('insert-after places a new kind after the selected element', async () => {
     const page = await loadedPage();
     const ids = page.selectedOrder.elementIds.slice();
