@@ -1,0 +1,133 @@
+name: Firebase Hosting preview cleanup
+
+# MS-726.
+
+# Preview channels (`pr-<number>`, made by firebase-preview.yml) used to live
+# until their 7-day expiry. A busy day of PRs filled the site's channel quota
+# and a new PR's preview could not be created. This workflow gives the
+# channels back:
+#
+#   * pull_request: closed  — deletes that PR's `pr-<n>` channel.
+#   * workflow_dispatch      — prune: lists the church site's channels and
+#                              deletes every `pr-<n>` whose PR is closed or
+#                              merged. Open PRs keep theirs.
+#
+# Only channels named exactly `pr-<digits>` are ever touched. `live` and any
+# other channel are left alone by construction. Never `firebase deploy`.
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted, delete nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: firebase-preview-cleanup-${{ github.event.pull_request.number || 'prune' }}
+  cancel-in-progress: false
+
+env:
+  PROJECT: mosaic-hymn-database
+  SITE: mosaic-hymn-database
+
+jobs:
+  cleanup:
+    name: Delete preview channels of closed PRs
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Load Firebase service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE }}
+        run: |
+          set -euo pipefail
+          SA_JSON="${FIREBASE_SERVICE_ACCOUNT:-${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE:-}}"
+          if [ -z "${SA_JSON}" ]; then
+            echo "::error::No Firebase service account secret."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "${SA_JSON}" > "${RUNNER_TEMP}/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-sa.json" >> "${GITHUB_ENV}"
+
+      - name: Delete this PR's channel
+        if: github.event_name == 'pull_request'
+        run: |
+          set -uo pipefail
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          if npx firebase hosting:channel:delete "${CHANNEL}" --site "${SITE}" --project "${PROJECT}" --force --non-interactive > "${RUNNER_TEMP}/out.txt" 2>&1; then
+            echo "Deleted ${CHANNEL}."
+          else
+            cat "${RUNNER_TEMP}/out.txt"
+            # A PR whose preview never deployed (docs-only, fork) has no channel.
+            if grep -qiE "not ?found|404" "${RUNNER_TEMP}/out.txt"; then
+              echo "No ${CHANNEL} channel; nothing to delete."
+            else
+              echo "::error::Could not delete ${CHANNEL}."
+              exit 1
+            fi
+          fi
+
+      - name: Prune channels of closed PRs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if ! npx firebase hosting:channel:list --site "${SITE}" --project "${PROJECT}" --json > "${RUNNER_TEMP}/channels.json" 2> "${RUNNER_TEMP}/list.err"; then
+            cat "${RUNNER_TEMP}/channels.json" "${RUNNER_TEMP}/list.err" || true
+            echo "::error::Could not list channels."
+            exit 1
+          fi
+          node -e '
+            const r = require(process.argv[1]).result;
+            const list = Array.isArray(r) ? r : ((r && r.channels) || []);
+            for (const c of list) console.log(String(c.name || "").split("/").pop());
+          ' "${RUNNER_TEMP}/channels.json" > "${RUNNER_TEMP}/names.txt"
+          TOTAL=$(wc -l < "${RUNNER_TEMP}/names.txt")
+          echo "Channels on ${SITE}: ${TOTAL}"
+          echo "### Preview channels on ${SITE}: ${TOTAL}" >> "${GITHUB_STEP_SUMMARY}"
+          DELETED=0; KEPT=0
+          while read -r name; do
+            # Only pr-<digits>. `live` and anything else are never candidates.
+            if ! [[ "${name}" =~ ^pr-([0-9]+)$ ]]; then
+              echo "skip ${name}"
+              continue
+            fi
+            n="${BASH_REMATCH[1]}"
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${n}" -q .state 2>/dev/null || echo unknown)"
+            if [ "${state}" != "closed" ]; then
+              echo "keep ${name} (PR #${n} ${state})"
+              KEPT=$((KEPT + 1))
+              continue
+            fi
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "would delete ${name} (PR #${n} closed)"
+            else
+              npx firebase hosting:channel:delete "${name}" --site "${SITE}" --project "${PROJECT}" --force --non-interactive
+              echo "deleted ${name} (PR #${n} closed)"
+            fi
+            DELETED=$((DELETED + 1))
+          done < "${RUNNER_TEMP}/names.txt"
+          echo "- ${DELETED} closed-PR channel(s) $([ "${DRY_RUN}" = "true" ] && echo 'would be ' )deleted, ${KEPT} open-PR channel(s) kept" >> "${GITHUB_STEP_SUMMARY}"
