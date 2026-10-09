@@ -113,6 +113,18 @@ function stamp() {
     return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
+/**
+ * Firestore treats dots in update keys as path separators. The catalog key
+ * `calendar.events.edit` is one field name, so a string path
+ * `permissions.calendar.events.edit` would nest `{ calendar: { events:
+ * { edit } } }` beside the real flat key. FieldPath keeps the key intact.
+ * @param {*} firestore the admin.firestore namespace
+ * @return {*} a FieldPath
+ */
+function permissionFieldPath(firestore) {
+    return new firestore.FieldPath('permissions', KEY);
+}
+
 function snapshotPath(kind, at) {
     return path.join(
         __dirname, '..', 'docs', 'ops',
@@ -139,6 +151,7 @@ module.exports = {
     allowedProject,
     planForUser,
     equalsEditorPresetExceptCalendarKey,
+    permissionFieldPath,
     initials,
 };
 
@@ -175,7 +188,7 @@ if (require.main === module) {
                     field: FIELD,
                     before: !!(data.permissions && data.permissions[KEY] === true),
                     after: acct.before === true,
-                    update: {[FIELD]: acct.before === true},
+                    value: acct.before === true,
                 });
             }
         } else {
@@ -193,7 +206,7 @@ if (require.main === module) {
                     field: plan.field,
                     before: plan.before,
                     after: plan.after,
-                    update: {[plan.field]: plan.after},
+                    value: plan.after,
                 });
             }
         }
@@ -205,6 +218,11 @@ if (require.main === module) {
             console.log(
                 `  ${row.initials} ${row.uid.slice(0, 8)}…  ${row.field}: ` +
                 `${JSON.stringify(row.before)} -> ${JSON.stringify(row.after)}`);
+        }
+
+        if (!rows.length) {
+            console.log('Nothing to write.');
+            return;
         }
 
         const at = stamp();
@@ -239,14 +257,16 @@ if (require.main === module) {
         }
 
         const batch = db.batch();
+        const fieldPath = permissionFieldPath(admin.firestore);
         for (const row of rows) {
-            batch.update(db.collection('users').doc(row.uid), row.update);
+            batch.update(db.collection('users').doc(row.uid), fieldPath, row.value);
         }
         await batch.commit();
         console.log(`Wrote ${rows.length} user(s).`);
+        const root = path.join(__dirname, '..');
         console.log(
             'Revert: node scripts/backfill-editor-calendar-key.js ' +
-            `--project ${projectId} --i-mean-prod --revert ${path.relative(path.join(__dirname, '..'), beforePath)} --commit`);
+            `--project ${projectId} --i-mean-prod --revert ${path.relative(root, beforePath)} --commit`);
     })().catch((e) => {
         console.error(e.message || e);
         process.exit(1);

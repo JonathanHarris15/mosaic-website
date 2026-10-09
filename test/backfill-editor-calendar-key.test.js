@@ -77,6 +77,14 @@ test('the current Editor preset still matches on every other catalog key', () =>
     assert.ok(Catalog.PERMISSION_KEYS.includes(Backfill.KEY));
 });
 
+test('the write path keeps the dotted key as one field name', () => {
+    function FieldPath(a, b) {
+        this.segments = [a, b];
+    }
+    const fp = Backfill.permissionFieldPath({ FieldPath });
+    assert.deepEqual(fp.segments, ['permissions', 'calendar.events.edit']);
+});
+
 test('dry-run is the default; --commit needs --i-mean-prod; only the church project', () => {
     assert.equal(Backfill.committing(['node', 'backfill-editor-calendar-key.js']), false);
     assert.equal(Backfill.willWrite([
