@@ -46,6 +46,7 @@
         let inFlight = 0;
         let failed = false;
         let pending = null;      // a remote copy held back while we had unsaved work
+        let latest = null;       // the newest server copy seen (ours included)
         let error = '';
 
         function status() {
@@ -97,6 +98,7 @@
             remote(data, meta) {
                 if (meta && meta.pendingWrites) return 'ignored';
                 const f = fp(data);
+                latest = { data, f };
                 if (f != null && f === base) return 'ignored';
                 if (isClean()) {
                     base = f;
@@ -109,10 +111,13 @@
                 emit();
                 return 'held';
             },
-            // The person chose the newer copy: theirs replaces ours.
+            // The person chose the newer copy: theirs replaces ours. If this
+            // copy has saved since the change was held (whole-document saves
+            // are last-write-wins), the newest server copy is what is shown,
+            // never a stale one.
             reload() {
                 if (!pending) return false;
-                const p = pending;
+                const p = latest || pending;
                 pending = null;
                 base = p.f;
                 savedGen = editGen;

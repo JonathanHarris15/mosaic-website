@@ -32,6 +32,11 @@ function formDocumentPage() {
         questions: [],
         answers: {},
         saveStatus: 'saved',
+        // ADR 0081 / MS-721: one document — a change made elsewhere is taken
+        // only while this copy has nothing unsaved; otherwise "Changed
+        // elsewhere — reload to see it" with Reload.
+        changedElsewhere: false,
+        _live: null,
         personQueries: {},
         directory: [],
         fileFaults: {},
@@ -217,6 +222,7 @@ function formDocumentPage() {
                     this.questions = Array.isArray(data.questions) ? data.questions : [];
                     this.answers = Object.assign({}, data.answers || {});
                     this.readyForLists();
+                    this.startLive(data);
                     this.loadDirectory();
                 } catch (e) {
                     this.problem = 'That did not load. Check your connection and refresh.';
@@ -246,7 +252,7 @@ function formDocumentPage() {
         // the indicator tidy.
 
         touch() {
-            this.saveStatus = 'unsaved';
+            if (this._live) this._live.edited(); else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(), 1500);
         },
@@ -255,24 +261,65 @@ function formDocumentPage() {
 
         async save() {
             if (!this.docId) return;
-            this.saveStatus = 'saving';
+            clearTimeout(this._saveTimer);
+            const ticket = this._live ? this._live.saving() : 0;
+            // Only the answers move. The questions are the record's own and
+            // are never rewritten from here.
+            const written = { title: this.title.trim() || 'Untitled', answers: JSON.parse(JSON.stringify(this.answers)) };
             try {
-                await db.collection('elder_documents').doc(this.docId).update({
-                    title: this.title.trim() || 'Untitled',
-                    // Only the answers move. The questions are the record's own
-                    // and are never rewritten from here.
-                    answers: JSON.parse(JSON.stringify(this.answers)),
+                await db.collection('elder_documents').doc(this.docId).update(Object.assign({}, written, {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedByName: this.currentUserName,
-                });
-                this.saveStatus = 'saved';
+                }));
+                if (this._live) this._live.saved(ticket, written); else this.saveStatus = 'saved';
+                this.problem = '';
                 await this.refileForSubject();
             } catch (e) {
                 console.error('Error saving form document:', e);
-                this.saveStatus = 'unsaved';
-                this.problem = 'That did not save. What is on screen is still here — try again in a moment.';
+                // "Not saved" + Retry; what is on screen is kept and the next
+                // edit tries again on its own.
+                if (this._live) this._live.failed(ticket, e); else this.saveStatus = 'failed';
+                this.problem = 'That did not save. What is on screen is still here — Retry, or keep typing.';
             }
         },
+
+        // ── Live (ADR 0081, MS-721) ──────────────────────────────────────────
+        // Empty answers (an unticked select-all list, a cleared box) are not
+        // a difference between two copies.
+        formDocFingerprint(d) {
+            const answers = {};
+            const raw = (d && d.answers) || {};
+            Object.keys(raw).sort().forEach(k => {
+                const v = raw[k];
+                if (v == null || v === '' || (Array.isArray(v) && !v.length)) return;
+                answers[k] = v;
+            });
+            return JSON.stringify({ t: ((d && d.title) || '').trim() || 'Untitled', a: answers });
+        },
+        startLive(data) {
+            if (typeof DocLive === 'undefined' || this._live) return;
+            const self = this;
+            this._live = DocLive.create({
+                fingerprint: (d) => self.formDocFingerprint(d),
+                onAdopt: (d) => {
+                    clearTimeout(self._saveTimer);
+                    self.doc = Object.assign({}, self.doc, d);
+                    self.title = d.title || '';
+                    self.answers = Object.assign({}, d.answers || {});
+                    self.readyForLists();
+                },
+                onChange: (st) => { self.saveStatus = st.status; self.changedElsewhere = st.changedElsewhere; },
+            });
+            this._live.loaded(data);
+            if (typeof MosaicLiveRead === 'undefined') return;
+            MosaicLiveRead.watch(db.collection('elder_documents').doc(this.docId), (snap) => {
+                if (!snap || !snap.exists) return;
+                self._live.remote(snap.data() || {}, { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) });
+            }, { onError: (e) => console.warn('This document is not following live changes:', e && e.message) });
+        },
+        reloadDocument() { if (this._live) this._live.reload(); },
+        retrySave() { return this.save(); },
+        get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
         // ── Filed by its first answer (MS-405) ───────────────────────────────
         //

@@ -39,6 +39,7 @@
 
     let editor = null;
     let saveTimer = null;
+    let live = null;   // DocLive (MS-721)
 
     // ⚠ KEPT OUT OF ALPINE STATE ON PURPOSE. Alpine wraps state in a proxy, and
     // a proxied File is no longer a File to FileReader — the brand check fails
@@ -73,6 +74,10 @@
             title: '',
 
             saveStatus: 'saved',
+            // ADR 0081 / MS-721: one document — a change made elsewhere is
+            // taken only while this copy has nothing unsaved; otherwise
+            // "Changed elsewhere — reload to see it" with Reload.
+            changedElsewhere: false,
             exportingWord: false,
             importingWord: false,
             insertingImage: false,
@@ -148,6 +153,7 @@
                     this.loading = false;
                     await this.$nextTick();
                     await this.mountEditor();
+                    this.startLive(document_);
                 } catch (e) {
                     console.error('Could not open the document:', e);
                     this.error = 'That document could not be opened. You may no longer have access to it.';
@@ -205,7 +211,7 @@
                     ],
                     content: this.doc.contentJson || Body.emptyBody(),
                     onUpdate() {
-                        self.saveStatus = 'unsaved';
+                        self.markEdited();
                         self.queueSave();
                     },
                     onSelectionUpdate() { self.editorTick++; },
@@ -369,7 +375,7 @@
                     const dataUrl = await ImageCore.capToDataUrl(file, ImageCore.BUDGET_BYTES);
                     if (working) this.notice = '';
                     this.command(chain => chain.setImage({ src: dataUrl, alt: file.name }).run());
-                    this.saveStatus = 'unsaved';
+                    this.markEdited();
                     this.queueSave();
                 } catch (e) {
                     console.error('Could not read that picture:', e);
@@ -397,26 +403,54 @@
             // which is not this screen's to say.
             async save() {
                 if (!this.isEditor || !editor) return;
-                this.saveStatus = 'saving';
+                clearTimeout(saveTimer);
+                const ticket = live ? live.saving() : 0;
+                const written = { title: Body.normaliseTitle(this.title), contentJson: editor.getJSON() };
                 try {
-                    await Store.updateEventDocument(db, OCCURRENCE_ID, DOCUMENT_ID, {
-                        title: Body.normaliseTitle(this.title),
-                        contentJson: editor.getJSON(),
+                    await Store.updateEventDocument(db, OCCURRENCE_ID, DOCUMENT_ID, Object.assign({}, written, {
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                         updatedByName: this.userName || null,
-                    });
-                    this.saveStatus = 'saved';
+                    }));
+                    if (live) live.saved(ticket, written); else this.saveStatus = 'saved';
                 } catch (e) {
                     console.error('Could not save the document:', e);
-                    this.saveStatus = 'unsaved';
+                    // "Not saved" + Retry; the next edit tries again on its own.
+                    if (live) live.failed(ticket, e); else this.saveStatus = 'failed';
                 }
             },
 
             onTitleInput() {
                 if (!this.isEditor) return;
-                this.saveStatus = 'unsaved';
+                this.markEdited();
                 this.queueSave();
             },
+
+            // ── Live (ADR 0081, MS-721) ──────────────────────────────────────
+            markEdited() { if (live) live.edited(); else this.saveStatus = 'unsaved'; },
+            startLive(document_) {
+                if (typeof DocLive === 'undefined' || live) return;
+                const self = this;
+                live = DocLive.create({
+                    fingerprint: (d) => JSON.stringify({ t: Body.normaliseTitle((d && d.title) || ''), c: (d && d.contentJson) || null }),
+                    onAdopt: (d) => {
+                        clearTimeout(saveTimer);
+                        self.title = d.title || '';
+                        self.doc = Object.assign({}, self.doc, d);
+                        // emitUpdate false: an adopted copy is not an edit.
+                        if (editor) editor.commands.setContent(d.contentJson || Body.emptyBody(), false);
+                    },
+                    onChange: (st) => { self.saveStatus = st.status; self.changedElsewhere = st.changedElsewhere; },
+                });
+                live.loaded(document_);
+                if (typeof MosaicLiveRead === 'undefined') return;
+                MosaicLiveRead.watch(db.collection('event_occurrences').doc(OCCURRENCE_ID).collection('documents').doc(DOCUMENT_ID), (snap) => {
+                    if (!snap || !snap.exists) return;
+                    live.remote(snap.data() || {}, { pendingWrites: !!(snap.metadata && snap.metadata.hasPendingWrites) });
+                }, { onError: (e) => console.warn('This document is not following live changes:', e && e.message) });
+            },
+            reloadDocument() { if (live) live.reload(); },
+            retrySave() { return this.save(); },
+            get chipText() { return (typeof DocLive !== 'undefined') ? DocLive.chipText(this.saveStatus) : ''; },
 
             // ── Word, both ways ──────────────────────────────────────────────
             //
@@ -453,7 +487,7 @@
                     // At the cursor, never over the top — the same rule the
                     // Elder Document editor follows, and for the same reason.
                     editor.chain().focus().insertContent(html).run();
-                    this.saveStatus = 'unsaved';
+                    this.markEdited();
                     this.queueSave();
                 } catch (e) {
                     console.error('Word import failed:', e);

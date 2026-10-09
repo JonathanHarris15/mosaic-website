@@ -85,3 +85,15 @@ test('Retry after a failure: a good save clears Not saved', () => {
     assert.equal(live.state.status, 'saved');
     assert.equal(DocLive.chipText('failed'), 'Not saved');
 });
+
+test('Reload after this copy saved over a held change shows the server copy, not a stale one', () => {
+    const { live, adopted } = rig();
+    live.edited();
+    live.remote({ body: 'theirs' });           // held
+    const t = live.saving();
+    live.saved(t, { body: 'mine' });
+    live.remote({ body: 'mine' });             // our echo: ignored, but it is the newest copy
+    assert.equal(live.state.changedElsewhere, true);
+    live.reload();
+    assert.deepEqual(adopted, ['mine']);
+});
