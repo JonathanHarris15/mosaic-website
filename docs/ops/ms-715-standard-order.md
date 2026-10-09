@@ -57,6 +57,18 @@ node scripts/patch-liturgy-order.js --project mosaic-hymn-database --i-mean-prod
 
 The apply re-plans inside a transaction and writes `standard-before-<stamp>.json` and `standard-after-<stamp>.json` next to the patch. It also prints the revert command (`--revert <before file> --commit`), which puts every element's name and `hasNote` back.
 
+**Applied 2026-10-09** (9 display-field changes; element ids unchanged). Snapshots committed in this repo:
+
+- `docs/ops/standard-before-2026-10-09T01-02-17-310Z.json` — live state immediately before apply
+- `docs/ops/standard-after-2026-10-09T01-02-17-310Z.json` — live state immediately after apply
+
+Revert to the pre-apply names and note toggles (needs credentials, same as apply):
+
+```
+node scripts/patch-liturgy-order.js --project mosaic-hymn-database --i-mean-prod \
+  --revert docs/ops/standard-before-2026-10-09T01-02-17-310Z.json --commit
+```
+
 On the Liturgy Orders page an editor can switch on the note for Call to Worship and Call to Confession and rename any element, hymns included (MS-716; ADR 0080 amendment). The seven Standard hymn display names can be set in the UI or with this script for a one-shot prod patch.
 
 Once set, the names hold. `elementDisplayName` reads a stored hymn name and falls back to "Hymn" when blank; ids never change on rename. A later save from the Liturgy Orders page writes the element back with its name. Hymns still line up by position when a Sunday moves between orders, so the names do not change how a Sunday is translated.
