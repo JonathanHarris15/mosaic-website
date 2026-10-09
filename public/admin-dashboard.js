@@ -273,43 +273,108 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // ── Event announcement wording saves itself (ADR 0081, MS-721) ───
+        // Typing waits 1.5 s, blur saves now, Escape puts back what is stored.
+        // The page is gated on admin.dashboard.access (accessesAdminDashboard),
+        // the key this whole page stands on; app_config stays the backstop.
+        wordingLive: null,
+        stopWordingWatch: null,
+        wordingChip: 'saved',
+        wordingError: '',
+
+        get wordingChipText() {
+            return typeof LiveFields !== 'undefined' ? LiveFields.chipText(this.wordingChip) : '';
+        },
+
+        wordingFrom(saved) {
+            const d = saved || {};
+            return {
+                text: d.eventAnnouncementText || EVENT_ANNOUNCEMENT_DEFAULTS.text,
+                pushTitle: d.pushEventAnnouncementTitle || EVENT_ANNOUNCEMENT_DEFAULTS.pushTitle,
+                pushBody: d.pushEventAnnouncementBody || EVENT_ANNOUNCEMENT_DEFAULTS.pushBody,
+            };
+        },
+
         async loadEventAnnouncementWording() {
             try {
                 const doc = await db.collection('app_config').doc('prayer_request_sms').get();
-                const saved = doc.exists ? doc.data() : {};
-                this.eventAnnouncementWording = {
-                    text: saved.eventAnnouncementText || EVENT_ANNOUNCEMENT_DEFAULTS.text,
-                    pushTitle: saved.pushEventAnnouncementTitle || EVENT_ANNOUNCEMENT_DEFAULTS.pushTitle,
-                    pushBody: saved.pushEventAnnouncementBody || EVENT_ANNOUNCEMENT_DEFAULTS.pushBody,
-                };
+                this.eventAnnouncementWording = this.wordingFrom(doc.exists ? doc.data() : {});
             } catch (e) {
                 console.error('Error loading event announcement wording:', e);
                 this.showToast('Could not load event announcement wording', 'error');
+                return;
+            }
+            this.startLiveWording();
+        },
+
+        startLiveWording() {
+            if (typeof LiveFields === 'undefined') return;
+            if (this.wordingLive) this.wordingLive.dispose();
+            const STORED = { text: 'eventAnnouncementText', pushTitle: 'pushEventAnnouncementTitle', pushBody: 'pushEventAnnouncementBody' };
+            this.wordingLive = LiveFields.create({
+                fields: ['text', 'pushTitle', 'pushBody'],
+                initial: { ...this.eventAnnouncementWording },
+                save: async (patch) => {
+                    const write = {
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedBy: this.currentUser.uid,
+                    };
+                    const stored = {};
+                    Object.keys(patch).forEach(f => {
+                        stored[f] = String(patch[f] == null ? '' : patch[f]).trim();
+                        write[STORED[f]] = stored[f];
+                    });
+                    try {
+                        await db.collection('app_config').doc('prayer_request_sms').set(write, { merge: true });
+                    } catch (e) {
+                        console.error('Error saving event announcement wording:', e);
+                        this.showToast('Error saving event announcement wording', 'error');
+                        throw e;
+                    }
+                    return stored;
+                },
+                onChange: (state) => {
+                    this.wordingChip = state.status;
+                    this.wordingError = state.error || '';
+                    this.eventAnnouncementSaving = state.status === 'saving';
+                },
+            });
+            const Live = window.MosaicLiveRead;
+            if (this.stopWordingWatch) { try { this.stopWordingWatch(); } catch (e) {} }
+            this.stopWordingWatch = null;
+            if (Live && db && typeof db.collection === 'function') {
+                try {
+                    this.stopWordingWatch = Live.watch(db.collection('app_config').doc('prayer_request_sms'), (snap) => {
+                        if (!snap || !this.wordingLive) return;
+                        const pending = !!(snap.metadata && snap.metadata.hasPendingWrites);
+                        this.wordingLive.remote(this.wordingFrom(snap.exists ? snap.data() : {}), { pendingWrites: pending });
+                        this.eventAnnouncementWording = { ...this.wordingLive.state.draft };
+                    }, { onError: () => {} });
+                } catch (e) { /* stays as loaded */ }
             }
         },
 
+        editWording(field, value) {
+            this.eventAnnouncementWording = { ...this.eventAnnouncementWording, [field]: value };
+            if (this.wordingLive) this.wordingLive.edit(field, value);
+        },
+
+        revertWording(field) {
+            if (!this.wordingLive) return;
+            this.wordingLive.revert(field);
+            this.eventAnnouncementWording = { ...this.wordingLive.state.draft };
+        },
+
+        // Blur / Retry. No Save button any more.
         async saveEventAnnouncementWording() {
-            this.eventAnnouncementSaving = true;
-            try {
-                await db.collection('app_config').doc('prayer_request_sms').set({
-                    eventAnnouncementText: this.eventAnnouncementWording.text.trim(),
-                    pushEventAnnouncementTitle: this.eventAnnouncementWording.pushTitle.trim(),
-                    pushEventAnnouncementBody: this.eventAnnouncementWording.pushBody.trim(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: this.currentUser.uid,
-                }, { merge: true });
-                this.showToast('Event announcement wording saved');
-            } catch (e) {
-                console.error('Error saving event announcement wording:', e);
-                this.showToast('Error saving event announcement wording', 'error');
-            } finally {
-                this.eventAnnouncementSaving = false;
-            }
+            if (!this.wordingLive) return;
+            return this.wordingLive.flush();
         },
 
         resetEventAnnouncementWording() {
-            this.eventAnnouncementWording = { ...EVENT_ANNOUNCEMENT_DEFAULTS };
-            this.showToast('Reset to defaults — Save to apply');
+            Object.keys(EVENT_ANNOUNCEMENT_DEFAULTS).forEach(f => this.editWording(f, EVENT_ANNOUNCEMENT_DEFAULTS[f]));
+            this.saveEventAnnouncementWording();
+            this.showToast('Reset to defaults');
         },
 
 
