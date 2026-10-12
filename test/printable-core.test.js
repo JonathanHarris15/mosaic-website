@@ -337,6 +337,34 @@ test('a list can ask to be left out when it has no rows', () => {
     assert.equal(round.nodes[0].repeat.omitWhenEmpty, true);
 });
 
+// MS-743 — intentional row range on a Repeat (1-based inclusive; to 0 = through end).
+test('a Repeat remembers a from/to row range; defaults keep the whole list', () => {
+    const whole = Core.buildRepeat({ source: 'people' });
+    assert.equal(whole.from, 0);
+    assert.equal(whole.to, 0);
+    const half = Core.buildRepeat({ source: 'people', from: 1, to: 5 });
+    assert.equal(half.from, 1);
+    assert.equal(half.to, 5);
+    const html = '<div data-repeat=\'{"source":"people","from":6,"to":0}\'></div>';
+    const back = Core.htmlToNodes(html);
+    assert.equal(back.ok, true, (back.problems || []).join(' '));
+    assert.equal(back.nodes[0].repeat.from, 6);
+    assert.equal(back.nodes[0].repeat.to, 0);
+});
+
+test('sliceRows takes a 1-based inclusive range; 0 to means through the end', () => {
+    const rows = ['a', 'b', 'c', 'd', 'e'];
+    assert.deepEqual(Core.sliceRows(rows, 0, 0), rows);
+    assert.deepEqual(Core.sliceRows(rows, 1, 0), rows);
+    assert.deepEqual(Core.sliceRows(rows, 1, 3), ['a', 'b', 'c']);
+    assert.deepEqual(Core.sliceRows(rows, 3, 0), ['c', 'd', 'e']);
+    assert.deepEqual(Core.sliceRows(rows, 4, 5), ['d', 'e']);
+    assert.deepEqual(Core.sliceRows(rows, 6, 0), []);
+    assert.deepEqual(Core.sliceRows(rows, 3, 2), []);
+    assert.deepEqual(Core.sliceRows(rows, 1, 99), rows);
+    assert.equal(Core.sliceRows(null, 1, 2), null);
+});
+
 // ── The record ───────────────────────────────────────────────────────────────
 
 test('a printable rebuilds its pages through the model, so every page has margins and a stylesheet', () => {

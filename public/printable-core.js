@@ -172,7 +172,9 @@
     // What an iterated element remembers: the list it stands for and how the
     // copies are laid out. `continueWith` is the page cloned when overflow
     // needs a *new* page — null means the page the list started on. Each
-    // cloned page is stored and edited on its own.
+    // cloned page is stored and edited on its own. `from` / `to` are a
+    // 1-based inclusive row range (0 = default: from the start / through the
+    // end), so two pages can each take half of the same list.
     function buildRepeat(spec) {
         const s = spec || {};
         const layout = s.layout || {};
@@ -185,12 +187,25 @@
                 gap: Math.max(0, Number(layout.gap) || 0),
                 maxPerPage: Math.max(0, Number(layout.maxPerPage) || 0),
             },
+            from: Math.max(0, Math.round(Number(s.from)) || 0),
+            to: Math.max(0, Math.round(Number(s.to)) || 0),
             overflow: s.overflow === 'new-page' ? 'new-page' : 'clip',
             continueWith: s.continueWith || null,
             // An empty list leaves the page out, the way an unnamed hymn slot
             // contributes no sheet. Anything else still draws the page.
             omitWhenEmpty: s.omitWhenEmpty === true,
         };
+    }
+
+    // Keep only rows in a 1-based inclusive range. `from` 0 or omitted starts
+    // at row 1; `to` 0 or omitted runs through the end. Out of range clamps;
+    // a backwards range is empty.
+    function sliceRows(rows, from, to) {
+        if (!rows) return rows;
+        const start = Math.max(1, Math.round(Number(from)) || 1);
+        const end = Math.max(0, Math.round(Number(to)) || 0);
+        if (end > 0 && end < start) return [];
+        return rows.slice(start - 1, end > 0 ? end : undefined);
     }
 
     // The three things the toolbar adds. Sized so a fresh one is visible on
@@ -1019,6 +1034,7 @@
         kindOf,
         buildNode,
         buildRepeat,
+        sliceRows,
         newBox,
         newText,
         newImage,

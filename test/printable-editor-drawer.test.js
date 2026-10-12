@@ -141,7 +141,7 @@ test('a directory: browse People, keep it to members, then iterate the selected 
     const card = Core.findNode(ed.currentPage, 'card');
     assert.equal(card.repeat.source, 'people');
     assert.equal(card.repeat.params.membership, 'members');
-    assert.deepEqual(Object.keys(card.repeat).sort(), ['continueWith', 'layout', 'omitWhenEmpty', 'overflow', 'params', 'source']);
+    assert.deepEqual(Object.keys(card.repeat).sort(), ['continueWith', 'from', 'layout', 'omitWhenEmpty', 'overflow', 'params', 'source', 'to']);
     assert.equal(ed.queryScope, 'own', 'the builder is now the box\'s own query');
     ed.setQueryParam('sort', 'first');
     assert.equal(Core.findNode(ed.currentPage, 'card').repeat.params.sort, 'first', 'a box\'s filter is saved on its Repeat');
@@ -210,6 +210,11 @@ test('hymn overflow and order rows: the Sunday lists a box can repeat over are a
     assert.equal(node.repeat.overflow, 'clip');
     ed.setRepeatOverflow('new-page');
     assert.equal(Core.findNode(ed.currentPage, 'sheet').repeat.overflow, 'new-page', 'a long hymn keeps real pages');
+    ed.setRepeatRange('from', 1);
+    ed.setRepeatRange('to', 3);
+    const ranged = Core.findNode(ed.currentPage, 'sheet').repeat;
+    assert.equal(ranged.from, 1);
+    assert.equal(ranged.to, 3);
 });
 
 test('an editor-locked query still runs, and a member can neither change nor rebuild it', () => {

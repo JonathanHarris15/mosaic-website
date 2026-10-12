@@ -46,6 +46,34 @@ test('the resolver answers rows for a list and values for both kinds of binding'
     assert.equal(res.sourceWarnings().length, 0);
 });
 
+test('a Repeat\'s from/to keeps only that slice of the list (1-based; to 0 = through end)', () => {
+    const people = [
+        { id: 'a', name: 'Anna', tags: ['Member'] },
+        { id: 'b', name: 'Ben', tags: ['Member'] },
+        { id: 'c', name: 'Cara', tags: ['Member'] },
+        { id: 'd', name: 'Dan', tags: ['Member'] },
+    ];
+    const p = Core.buildPrintable({
+        name: 'Split directory',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [
+            { id: 'pg1', nodes: [
+                { id: 'first', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, from: 1, to: 2 }, children: [
+                    { id: 'n1', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+            ] },
+            { id: 'pg2', nodes: [
+                { id: 'last', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, from: 3, to: 0 }, children: [
+                    { id: 'n2', tag: 'p', bind: { text: { scope: 'item', field: 'name' } } },
+                ] },
+            ] },
+        ],
+    });
+    const res = Live.resolver(p, { people: people }, { today: '2026-09-03', level: 'editor' });
+    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[0], 'first')).map(r => r.name), ['Anna', 'Ben']);
+    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[1], 'last')).map(r => r.name), ['Cara', 'Dan']);
+});
+
 test('an empty field on a dated row is named by its date in words', () => {
     const res = Live.resolver(project(), { people: [], services: {} }, { today: '2026-09-03', level: 'editor' });
     const miss = res.valueFor({ scope: 'item', field: 'theme' }, { _id: '2026-09-20', date: 'Sunday 20 September 2026', theme: '' });

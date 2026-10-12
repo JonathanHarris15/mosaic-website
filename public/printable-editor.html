@@ -414,7 +414,10 @@
                                             <label class="pe-f"><span x-text="selectedNode.repeat.layout.direction === 'row' ? 'Per row' : 'Columns'"></span><input class="pe-in" type="number" min="1" max="12" :value="selectedNode.repeat.layout.perLine" @change="setRepeatLayout('perLine', Number($event.target.value))" /></label>
                                             <label class="pe-f"><span>Gap (px)</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.gap" @change="setRepeatLayout('gap', Number($event.target.value))" /></label>
                                             <label class="pe-f"><span>Max per page</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.maxPerPage" @change="setRepeatLayout('maxPerPage', Number($event.target.value))" placeholder="0 = as many as fit" /></label>
+                                            <label class="pe-f"><span>From row</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.from || 0" @change="setRepeatRange('from', Number($event.target.value))" placeholder="1" /></label>
+                                            <label class="pe-f"><span>To row</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.to || 0" @change="setRepeatRange('to', Number($event.target.value))" placeholder="0 = through end" /></label>
                                         </div>
+                                        <p class="pe-hint">Rows are numbered from 1. Leave From at 0 (or 1) and To at 0 for the whole list — or set both to put the first half on one page and the rest on another.</p>
                                         <h3 class="pe-h pe-h--sub">When the list runs past the page</h3>
                                         <div class="pe-f"><span>Overflow</span>
                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
