@@ -34,6 +34,26 @@
 (function (global) {
     'use strict';
 
+    // #region agent log
+    function __dbgUndo(hypothesisId, location, message, data) {
+        var payload = { hypothesisId: hypothesisId, location: location, message: message, data: data || {}, timestamp: Date.now() };
+        try {
+            var g = typeof globalThis !== 'undefined' ? globalThis : global;
+            if (!g.__UNDO_DEBUG_LOGS) g.__UNDO_DEBUG_LOGS = [];
+            g.__UNDO_DEBUG_LOGS.push(payload);
+            if (typeof g.__undoDebugWrite === 'function') g.__undoDebugWrite(payload);
+        } catch (e) { /* ignore */ }
+        try { console.log('[DEBUG-undo]', JSON.stringify(payload)); } catch (e2) { /* ignore */ }
+    }
+    function __dbgFpBrief(f) {
+        if (f == null) return { fp: null, len: 0 };
+        var s = String(f);
+        var h = 0;
+        for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        return { len: s.length, hash: (h >>> 0).toString(16), head: s.slice(0, 48) };
+    }
+    // #endregion
+
     function create(opts) {
         const o = opts || {};
         const fingerprint = o.fingerprint || ((d) => JSON.stringify(d == null ? null : d));
@@ -86,6 +106,12 @@
                 failed = false; error = '';
                 if (typeof ticket === 'number' && ticket > savedGen) savedGen = ticket;
                 if (written !== undefined) base = fp(written);
+                // #region agent log
+                __dbgUndo('H1', 'doc-live-core.js:saved', 'DocLive.saved', {
+                    ticket: ticket, editGen: editGen, savedGen: savedGen, inFlight: inFlight,
+                    clean: isClean(), base: __dbgFpBrief(base),
+                });
+                // #endregion
                 emit();
             },
             failed(ticket, err) {
@@ -96,11 +122,33 @@
             },
             // Returns 'ignored' | 'adopted' | 'held'.
             remote(data, meta) {
-                if (meta && meta.pendingWrites) return 'ignored';
+                if (meta && meta.pendingWrites) {
+                    // #region agent log
+                    __dbgUndo('H1', 'doc-live-core.js:remote', 'DocLive.remote', {
+                        result: 'ignored', reason: 'pendingWrites', clean: isClean(),
+                        base: __dbgFpBrief(base),
+                    });
+                    // #endregion
+                    return 'ignored';
+                }
                 const f = fp(data);
                 latest = { data, f };
-                if (f != null && f === base) return 'ignored';
+                if (f != null && f === base) {
+                    // #region agent log
+                    __dbgUndo('H1', 'doc-live-core.js:remote', 'DocLive.remote', {
+                        result: 'ignored', reason: 'fingerprintMatch', clean: isClean(),
+                        base: __dbgFpBrief(base), remote: __dbgFpBrief(f), fpMatch: true,
+                    });
+                    // #endregion
+                    return 'ignored';
+                }
                 if (isClean()) {
+                    // #region agent log
+                    __dbgUndo('H1', 'doc-live-core.js:remote', 'DocLive.remote', {
+                        result: 'adopted', reason: 'cleanAndFingerprintMismatch', clean: true,
+                        base: __dbgFpBrief(base), remote: __dbgFpBrief(f), fpMatch: false,
+                    });
+                    // #endregion
                     base = f;
                     pending = null;
                     onAdopt(data);
@@ -108,6 +156,13 @@
                     return 'adopted';
                 }
                 pending = { data, f };
+                // #region agent log
+                __dbgUndo('H1', 'doc-live-core.js:remote', 'DocLive.remote', {
+                    result: 'held', reason: 'dirty', clean: false,
+                    base: __dbgFpBrief(base), remote: __dbgFpBrief(f), fpMatch: false,
+                    status: status(),
+                });
+                // #endregion
                 emit();
                 return 'held';
             },
@@ -122,6 +177,11 @@
                 base = p.f;
                 savedGen = editGen;
                 failed = false; error = '';
+                // #region agent log
+                __dbgUndo('H1', 'doc-live-core.js:reload', 'DocLive.reload → onAdopt', {
+                    base: __dbgFpBrief(base),
+                });
+                // #endregion
                 onAdopt(p.data);
                 emit();
                 return true;
