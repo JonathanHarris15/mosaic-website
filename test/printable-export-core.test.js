@@ -154,19 +154,26 @@ test('Sunday booklet binds and bookletExport flag both take the pad path', () =>
     assert.equal(Export.exportPadCount(3, typed), 1);
 });
 
-test('view-only booklet banner is gated on the Sunday booklet path', () => {
+test('view-only print chrome distinguishes folio from flat print and has no booklet banner', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const html = fs.readFileSync(path.join(__dirname, '../public/printable-view.html'), 'utf8');
-    assert.match(html, /pv-booklet[^>]*wantsBookletExport/,
-        'the booklet-mode banner must not show on every Printable');
-    assert.doesNotMatch(html, /pv-booklet" x-show="!loading && !problem && entries\.length"/,
-        'the MS-481 unscoped banner must not return');
+    assert.doesNotMatch(html, /Printing this booklet/,
+        'the booklet-mode banner is gone; the buttons carry the distinction');
+    assert.doesNotMatch(html, /pv-booklet/,
+        'the booklet-mode banner class must not return');
     assert.match(html, /printFolio\(\)/, 'the view page offers folio print');
+    assert.match(html, />menu_book</, 'folio uses the menu_book icon');
+    assert.match(html, /aria-label="Print folio"/);
+    assert.match(html, /aria-label="Print"/);
+    assert.match(html, /folioPadOpen|openFolioPad/, 'folio pad tool is on the view page');
     const editor = fs.readFileSync(path.join(__dirname, '../public/printable-editor.html'), 'utf8');
     assert.match(editor, /printFolio\(\)/, 'the editor File menu offers folio print');
+    assert.match(editor, />menu_book</, 'editor folio uses the menu_book icon');
+    assert.match(editor, /folioPadOpen|openFolioPad/, 'folio pad tool is on the editor');
     const editorJs = fs.readFileSync(path.join(__dirname, '../public/printable-editor.js'), 'utf8');
     assert.match(editorJs, /mountFolioPrint/, 'editor folio print uses the shared sheet builder');
+    assert.match(editorJs, /applyFolioPad|folioPadEntries/, 'editor uses the temporary folio pad stack');
 });
 
 test('folioSpreads matches the service guide imposition table', () => {
@@ -202,6 +209,73 @@ test('folioSpreads pads any Printable to a multiple of 4, including a one-page d
     assert.equal(padded.length, 4, '5 pages pad to 8 leaves, 4 sheets');
     assert.equal(padded[0].left.blank, true);
     for (const s of padded) assert.equal(s.leftIdx + s.rightIdx, 7);
+});
+
+test('folio pad tool duplicates a page into a temporary stack until ×4 without splitting overflow runs', () => {
+    const five = [0, 1, 2, 3, 4].map(i => ({
+        key: 'k' + i,
+        page: { id: 'k' + i, name: 'Sheet ' + (i + 1), nodes: [] },
+        nodes: [{
+            id: 'n' + i,
+            tag: 'p',
+            text: String(i + 1),
+            bind: { text: { source: 'insert_page_number', field: 'number', params: { startAt: 1 } } },
+        }],
+    }));
+    assert.equal(Export.folioNeedsPad(five), true);
+    assert.equal(Export.folioPadNeed(five), 3);
+    assert.equal(Export.folioReadyToPrint(five), false);
+
+    const working = Export.cloneEntriesForFolio(five);
+    assert.equal(working.length, 5);
+    working[0].nodes[0].text = 'MUTATE-ORIGINAL-GUARD';
+    assert.notEqual(five[0].nodes[0].text, 'MUTATE-ORIGINAL-GUARD', 'clone is deep');
+
+    let stack = Export.cloneEntriesForFolio(five);
+    let r = Export.applyFolioPad(stack, { kind: 'duplicate', sourceIndex: 4, afterIndex: 4 });
+    assert.equal(r.ok, true);
+    stack = r.entries;
+    assert.equal(stack.length, 6);
+    assert.equal(stack[5].folioPad, true);
+    assert.equal(stack[5].folioDuplicate, true);
+    assert.equal(stack[5].nodes[0].text, '6', 'page numbers restamp for the print order');
+    assert.equal(five.length, 5, 'source layout is unchanged');
+    assert.equal(five[4].nodes[0].text, '5', 'source page number stays');
+
+    r = Export.applyFolioPad(stack, { kind: 'duplicate', sourceIndex: 4, afterIndex: 5 });
+    assert.equal(r.ok, true);
+    stack = r.entries;
+    r = Export.applyFolioPad(stack, { kind: 'blank', afterIndex: stack.length - 1 });
+    assert.equal(r.ok, true);
+    stack = r.entries;
+    assert.equal(stack.length, 8);
+    assert.equal(Export.folioReadyToPrint(stack), true);
+    assert.equal(Export.folioNeedsPad(stack), false);
+    assert.equal(stack[7].blank, true);
+    assert.equal(stack[7].folioPad, true);
+
+    const spreads = Export.folioSpreads(stack);
+    assert.equal(spreads.length, 4, 'already ×4 stack needs no further blank pad');
+    assert.ok(spreads.every(s => s.left && s.right), 'every sheet has two leaves');
+
+    const overflow = [
+        { key: 'a', page: { id: 'a', nodes: [] }, nodes: [] },
+        { key: 'b', page: { id: 'b', continues: { from: 'a' }, nodes: [] }, nodes: [] },
+        { key: 'c', page: { id: 'c', nodes: [] }, nodes: [] },
+    ];
+    assert.equal(Export.canInsertAfterEntry(overflow, 0), false, 'cannot split an overflow run');
+    assert.equal(Export.canInsertAfterEntry(overflow, 1), true);
+    const bad = Export.applyFolioPad(overflow, { kind: 'duplicate', sourceIndex: 2, afterIndex: 0 });
+    assert.equal(bad.ok, false);
+    const slots = Export.folioInsertAfterOptions(overflow).map(o => o.afterIndex);
+    assert.deepEqual(slots, [-1, 1, 2]);
+
+    const removed = Export.removeFolioPadAt(stack, 7);
+    assert.equal(removed.ok, true);
+    assert.equal(removed.entries.length, 7);
+    assert.equal(Export.folioReadyToPrint(removed.entries), false);
+    const keep = Export.removeFolioPadAt(stack, 0);
+    assert.equal(keep.ok, false, 'saved pages cannot be removed in the pad tool');
 });
 
 test('a half-letter folio sheet is letter landscape, matching the service guide @page', () => {
