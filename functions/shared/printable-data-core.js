@@ -138,6 +138,7 @@
 
     // "Sunday 14 June 2026" — how a date reads on paper. `monthDay` is
     // "Jun 14", the designed Service Guide's preaching-schedule column.
+    // `slash` is "06/14/26", the legacy booklet's schedule column.
     function formatDate(dateStr, style) {
         if (!isDateStr(dateStr)) return String(dateStr || '');
         const d = parseDate(dateStr);
@@ -146,6 +147,11 @@
         if (style === 'monthDay') return MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
         if (style === 'weekday') return DAYS[d.getDay()];
         if (style === 'medium') return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+        if (style === 'slash') {
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return mm + '/' + dd + '/' + String(d.getFullYear()).slice(-2);
+        }
         return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     }
 
@@ -314,6 +320,7 @@
         { key: 'longDate', label: 'Date (Sunday, June 14, 2026)', kind: 'date' },
         { key: 'shortDate', label: 'Short date (Sep 6)', kind: 'date' },
         { key: 'dateShort', label: 'Date (6 Sep)', kind: 'date' },
+        { key: 'slashDate', label: 'Date (06/14/26)', kind: 'date' },
         { key: 'preacher', label: 'Preacher', kind: 'text' },
         { key: 'theme', label: 'Theme', kind: 'text' },
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
@@ -650,6 +657,7 @@
                 { key: 'attribution', label: 'Attribution', kind: 'text' },
                 { key: 'sheetTitle', label: 'Title on the first sheet', kind: 'text' },
                 { key: 'sheetCredit', label: 'Credit on the last sheet', kind: 'text' },
+                { key: 'sheetFooter', label: 'Footer ((next page) or credit)', kind: 'text' },
             ],
             filters: [
                 { key: 'slot', label: 'Which hymn', kind: 'choice', default: '', verbatim: true, options: [{ value: '', label: 'Every hymn' }]
@@ -1172,7 +1180,7 @@
     // already known, and a baptism is not something to be announced later.
     // TBA is only written onto text fields — a date is a date — and never
     // onto a people element (a baptism's candidates).
-    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort'];
+    const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort', 'slashDate'];
 
     // One Sunday as a row — the single Sunday, and each row of the Sundays
     // list. Every element of the catalog has its value field, whatever order
@@ -1192,6 +1200,7 @@
             longDate: formatDate(date, 'longUs'),
             shortDate: formatDate(date, 'monthDay'),
             dateShort: formatDate(date, 'short'),
+            slashDate: formatDate(date, 'slash'),
             theme: slotText(s && s.theme),
             keyVerse: slotText(s && s.keyVerse),
             preacher: slotText(s && s.preacher),
@@ -1373,6 +1382,7 @@
             const images = pages.length ? pages : [''];
             const credit = (hymn && hymn.attribution) || '';
             images.forEach((image, i) => {
+                const last = i === images.length - 1;
                 rows.push({
                     _id: slot + '~' + i,
                     name: name,
@@ -1383,8 +1393,11 @@
                     attribution: credit,
                     // The designed booklet prints the title on the first sheet
                     // and the credit on the last. A one-page hymn prints both.
+                    // The legacy booklet puts "(next page)" on every sheet but
+                    // the last, and the credit on the last — sheetFooter.
                     sheetTitle: i === 0 ? name : '',
-                    sheetCredit: i === images.length - 1 ? credit : '',
+                    sheetCredit: last ? credit : '',
+                    sheetFooter: last ? credit : (images.length > 1 ? '(next page)' : ''),
                     number: rows.length + 1,
                 });
             });

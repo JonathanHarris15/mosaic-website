@@ -112,6 +112,9 @@ async function read(db, args) {
     folderId: project.folderId,
     memberVisible: raw.memberVisible === true,
     template: project.template,
+    // Blanks filled on the linked event — same library the editor's
+    // Fill-in drawer shows. event_field / event_list wires name these ids.
+    inputs: project.inputs || [],
     pages: (project.pages || []).map((p, i) => ({
       pageNumber: i + 1,
       id: p.id,
@@ -234,6 +237,7 @@ async function create(db, args, actor) {
     folderId: args.folderId || null,
     template: template,
     pages: pages,
+    inputs: args.inputs || [],
   });
 
   const ref = await db.collection(PRINTABLES).add(Object.assign(record, {
@@ -247,7 +251,37 @@ async function create(db, args, actor) {
     name: record.name,
     template: record.template,
     pages: record.pages.length,
+    inputs: record.inputs || [],
     openAt: `printable-editor.html?id=${ref.id}`,
+  };
+}
+
+/**
+ * Replace the fill-in library — the blanks a linked event fills in.
+ * Same shape the editor saves: id, label, kind, and for lists their columns.
+ * Wires on the pages are not rewritten here; bind event_field / event_list
+ * to these ids the way the Fill-in drawer does.
+ *
+ * @param {object} db the Firestore handle
+ * @param {object} args {printableId, inputs}
+ * @param {?object} actor who is asking
+ * @return {Promise<object>} what was stored
+ */
+async function setInputs(db, args, actor) {
+  const {project} = await loadRecord(db, args.printableId);
+  if (!Array.isArray(args.inputs)) {
+    fail("Pass inputs as a list of fill-ins (id, label, kind), " +
+      "the same library the editor's Fill-in drawer edits.");
+  }
+  const next = Core.buildPrintable(Object.assign({}, project, {
+    inputs: args.inputs,
+  }));
+  await db.collection(PRINTABLES).doc(String(args.printableId)).set(
+      Object.assign({inputs: next.inputs}, stamp(actor)), {merge: true});
+  return {
+    printableId: String(args.printableId),
+    inputs: next.inputs,
+    count: (next.inputs || []).length,
   };
 }
 
@@ -262,8 +296,16 @@ async function create(db, args, actor) {
  */
 async function savePages(db, id, project, pages, actor) {
   const next = Core.buildPrintable(Object.assign({}, project, {pages: pages}));
+  // Persist fill-ins too: buildPrintable migrates sunday_typed wires into
+  // event_field + inputs, and a page write must not leave those names only
+  // in memory — the editor's Fill-in drawer and the linked event form read
+  // them off the stored record.
   await db.collection(PRINTABLES).doc(String(id)).set(
-      Object.assign({pages: next.pages}, stamp(actor)), {merge: true});
+      Object.assign({
+        pages: next.pages,
+        inputs: next.inputs || [],
+      }, stamp(actor)),
+      {merge: true});
   return next;
 }
 
@@ -535,7 +577,12 @@ function dataCatalog(permissionLevel, args, liturgy) {
       "\"params\":{\"when\":{\"mode\":\"this\"}},\"field\":\"theme\"}}'. " +
       "A row of a list: data-bind='{\"text\":{\"scope\":\"item\"," +
       "\"field\":\"name\"}}' on an element INSIDE the iterated box. An image " +
-      "binds \"src\" instead of \"text\".",
+      "binds \"src\" instead of \"text\". " +
+      "Fill-ins (blanks on the linked event) are not catalog sources — name " +
+      "them with printable_set_inputs (or the editor's Fill-in drawer), then " +
+      "wire data-bind='{\"text\":{\"scope\":\"global\",\"source\":" +
+      "\"event_field\",\"field\":\"<inputId>\",\"params\":{}}}' (or \"src\" " +
+      "for an image).",
     howToRepeat:
       "Put data-repeat on the box that stands for one row: " +
       "data-repeat='{\"source\":\"people\",\"params\":" +
@@ -546,7 +593,11 @@ function dataCatalog(permissionLevel, args, liturgy) {
       "overflow is \"clip\" or \"new-page\". new-page keeps real pages " +
       "the list spills onto; those pages are stored and can be edited. " +
       "from and to are a 1-based inclusive row range (to 0 = through the " +
-      "end) so two pages can each take half of the same list. " +
+      "end) so two pages can each take half of the same list — for example " +
+      "hymn sheets before pastoral prayer on one page (from 1, to N) and " +
+      "the rest after sermon notes on another (from N+1, to 0). " +
+      "A fill-in list uses source \"event_list\" with params.inputId set to " +
+      "that fill-in's id. " +
       "A related list (of: households) belongs on a box INSIDE that " +
       "parent card — household_children is the children of this household, " +
       "not a second directory. Filter households with hasChildren:yes " +
@@ -585,6 +636,7 @@ module.exports = {
   list,
   read,
   create,
+  setInputs,
   writePage,
   addPage,
   deletePage,

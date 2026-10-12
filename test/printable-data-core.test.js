@@ -101,6 +101,7 @@ test('a date reads on paper as words', () => {
     assert.equal(Data.formatDate('2026-09-06'), 'Sunday 6 September 2026');
     assert.equal(Data.formatDate('2026-09-06', 'medium'), '6 September 2026');
     assert.equal(Data.formatDate('2026-09-06', 'monthDay'), 'Sep 6', 'the designed schedule\'s date');
+    assert.equal(Data.formatDate('2026-06-14', 'slash'), '06/14/26', 'the legacy schedule\'s date');
     assert.equal(Data.formatDate('2026-09-06', 'short'), '6 Sep', 'day then month, as some schedules print it');
     assert.equal(Data.formatDate('2026-09-06', 'weekday'), 'Sunday');
     assert.equal(Data.formatDate('not a date'), 'not a date');
@@ -609,6 +610,9 @@ test('the hymns of a Sunday return every sheet-music page, in slot then page ord
     assert.equal(r.rows[1].sheetTitle, '');
     assert.equal(r.rows[0].sheetCredit, '');
     assert.equal(r.rows[1].sheetCredit, 'Newton');
+    assert.equal(r.rows[0].sheetFooter, '(next page)', 'legacy footer on every sheet but the last');
+    assert.equal(r.rows[1].sheetFooter, 'Newton', 'credit on the last sheet');
+    assert.equal(r.rows[2].sheetFooter, '', 'a one-page hymn with no credit stays blank');
     assert.equal(r.rows[0]._id, 'preparatoryHymn~0');
     assert.equal(r.rows[1]._id, 'preparatoryHymn~1');
     assert.match(r.warnings[0], /A Literal Hymn.*no sheet music/);

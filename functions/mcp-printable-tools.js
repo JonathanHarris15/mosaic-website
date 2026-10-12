@@ -149,7 +149,8 @@ function register(server, deps) {
       "list, or which page it continues when it is part of one. Values are " +
       "NOT resolved here — a wired element comes back with its data-bind, " +
       "not with today's text, because a Printable stores which field feeds " +
-      "it and never the value (ADR-0057).",
+      "it and never the value (ADR-0057). Also returns inputs: the fill-in " +
+      "library event_field / event_list wires name.",
     inputSchema: {printableId: printableId},
     annotations: read,
   }, (a) => Printables.read(db, a));
@@ -182,6 +183,21 @@ function register(server, deps) {
 
   // ── Building one ─────────────────────────────────────────────────────────
 
+  const fillIn = z.object({
+    id: z.string().min(1)
+        .describe("Stable id wires use as event_field / event_list"),
+    label: z.string().min(1)
+        .describe("What the Fill-in drawer calls it"),
+    kind: z.enum(["text", "image", "number", "date", "list"])
+        .describe("text, image, number, date, or list"),
+    fields: z.array(z.object({
+      id: z.string().min(1),
+      label: z.string().min(1),
+      kind: z.enum(["text", "image", "number", "date"]).optional(),
+    })).optional()
+        .describe("Columns when kind is list — one text column at least"),
+  });
+
   tool("printable_create", {
     title: "Start a printable",
     description:
@@ -189,7 +205,9 @@ function register(server, deps) {
       "FOR THE LIFE OF THE RECORD — every measurement inside is written in " +
       "those pixels — so choose it deliberately from " +
       "printable_page_templates rather than letting it default. Give pages " +
-      "to lay it out in the same call, or add pages afterwards.",
+      "to lay it out in the same call, or add pages afterwards. Optional " +
+      "inputs are the fill-in blanks a linked event will supply — the same " +
+      "library the editor's Fill-in drawer edits.",
     inputSchema: {
       name: z.string().min(1).describe("What the church will call it"),
       paper: z.string().optional()
@@ -203,6 +221,9 @@ function register(server, deps) {
       fromTemplateId: z.string().optional()
           .describe("Start from a saved page template instead of a bare paper"),
       folderId: z.string().optional().describe("The folder to file it in"),
+      inputs: z.array(fillIn).optional()
+          .describe("Fill-ins for the linked event (Nation, lesson title…). " +
+            "Same as printable_set_inputs."),
       pages: z.array(z.object({
         name: z.string().optional().describe("Cover, Back…"),
         html: z.string().optional().describe(HTML_HELP),
@@ -212,6 +233,21 @@ function register(server, deps) {
           .describe("The pages to start with. One empty page if omitted."),
     },
   }, (a, actor) => Printables.create(db, a, actor));
+
+  tool("printable_set_inputs", {
+    title: "Set fill-ins",
+    description:
+      "Replace the fill-in library on a Printable — the blanks a linked " +
+      "event fills in. This is what the editor's Fill-in drawer edits: each " +
+      "entry has an id, a label and a kind (text, image, number, date, or " +
+      "list). Wire pages with source event_field (scalars) or event_list " +
+      "(lists, params.inputId = the fill-in's id). Replaces the whole " +
+      "library; pass every fill-in that should remain.",
+    inputSchema: {
+      printableId: printableId,
+      inputs: z.array(fillIn).describe("The full fill-in library"),
+    },
+  }, (a, actor) => Printables.setInputs(db, a, actor));
 
   tool("printable_write_page", {
     title: "Write a page",

@@ -449,6 +449,65 @@ describe('what a Printable may be told, and by whom', () => {
     });
 });
 
+describe('fill-ins on a Printable', () => {
+    test('create can name fill-ins, and read returns them', async () => {
+        const db = fakeDb();
+        const made = await Printables.create(db, {
+            name: 'Guide', paper: 'half_letter',
+            inputs: [
+                {id: 'nation', label: 'Nation', kind: 'text'},
+                {id: 'map', label: 'Country Map', kind: 'image'},
+                {id: 'prompts', label: 'Prompts', kind: 'list', fields: [
+                    {id: 'text', label: 'Prompt', kind: 'text'},
+                ]},
+            ],
+        }, ACTOR);
+        assert.strictEqual(made.inputs.length, 3);
+        const back = await Printables.read(db, {printableId: made.id});
+        assert.strictEqual(back.inputs.length, 3);
+        assert.strictEqual(back.inputs[0].label, 'Nation');
+        assert.strictEqual(back.inputs[2].fields[0].id, 'text');
+    });
+
+    test('setInputs replaces the library the way the Fill-in drawer does', async () => {
+        const db = fakeDb();
+        const made = await Printables.create(db, {
+            name: 'Guide', paper: 'half_letter',
+            inputs: [{id: 'old', label: 'Old', kind: 'text'}],
+        }, ACTOR);
+        const out = await Printables.setInputs(db, {
+            printableId: made.id,
+            inputs: [
+                {id: 'legacy_prayerNation', label: 'Nation/Country', kind: 'text'},
+                {id: 'legacy_kidsQuestions', label: 'Review Questions', kind: 'list', fields: [
+                    {id: 'text', label: 'Question', kind: 'text'},
+                ]},
+            ],
+        }, ACTOR);
+        assert.strictEqual(out.count, 2);
+        const back = await Printables.read(db, {printableId: made.id});
+        assert.deepStrictEqual(back.inputs.map((i) => i.id), [
+            'legacy_prayerNation', 'legacy_kidsQuestions',
+        ]);
+        assert.strictEqual(db.store.printables[made.id].inputs.length, 2);
+    });
+
+    test('writing a page keeps fill-ins on the record', async () => {
+        const db = fakeDb();
+        const made = await Printables.create(db, {
+            name: 'Guide', paper: 'half_letter',
+            inputs: [{id: 'nation', label: 'Nation', kind: 'text'}],
+            pages: [{html: '<p data-bind=\'{"text":{"scope":"global","source":"event_field","field":"nation","params":{}}}\'>x</p>'}],
+        }, ACTOR);
+        await Printables.writePage(db, {
+            printableId: made.id, pageNumber: 1, html: '<p>kept</p>',
+        }, ACTOR);
+        const back = await Printables.read(db, {printableId: made.id});
+        assert.strictEqual(back.inputs.length, 1);
+        assert.strictEqual(back.inputs[0].id, 'nation');
+    });
+});
+
 describe('publishing to members', () => {
     test('members may view is off until it is switched on', async () => {
         const db = fakeDb();
