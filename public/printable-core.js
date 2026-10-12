@@ -410,6 +410,81 @@
         return list;
     }
 
+    // Gaps a dragged run may land in. `after` is the index of the page the
+    // run should follow, or -1 to land before the first page. The gap the
+    // run already occupies is left out. Nothing inside an overflow run is
+    // a slot — the run moves as a block.
+    function pageReorderSlots(pages, dragPageId) {
+        const list = pages || [];
+        const run = continuationRunBounds(list, dragPageId);
+        if (!run) return [];
+        const slots = [];
+        const consider = (after) => {
+            if (after === run.start - 1 || after === run.end) return;
+            slots.push(after);
+        };
+        consider(-1);
+        for (let i = 0; i < list.length; i++) {
+            if (canInsertAfter(list, i)) consider(i);
+        }
+        return slots;
+    }
+
+    // The page id the run should sit before, or null to land at the end.
+    function pageReorderTarget(pages, afterIndex) {
+        const list = pages || [];
+        const after = Number(afterIndex);
+        if (!list.length || isNaN(after)) return null;
+        if (after < 0) return list[0].id;
+        if (after >= list.length - 1) return null;
+        return list[after + 1].id;
+    }
+
+    // Place dragPageId's whole run before targetPageId. Null target appends.
+    // A landing that would split a run is refused; the list comes back unchanged.
+    function reorderPageRunBefore(pages, dragPageId, targetPageId) {
+        const list = (pages || []).slice();
+        if (!dragPageId || dragPageId === targetPageId) return list;
+        const run = continuationRunBounds(list, dragPageId);
+        if (!run) return list;
+        if (targetPageId) {
+            const tRun = continuationRunBounds(list, targetPageId);
+            if (tRun && dragPageId !== targetPageId
+                && run.originId === tRun.originId
+                && run.start === tRun.start) return list;
+        }
+        const block = list.splice(run.start, run.end - run.start + 1);
+        let dest = targetPageId ? list.findIndex(p => p.id === targetPageId) : list.length;
+        if (dest < 0) dest = list.length;
+        if (targetPageId && dest < list.length) {
+            const at = continuationRunBounds(list, list[dest].id);
+            if (at) dest = at.start;
+        }
+        list.splice(dest, 0, ...block);
+        return list;
+    }
+
+    // Which gap the pointer is in. The nearest slot that is not a legal
+    // landing (the run already sits there) answers null, so the line is
+    // not drawn on a gap that would not move the page.
+    function nearestPageReorderSlot(slots, clientY) {
+        const y = Number(clientY);
+        let best = null;
+        let bestDist = Infinity;
+        (slots || []).forEach(slot => {
+            if (!slot) return;
+            const mid = (Number(slot.top) + Number(slot.bottom)) / 2;
+            const dist = Math.abs(y - mid);
+            const after = Number(slot.after);
+            if (dist < bestDist || (dist === bestDist && best && after < best.after)) {
+                bestDist = dist;
+                best = { after: after, legal: !!slot.legal };
+            }
+        });
+        if (!best || !best.legal || isNaN(best.after)) return null;
+        return best.after;
+    }
+
     function num(v, d) { const n = Number(v); return (v != null && !isNaN(n) && n >= 0) ? n : d; }
 
     // A page sized in physical units for a print stylesheet. CSS inches are
@@ -1111,6 +1186,10 @@
         continuationRunBounds,
         canInsertAfter,
         movePageRun,
+        pageReorderSlots,
+        pageReorderTarget,
+        reorderPageRunBefore,
+        nearestPageReorderSlot,
         buildPrintable,
         duplicatePrintable,
         migrate,

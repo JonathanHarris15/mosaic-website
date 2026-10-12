@@ -25,4 +25,10 @@ test('the Elements tree shows only the selected page; pages live in the filmstri
     assert.match(js, /canInsertAfter/, 'insert respects overflow runs');
     assert.match(js, /movePageRun/, 'reorder moves a whole run');
     assert.match(html, /\.pe-pages__run/, 'the run rail is styled');
+    assert.match(js, /nearestPageReorderSlot/, 'a page drag picks the gap under the pointer');
+    assert.match(js, /pageReorderTarget/, 'the drop lands before the page after that gap');
+    assert.match(html, /\.pe-pages__insert\.is-drop/, 'the gap draws a line');
+    assert.match(html, /100cqw/, 'the thumbnail scales to the card');
+    assert.doesNotMatch(html, /aspect-ratio:\s*1\s*\/\s*1\.294/, 'thumbnails are not forced into a letter frame');
+    assert.doesNotMatch(js, /reorderPageBefore\(ui\.pageDrag\.pageId, page\.id\)/, 'dropping does not target the page under the pointer');
 });

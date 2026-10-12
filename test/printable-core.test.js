@@ -527,6 +527,38 @@ test('continuation runs: bounds, no insert between sheets, move as a block (MS-7
     assert.deepEqual(movedDown.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back'], 'cover jumps past the whole run');
 });
 
+test('a page drag lands in a gap between runs, never on a page or inside a run', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const cover = Core.buildPage(t, { id: 'cover', name: 'Cover', nodes: [] });
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'List', nodes: [] });
+    const two = Core.buildPage(t, { id: 'pg2', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const three = Core.buildPage(t, { id: 'pg3', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const back = Core.buildPage(t, { id: 'back', name: 'Back', nodes: [] });
+    const pages = [cover, origin, two, three, back];
+
+    assert.deepEqual(Core.pageReorderSlots(pages, 'pg2'), [-1, 4], 'the list run can move before the cover or after the back, not into its own gap');
+    assert.deepEqual(Core.pageReorderSlots(pages, 'cover'), [3, 4], 'cover can follow the run or the back');
+    assert.equal(Core.pageReorderTarget(pages, -1), 'cover');
+    assert.equal(Core.pageReorderTarget(pages, 3), 'back');
+    assert.equal(Core.pageReorderTarget(pages, 4), null);
+
+    const beforeCover = Core.reorderPageRunBefore(pages, 'pg2', Core.pageReorderTarget(pages, -1));
+    assert.deepEqual(beforeCover.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back']);
+    const afterBack = Core.reorderPageRunBefore(pages, 'pg2', Core.pageReorderTarget(pages, 4));
+    assert.deepEqual(afterBack.map(p => p.id), ['cover', 'back', 'pg1', 'pg2', 'pg3']);
+    const split = Core.reorderPageRunBefore(pages, 'back', 'pg2');
+    assert.deepEqual(split.map(p => p.id), ['cover', 'back', 'pg1', 'pg2', 'pg3'], 'a landing aimed inside a run snaps to the run boundary');
+
+    const gaps = [
+        { after: -1, top: 0, bottom: 14, legal: true },
+        { after: 0, top: 200, bottom: 214, legal: false },
+        { after: 3, top: 800, bottom: 814, legal: true },
+    ];
+    assert.equal(Core.nearestPageReorderSlot(gaps, 30), -1, 'the pointer near the top gap lands there');
+    assert.equal(Core.nearestPageReorderSlot(gaps, 190), null, 'the gap the page already occupies is not a landing');
+    assert.equal(Core.nearestPageReorderSlot(gaps, 760), 3, 'the nearer legal gap, past the middle of the run');
+});
+
 test('cloning a page for overflow remints every id and keeps the design', () => {
     const { page, template } = directoryPage();
     const copy = Core.clonePage(template, page, { continues: { from: page.id, repeat: 'card' } });
