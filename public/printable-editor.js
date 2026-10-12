@@ -107,6 +107,12 @@ function printableEditor() {
         savingTemplate: false,
         templateName: '',
         fileMenu: false,
+        folioPadOpen: false,
+        folioPadEntries: [],
+        folioPadSource: 'blank:-1',
+        folioPadAfterIndex: -1,
+        folioPadError: '',
+        folioPadBaseCount: 0,
         codeOpen: false,
         codeTab: 'html',
         codeProblem: '',
@@ -1950,14 +1956,124 @@ function printableEditor() {
             this.beginPrint(layer);
         },
 
+        get folioPadNeedCount() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioPadNeed(this.folioPadEntries) : 0;
+        },
+        get folioPadReady() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return !!(Ex && Ex.folioReadyToPrint(this.folioPadEntries));
+        },
+        get folioPadSourceOptions() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioSourceOptions(this.folioPadEntries) : [];
+        },
+        get folioPadInsertOptions() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return Ex ? Ex.folioInsertAfterOptions(this.folioPadEntries) : [];
+        },
+        get folioPadRows() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            return (this.folioPadEntries || []).map((entry, i) => ({
+                key: (entry && entry.key) || ('row-' + i),
+                folioPad: !!(entry && entry.folioPad),
+                label: Ex ? Ex.entryLabel(entry, i) : ('Page ' + (i + 1)),
+            }));
+        },
+
         printFolio() {
             this.fileMenu = false;
             if (!this.project || !this.template) return;
             this.finishTextEdit();
-            const layer = document.getElementById('pe-print');
-            if (!layer || typeof PrintableDom.mountFolioPrint !== 'function') return;
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex || typeof PrintableDom.mountFolioPrint !== 'function') return;
             const entries = this.computeLayout ? this.computeLayout({ persist: false }) : [];
             if (!entries.length) return;
+            if (!Ex.folioNeedsPad(entries)) {
+                this.runFolioPrint(entries);
+                return;
+            }
+            this.openFolioPad(entries);
+        },
+
+        openFolioPad(entries) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex || !(entries || []).length) return;
+            this.folioPadEntries = Ex.cloneEntriesForFolio(entries);
+            this.folioPadBaseCount = entries.length;
+            this.folioPadError = '';
+            const sources = Ex.folioSourceOptions(this.folioPadEntries);
+            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
+            const preferred = sources.find(s => s.kind === 'duplicate') || sources[0];
+            this.folioPadSource = preferred
+                ? (preferred.kind + ':' + preferred.sourceIndex)
+                : 'blank:-1';
+            this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
+            this.folioPadOpen = true;
+        },
+
+        closeFolioPad() {
+            this.folioPadOpen = false;
+            this.folioPadError = '';
+            this.folioPadEntries = [];
+        },
+
+        addFolioPadRow() {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const raw = String(this.folioPadSource || 'blank:-1');
+            const at = raw.indexOf(':');
+            const kind = at < 0 ? 'blank' : raw.slice(0, at);
+            const sourceIndex = Number(at < 0 ? -1 : raw.slice(at + 1));
+            const result = Ex.applyFolioPad(this.folioPadEntries, {
+                kind: kind === 'duplicate' ? 'duplicate' : 'blank',
+                sourceIndex: sourceIndex,
+                afterIndex: this.folioPadAfterIndex,
+            });
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not add that page.';
+                return;
+            }
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
+            this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
+            const sources = Ex.folioSourceOptions(this.folioPadEntries);
+            if (!sources.some(s => (s.kind + ':' + s.sourceIndex) === this.folioPadSource)) {
+                const preferred = sources.find(s => s.kind === 'duplicate') || sources[0];
+                this.folioPadSource = preferred
+                    ? (preferred.kind + ':' + preferred.sourceIndex)
+                    : 'blank:-1';
+            }
+        },
+
+        removeFolioPadRow(index) {
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const result = Ex.removeFolioPadAt(this.folioPadEntries, index);
+            if (!result.ok) {
+                this.folioPadError = result.why || 'Could not remove that page.';
+                return;
+            }
+            this.folioPadEntries = result.entries;
+            this.folioPadError = '';
+            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
+            if (!inserts.some(o => o.afterIndex === this.folioPadAfterIndex)) {
+                this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
+            }
+        },
+
+        confirmFolioPadPrint() {
+            if (!this.folioPadReady) return;
+            const stack = this.folioPadEntries.slice();
+            this.closeFolioPad();
+            this.runFolioPrint(stack);
+        },
+
+        runFolioPrint(entries) {
+            const layer = document.getElementById('pe-print');
+            if (!layer || !this.template || !(entries || []).length) return;
+            if (typeof PrintableDom.mountFolioPrint !== 'function') return;
             PrintableDom.mountFolioPrint(layer, this.template, entries);
             this.beginPrint(layer);
         },

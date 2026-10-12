@@ -38,8 +38,8 @@
                     <span class="material-symbols-outlined">warning</span><span class="m-btn__label" x-text="warnings.length + ' gap' + (warnings.length === 1 ? '' : 's')"></span>
                 </button>
                 <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
-                <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="printFolio()" :disabled="!entries.length" :title="folioTitle"><span class="material-symbols-outlined" aria-hidden="true">print</span><span class="m-btn__label">Print folio</span></button>
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="printPrintable()" :disabled="!entries.length" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span class="m-btn__label">Print</span></button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm m-btn--named" @click="printFolio()" :disabled="!entries.length" aria-label="Print folio" :title="folioTitle"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span><span class="m-btn__label">Folio</span></button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm m-btn--named" @click="printPrintable()" :disabled="!entries.length" aria-label="Print" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span class="m-btn__label">Print</span></button>
             </div>
             <div class="m-header__rule"></div>
             <div class="m-header__auth" id="auth-container"></div>
@@ -59,18 +59,50 @@
                 <template x-for="(w, i) in warnings" :key="i"><span class="m-notice__text pv-warn" x-text="w.label + ': ' + w.message"></span></template>
             </div>
         </div>
-        <div class="m-notice m-notice--info pv-booklet" x-show="!loading && !problem && entries.length && wantsBookletExport">
-            <span class="material-symbols-outlined m-notice__icon">print</span>
-            <div class="m-notice__body">
-                <span class="m-notice__title">Printing this booklet</span>
-                <span class="m-notice__text"><strong>Print folio</strong> puts two pages on each landscape sheet, in the same order as the service guide (<span x-text="folioSheetCount"></span> sheets<span x-show="bookletPadCount" x-text="', ' + bookletPadCount + ' blank page' + (bookletPadCount === 1 ? '' : 's')"></span>). Fold that stack, and leave the copier’s booklet mode off. <strong>Print</strong> sends a flat stack of <span x-text="printPageCount"></span> pages for a copier set to Booklet / Saddle Stitch.</span>
-            </div>
-        </div>
         <div id="pv-pages" class="pv-pages" x-show="!loading && !problem"></div>
         <div id="pv-measure" class="pv-measure"></div>
     </main>
 
     <div id="pv-print" class="pv-print"></div>
+
+    <div class="pv-scrim" x-show="folioPadOpen" x-cloak @click.self="closeFolioPad()" @keydown.escape.window="closeFolioPad()">
+        <div class="pv-dialog" role="dialog" aria-modal="true" aria-labelledby="pv-folio-pad-title">
+            <h2 id="pv-folio-pad-title" class="m-headline-lg">Fill the folio fold</h2>
+            <p class="pv-dialog__hint">A folded booklet needs a multiple of 4 pages. You have <strong x-text="folioPadBaseCount"></strong> — add <strong x-text="folioPadNeedCount"></strong> temporary page<span x-show="folioPadNeedCount !== 1">s</span> for this print only. Nothing is saved on the printable.</p>
+            <p class="m-notice m-notice--error" x-show="folioPadError" x-text="folioPadError" aria-live="polite"></p>
+            <ol class="pv-folio-stack" aria-label="Print stack for folio">
+                <template x-for="(row, i) in folioPadRows" :key="row.key">
+                    <li class="pv-folio-stack__row" :class="{ 'is-pad': row.folioPad }">
+                        <span class="pv-folio-stack__label" x-text="row.label"></span>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="row.folioPad" @click="removeFolioPadRow(i)">Remove</button>
+                    </li>
+                </template>
+            </ol>
+            <div class="pv-folio-add" x-show="folioPadNeedCount > 0">
+                <label class="pv-folio-field">
+                    <span>Duplicate</span>
+                    <select class="m-input" name="folioPadSource" autocomplete="off" x-model="folioPadSource">
+                        <template x-for="opt in folioPadSourceOptions" :key="opt.kind + ':' + opt.sourceIndex">
+                            <option :value="opt.kind + ':' + opt.sourceIndex" x-text="opt.label"></option>
+                        </template>
+                    </select>
+                </label>
+                <label class="pv-folio-field">
+                    <span>Insert</span>
+                    <select class="m-input" name="folioPadAfter" autocomplete="off" x-model.number="folioPadAfterIndex">
+                        <template x-for="opt in folioPadInsertOptions" :key="opt.afterIndex">
+                            <option :value="opt.afterIndex" x-text="opt.label"></option>
+                        </template>
+                    </select>
+                </label>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="addFolioPadRow()">Add page</button>
+            </div>
+            <div class="pv-dialog__acts">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="closeFolioPad()">Cancel</button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" :disabled="!folioPadReady" @click="confirmFolioPadPrint()">Print folio</button>
+            </div>
+        </div>
+    </div>
 
     <div class="pv-dock" x-show="canFill && fillTotal" x-cloak>
         <div class="pv-go" :class="{ 'pv-go--done': !fillLeft, 'pv-go--celebrate': justDone }">
@@ -167,6 +199,47 @@
         /* The page's own base rules come from PrintableDom.ensureBaseStyles. */
         .pv-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
         .pv-print { display: none; }
+        .pv-header .m-btn--named {
+            width: auto; min-width: 44px; height: 44px; padding: 0 10px; gap: 4px;
+        }
+        .pv-header .m-btn--named .m-btn__label { display: inline; font-size: 12.5px; }
+        .pv-scrim {
+            position: fixed; inset: 0; z-index: 60;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px; background: rgba(14, 28, 54, .45);
+        }
+        .pv-dialog {
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl, 16px);
+            padding: 24px; width: 100%; max-width: 520px;
+            display: flex; flex-direction: column; gap: 12px;
+            max-height: 92vh; overflow: auto;
+        }
+        .pv-dialog__hint { margin: 0; font-size: 13.5px; color: var(--on-surface-variant); line-height: 1.45; }
+        .pv-dialog__acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+        .pv-folio-stack {
+            list-style: none; margin: 0; padding: 0;
+            display: flex; flex-direction: column; gap: 4px;
+            max-height: 240px; overflow: auto;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius); padding: 6px;
+            background: var(--surface-container);
+        }
+        .pv-folio-stack__row {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 6px 8px; border-radius: var(--radius-sm, 8px);
+            background: var(--surface-container-lowest); font-size: 13px;
+        }
+        .pv-folio-stack__row.is-pad { outline: 1px dashed var(--outline-variant); }
+        .pv-folio-stack__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pv-folio-add {
+            display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end;
+        }
+        .pv-folio-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--on-surface-variant); }
+        @media (max-width: 640px) {
+            .pv-folio-add { grid-template-columns: 1fr; }
+        }
         .pv-dock {
             position: fixed;
             z-index: 40;
