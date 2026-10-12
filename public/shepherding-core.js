@@ -848,6 +848,51 @@
     // while older notes sit on the profile.
     const NOTES_COLLECTION = 'shepherding_notes';
 
+    // Person.createdAt on the directory record (MS-756).
+    function personCreatedAtMs(person) {
+        return noteCreatedAtMs(person && person.createdAt);
+    }
+
+    // People list sort (MS-756). Newest-first for date added and tag date;
+    // unknown timestamps sink to the bottom. Tie-break on name.
+    function comparePeopleList(a, b, sortBy, options) {
+        const opts = options || {};
+        const tagHolds = opts.tagHolds || {};
+        const tagId = opts.tagId || null;
+        const nameTie = () => String(a && a.name || '').localeCompare(String(b && b.name || ''));
+        if (sortBy === 'name') return nameTie();
+        if (sortBy === 'attention') {
+            const aTs = a && a.lastNoteAt;
+            const bTs = b && b.lastNoteAt;
+            if (!aTs && !bTs) return nameTie();
+            if (!aTs) return -1;
+            if (!bTs) return 1;
+            const aTime = noteCreatedAtMs(aTs);
+            const bTime = noteCreatedAtMs(bTs);
+            const diff = (aTime || 0) - (bTime || 0);
+            return diff !== 0 ? diff : nameTie();
+        }
+        if (sortBy === 'added') {
+            const aMs = personCreatedAtMs(a);
+            const bMs = personCreatedAtMs(b);
+            if (aMs === null && bMs === null) return nameTie();
+            if (aMs === null) return 1;
+            if (bMs === null) return -1;
+            const diff = bMs - aMs;
+            return diff !== 0 ? diff : nameTie();
+        }
+        if (sortBy === 'tagDate' && tagId) {
+            const aSince = ((tagHolds[a && a.id] || {})[tagId] || {}).heldSinceMs;
+            const bSince = ((tagHolds[b && b.id] || {})[tagId] || {}).heldSinceMs;
+            if (aSince == null && bSince == null) return nameTie();
+            if (aSince == null) return 1;
+            if (bSince == null) return -1;
+            const diff = bSince - aSince;
+            return diff !== 0 ? diff : nameTie();
+        }
+        return nameTie();
+    }
+
     function noteCreatedAtMs(value) {
         if (value == null || value === '') return null;
         if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -1004,6 +1049,8 @@
         // lastNoteAt cache (MS-530)
         NOTES_COLLECTION,
         noteCreatedAtMs,
+        personCreatedAtMs,
+        comparePeopleList,
         latestNoteAt,
         lastNoteAtCreatePatch,
         lastNoteAtFromRemaining,

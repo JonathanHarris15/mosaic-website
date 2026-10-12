@@ -503,6 +503,9 @@
             </label>
             <div class="people-sort m-seg" role="group" aria-label="Sort">
                 <button type="button" class="m-seg__opt" @click="sortBy = 'name'" :aria-pressed="sortBy === 'name'">Name</button>
+                <button type="button" class="m-seg__opt" @click="sortBy = 'added'" :aria-pressed="sortBy === 'added'">Date added</button>
+                <button type="button" class="m-seg__opt" x-show="tagFilters.length === 1" x-cloak
+                    @click="sortBy = 'tagDate'" :aria-pressed="sortBy === 'tagDate'">Tag date</button>
                 <button type="button" class="m-seg__opt" @click="sortBy = 'attention'" :aria-pressed="sortBy === 'attention'">Needs attention</button>
             </div>
             <p class="people-count m-label">

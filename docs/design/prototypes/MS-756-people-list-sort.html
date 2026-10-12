@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MS-756 — People list sort (prototype)</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        body { background: var(--surface-container-highest, #E8DDCD); margin: 0; font-family: 'Libre Franklin', system-ui, sans-serif; }
+        .proto-note { max-width: 1180px; margin: 16px auto 0; padding: 10px 14px; font-size: 12.5px; color: #5b4a33; background: #fff8e8; border: 1px dashed #c9a96b; border-radius: 10px; }
+        .stage { max-width: 1180px; margin: 22px auto; padding: 0 16px; }
+        .stage h2 { font-family: 'Cinzel', serif; font-size: 15px; letter-spacing: .08em; color: #1d2b4f; margin: 0 0 6px; }
+        .stage p.why { font-size: 12.5px; color: #4a4a4a; margin: 0 0 12px; max-width: 85ch; }
+        .variant { background: var(--surface, #FBF7F0); border: 1px solid #d9ccb6; border-radius: 14px; overflow: hidden; margin-bottom: 28px; }
+        .variant-cap { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #6b5a40; padding: 8px 14px; border-bottom: 1px solid #e6dccb; background: #f4ecdf; }
+        .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; flex-wrap: wrap; }
+        .m-search { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; padding: 0 12px; height: 42px; border: 1px solid var(--outline-variant, #c9b89a); border-radius: 999px; background: var(--surface-container-lowest, #fff); }
+        .m-search input { border: none; outline: none; flex: 1; font: inherit; background: transparent; }
+        .people-count { margin: 0; font-size: 12px; color: var(--on-surface-variant); white-space: nowrap; }
+        .m-seg { display: inline-flex; background: var(--surface-container); border-radius: 999px; padding: 3px; border: 1px solid var(--outline-variant); }
+        .m-seg__opt { border: none; background: transparent; padding: 6px 12px; border-radius: 999px; font: 600 13px 'Libre Franklin', sans-serif; cursor: pointer; color: var(--on-surface-variant); letter-spacing: 0; text-transform: none; }
+        .m-seg__opt[aria-pressed="true"] { background: var(--surface-container-lowest); color: var(--primary); box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,.08)); }
+        .m-seg__opt:disabled { opacity: .45; cursor: not-allowed; }
+        select.sort-dd { font: 600 13px 'Libre Franklin', sans-serif; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--outline-variant); background: var(--surface-container-lowest); color: var(--on-surface); }
+        .tag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--secondary-container); color: var(--on-secondary-container); }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--on-surface-variant); padding: 10px 16px; border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+        td { padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,.06); }
+        tr:hover td { background: rgba(29,43,79,.04); }
+        .meta { font-size: 12px; color: var(--on-surface-variant); }
+        .empty { padding: 24px; text-align: center; color: var(--on-surface-variant); font-style: italic; }
+        .error { padding: 16px; color: #7a2e2e; background: #f7e1e1; font-size: 13px; }
+        @media (max-width: 390px) { .toolbar { flex-direction: column; align-items: stretch; } }
+    </style>
+</head>
+<body>
+<div class="proto-note"><b>Prototype, throwaway.</b> Fictional people only. Three sort UX variants for MS-756. <b>Pick: Variant A</b> — same segmented control as today, with <em>Date added</em> always available and <em>Tag date</em> appearing only when exactly one tag is filtered (Visitor view). Newest-first for both date sorts; unknown tag history sorts to the bottom (ADR-0011).</div>
+
+<section class="stage">
+    <h2>States (Variant A)</h2>
+    <p class="why">Empty: no people match. One / many: table rows. Error: tag-date sort with holds failed to load — list stays on name order with a toast (not shown here).</p>
+    <div class="variant">
+        <div class="variant-cap">A · Segmented control (chosen) — no tag filter</div>
+        <div class="toolbar">
+            <label class="m-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="text" value="" placeholder="Search by name…" readonly /></label>
+            <div class="m-seg" role="group" aria-label="Sort">
+                <button type="button" class="m-seg__opt" aria-pressed="true">Name</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Date added</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Needs attention</button>
+            </div>
+            <p class="people-count">3 of 48 shown</p>
+        </div>
+        <table>
+            <thead><tr><th>Name</th><th>Tags</th><th>Last note</th></tr></thead>
+            <tbody>
+                <tr><td>Ava Chen</td><td><span class="tag-chip">Visitor</span></td><td class="meta">2 days ago</td></tr>
+                <tr><td>Ben Okonkwo</td><td><span class="tag-chip">Visitor</span></td><td class="meta">Never</td></tr>
+                <tr><td>Cora Ellis</td><td><span class="tag-chip">Visitor</span></td><td class="meta">1 week ago</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="variant">
+        <div class="variant-cap">A · Visitor tag filtered — Tag date segment visible</div>
+        <div class="toolbar">
+            <label class="m-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="text" placeholder="Search by name…" readonly /></label>
+            <div class="m-seg" role="group" aria-label="Sort">
+                <button type="button" class="m-seg__opt" aria-pressed="false">Name</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Date added</button>
+                <button type="button" class="m-seg__opt" aria-pressed="true">Tag date</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Needs attention</button>
+            </div>
+            <p class="people-count">12 of 48 shown</p>
+        </div>
+        <table>
+            <thead><tr><th>Name</th><th>Visitor since</th><th>Last note</th></tr></thead>
+            <tbody>
+                <tr><td>Dana Frye</td><td class="meta">Today</td><td class="meta">Never</td></tr>
+                <tr><td>Eli Marsh</td><td class="meta">3 days ago</td><td class="meta">Yesterday</td></tr>
+                <tr><td class="meta" colspan="3" style="font-style:italic;color:var(--on-surface-variant)">…older holds; people with unknown tag history sink to the bottom</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="variant">
+        <div class="variant-cap">Empty</div>
+        <div class="empty">No one matches these filters.</div>
+    </div>
+</section>
+
+<section class="stage">
+    <h2>Variant B — Sort dropdown</h2>
+    <p class="why">Same behaviour, one control. Tag date option disabled until a single tag is selected.</p>
+    <div class="variant">
+        <div class="variant-cap">B · Dropdown</div>
+        <div class="toolbar">
+            <label class="m-search"><span class="material-symbols-outlined">search</span><input placeholder="Search by name…" readonly /></label>
+            <label><span class="sr-only">Sort</span>
+                <select class="sort-dd">
+                    <option>Name</option>
+                    <option>Date added (newest)</option>
+                    <option selected>Tag date (newest) — Visitor</option>
+                    <option>Needs attention</option>
+                </select>
+            </label>
+            <p class="people-count">12 shown</p>
+        </div>
+    </div>
+</section>
+
+<section class="stage">
+    <h2>Variant C — Primary sort + contextual chip</h2>
+    <p class="why">Keeps three segments; tag date is a chip beside the control when one tag is active.</p>
+    <div class="variant">
+        <div class="variant-cap">C · Chip for tag recency</div>
+        <div class="toolbar">
+            <label class="m-search"><span class="material-symbols-outlined">search</span><input placeholder="Search by name…" readonly /></label>
+            <div class="m-seg" role="group">
+                <button type="button" class="m-seg__opt" aria-pressed="false">Name</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Date added</button>
+                <button type="button" class="m-seg__opt" aria-pressed="false">Needs attention</button>
+            </div>
+            <button type="button" class="m-seg__opt" style="background:var(--primary);color:var(--on-primary)" aria-pressed="true">Visitor · newest tag</button>
+        </div>
+    </div>
+</section>
+</body>
+</html>
