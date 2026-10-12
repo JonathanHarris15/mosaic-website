@@ -246,7 +246,7 @@ test('children of a household are a related list of that household, not a top-le
 test('MS-730: the query builder offers every source a level may read, single and list, and nothing typed or inserted', () => {
     const member = Data.querySourcesFor('member').map(s => s.key);
     ['people', 'households', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',
-        'sunday_kids_questions', 'sundays', 'event_dates'].forEach(key => {
+        'sunday_kids_questions', 'sundays', 'event_dates', 'event_announcements'].forEach(key => {
         assert.ok(member.includes(key), key + ' is in a member\'s query builder');
     });
     assert.ok(member.includes('sunday') && Data.sourceByKey('sunday').shape === 'single', 'a single is queried too');
@@ -424,7 +424,13 @@ const SUNDAYS = () => ({
         '2026-09-13': { theme: 'Hope', 'liturgy.sermon': 'John 3', 'liturgy.hymn1': { id: 'h2', name: 'Doxology' } },
     },
     hymns: {
-        h1: { hymn_name: 'Amazing Grace', attribution: 'Newton', versions: [{ pages: ['ag1.png', 'ag2.png'] }] },
+        h1: {
+            hymn_name: 'Amazing Grace',
+            attribution: 'Newton',
+            lyrics_writer: 'John Newton',
+            music_writer: 'Traditional',
+            versions: [{ pages: ['ag1.png', 'ag2.png'] }],
+        },
         h2: { hymn_name: 'Doxology', versions: [{ pages: ['dox.png'] }] },
     },
 });
@@ -444,6 +450,69 @@ test('a Sunday resolves its people, theme and every slot for this Sunday', () =>
     assert.equal(row.prayerLabel, 'Pastoral Prayer');
     assert.equal(row.hymnEnd2, '', 'a hymn the Sunday has dropped does not print');
     assert.equal(r.warnings.length, 0);
+});
+
+test('A Sunday hymn chips expose name, attribution, words, music, and first image', () => {
+    const hymnEl = Liturgy.standardCatalog().elements.find(e => e.id === 'preparatoryHymn');
+    const fields = Data.fieldsForElement(hymnEl);
+    assert.ok(fields.some(f => f.label === 'Hymn name' && f.aspect === 'value'));
+    assert.ok(fields.some(f => f.aspect === 'attribution' && f.kind === 'text'));
+    assert.ok(fields.some(f => f.aspect === 'words' && f.kind === 'text'));
+    assert.ok(fields.some(f => f.aspect === 'music' && f.kind === 'text'));
+    assert.ok(fields.some(f => f.aspect === 'image' && f.kind === 'image'));
+    const r = Data.resolve('sunday', { when: { mode: 'this' } }, SUNDAYS(), { today: TODAY });
+    const row = r.rows[0];
+    assert.equal(row['preparatoryHymn.attribution'], 'Newton');
+    assert.equal(row['preparatoryHymn.words'], 'John Newton');
+    assert.equal(row['preparatoryHymn.music'], 'Traditional');
+    assert.equal(row['preparatoryHymn.image'], 'ag1.png');
+    assert.equal(row['hymn1.attribution'], '', 'freehand hymn has no book facts');
+    assert.equal(row['hymn1.image'], '');
+    assert.equal(Data.needsFor('sunday', {}, TODAY).hymns, true);
+});
+
+test('Events → Announcements lists printables-visible notes in the weeks window', () => {
+    const date = '2026-09-06';
+    const data = {
+        printedEventsBySunday: {
+            [date]: [{
+                id: 'picnic',
+                name: 'Church picnic',
+                visibility: 'public',
+                occurrence: { id: 'picnic', date: '2026-09-12', name: 'Church picnic' },
+                announcements: [{
+                    id: 'a1', way: 'printed', weeks: 2,
+                    title: 'Bring a plate', prose: 'Park at noon',
+                }],
+            }, {
+                id: 'far',
+                name: 'Far ahead',
+                visibility: 'public',
+                occurrence: { id: 'far', date: '2026-10-18', name: 'Far ahead' },
+                announcements: [{
+                    id: 'a2', way: 'printed', weeks: 8,
+                    title: 'Too soon', prose: 'Not yet',
+                }],
+            }],
+        },
+        linkedEventAnnouncements: [{
+            announcement: {
+                id: 'linked', way: 'printed', weeks: 1,
+                title: 'Tonight', prose: 'Hall open',
+            },
+            eventName: 'Members meeting',
+            date: '2026-09-10',
+        }],
+    };
+    const r = Data.resolve('event_announcements', { when: { mode: 'this' }, weeks: 2 }, data, { today: date });
+    assert.deepEqual(r.rows.map(x => x.title), ['Bring a plate', 'Tonight']);
+    assert.equal(r.rows[0].content, 'Park at noon');
+    assert.equal(r.rows[0].event, 'Church picnic');
+    assert.ok(!r.rows.some(x => x.title === 'Too soon'));
+    const src = Data.sourceByKey('event_announcements');
+    assert.equal(src.region, 'Events');
+    assert.ok(src.params.some(p => p.key === 'weeks'));
+    assert.match(Data.describeParams('event_announcements', { weeks: 2 }), /next 2 weeks/);
 });
 
 test('a Sunday nobody has planned is an answer with a warning, not an error', () => {
@@ -905,7 +974,11 @@ test('Sundays start as a preaching schedule: five from this Sunday, planned or n
     assert.equal(r.rows[2].date, 'Sunday 20 September 2026');
     assert.equal(r.rows[2]._id, '2026-09-20');
     assert.deepEqual(r.warnings, [], 'a Sunday nobody has planned yet is not a failure');
-    assert.deepEqual(Data.needsFor('sundays', {}, TODAY), { serviceRange: { from: '2026-09-06', to: '2026-10-10' }, liturgy: true });
+    assert.deepEqual(Data.needsFor('sundays', {}, TODAY), {
+        serviceRange: { from: '2026-09-06', to: '2026-10-10' },
+        liturgy: true,
+        hymns: true,
+    });
 });
 
 test('what is not planned yet reads as whatever the query says, or stays blank', () => {

@@ -105,16 +105,17 @@ test('an announcement is exactly one way', () => {
 
     const neither = Ann.accept(draft({ way: 'both' }));
     assert.equal(neither.ok, false);
-    assert.match(neither.refusal, /printed or told/i);
+    assert.match(neither.refusal, /visible to printables or told/i);
 });
 
-// ── Printed ───────────────────────────────────────────────────────────────────
+// ── Printed (visible to printables) ───────────────────────────────────────────
 
 test('printed weeks of 0, a fraction, and a negative are refused, and 1 is kept', () => {
     for (const weeks of [0, 1.5, -1, '', '1.5']) {
         const result = Ann.accept(draft({ weeks }));
         assert.equal(result.ok, false, 'weeks ' + weeks + ' should be refused');
         assert.equal(result.announcement, undefined);
+        assert.match(result.refusal, /weeks ahead/i);
     }
     assert.equal(accepted({ weeks: 1 }).weeks, 1);
     assert.equal(accepted({ weeks: '3' }).weeks, 3);

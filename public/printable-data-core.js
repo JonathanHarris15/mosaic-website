@@ -325,6 +325,10 @@
         person: 'person',
         carriedBy: 'carriedBy',
         note: 'note',
+        attribution: 'attribution',
+        words: 'words',
+        music: 'music',
+        image: 'image',
     });
 
     function sundayAspectKey(elementId, aspect) {
@@ -347,7 +351,7 @@
 
     function valueFieldLabel(el) {
         const kind = el && (el.kind || el.primitive);
-        if (kind === 'hymn' || kind === 'song') return 'Hymn';
+        if (kind === 'hymn' || kind === 'song') return 'Hymn name';
         if (kind === 'scripture') return 'Reference';
         if (kind === 'prayer') return 'People';
         if (kind === 'person' || kind === 'people') return 'Person';
@@ -474,6 +478,42 @@
                 kind: 'text',
                 element: kind,
                 aspect: SUNDAY_ASPECTS.note,
+                elementId: el.id,
+            });
+        }
+        // Hymn book facts — same registry Hymns of a Sunday reads. Image is
+        // the first sheet-music page; every page stays on that list source.
+        if (kind === 'hymn' || kind === 'song') {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.attribution),
+                label: 'Attribution',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.attribution,
+                elementId: el.id,
+            });
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.words),
+                label: 'Words',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.words,
+                elementId: el.id,
+            });
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.music),
+                label: 'Music',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.music,
+                elementId: el.id,
+            });
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.image),
+                label: 'Image',
+                kind: 'image',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.image,
                 elementId: el.id,
             });
         }
@@ -729,6 +769,24 @@
                 { key: 'description', label: 'About the event', kind: 'text' },
                 { key: 'dateNote', label: 'About this date', kind: 'text' },
                 { key: 'holder', label: 'Who is down for the role', kind: 'text', minLevel: ROTA_LEVEL },
+            ],
+        },
+        {
+            key: 'event_announcements', region: 'Events', label: 'Announcements', shape: 'list', minLevel: 'viewer',
+            blurb: 'One row per event announcement marked visible to printables, for events in the next weeks. A printable linked to an event also gets that event\'s announcements.',
+            params: [
+                WHEN_PARAM,
+                { key: 'weeks', label: 'Weeks of events', kind: 'text', default: 2 },
+            ],
+            fields: [
+                { key: 'title', label: 'Title', kind: 'text' },
+                { key: 'content', label: 'Body', kind: 'text' },
+                { key: 'text', label: 'Title and body', kind: 'text' },
+                { key: 'label', label: 'Title as printed', kind: 'text' },
+                { key: 'plain', label: 'Body as printed', kind: 'text' },
+                { key: 'event', label: 'Event', kind: 'text' },
+                { key: 'date', label: 'Event date', kind: 'date' },
+                { key: 'number', label: 'Announcement number', kind: 'number' },
             ],
         },
         {
@@ -1173,10 +1231,11 @@
     // guide. `notPlanned`, when it has words, stands in for whatever nobody
     // has written yet ("TBA"); a dropped hymn is not coming, so it stays blank.
     // `prayerLabel` stays on the row for old wires only — it is not a catalog field.
-    function sundayRow(date, s, notPlanned, catalog) {
+    function sundayRow(date, s, notPlanned, catalog, hymns) {
         const cat = catalogOrSeed(catalog);
         const lit = (s && s.liturgy) || {};
         const notes = (s && s.notes) || {};
+        const book = hymns || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
         const row = {
             _id: date,
@@ -1193,14 +1252,16 @@
         };
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
         cat.elements.forEach(el => {
-            const dropsOut = (el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1;
+            const kind = el.kind || el.primitive || '';
+            const dropsOut = (kind === 'hymn' || kind === 'song') && dropped.indexOf(el.id) !== -1;
             // Other has no Sunday field. A value already stored (an older text
             // element) still prints; otherwise the row is the name.
-            const stored = slotText(lit[el.id]);
+            const raw = lit[el.id];
+            const stored = slotText(raw);
             const displayName = Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el.name || '');
-            row[el.id] = dropsOut ? '' : (el.kind === 'other' ? (stored || el.name) : stored);
+            row[el.id] = dropsOut ? '' : (kind === 'other' ? (stored || el.name) : stored);
             row[sundayAspectKey(el.id, SUNDAY_ASPECTS.name)] = displayName;
-            if (el.kind === 'prayer') {
+            if (kind === 'prayer') {
                 const msg = String(el.message || '');
                 const res = String(el.response || '');
                 // Order templates stay resolvable for older wires.
@@ -1226,7 +1287,19 @@
                 const rawNote = notes[el.id];
                 row[sundayAspectKey(el.id, SUNDAY_ASPECTS.note)] = rawNote == null ? '' : String(rawNote);
             }
-            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) {
+            if ((kind === 'hymn' || kind === 'song') && !dropsOut) {
+                const hymn = raw && raw.id ? book[raw.id] : null;
+                if (hymn && hymn.hymn_name) row[el.id] = hymn.hymn_name;
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.attribution)] =
+                    (hymn && hymn.attribution) || '';
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.words)] =
+                    (hymn && hymn.lyrics_writer) || '';
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.music)] =
+                    (hymn && hymn.music_writer) || '';
+                const pages = hymnSheetPages(hymn);
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.image)] = pages[0] || '';
+            }
+            if (kind !== 'other' && kind !== 'person' && kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) {
                 textKeys.push(el.id);
             }
         });
@@ -1247,7 +1320,7 @@
         const s = serviceAt(data, date);
         const warnings = [];
         if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
-        return { rows: [sundayRow(date, s, undefined, data.liturgy)], warnings: warnings, date: date };
+        return { rows: [sundayRow(date, s, undefined, data.liturgy, data.hymns)], warnings: warnings, date: date };
     }
 
     // The Sunday's liturgy order, walked: one row per element. A dropped hymn
@@ -1552,7 +1625,7 @@
         const rows = Object.keys(dates).sort()
             .map(d => ({ date: d, service: serviceAt(data, d) }))
             .filter(x => x.service || p.which !== 'planned')
-            .map(x => sundayRow(x.date, x.service, p.notPlanned, data.liturgy));
+            .map(x => sundayRow(x.date, x.service, p.notPlanned, data.liturgy, data.hymns));
         const warnings = [];
         if (w.cut) warnings.push('Only the first ' + SUNDAYS_MAX + ' Sundays are listed.');
         if (!rows.length) {
@@ -1561,6 +1634,80 @@
                 : 'There is no Sunday ' + describeRange(p.range, 'Sundays') + '.');
         }
         return { rows: rows, warnings: warnings, range: { from: w.from, to: w.to } };
+    }
+
+    // Whole weeks for the Events → Announcements query. Same floor as a
+    // printed announcement's own weeks: 1 or more, else the default.
+    function queryWeeks(value, fallback) {
+        const n = typeof value === 'number' ? value : Number(String(value == null ? '' : value).trim());
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) return fallback;
+        return n;
+    }
+
+    // Event dates that fall in [from, to]. Reuses the occurrence expander
+    // the guide already trusts for skips and moves.
+    function eventDatesInRange(event, from, to) {
+        const Lines = linesCore();
+        if (!Lines || !Lines.datesTheEventHappens) return [];
+        const happened = event && event.rule
+            ? Lines.datesTheEventHappens(event, from, to)
+            : Lines.datesTheEventHappens({ occurrence: (event && event.occurrence) || event || {} });
+        return (happened.dates || []).filter(d => d >= from && d <= to);
+    }
+
+    function announcementRow(ann, eventName, eventDate, index) {
+        const title = String((ann && (ann.title || '')) || '').trim();
+        const prose = String((ann && (ann.prose || ann.content || '')) || '').trim();
+        const id = ann && ann.id != null ? String(ann.id) : '';
+        return {
+            _id: id || (String(eventName || 'event') + '~' + index),
+            title: title,
+            content: prose,
+            prose: prose,
+            text: title && prose ? title + '\n' + prose : title || prose,
+            label: title ? title + ': ' : '',
+            plain: announcementPlain(prose),
+            event: eventName || '',
+            date: eventDate ? formatDate(eventDate, 'medium') : '',
+            number: index + 1,
+        };
+    }
+
+    // Announcements marked visible to printables (stored way `printed`) for
+    // events in the next N weeks from the chosen Sunday — plus any on the
+    // occurrence this printable is linked to.
+    function resolveEventAnnouncements(params, data, ctx) {
+        const Lines = linesCore();
+        const p = Object.assign(defaultParams('event_announcements'), params || {});
+        const date = resolveWhen(p.when, ctx.today);
+        const weeks = queryWeeks(p.weeks, 2);
+        const end = addDays(date, weeks * 7);
+        const seen = {};
+        const rows = [];
+        function take(ann, eventName, eventDate) {
+            if (!ann || ann.way !== 'printed') return;
+            const id = ann.id != null ? String(ann.id) : '';
+            if (id && seen[id]) return;
+            if (id) seen[id] = true;
+            rows.push(announcementRow(ann, eventName, eventDate, rows.length));
+        }
+        const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
+        events.forEach(event => {
+            if (Lines && Lines.mayBeHandedOut && !Lines.mayBeHandedOut(event)) return;
+            const dates = eventDatesInRange(event, date, end);
+            if (!dates.length) return;
+            (event.announcements || []).forEach(ann => take(ann, event.name || '', dates[0]));
+        });
+        (data.linkedEventAnnouncements || []).forEach(item => {
+            if (!item) return;
+            take(item.announcement || item, item.eventName || item.event || '', item.date || '');
+        });
+        const warnings = [];
+        if (!rows.length) {
+            warnings.push('No announcements are visible to printables for events in the next '
+                + weeks + ' week' + (weeks === 1 ? '' : 's') + '.');
+        }
+        return { rows: rows, warnings: warnings, date: date };
     }
 
     // ── Events ───────────────────────────────────────────────────────────────
@@ -1781,6 +1928,7 @@
         sunday_kids_questions: resolveSundayKidsQuestions,
         sundays: resolveSundays,
         event_dates: resolveEventDates,
+        event_announcements: resolveEventAnnouncements,
         role_holder: resolveRoleHolder,
         form_answers: resolveFormAnswers,
         insert_date: resolveInsertDate,
@@ -1817,13 +1965,22 @@
             case 'people': return { people: true, families: true, households: true };
             case 'households': return { people: true, families: true, households: true };
             case 'household_children': return { people: true, families: true, households: true };
-            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true };
+            case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true, hymns: true };
             case 'sunday_prayer_requests': return { services: [resolveWhen(p.when, t)], liturgy: true, prayerRequests: [resolveWhen(p.when, t)] };
             case 'sunday_typed':
             case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
             case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true, liturgy: true };
-            case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to }, liturgy: true }; }
+            case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to }, liturgy: true, hymns: true }; }
+            case 'event_announcements': {
+                const when = resolveWhen(p.when, t);
+                const weeks = queryWeeks(p.weeks, 2);
+                return {
+                    printedAnnouncements: [when],
+                    occurrenceRange: { from: when, to: addDays(when, weeks * 7) },
+                    series: true,
+                };
+            }
             case 'event_dates': {
                 const n = { series: true, occurrenceRange: resolveRange(p.range, t) };
                 return p.roleSlug ? Object.assign(n, { roles: true, people: true, rosters: p.seriesId || true }) : n;
@@ -1865,6 +2022,10 @@
             else if (param.kind === 'series') { const sr = ((options && options.series) || []).find(x => x.id === v); if (sr) bits.push(sr.name); }
             else if (param.kind === 'role') { if (v) bits.push(roleLabel(v, { roles: (options && options.roles) || [] })); }
             else if (param.kind === 'form') { const f = ((options && options.forms) || []).find(x => x.id === v); if (f) bits.push('"' + f.title + '"'); }
+            else if (param.key === 'weeks' && sourceKey === 'event_announcements') {
+                const weeks = queryWeeks(v, 2);
+                bits.push('next ' + weeks + ' week' + (weeks === 1 ? '' : 's'));
+            }
         });
         filtersFor(s, options).forEach(f => {
             const v = p[f.key];

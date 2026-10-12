@@ -228,6 +228,8 @@ test('the event pages offer the Announcements tab and load the model first', () 
     const event = fs.readFileSync(path.join(root, 'calendar-event.html'), 'utf8');
     const series = fs.readFileSync(path.join(root, 'recurring-events.html'), 'utf8');
     for (const html of [event, series]) {
+        assert.match(html, /Visible to printables/);
+        assert.ok(!html.includes('Printed in the Sunday service guide'));
         assert.match(html, />Announcements</);
         assert.match(html, /announcementTab\(\)/);
         assert.match(html, /saveAnnouncement\(\)/);

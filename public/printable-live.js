@@ -117,6 +117,9 @@
                 occurrenceId: (opts && opts.occurrenceId) || '',
             };
         }
+        if (opts && opts.occurrenceId) {
+            needs.linkedOccurrenceId = opts.occurrenceId;
+        }
         return needs;
     }
 
