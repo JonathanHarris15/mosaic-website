@@ -203,7 +203,7 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 The two actions must read apart without a banner. **Print folio** uses the `menu_book` icon; flat **Print** uses `print`. On the compact view header both keep a short label via `.m-btn--named` (**Folio** / **Print**) so twin icon-only squares never appear. Titles and `aria-label`s name the full action.
 
-When the laid-out page count is not a multiple of 4, **Print folio** opens **Fill the folio fold**: every page is laid out as a thumbnail with insert gaps between them. Click a page to set the **brush**; click a gap to stamp a copy there. A side rail counts how many insertions are left to the next multiple of 4 (e.g. **3 left to 16 pages**). Gaps inside an overflow run stay closed. Temporary leaves are print-only; they do not write the printable. Page numbers on the temporary stack are restamped for the print order. A stack that is already ×4 prints with no dialog.
+**Print folio** opens **Fill the folio fold** whenever there are pages: every page is laid out as a thumbnail with insert gaps between them. Click a page to set the **brush**; click a gap to stamp a copy there; × on a page drops it from this print only. A side rail counts how many insertions are left to the next multiple of 4 (e.g. **3 left to 16 pages**). Gaps inside an overflow run stay closed. The temporary stack never writes the printable. Page numbers are restamped for the print order. Print folio stays disabled until the stack is a multiple of 4 and has at least one page.
 
 ## Printable editor — pages filmstrip and elements tree (MS-760)
 

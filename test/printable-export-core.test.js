@@ -282,8 +282,13 @@ test('folio pad tool duplicates a page into a temporary stack until ×4 without 
     assert.equal(removed.ok, true);
     assert.equal(removed.entries.length, 7);
     assert.equal(Export.folioReadyToPrint(removed.entries), false);
-    const keep = Export.removeFolioPadAt(stack, 0);
-    assert.equal(keep.ok, false, 'saved pages cannot be removed in the pad tool');
+    const dropSaved = Export.removeFolioPadAt(stack, 0);
+    assert.equal(dropSaved.ok, true, 'any page can be dropped from the print-only stack');
+    assert.equal(dropSaved.entries.length, 7);
+    assert.equal(stack.length, 8, 'source stack is unchanged');
+    const one = Export.cloneEntriesForFolio([stack[0]]);
+    const keepLast = Export.removeFolioPadAt(one, 0);
+    assert.equal(keepLast.ok, false, 'the last page cannot be removed');
 });
 
 test('a half-letter folio sheet is letter landscape, matching the service guide @page', () => {

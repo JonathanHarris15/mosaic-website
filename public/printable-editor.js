@@ -1981,10 +1981,8 @@ function printableEditor() {
             if (!Ex || typeof PrintableDom.mountFolioPrint !== 'function') return;
             const entries = this.computeLayout ? this.computeLayout({ persist: false }) : [];
             if (!entries.length) return;
-            if (!Ex.folioNeedsPad(entries)) {
-                this.runFolioPrint(entries);
-                return;
-            }
+            // Always open the board so the operator can delete or stamp
+            // pages before printing — even when the count is already ×4.
             this.openFolioPad(entries);
         },
 
