@@ -17,19 +17,6 @@
 // The page saves itself (ADR-0032): 1.5 s after the last edit, with the chip;
 // the Save button means "now".
 
-// #region agent log
-function __dbgUndo(hypothesisId, location, message, data) {
-    var payload = { hypothesisId: hypothesisId, location: location, message: message, data: data || {}, timestamp: Date.now() };
-    try {
-        var g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : {});
-        if (!g.__UNDO_DEBUG_LOGS) g.__UNDO_DEBUG_LOGS = [];
-        g.__UNDO_DEBUG_LOGS.push(payload);
-        if (typeof g.__undoDebugWrite === 'function') g.__undoDebugWrite(payload);
-    } catch (e) { /* ignore */ }
-    try { console.log('[DEBUG-undo]', JSON.stringify(payload)); } catch (e2) { /* ignore */ }
-}
-// #endregion
-
 function printableEditor() {
     const global = window;
     // Things Alpine must NOT make reactive: DOM handles, the undo stack, the
@@ -386,12 +373,6 @@ function printableEditor() {
         // ── Saving (ADR-0032) ────────────────────────────────────────────
 
         touch() {
-            // #region agent log
-            __dbgUndo('H3', 'printable-editor.js:touch', 'touch()', {
-                historyLen: ui.history.length, futureLen: ui.future.length,
-                hasLive: !!this._live, saveStatus: this.saveStatus,
-            });
-            // #endregion
             if (this._live) this._live.edited(); else this.saveStatus = 'unsaved';
             clearTimeout(this._saveTimer);
             this._saveTimer = setTimeout(() => this.save(false), 1500);
@@ -404,19 +385,9 @@ function printableEditor() {
             if (!this._live) this.saveStatus = 'saving';
             this.saving = true;
             const written = JSON.parse(JSON.stringify(this.project));
-            // #region agent log
-            __dbgUndo('H1', 'printable-editor.js:save', 'save() start', {
-                pressed: !!pressed, ticket: ticket, historyLen: ui.history.length,
-            });
-            // #endregion
             try {
                 await PrintableStore.savePrintable(db, firebase, this.currentUser, this.project.id, written);
                 if (this._live) this._live.saved(ticket, written); else this.saveStatus = 'saved';
-                // #region agent log
-                __dbgUndo('H1', 'printable-editor.js:save', 'save() ok → saved()', {
-                    ticket: ticket, historyLen: ui.history.length,
-                });
-                // #endregion
             } catch (e) {
                 console.error(e);
                 // "Not saved" + Retry; the next edit tries again on its own.
@@ -457,25 +428,20 @@ function printableEditor() {
         },
         adoptPrintable(data) {
             if (!this.project) return;
-            // #region agent log
-            const histBefore = ui.history.length;
-            __dbgUndo('H1', 'printable-editor.js:adoptPrintable', 'adoptPrintable() wiping history', {
-                historyLenBefore: histBefore, futureLenBefore: ui.future.length,
-                reason: 'DocLive.onAdopt',
-            });
-            // #endregion
             clearTimeout(this._saveTimer);
+            // Undo is pages+inputs only. A DocLive adopt that fingerprints
+            // differently (or carries stamps) but lands on the same pages and
+            // inputs must not wipe the stack — otherwise our own save echo
+            // makes Undo a no-op (MS-721).
+            const before = this.snapshot();
             const next = PrintableCore.migrate(data);
             Object.assign(this.project, next, { id: this.project.id });
             if (!this.pages.find(p => p.id === this.selection.pageId)) this.selection.pageId = this.pages[0] ? this.pages[0].id : null;
             if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
-            ui.history = [this.snapshot()];
-            ui.future = [];
-            // #region agent log
-            __dbgUndo('H1', 'printable-editor.js:adoptPrintable', 'adoptPrintable() done', {
-                historyLenAfter: ui.history.length, historyLenBefore: histBefore,
-            });
-            // #endregion
+            if (this.snapshot() !== before) {
+                ui.history = [this.snapshot()];
+                ui.future = [];
+            }
             this.renderAll();
             this.readProps();
         },
@@ -503,38 +469,16 @@ function printableEditor() {
 
         commit() {
             const s = this.snapshot();
-            // #region agent log
-            const histBefore = ui.history.length;
-            const willPush = ui.history[ui.history.length - 1] !== s;
-            // #endregion
             if (ui.history[ui.history.length - 1] !== s) {
                 ui.history.push(s);
                 if (ui.history.length > 100) ui.history.shift();
                 ui.future = [];
             }
-            // #region agent log
-            __dbgUndo('H2', 'printable-editor.js:commit', 'commit()', {
-                historyLenBefore: histBefore, historyLenAfter: ui.history.length,
-                pushed: willPush, skippedDuplicate: !willPush,
-            });
-            // #endregion
             this.touch();
         },
 
         undo() {
-            if (ui.history.length < 2) {
-                // #region agent log
-                __dbgUndo('H1', 'printable-editor.js:undo', 'undo() early return', {
-                    historyLen: ui.history.length, futureLen: ui.future.length, action: 'earlyReturn',
-                });
-                // #endregion
-                return;
-            }
-            // #region agent log
-            __dbgUndo('H1', 'printable-editor.js:undo', 'undo() → restore', {
-                historyLenBefore: ui.history.length, futureLenBefore: ui.future.length, action: 'restore',
-            });
-            // #endregion
+            if (ui.history.length < 2) return;
             ui.future.push(ui.history.pop());
             this.restore(ui.history[ui.history.length - 1]);
         },
@@ -547,11 +491,6 @@ function printableEditor() {
         },
 
         restore(s) {
-            // #region agent log
-            __dbgUndo('H3', 'printable-editor.js:restore', 'restore() before apply+touch', {
-                historyLen: ui.history.length, futureLen: ui.future.length,
-            });
-            // #endregion
             const parsed = JSON.parse(s);
             if (Array.isArray(parsed)) {
                 this.project.pages = parsed;
@@ -563,11 +502,6 @@ function printableEditor() {
             if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
             this.renderAll();
             this.readProps();
-            // #region agent log
-            __dbgUndo('H3', 'printable-editor.js:restore', 'restore() → touch()', {
-                historyLen: ui.history.length, futureLen: ui.future.length,
-            });
-            // #endregion
             this.touch();
         },
 
@@ -1482,18 +1416,6 @@ function printableEditor() {
                 const mod = e.ctrlKey || e.metaKey;
                 if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); this.save(true); return; }
                 if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.printPrintable(); return; }
-                // #region agent log
-                if (mod && e.key.toLowerCase() === 'z') {
-                    __dbgUndo('H4', 'printable-editor.js:bindKeys', 'Ctrl/Cmd+Z keydown', {
-                        inField: !!inField,
-                        tag: document.activeElement && document.activeElement.tagName,
-                        contentEditable: !!(document.activeElement && document.activeElement.isContentEditable),
-                        blockedByInField: !!inField,
-                        shift: !!e.shiftKey,
-                        historyLen: ui.history.length,
-                    });
-                }
-                // #endregion
                 if (inField) return;
                 if (e.key === ' ') { this.spaceHeld = true; if (ui.viewport) ui.viewport.classList.add('pe-space'); e.preventDefault(); return; }
                 if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
