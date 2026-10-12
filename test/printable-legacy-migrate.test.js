@@ -29,8 +29,57 @@ test('sunday_typed wires become event fill-ins with stable legacy_ ids', () => {
     assert.equal(bind.field, 'legacy_prayerNation');
     assert.ok(out.project.inputs.some(i => i.id === 'legacy_prayerNation'));
     assert.ok(out.project.inputs.some(i => i.id === 'legacy_kidsLessonTitle'));
+    assert.ok(!out.project.inputs.some(i => i.id === 'legacy_announcements'));
+    assert.ok(!Migrate.FILL_KEYS.includes('announcements'));
     // Idempotent
     assert.equal(Migrate.migrateProject(out.project).changed, false);
+});
+
+test('sunday_typed announcements become an event_announcements repeat, not a fill-in', () => {
+    const project = {
+        name: 'Guide',
+        pages: [{
+            id: 'p1',
+            nodes: [{
+                id: 'ann',
+                kind: 'text',
+                bind: {
+                    text: { scope: 'global', source: 'sunday_typed', field: 'announcements', params: {} },
+                },
+            }],
+        }],
+        inputs: [{ id: 'legacy_announcements', label: 'Announcements', kind: 'text' }],
+    };
+    const out = Migrate.migrateProject(project);
+    assert.equal(out.changed, true);
+    const node = out.project.pages[0].nodes[0];
+    assert.equal(node.bind.text.source, 'event_announcements');
+    assert.equal(node.bind.text.scope, 'item');
+    assert.equal(node.bind.text.field, 'text');
+    assert.equal(node.repeat.source, 'event_announcements');
+    assert.equal(node.repeat.params.weeks, 2);
+    assert.ok(!out.project.inputs.some(i => i.id === 'legacy_announcements'));
+});
+
+test('legacy_announcements fill-in wires rewrite onto the announcements query', () => {
+    const project = {
+        name: 'Guide',
+        pages: [{
+            id: 'p1',
+            nodes: [{
+                id: 'ann',
+                kind: 'text',
+                bind: {
+                    text: { scope: 'global', source: 'event_field', field: 'legacy_announcements', params: {} },
+                },
+            }],
+        }],
+        inputs: [{ id: 'legacy_announcements', label: 'Announcements', kind: 'text' }],
+    };
+    const out = Migrate.migrateProject(project);
+    assert.equal(out.changed, true);
+    assert.equal(out.project.pages[0].nodes[0].repeat.source, 'event_announcements');
+    assert.ok(!out.project.inputs.some(i => i.id === 'legacy_announcements'));
 });
 
 test('buildPrintable migrates sunday_typed on load', () => {

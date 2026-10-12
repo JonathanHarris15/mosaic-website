@@ -3,10 +3,9 @@
 // Prayer-country facts and Mosaic Kids scalars used to be `sunday_typed`
 // blanks on `services/{date}.typedContent`. They are fill-ins on the linked
 // event now: names on the Printable (`project.inputs`), values on the
-// occurrence (`printableInputs`). Announcements and kids questions as rows
-// already live in the query builder (`sunday_announcements`,
-// `sunday_kids_questions`); a joined-text wire to those fields becomes a
-// text fill-in so the page still has somewhere to put the words.
+// occurrence (`printableInputs`). Kids questions as rows already live in the
+// query builder (`sunday_kids_questions`). Announcements migrate onto the
+// Events `event_announcements` query (MS-739), not a fill-in.
 //
 // Pure: no Firestore, no DOM.
 
@@ -26,14 +25,14 @@
     const PREFIX = 'legacy_';
 
     // Every sunday_typed field that becomes one text/image/number fill-in.
-    // announcementCount is derived — dropped on migrate.
+    // announcementCount is derived — dropped on migrate. Announcements become
+    // an event_announcements repeat, not a fill-in.
     const FILL_KEYS = [
         'prayerNation', 'prayerContinent', 'prayerCapital', 'prayerPopulation',
         'prayerLanguage', 'prayerTotalLanguages', 'prayerLiteracy',
         'prayerChristian', 'prayerEvangelical', 'prayerUnevangelized',
         'prayerPrompts', 'prayerCountryImage',
         'kidsLessonTitle', 'kidsLessonVerse', 'kidsSummary', 'kidsQuestions',
-        'announcements',
     ];
 
     function fillId(typedKey) {
@@ -43,6 +42,7 @@
     function typedKeyOf(id) {
         const s = String(id || '');
         if (s.indexOf(PREFIX) === 0) return s.slice(PREFIX.length);
+        if (s === 'announcements' || s === 'legacy_announcements') return 'announcements';
         return FILL_KEYS.indexOf(s) !== -1 ? s : '';
     }
 
@@ -82,11 +82,46 @@
         return FILL_KEYS.map(inputDefFor);
     }
 
+    function eventAnnouncementsRepeat() {
+        return {
+            source: 'event_announcements',
+            params: { when: { mode: 'this' }, weeks: 2 },
+        };
+    }
+
     function rewriteBind(bind) {
-        if (!bind || bind.source !== 'sunday_typed') return { bind: bind, changed: false, typedKey: '' };
+        if (!bind) return { bind: bind, changed: false, typedKey: '' };
+        // Legacy fill-in for announcements → Events announcements query.
+        if (bind.source === 'event_field' && typedKeyOf(bind.field) === 'announcements') {
+            return {
+                bind: {
+                    scope: 'item',
+                    source: 'event_announcements',
+                    field: 'text',
+                    params: {},
+                },
+                changed: true,
+                typedKey: 'announcements',
+                repeat: eventAnnouncementsRepeat(),
+            };
+        }
+        if (bind.source !== 'sunday_typed') return { bind: bind, changed: false, typedKey: '' };
         const key = bind.field;
         if (!key || key === 'announcementCount') {
             return { bind: null, changed: true, typedKey: '', drop: true };
+        }
+        if (key === 'announcements') {
+            return {
+                bind: {
+                    scope: 'item',
+                    source: 'event_announcements',
+                    field: 'text',
+                    params: {},
+                },
+                changed: true,
+                typedKey: 'announcements',
+                repeat: eventAnnouncementsRepeat(),
+            };
         }
         if (FILL_KEYS.indexOf(key) === -1) return { bind: bind, changed: false, typedKey: '' };
         return {
@@ -109,8 +144,8 @@
         });
     }
 
-    // Rewrite sunday_typed wires to event fill-ins and ensure those fill-ins
-    // exist on the printable. Idempotent.
+    // Rewrite sunday_typed wires to event fill-ins (or the announcements
+    // query) and ensure those fill-ins exist on the printable. Idempotent.
     function migrateProject(project) {
         const p = project && typeof project === 'object' ? project : null;
         if (!p) return { project: p, changed: false };
@@ -121,8 +156,12 @@
                 if (!node || !node.bind) return;
                 ['text', 'src'].forEach(prop => {
                     const b = node.bind[prop];
-                    if (!b || b.source !== 'sunday_typed') return;
-                    anyLegacy = true;
+                    if (!b) return;
+                    if (b.source !== 'sunday_typed'
+                        && !(b.source === 'event_field' && typedKeyOf(b.field) === 'announcements')) {
+                        return;
+                    }
+                    if (b.source === 'sunday_typed') anyLegacy = true;
                     const out = rewriteBind(b);
                     if (!out.changed) return;
                     if (out.drop) {
@@ -130,12 +169,17 @@
                         if (!node.bind.text && !node.bind.src) node.bind = null;
                     } else {
                         node.bind[prop] = out.bind;
+                        if (out.repeat && !node.repeat) node.repeat = out.repeat;
                     }
                     changed = true;
                 });
             });
         });
         let inputs = (linkCore() ? linkCore().normalizeInputs(p.inputs) : (p.inputs || [])).slice();
+        // Drop a leftover legacy_announcements fill-in the old migrate added.
+        const beforeDrop = inputs.length;
+        inputs = inputs.filter(i => !(i && typedKeyOf(i.id) === 'announcements'));
+        if (inputs.length !== beforeDrop) changed = true;
         const before = inputs.length;
         if (anyLegacy || changed) {
             inputDefsNeeded().forEach(def => { inputs = ensureInput(inputs, def); });
