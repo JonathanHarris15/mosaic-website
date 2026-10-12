@@ -66,6 +66,32 @@ function catalogWithQuietRows() {
     return { catalog, praise, asked, other, noted, hymn };
 }
 
+// After MS-734 the pastoral slot is gone. The trailing legacy row is only for
+// praise/confession leaders that have no element to sit under — not for a
+// pastoralId that no longer exists. Leaving that check in always drew an
+// empty beige panel with a primary left border under Benediction.
+test('Standard does not append an empty legacy prayer row', () => {
+    const form = formWith({ load: async () => ({ catalog: Core.standardCatalog(), stored: null }) });
+    form.liturgyCatalog = Core.standardCatalog();
+    const keys = form.displayRows.map((row) => row.key);
+    assert.equal(keys.includes('__legacy_prayer__'), false);
+    assert.equal(keys[keys.length - 1], 'benediction');
+});
+
+test('a trailing legacy row appears only when praise or confession has no home', () => {
+    const form = formWith({ load: async () => ({ catalog: Core.standardCatalog(), stored: null }) });
+    const stripped = Core.standardCatalog();
+    stripped.orders = stripped.orders.map((order) => ({
+        ...order,
+        elements: order.elements.filter((el) => el.id !== 'callToWorship'),
+        elementIds: order.elementIds.filter((id) => id !== 'callToWorship'),
+    }));
+    form.liturgyCatalog = stripped;
+    const keys = form.displayRows.map((row) => row.key);
+    assert.equal(keys.includes('__legacy_prayer__'), true);
+    assert.equal(keys[keys.length - 1], '__legacy_prayer__');
+});
+
 test('a row with nothing to enter does not open', () => {
     global.PresenceStore = { release() {}, claim() { return true; }, leave() {} };
     const made = catalogWithQuietRows();

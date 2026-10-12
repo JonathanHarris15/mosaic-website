@@ -2171,12 +2171,13 @@ function serviceForm() {
             return this.orderElements.map(el => this._buildItem(el, lit));
         },
 
-        // The locked order, plus one trailing row when an older prayer field
-        // has no element to sit under. That row is not part of the order.
+        // The locked order, plus one trailing row when an older praise or
+        // confession leader has no element to sit under. That row is not part
+        // of the order. (Pastoral prayer no longer uses this path — MS-734.)
         get displayRows() {
             const rows = this.rows.slice();
             const homes = this.legacyHomes();
-            if (homes.praiseId && homes.confessionId && homes.pastoralId) return rows;
+            if (homes.praiseId && homes.confessionId) return rows;
             rows.push({
                 key: '__legacy_prayer__',
                 type: 'legacy',
