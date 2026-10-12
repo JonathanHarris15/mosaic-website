@@ -27,6 +27,7 @@
             });
             doc.requests = { people: people, count: people.length, who: el.requests.who };
             doc.noticeDays = Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [];
+            doc.elderDigest = el.elderDigest !== false;
         }
         if (el.kind === 'prayer' && el.message) doc.message = el.message;
         if (el.kind === 'prayer' && el.response) doc.response = el.response;

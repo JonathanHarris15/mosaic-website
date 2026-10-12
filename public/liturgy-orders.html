@@ -213,6 +213,11 @@
 
                                     <template x-if="inspectorElement.requests">
                                         <div class="lo-requests">
+                                        <label class="m-check">
+                                            <input type="checkbox" :checked="inspectorElement.elderDigest !== false" :disabled="!editing"
+                                                   @change="updateElement(inspectorElement.id, { elderDigest: $event.target.checked })" />
+                                            <span>Send a digest to Elders when all requests are in</span>
+                                        </label>
                                         <div class="lo-person">
                                             <template x-for="(person, pindex) in inspectorElement.requests.people" :key="inspectorElement.id + '-' + pindex">
                                                 <div class="lo-person__line">

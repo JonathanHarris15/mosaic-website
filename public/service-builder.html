@@ -1201,12 +1201,15 @@
                                         <span class="text-[9px] uppercase tracking-wider text-secondary font-bold" x-text="prayerRequestStatus(which)"></span>
                                     </div>
                                     <textarea x-model="prayerRequests[which].text" :disabled="!canDecide" rows="2" x-effect="prayerRequests[which].text; $nextTick(() => autoResize($el))" @input="autoResize($el)" placeholder="What they'd like prayer about. Texted replies fill this in automatically." class="w-full text-sm leading-relaxed rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none resize-none overflow-hidden"></textarea>
-                                    <div x-show="canDecide" class="flex justify-end items-center gap-2 mt-1">
-                                        <button @click="sendPrayerRequestNow(which)" :disabled="!canSendPrayerText(which) || prayerSending[which]" :title="prayerSendTitle(which)" class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
-                                            <span class="material-symbols-outlined text-[12px]" :class="prayerSending[which] ? 'animate-spin' : ''" x-text="prayerSending[which] ? 'progress_activity' : 'sms'"></span>
-                                            <span x-text="prayerSending[which] ? 'Sending…' : 'Send Now'"></span>
-                                        </button>
-                                        <button @click="savePrayerRequest(which)" class="text-[10px] uppercase tracking-widest bg-primary text-on-primary px-3 py-1 rounded-full hover:bg-primary-container transition-all">Save Request</button>
+                                    <div x-show="canDecide" class="flex flex-wrap justify-between items-center gap-2 mt-1">
+                                        <span class="text-[9px] text-secondary" x-text="prayerScheduleLabel(which)"></span>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="sendPrayerRequestNow(which)" :disabled="!canSendPrayerText(which) || prayerSending[which]" :title="prayerSendTitle(which)" class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[12px]" :class="prayerSending[which] ? 'animate-spin' : ''" x-text="prayerSending[which] ? 'progress_activity' : 'sms'"></span>
+                                                <span x-text="prayerSending[which] ? 'Sending…' : 'Send Now'"></span>
+                                            </button>
+                                            <button @click="savePrayerRequest(which)" class="text-[10px] uppercase tracking-widest bg-primary text-on-primary px-3 py-1 rounded-full hover:bg-primary-container transition-all">Save Request</button>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -1232,15 +1235,27 @@
                                                                 </template>
                                                             </select>
                                                         </label>
-                                                        <div x-show="isShepherd && slot.id" x-init="ensurePrayerRequest(slot.id)" class="mt-2">
+                                                        <div x-show="isShepherd && slot.id" x-init="ensurePrayerRequest(slot.id)" class="mt-2 rounded-xl border border-secondary/30 bg-secondary-container/15 p-3">
+                                                            <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-2">
+                                                                <span class="material-symbols-outlined text-[14px] text-secondary">lock</span>
+                                                                <span class="text-[9px] uppercase tracking-wider text-secondary/80">Private — Elders only</span>
+                                                            </div>
                                                             <div class="flex items-center justify-between mb-1">
                                                                 <span class="text-[10px] uppercase tracking-wider font-bold text-primary" x-text="subjectFor(slot.id).name"></span>
                                                                 <span class="text-[9px] uppercase tracking-wider text-secondary font-bold" x-text="prayerRequestStatus(slot.id)"></span>
                                                             </div>
-                                                            <textarea x-show="prayerRequests[slot.id]" x-model="prayerRequests[slot.id].text" :disabled="!canDecide" rows="2" @input="autoResize($el)" placeholder="What they'd like prayer about. Texted replies fill this in automatically." class="w-full text-sm leading-relaxed rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none resize-none overflow-hidden"></textarea>
-                                                            <div x-show="canDecide && prayerRequests[slot.id]" class="flex justify-end items-center gap-2 mt-1">
-                                                                <button type="button" @click="sendPrayerRequestNow(slot.id)" :disabled="!canSendPrayerText(slot.id) || prayerSending[slot.id]" class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed">Send Now</button>
-                                                                <button type="button" @click="savePrayerRequest(slot.id)" class="text-[10px] uppercase tracking-widest bg-primary text-on-primary px-3 py-1 rounded-full hover:bg-primary-container transition-all">Save Request</button>
+                                                            <template x-if="prayerRequests[slot.id]">
+                                                                <textarea x-model="prayerRequests[slot.id].text" :disabled="!canDecide" rows="2" x-effect="prayerRequests[slot.id].text; $nextTick(() => autoResize($el))" @input="autoResize($el)" placeholder="What they'd like prayer about. Texted replies fill this in automatically." class="w-full text-sm leading-relaxed rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none resize-none overflow-hidden"></textarea>
+                                                            </template>
+                                                            <div x-show="canDecide" class="flex flex-wrap justify-between items-center gap-2 mt-1">
+                                                                <span class="text-[9px] text-secondary" x-text="prayerScheduleLabel(slot.id)"></span>
+                                                                <div class="flex items-center gap-2">
+                                                                    <button type="button" @click="sendPrayerRequestNow(slot.id)" :disabled="!canSendPrayerText(slot.id) || prayerSending[slot.id]" :title="prayerSendTitle(slot.id)" class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                                                                        <span class="material-symbols-outlined text-[12px]" :class="prayerSending[slot.id] ? 'animate-spin' : ''" x-text="prayerSending[slot.id] ? 'progress_activity' : 'sms'"></span>
+                                                                        <span x-text="prayerSending[slot.id] ? 'Sending…' : 'Send Now'"></span>
+                                                                    </button>
+                                                                    <button type="button" @click="savePrayerRequest(slot.id)" class="text-[10px] uppercase tracking-widest bg-primary text-on-primary px-3 py-1 rounded-full hover:bg-primary-container transition-all">Save Request</button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
