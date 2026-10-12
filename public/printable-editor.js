@@ -429,12 +429,19 @@ function printableEditor() {
         adoptPrintable(data) {
             if (!this.project) return;
             clearTimeout(this._saveTimer);
+            // Undo is pages+inputs only. A DocLive adopt that fingerprints
+            // differently (or carries stamps) but lands on the same pages and
+            // inputs must not wipe the stack — otherwise our own save echo
+            // makes Undo a no-op (MS-721).
+            const before = this.snapshot();
             const next = PrintableCore.migrate(data);
             Object.assign(this.project, next, { id: this.project.id });
             if (!this.pages.find(p => p.id === this.selection.pageId)) this.selection.pageId = this.pages[0] ? this.pages[0].id : null;
             if (this.selection.nodeId && !this.selectedNode) this.selection.nodeId = null;
-            ui.history = [this.snapshot()];
-            ui.future = [];
+            if (this.snapshot() !== before) {
+                ui.history = [this.snapshot()];
+                ui.future = [];
+            }
             this.renderAll();
             this.readProps();
         },
