@@ -79,6 +79,8 @@ document.addEventListener('alpine:init', () => {
                 if (savedHoldCmp) this.tagHoldCmp = JSON.parse(savedHoldCmp);
                 const savedShowInactive = sessionStorage.getItem('shepherding_showInactive');
                 if (savedShowInactive) this.showInactive = savedShowInactive === 'true';
+                const savedSort = sessionStorage.getItem('shepherding_sortBy');
+                if (savedSort) this.sortBy = savedSort;
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
@@ -92,6 +94,13 @@ document.addEventListener('alpine:init', () => {
             });
             this.$watch('tagHoldCmp', val => sessionStorage.setItem('shepherding_tagHoldCmp', JSON.stringify(val)));
             this.$watch('showInactive', val => sessionStorage.setItem('shepherding_showInactive', String(val)));
+            this.$watch('sortBy', val => {
+                sessionStorage.setItem('shepherding_sortBy', val);
+                if (val === 'tagDate' && !this.holdsLoaded) this.loadTagHolds();
+            });
+            this.$watch('tagFilters', val => {
+                if (val.length !== 1 && this.sortBy === 'tagDate') this.sortBy = 'name';
+            });
 
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
@@ -127,7 +136,7 @@ document.addEventListener('alpine:init', () => {
                 // shows up without a reload (ADR 0081 part 4).
                 this.watchLists();
                 // A restored Hold-Duration filter needs its history up front.
-                if (this.anyHoldActive()) await this.loadTagHolds();
+                if (this.anyHoldActive() || this.sortBy === 'tagDate') await this.loadTagHolds();
                 if (new URLSearchParams(window.location.search).get('panel') === 'tags') {
                     this.sideMode = 'tags';
                 }
@@ -261,17 +270,17 @@ document.addEventListener('alpine:init', () => {
                 result = result.filter(p => p.name?.toLowerCase().includes(q));
             }
 
-            if (this.sortBy === 'attention') {
-                result = [...result].sort((a, b) => {
-                    const aTs = a.lastNoteAt;
-                    const bTs = b.lastNoteAt;
-                    if (!aTs && !bTs) return (a.name || '').localeCompare(b.name || '');
-                    if (!aTs) return -1;
-                    if (!bTs) return 1;
-                    const aTime = ShepherdingCore.noteCreatedAtMs(aTs);
-                    const bTime = ShepherdingCore.noteCreatedAtMs(bTs);
-                    return aTime - bTime;
-                });
+            const sortKey = (this.sortBy === 'tagDate' && this.tagFilters.length === 1)
+                ? 'tagDate'
+                : (this.sortBy === 'tagDate' ? 'name' : this.sortBy);
+            if (sortKey !== 'name') {
+                const tagId = sortKey === 'tagDate' ? this.tagFilters[0] : null;
+                result = [...result].sort((a, b) => ShepherdingCore.comparePeopleList(a, b, sortKey, {
+                    tagHolds: this.tagHolds,
+                    tagId,
+                }));
+            } else {
+                result = [...result].sort((a, b) => ShepherdingCore.comparePeopleList(a, b, 'name'));
             }
 
             return result;
