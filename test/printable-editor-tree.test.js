@@ -13,3 +13,16 @@ test('the Elements tree can fold a parent so its children sit underneath it', ()
     assert.match(js, /treeCollapsed/, 'the fold is session state, not a fact about the page');
     assert.match(js, /if \(!folded\) kids\.forEach/, 'a folded parent does not draw its children');
 });
+
+test('the Elements tree shows only the selected page; pages live in the filmstrip (MS-760)', () => {
+    assert.match(html, /pe-pages/, 'the pages filmstrip is in the chrome');
+    assert.match(html, /id="pe-pages-strip"/, 'the strip is drawn by hand');
+    assert.match(js, /renderPagesStrip/, 'the filmstrip is rebuilt with the canvas');
+    assert.match(js, /currentPage/, 'the tree is keyed off the selection');
+    assert.match(js, /Elements of the selected page only/, 'page rows left the tree');
+    assert.doesNotMatch(js, /pe-tree__page/, 'page chrome is not drawn inside the elements tree');
+    assert.match(js, /Overflow run/, 'continuation runs are labelled in the filmstrip');
+    assert.match(js, /canInsertAfter/, 'insert respects overflow runs');
+    assert.match(js, /movePageRun/, 'reorder moves a whole run');
+    assert.match(html, /\.pe-pages__run/, 'the run rail is styled');
+});

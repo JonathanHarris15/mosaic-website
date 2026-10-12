@@ -101,7 +101,18 @@
 
     <main class="pe-main" x-show="!loading && project">
 
-        <!-- ═══ Left: elements and their properties ═══ -->
+        <!-- ═══ Far left: pages filmstrip (MS-760) ═══ -->
+        <aside class="pe-pages" aria-label="Pages">
+            <div class="pe-pages__head">
+                <h2 class="pe-h">Pages</h2>
+                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Add a page at the end" aria-label="Add a page at the end" @click="addPage()">
+                    <span class="material-symbols-outlined">add</span>
+                </button>
+            </div>
+            <div id="pe-pages-strip" class="pe-pages__strip"></div>
+        </aside>
+
+        <!-- ═══ Left: elements of the selected page and their properties ═══ -->
         <aside class="pe-panel pe-panel--left">
             <div class="pe-tools">
                 <button type="button" class="pe-tool" @click="addElement('box')" title="Add a box (a div)">
@@ -117,6 +128,7 @@
 
             <section class="pe-section pe-section--tree">
                 <h2 class="pe-h">Elements</h2>
+                <p class="pe-tree__page-label" x-show="currentPage" x-text="currentPage ? ('Page ' + (pages.indexOf(currentPage) + 1) + (currentPage.name ? ' · ' + currentPage.name : '')) : ''"></p>
                 <div id="pe-tree" class="pe-tree"></div>
             </section>
 
@@ -987,6 +999,8 @@
 
         <!-- Wires from chips to elements, drawn over everything. -->
         <svg id="pe-wires" class="pe-wires" aria-hidden="true"></svg>
+        <!-- Ghost chips for wires whose real pill is scrolled out of the data drawer (MS-760). -->
+        <div id="pe-wire-ghosts" class="pe-wire-ghosts" aria-hidden="true"></div>
         <!-- Where probe pages are drawn and measured for overflow. Off screen, never seen. -->
         <div id="pe-measure" class="pe-measure"></div>
     </main>
@@ -1163,6 +1177,40 @@
         .pe-loading { flex: 1; }
         .pe-notices { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 90; width: min(640px, 90vw); display: flex; flex-direction: column; gap: 8px; }
         .pe-main { flex: 1; display: flex; min-height: 0; }
+        /* Pages filmstrip — Google Slides-style column left of the element panel. */
+        .pe-pages { flex: 0 0 148px; width: 148px; background: var(--surface-container-low, var(--surface-container)); border-right: 1px solid var(--outline-variant); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+        .pe-pages__head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 10px 10px 6px; flex: 0 0 auto; }
+        .pe-pages__head .pe-h { margin: 0; }
+        .pe-pages__strip { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 10px 16px; display: flex; flex-direction: column; gap: 0; }
+        .pe-pages__slot { position: relative; display: flex; flex-direction: column; align-items: stretch; }
+        .pe-pages__insert { height: 14px; margin: 0 4px; border: 0; padding: 0; background: transparent; cursor: pointer; position: relative; border-radius: var(--radius-sm); }
+        .pe-pages__insert::before { content: ''; position: absolute; left: 8px; right: 8px; top: 50%; height: 2px; background: var(--tertiary); opacity: 0; transform: translateY(-50%); border-radius: 1px; }
+        .pe-pages__insert:hover::before, .pe-pages__insert:focus-visible::before { opacity: .85; }
+        .pe-pages__insert:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+        .pe-pages__insert[disabled] { cursor: default; pointer-events: none; }
+        .pe-pages__insert[disabled]::before { display: none; }
+        .pe-pages__run { position: relative; display: flex; flex-direction: column; gap: 8px; padding-left: 10px; }
+        .pe-pages__run::before { content: ''; position: absolute; left: 2px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--tertiary); opacity: .55; }
+        .pe-pages__run[data-run-len="1"]::before { display: none; }
+        .pe-pages__run[data-run-len="1"] { padding-left: 0; }
+        .pe-pages__card { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; box-sizing: border-box; }
+        .pe-pages__card:hover { background: var(--surface-container); }
+        .pe-pages__card.is-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+        .pe-pages__card.is-drop { outline: 2px dashed var(--tertiary); outline-offset: -2px; }
+        .pe-pages__card.is-cont { border-style: dashed; }
+        .pe-pages__meta { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .pe-pages__num { flex: 0 0 auto; font: 600 11px var(--font-sans); letter-spacing: .06em; color: var(--primary); }
+        .pe-pages__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--on-surface-variant); }
+        .pe-pages__acts { display: none; gap: 0; flex: 0 0 auto; }
+        .pe-pages__card:hover .pe-pages__acts, .pe-pages__card.is-selected .pe-pages__acts { display: inline-flex; }
+        .pe-pages__acts button { border: 0; background: none; padding: 0 1px; cursor: pointer; color: var(--on-surface-variant); display: inline-flex; }
+        .pe-pages__acts button:hover { color: var(--primary); }
+        .pe-pages__acts button:disabled { opacity: .35; cursor: default; }
+        .pe-pages__acts .material-symbols-outlined { font-size: 14px; }
+        .pe-pages__thumb { position: relative; width: 100%; aspect-ratio: 1 / 1.294; background: #fff; border: 1px solid var(--outline-variant); border-radius: 2px; overflow: hidden; pointer-events: none; }
+        .pe-pages__thumb-inner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+        .pe-pages__link { font-size: 10px; color: var(--tertiary); letter-spacing: .04em; padding-left: 2px; }
+        .pe-tree__page-label { margin: 0 0 6px; font: 600 12px var(--font-sans); color: var(--primary); }
         .pe-panel { flex: 0 0 var(--pe-left-w, 300px); width: var(--pe-left-w, 300px); background: var(--surface-container-lowest); border-right: 1px solid var(--outline-variant); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
         .pe-panel--right { border-right: 0; border-left: 1px solid var(--outline-variant); flex-basis: var(--pe-right-w, 320px); width: var(--pe-right-w, 320px); }
         .pe-panel--right:empty { display: none; }
@@ -1238,20 +1286,11 @@
         .pe-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
         .pe-row-acts { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--outline-variant); margin-top: 8px; }
 
-        /* ── The tree ──────────────────────────────────────────────────── */
+        /* ── The tree (selected page only — pages live in .pe-pages) ───── */
         .pe-tree { font-size: 13px; }
-        .pe-tree__page { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; color: var(--primary); margin-top: 6px; }
-        .pe-tree__page:first-child { margin-top: 0; }
-        .pe-tree__page .material-symbols-outlined { font-size: 18px; }
-        .pe-tree__page:hover, .pe-tree__row:hover { background: var(--surface-container); }
-        .pe-tree__page.is-selected, .pe-tree__row.is-selected { background: var(--primary-fixed, var(--surface-container-high)); }
-        .pe-tree__page.is-drop { outline: 2px dashed var(--tertiary); outline-offset: -2px; }
+        .pe-tree__row:hover { background: var(--surface-container); }
+        .pe-tree__row.is-selected { background: var(--primary-fixed, var(--surface-container-high)); }
         .pe-tree__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pe-tree__acts { display: none; gap: 0; }
-        .pe-tree__page:hover .pe-tree__acts, .pe-tree__page.is-selected .pe-tree__acts { display: inline-flex; }
-        .pe-tree__acts button { border: 0; background: none; padding: 0 2px; cursor: pointer; color: var(--on-surface-variant); display: inline-flex; }
-        .pe-tree__acts button:hover { color: var(--primary); }
-        .pe-tree__acts .material-symbols-outlined { font-size: 16px; }
         .pe-tree__twist { border: 0; background: none; padding: 0; width: 18px; height: 18px; flex: 0 0 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--on-surface-variant); cursor: pointer; border-radius: var(--radius-sm); }
         .pe-tree__twist .material-symbols-outlined { font-size: 16px; }
         .pe-tree__twist:hover { color: var(--primary); background: var(--surface-container); }
@@ -1425,6 +1464,11 @@
         .pe-wires path { fill: none; stroke: var(--tertiary); stroke-width: 2; stroke-linecap: round; }
         .pe-wires path.is-live { stroke-dasharray: 6 5; animation: pe-dash .6s linear infinite; }
         .pe-wires path.is-enter { animation: pe-wire-in .45s ease-out; }
+        .pe-wire-ghosts { position: absolute; inset: 0; pointer-events: none; z-index: 71; overflow: visible; }
+        .pe-wire-ghost { position: absolute; display: inline-flex; align-items: center; gap: 4px; max-width: 160px; padding: 3px 8px; border-radius: 999px; background: var(--surface-container-lowest); border: 1px solid var(--tertiary); box-shadow: 0 2px 8px rgba(14,28,54,.12); font: 600 11px var(--font-sans); color: var(--on-surface); white-space: nowrap; }
+        .pe-wire-ghost .material-symbols-outlined { font-size: 14px; color: var(--tertiary); }
+        .pe-wire-ghost__name { overflow: hidden; text-overflow: ellipsis; max-width: 7em; }
+        .pe-wire-ghost__val { font-weight: 400; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; max-width: 6em; }
         @keyframes pe-dash { to { stroke-dashoffset: -11; } }
         @keyframes pe-wire-in { from { opacity: 0; stroke-dasharray: 12 280; } to { opacity: 1; stroke-dasharray: 0 0; } }
         .pe-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }

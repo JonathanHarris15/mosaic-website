@@ -172,20 +172,33 @@ test('the builder reads today\'s rows for what it is browsing, so chips say what
     assert.match(drawer, /queryResults\.warnings/, 'what the pick cannot read is said under it');
 });
 
-test('a selection wire lands on the query builder box, never a land chip', () => {
+test('a selection wire lands on its data pill, with a ghost when the pill is off-screen (MS-760)', () => {
     require('../public/scripture-passage.js');
     const Wires = require('../public/printable-editor-data.js').PrintableEditorWires;
     assert.equal(Wires.wireKey({ source: 'sunday', field: 'keyVerse', reading: 'passage' }), 'global|sunday|keyVerse#passage');
     assert.equal(Wires.drawerScrollDelta(
         { top: 100, bottom: 400 },
         { top: 20, bottom: 48 }
-    ) < 0, true, 'a builder above the drawer scrolls up');
-    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'land-chip lookup is gone');
+    ) < 0, true, 'a chip above the drawer scrolls up');
+    assert.equal(typeof Wires.firstLaidOutChip, 'undefined', 'the old land-chip strip stays gone');
     assert.doesNotMatch(drawer, /Wired to this element/, 'no land-chip strip above the builder');
     assert.doesNotMatch(drawer, /pe-chip--land/);
     assert.doesNotMatch(js, /connectedChips/);
     assert.match(js, /wireLandsOnQuery/);
-    assert.match(js, /querySelector\('\.pe-query'\)/, 'the wire lands on the query builder');
+    assert.match(js, /findChipEl/, 'the wire looks up the pill by data-chip');
+    assert.match(js, /syncGhostChips/, 'a scrolled-away pill gets a ghost');
+    assert.match(html, /pe-wire-ghosts/, 'ghost chips sit in the canvas margin');
+    assert.ok(typeof Wires.chipInDrawer === 'function');
+    assert.ok(typeof Wires.ghostChipPoint === 'function');
+    const anchor = Wires.ghostChipPoint(
+        { left: 0, top: 0 },
+        { left: 100, right: 700, top: 0, bottom: 600 },
+        200
+    );
+    assert.equal(anchor.x, 692, 'ghost sits just inside the stage\'s right edge');
+    assert.equal(anchor.y, 200);
+    const label = Wires.ghostChipLabel(null, 'global|sunday|sermon#passage');
+    assert.match(label.name, /Words/);
 });
 
 test('a wire hides when its element leaves the canvas and redraws as the drawer scrolls', () => {
@@ -202,15 +215,14 @@ test('a wire hides when its element leaves the canvas and redraws as the drawer 
     assert.doesNotMatch(js, /svg\.innerHTML\s*=\s*''/, 'wiping the svg kills the draw-on');
 });
 
-test('selection wires land on the query builder for query sources only', () => {
+test('selection wires land on the data pill for query sources only', () => {
     assert.match(js, /wireLandsOnQuery/);
-    assert.match(js, /scrollQueryIntoDrawer/);
+    assert.match(js, /scrollChipIntoDrawer/, 'pin scrolls the pill, not only the builder');
     assert.match(js, /syncQueryToSelection/);
     assert.match(js, /_wirePinnedFor/, 'pinning is remembered per selection');
     assert.match(js, /addEventListener\('scroll',\s*\(\)\s*=>\s*this\.refreshWires\(\)/,
         'scroll redraws the wire without asking to pin');
-    assert.doesNotMatch(js, /scrollChipIntoDrawer/);
-    assert.match(js, /source === 'event_field'/, 'fill-ins do not draw a line to the builder');
+    assert.match(js, /source === 'event_field'/, 'fill-ins do not draw a line to a pill');
 });
 
 test('a Sunday in the query builder walks Service then the liturgy order; fill-ins are a list of blanks', () => {

@@ -13,7 +13,9 @@
 //       – GENERAL LIVE DATA: the date, the page number, brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
 //     the chip to the cursor and, once bound, from the selected element to
-//     the query builder (no line when the bind is a fill-in or page insert);
+//     that chip's pill (MS-760). When the pill is scrolled out of the drawer,
+//     a ghost chip sits in the canvas margin and the wire lands on it. Fill-ins
+//     and page inserts draw no line;
 //   • ITERATION — "Make this element iterated": the element stands for one
 //     row of a list, its filters and layout live on the element panel, and a
     //     list that overflows keeps real pages, each editable, with live rows;
@@ -224,14 +226,85 @@
         return 'global|' + (b.source || '') + '|' + field;
     }
 
-    // How far to move the drawer so the query builder sits inside it.
-    // Positive scrolls down. Zero when the builder is already in view.
+    // How far to move the drawer so a chip (or the query builder) sits inside
+    // it. Positive scrolls down. Zero when the target is already in view.
     function drawerScrollDelta(bodyRect, chipRect) {
         if (!bodyRect || !chipRect) return 0;
         const pad = 8;
         if (chipRect.top < bodyRect.top + pad) return chipRect.top - bodyRect.top - pad;
         if (chipRect.bottom > bodyRect.bottom - pad) return chipRect.bottom - bodyRect.bottom + pad;
         return 0;
+    }
+
+    // The pill a wire key names, if it is in the drawer right now.
+    function findChipEl(root, key) {
+        if (!root || !key) return null;
+        try {
+            return root.querySelector('[data-chip="' + String(key).replace(/"/g, '\\"') + '"]');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Where a ghost pill sits: in the stage's right margin, level with the
+    // selected element, just left of the data drawer.
+    function ghostChipPoint(mainRect, stageRect, elementMidY) {
+        const main = mainRect || { left: 0, top: 0 };
+        const stage = stageRect || main;
+        const x = Math.max(8, (stage.right - main.left) - 8);
+        const y = elementMidY;
+        return { x: x, y: y };
+    }
+
+    // Copy the visible words off a chip (or invent them from the wire key)
+    // so a ghost can stand in when the real pill is scrolled away.
+    function ghostChipLabel(chipEl, key) {
+        if (chipEl) {
+            const name = chipEl.querySelector('.pe-chip__name');
+            const val = chipEl.querySelector('.pe-chip__val');
+            const icon = chipEl.querySelector('.material-symbols-outlined');
+            const text = (chipEl.textContent || '').replace(/\s+/g, ' ').trim();
+            return {
+                icon: icon ? icon.textContent : 'cable',
+                name: name ? name.textContent : text,
+                value: val ? val.textContent : '',
+            };
+        }
+        const parts = String(key || '').split('|');
+        const field = parts[2] || parts[parts.length - 1] || 'Field';
+        const label = field.replace(/#passage$/, ' · Words').replace(/#citation$/, ' · Reference');
+        return { icon: 'cable', name: label, value: '' };
+    }
+
+    function syncGhostChips(host, ghosts) {
+        if (!host) return;
+        const keep = {};
+        (ghosts || []).forEach(g => {
+            keep[g.key] = true;
+            let el = host.querySelector('[data-ghost-chip="' + g.key.replace(/"/g, '\\"') + '"]');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'pe-wire-ghost';
+                el.setAttribute('data-ghost-chip', g.key);
+                host.appendChild(el);
+            }
+            el.style.left = g.x + 'px';
+            el.style.top = g.y + 'px';
+            el.style.transform = 'translate(-100%, -50%)';
+            const icon = g.icon || 'cable';
+            const name = g.name || '';
+            const value = g.value || '';
+            el.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + icon + '</span>'
+                + '<span class="pe-wire-ghost__name"></span>'
+                + (value ? '<span class="pe-wire-ghost__val"></span>' : '');
+            const nameEl = el.querySelector('.pe-wire-ghost__name');
+            if (nameEl) nameEl.textContent = name;
+            const valEl = el.querySelector('.pe-wire-ghost__val');
+            if (valEl) valEl.textContent = value;
+        });
+        Array.from(host.querySelectorAll('[data-ghost-chip]')).forEach(el => {
+            if (!keep[el.getAttribute('data-ghost-chip')]) el.remove();
+        });
     }
 
     // The chips the query builder shows for A Sunday. Extra date formats stay
@@ -399,8 +472,13 @@
 
     const PrintableEditorWires = {
         elementOnCanvas: rectsOverlap,
+        chipInDrawer: rectsOverlap,
         wireKey: wireKey,
         drawerScrollDelta: drawerScrollDelta,
+        findChipEl: findChipEl,
+        ghostChipPoint: ghostChipPoint,
+        ghostChipLabel: ghostChipLabel,
+        syncGhostChips: syncGhostChips,
         drawerPartOf: drawerPartOf,
         groupQuerySources: groupQuerySources,
         querySubject: querySubject,
@@ -1611,9 +1689,9 @@
                 return { x: r.left - m.left, y: r.top - m.top + r.height / 2, w: r.width, h: r.height };
             },
 
-            // A selection wire lands on the query builder when the bind is a
-            // catalog query source. Fill-ins, page inserts, and assets draw
-            // no line — there is no query-builder home for them.
+            // A selection wire is drawn when the bind is a catalog query
+            // source (it lands on that source's pill). Fill-ins, page
+            // inserts, and assets draw no line.
             wireLandsOnQuery(bind) {
                 if (!bind || bind.scope === 'asset') return false;
                 const source = bind.source || (this.repeatContext && this.repeatContext.repeat && this.repeatContext.repeat.source) || '';
@@ -1643,6 +1721,17 @@
                 }
             },
 
+            scrollChipIntoDrawer(chipEl) {
+                const body = document.querySelector('.pe-drawer__body');
+                if (!body || !chipEl) return;
+                const delta = PrintableEditorWires.drawerScrollDelta(
+                    body.getBoundingClientRect(), chipEl.getBoundingClientRect()
+                );
+                if (delta) body.scrollTop += delta;
+            },
+
+            // Prefer the pill; fall back to the query builder so a pin still
+            // reveals the right source when the chip is not mounted yet.
             scrollQueryIntoDrawer() {
                 const body = document.querySelector('.pe-drawer__body');
                 const query = document.querySelector('.pe-query');
@@ -1653,13 +1742,18 @@
                 if (delta) body.scrollTop += delta;
             },
 
-            // The line runs from the selected element to the query builder.
-            // Pin (scroll the builder into view) only when the selection changes.
+            // The line runs from the selected element to its data pill.
+            // When the pill is scrolled out of the drawer, a ghost chip in
+            // the canvas margin holds the landing (MS-760). Pin (scroll the
+            // pill into view) only when the selection changes.
             refreshWires(opts) {
                 const wires = [];
+                const ghosts = [];
                 const main = document.querySelector('.pe-main');
                 const viewport = document.getElementById('pe-viewport');
-                const query = document.querySelector('.pe-query');
+                const drawer = document.getElementById('pe-drawer');
+                const body = document.querySelector('.pe-drawer__body');
+                const stage = document.querySelector('.pe-stage');
                 const node = this.selectedNode;
                 const nodeId = node && node.id;
                 const pin = !!(opts && opts.pinChip)
@@ -1671,22 +1765,61 @@
                 const repeatSource = this.repeatContext && this.repeatContext.repeat
                     ? this.repeatContext.repeat.source : '';
                 if (pin && node) this.syncQueryToSelection();
-                if (main && node && node.bind && !this.dragWire && query) {
+                const pendingGhostWires = [];
+                if (main && node && node.bind && !this.dragWire) {
                     Object.keys(node.bind).forEach(prop => {
                         const b = node.bind[prop];
                         if (!this.wireLandsOnQuery(b)) return;
                         const key = PrintableEditorWires.wireKey(b, repeatSource);
-                        if (pin) this.scrollQueryIntoDrawer();
                         const el = ui.world && ui.world.querySelector('[data-pid="' + node.id + '"]');
                         if (!el) return;
                         if (viewport && !PrintableEditorWires.elementOnCanvas(el.getBoundingClientRect(), viewport.getBoundingClientRect())) return;
                         const a = this.pointOf(el);
-                        const c = this.pointOf(query);
+                        let chip = PrintableEditorWires.findChipEl(drawer, key);
+                        if (pin) {
+                            if (chip) this.scrollChipIntoDrawer(chip);
+                            else this.scrollQueryIntoDrawer();
+                            chip = PrintableEditorWires.findChipEl(drawer, key);
+                        }
                         const enter = !prev[key];
                         nextKeys[key] = true;
-                        wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });
+                        const bodyRect = body && body.getBoundingClientRect();
+                        const chipVisible = !!(chip && bodyRect
+                            && PrintableEditorWires.chipInDrawer(chip.getBoundingClientRect(), bodyRect));
+                        if (chipVisible) {
+                            const c = this.pointOf(chip);
+                            wires.push({ x1: a.x + a.w, y1: a.y, x2: c.x, y2: c.y, key: key, enter: enter });
+                            return;
+                        }
+                        // Pill missing or scrolled away — ghost in the margin.
+                        const mainRect = main.getBoundingClientRect();
+                        const stageRect = (stage || main).getBoundingClientRect();
+                        const anchor = PrintableEditorWires.ghostChipPoint(mainRect, stageRect, a.y);
+                        const label = PrintableEditorWires.ghostChipLabel(chip, key);
+                        ghosts.push({
+                            key: key,
+                            x: anchor.x,
+                            y: anchor.y,
+                            icon: label.icon,
+                            name: label.name,
+                            value: label.value,
+                        });
+                        pendingGhostWires.push({
+                            x1: a.x + a.w, y1: a.y, key: key, enter: enter, ghost: true,
+                        });
                     });
                 }
+                PrintableEditorWires.syncGhostChips(document.getElementById('pe-wire-ghosts'), ghosts);
+                const ghostHost = document.getElementById('pe-wire-ghosts');
+                pendingGhostWires.forEach(w => {
+                    const ghostEl = ghostHost && ghostHost.querySelector('[data-ghost-chip="' + w.key.replace(/"/g, '\\"') + '"]');
+                    if (ghostEl) {
+                        const c = this.pointOf(ghostEl);
+                        wires.push({ x1: w.x1, y1: w.y1, x2: c.x, y2: c.y, key: w.key, enter: w.enter, ghost: true });
+                    } else {
+                        wires.push({ x1: w.x1, y1: w.y1, x2: w.x1 + 80, y2: w.y1, key: w.key, enter: w.enter, ghost: true });
+                    }
+                });
                 if (this.dragWire) wires.push({ x1: this.dragWire.to.x, y1: this.dragWire.to.y, x2: this.dragWire.from.x, y2: this.dragWire.from.y, live: true });
                 this.wires = wires;
                 this._wireKeys = nextKeys;
