@@ -58,11 +58,10 @@
     // The older Sunday fields are not elements. They are drawn under the
     // elements the seed already uses for those moments. A leader stays under
     // its row when that element is renamed, because the id does not change.
-    // The people being prayed for follow the Sunday's prayer label, which the
-    // seed names Pastoral Prayer.
+    // Praise and confession leaders still sit under the seed scripture rows
+    // they have always belonged with.
     const LEGACY_PRAISE_ID = 'callToWorship';
     const LEGACY_CONFESSION_ID = 'callToConfession';
-    const LEGACY_PRAYER_NAME = 'Pastoral Prayer';
 
     const STANDARD_ORDER_ID = 'standard';
 
@@ -974,18 +973,13 @@
         return problems;
     }
 
-    // Where the older prayer fields are drawn on a locked order. A missing
-    // id means the page draws that field once, after the list.
-    function legacyPrayerHomes(order, prayerLabel) {
+    // Where the older praise and confession leaders are drawn on a locked
+    // order. A missing id means that leader is not nested under a row.
+    function legacyPrayerHomes(order) {
         const elements = (order && order.elements) || [];
-        const label = (cleanName(prayerLabel) || LEGACY_PRAYER_NAME).toLowerCase();
-        const named = elements.find(function (el) {
-            return cleanName(el.name).toLowerCase() === label;
-        });
         const praise = elements.find(function (el) { return el.id === LEGACY_PRAISE_ID; });
         const confession = elements.find(function (el) { return el.id === LEGACY_CONFESSION_ID; });
         return {
-            pastoralId: named ? named.id : null,
             praiseId: praise ? praise.id : null,
             confessionId: confession ? confession.id : null,
         };
@@ -1001,7 +995,6 @@
         NOTICE_DAYS_MAX: NOTICE_DAYS_MAX,
         LEGACY_PRAISE_ID: LEGACY_PRAISE_ID,
         LEGACY_CONFESSION_ID: LEGACY_CONFESSION_ID,
-        LEGACY_PRAYER_NAME: LEGACY_PRAYER_NAME,
         PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
         PRIMITIVE_LABELS: Object.freeze({
             song: 'Hymn',

@@ -114,15 +114,14 @@ const JACOB = 'h2avXZjed7NlW3wIAmvx';
 function sunday(overrides) {
     return Object.assign({
         date: SUNDAY,
-        prayerMaleId: null,
-        prayerFemaleId: null,
+        subjectIds: [],
     }, overrides);
 }
 
 test('a subject who appears only on the saved Sunday is recorded, and the cache includes it', () => {
     const decision = Core.decidePastoralPrayerSave(
-        sunday({ prayerMaleId: JACOB }),
-        sunday({ prayerMaleId: JACOB, prayerFemaleId: AVA }),
+        sunday({ subjectIds: [JACOB] }),
+        sunday({ subjectIds: [JACOB, AVA] }),
         { [JACOB]: [SUNDAY], [AVA]: [] });
 
     assert.deepStrictEqual(decision.records, [
@@ -134,7 +133,7 @@ test('a subject who appears only on the saved Sunday is recorded, and the cache 
 });
 
 test('a subject already on the Sunday, with no history doc, still gets the doc', () => {
-    const loaded = sunday({ prayerFemaleId: AVA });
+    const loaded = sunday({ subjectIds: [AVA] });
     const decision = Core.decidePastoralPrayerSave(loaded, loaded, { [AVA]: [] });
 
     assert.deepStrictEqual(decision.records, [
@@ -146,7 +145,7 @@ test('a subject already on the Sunday, with no history doc, still gets the doc',
 });
 
 test('saving again when the history doc is already there does not rewrite it', () => {
-    const loaded = sunday({ prayerFemaleId: AVA });
+    const loaded = sunday({ subjectIds: [AVA] });
     const decision = Core.decidePastoralPrayerSave(
         loaded, loaded, { [AVA]: [SUNDAY] });
 
@@ -156,7 +155,7 @@ test('saving again when the history doc is already there does not rewrite it', (
 
 test('removing a subject drops that Sunday, and the cache falls back when it was the newest', () => {
     const decision = Core.decidePastoralPrayerSave(
-        sunday({ prayerFemaleId: AVA }),
+        sunday({ subjectIds: [AVA] }),
         sunday(),
         { [AVA]: ['2026-01-04', SUNDAY] });
 
@@ -172,7 +171,7 @@ test('a Sunday still ahead is the cached date', () => {
     const ahead = '2099-01-03';
     const decision = Core.decidePastoralPrayerSave(
         sunday({ date: ahead }),
-        sunday({ date: ahead, prayerFemaleId: AVA }),
+        sunday({ date: ahead, subjectIds: [AVA] }),
         { [AVA]: ['2026-01-04'] });
 
     assert.deepStrictEqual(decision.records, [
@@ -184,25 +183,35 @@ test('a Sunday still ahead is the cached date', () => {
 });
 
 test('a subject chosen while the history read was in flight is on the Sunday that gets written', async () => {
-    let live = sunday({ prayerMaleId: JACOB });
+    let live = sunday({ subjectIds: [JACOB] });
     let reads = 0;
     const taken = await Core.takeSundayAfterHistoryRead(
-        sunday({ prayerMaleId: JACOB }),
+        sunday({ subjectIds: [JACOB] }),
         () => Object.assign({}, live),
         async (personIds) => {
             reads += 1;
-            if (reads === 1) live = sunday({ prayerMaleId: JACOB, prayerFemaleId: AVA });
+            if (reads === 1) live = sunday({ subjectIds: [JACOB, AVA] });
             const stored = {};
             personIds.forEach(id => { stored[id] = []; });
             return stored;
         });
 
-    assert.strictEqual(taken.savedSunday.prayerFemaleId, AVA);
+    assert.deepStrictEqual(taken.savedSunday.subjectIds, [JACOB, AVA]);
     assert.ok(Object.prototype.hasOwnProperty.call(taken.historyByPerson, AVA));
     const decision = Core.decidePastoralPrayerSave(
-        sunday({ prayerMaleId: JACOB }), taken.savedSunday, taken.historyByPerson);
+        sunday({ subjectIds: [JACOB] }), taken.savedSunday, taken.historyByPerson);
     assert.ok(decision.records.some(record =>
         record.personId === AVA && record.change === 'add' && record.serviceDate === SUNDAY));
+});
+
+test('the older male/female sunday shape still decides history for repair', () => {
+    const decision = Core.decidePastoralPrayerSave(
+        { date: SUNDAY, prayerMaleId: JACOB, prayerFemaleId: null },
+        { date: SUNDAY, prayerMaleId: JACOB, prayerFemaleId: AVA },
+        { [JACOB]: [SUNDAY], [AVA]: [] });
+    assert.deepStrictEqual(decision.records, [
+        { personId: AVA, serviceDate: SUNDAY, change: 'add' },
+    ]);
 });
 
 function fakePeople() {

@@ -418,7 +418,6 @@ const SUNDAYS = () => ({
             liturgy: {
                 preparatoryHymn: { id: 'h1', name: 'Amazing Grace' }, callToWorship: 'Psalm 100',
                 hymn1: { id: null, name: 'A Literal Hymn' }, sermon: 'Romans 8', hymnEnd2: { id: 'h2', name: 'Doxology' },
-                prayerMale: 'Tom',
             },
         },
         // The ADR-0034 trap: a dotted key written by an old save.
@@ -440,7 +439,8 @@ test('a Sunday resolves its people, theme and every slot for this Sunday', () =>
     assert.equal(row.preparatoryHymn, 'Amazing Grace');
     assert.equal(row.hymn1, 'A Literal Hymn');
     assert.equal(row.sermon, 'Romans 8');
-    assert.equal(row.prayerMale, 'Tom');
+    assert.equal(row.prayerMale, undefined, 'legacy Prayer (man) is not a Sunday identity field');
+    assert.equal(row.prayerFemale, undefined, 'legacy Prayer (woman) is not a Sunday identity field');
     assert.equal(row.prayerLabel, 'Pastoral Prayer');
     assert.equal(row.hymnEnd2, '', 'a hymn the Sunday has dropped does not print');
     assert.equal(r.warnings.length, 0);
@@ -459,8 +459,8 @@ test('dotted liturgy keys on an old record are folded back before reading', () =
 });
 
 test('order of service rows walk the Sunday\'s order; empty slots optional; removed hymns stay out', () => {
-    // The people prayed for are the Sunday's own fields (prayerMale /
-    // prayerFemale on the single Sunday), not elements of its order.
+    // Requesting-prayer subjects live on prayer elements of the order, not as
+    // top-level Sunday identity fields.
     const filled = Data.resolve('sunday_rows', { includeEmpty: false }, SUNDAYS(), { today: TODAY });
     assert.deepEqual(filled.rows.map(x => x.label), ['Preparatory Hymn', 'Call to Worship', 'Hymn of Praise', 'Sermon']);
     assert.deepEqual(filled.rows.map(x => x.value), ['Amazing Grace', 'Psalm 100', 'A Literal Hymn', 'Romans 8']);
@@ -511,8 +511,10 @@ test('order of service rows follow the order the Sunday names, with who carries 
 test('a Sunday\'s fields are the value plus order aspects for each element', () => {
     const data = WITH_ORDERS();
     const keys = Data.fieldsFor('sunday', {}, { liturgy: data.liturgy }).map(f => f.key);
-    ['theme', 'preacher', 'prayerMale', 'sermon', 'hymn1', 'scriptureReading', 'baptism', 'offertory']
+    ['theme', 'preacher', 'sermon', 'hymn1', 'scriptureReading', 'baptism', 'offertory']
         .forEach(k => assert.ok(keys.includes(k), k + ' should be a field'));
+    assert.ok(!keys.includes('prayerMale'), 'Prayer (man) is gone from A Sunday');
+    assert.ok(!keys.includes('prayerFemale'), 'Prayer (woman) is gone from A Sunday');
     assert.ok(!keys.includes('prayerLabel'), 'Prayer heading is not a catalog field');
     assert.ok(keys.includes('lordsSupper.name'), 'the order name is a field');
     assert.ok(!keys.includes('lordsSupper'), 'Other has no Sunday value field — the name is the print');
@@ -525,10 +527,14 @@ test('a Sunday\'s fields are the value plus order aspects for each element', () 
     assert.equal(row.preparatoryHymn, 'Amazing Grace', 'every element\'s field resolves, whatever the order');
     assert.equal(row.offertory, 'Doxology');
     assert.equal(row.prayerLabel, 'Pastoral Prayer', 'old prayerLabel wires still resolve');
+    assert.equal(row.prayerMale, undefined, 'legacy Prayer (man) is not on the Sunday row');
+    assert.equal(row.prayerFemale, undefined, 'legacy Prayer (woman) is not on the Sunday row');
     const seedKeys = Data.SOURCES.find(x => x.key === 'sunday').fields.map(f => f.key);
     assert.ok(seedKeys.includes('theme') && seedKeys.includes('preparatoryHymn'));
     assert.ok(seedKeys.includes('preparatoryHymn.name'));
     assert.ok(!seedKeys.includes('prayerLabel'));
+    assert.ok(!seedKeys.includes('prayerMale'));
+    assert.ok(!seedKeys.includes('prayerFemale'));
 });
 
 test('the hymn sheets are the song elements of the Sunday\'s order', () => {
@@ -867,8 +873,8 @@ test('the date, a baptism and a dropped hymn are never "to be announced"', () =>
     assert.equal(first.hymnEnd2, '', 'nor does it print the name it had before it was dropped, as the old guide did not');
     assert.equal(first.hymnMid1, 'TBA', 'a hymn still to be chosen is');
     assert.equal(first.serviceLeader, 'Lee');
-    assert.equal(first.prayerMale, 'Tom');
-    assert.equal(first.prayerFemale, 'TBA');
+    assert.equal(first.prayerMale, undefined);
+    assert.equal(first.prayerFemale, undefined);
     assert.equal(r.rows[4].date, 'Sunday 4 October 2026');
     assert.equal(r.rows[4].shortDate, 'Oct 4');
     assert.equal(r.rows[4].dateShort, '4 Oct', 'a date is never TBA — only the text fields can be');

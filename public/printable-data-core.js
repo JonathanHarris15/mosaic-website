@@ -311,8 +311,6 @@
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
         { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
-        { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
-        { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
     ];
 
     // Aspects of a placement beyond its Sunday value. The value stays at
@@ -1129,8 +1127,6 @@
             preacher: slotText(s && s.preacher),
             serviceLeader: slotText(s && s.serviceLeader),
             musicLeader: slotText(s && s.musicLeader),
-            prayerMale: slotText(lit.prayerMale),
-            prayerFemale: slotText(lit.prayerFemale),
             prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
         };
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
@@ -1210,12 +1206,11 @@
         return { rows: rows, warnings: rows.length ? [] : ['The order of service for ' + formatDate(date) + ' is empty.'], date: date };
     }
 
-    // Subjects named on that Sunday's pastoral prayers, with their request text.
+    // Subjects named on that Sunday's requesting prayers, with their request text.
     function prayerSubjectsOf(service, catalog) {
         const s = service || {};
         const lit = s.liturgy || {};
         const cat = catalogOrSeed(catalog);
-        const label = slotText(lit.prayerLabel) || 'Pastoral Prayer';
         const out = [];
         const push = (person, who, slot, id) => {
             if (!person || !person.id) return;
@@ -1223,22 +1218,21 @@
                 personId: person.id,
                 name: person.name || '',
                 who: who || '',
-                slot: slot || label,
-                label: label,
+                slot: slot || '',
+                label: slot || '',
                 _id: id || person.id,
             });
         };
-        push(lit.prayerMale, 'man', label + ' (man)', 'male');
-        push(lit.prayerFemale, 'woman', label + ' (woman)', 'female');
         Liturgy.elementsFor(s, cat).forEach(el => {
             if (!el || el.kind !== 'prayer' || !el.requests) return;
             const list = lit[el.id];
             if (!Array.isArray(list)) return;
             const people = el.requests.people || [];
+            const slot = Liturgy.elementDisplayName(el);
             list.forEach((person, i) => {
                 const line = people[i] || {};
                 const who = line.who === 'male' ? 'man' : (line.who === 'female' ? 'woman' : (line.who || 'anyone'));
-                push(person, who, Liturgy.elementDisplayName(el), person && person.id);
+                push(person, who, slot, person && person.id);
             });
         });
         return out;

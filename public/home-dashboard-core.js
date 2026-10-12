@@ -240,7 +240,7 @@
         };
     }
 
-    function glance(svc) {
+    function glance(svc, catalog) {
         const service = svc || {};
         if (unscoredIrregular(service)) {
             return { theme: '', sermon: '', pairs: [], baptism: '' };
@@ -253,8 +253,17 @@
         if (service.musicLeader) pairs.push({ k: 'Music Leader', v: String(service.musicLeader) });
 
         const prayers = [];
-        if (liturgy.prayerMale && liturgy.prayerMale.name) prayers.push(liturgy.prayerMale.name);
-        if (liturgy.prayerFemale && liturgy.prayerFemale.name) prayers.push(liturgy.prayerFemale.name);
+        const seen = {};
+        Liturgy.elementsFor(service, catalog).forEach(function (el) {
+            if (!el || el.kind !== 'prayer' || !el.requests) return;
+            const list = liturgy[el.id];
+            if (!Array.isArray(list)) return;
+            list.forEach(function (person) {
+                if (!person || !person.id || !person.name || seen[person.id]) return;
+                seen[person.id] = true;
+                prayers.push(person.name);
+            });
+        });
         if (prayers.length) pairs.push({ k: 'Pastoral Prayer', v: prayers.join(', ') });
 
         let baptism = '';

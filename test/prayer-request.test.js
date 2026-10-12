@@ -306,7 +306,7 @@ test('elderDigestGroups: one group per requesting prayer with digest on', () => 
     assert.deepStrictEqual(groups[0].subjects.map((s) => s.id), ['p-ada', 'p-bea']);
 });
 
-test('elderDigestGroups: legacy male/female when no requesting prayer', () => {
+test('elderDigestGroups: no requesting prayer yields no group', () => {
     const groups = pr.elderDigestGroups({
         liturgy: {
             prayerMale: { id: 'p-ada', name: 'Ada' },
@@ -314,16 +314,13 @@ test('elderDigestGroups: legacy male/female when no requesting prayer', () => {
         },
         elements: [],
     });
-    assert.strictEqual(groups.length, 1);
-    assert.strictEqual(groups[0].id, '_legacy');
-    assert.deepStrictEqual(groups[0].subjects.map((s) => s.id), ['p-ada', 'p-bea']);
+    assert.deepStrictEqual(groups, []);
 });
 
 test('elderDigestGroups: requesting prayer with digest off yields no group', () => {
     const groups = pr.elderDigestGroups({
         liturgy: {
             quiet: [{ id: 'p-ada', name: 'Ada' }],
-            prayerMale: { id: 'p-bea', name: 'Bea' },
         },
         elements: [{
             id: 'quiet', kind: 'prayer',
@@ -388,16 +385,12 @@ test('resolveTemplates includes elderDigest (default and override)', () => {
 
 const SERVICE = '2026-06-28';
 const TODAY_IN_WINDOW = '2026-06-23';
-const liturgyFor = (maleId, femaleId) => ({
-    prayerMale: { id: maleId || null, name: '' },
-    prayerFemale: { id: femaleId || null, name: '' },
-});
 
 const baseMayAnswer = {
     personId: 'p-jane',
     serviceDate: SERVICE,
     todayDate: TODAY_IN_WINDOW,
-    liturgy: liturgyFor('p-jane', 'p-john'),
+    subjectIds: ['p-jane', 'p-john'],
     viaAnswerLink: false,
     initialSentDate: null,
 };
@@ -412,7 +405,7 @@ test('mayAnswer: still a subject, in the window → yes', () => {
 test('mayAnswer: no longer on the service → no', () => {
     assert.strictEqual(pr.mayAnswerPrayerRequest({
         ...baseMayAnswer,
-        liturgy: liturgyFor('p-other', 'p-john'),
+        subjectIds: ['p-other', 'p-john'],
         viaAnswerLink: true,
     }), false);
 });
@@ -672,7 +665,7 @@ test('notice days: a prayer with no number keeps the old five', () => {
     assert.strictEqual(pr.noticeDaysOf({ kind: 'hymn' }), 0);
 });
 
-test('pastoral subjects: a prayer and the older fields are one list', () => {
+test('pastoral subjects: older male/female fields are ignored', () => {
     const prayer = {
         id: 'pastoral', kind: 'prayer', name: 'Pastoral Prayer',
         requests: { count: 1, who: 'either' }, noticeDays: 10,
@@ -685,11 +678,9 @@ test('pastoral subjects: a prayer and the older fields are one list', () => {
         },
         elements: [prayer],
     });
-    assert.deepStrictEqual(subjects.map((s) => s.id), ['p-ada', 'p-bea']);
-    const ada = subjects.find((s) => s.id === 'p-ada');
-    assert.strictEqual(ada.noticeDays, 10);
-    assert.strictEqual(ada.fromElement, true);
-    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 10);
+    assert.deepStrictEqual(subjects.map((s) => s.id), ['p-ada']);
+    assert.strictEqual(subjects[0].noticeDays, 10);
+    assert.strictEqual(subjects[0].fromElement, true);
 });
 
 test('pastoral subjects: a prayer set to 0 does not tell its own people', () => {
@@ -704,7 +695,7 @@ test('pastoral subjects: a prayer set to 0 does not tell its own people', () => 
         }],
     });
     assert.strictEqual(subjects.find((s) => s.id === 'p-ada').noticeDays, 0);
-    assert.strictEqual(subjects.find((s) => s.id === 'p-bea').noticeDays, 5);
+    assert.strictEqual(subjects.find((s) => s.id === 'p-bea'), undefined);
 });
 
 test('prayer notice plan: days on a prayer turn asking on', () => {
@@ -716,9 +707,9 @@ test('prayer notice plan: days on a prayer turn asking on', () => {
     });
     assert.strictEqual(on.notifies, true);
     const off = pr.prayerNoticePlan({
-        liturgy: { prayerMale: { id: 'p-ada', name: 'Ada' } },
+        liturgy: { quiet: [{ id: 'p-ada', name: 'Ada' }] },
         elements: [{
-            id: 'p', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 0,
+            id: 'quiet', kind: 'prayer', requests: { count: 1, who: 'either' }, noticeDays: 0,
         }],
     });
     assert.strictEqual(off.notifies, false);
@@ -728,7 +719,6 @@ test('prayer notice plan: days on a prayer turn asking on', () => {
 test('mayAnswer: a person named on a requesting prayer can answer', () => {
     assert.strictEqual(pr.mayAnswerPrayerRequest({
         ...baseMayAnswer,
-        liturgy: liturgyFor('p-other', 'p-john'),
         subjectIds: ['p-jane'],
         noticeDays: 10,
         todayDate: '2026-06-18',

@@ -234,20 +234,21 @@ function stampRowIds(entries, derived) {
 // current model, so `changedFieldPaths` gets two things it can compare
 // like-for-like. The parts of a save that are not a function of the model —
 // the timestamp, the guide record, involvementDeferred — are added by save().
-// The two pastoral-prayer subjects, in the shape decidePastoralPrayerSave reads.
-// A blank slot is null, not an empty string, so it is not a person id.
-function pastoralSunday(service, date) {
-    const slotId = (field) => {
-        const liturgy = service && service.liturgy;
-        const slot = liturgy && liturgy[field];
-        const id = slot && slot.id;
-        return (typeof id === 'string' && id) ? id : null;
-    };
-    return {
-        date: date,
-        prayerMaleId: slotId('prayerMale'),
-        prayerFemaleId: slotId('prayerFemale'),
-    };
+// Subjects named on requesting prayers, in the shape decidePastoralPrayerSave
+// reads. A blank slot is omitted; the same person on two lines is one id.
+function pastoralSunday(service, date, elements) {
+    const liturgy = (service && service.liturgy) || {};
+    const ids = [];
+    (elements || []).forEach((el) => {
+        if (!el || el.kind !== 'prayer' || !el.requests) return;
+        const list = liturgy[el.id];
+        if (!Array.isArray(list)) return;
+        list.forEach((person) => {
+            const id = person && person.id;
+            if (typeof id === 'string' && id && ids.indexOf(id) === -1) ids.push(id);
+        });
+    });
+    return { date: date, subjectIds: ids };
 }
 
 function flattenServiceForSave(service) {
@@ -657,9 +658,6 @@ function serviceForm() {
                 hymnMid1: { id: null, name: '' },
                 hymnMid2: { id: null, name: '' },
                 scriptureReading: '',
-                prayerMale: { id: null, name: '' },
-                prayerFemale: { id: null, name: '' },
-                prayerLabel: 'Pastoral Prayer',
                 sermon: '',
                 baptism: [],
                 hymnEnd1: { id: null, name: '' },
@@ -794,8 +792,7 @@ function serviceForm() {
         // Orders page, and this Sunday only fills the values.
         legacyHomes() {
             const order = liturgyCore().orderFor(this.service, this.liturgyCatalog);
-            const label = this.service.liturgy && this.service.liturgy.prayerLabel;
-            return liturgyCore().legacyPrayerHomes(order, label);
+            return liturgyCore().legacyPrayerHomes(order);
         },
         showsPraise(item) {
             const homes = this.legacyHomes();
@@ -805,11 +802,6 @@ function serviceForm() {
         showsConfession(item) {
             const homes = this.legacyHomes();
             if (homes.confessionId) return item.key === homes.confessionId;
-            return !!item.legacy;
-        },
-        showsPastoral(item) {
-            const homes = this.legacyHomes();
-            if (homes.pastoralId) return item.key === homes.pastoralId;
             return !!item.legacy;
         },
         kindLabel(kind) {
@@ -865,13 +857,6 @@ function serviceForm() {
             const bap = s.liturgy && s.liturgy.baptism;
             const named = Array.isArray(bap) && bap.some(c => c && (c.id || (c.name && c.name.trim())));
             s.hasBaptism = this._orderHasBaptism(s) && named;
-        },
-
-        // Pastoral-prayer subjects (the two prayed-for members and their
-        // request texts) are asked for unless this Sunday's prayer is
-        // congregational.
-        get showPrayerSubjects() {
-            return this.service.liturgy.prayerLabel !== 'Congregational Prayer';
         },
 
         // The single shared routing rule (calendar + this page never drift).
@@ -1499,19 +1484,8 @@ function serviceForm() {
             return { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
         },
 
-        // Notice-day list on the prayer that named this person (or the
-        // shared list when only the older male/female fields are in use).
+        // Notice-day list on the prayer that named this person.
         noticeDaysFor(which) {
-            if (which === 'male' || which === 'female') {
-                let best = null;
-                for (const el of this.orderElements) {
-                    if (!el.requests || !Array.isArray(el.noticeDays)) continue;
-                    if (!best || (el.noticeDays[0] || 0) > (best[0] || 0)) {
-                        best = el.noticeDays;
-                    }
-                }
-                return best ? best.slice() : [5, 3, 1];
-            }
             for (const el of this.orderElements) {
                 if (!el.requests) continue;
                 const list = this.service.liturgy[el.id];
@@ -1540,8 +1514,6 @@ function serviceForm() {
         },
 
         subjectFor(which) {
-            if (which === 'male') return this.service.liturgy.prayerMale || { id: null, name: '' };
-            if (which === 'female') return this.service.liturgy.prayerFemale || { id: null, name: '' };
             for (const el of this.orderElements) {
                 if (!el.requests) continue;
                 const list = this.service.liturgy[el.id];
@@ -1554,7 +1526,7 @@ function serviceForm() {
         },
 
         prayerRequestKeys() {
-            const keys = ['male', 'female'];
+            const keys = [];
             for (const el of this.orderElements) {
                 if (!el.requests) continue;
                 const list = this.service.liturgy[el.id];
@@ -1871,12 +1843,13 @@ function serviceForm() {
                 // that arrives after the last read stays on the page, so the
                 // next save writes it instead of treating it as done.
                 let frozenService = null;
-                const loadedSunday = pastoralSunday(original, this.date);
+                const requestElements = liturgyCore().elementsFor(this.service, this.liturgyCatalog);
+                const loadedSunday = pastoralSunday(original, this.date, requestElements);
                 const taken = await PastoralPrayerCore.takeSundayAfterHistoryRead(
                     loadedSunday,
                     () => {
                         frozenService = JSON.parse(JSON.stringify(this.service));
-                        return pastoralSunday(frozenService, this.date);
+                        return pastoralSunday(frozenService, this.date, requestElements);
                     },
                     (personIds) => this._readPastoralHistories(personIds)
                 );
@@ -2274,13 +2247,13 @@ function serviceForm() {
 
         // A row opens only when its panel has a field. A hymn, a scripture, a
         // line of text, or a person is entered there. So is a prayer's people
-        // and its leader, and the older praise, confession, and pastoral
-        // fields that belong to this row. A prayer or an Other that is only a
-        // name on the order has nothing to enter, so it stays closed.
+        // and its leader, and the older praise and confession leaders that
+        // belong to this row. A prayer or an Other that is only a name on the
+        // order has nothing to enter, so it stays closed.
         rowOpens(item) {
             if (!item || item.removed || item.type === 'legacy') return false;
             if (item.noteOn || item.hasRole || item.requests || item.prayedByOther) return true;
-            if (this.showsPraise(item) || this.showsConfession(item) || this.showsPastoral(item)) return true;
+            if (this.showsPraise(item) || this.showsConfession(item)) return true;
             return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
                 || item.type === 'people' || item.type === 'person';
         },
@@ -2535,13 +2508,9 @@ function serviceForm() {
             this.service.removedHymns = [];
             this.service.notes = {};
             this.service.carriedBy = {};
-            const liturgy = {
-                prayerMale: { id: null, name: '' },
-                prayerFemale: { id: null, name: '' },
-                prayerLabel: 'Pastoral Prayer',
-            };
+            const liturgy = {};
             Object.keys(this.service.liturgy || {}).forEach(key => {
-                if (!(key in liturgy)) liturgy[key] = '';
+                liturgy[key] = '';
             });
             this.service.liturgy = liturgy;
             for (const el of this.liturgyCatalog.elements) {

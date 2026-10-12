@@ -142,9 +142,9 @@ test('Service Builder Send prayer now is a canDecide write, not canReadElder', (
     const canSend = js.slice(js.indexOf('canSendPrayerText(which)'), js.indexOf('canSendPrayerText(which)') + 120);
     assert.match(canSend, /if\s*\(\s*!this\.canDecide\s*\)\s*return false/);
     const html = read('service-builder.html');
-    const sendBtn = html.indexOf('sendPrayerRequestNow(which)');
-    assert.ok(sendBtn !== -1);
-    assert.match(html.slice(Math.max(0, sendBtn - 400), sendBtn), /x-show="canDecide"/);
+    const sendBtn = html.indexOf('sendPrayerRequestNow(slot.id)');
+    assert.ok(sendBtn !== -1, 'Send Now lives on the requesting-prayer card');
+    assert.match(html.slice(Math.max(0, sendBtn - 800), sendBtn), /x-show="canDecide"/);
 });
 
 // ── MS-572 / MS-573 / MS-574 — leftover chrome after MS-540 ────────────────

@@ -234,18 +234,15 @@ Each day in the list sends once. `sentDays` on the request records which
 of those days have gone out. The message and the response live on the
 prayer. Written prose wins for that prayer's people. Blank still uses
 `app_config/prayer_request_sms`, then the built-in text. A Sunday whose
-order has no prayer that sends requests still follows `autoSendEnabled` on
-that document, and still asks `liturgy.prayerMale` and `liturgy.prayerFemale`.
-When the order does send requests, those older fields are asked on the same
-days, so a Sunday planned before the prayer element keeps its people.
+order has no prayer that sends requests asks nobody for a prayer request;
+`autoSendEnabled` alone does not name subjects. The older
+`liturgy.prayerMale` / `prayerFemale` / `prayerLabel` fields are no longer
+read for asks, digests, or Sunday fill (MS-734).
 
 On the Sunday, a prayer's leader and the people it prays for are drawn
-under that row. The older praise leader sits under `callToWorship`, the
-confession leader under `callToConfession`, and the pastoral ask under the
-element whose name is the Sunday's prayer label (the seed names that
-element Pastoral Prayer). An order that no longer has that row draws the
-field once, after the list. Those anchors are the seed's ids and the
-label the Sunday already stores. They are not a new kind.
+under that row. The older praise leader sits under `callToWorship` and the
+confession leader under `callToConfession`. Those anchors are the seed's
+ids. They are not a new kind.
 
 ## Amendment — the table lines orders up, and names a column one order uses
 

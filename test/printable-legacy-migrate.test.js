@@ -5,6 +5,7 @@ require('../public/printable-link-core.js');
 const Migrate = require('../public/printable-legacy-migrate-core.js');
 const Core = require('../public/printable-core.js');
 const Data = require('../public/printable-data-core.js');
+const Liturgy = require('../public/liturgy-order-core.js');
 
 test('sunday_typed wires become event fill-ins with stable legacy_ ids', () => {
     const project = {
@@ -64,16 +65,21 @@ test('typedContent seeds empty event fill-ins', () => {
 
 test('pastoral prayer requests resolve for elders with subject names and request text', () => {
     const date = '2026-09-06';
+    const added = Liturgy.addElement(Liturgy.standardCatalog(), {
+        name: 'Pastoral Prayer',
+        kind: 'prayer',
+        requests: { people: [{ who: 'male' }, { who: 'female' }] },
+    });
+    const catalog = Liturgy.addToOrder(added.catalog, 'standard', added.element.id);
+    const liturgy = {};
+    liturgy[added.element.id] = [
+        { id: 'p-m', name: 'Abe Example' },
+        { id: 'p-f', name: 'Bea Example' },
+    ];
     const data = {
-        liturgy: null,
+        liturgy: catalog,
         services: {
-            [date]: {
-                liturgy: {
-                    prayerMale: { id: 'p-m', name: 'Abe Example' },
-                    prayerFemale: { id: 'p-f', name: 'Bea Example' },
-                    prayerLabel: 'Pastoral Prayer',
-                },
-            },
+            [date]: { liturgy },
         },
         prayerRequests: {
             ['p-m/' + date]: { prayerRequest: 'Health after surgery' },
