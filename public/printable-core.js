@@ -345,6 +345,71 @@
         return rest;
     }
 
+    // The contiguous run a page belongs to when an overflowing list keeps
+    // real pages: the origin plus every stored page that immediately
+    // follows it with continues.from pointing at that origin. A lone page
+    // is a run of one. Used by the pages filmstrip so insert and reorder
+    // cannot split a run.
+    function continuationRunBounds(pages, pageId) {
+        const list = pages || [];
+        const i = list.findIndex(p => p && p.id === pageId);
+        if (i < 0) return null;
+        const page = list[i];
+        const originId = (page.continues && page.continues.from) || page.id;
+        let start = list.findIndex(p => p && p.id === originId);
+        if (start < 0) start = i;
+        let end = start;
+        for (let j = start + 1; j < list.length; j++) {
+            const p = list[j];
+            if (p && p.continues && p.continues.from === originId) end = j;
+            else break;
+        }
+        if (i < start || i > end) return { start: i, end: i, originId: page.id };
+        return { start: start, end: end, originId: originId };
+    }
+
+    // True when a new page may sit after pages[index] — never between two
+    // sheets of the same overflow run.
+    function canInsertAfter(pages, index) {
+        const list = pages || [];
+        if (index < 0 || index >= list.length - 1) return true;
+        const a = list[index];
+        const b = list[index + 1];
+        if (!a || !b || !b.continues || !b.continues.from) return true;
+        const from = b.continues.from;
+        if (a.id === from) return false;
+        if (a.continues && a.continues.from === from) return false;
+        return true;
+    }
+
+    // Move the whole continuation run that holds pageId by `delta` runs
+    // (negative = earlier). Neighbour runs move as blocks too, so a list
+    // that spilled never gets a foreign page between its sheets.
+    function movePageRun(pages, pageId, delta) {
+        const list = (pages || []).slice();
+        const run = continuationRunBounds(list, pageId);
+        if (!run || !delta) return list;
+        const block = list.splice(run.start, run.end - run.start + 1);
+        let dest = run.start;
+        if (delta < 0) {
+            for (let n = 0; n < -delta && dest > 0; n++) {
+                const prev = list[dest - 1];
+                if (!prev) break;
+                const prevRun = continuationRunBounds(list, prev.id);
+                dest = prevRun ? prevRun.start : dest - 1;
+            }
+        } else {
+            for (let n = 0; n < delta && dest < list.length; n++) {
+                const next = list[dest];
+                if (!next) break;
+                const nextRun = continuationRunBounds(list, next.id);
+                dest = nextRun ? nextRun.end + 1 : dest + 1;
+            }
+        }
+        list.splice(dest, 0, ...block);
+        return list;
+    }
+
     function num(v, d) { const n = Number(v); return (v != null && !isNaN(n) && n >= 0) ? n : d; }
 
     // A page sized in physical units for a print stylesheet. CSS inches are
@@ -1043,6 +1108,9 @@
         clonePage,
         continuesForCopy,
         pagesWithout,
+        continuationRunBounds,
+        canInsertAfter,
+        movePageRun,
         buildPrintable,
         duplicatePrintable,
         migrate,

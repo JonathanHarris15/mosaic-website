@@ -506,6 +506,27 @@ test('deleting a middle continuation leaves the list pointing at its start', () 
     assert.deepEqual(left[1].continues, { from: 'pg1', repeat: 'card' });
 });
 
+test('continuation runs: bounds, no insert between sheets, move as a block (MS-760)', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const cover = Core.buildPage(t, { id: 'cover', name: 'Cover', nodes: [] });
+    const origin = Core.buildPage(t, { id: 'pg1', name: 'List', nodes: [] });
+    const two = Core.buildPage(t, { id: 'pg2', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const three = Core.buildPage(t, { id: 'pg3', continues: { from: 'pg1', repeat: 'card' }, nodes: [] });
+    const back = Core.buildPage(t, { id: 'back', name: 'Back', nodes: [] });
+    const pages = [cover, origin, two, three, back];
+    assert.deepEqual(Core.continuationRunBounds(pages, 'pg2'), { start: 1, end: 3, originId: 'pg1' });
+    assert.deepEqual(Core.continuationRunBounds(pages, 'cover'), { start: 0, end: 0, originId: 'cover' });
+    assert.equal(Core.canInsertAfter(pages, 0), true, 'after cover is fine');
+    assert.equal(Core.canInsertAfter(pages, 1), false, 'not between origin and first continuation');
+    assert.equal(Core.canInsertAfter(pages, 2), false, 'not between continuations');
+    assert.equal(Core.canInsertAfter(pages, 3), true, 'after the run is fine');
+    assert.equal(Core.canInsertAfter(pages, 4), true, 'after the last page is fine');
+    const moved = Core.movePageRun(pages, 'pg2', -1);
+    assert.deepEqual(moved.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back'], 'the whole run moves earlier');
+    const movedDown = Core.movePageRun(pages, 'cover', 1);
+    assert.deepEqual(movedDown.map(p => p.id), ['pg1', 'pg2', 'pg3', 'cover', 'back'], 'cover jumps past the whole run');
+});
+
 test('cloning a page for overflow remints every id and keeps the design', () => {
     const { page, template } = directoryPage();
     const copy = Core.clonePage(template, page, { continues: { from: page.id, repeat: 'card' } });

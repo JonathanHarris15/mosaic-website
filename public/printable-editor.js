@@ -1,8 +1,9 @@
 // The Printable editor (MS-393, MS-394) — where pages are laid out.
 //
-// Three parts: a CANVAS in the middle showing every page with generous space
-// around it, an ELEMENT PANEL on the left carrying the element tree and the
-// controls for whatever is selected, and the DATA DRAWER on the right (MS-396).
+// Four parts: a PAGES filmstrip on the far left (MS-760), an ELEMENT PANEL
+// with the selected page's tree and controls, a CANVAS in the middle showing
+// every page with generous space around it, and the DATA DRAWER on the right
+// (MS-396).
 //
 // Alpine drives the panels, the header and the dialogs. The canvas and the
 // tree are drawn by hand from the model — a page is a tree of elements that
@@ -24,11 +25,12 @@ function printableEditor() {
     // service-guide-manager.js), and the drag state, which changes on every
     // mouse move and would re-run every getter if it were reactive.
     const ui = {
-        viewport: null, world: null, tree: null,
+        viewport: null, world: null, tree: null, pagesStrip: null,
         history: [], future: [],
         drag: null,          // { kind: 'pan'|'move'|'resize', ... }
         panelW: { left: 0, right: 0 },   // 0 until the stored width is read
         treeDrag: null,      // { nodeId, pageId }
+        pageDrag: null,      // { pageId } while reordering in the filmstrip
         cm: { html: null, css: null },
         pageEls: {},         // pageId -> the rendered page element
         editingText: null,   // node id being edited inline
@@ -36,6 +38,7 @@ function printableEditor() {
 
     const PAD = 600;         // world padding round the pages, so panning never feels pinned
     const GAP = 80;          // between pages
+    const PAGES_STRIP_W = 148; // fixed filmstrip; not a resizable panel
 
     // Each panel's width, dragged on its border and remembered per browser.
     // `narrow` is the width below which a field row stacks its label above
@@ -187,6 +190,7 @@ function printableEditor() {
             ui.viewport = document.getElementById('pe-viewport');
             ui.world = document.getElementById('pe-world');
             ui.tree = document.getElementById('pe-tree');
+            ui.pagesStrip = document.getElementById('pe-pages-strip');
             if (!ui.viewport || !ui.world) return;
             this.bindCanvasEvents();
             this.bindKeys();
@@ -214,7 +218,7 @@ function printableEditor() {
         panelLimits(side) {
             const spec = PANELS[side];
             const other = side === 'left' ? 'right' : 'left';
-            const room = window.innerWidth - CANVAS_FLOOR - (ui.panelW[other] || PANELS[other].def);
+            const room = window.innerWidth - CANVAS_FLOOR - PAGES_STRIP_W - (ui.panelW[other] || PANELS[other].def);
             const max = Math.max(spec.min, Math.min(spec.max, room));
             return { min: spec.min, max: max };
         },
@@ -515,7 +519,13 @@ function printableEditor() {
 
         addPage(afterId) {
             const page = PrintableCore.buildPage(this.template, {});
-            const i = afterId ? this.pages.findIndex(p => p.id === afterId) : this.pages.length - 1;
+            let i = afterId ? this.pages.findIndex(p => p.id === afterId) : this.pages.length - 1;
+            if (i < 0) i = this.pages.length - 1;
+            // Never split an overflow run — jump to the end of that run.
+            while (i >= 0 && i < this.pages.length - 1 && !PrintableCore.canInsertAfter(this.pages, i)) {
+                const run = PrintableCore.continuationRunBounds(this.pages, this.pages[i].id);
+                i = run ? run.end : i + 1;
+            }
             this.project.pages.splice(i + 1, 0, page);
             this.commit();
             this.renderAll();
@@ -557,12 +567,38 @@ function printableEditor() {
         },
 
         movePage(pageId, delta) {
-            const i = this.pages.findIndex(p => p.id === pageId);
-            const j = i + delta;
-            if (i < 0 || j < 0 || j >= this.pages.length) return;
-            const list = this.project.pages;
-            const [pg] = list.splice(i, 1);
-            list.splice(j, 0, pg);
+            if (!delta) return;
+            const before = this.pages.map(p => p.id).join(',');
+            const next = PrintableCore.movePageRun(this.pages, pageId, delta > 0 ? 1 : -1);
+            if (next.map(p => p.id).join(',') === before) return;
+            this.project.pages = next;
+            this.commit();
+            this.renderAll();
+        },
+
+        // Drop a page run so it sits before targetPageId (or at the end when
+        // target is null). Refuses a landing that would split another run.
+        reorderPageBefore(dragPageId, targetPageId) {
+            if (!dragPageId || dragPageId === targetPageId) return;
+            const list = this.pages.slice();
+            const run = PrintableCore.continuationRunBounds(list, dragPageId);
+            if (!run) return;
+            if (targetPageId) {
+                const tRun = PrintableCore.continuationRunBounds(list, targetPageId);
+                if (tRun && dragPageId !== targetPageId
+                    && run.originId === tRun.originId
+                    && run.start === tRun.start) return;
+            }
+            const block = list.splice(run.start, run.end - run.start + 1);
+            let dest = targetPageId ? list.findIndex(p => p.id === targetPageId) : list.length;
+            if (dest < 0) dest = list.length;
+            // If the target is mid-run, land before that run's origin.
+            if (targetPageId && dest < list.length) {
+                const at = PrintableCore.continuationRunBounds(list, list[dest].id);
+                if (at) dest = at.start;
+            }
+            list.splice(dest, 0, ...block);
+            this.project.pages = list;
             this.commit();
             this.renderAll();
         },
@@ -572,6 +608,7 @@ function printableEditor() {
             this.selection.nodeId = null;
             this.readProps();
             this.refreshOverlays();
+            this.markPagesStripSelection();
             this.renderTree();
             this.syncCode();
         },
@@ -584,6 +621,7 @@ function printableEditor() {
             this.revealInTree(pageId, nodeId);
             this.readProps();
             this.refreshOverlays();
+            this.markPagesStripSelection();
             this.renderTree();
             this.syncCode();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
@@ -595,6 +633,16 @@ function printableEditor() {
             this.refreshOverlays();
             this.renderTree();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
+        },
+
+        markPagesStripSelection() {
+            if (!ui.pagesStrip) return;
+            ui.pagesStrip.querySelectorAll('.pe-pages__card').forEach(card => {
+                card.classList.toggle('is-selected', card.getAttribute('data-page') === this.selection.pageId);
+            });
+            const sel = ui.pagesStrip.querySelector('.is-selected');
+            if (sel && sel.scrollIntoViewIfNeeded) sel.scrollIntoViewIfNeeded(false);
+            else if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
         },
 
         // Where a new element goes: inside the selected box, beside a selected
@@ -1017,6 +1065,7 @@ function printableEditor() {
             ui.world.style.width = (PAD * 2 + t.widthPx) + 'px';
             ui.world.style.height = (this.pageTop(entries.length) + PAD) + 'px';
             this.applyView();
+            this.renderPagesStrip();
             this.renderTree();
             this.refreshOverlays();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
@@ -1073,6 +1122,7 @@ function printableEditor() {
             const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i);
             old.replaceWith(fresh);
             this.refreshOverlays();
+            this.renderPagesStrip();
             this.renderTree();
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
@@ -1470,67 +1520,201 @@ function printableEditor() {
             return pad;
         },
 
+        // The filmstrip of pages (MS-760). Overflow runs share a vertical
+        // rail; insert gaps between sheets of the same run stay shut.
+        renderPagesStrip() {
+            if (!ui.pagesStrip || !this.project || !this.template) return;
+            const frag = document.createDocumentFragment();
+            const t = this.template;
+            const thumbW = 112;
+            const scale = thumbW / Math.max(1, t.widthPx);
+            const runs = [];
+            let i = 0;
+            while (i < this.pages.length) {
+                const run = PrintableCore.continuationRunBounds(this.pages, this.pages[i].id);
+                const end = run ? run.end : i;
+                runs.push({ start: i, end: end, originId: run ? run.originId : this.pages[i].id });
+                i = end + 1;
+            }
+
+            const insertBtn = (afterIndex, enabled) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'pe-pages__insert';
+                btn.title = enabled ? 'Insert a page here' : 'This overflow run keeps these pages together';
+                btn.setAttribute('aria-label', enabled ? 'Insert a page here' : 'Cannot insert inside an overflow run');
+                if (!enabled) btn.disabled = true;
+                else {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const afterId = afterIndex < 0 ? null : this.pages[afterIndex].id;
+                        if (afterId) this.addPage(afterId);
+                        else {
+                            const page = PrintableCore.buildPage(this.template, {});
+                            this.project.pages.unshift(page);
+                            this.commit();
+                            this.renderAll();
+                            this.selectPage(page.id);
+                            this.scrollToPage(page.id);
+                        }
+                    });
+                }
+                return btn;
+            };
+
+            frag.appendChild(insertBtn(-1, true));
+
+            runs.forEach((run) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'pe-pages__run';
+                wrap.setAttribute('data-run-len', String(run.end - run.start + 1));
+                if (run.end > run.start) {
+                    const link = document.createElement('div');
+                    link.className = 'pe-pages__link';
+                    link.textContent = 'Overflow run';
+                    wrap.appendChild(link);
+                }
+                for (let p = run.start; p <= run.end; p++) {
+                    const page = this.pages[p];
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'pe-pages__card'
+                        + (this.selection.pageId === page.id ? ' is-selected' : '')
+                        + (page.continues && page.continues.from ? ' is-cont' : '');
+                    card.setAttribute('draggable', 'true');
+                    card.setAttribute('data-page', page.id);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'pe-pages__meta';
+                    const num = document.createElement('span');
+                    num.className = 'pe-pages__num';
+                    num.textContent = String(p + 1);
+                    meta.appendChild(num);
+                    const name = document.createElement('span');
+                    name.className = 'pe-pages__name';
+                    name.textContent = page.name || (page.continues && page.continues.from ? 'Continued' : 'Page');
+                    meta.appendChild(name);
+                    const acts = document.createElement('span');
+                    acts.className = 'pe-pages__acts';
+                    const canUp = run.start > 0;
+                    const canDown = run.end < this.pages.length - 1;
+                    acts.innerHTML = '<button type="button" title="Move earlier" data-act="up"' + (canUp ? '' : ' disabled') + '><span class="material-symbols-outlined">arrow_upward</span></button>'
+                        + '<button type="button" title="Move later" data-act="down"' + (canDown ? '' : ' disabled') + '><span class="material-symbols-outlined">arrow_downward</span></button>'
+                        + '<button type="button" title="Duplicate page" data-act="dup"><span class="material-symbols-outlined">content_copy</span></button>'
+                        + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>';
+                    meta.appendChild(acts);
+                    card.appendChild(meta);
+
+                    const thumb = document.createElement('div');
+                    thumb.className = 'pe-pages__thumb';
+                    const inner = document.createElement('div');
+                    inner.className = 'pe-pages__thumb-inner';
+                    inner.style.width = t.widthPx + 'px';
+                    inner.style.height = t.heightPx + 'px';
+                    inner.style.transform = 'scale(' + scale + ')';
+                    try {
+                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id });
+                        mini.style.width = t.widthPx + 'px';
+                        mini.style.height = t.heightPx + 'px';
+                        inner.appendChild(mini);
+                    } catch (err) { /* thumb is best-effort */ }
+                    thumb.appendChild(inner);
+                    // Keep the card's box at the scaled size.
+                    thumb.style.height = Math.round(t.heightPx * scale) + 'px';
+                    card.appendChild(thumb);
+
+                    card.addEventListener('click', (e) => {
+                        const act = e.target.closest('[data-act]');
+                        if (act) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const a = act.getAttribute('data-act');
+                            if (a === 'up') this.movePage(page.id, -1);
+                            else if (a === 'down') this.movePage(page.id, 1);
+                            else if (a === 'dup') this.duplicatePage(page.id);
+                            else if (a === 'del') this.deletePage(page.id);
+                            return;
+                        }
+                        this.selectPage(page.id);
+                        this.scrollToPage(page.id);
+                    });
+                    card.addEventListener('dragstart', (e) => {
+                        ui.pageDrag = { pageId: page.id };
+                        e.dataTransfer.effectAllowed = 'move';
+                        try { e.dataTransfer.setData('text/plain', page.id); } catch (err) { /* IE */ }
+                    });
+                    card.addEventListener('dragend', () => { ui.pageDrag = null; this.clearPageDropMarks(); });
+                    card.addEventListener('dragover', (e) => {
+                        if (ui.pageDrag && ui.pageDrag.pageId !== page.id) {
+                            e.preventDefault();
+                            card.classList.add('is-drop');
+                            return;
+                        }
+                        if (ui.treeDrag) {
+                            e.preventDefault();
+                            card.classList.add('is-drop');
+                        }
+                    });
+                    card.addEventListener('dragleave', () => card.classList.remove('is-drop'));
+                    card.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        card.classList.remove('is-drop');
+                        if (ui.pageDrag) {
+                            this.reorderPageBefore(ui.pageDrag.pageId, page.id);
+                            ui.pageDrag = null;
+                            return;
+                        }
+                        if (ui.treeDrag) {
+                            this.dropOnPage(ui.treeDrag.nodeId, page.id);
+                            ui.treeDrag = null;
+                        }
+                    });
+                    wrap.appendChild(card);
+                }
+                frag.appendChild(wrap);
+                const after = run.end;
+                const canInsert = PrintableCore.canInsertAfter(this.pages, after)
+                    || after === this.pages.length - 1;
+                frag.appendChild(insertBtn(after, canInsert));
+            });
+
+            ui.pagesStrip.innerHTML = '';
+            ui.pagesStrip.appendChild(frag);
+            const sel = ui.pagesStrip.querySelector('.is-selected');
+            if (sel && sel.scrollIntoViewIfNeeded) sel.scrollIntoViewIfNeeded(false);
+            else if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+        },
+
+        clearPageDropMarks() {
+            if (!ui.pagesStrip) return;
+            ui.pagesStrip.querySelectorAll('.is-drop').forEach(el => el.classList.remove('is-drop'));
+        },
+
+        // Elements of the selected page only (MS-760). Page management lives
+        // in the filmstrip.
         renderTree() {
             if (!ui.tree || !this.project) return;
             const frag = document.createDocumentFragment();
-            this.pages.forEach((page, i) => {
-                const folded = !!this.treeCollapsed[page.id];
-                const kidCount = (page.nodes || []).length;
-                const row = document.createElement('div');
-                row.className = 'pe-tree__page' + (this.selection.pageId === page.id && !this.selection.nodeId ? ' is-selected' : '')
-                    + (folded ? ' is-collapsed' : '');
-                row.appendChild(kidCount ? this.treeTwist(page.id, folded, kidCount) : this.treeTwistSpacer());
-                const icon = document.createElement('span');
-                icon.className = 'material-symbols-outlined';
-                icon.textContent = 'description';
-                row.appendChild(icon);
-                const label = document.createElement('span');
-                label.className = 'pe-tree__label';
-                label.textContent = 'Page ' + (i + 1) + (page.name ? ' · ' + page.name : '');
-                row.appendChild(label);
-                if (folded && kidCount) {
-                    const hint = document.createElement('span');
-                    hint.className = 'pe-tree__hint';
-                    hint.textContent = kidCount + (kidCount === 1 ? ' element' : ' elements');
-                    row.appendChild(hint);
-                }
-                const acts = document.createElement('span');
-                acts.className = 'pe-tree__acts';
-                acts.innerHTML = '<button type="button" title="Move up" data-act="up"><span class="material-symbols-outlined">arrow_upward</span></button>'
-                    + '<button type="button" title="Move down" data-act="down"><span class="material-symbols-outlined">arrow_downward</span></button>'
-                    + '<button type="button" title="Duplicate page" data-act="dup"><span class="material-symbols-outlined">content_copy</span></button>'
-                    + '<button type="button" title="Delete page" data-act="del"><span class="material-symbols-outlined">delete</span></button>';
-                row.appendChild(acts);
-                row.addEventListener('click', (e) => {
-                    const act = e.target.closest('[data-act]');
-                    if (act) {
-                        const a = act.getAttribute('data-act');
-                        if (a === 'up') this.movePage(page.id, -1);
-                        else if (a === 'down') this.movePage(page.id, 1);
-                        else if (a === 'dup') this.duplicatePage(page.id);
-                        else if (a === 'del') this.deletePage(page.id);
-                        return;
-                    }
-                    if (e.target.closest('.pe-tree__twist')) return;
-                    this.selectPage(page.id);
-                    this.scrollToPage(page.id);
+            const page = this.currentPage;
+            if (page) {
+                const list = document.createElement('div');
+                list.className = 'pe-tree__list';
+                list.addEventListener('dragover', (e) => {
+                    if (!ui.treeDrag) return;
+                    e.preventDefault();
+                    list.classList.add('is-drop');
                 });
-                row.addEventListener('dragover', (e) => { if (ui.treeDrag) { e.preventDefault(); row.classList.add('is-drop'); } });
-                row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
-                row.addEventListener('drop', (e) => {
-                    e.preventDefault(); row.classList.remove('is-drop');
+                list.addEventListener('dragleave', () => list.classList.remove('is-drop'));
+                list.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    list.classList.remove('is-drop');
                     if (!ui.treeDrag) return;
                     this.dropOnPage(ui.treeDrag.nodeId, page.id);
                     ui.treeDrag = null;
                 });
-                frag.appendChild(row);
-                if (!folded) {
-                    const list = document.createElement('div');
-                    list.className = 'pe-tree__list';
-                    page.nodes.forEach(n => list.appendChild(this.treeRow(page, n, 1)));
-                    frag.appendChild(list);
-                }
-            });
+                (page.nodes || []).forEach(n => list.appendChild(this.treeRow(page, n, 0)));
+                frag.appendChild(list);
+            }
             ui.tree.innerHTML = '';
             ui.tree.appendChild(frag);
             const sel = ui.tree.querySelector('.is-selected');
