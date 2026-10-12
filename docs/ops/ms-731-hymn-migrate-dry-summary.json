@@ -1,0 +1,1944 @@
+{
+  "summary": {
+    "projectId": "mosaic-hymn-database",
+    "mode": "dry-run",
+    "at": "2026-10-12T14:18:26.983Z",
+    "serviceCount": 208,
+    "SundaysToWrite": 171,
+    "SundaysUnchanged": 37,
+    "fieldWrites": 1276,
+    "samples": [
+      {
+        "date": "2023-02-04",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "Jesus, Strong and Kind"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Leaning on the Everlasting Arms"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "O the Deep, Deep Love of Jesus"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "The Goodness of Jesus"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Give Me Jesus"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Afflicted Saint, to Christ Draw Near"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Everlasting Arms"
+          }
+        ]
+      },
+      {
+        "date": "2023-02-18",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "In Christ Alone"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "A Mighty Fortress is Our God"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "The Church's One Foundation"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Christ Our Hope in Life and Death"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Christ, the Sure and Steady Anchor"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "'Tis So Sweet to Trust in Jesus"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Take My Life and Let It Be Consecrated"
+          }
+        ]
+      },
+      {
+        "date": "2023-03-10",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "Behold Our God"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Before the Throne of God Above"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "This Is My Father’s World"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "All Hail the Glorious Christ"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "O the Deep, Deep Love of Jesus"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Here Is Love"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "How Deep the Father’s Love for Us"
+          }
+        ]
+      },
+      {
+        "date": "2023-07-30",
+        "fields": [
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Behold Our God"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "All Praise to Him"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Christ Is Mine Forevermore"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Here Is Love"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "In Christ Alone"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Christ Our Hope in Life and Death"
+          }
+        ]
+      },
+      {
+        "date": "2023-08-06",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "His Mercy Is More"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "How Deep the Father’s Love for Us"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "Only a Holy God"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Before the Throne of God Above"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Turn Your Eyes Upon Jesus"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Great Is Thy Faithfulness"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "All Glory Be to Christ"
+          }
+        ]
+      },
+      {
+        "date": "2023-08-13",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "To God Be the Glory"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Come, Behold the Wondrous Mystery"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "I Need Thee Every Hour"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Yet Not I, but Through Christ in Me"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "O Lord, My Rock and My Redeemer"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "He Will Hold Me Fast"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Afflicted Saint, to Christ Draw Near"
+          }
+        ]
+      },
+      {
+        "date": "2023-08-20",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "Only a Holy God"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "All Creatures Of Our God And King"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "Great Is Thy Faithfulness"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "There is a Fountain Filled with Blood"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Come Thou Fount"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Christ Is Mine Forevermore"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Christ Our Hope in Life and Death"
+          }
+        ]
+      },
+      {
+        "date": "2023-08-27",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "Come, Behold the Wondrous Mystery"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "O For a Thousand Tongues to Sing"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "I Will Sing of My Redeemer"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Yet Not I, but Through Christ in Me"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "O Lord, My Rock and My Redeemer"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Christ Is Mine Forevermore"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Gloryland"
+          }
+        ]
+      },
+      {
+        "date": "2023-09-03",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "O Great God"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Whate’er My God Ordains Is Right"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "Everlasting Arms"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Jesus, Strong and Kind"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "How Rich a Treasure We Possess"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "The Church's One Foundation"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Gloryland"
+          }
+        ]
+      },
+      {
+        "date": "2023-09-10",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "All Praise to Him"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Holy, Holy, Holy"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "He Will Hold Me Fast"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Before the Throne of God Above"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Lord, Have Mercy"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Take My Life and Let It Be Consecrated"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Doxology"
+          }
+        ]
+      },
+      {
+        "date": "2023-09-17",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "All Creatures Of Our God And King"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Be Thou My Vision"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "How Deep the Father’s Love for Us"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Nothing but the Blood of Jesus"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Amazing Grace! How Sweet the Sound"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Only a Holy God"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "Jesus Paid It All"
+          }
+        ]
+      },
+      {
+        "date": "2023-09-24",
+        "fields": [
+          "liturgy.hymn2",
+          "liturgy.hymn6",
+          "liturgy.hymn7",
+          "liturgy.hymn",
+          "liturgy.hymn3",
+          "liturgy.hymn4",
+          "liturgy.hymn5"
+        ],
+        "hymns": [
+          {
+            "field": "liturgy.hymn2",
+            "from": "preparatoryHymn",
+            "after": "Hark, I Hear the Harps Eternal"
+          },
+          {
+            "field": "liturgy.hymn6",
+            "from": "hymn1",
+            "after": "Only a Holy God"
+          },
+          {
+            "field": "liturgy.hymn7",
+            "from": "hymn2",
+            "after": "All Praise to Him"
+          },
+          {
+            "field": "liturgy.hymn",
+            "from": "hymnMid1",
+            "after": "Before the Throne of God Above"
+          },
+          {
+            "field": "liturgy.hymn3",
+            "from": "hymnMid2",
+            "after": "Christ, the Sure and Steady Anchor"
+          },
+          {
+            "field": "liturgy.hymn4",
+            "from": "hymnEnd1",
+            "after": "Ancient of Days"
+          },
+          {
+            "field": "liturgy.hymn5",
+            "from": "hymnEnd2",
+            "after": "He Will Hold Me Fast"
+          }
+        ]
+      }
+    ]
+  },
+  "samples": [
+    {
+      "date": "2023-02-04",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "Jesus, Strong and Kind"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Leaning on the Everlasting Arms"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "O the Deep, Deep Love of Jesus"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "The Goodness of Jesus"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Give Me Jesus"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Afflicted Saint, to Christ Draw Near"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Everlasting Arms"
+        }
+      ]
+    },
+    {
+      "date": "2023-02-18",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "In Christ Alone"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "A Mighty Fortress is Our God"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "The Church's One Foundation"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Christ Our Hope in Life and Death"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Christ, the Sure and Steady Anchor"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "'Tis So Sweet to Trust in Jesus"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Take My Life and Let It Be Consecrated"
+        }
+      ]
+    },
+    {
+      "date": "2023-03-10",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "Behold Our God"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Before the Throne of God Above"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "This Is My Father’s World"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "All Hail the Glorious Christ"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "O the Deep, Deep Love of Jesus"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Here Is Love"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "How Deep the Father’s Love for Us"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-30",
+      "fields": [
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Behold Our God"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "All Praise to Him"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Christ Is Mine Forevermore"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Here Is Love"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "In Christ Alone"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Christ Our Hope in Life and Death"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-06",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "His Mercy Is More"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "How Deep the Father’s Love for Us"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "Only a Holy God"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Before the Throne of God Above"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Turn Your Eyes Upon Jesus"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Great Is Thy Faithfulness"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "All Glory Be to Christ"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-13",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "To God Be the Glory"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Come, Behold the Wondrous Mystery"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "I Need Thee Every Hour"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Yet Not I, but Through Christ in Me"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "O Lord, My Rock and My Redeemer"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "He Will Hold Me Fast"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Afflicted Saint, to Christ Draw Near"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-20",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "Only a Holy God"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "All Creatures Of Our God And King"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "Great Is Thy Faithfulness"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "There is a Fountain Filled with Blood"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Come Thou Fount"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Christ Is Mine Forevermore"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Christ Our Hope in Life and Death"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-27",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "Come, Behold the Wondrous Mystery"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "O For a Thousand Tongues to Sing"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "I Will Sing of My Redeemer"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Yet Not I, but Through Christ in Me"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "O Lord, My Rock and My Redeemer"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Christ Is Mine Forevermore"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Gloryland"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-03",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "O Great God"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Whate’er My God Ordains Is Right"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "Everlasting Arms"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Jesus, Strong and Kind"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "How Rich a Treasure We Possess"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "The Church's One Foundation"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Gloryland"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-10",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "All Praise to Him"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Holy, Holy, Holy"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "He Will Hold Me Fast"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Before the Throne of God Above"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Lord, Have Mercy"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Take My Life and Let It Be Consecrated"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Doxology"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-17",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "All Creatures Of Our God And King"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Be Thou My Vision"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "How Deep the Father’s Love for Us"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Nothing but the Blood of Jesus"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Amazing Grace! How Sweet the Sound"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Only a Holy God"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "Jesus Paid It All"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-24",
+      "fields": [
+        "liturgy.hymn2",
+        "liturgy.hymn6",
+        "liturgy.hymn7",
+        "liturgy.hymn",
+        "liturgy.hymn3",
+        "liturgy.hymn4",
+        "liturgy.hymn5"
+      ],
+      "hymns": [
+        {
+          "field": "liturgy.hymn2",
+          "from": "preparatoryHymn",
+          "after": "Hark, I Hear the Harps Eternal"
+        },
+        {
+          "field": "liturgy.hymn6",
+          "from": "hymn1",
+          "after": "Only a Holy God"
+        },
+        {
+          "field": "liturgy.hymn7",
+          "from": "hymn2",
+          "after": "All Praise to Him"
+        },
+        {
+          "field": "liturgy.hymn",
+          "from": "hymnMid1",
+          "after": "Before the Throne of God Above"
+        },
+        {
+          "field": "liturgy.hymn3",
+          "from": "hymnMid2",
+          "after": "Christ, the Sure and Steady Anchor"
+        },
+        {
+          "field": "liturgy.hymn4",
+          "from": "hymnEnd1",
+          "after": "Ancient of Days"
+        },
+        {
+          "field": "liturgy.hymn5",
+          "from": "hymnEnd2",
+          "after": "He Will Hold Me Fast"
+        }
+      ]
+    }
+  ],
+  "sept13": {
+    "date": "2026-09-13",
+    "changes": [
+      {
+        "field": "liturgy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "name": "Jesus! What a Friend for Sinners",
+          "id": "76ZfFnJO2tEBjhUlw6Ei"
+        },
+        "after": {
+          "id": "xa2DYFHnmpmuIP9oA5zt",
+          "name": "'Tis So Sweet to Trust in Jesus"
+        }
+      },
+      {
+        "field": "decidedBy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "name": "Stephen Pursley",
+          "at": {
+            "_seconds": 1788804189,
+            "_nanoseconds": 767000000
+          }
+        },
+        "after": {
+          "name": "Stephen Pursley",
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "at": {
+            "_seconds": 1788802115,
+            "_nanoseconds": 329000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn6",
+        "from": "hymn1",
+        "label": "Hymn 1",
+        "before": null,
+        "after": {
+          "name": "How Rich a Treasure We Possess",
+          "id": "9Oq6E8z2g6DoQYagfXiw"
+        }
+      },
+      {
+        "field": "decidedBy.hymn6",
+        "from": "hymn1",
+        "label": "Hymn 1",
+        "before": null,
+        "after": {
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "name": "Stephen Pursley",
+          "at": {
+            "_seconds": 1788804370,
+            "_nanoseconds": 969000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn7",
+        "from": "hymn2",
+        "label": "Hymn 2",
+        "before": null,
+        "after": {
+          "name": "Jesus! What a Friend for Sinners",
+          "id": "76ZfFnJO2tEBjhUlw6Ei"
+        }
+      },
+      {
+        "field": "decidedBy.hymn7",
+        "from": "hymn2",
+        "label": "Hymn 2",
+        "before": null,
+        "after": {
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "name": "Stephen Pursley",
+          "at": {
+            "_seconds": 1788804189,
+            "_nanoseconds": 767000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn",
+        "from": "hymnMid1",
+        "label": "Hymn 3",
+        "before": null,
+        "after": {
+          "name": "Take My Life and Let It Be Consecrated",
+          "id": "RMRMQqK07lDpmlJ7jCsC"
+        }
+      },
+      {
+        "field": "decidedBy.hymn",
+        "from": "hymnMid1",
+        "label": "Hymn 3",
+        "before": null,
+        "after": {
+          "name": "Stephen Pursley",
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "at": {
+            "_seconds": 1788803510,
+            "_nanoseconds": 976000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn3",
+        "from": "hymnMid2",
+        "label": "Hymn 4",
+        "before": null,
+        "after": {
+          "name": "O the Deep, Deep Love of Jesus",
+          "id": "KEW5ZQOndtPC9AxcU8S8"
+        }
+      },
+      {
+        "field": "decidedBy.hymn3",
+        "from": "hymnMid2",
+        "label": "Hymn 4",
+        "before": null,
+        "after": {
+          "name": "Stephen Pursley",
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "at": {
+            "_seconds": 1788803999,
+            "_nanoseconds": 286000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn4",
+        "from": "hymnEnd1",
+        "label": "Hymn 5",
+        "before": null,
+        "after": {
+          "name": "All Hail the Power of Jesus’ Name",
+          "id": "8JCEU7pctvy3r4vzlNgg"
+        }
+      },
+      {
+        "field": "decidedBy.hymn4",
+        "from": "hymnEnd1",
+        "label": "Hymn 5",
+        "before": null,
+        "after": {
+          "name": "Stephen Pursley",
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "at": {
+            "_seconds": 1788802577,
+            "_nanoseconds": 469000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn5",
+        "from": "hymnEnd2",
+        "label": "Hymn 6",
+        "before": null,
+        "after": {
+          "name": "Victory in Jesus",
+          "id": "xf5JzfmzGgPXPPaO4NPZ"
+        }
+      },
+      {
+        "field": "decidedBy.hymn5",
+        "from": "hymnEnd2",
+        "label": "Hymn 6",
+        "before": null,
+        "after": {
+          "name": "Stephen Pursley",
+          "id": "tCsFJl0ingDA6E8IKSMi",
+          "at": {
+            "_seconds": 1788801465,
+            "_nanoseconds": 404000000
+          }
+        }
+      }
+    ],
+    "update": {
+      "liturgy.hymn2": {
+        "id": "xa2DYFHnmpmuIP9oA5zt",
+        "name": "'Tis So Sweet to Trust in Jesus"
+      },
+      "decidedBy.hymn2": {
+        "name": "Stephen Pursley",
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "at": {
+          "_seconds": 1788802115,
+          "_nanoseconds": 329000000
+        }
+      },
+      "liturgy.hymn6": {
+        "name": "How Rich a Treasure We Possess",
+        "id": "9Oq6E8z2g6DoQYagfXiw"
+      },
+      "decidedBy.hymn6": {
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "name": "Stephen Pursley",
+        "at": {
+          "_seconds": 1788804370,
+          "_nanoseconds": 969000000
+        }
+      },
+      "liturgy.hymn7": {
+        "name": "Jesus! What a Friend for Sinners",
+        "id": "76ZfFnJO2tEBjhUlw6Ei"
+      },
+      "decidedBy.hymn7": {
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "name": "Stephen Pursley",
+        "at": {
+          "_seconds": 1788804189,
+          "_nanoseconds": 767000000
+        }
+      },
+      "liturgy.hymn": {
+        "name": "Take My Life and Let It Be Consecrated",
+        "id": "RMRMQqK07lDpmlJ7jCsC"
+      },
+      "decidedBy.hymn": {
+        "name": "Stephen Pursley",
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "at": {
+          "_seconds": 1788803510,
+          "_nanoseconds": 976000000
+        }
+      },
+      "liturgy.hymn3": {
+        "name": "O the Deep, Deep Love of Jesus",
+        "id": "KEW5ZQOndtPC9AxcU8S8"
+      },
+      "decidedBy.hymn3": {
+        "name": "Stephen Pursley",
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "at": {
+          "_seconds": 1788803999,
+          "_nanoseconds": 286000000
+        }
+      },
+      "liturgy.hymn4": {
+        "name": "All Hail the Power of Jesus’ Name",
+        "id": "8JCEU7pctvy3r4vzlNgg"
+      },
+      "decidedBy.hymn4": {
+        "name": "Stephen Pursley",
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "at": {
+          "_seconds": 1788802577,
+          "_nanoseconds": 469000000
+        }
+      },
+      "liturgy.hymn5": {
+        "name": "Victory in Jesus",
+        "id": "xf5JzfmzGgPXPPaO4NPZ"
+      },
+      "decidedBy.hymn5": {
+        "name": "Stephen Pursley",
+        "id": "tCsFJl0ingDA6E8IKSMi",
+        "at": {
+          "_seconds": 1788801465,
+          "_nanoseconds": 404000000
+        }
+      }
+    }
+  },
+  "oct4": {
+    "date": "2026-10-04",
+    "changes": [
+      {
+        "field": "liturgy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "id": "7sqqhPqKQz9VhEE8fQIj",
+          "name": "O Lord, My Rock and My Redeemer"
+        },
+        "after": {
+          "id": "8ruN229vyOtBD3WSBe2o",
+          "name": "Rock of Ages"
+        }
+      },
+      {
+        "field": "decidedBy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191835,
+            "_nanoseconds": 705000000
+          }
+        },
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191902,
+            "_nanoseconds": 244000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn6",
+        "from": "hymn1",
+        "label": "Hymn 1",
+        "before": null,
+        "after": {
+          "id": "YDMLskC4BFJ9dpy4jamn",
+          "name": "God is for Us"
+        }
+      },
+      {
+        "field": "decidedBy.hymn6",
+        "from": "hymn1",
+        "label": "Hymn 1",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191841,
+            "_nanoseconds": 779000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn7",
+        "from": "hymn2",
+        "label": "Hymn 2",
+        "before": null,
+        "after": {
+          "id": "7sqqhPqKQz9VhEE8fQIj",
+          "name": "O Lord, My Rock and My Redeemer"
+        }
+      },
+      {
+        "field": "decidedBy.hymn7",
+        "from": "hymn2",
+        "label": "Hymn 2",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191835,
+            "_nanoseconds": 705000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn",
+        "from": "hymnMid1",
+        "label": "Hymn 3",
+        "before": null,
+        "after": {
+          "id": "q2tz65sxuUDi5z2lqvGp",
+          "name": "My Hope Is Built on Nothing Less"
+        }
+      },
+      {
+        "field": "decidedBy.hymn",
+        "from": "hymnMid1",
+        "label": "Hymn 3",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191747,
+            "_nanoseconds": 578000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn3",
+        "from": "hymnMid2",
+        "label": "Hymn 4",
+        "before": null,
+        "after": {
+          "id": "JT7TZo9sPRAAE29XGuau",
+          "name": "Everlasting Arms"
+        }
+      },
+      {
+        "field": "decidedBy.hymn3",
+        "from": "hymnMid2",
+        "label": "Hymn 4",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191185,
+            "_nanoseconds": 529000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn4",
+        "from": "hymnEnd1",
+        "label": "Hymn 5",
+        "before": null,
+        "after": {
+          "id": "BXSGAtz33p15dHS9F7lc",
+          "name": "A Mighty Fortress is Our God"
+        }
+      },
+      {
+        "field": "decidedBy.hymn4",
+        "from": "hymnEnd1",
+        "label": "Hymn 5",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787191788,
+            "_nanoseconds": 606000000
+          }
+        }
+      },
+      {
+        "field": "liturgy.hymn5",
+        "from": "hymnEnd2",
+        "label": "Hymn 6",
+        "before": null,
+        "after": {
+          "name": "The Church's One Foundation",
+          "id": "vnPcDjRelerbR49vSy8D"
+        }
+      },
+      {
+        "field": "decidedBy.hymn5",
+        "from": "hymnEnd2",
+        "label": "Hymn 6",
+        "before": null,
+        "after": {
+          "id": "3nJTurw7cVDYqbVJ3K3X",
+          "name": "Preston Jacks",
+          "at": {
+            "_seconds": 1787192026,
+            "_nanoseconds": 236000000
+          }
+        }
+      }
+    ],
+    "update": {
+      "liturgy.hymn2": {
+        "id": "8ruN229vyOtBD3WSBe2o",
+        "name": "Rock of Ages"
+      },
+      "decidedBy.hymn2": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191902,
+          "_nanoseconds": 244000000
+        }
+      },
+      "liturgy.hymn6": {
+        "id": "YDMLskC4BFJ9dpy4jamn",
+        "name": "God is for Us"
+      },
+      "decidedBy.hymn6": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191841,
+          "_nanoseconds": 779000000
+        }
+      },
+      "liturgy.hymn7": {
+        "id": "7sqqhPqKQz9VhEE8fQIj",
+        "name": "O Lord, My Rock and My Redeemer"
+      },
+      "decidedBy.hymn7": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191835,
+          "_nanoseconds": 705000000
+        }
+      },
+      "liturgy.hymn": {
+        "id": "q2tz65sxuUDi5z2lqvGp",
+        "name": "My Hope Is Built on Nothing Less"
+      },
+      "decidedBy.hymn": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191747,
+          "_nanoseconds": 578000000
+        }
+      },
+      "liturgy.hymn3": {
+        "id": "JT7TZo9sPRAAE29XGuau",
+        "name": "Everlasting Arms"
+      },
+      "decidedBy.hymn3": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191185,
+          "_nanoseconds": 529000000
+        }
+      },
+      "liturgy.hymn4": {
+        "id": "BXSGAtz33p15dHS9F7lc",
+        "name": "A Mighty Fortress is Our God"
+      },
+      "decidedBy.hymn4": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787191788,
+          "_nanoseconds": 606000000
+        }
+      },
+      "liturgy.hymn5": {
+        "name": "The Church's One Foundation",
+        "id": "vnPcDjRelerbR49vSy8D"
+      },
+      "decidedBy.hymn5": {
+        "id": "3nJTurw7cVDYqbVJ3K3X",
+        "name": "Preston Jacks",
+        "at": {
+          "_seconds": 1787192026,
+          "_nanoseconds": 236000000
+        }
+      }
+    }
+  },
+  "oct11": {
+    "date": "2026-10-11",
+    "changes": [
+      {
+        "field": "liturgy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "id": "9upNAic6U61hVNO51rLa",
+          "name": "O Great God"
+        },
+        "after": {
+          "id": "tmtyb1aMRY6EJKnVazxh",
+          "name": "Come, Thou Fount of Every Blessing"
+        }
+      },
+      {
+        "field": "decidedBy.hymn2",
+        "from": "preparatoryHymn",
+        "label": "Preparatory Hymn",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791559984,
+            "_nanoseconds": 508000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791260008,
+            "_nanoseconds": 890000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn6",
+        "from": "hymn1",
+        "label": "Hymn 1",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495790,
+            "_nanoseconds": 98000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791259005,
+            "_nanoseconds": 17000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn7",
+        "from": "hymn2",
+        "label": "Hymn 2",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495797,
+            "_nanoseconds": 993000000
+          }
+        },
+        "after": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791559984,
+            "_nanoseconds": 508000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn",
+        "from": "hymnMid1",
+        "label": "Hymn 3",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495829,
+            "_nanoseconds": 773000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791259201,
+            "_nanoseconds": 161000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn3",
+        "from": "hymnMid2",
+        "label": "Hymn 4",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495839,
+            "_nanoseconds": 221000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791259909,
+            "_nanoseconds": 473000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn4",
+        "from": "hymnEnd1",
+        "label": "Hymn 5",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495879,
+            "_nanoseconds": 453000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791260146,
+            "_nanoseconds": 462000000
+          }
+        }
+      },
+      {
+        "field": "decidedBy.hymn5",
+        "from": "hymnEnd2",
+        "label": "Hymn 6",
+        "before": {
+          "id": "CErA3v4J4hVm0iLfdG9Y",
+          "name": "Jonathan Harris",
+          "at": {
+            "_seconds": 1791495885,
+            "_nanoseconds": 344000000
+          }
+        },
+        "after": {
+          "id": "wvz40j5PsqbZI9cl9I99",
+          "name": "Dawson Baker",
+          "at": {
+            "_seconds": 1791259628,
+            "_nanoseconds": 388000000
+          }
+        }
+      }
+    ],
+    "update": {
+      "liturgy.hymn2": {
+        "id": "tmtyb1aMRY6EJKnVazxh",
+        "name": "Come, Thou Fount of Every Blessing"
+      },
+      "decidedBy.hymn2": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791260008,
+          "_nanoseconds": 890000000
+        }
+      },
+      "decidedBy.hymn6": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791259005,
+          "_nanoseconds": 17000000
+        }
+      },
+      "decidedBy.hymn7": {
+        "id": "CErA3v4J4hVm0iLfdG9Y",
+        "name": "Jonathan Harris",
+        "at": {
+          "_seconds": 1791559984,
+          "_nanoseconds": 508000000
+        }
+      },
+      "decidedBy.hymn": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791259201,
+          "_nanoseconds": 161000000
+        }
+      },
+      "decidedBy.hymn3": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791259909,
+          "_nanoseconds": 473000000
+        }
+      },
+      "decidedBy.hymn4": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791260146,
+          "_nanoseconds": 462000000
+        }
+      },
+      "decidedBy.hymn5": {
+        "id": "wvz40j5PsqbZI9cl9I99",
+        "name": "Dawson Baker",
+        "at": {
+          "_seconds": 1791259628,
+          "_nanoseconds": 388000000
+        }
+      }
+    }
+  }
+}
