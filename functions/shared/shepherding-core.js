@@ -861,14 +861,28 @@
         return noteCreatedAtMs(person && person.createdAt);
     }
 
-    // People list sort (MS-756). Newest-first for date added and tag date;
-    // unknown timestamps sink to the bottom. Tie-break on name.
+    // Default direction per sort key (MS-756). Elders can flip with sortDir asc/desc.
+    function defaultPeopleSortDir(sortBy) {
+        if (sortBy === 'added' || sortBy === 'tagDate') return 'desc';
+        return 'asc';
+    }
+
+    function flipPeopleSortDiff(diff, sortBy, sortDir) {
+        if (diff === 0) return 0;
+        const dir = sortDir || defaultPeopleSortDir(sortBy);
+        return dir === defaultPeopleSortDir(sortBy) ? diff : -diff;
+    }
+
+    // People list sort (MS-756). Unknown timestamps sink to the bottom. Tie-break on name.
     function comparePeopleList(a, b, sortBy, options) {
         const opts = options || {};
         const tagHolds = opts.tagHolds || {};
         const tagId = opts.tagId || null;
+        const sortDir = opts.sortDir;
         const nameTie = () => String(a && a.name || '').localeCompare(String(b && b.name || ''));
-        if (sortBy === 'name') return nameTie();
+        if (sortBy === 'name') {
+            return flipPeopleSortDiff(nameTie(), sortBy, sortDir);
+        }
         if (sortBy === 'attention') {
             const aTs = a && a.lastNoteAt;
             const bTs = b && b.lastNoteAt;
@@ -878,7 +892,7 @@
             const aTime = noteCreatedAtMs(aTs);
             const bTime = noteCreatedAtMs(bTs);
             const diff = (aTime || 0) - (bTime || 0);
-            return diff !== 0 ? diff : nameTie();
+            return diff !== 0 ? flipPeopleSortDiff(diff, sortBy, sortDir) : nameTie();
         }
         if (sortBy === 'added') {
             const aMs = personCreatedAtMs(a);
@@ -887,7 +901,7 @@
             if (aMs === null) return 1;
             if (bMs === null) return -1;
             const diff = bMs - aMs;
-            return diff !== 0 ? diff : nameTie();
+            return diff !== 0 ? flipPeopleSortDiff(diff, sortBy, sortDir) : nameTie();
         }
         if (sortBy === 'tagDate' && tagId) {
             const aSince = ((tagHolds[a && a.id] || {})[tagId] || {}).heldSinceMs;
@@ -896,7 +910,7 @@
             if (aSince == null) return 1;
             if (bSince == null) return -1;
             const diff = bSince - aSince;
-            return diff !== 0 ? diff : nameTie();
+            return diff !== 0 ? flipPeopleSortDiff(diff, sortBy, sortDir) : nameTie();
         }
         return nameTie();
     }
@@ -1059,6 +1073,7 @@
         noteCreatedAtMs,
         personCreatedAtMs,
         comparePeopleList,
+        defaultPeopleSortDir,
         latestNoteAt,
         lastNoteAtCreatePatch,
         lastNoteAtFromRemaining,

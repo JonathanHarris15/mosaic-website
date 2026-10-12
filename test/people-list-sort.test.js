@@ -33,3 +33,9 @@ test('comparePeopleList sinks unknown tag hold when sorting by tag date', () => 
     const tagHolds = { p1: { T: { heldSinceMs: 1000, durationMs: DAY } } };
     assert.ok(Core.comparePeopleList(unknown, known, 'tagDate', { tagHolds, tagId: 'T' }) > 0);
 });
+
+test('comparePeopleList flips date added when sortDir is asc', () => {
+    const a = { name: 'A', createdAt: { toMillis: () => 1000 } };
+    const b = { name: 'B', createdAt: { toMillis: () => 1000 + DAY } };
+    assert.ok(Core.comparePeopleList(a, b, 'added', { sortDir: 'asc' }) < 0);
+});

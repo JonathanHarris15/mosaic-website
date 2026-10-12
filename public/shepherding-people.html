@@ -95,7 +95,14 @@
             margin-bottom: var(--space-sm);
         }
         .people-toolbar .m-search { flex: 1 1 220px; min-width: 0; max-width: none; }
+        .people-sort-wrap {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 0 0 auto;
+        }
         .people-sort { flex: 0 0 auto; }
+        .people-sort-dir { flex: 0 0 auto; }
         .people-sort .m-seg__opt {
             letter-spacing: 0;
             text-transform: none;
@@ -501,12 +508,18 @@
                 <span class="material-symbols-outlined" aria-hidden="true">search</span>
                 <input type="text" x-model="search" placeholder="Search by name…" aria-label="Search by name">
             </label>
-            <div class="people-sort m-seg" role="group" aria-label="Sort">
-                <button type="button" class="m-seg__opt" @click="sortBy = 'name'" :aria-pressed="sortBy === 'name'">Name</button>
-                <button type="button" class="m-seg__opt" @click="sortBy = 'added'" :aria-pressed="sortBy === 'added'">Date added</button>
-                <button type="button" class="m-seg__opt" x-show="tagFilters.length === 1" x-cloak
-                    @click="sortBy = 'tagDate'" :aria-pressed="sortBy === 'tagDate'">Tag date</button>
-                <button type="button" class="m-seg__opt" @click="sortBy = 'attention'" :aria-pressed="sortBy === 'attention'">Needs attention</button>
+            <div class="people-sort-wrap">
+                <div class="people-sort m-seg" role="group" aria-label="Sort">
+                    <button type="button" class="m-seg__opt" @click="pickSortBy('name')" :aria-pressed="sortBy === 'name'">Name</button>
+                    <button type="button" class="m-seg__opt" @click="pickSortBy('added')" :aria-pressed="sortBy === 'added'">Date added</button>
+                    <button type="button" class="m-seg__opt" x-show="tagFilters.length === 1" x-cloak
+                        @click="pickSortBy('tagDate')" :aria-pressed="sortBy === 'tagDate'">Tag date</button>
+                    <button type="button" class="m-seg__opt" @click="pickSortBy('attention')" :aria-pressed="sortBy === 'attention'">Needs attention</button>
+                </div>
+                <button type="button" class="m-icon-btn people-sort-dir" @click="toggleSortDir()"
+                    :aria-label="sortDirAriaLabel()" :title="sortDirAriaLabel()">
+                    <span class="material-symbols-outlined" aria-hidden="true" x-text="sortDirIcon()"></span>
+                </button>
             </div>
             <p class="people-count m-label">
                 <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> shown

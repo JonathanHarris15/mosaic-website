@@ -437,7 +437,7 @@
     var user = props.user || {};
     var loadingS = useState(true), errS = useState(false);
     var peopleS = useState([]), tagsS = useState([]), viewsS = useState([]);
-    var searchS = useState(""), sortByS = useState("name"), filtersOpenS = useState(false);
+    var searchS = useState(""), sortByS = useState("name"), sortDirS = useState("asc"), filtersOpenS = useState(false);
     var tagFiltersS = useState([]), tagModeS = useState("any"), statusZonesS = useState([]);
     var tagHoldsS = useState({}), holdsLoadedS = useState(false);
     var showSaveS = useState(false), saveNameS = useState("");
@@ -452,6 +452,10 @@
     var tagFilters = tagFiltersS[0], tagMode = tagModeS[0], statusZones = statusZonesS[0];
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
+    function pickSort(key) {
+      if (sortByS[0] === key) sortDirS[1](sortDirS[0] === "asc" ? "desc" : "asc");
+      else { sortByS[1](key); sortDirS[1](window.ShepherdingCore.defaultPeopleSortDir(key)); }
+    }
 
     var userKnown = props.user !== undefined;
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
@@ -494,6 +498,7 @@
       return window.ShepherdingCore.comparePeopleList(a, b, sortKey, {
         tagHolds: tagHoldsS[0],
         tagId: sortKey === "tagDate" ? tagFilters[0] : null,
+        sortDir: sortDirS[0],
       });
     });
 
@@ -522,11 +527,17 @@
     function saveView() {
       if (!canDecide) return;
       var t = saveNameS[0].trim(); if (!t) return;
-      data.addShepherdingView({ title: t, filterTags: tagFilters.slice(), filterMode: tagMode, statusZoneFilters: statusZones.slice(), sortBy: sortByS[0], tagHoldFilters: {}, tagHoldCmp: {} }, user)
+      data.addShepherdingView({ title: t, filterTags: tagFilters.slice(), filterMode: tagMode, statusZoneFilters: statusZones.slice(), sortBy: sortByS[0], sortDir: sortDirS[0], tagHoldFilters: {}, tagHoldCmp: {} }, user)
         .then(function () { saveNameS[1](""); showSaveS[1](false); data.getShepherdingViews().then(viewsS[1]); showToast("View saved"); })
         .catch(function () { showToast("Error saving view", "error"); });
     }
-    function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
+    function loadView(v) {
+      tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice());
+      if (v.sortBy) sortByS[1](v.sortBy);
+      if (v.sortDir === "asc" || v.sortDir === "desc") sortDirS[1](v.sortDir);
+      else if (v.sortBy) sortDirS[1](window.ShepherdingCore.defaultPeopleSortDir(v.sortBy));
+      showToast("Loaded “" + v.title + "”");
+    }
 
     var addBtn = html`<button onClick=${function () { addModalS[1](true); }} aria-label="Add person" style=${Object.assign({}, iconBtn, { color: "var(--primary)", marginRight: 4, width: 40, height: 40 })}>${Ic("user-plus", 20)}</button>`;
 
@@ -562,9 +573,10 @@
                 return o[0] !== "tagDate" || tagFilters.length === 1;
               }).map(function (o) {
                 var on = sortByS[0] === o[0];
-                return html`<button key=${o[0]} onClick=${function () { sortByS[1](o[0]); }} style=${{ flex: 1, padding: "7px 6px", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600, background: on ? "var(--surface-container-lowest)" : "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", boxShadow: on ? "var(--shadow-xs)" : "none" }}>${o[1]}</button>`;
+                return html`<button key=${o[0]} onClick=${function () { pickSort(o[0]); }} style=${{ flex: 1, padding: "7px 6px", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600, background: on ? "var(--surface-container-lowest)" : "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", boxShadow: on ? "var(--shadow-xs)" : "none" }}>${o[1]}</button>`;
               })}
             </div>
+            <button type="button" onClick=${function () { sortDirS[1](sortDirS[0] === "asc" ? "desc" : "asc"); }} aria-label="Reverse sort order" style=${Object.assign({}, iconBtn, { width: 36, height: 36, flexShrink: 0, color: "var(--primary)" })}>${Ic(sortDirS[0] === "asc" ? "arrow-up" : "arrow-down", 20)}</button>
           </div>
 
           ${filtersOpenS[0] ? html`<div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", marginBottom: 16, overflow: "hidden" }}>

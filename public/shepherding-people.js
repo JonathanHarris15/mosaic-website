@@ -24,6 +24,7 @@ document.addEventListener('alpine:init', () => {
         tagFilterMode: 'any',
         statusZoneFilters: [],
         sortBy: 'name',
+        sortDir: 'asc',
         // Inactive people are hidden from the People list by default; this toggle
         // (in Filters) reveals them (ADR-0012 — inactive is orthogonal to the Track).
         showInactive: false,
@@ -81,6 +82,12 @@ document.addEventListener('alpine:init', () => {
                 if (savedShowInactive) this.showInactive = savedShowInactive === 'true';
                 const savedSort = sessionStorage.getItem('shepherding_sortBy');
                 if (savedSort) this.sortBy = savedSort;
+                const savedSortDir = sessionStorage.getItem('shepherding_sortDir');
+                if (savedSortDir === 'asc' || savedSortDir === 'desc') {
+                    this.sortDir = savedSortDir;
+                } else if (savedSort) {
+                    this.sortDir = ShepherdingCore.defaultPeopleSortDir(this.sortBy);
+                }
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
@@ -94,10 +101,14 @@ document.addEventListener('alpine:init', () => {
             });
             this.$watch('tagHoldCmp', val => sessionStorage.setItem('shepherding_tagHoldCmp', JSON.stringify(val)));
             this.$watch('showInactive', val => sessionStorage.setItem('shepherding_showInactive', String(val)));
-            this.$watch('sortBy', val => {
+            this.$watch('sortBy', (val, prev) => {
                 sessionStorage.setItem('shepherding_sortBy', val);
+                if (prev !== undefined && val !== prev) {
+                    this.sortDir = ShepherdingCore.defaultPeopleSortDir(val);
+                }
                 if (val === 'tagDate' && !this.holdsLoaded) this.loadTagHolds();
             });
+            this.$watch('sortDir', val => sessionStorage.setItem('shepherding_sortDir', val));
             this.$watch('tagFilters', val => {
                 if (val.length !== 1 && this.sortBy === 'tagDate') this.sortBy = 'name';
             });
@@ -278,6 +289,7 @@ document.addEventListener('alpine:init', () => {
                 result = [...result].sort((a, b) => ShepherdingCore.comparePeopleList(a, b, sortKey, {
                     tagHolds: this.tagHolds,
                     tagId,
+                    sortDir: this.sortDir,
                 }));
             } else {
                 result = [...result].sort((a, b) => ShepherdingCore.comparePeopleList(a, b, 'name'));
@@ -360,6 +372,36 @@ document.addEventListener('alpine:init', () => {
         // Direction, in words: 'recent' (held less than) or 'older' (held at
         // least, the default). The core owns the wording so this panel and the
         // Filtered View editor cannot drift apart again (MS-279).
+        pickSortBy(key) {
+            if (this.sortBy === key) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortBy = key;
+            }
+        },
+        toggleSortDir() {
+            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+        },
+        sortDirIcon() {
+            return this.sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward';
+        },
+        sortDirAriaLabel() {
+            const lowHigh = this.sortDir === 'asc' ? 'low to high' : 'high to low';
+            if (this.sortBy === 'name') {
+                return this.sortDir === 'asc' ? 'Name A to Z' : 'Name Z to A';
+            }
+            if (this.sortBy === 'added') {
+                return this.sortDir === 'desc' ? 'Date added, newest first' : 'Date added, oldest first';
+            }
+            if (this.sortBy === 'tagDate') {
+                return this.sortDir === 'desc' ? 'Tag date, newest first' : 'Tag date, oldest first';
+            }
+            if (this.sortBy === 'attention') {
+                return this.sortDir === 'asc' ? 'Needs attention, oldest note first' : 'Needs attention, newest note first';
+            }
+            return `Sort ${lowHigh}`;
+        },
+
         holdDirectionWord(tagId) { return ShepherdingCore.holdDirectionWord(this.tagHoldCmp[tagId]); },
         holdDirectionHint(tagId) { return ShepherdingCore.holdDirectionHint(this.tagHoldCmp[tagId]); },
         holdScrubberLabel(tagId) {
@@ -413,6 +455,7 @@ document.addEventListener('alpine:init', () => {
             this.tagFilterMode = view.filterMode || 'any';
             this.statusZoneFilters = view.statusZoneFilters || [];
             if (view.sortBy) this.sortBy = view.sortBy;
+            if (view.sortDir === 'asc' || view.sortDir === 'desc') this.sortDir = view.sortDir;
         },
 
         async saveFilterView() {
@@ -426,6 +469,7 @@ document.addEventListener('alpine:init', () => {
                     filterMode: this.tagFilterMode,
                     statusZoneFilters: this.statusZoneFilters,
                     sortBy: this.sortBy,
+                    sortDir: this.sortDir,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     createdBy: auth.currentUser.uid,
                 };
