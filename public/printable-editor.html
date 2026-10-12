@@ -71,8 +71,8 @@
                         <span class="material-symbols-outlined">menu</span><span class="m-btn__label">File</span>
                     </button>
                     <div class="pe-menu" x-show="fileMenu" x-cloak @click.outside="fileMenu = false">
-                        <button type="button" @click="printPrintable()" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span> <kbd>Ctrl+P</kbd></button>
-                        <button type="button" @click="printFolio()" title="Two pages on each landscape sheet, in the same order as the service guide. Fold the stack and leave the copier booklet mode off."><span class="material-symbols-outlined" aria-hidden="true">print</span>Print folio…</button>
+                        <button type="button" @click="printPrintable()" aria-label="Print" :title="wantsBookletExport ? 'Flat pages padded to a multiple of 4. Use the copier\'s Booklet / Saddle mode.' : 'Print these pages as they stand.'"><span class="material-symbols-outlined" aria-hidden="true">print</span><span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span> <kbd>Ctrl+P</kbd></button>
+                        <button type="button" @click="printFolio()" aria-label="Print folio" title="Print folio: two pages on each landscape sheet, in the same order as the service guide. Fold the stack and leave the copier booklet mode off."><span class="material-symbols-outlined" aria-hidden="true">menu_book</span>Print folio…</button>
                         <button type="button" @click="openSendSnapshot()"><span class="material-symbols-outlined">picture_as_pdf</span>Send snapshot to…</button>
                         <button type="button" @click="startSaveTemplate()"><span class="material-symbols-outlined">bookmark_add</span>Save this page as a template</button>
                         <button type="button" @click="fileMenu = false; fitToView()"><span class="material-symbols-outlined">fit_screen</span>Fit page to view <kbd>Ctrl+0</kbd></button>
@@ -1107,6 +1107,38 @@
         </div>
     </div>
 
+    <!-- Temporary folio pad: brush a page, stamp into gaps until ×4. -->
+    <div class="pe-scrim" x-show="folioPadOpen" x-cloak @click.self="closeFolioPad()" @keydown.escape.window="closeFolioPad()">
+        <div class="pe-dialog pe-dialog--folio" role="dialog" aria-modal="true" aria-labelledby="pe-folio-pad-title">
+            <div class="folio-pad">
+                <div class="folio-pad__main">
+                    <h2 id="pe-folio-pad-title" class="m-headline-lg">Fill the folio fold</h2>
+                    <p class="pe-hint">Click a page to set the brush. Click a gap to place a copy there. Temporary for this print only — nothing is saved on the printable.</p>
+                    <p class="m-notice m-notice--error" x-show="folioPadError" x-text="folioPadError" aria-live="polite"></p>
+                    <div id="pe-folio-board" class="folio-pad__board" role="list" aria-label="Pages for folio print"></div>
+                </div>
+                <aside class="folio-pad__side" aria-live="polite">
+                    <div class="folio-pad__count">
+                        <span class="folio-pad__count-n" x-text="folioPadNeedCount"></span>
+                        <span class="folio-pad__count-label">left</span>
+                        <span class="folio-pad__count-to">to <strong x-text="folioPadTargetCount"></strong> pages</span>
+                    </div>
+                    <p class="folio-pad__brush" x-show="folioPadBrushLabel">
+                        <span class="folio-pad__brush-k">Brush</span>
+                        <span class="folio-pad__brush-v" x-text="folioPadBrushLabel"></span>
+                    </p>
+                    <p class="folio-pad__brush folio-pad__brush--empty" x-show="!folioPadBrushLabel">Click a page to set the brush.</p>
+                    <p class="folio-pad__tip" x-show="folioPadNeedCount > 0 && folioPadBrushLabel">Then click a gap between pages to insert it.</p>
+                    <p class="folio-pad__tip" x-show="folioPadReady">Fold is full. Print when ready.</p>
+                    <div class="folio-pad__acts">
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="closeFolioPad()">Cancel</button>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" :disabled="!folioPadReady" @click="confirmFolioPadPrint()">Print folio</button>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </div>
+
     <!-- The print layer: filled on print, empty otherwise. -->
     <div id="pe-print" class="pe-print"></div>
 
@@ -1520,7 +1552,79 @@
         .pe-scrim { position: fixed; inset: 0; background: rgba(4,22,46,.45); display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px; }
         .pe-dialog { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl, 16px); padding: 24px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 92vh; overflow: auto; }
         .pe-dialog--picker { max-width: 760px; }
+        .pe-dialog--folio { max-width: min(1120px, 96vw); padding: 20px; }
         .pe-dialog__acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+        .folio-pad {
+            display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px;
+            min-height: 0; max-height: calc(92vh - 40px);
+        }
+        .folio-pad__main { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+        .folio-pad__board {
+            display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start;
+            gap: 0 2px; row-gap: 16px; overflow: auto; padding: 8px 4px 16px;
+            background: var(--surface-container); border: 1px solid var(--outline-variant);
+            border-radius: var(--radius); min-height: 240px; flex: 1 1 auto;
+        }
+        .folio-pad__card { width: 140px; display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+        .folio-pad__card.is-brush .folio-pad__pick { box-shadow: 0 0 0 2px var(--primary); border-color: var(--primary); }
+        .folio-pad__card.is-pad .folio-pad__pick { outline: 1px dashed var(--outline); }
+        .folio-pad__meta { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 0 2px; font-size: 11px; }
+        .folio-pad__num { font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+        .folio-pad__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--on-surface-variant); }
+        .folio-pad__remove { border: 0; background: transparent; padding: 0; cursor: pointer; color: var(--on-surface-variant); display: inline-flex; border-radius: 4px; }
+        .folio-pad__remove:hover { color: var(--error, #b3261e); }
+        .folio-pad__remove .material-symbols-outlined { font-size: 16px; }
+        .folio-pad__pick {
+            display: block; width: 100%; padding: 0; border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-sm, 8px); background: #fff; cursor: pointer; overflow: hidden;
+        }
+        .folio-pad__pick:disabled { cursor: default; opacity: .85; }
+        .folio-pad__pick:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .folio-pad__thumb { position: relative; width: 100%; overflow: hidden; background: #fff; pointer-events: none; }
+        .folio-pad__thumb-inner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+        .folio-pad__gap {
+            width: 22px; align-self: stretch; min-height: 120px; margin-top: 22px;
+            border: 0; padding: 0; background: transparent; cursor: default; position: relative;
+            border-radius: 4px; flex: 0 0 auto;
+        }
+        .folio-pad__gap.is-open { cursor: pointer; }
+        .folio-pad__gap-tick {
+            position: absolute; left: 50%; top: 12px; bottom: 12px; width: 2px;
+            transform: translateX(-50%); background: var(--tertiary); opacity: 0; border-radius: 1px;
+        }
+        .folio-pad__gap.is-open:hover .folio-pad__gap-tick,
+        .folio-pad__gap.is-open:focus-visible .folio-pad__gap-tick { opacity: .9; }
+        .folio-pad__gap.is-open::after {
+            content: 'add'; font-family: 'Material Symbols Outlined';
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            font-size: 16px; color: var(--primary); opacity: 0;
+        }
+        .folio-pad__gap.is-open:hover::after,
+        .folio-pad__gap.is-open:focus-visible::after { opacity: 1; }
+        .folio-pad__gap.is-open:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+        .folio-pad__gap.is-blocked { opacity: .25; }
+        .folio-pad__side {
+            display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius);
+            background: var(--surface-container); border: 1px solid var(--outline-variant); align-self: stretch;
+        }
+        .folio-pad__count { display: flex; flex-direction: column; gap: 2px; }
+        .folio-pad__count-n { font: 700 48px/1 var(--font-serif); color: var(--primary); font-variant-numeric: tabular-nums; }
+        .folio-pad__count-label { font-size: 14px; font-weight: 600; color: var(--on-surface); }
+        .folio-pad__count-to { font-size: 13px; color: var(--on-surface-variant); }
+        .folio-pad__brush { margin: 0; font-size: 13px; line-height: 1.35; }
+        .folio-pad__brush-k {
+            display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--on-surface-variant); margin-bottom: 2px;
+        }
+        .folio-pad__brush-v { color: var(--on-surface); font-weight: 600; }
+        .folio-pad__brush--empty, .folio-pad__tip { margin: 0; font-size: 12.5px; color: var(--on-surface-variant); line-height: 1.4; }
+        .folio-pad__acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+        @media (max-width: 800px) {
+            .folio-pad { grid-template-columns: 1fr; max-height: none; }
+            .folio-pad__side { order: -1; }
+            .folio-pad__count { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+            .folio-pad__count-n { font-size: 36px; }
+        }
         .pe-picker__tabs { align-self: flex-start; }
         .pe-picker__papers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0; }
         .pe-paper { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); cursor: pointer; }

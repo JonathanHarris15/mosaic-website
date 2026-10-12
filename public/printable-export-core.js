@@ -13,6 +13,13 @@
 // it, and choosing it does not change the flat export. The sheet is
 // twice the page width (half letter lands on letter landscape).
 //
+// Folio pad tool. When the laid-out stack is not a multiple of 4,
+// the print UI lets the operator duplicate a page (or add a blank)
+// into a temporary print-only stack until it folds cleanly. Those
+// leaves never write the printable. Insert slots follow the same
+// overflow-run rule as the pages filmstrip. Page numbers on the
+// temporary stack are restamped for the print order.
+//
 // Pure: no DOM, no jsPDF. The print UI calls these on the layout
 // PrintableLive already produced.
 
@@ -156,7 +163,8 @@
     // indices sum to n-1; even spreads put the high page on the left, odd
     // spreads flip. Blank leaves are real empty pages so a print can draw them.
     // This always pads — folio is a folded booklet, including for a Printable
-    // that would not pad on the flat path.
+    // that would not pad on the flat path. Prefer `folioPadEntries` first so
+    // the operator can fill with duplicated content instead of blanks.
     function folioSpreads(entries) {
         const padded = padEntries(Array.isArray(entries) ? entries : []);
         const n = padded.length;
@@ -191,6 +199,207 @@
             + ' .pr-folio-leaf > .pr-page { transform: scale(' + s + '); transform-origin: 0 0; }';
     }
 
+    function deepClone(v) {
+        return JSON.parse(JSON.stringify(v));
+    }
+
+    function cloneEntriesForFolio(entries) {
+        return deepClone(Array.isArray(entries) ? entries : []);
+    }
+
+    function folioNeedsPad(entries) {
+        return blankPadCount((entries || []).length) > 0;
+    }
+
+    function folioPadNeed(entries) {
+        return blankPadCount((entries || []).length);
+    }
+
+    function entryLabel(entry, index) {
+        const name = (entry && entry.page && entry.page.name) || '';
+        const n = Math.round(Number(index)) + 1;
+        const base = 'Page ' + (Number.isFinite(n) && n > 0 ? n : '?');
+        if (entry && entry.folioPad) {
+            return name ? (base + ' · ' + name + ' (print only)') : (base + ' (print only)');
+        }
+        return name ? (base + ' · ' + name) : base;
+    }
+
+    // Same rule as PrintableCore.canInsertAfter: never between two sheets of
+    // one overflow run (`continues.from` chain).
+    function canInsertAfterEntry(entries, index) {
+        const list = entries || [];
+        if (index < -1 || index >= list.length) return false;
+        if (index < 0 || index >= list.length - 1) return true;
+        const a = list[index] && list[index].page;
+        const b = list[index + 1] && list[index + 1].page;
+        if (!a || !b || !b.continues || !b.continues.from) return true;
+        const from = b.continues.from;
+        if (a.id === from) return false;
+        if (a.continues && a.continues.from === from) return false;
+        return true;
+    }
+
+    function folioInsertAfterOptions(entries) {
+        const list = entries || [];
+        const opts = [{ afterIndex: -1, label: 'At the start' }];
+        for (let i = 0; i < list.length; i++) {
+            if (!canInsertAfterEntry(list, i)) continue;
+            opts.push({ afterIndex: i, label: 'After ' + entryLabel(list[i], i) });
+        }
+        return opts;
+    }
+
+    function folioSourceOptions(entries) {
+        const list = entries || [];
+        const opts = [{ kind: 'blank', sourceIndex: -1, label: 'Blank page' }];
+        list.forEach((entry, i) => {
+            if (!entry || entry.blank) return;
+            opts.push({ kind: 'duplicate', sourceIndex: i, label: entryLabel(entry, i) });
+        });
+        return opts;
+    }
+
+    function pageNumberDisplay(pageIndex, startAt) {
+        const start = Math.max(1, Math.round(Number(startAt)) || 1);
+        const physical = Math.round(Number(pageIndex)) + 1;
+        if (!Number.isFinite(physical) || physical < 1) return null;
+        if (physical < start) return null;
+        return physical - start + 1;
+    }
+
+    function restampPageNumberNodes(nodes, pageIndex) {
+        (nodes || []).forEach(node => {
+            if (!node) return;
+            if (node.bind) {
+                Object.keys(node.bind).forEach(prop => {
+                    const bind = node.bind[prop];
+                    if (!bind || bind.source !== 'insert_page_number') return;
+                    if (bind.field === 'edgeClass') {
+                        const edge = pageIndex % 2 === 1 ? 'left' : 'right';
+                        const val = 'm-pagenum m-pagenum--' + edge;
+                        if (prop === 'class' || prop === 'className') {
+                            node.attrs = Object.assign({}, node.attrs, { class: val });
+                        } else if (prop === 'text') {
+                            node.text = val;
+                        } else {
+                            node.attrs = Object.assign({}, node.attrs, { [prop]: val });
+                        }
+                        return;
+                    }
+                    const n = pageNumberDisplay(pageIndex, (bind.params || {}).startAt);
+                    if (n == null) {
+                        if (prop === 'text') {
+                            node.text = '';
+                            node.children = [];
+                        } else {
+                            node.attrs = Object.assign({}, node.attrs, { [prop]: '' });
+                        }
+                    } else if (prop === 'text') {
+                        node.text = String(n);
+                        node.children = [];
+                    } else {
+                        node.attrs = Object.assign({}, node.attrs, { [prop]: String(n) });
+                    }
+                });
+            }
+            if (node.children) restampPageNumberNodes(node.children, pageIndex);
+        });
+    }
+
+    function restampFolioPageNumbers(entries) {
+        (entries || []).forEach((entry, i) => {
+            if (!entry) return;
+            entry.pageIndex = i;
+            restampPageNumberNodes(entry.nodes, i);
+            if (entry.page && entry.page.nodes && entry.page.nodes !== entry.nodes) {
+                restampPageNumberNodes(entry.page.nodes, i);
+            }
+        });
+        return entries;
+    }
+
+    function duplicateFolioEntry(entry, stamp) {
+        const copy = deepClone(entry || {});
+        const id = ((entry && entry.key) || (entry && entry.page && entry.page.id) || 'pg') + '~folio' + stamp;
+        copy.key = id;
+        copy.folioPad = true;
+        copy.folioDuplicate = true;
+        copy.blank = false;
+        copy.generated = true;
+        copy.originId = (entry && (entry.originId || (entry.page && entry.page.id))) || id;
+        if (copy.page) {
+            copy.page = Object.assign({}, copy.page, {
+                id: id,
+                continues: null,
+                name: (entry.page && entry.page.name) || copy.page.name || '',
+            });
+        }
+        return copy;
+    }
+
+    function blankFolioPadEntry(proto, stamp) {
+        const entry = blankEntry(proto, stamp);
+        entry.folioPad = true;
+        entry.key = 'folio-blank~' + stamp;
+        if (entry.page) entry.page.id = entry.key;
+        return entry;
+    }
+
+    // Insert one temporary leaf into a folio working stack. Mutates nothing
+    // on the caller's array: returns a new list with page numbers restamped.
+    // `action.kind` is 'duplicate' | 'blank'. `afterIndex` is -1 for start.
+    function applyFolioPad(entries, action) {
+        const list = cloneEntriesForFolio(entries);
+        const act = action || {};
+        const afterIndex = Math.round(Number(act.afterIndex));
+        if (!Number.isFinite(afterIndex) || afterIndex < -1 || afterIndex >= list.length) {
+            return { ok: false, why: 'Pick where the page should go.', entries: list };
+        }
+        if (!canInsertAfterEntry(list, afterIndex)) {
+            return { ok: false, why: 'That spot sits inside an overflow run. Insert before or after the run.', entries: list };
+        }
+        const stamp = Date.now().toString(36) + Math.floor(Math.random() * 1000);
+        let leaf = null;
+        if (act.kind === 'blank') {
+            leaf = blankFolioPadEntry(list[0] || null, stamp);
+        } else if (act.kind === 'duplicate') {
+            const sourceIndex = Math.round(Number(act.sourceIndex));
+            if (!Number.isFinite(sourceIndex) || sourceIndex < 0 || sourceIndex >= list.length) {
+                return { ok: false, why: 'Pick a page to duplicate.', entries: list };
+            }
+            const source = list[sourceIndex];
+            if (!source || source.blank) {
+                return { ok: false, why: 'Pick a real page to duplicate.', entries: list };
+            }
+            leaf = duplicateFolioEntry(source, stamp);
+        } else {
+            return { ok: false, why: 'Pick a page to duplicate, or a blank page.', entries: list };
+        }
+        list.splice(afterIndex + 1, 0, leaf);
+        restampFolioPageNumbers(list);
+        return { ok: true, entries: list, leaf: leaf };
+    }
+
+    function removeFolioPadAt(entries, index) {
+        const list = cloneEntriesForFolio(entries);
+        const i = Math.round(Number(index));
+        if (!Number.isFinite(i) || i < 0 || i >= list.length) {
+            return { ok: false, why: 'That page is not in the print stack.', entries: list };
+        }
+        if (!list[i] || !list[i].folioPad) {
+            return { ok: false, why: 'Only temporary print pages can be removed here.', entries: list };
+        }
+        list.splice(i, 1);
+        restampFolioPageNumbers(list);
+        return { ok: true, entries: list };
+    }
+
+    function folioReadyToPrint(entries) {
+        const n = (entries || []).length;
+        return n > 0 && n % MULTIPLE === 0;
+    }
+
     const PrintableExportCore = {
         MULTIPLE,
         SUNDAY_BOOKLET_SOURCES,
@@ -206,6 +415,18 @@
         folioSheet,
         folioSpreads,
         folioPrintCss,
+        cloneEntriesForFolio,
+        folioNeedsPad,
+        folioPadNeed,
+        entryLabel,
+        canInsertAfterEntry,
+        folioInsertAfterOptions,
+        folioSourceOptions,
+        pageNumberDisplay,
+        restampFolioPageNumbers,
+        applyFolioPad,
+        removeFolioPadAt,
+        folioReadyToPrint,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

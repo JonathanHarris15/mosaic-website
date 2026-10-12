@@ -199,7 +199,11 @@ Waiting is `.m-loading` with `.m-spinner`, not the word “Loading…” in 13px
 
 ## Printable folio print
 
-**Print folio** (editor File menu, view-only header) lays two pages on one landscape sheet, the same saddle-stitch order as the service guide editor. The sheet class is `.pr-folio-sheet`; each page sits in a `.pr-folio-leaf` at the page's own inch size. A half-letter page therefore prints at letter landscape. The label is **Print folio** (with `…` inside the editor's File menu, where the other print item already uses it). Flat **Print** stays the one-page-per-sheet path. On a Sunday booklet the view page says which button folds on the copier and which one is already paired.
+**Print folio** (editor File menu, view-only header) lays two pages on one landscape sheet, the same saddle-stitch order as the service guide editor. The sheet class is `.pr-folio-sheet`; each page sits in a `.pr-folio-leaf` at the page's own inch size. A half-letter page therefore prints at letter landscape. Flat **Print** stays the one-page-per-sheet path.
+
+The two actions must read apart without a banner. **Print folio** uses the `menu_book` icon; flat **Print** uses `print`. On the compact view header both keep a short label via `.m-btn--named` (**Folio** / **Print**) so twin icon-only squares never appear. Titles and `aria-label`s name the full action.
+
+When the laid-out page count is not a multiple of 4, **Print folio** opens **Fill the folio fold**: every page is laid out as a thumbnail with insert gaps between them. Click a page to set the **brush**; click a gap to stamp a copy there. A side rail counts how many insertions are left to the next multiple of 4 (e.g. **3 left to 16 pages**). Gaps inside an overflow run stay closed. Temporary leaves are print-only; they do not write the printable. Page numbers on the temporary stack are restamped for the print order. A stack that is already ×4 prints with no dialog.
 
 ## Printable editor — pages filmstrip and elements tree (MS-760)
 
