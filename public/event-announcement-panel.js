@@ -85,7 +85,7 @@
         if (!item || !item.way) return '';
         if (item.way === Ann.PRINTED) {
             const weeks = item.weeks;
-            return 'Printed ' + weeks + (weeks === 1 ? ' week' : ' weeks') + ' ahead.';
+            return 'Visible to printables · ' + weeks + (weeks === 1 ? ' week' : ' weeks') + ' ahead.';
         }
         if (item.dates && item.dates.length) {
             return 'Told ' + item.dates.map(when => when.date + ' at ' + when.time).join(', ') + '.';

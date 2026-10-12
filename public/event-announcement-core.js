@@ -1,11 +1,11 @@
 // Event Announcement — what may be written on an event, and who would be told.
 //
 // An editor writes a title, a short piece of plain prose, and exactly one way
-// of going out: printed in the Sunday service guide, or told to people who
-// carry every chosen tag. This module accepts a draft or refuses it, and it
-// answers who matches those tags today. Nothing is stored here, and nobody
-// is told. The pages and the save path call this rather than restating the
-// rules (MS-621, MS-630).
+// of going out: visible to printables (stored as way `printed`), or told to
+// people who carry every chosen tag. This module accepts a draft or refuses
+// it, and it answers who matches those tags today. Nothing is stored here,
+// and nobody is told. The pages and the save path call this rather than
+// restating the rules (MS-621, MS-630, MS-739).
 //
 // Loaded as a classic <script> (window.EventAnnouncementCore) and exported
 // for Node tests.
@@ -84,8 +84,8 @@
     }
 
     // Tags already saved that this editor cannot see stay. The ones
-    // they can see are whatever they left chosen. A printed announcement
-    // never calls this — a print stores no tags.
+    // they can see are whatever they left chosen. A printables-visible
+    // announcement never calls this — that way stores no tags.
     function tagsKept(draft) {
         const visible = new Set(unique(draft.visibleTagIds));
         const chosen = unique(draft.tagIds).filter(id => visible.has(id));
@@ -111,7 +111,7 @@
     function acceptPrinted(draft) {
         const weeks = wholeNumber(draft.weeks);
         if (weeks == null || weeks < 1) {
-            return refusal('Printed weeks are a whole number of 1 or more.');
+            return refusal('Weeks ahead are a whole number of 1 or more.');
         }
         return { way: PRINTED, weeks };
     }
@@ -157,7 +157,7 @@
         if (words.ok === false) return words;
 
         if (input.way !== PRINTED && input.way !== TOLD) {
-            return refusal('An announcement is printed or told, not both.');
+            return refusal('An announcement is visible to printables or told, not both.');
         }
         if (input.eventKind !== 'one-off' && input.eventKind !== 'repeating') {
             return refusal('An announcement belongs to a one-off or a repeating event.');
