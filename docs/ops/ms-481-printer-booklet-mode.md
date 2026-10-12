@@ -32,12 +32,17 @@ Folio print pads every Printable, because the fold needs four pages.
 ## Operator steps — folio (same as the service guide)
 
 1. Open the Printable (editor File menu, or the view-only page) and
-   choose **Print folio**.
-2. The dialog's paper is one landscape sheet per pair of pages
+   choose **Print folio** (book icon / **Folio**, not the printer
+   **Print** control).
+2. If the page count is not a multiple of 4, **Fill the folio fold**
+   asks which page to duplicate (or a blank) and where to insert it.
+   Repeat until the temporary stack is ×4. Those pages print only;
+   they are not saved on the printable.
+3. The dialog's paper is one landscape sheet per pair of pages
    (letter landscape for a half-letter Printable). Print double-sided
    the same way the service guide is printed.
-3. Leave **Booklet** / **Saddle Stitch** off. Fold the stack.
-4. Print one proof and check page order before the Sunday run.
+4. Leave **Booklet** / **Saddle Stitch** off. Fold the stack.
+5. Print one proof and check page order before the Sunday run.
 
 ## Operator steps — flat stack (copier booklet mode)
 

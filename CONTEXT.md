@@ -1208,7 +1208,7 @@ What an element shows when no data is loaded: its own typed text, its own pictur
 _Avoid_: placeholder (fine in prose), fallback, default value
 
 **View-only page**:
-`printable-view.html` — a Printable resolved as of its [[View date]] (today, when the address does not name one), laid out page by page, read-only, with **Print** and **Print folio**. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks). **Print** and the event PDF snapshot pad the flat page count to a **multiple of 4** (blank leaves at the end) on the Sunday booklet path, so a copier in booklet / saddle mode can fold that stack. **Print folio** reorders (`docs/ops/ms-481-printer-booklet-mode.md`).
+`printable-view.html` — a Printable resolved as of its [[View date]] (today, when the address does not name one), laid out page by page, read-only, with **Print** and **Print folio**. The same renderer the editor and the snapshot use. Reachable by an editor always, and by a member when an editor has switched **Members may view** on for that Printable (the `memberVisible` flag the read rule checks). **Print** and the event PDF snapshot pad the flat page count to a **multiple of 4** (blank leaves at the end) on the Sunday booklet path, so a copier in booklet / saddle mode can fold that stack. **Print folio** imposes saddle-stitch spreads (`docs/ops/ms-481-printer-booklet-mode.md`); when the stack is short of a multiple of 4 it offers a temporary print-only pad (duplicate a page or add a blank) that does not write the printable.
 _Avoid_: preview, print preview, share page
 
 **Folio**:
