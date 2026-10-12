@@ -167,13 +167,21 @@ test('view-only print chrome distinguishes folio from flat print and has no book
     assert.match(html, /aria-label="Print folio"/);
     assert.match(html, /aria-label="Print"/);
     assert.match(html, /folioPadOpen|openFolioPad/, 'folio pad tool is on the view page');
+    assert.match(html, /pv-folio-board|folio-pad__board/, 'folio pad lays pages out visually');
+    assert.match(html, /folioPadBrushLabel/, 'folio pad names the brush on the side rail');
+    assert.match(html, /folioPadTargetCount/, 'side rail names how many pages the fold needs');
     const editor = fs.readFileSync(path.join(__dirname, '../public/printable-editor.html'), 'utf8');
     assert.match(editor, /printFolio\(\)/, 'the editor File menu offers folio print');
     assert.match(editor, />menu_book</, 'editor folio uses the menu_book icon');
     assert.match(editor, /folioPadOpen|openFolioPad/, 'folio pad tool is on the editor');
+    assert.match(editor, /pe-folio-board|folio-pad__board/, 'editor folio pad lays pages out visually');
     const editorJs = fs.readFileSync(path.join(__dirname, '../public/printable-editor.js'), 'utf8');
     assert.match(editorJs, /mountFolioPrint/, 'editor folio print uses the shared sheet builder');
-    assert.match(editorJs, /applyFolioPad|folioPadEntries/, 'editor uses the temporary folio pad stack');
+    assert.match(editorJs, /mountFolioPadBoard|insertFolioBrushAt/, 'editor folio pad uses brush + gap insert');
+    const viewJs = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
+    assert.match(viewJs, /mountFolioPadBoard|insertFolioBrushAt/, 'view folio pad uses brush + gap insert');
+    const dom = fs.readFileSync(path.join(__dirname, '../public/printable-dom.js'), 'utf8');
+    assert.match(dom, /function mountFolioPadBoard/, 'shared board painter lives in printable-dom');
 });
 
 test('folioSpreads matches the service guide imposition table', () => {

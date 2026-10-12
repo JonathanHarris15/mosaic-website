@@ -36,8 +36,7 @@ function printableView() {
         fillCommitted: {},
         folioPadOpen: false,
         folioPadEntries: [],
-        folioPadSource: 'blank:-1',
-        folioPadAfterIndex: -1,
+        folioPadBrushIndex: null,
         folioPadError: '',
         folioPadBaseCount: 0,
 
@@ -80,25 +79,18 @@ function printableView() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             return Ex ? Ex.folioPadNeed(this.folioPadEntries) : 0;
         },
+        get folioPadTargetCount() {
+            return (this.folioPadEntries || []).length + this.folioPadNeedCount;
+        },
         get folioPadReady() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             return !!(Ex && Ex.folioReadyToPrint(this.folioPadEntries));
         },
-        get folioPadSourceOptions() {
+        get folioPadBrushLabel() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return Ex ? Ex.folioSourceOptions(this.folioPadEntries) : [];
-        },
-        get folioPadInsertOptions() {
-            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return Ex ? Ex.folioInsertAfterOptions(this.folioPadEntries) : [];
-        },
-        get folioPadRows() {
-            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            return (this.folioPadEntries || []).map((entry, i) => ({
-                key: (entry && entry.key) || ('row-' + i),
-                folioPad: !!(entry && entry.folioPad),
-                label: Ex ? Ex.entryLabel(entry, i) : ('Page ' + (i + 1)),
-            }));
+            const i = this.folioPadBrushIndex;
+            if (i == null || i < 0 || i >= (this.folioPadEntries || []).length) return '';
+            return Ex ? Ex.entryLabel(this.folioPadEntries[i], i) : ('Page ' + (i + 1));
         },
 
         async init() {
@@ -681,49 +673,77 @@ function printableView() {
             this.folioPadEntries = Ex.cloneEntriesForFolio(this.entries);
             this.folioPadBaseCount = this.entries.length;
             this.folioPadError = '';
-            const sources = Ex.folioSourceOptions(this.folioPadEntries);
-            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
-            const preferred = sources.find(s => s.kind === 'duplicate') || sources[0];
-            this.folioPadSource = preferred
-                ? (preferred.kind + ':' + preferred.sourceIndex)
-                : 'blank:-1';
-            this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
+            let brush = null;
+            for (let i = this.folioPadEntries.length - 1; i >= 0; i--) {
+                if (this.folioPadEntries[i] && !this.folioPadEntries[i].blank) { brush = i; break; }
+            }
+            this.folioPadBrushIndex = brush;
             this.folioPadOpen = true;
+            this.$nextTick(() => this.paintFolioPadBoard());
         },
 
         closeFolioPad() {
             this.folioPadOpen = false;
             this.folioPadError = '';
             this.folioPadEntries = [];
+            this.folioPadBrushIndex = null;
+            const host = document.getElementById('pv-folio-board');
+            if (host) host.innerHTML = '';
         },
 
-        addFolioPadRow() {
+        paintFolioPadBoard() {
+            const host = document.getElementById('pv-folio-board');
+            if (!host || !this.template || typeof PrintableDom.mountFolioPadBoard !== 'function') return;
+            const view = this;
+            PrintableDom.mountFolioPadBoard(host, {
+                template: this.template,
+                entries: this.folioPadEntries,
+                brushIndex: this.folioPadBrushIndex,
+                needCount: this.folioPadNeedCount,
+                onBrush: (i) => view.setFolioBrush(i),
+                onInsert: (after) => view.insertFolioBrushAt(after),
+                onRemove: (i) => view.removeFolioPadRow(i),
+            });
+        },
+
+        setFolioBrush(index) {
+            const i = Math.round(Number(index));
+            if (!Number.isFinite(i) || i < 0 || i >= (this.folioPadEntries || []).length) return;
+            const entry = this.folioPadEntries[i];
+            if (!entry || entry.blank) {
+                this.folioPadError = 'Pick a real page for the brush.';
+                return;
+            }
+            this.folioPadBrushIndex = i;
+            this.folioPadError = '';
+            this.paintFolioPadBoard();
+        },
+
+        insertFolioBrushAt(afterIndex) {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             if (!Ex) return;
-            const raw = String(this.folioPadSource || 'blank:-1');
-            const at = raw.indexOf(':');
-            const kind = at < 0 ? 'blank' : raw.slice(0, at);
-            const sourceIndex = Number(at < 0 ? -1 : raw.slice(at + 1));
+            const brush = this.folioPadBrushIndex;
+            if (brush == null || brush < 0) {
+                this.folioPadError = 'Pick a page for the brush first.';
+                return;
+            }
+            if (this.folioPadNeedCount <= 0) {
+                this.folioPadError = 'The fold is already a multiple of 4.';
+                return;
+            }
             const result = Ex.applyFolioPad(this.folioPadEntries, {
-                kind: kind === 'duplicate' ? 'duplicate' : 'blank',
-                sourceIndex: sourceIndex,
-                afterIndex: this.folioPadAfterIndex,
+                kind: 'duplicate',
+                sourceIndex: brush,
+                afterIndex: afterIndex,
             });
             if (!result.ok) {
-                this.folioPadError = result.why || 'Could not add that page.';
+                this.folioPadError = result.why || 'Could not place that page.';
                 return;
             }
             this.folioPadEntries = result.entries;
             this.folioPadError = '';
-            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
-            this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
-            const sources = Ex.folioSourceOptions(this.folioPadEntries);
-            if (!sources.some(s => (s.kind + ':' + s.sourceIndex) === this.folioPadSource)) {
-                const preferred = sources.find(s => s.kind === 'duplicate') || sources[0];
-                this.folioPadSource = preferred
-                    ? (preferred.kind + ':' + preferred.sourceIndex)
-                    : 'blank:-1';
-            }
+            if (afterIndex < brush) this.folioPadBrushIndex = brush + 1;
+            this.$nextTick(() => this.paintFolioPadBoard());
         },
 
         removeFolioPadRow(index) {
@@ -734,12 +754,17 @@ function printableView() {
                 this.folioPadError = result.why || 'Could not remove that page.';
                 return;
             }
+            const brush = this.folioPadBrushIndex;
             this.folioPadEntries = result.entries;
             this.folioPadError = '';
-            const inserts = Ex.folioInsertAfterOptions(this.folioPadEntries);
-            if (!inserts.some(o => o.afterIndex === this.folioPadAfterIndex)) {
-                this.folioPadAfterIndex = inserts.length ? inserts[inserts.length - 1].afterIndex : -1;
+            if (brush == null) {
+                /* keep */
+            } else if (brush === index) {
+                this.folioPadBrushIndex = null;
+            } else if (brush > index) {
+                this.folioPadBrushIndex = brush - 1;
             }
+            this.$nextTick(() => this.paintFolioPadBoard());
         },
 
         confirmFolioPadPrint() {

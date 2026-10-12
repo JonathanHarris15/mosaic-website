@@ -244,7 +244,123 @@
         return spreads;
     }
 
-    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, BASE_CSS };
+    // Folio pad board: every page as a thumbnail, gaps between them to
+    // stamp the brush into. Pure DOM paint — Alpine owns the side counter.
+    function mountFolioPadBoard(host, opts) {
+        if (!host || !opts || !opts.template) return;
+        const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+        const t = opts.template;
+        const entries = Array.isArray(opts.entries) ? opts.entries : [];
+        const brushIndex = opts.brushIndex;
+        const needCount = Number(opts.needCount) || 0;
+        const thumbW = opts.thumbWidth || 132;
+        const scale = thumbW / Math.max(1, t.widthPx || 1);
+        host.innerHTML = '';
+        host.classList.add('folio-pad__board');
+
+        function appendGap(afterIndex) {
+            const legal = Ex ? Ex.canInsertAfterEntry(entries, afterIndex) : (afterIndex < 0 || afterIndex >= entries.length - 1);
+            const open = legal && brushIndex != null && brushIndex >= 0 && needCount > 0;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'folio-pad__gap' + (open ? ' is-open' : '') + (!legal ? ' is-blocked' : '');
+            btn.disabled = !open;
+            btn.setAttribute('aria-label', afterIndex < 0
+                ? 'Insert brush at the start'
+                : 'Insert brush after page ' + (afterIndex + 1));
+            if (!legal) btn.title = 'Inside an overflow run — insert before or after the run';
+            else if (brushIndex == null || brushIndex < 0) btn.title = 'Pick a page first';
+            else if (needCount <= 0) btn.title = 'Fold is full';
+            else btn.title = 'Place a copy of the brush here';
+            const tick = document.createElement('span');
+            tick.className = 'folio-pad__gap-tick';
+            tick.setAttribute('aria-hidden', 'true');
+            btn.appendChild(tick);
+            btn.addEventListener('click', () => {
+                if (typeof opts.onInsert === 'function') opts.onInsert(afterIndex);
+            });
+            host.appendChild(btn);
+        }
+
+        appendGap(-1);
+        entries.forEach((entry, i) => {
+            const card = document.createElement('div');
+            const isBrush = brushIndex === i;
+            const isPad = !!(entry && entry.folioPad);
+            const isBlank = !!(entry && entry.blank);
+            card.className = 'folio-pad__card'
+                + (isBrush ? ' is-brush' : '')
+                + (isPad ? ' is-pad' : '')
+                + (isBlank ? ' is-blank' : '');
+
+            const meta = document.createElement('div');
+            meta.className = 'folio-pad__meta';
+            const num = document.createElement('span');
+            num.className = 'folio-pad__num';
+            num.textContent = String(i + 1);
+            meta.appendChild(num);
+            const name = document.createElement('span');
+            name.className = 'folio-pad__name';
+            const label = Ex ? Ex.entryLabel(entry, i) : ('Page ' + (i + 1));
+            name.textContent = (entry && entry.page && entry.page.name)
+                || (isBlank ? 'Blank' : (isPad ? 'Print only' : 'Page'));
+            name.title = label;
+            meta.appendChild(name);
+            if (isPad) {
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'folio-pad__remove';
+                rm.setAttribute('aria-label', 'Remove temporary page ' + (i + 1));
+                rm.title = 'Remove';
+                rm.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
+                rm.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (typeof opts.onRemove === 'function') opts.onRemove(i);
+                });
+                meta.appendChild(rm);
+            }
+            card.appendChild(meta);
+
+            const pick = document.createElement('button');
+            pick.type = 'button';
+            pick.className = 'folio-pad__pick';
+            pick.disabled = isBlank;
+            pick.setAttribute('aria-pressed', isBrush ? 'true' : 'false');
+            pick.setAttribute('aria-label', isBlank
+                ? ('Page ' + (i + 1) + ', blank')
+                : (isBrush ? ('Brush is page ' + (i + 1)) : ('Set brush to page ' + (i + 1))));
+
+            const thumb = document.createElement('div');
+            thumb.className = 'folio-pad__thumb';
+            const inner = document.createElement('div');
+            inner.className = 'folio-pad__thumb-inner';
+            inner.style.width = (t.widthPx || 0) + 'px';
+            inner.style.height = (t.heightPx || 0) + 'px';
+            inner.style.transform = 'scale(' + scale + ')';
+            try {
+                const page = entry && entry.page
+                    ? Object.assign({}, entry.page, { nodes: entry.nodes || entry.page.nodes || [] })
+                    : { id: 'folio-pad-' + i, nodes: [], margins: { top: 0, right: 0, bottom: 0, left: 0 }, style: { 'background-color': '#ffffff' } };
+                const mini = renderPage(page, t, { editing: false, scopeId: page.id || ('pad-' + i) });
+                mini.style.width = (t.widthPx || 0) + 'px';
+                mini.style.height = (t.heightPx || 0) + 'px';
+                inner.appendChild(mini);
+            } catch (err) { /* thumb is best-effort */ }
+            thumb.appendChild(inner);
+            thumb.style.height = Math.round((t.heightPx || 0) * scale) + 'px';
+            pick.appendChild(thumb);
+            if (!isBlank) {
+                pick.addEventListener('click', () => {
+                    if (typeof opts.onBrush === 'function') opts.onBrush(i);
+                });
+            }
+            card.appendChild(pick);
+            host.appendChild(card);
+            appendGap(i);
+        });
+    }
+
+    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, mountFolioPadBoard, BASE_CSS };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableDom;
