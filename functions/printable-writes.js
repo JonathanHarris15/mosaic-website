@@ -541,9 +541,12 @@ function dataCatalog(permissionLevel, args, liturgy) {
       "data-repeat='{\"source\":\"people\",\"params\":" +
       "{\"membership\":\"members\"," +
       "\"sort\":\"last\"},\"layout\":{\"direction\":\"column\",\"perLine\":1," +
-      "\"gap\":12,\"maxPerPage\":0},\"overflow\":\"new-page\"}'. " +
+      "\"gap\":12,\"maxPerPage\":0},\"from\":0,\"to\":0," +
+      "\"overflow\":\"new-page\"}'. " +
       "overflow is \"clip\" or \"new-page\". new-page keeps real pages " +
       "the list spills onto; those pages are stored and can be edited. " +
+      "from and to are a 1-based inclusive row range (to 0 = through the " +
+      "end) so two pages can each take half of the same list. " +
       "A related list (of: households) belongs on a box INSIDE that " +
       "parent card — household_children is the children of this household, " +
       "not a second directory. Filter households with hasChildren:yes " +

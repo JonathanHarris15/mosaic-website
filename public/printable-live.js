@@ -162,20 +162,24 @@
 
         function rowsFor(node, parentRow) {
             if (!node.repeat || !node.repeat.source) return null;
+            let rows;
             if (node.repeat.source === 'event_list') {
                 const id = node.repeat.params && node.repeat.params.inputId;
                 const input = eventInput(id);
                 const raw = eventBag()[id];
-                const rows = Array.isArray(raw) ? raw : [];
-                return rows.map((row, i) => {
+                const list = Array.isArray(raw) ? raw : [];
+                rows = list.map((row, i) => {
                     const out = { _id: id + '~' + i, number: i + 1 };
                     (input && input.fields || []).forEach(col => {
                         out[col.id] = row && row[col.id] != null ? String(row[col.id]) : '';
                     });
                     return out;
                 });
+            } else {
+                rows = resolved(node.repeat.source, node.repeat.params, parentRow).rows;
             }
-            return resolved(node.repeat.source, node.repeat.params, parentRow).rows;
+            // Intentional range (MS-743) before max-per-page overflow.
+            return Core.sliceRows(rows, node.repeat.from, node.repeat.to);
         }
 
         function valueFor(bind, row, node, pageCtx) {

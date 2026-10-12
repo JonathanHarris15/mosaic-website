@@ -1786,6 +1786,18 @@
                 this.renderAll();
             },
 
+            // Inclusive 1-based row range on the Repeat (MS-743). 0 means
+            // default: from the start, or through the end.
+            setRepeatRange(key, value) {
+                const r = this.repeatContext;
+                const page = this.pageOfNode(r && r.id);
+                if (!r || !page || (key !== 'from' && key !== 'to')) return;
+                const n = Math.max(0, Math.round(Number(value)) || 0);
+                this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { [key]: n }) }));
+                this.commit();
+                this.renderAll();
+            },
+
             setRepeatOverflow(value) {
                 const r = this.repeatContext;
                 const page = this.pageOfNode(r && r.id);
