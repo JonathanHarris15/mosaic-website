@@ -46,8 +46,10 @@ Recorded when the agent ran the recovery (2026-10-12). Sample plans:
 | Pass | Sundays to write | Unchanged | Field writes |
 | --- | --- | --- | --- |
 | Dry run | 171 | 37 | 1276 |
-| Commit | _(fill after apply)_ | | |
-| Second dry run | _(expect 0)_ | | |
+| Commit (2026-10-12) | 171 | 37 | 1276 |
+| Second dry run | 0 | 208 | 0 |
+
+Verified via `oos_get_service` after commit: 2026-09-13 / 09-20 / 09-27 / 10-04 show all seven hymns on live ids; 2026-10-11 preparatory corrected to Come, Thou Fount.
 
 ### Spot checks (dry run)
 
