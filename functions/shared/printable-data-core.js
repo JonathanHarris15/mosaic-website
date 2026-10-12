@@ -301,11 +301,14 @@
 
     // What a row of one Sunday carries — the single Sunday and each row of
     // the Sundays list are the same shape. The Sunday's own facts first (who
-    // is preaching is the preaching schedule), then one field per Liturgy
-    // Element, keyed by its id, so a field bound to `sermon` or `hymn1`
-    // still resolves and another church's element is a field the moment it
-    // is saved. A Sunday has one field per element, never two: who carries
-    // an element is not a second field.
+    // is preaching is the preaching schedule), then each Liturgy Element's
+    // value keyed by its id (so a field bound to `sermon` or `hymn1` still
+    // resolves), plus the facts the Liturgy Order sets on that placement
+    // (`id.name`, `id.message`, …) and who carries it / its note when the
+    // order says those apply. `prayerLabel` is not a field any more — that
+    // heading was the old latent Pastoral Prayer title; bind the prayer
+    // element's `.name` from the order instead. Old wires still resolve
+    // `prayerLabel` from the Sunday row.
     const SUNDAY_IDENTITY_FIELDS = [
         { key: 'date', label: 'Date', kind: 'date' },
         { key: 'longDate', label: 'Date (Sunday, June 14, 2026)', kind: 'date' },
@@ -314,12 +317,33 @@
         { key: 'preacher', label: 'Preacher', kind: 'text' },
         { key: 'theme', label: 'Theme', kind: 'text' },
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
-        { key: 'prayerLabel', label: 'Prayer heading', kind: 'text' },
         { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
         { key: 'prayerMale', label: 'Prayer (man)', kind: 'text' },
         { key: 'prayerFemale', label: 'Prayer (woman)', kind: 'text' },
     ];
+
+    // Aspects of a placement beyond its Sunday value. The value stays at
+    // `el.id`; these are `el.id.name`, `el.id.message`, and the rest.
+    const SUNDAY_ASPECTS = Object.freeze({
+        name: 'name',
+        message: 'message',
+        response: 'response',
+        carriedBy: 'carriedBy',
+        note: 'note',
+    });
+
+    function sundayAspectKey(elementId, aspect) {
+        return String(elementId || '') + '.' + String(aspect || '');
+    }
+
+    function parseSundayFieldKey(field) {
+        const key = String(field || '');
+        if (!key) return { id: '', aspect: '' };
+        const dot = key.indexOf('.');
+        if (dot <= 0) return { id: key, aspect: '' };
+        return { id: key.slice(0, dot), aspect: key.slice(dot + 1) };
+    }
 
     function catalogOrSeed(catalog) {
         return (catalog && Array.isArray(catalog.elements) && Array.isArray(catalog.orders))
@@ -327,26 +351,106 @@
             : Liturgy.standardCatalog();
     }
 
-    function sundayFieldsFor(catalog) {
-        return SUNDAY_IDENTITY_FIELDS.concat(catalogOrSeed(catalog).elements.map(el => ({
-            key: el.id,
-            label: Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : el.name,
+    function valueFieldLabel(el) {
+        const kind = el && (el.kind || el.primitive);
+        if (kind === 'hymn' || kind === 'song') return 'Hymn';
+        if (kind === 'scripture') return 'Reference';
+        if (kind === 'prayer') return 'People';
+        if (kind === 'person' || kind === 'people') return 'Person';
+        return Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el && el.name) || '';
+    }
+
+    // Fields one placement offers: its Sunday value, the name on the order,
+    // and for a prayer the message and response. Carried-by and note follow
+    // what the order toggled on that placement.
+    function fieldsForElement(el) {
+        if (!el || !el.id) return [];
+        const kind = el.kind || el.primitive || '';
+        const out = [];
+        out.push({
+            key: sundayAspectKey(el.id, SUNDAY_ASPECTS.name),
+            label: 'Name',
             kind: 'text',
-            element: el.kind || el.primitive,
-        })));
+            element: kind,
+            aspect: SUNDAY_ASPECTS.name,
+            elementId: el.id,
+        });
+        // Other has nothing to fill on the Sunday — the name is the print.
+        // Scripture's citation is the Reference chip (same key as the value).
+        if (kind !== 'other') {
+            out.push({
+                key: el.id,
+                label: valueFieldLabel(el),
+                kind: 'text',
+                element: kind,
+                aspect: 'value',
+                elementId: el.id,
+            });
+        }
+        if (kind === 'prayer') {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message),
+                label: 'Message',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.message,
+                elementId: el.id,
+            });
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response),
+                label: 'Response',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.response,
+                elementId: el.id,
+            });
+        }
+        if (el.prayedByOther || el.hasRole) {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.carriedBy),
+                label: el.prayedByOther ? 'Prayer leader' : 'Carried by',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.carriedBy,
+                elementId: el.id,
+            });
+        }
+        if (el.hasNote) {
+            out.push({
+                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.note),
+                label: 'Note',
+                kind: 'text',
+                element: kind,
+                aspect: SUNDAY_ASPECTS.note,
+                elementId: el.id,
+            });
+        }
+        return out;
+    }
+
+    function sundayFieldsFor(catalog) {
+        const fields = SUNDAY_IDENTITY_FIELDS.slice();
+        catalogOrSeed(catalog).elements.forEach(el => {
+            fieldsForElement(el).forEach(f => fields.push(f));
+        });
+        return fields;
     }
 
     // A Sunday field that holds a scripture citation — the seed list, or any
-    // scripture placement on the congregation's orders (ADR 0080).
+    // scripture placement on the congregation's orders (ADR 0080). Aspect
+    // keys (`sermon.name`) are not citations.
     function isScriptureField(field, liturgy) {
         if (!field) return false;
-        if (field === 'keyVerse') return true;
+        const parsed = parseSundayFieldKey(field);
+        if (parsed.aspect && parsed.aspect !== 'value') return false;
+        const id = parsed.id;
+        if (id === 'keyVerse') return true;
         const root = typeof globalThis !== 'undefined' ? globalThis : global;
         const Passage = root && root.ScripturePassage;
-        if (Passage && Array.isArray(Passage.FIELDS) && Passage.FIELDS.indexOf(field) !== -1) {
+        if (Passage && Array.isArray(Passage.FIELDS) && Passage.FIELDS.indexOf(id) !== -1) {
             return true;
         }
-        const el = Liturgy.elementById(catalogOrSeed(liturgy), field);
+        const el = Liturgy.elementById(catalogOrSeed(liturgy), id);
         return !!(el && (el.kind === 'scripture' || el.primitive === 'scripture'));
     }
 
@@ -1011,15 +1115,16 @@
     const NEVER_TO_BE_ANNOUNCED = ['date', 'shortDate', 'dateShort'];
 
     // One Sunday as a row — the single Sunday, and each row of the Sundays
-    // list. Every element of the catalog has its field, whatever order this
-    // Sunday follows: a field is an element, and the value under
-    // `liturgy.<id>` is there or it is not. A hymn the Sunday has dropped
-    // reads as nothing, as it did on the old guide. `notPlanned`, when it has
-    // words, stands in for whatever nobody has written yet ("TBA"); a dropped
-    // hymn is not coming, so it stays blank.
+    // list. Every element of the catalog has its value field, whatever order
+    // this Sunday follows, plus the order-side aspects (name, message, …).
+    // A hymn the Sunday has dropped reads as nothing, as it did on the old
+    // guide. `notPlanned`, when it has words, stands in for whatever nobody
+    // has written yet ("TBA"); a dropped hymn is not coming, so it stays blank.
+    // `prayerLabel` stays on the row for old wires only — it is not a catalog field.
     function sundayRow(date, s, notPlanned, catalog) {
         const cat = catalogOrSeed(catalog);
         const lit = (s && s.liturgy) || {};
+        const notes = (s && s.notes) || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
         const row = {
             _id: date,
@@ -1042,8 +1147,24 @@
             // Other has no Sunday field. A value already stored (an older text
             // element) still prints; otherwise the row is the name.
             const stored = slotText(lit[el.id]);
+            const displayName = Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el.name || '');
             row[el.id] = dropsOut ? '' : (el.kind === 'other' ? (stored || el.name) : stored);
-            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) textKeys.push(el.id);
+            row[sundayAspectKey(el.id, SUNDAY_ASPECTS.name)] = displayName;
+            if (el.kind === 'prayer') {
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message)] = String(el.message || '');
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response)] = String(el.response || '');
+            }
+            if (el.prayedByOther || el.hasRole) {
+                const carrier = Liturgy.carrierOf ? Liturgy.carrierOf(s, el) : null;
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.carriedBy)] = carrier ? (carrier.name || '') : '';
+            }
+            if (el.hasNote) {
+                const rawNote = notes[el.id];
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.note)] = rawNote == null ? '' : String(rawNote);
+            }
+            if (el.kind !== 'other' && el.kind !== 'person' && el.kind !== 'prayer' && el.primitive !== 'people' && !dropsOut) {
+                textKeys.push(el.id);
+            }
         });
         if (!row.sermon && s && s.sermon) row.sermon = slotText(s.sermon);
         const fill = typeof notPlanned === 'string' ? notPlanned.trim() : '';
@@ -1696,6 +1817,10 @@
         LEVELS,
         SOURCES,
         HYMN_SLOTS,
+        SUNDAY_ASPECTS,
+        sundayAspectKey,
+        parseSundayFieldKey,
+        fieldsForElement,
         sundayFieldsFor,
         isScriptureField,
         hymnSlotOptions,

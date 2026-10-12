@@ -684,7 +684,7 @@
                                     <div class="pe-sun__group">
                                         <p class="pe-sun__label">Service</p>
                                         <div class="pe-chips">
-                                            <template x-for="f in querySundayGroups.service" :key="'sun-' + f.key">
+                                            <template x-for="f in querySundayGroups.identity" :key="'sun-' + f.key">
                                                 <span class="pe-chip" draggable="true" tabindex="0"
                                                       :data-chip="chipKey('global', 'sunday', f.key)"
                                                       :title="f.value || f.label"
@@ -696,43 +696,61 @@
                                             </template>
                                         </div>
                                     </div>
-                                    <div class="pe-sun__group" x-show="querySundayGroups.hymns.length">
-                                        <p class="pe-sun__label">Hymns</p>
-                                        <div class="pe-chips">
-                                            <template x-for="f in querySundayGroups.hymns" :key="'hymn-' + f.key">
-                                                <span class="pe-chip" draggable="true" tabindex="0"
-                                                      :data-chip="chipKey('global', 'sunday', f.key)"
-                                                      :title="f.value || f.label"
-                                                      @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
-                                                    <span class="material-symbols-outlined" aria-hidden="true">music_note</span>
-                                                    <span class="pe-chip__name" x-text="f.label"></span>
-                                                    <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
-                                                </span>
-                                            </template>
-                                        </div>
-                                    </div>
-                                    <div class="pe-sun__group pe-sun__group--scripture" x-show="querySundayGroups.scripture.length" aria-label="Scripture">
-                                        <p class="pe-sun__label">Scripture</p>
-                                        <p class="pe-hint">Reference is the citation as typed. Words are the verses, styled, with the citation line and the short copyright.</p>
-                                        <template x-for="ref in querySundayGroups.scripture" :key="'scr-' + ref.key">
+                                    <template x-if="querySundayGroups.keyVerse">
+                                        <div class="pe-sun__group pe-sun__group--element" aria-label="Key verse">
+                                            <p class="pe-sun__label" x-text="querySundayGroups.keyVerse.label"></p>
+                                            <p class="pe-hint">Reference is the citation as typed. Words are the verses, styled, with the citation line and the short copyright.</p>
                                             <div class="pe-scripture-row">
                                                 <div class="pe-scripture-row__meta">
-                                                    <strong x-text="ref.label"></strong>
-                                                    <span class="pe-typecard__live" x-text="ref.citation || 'Nothing entered'"></span>
+                                                    <span class="pe-typecard__live" x-text="querySundayGroups.keyVerse.citation || 'Nothing entered'"></span>
                                                 </div>
                                                 <span class="pe-chip" draggable="true" tabindex="0"
-                                                      :data-chip="scriptureChipKey(ref, 'citation')"
-                                                      @dragstart="onScriptureChipDragStart($event, ref, 'citation')" @dragend="onChipDragEnd()">
+                                                      :data-chip="scriptureChipKey(querySundayGroups.keyVerse, 'citation')"
+                                                      @dragstart="onScriptureChipDragStart($event, querySundayGroups.keyVerse, 'citation')" @dragend="onChipDragEnd()">
                                                     <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Reference
                                                 </span>
                                                 <span class="pe-chip" draggable="true" tabindex="0"
-                                                      :data-chip="scriptureChipKey(ref, 'passage')"
-                                                      @dragstart="onScriptureChipDragStart($event, ref, 'passage')" @dragend="onChipDragEnd()">
+                                                      :data-chip="scriptureChipKey(querySundayGroups.keyVerse, 'passage')"
+                                                      @dragstart="onScriptureChipDragStart($event, querySundayGroups.keyVerse, 'passage')" @dragend="onChipDragEnd()">
                                                     <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Words
                                                 </span>
                                             </div>
-                                        </template>
-                                    </div>
+                                        </div>
+                                    </template>
+                                    <template x-for="el in querySundayGroups.elements" :key="'el-' + el.id">
+                                        <div class="pe-sun__group pe-sun__group--element" :aria-label="el.label">
+                                            <p class="pe-sun__label" x-text="el.label"></p>
+                                            <div class="pe-chips" x-show="el.chips.length">
+                                                <template x-for="f in el.chips" :key="'elchip-' + f.key">
+                                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                                          :data-chip="chipKey('global', 'sunday', f.key)"
+                                                          :title="f.value || f.label"
+                                                          @dragstart="onSundayChipDragStart($event, 'sunday', f)" @dragend="onChipDragEnd()">
+                                                        <span class="material-symbols-outlined" x-text="el.kind === 'hymn' || el.kind === 'song' ? 'music_note' : kindIcon(f.kind)" aria-hidden="true"></span>
+                                                        <span class="pe-chip__name" x-text="f.label"></span>
+                                                        <span class="pe-chip__val" x-show="f.value" x-text="f.value"></span>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <template x-if="el.scripture">
+                                                <div class="pe-scripture-row">
+                                                    <div class="pe-scripture-row__meta">
+                                                        <span class="pe-typecard__live" x-text="el.scripture.citation || 'Nothing entered'"></span>
+                                                    </div>
+                                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                                          :data-chip="scriptureChipKey(el.scripture, 'citation')"
+                                                          @dragstart="onScriptureChipDragStart($event, el.scripture, 'citation')" @dragend="onChipDragEnd()">
+                                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Reference
+                                                    </span>
+                                                    <span class="pe-chip" draggable="true" tabindex="0"
+                                                          :data-chip="scriptureChipKey(el.scripture, 'passage')"
+                                                          @dragstart="onScriptureChipDragStart($event, el.scripture, 'passage')" @dragend="onChipDragEnd()">
+                                                        <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Words
+                                                    </span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
 
@@ -1319,6 +1337,8 @@
         .pe-chip__val { flex: 1 1 auto; min-width: 0; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--on-surface-variant); }
         .pe-chip--inert { cursor: default; opacity: .7; }
         .pe-sun__group { margin-top: 8px; }
+        .pe-sun__group--element { padding-top: 6px; border-top: 1px solid var(--outline-variant); }
+        .pe-sun__group--element .pe-scripture-row { border-top: 0; padding-top: 4px; }
         .pe-sun__label { margin: 0 0 4px; font: 600 10px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
         .pe-fold {
             padding: 7px 9px; border: 1px solid var(--outline-variant); border-radius: var(--radius);

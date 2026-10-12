@@ -478,44 +478,57 @@ const WITH_ORDERS = () => {
     const seed = Liturgy.standardCatalog();
     data.liturgy = Liturgy.catalogFrom({
         elements: seed.elements.concat([
-            { id: 'lordsSupper', name: 'Lord\'s Supper', primitive: 'text', hasRole: true, hasNote: false },
-            { id: 'offertory', name: 'Offertory', primitive: 'song', hasRole: false, hasNote: true },
+            { id: 'lordsSupper', name: 'Lord\'s Supper', kind: 'other', hasNote: false },
+            { id: 'communionPrayer', name: 'Communion Prayer', kind: 'prayer', hasNote: false,
+                prayedByOther: true, message: 'Let us pray', response: '' },
+            { id: 'offertory', name: 'Offertory', kind: 'hymn', hasNote: true },
         ]),
         orders: seed.orders.concat([
-            { id: 'communion', name: 'Communion', elementIds: ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon'] },
+            { id: 'communion', name: 'Communion', elementIds: ['offertory', 'hymn1', 'lordsSupper', 'communionPrayer', 'baptism', 'sermon'] },
         ]),
     });
     const s = data.services['2026-09-06'];
     s.liturgyOrderId = 'communion';
     s.liturgy.offertory = { id: 'h2', name: 'Doxology' };
     s.liturgy.lordsSupper = 'Words of institution';
+    s.liturgy.communionPrayer = [{ id: 'p-3', name: 'Dana Example' }];
     s.liturgy.baptism = [{ id: 'p-1', name: 'Ada Example' }, { id: null, name: 'Ben Example' }];
-    s.carriedBy = { lordsSupper: { id: 'p-2', name: 'Cal Example' } };
+    s.carriedBy = { communionPrayer: { id: 'p-2', name: 'Cal Example' } };
     return data;
 };
 
 test('order of service rows follow the order the Sunday names, with who carries an element', () => {
     const r = Data.resolve('sunday_rows', { includeEmpty: false }, WITH_ORDERS(), { today: TODAY });
-    assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'baptism', 'sermon']);
-    assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn of Praise', 'Lord\'s Supper', 'Baptism', 'Sermon']);
-    assert.equal(r.rows[3].value, 'Ada Example, Ben Example', 'a people element lists its people');
-    assert.equal(r.rows[2].carriedBy, 'Cal Example');
+    assert.deepEqual(r.rows.map(x => x._id), ['offertory', 'hymn1', 'lordsSupper', 'communionPrayer', 'baptism', 'sermon']);
+    assert.deepEqual(r.rows.map(x => x.label), ['Offertory', 'Hymn of Praise', 'Lord\'s Supper', 'Communion Prayer', 'Baptism', 'Sermon']);
+    assert.equal(r.rows[4].value, 'Ada Example, Ben Example', 'a people element lists its people');
+    assert.equal(r.rows[3].carriedBy, 'Cal Example');
+    assert.equal(r.rows[3].message, 'Let us pray');
     assert.equal(r.rows[0].carriedBy, '', 'an element nobody carries says nothing');
     assert.ok(!r.rows.some(x => x._id === 'preparatoryHymn'), 'a value outside the order stays hidden, not deleted');
 });
 
-test('a Sunday\'s fields are one per element, the existing keys and a new element\'s alike', () => {
+test('a Sunday\'s fields are the value plus order aspects for each element', () => {
     const data = WITH_ORDERS();
     const keys = Data.fieldsFor('sunday', {}, { liturgy: data.liturgy }).map(f => f.key);
-    ['theme', 'preacher', 'prayerMale', 'sermon', 'hymn1', 'scriptureReading', 'baptism', 'lordsSupper', 'offertory']
+    ['theme', 'preacher', 'prayerMale', 'sermon', 'hymn1', 'scriptureReading', 'baptism', 'offertory']
         .forEach(k => assert.ok(keys.includes(k), k + ' should be a field'));
-    assert.equal(keys.filter(k => k === 'lordsSupper').length, 1, 'who carries it is not a second field');
+    assert.ok(!keys.includes('prayerLabel'), 'Prayer heading is not a catalog field');
+    assert.ok(keys.includes('lordsSupper.name'), 'the order name is a field');
+    assert.ok(!keys.includes('lordsSupper'), 'Other has no Sunday value field — the name is the print');
+    assert.ok(keys.includes('communionPrayer.carriedBy'), 'who prays it is an aspect when the order says so');
     const row = Data.resolve('sunday', {}, data, { today: TODAY }).rows[0];
-    assert.equal(row.lordsSupper, 'Words of institution');
+    assert.equal(row.lordsSupper, 'Words of institution', 'a stored Other value still resolves');
+    assert.equal(row['lordsSupper.name'], 'Lord\'s Supper');
+    assert.equal(row['communionPrayer.carriedBy'], 'Cal Example');
+    assert.equal(row['communionPrayer.message'], 'Let us pray');
     assert.equal(row.preparatoryHymn, 'Amazing Grace', 'every element\'s field resolves, whatever the order');
     assert.equal(row.offertory, 'Doxology');
-    assert.deepEqual(Data.SOURCES.find(x => x.key === 'sunday').fields.map(f => f.key).slice(12),
-        Liturgy.STANDARD_ELEMENTS.map(el => el.id), 'with no catalog, the fields are Standard\'s elements');
+    assert.equal(row.prayerLabel, 'Pastoral Prayer', 'old prayerLabel wires still resolve');
+    const seedKeys = Data.SOURCES.find(x => x.key === 'sunday').fields.map(f => f.key);
+    assert.ok(seedKeys.includes('theme') && seedKeys.includes('preparatoryHymn'));
+    assert.ok(seedKeys.includes('preparatoryHymn.name'));
+    assert.ok(!seedKeys.includes('prayerLabel'));
 });
 
 test('the hymn sheets are the song elements of the Sunday\'s order', () => {

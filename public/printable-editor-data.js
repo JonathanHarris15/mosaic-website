@@ -234,71 +234,150 @@
         return 0;
     }
 
-    // The chips the query builder shows for A Sunday, grouped Service,
-    // Hymns and Scripture. Extra date formats stay off — longDate is the
-    // one the guide prints. `fillFields` is the typed-on-the-Sunday set
-    // (prayer, Mosaic Kids), which the Fill-in library offers. Chips follow
-    // the Liturgy Order that Sunday uses (ADR 0080): identity fields, then
-    // that order's placements under their order names. Without a catalog,
-    // Standard is the order.
+    // The chips the query builder shows for A Sunday. Extra date formats stay
+    // off — longDate is the one the guide prints. `fillFields` is the typed-
+    // on-the-Sunday set (prayer, Mosaic Kids), which the Fill-in library
+    // offers. Layout follows the Liturgy Order that Sunday uses (ADR 0080):
+    // the Sunday's own facts first, then each placement in that order with
+    // every field the Liturgy Orders page and the Order of Service set on it.
+    // Without a catalog, Standard is the order. Prayer heading is gone —
+    // bind a prayer element's Name from the order instead.
     function sundayDrawerFields(Data, Passage, fillFields, options) {
-        const Liturgy = global.LiturgyOrderCore;
+        const Liturgy = global.LiturgyOrderCore || (typeof require !== 'undefined'
+            ? require('./liturgy-order-core.js')
+            : null);
         const liturgy = options && options.liturgy;
         const cat = liturgy || (Liturgy && Liturgy.standardCatalog ? Liturgy.standardCatalog() : null);
-        const order = Liturgy && Liturgy.orderFor
-            ? Liturgy.orderFor((options && options.service) || {}, cat)
-            : null;
-        const orderEls = order && Liturgy.elementsOf ? Liturgy.elementsOf(order) : [];
-        const orderById = new Map(orderEls.map(el => [el.id, el]));
+        const serviceDoc = (options && options.service) || {};
+        let orderEls = Liturgy && Liturgy.elementsFor
+            ? Liturgy.elementsFor(serviceDoc, cat)
+            : [];
+        // Plain catalog walk when the liturgy module is not on global (Node tests).
+        if (!orderEls.length && cat && Array.isArray(cat.orders)) {
+            const orderId = (serviceDoc && serviceDoc.liturgyOrderId) || 'standard';
+            const order = cat.orders.find(o => o && o.id === orderId)
+                || cat.orders.find(o => o && o.id === 'standard')
+                || cat.orders[0];
+            orderEls = (order && Array.isArray(order.elements)) ? order.elements : [];
+        }
+        const skip = { date: true, shortDate: true, dateShort: true, keyVerse: true };
+        const shortLabel = { longDate: 'Date' };
+        const identity = [];
+        const identityKeys = {
+            longDate: true, preacher: true, theme: true,
+            serviceLeader: true, musicLeader: true,
+            prayerMale: true, prayerFemale: true,
+        };
         const fields = Data && Data.fieldsFor
             ? Data.fieldsFor('sunday', {}, { liturgy: cat })
             : ((Data && Data.sourceByKey && Data.sourceByKey('sunday') || {}).fields || []);
-        const skip = { date: true, shortDate: true, dateShort: true };
-        const shortLabel = { longDate: 'Date' };
-        const service = [];
-        const hymns = [];
-        const scripture = [];
-        if (!orderById.size && Passage && Passage.FIELDS) {
-            // No liturgy module — keep the old seed split so the drawer still paints.
-            const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
-            const scriptureKeys = Passage.FIELDS;
-            fields.forEach(f => {
-                if (!f || skip[f.key]) return;
-                if (f.key === 'keyVerse' || scriptureKeys.indexOf(f.key) !== -1) {
-                    scripture.push(f.key === 'keyVerse'
-                        ? Object.assign({}, f, { label: 'Key verse' })
-                        : f);
+        fields.forEach(f => {
+            if (!f || skip[f.key] || !identityKeys[f.key]) return;
+            identity.push(shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f);
+        });
+
+        const keyVerse = { key: 'keyVerse', label: 'Key verse', kind: 'text', scripture: true };
+        const elements = [];
+
+        function pushElement(el) {
+            if (!el || !el.id) return;
+            const kind = el.kind || el.primitive || '';
+            const label = Liturgy && Liturgy.elementDisplayName
+                ? Liturgy.elementDisplayName(el)
+                : (el.name || el.id);
+            const aspectFields = Data && Data.fieldsForElement
+                ? Data.fieldsForElement(el)
+                : [];
+            const chips = [];
+            let scripture = null;
+            aspectFields.forEach(f => {
+                if (!f) return;
+                // Scripture's citation is Reference + Words, not a plain value chip.
+                if ((kind === 'scripture') && (f.aspect === 'value' || f.key === el.id)) {
+                    scripture = { key: el.id, label: label, kind: 'text' };
                     return;
                 }
-                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
-                if (hymnSlots.indexOf(f.key) !== -1) hymns.push(chip);
-                else service.push(chip);
+                chips.push(Object.assign({}, f, {
+                    label: f.label,
+                    element: kind,
+                }));
             });
-        } else {
-            fields.forEach(f => {
-                if (!f || skip[f.key]) return;
-                if (f.key === 'keyVerse') {
-                    scripture.push(Object.assign({}, f, { label: 'Key verse' }));
-                    return;
+            // Fallback when Data.fieldsForElement is missing (older bundle).
+            if (!aspectFields.length) {
+                if (kind === 'scripture') {
+                    scripture = { key: el.id, label: label, kind: 'text' };
+                } else if (kind !== 'other') {
+                    chips.push({
+                        key: el.id,
+                        label: label,
+                        kind: 'text',
+                        element: kind,
+                        aspect: 'value',
+                        elementId: el.id,
+                    });
                 }
-                const el = orderById.get(f.key);
-                if (el) {
-                    const label = Liturgy.elementDisplayName
-                        ? Liturgy.elementDisplayName(el)
-                        : (el.name || f.label);
-                    const chip = Object.assign({}, f, { label: label, element: el.kind || el.primitive });
-                    if (el.kind === 'hymn' || el.primitive === 'song') hymns.push(chip);
-                    else if (el.kind === 'scripture' || el.primitive === 'scripture') scripture.push(chip);
-                    else service.push(chip);
-                    return;
-                }
-                if (f.element || f.element === '') return;
-                // Identity fields of the Sunday (preacher, theme, …) — not placements.
-                const chip = shortLabel[f.key] ? Object.assign({}, f, { label: shortLabel[f.key] }) : f;
-                service.push(chip);
+            }
+            elements.push({
+                id: el.id,
+                label: label,
+                kind: kind,
+                chips: chips,
+                scripture: scripture,
             });
         }
-        return { service: service, hymns: hymns, typed: typedChipFields(fillFields), scripture: scripture };
+
+        if (orderEls.length) {
+            orderEls.forEach(pushElement);
+        } else if (Passage && Passage.FIELDS) {
+            // No liturgy module — still paint Standard-shaped groups from the seed fields.
+            const hymnSlots = (Data && Data.HYMN_SLOTS) || [];
+            const byKey = new Map(fields.map(f => [f.key, f]));
+            hymnSlots.forEach(id => {
+                const f = byKey.get(id);
+                if (f) {
+                    elements.push({
+                        id: id,
+                        label: f.label || id,
+                        kind: 'hymn',
+                        chips: [Object.assign({}, f, { aspect: 'value', elementId: id })],
+                        scripture: null,
+                    });
+                }
+            });
+            Passage.FIELDS.forEach(id => {
+                const f = byKey.get(id);
+                if (!f) return;
+                elements.push({
+                    id: id,
+                    label: f.label || id,
+                    kind: 'scripture',
+                    chips: [{
+                        key: (Data && Data.sundayAspectKey)
+                            ? Data.sundayAspectKey(id, 'name')
+                            : (id + '.name'),
+                        label: 'Name',
+                        kind: 'text',
+                        aspect: 'name',
+                        elementId: id,
+                    }],
+                    scripture: { key: id, label: f.label || id, kind: 'text' },
+                });
+            });
+        }
+
+        return {
+            identity: identity,
+            keyVerse: keyVerse,
+            elements: elements,
+            typed: typedChipFields(fillFields),
+            // Compat for older callers/tests that still read the kind buckets.
+            service: identity.slice(),
+            hymns: elements.filter(e => e.kind === 'hymn' || e.kind === 'song')
+                .map(e => (e.chips.find(c => c.aspect === 'value') || { key: e.id, label: e.label })),
+            scripture: [keyVerse].concat(
+                elements.filter(e => e.scripture).map(e => e.scripture)
+            ),
+        };
     }
 
     // The Sunday booklet fields offered as chips. Announcements are a list
@@ -809,24 +888,33 @@
                         : f);
             },
 
-            // A Sunday's fields, grouped by the order that Sunday follows.
+            // A Sunday's fields: identity, then each liturgy-order placement.
             get queryIsSunday() {
                 return this.queryChipScope === 'global' && this.querySourceKey === 'sunday';
             },
 
             get querySundayGroups() {
-                if (!this.queryIsSunday) return { service: [], hymns: [], scripture: [] };
+                const empty = { identity: [], keyVerse: null, elements: [], service: [], hymns: [], scripture: [] };
+                if (!this.queryIsSunday) return empty;
                 const groups = this.sundayDrawer();
                 const row = this.data.query.preview.row || {};
-                const chips = list => list.map(f => Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) }));
+                const chips = list => (list || []).map(f => Object.assign({}, f, { value: chipPreview(f.kind, row[f.key]) }));
+                const scriptureOf = f => f ? {
+                    key: f.key,
+                    label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
+                    citation: row[f.key] ? String(row[f.key]) : '',
+                } : null;
                 return {
-                    service: chips(groups.service),
-                    hymns: chips(groups.hymns),
-                    scripture: groups.scripture.map(f => ({
-                        key: f.key,
-                        label: f.label || SCRIPTURE_LABELS[f.key] || f.key,
-                        citation: row[f.key] ? String(row[f.key]) : '',
+                    identity: chips(groups.identity || groups.service),
+                    keyVerse: scriptureOf(groups.keyVerse),
+                    elements: (groups.elements || []).map(el => Object.assign({}, el, {
+                        chips: chips(el.chips),
+                        scripture: scriptureOf(el.scripture),
                     })),
+                    // Compat mirrors for older tests.
+                    service: chips(groups.identity || groups.service),
+                    hymns: chips(groups.hymns),
+                    scripture: (groups.scripture || []).map(scriptureOf).filter(Boolean),
                 };
             },
 
@@ -1847,7 +1935,7 @@
                 return href;
             },
 
-            // ── A Sunday's fields, grouped by its order ──────────────────
+            // ── A Sunday's fields, in its liturgy order ──────────────────
 
             // The Sunday the builder is browsing decides the order its chips
             // follow (ADR 0080): the builder's own read of it when there is
