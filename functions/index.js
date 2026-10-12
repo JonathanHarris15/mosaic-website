@@ -3043,7 +3043,7 @@ async function processPrayerSubject(db, args) {
 
 /**
  * Who a Sunday asks, and whether its order has turned asking on.
- * A failed order read falls back to the older male and female fields.
+ * A failed order read asks nobody until the catalog can be read again.
  * @param {Object} db Firestore instance.
  * @param {Object} service the service document
  * @param {Object} liturgy
@@ -3060,8 +3060,8 @@ async function prayerPlanForService(db, service, liturgy, catalog) {
     try {
       orders = await liturgyCatalog.loadLiturgyCatalog(db);
     } catch (err) {
-      log("Liturgy orders could not be read; using the Sunday's " +
-          "prayer fields. " + err);
+      log("Liturgy orders could not be read; no prayer subjects until " +
+          "they can. " + err);
       return pr.prayerNoticePlan({liturgy, elements: []});
     }
   }
