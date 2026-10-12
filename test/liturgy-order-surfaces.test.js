@@ -63,6 +63,10 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /Male Being Prayed For/);
     assert.match(html, /item\.type === 'prayer'/);
     assert.match(html, /Who prays /);
+    assert.match(html, /prayerScheduleLabel\(slot\.id\)/);
+    assert.match(js, /prayerScheduleLabel\(/);
+    assert.match(js, /prayerScheduledDates\(/);
+    assert.match(js, /Scheduled texts:/);
     assert.doesNotMatch(html, /Scripture Reading/);
     assert.match(html, /item\.type === 'person'/);
     assert.match(js, /type === 'other'/);
@@ -110,6 +114,7 @@ test('the Liturgy Orders page uses tabs, a palette, a list, and an inspector', (
     assert.match(paletteRule[0], /padding: 16px 12px 20px 16px/);
     assert.doesNotMatch(paletteRule[0], /20px 0/);
     assert.match(html, /Send prayer requests/);
+    assert.match(html, /Send a digest to Elders when all requests are in/);
     assert.match(html, /Add a person/);
     assert.match(html, /Days before the Sunday/);
     assert.match(html, /id="prayer-message"/);

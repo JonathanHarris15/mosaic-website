@@ -164,6 +164,7 @@ function liturgyOrdersPage() {
                 const days = (Array.isArray(el.noticeDays) ? el.noticeDays : []).slice().sort((a, b) => b - a);
                 let line = count + ' request' + (count === 1 ? '' : 's');
                 line += days.length ? ' · days ' + days.join(', ') : ' · no days';
+                if (el.elderDigest !== false) line += ' · elder digest';
                 parts.push(line);
             }
             return parts.join(' · ');
@@ -455,7 +456,12 @@ function liturgyOrdersPage() {
         },
         toggleRequests(el, on) {
             const patch = { requests: on ? { people: [{ who: 'either' }] } : null };
-            if (on) patch.noticeDays = Core.DEFAULT_NOTICE_LIST.slice();
+            if (on) {
+                patch.noticeDays = Core.DEFAULT_NOTICE_LIST.slice();
+                patch.elderDigest = true;
+            } else {
+                patch.elderDigest = false;
+            }
             this.updateElement(el.id, patch);
         },
         addPerson(el) {

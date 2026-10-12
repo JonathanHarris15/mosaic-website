@@ -734,6 +734,76 @@ function elderDigestDecision({
   return changedSource === "reply" || changedSource === "form";
 }
 
+/**
+ * Which subject sets may fire an Elder Digest. Each requesting prayer with
+ * elderDigest on is its own group. When the order has no requesting prayer,
+ * the older male/female fields are one legacy group (digest on).
+ * @param {Object} args
+ * @param {?Object} args.liturgy
+ * @param {Array} [args.elements]
+ * @return {Array<{id: string, subjects: Array<{id: string, name: string}>}>}
+ */
+function elderDigestGroups(args) {
+  const liturgy = (args && args.liturgy) || {};
+  const elements = (args && args.elements) || [];
+  const requesting = elements.filter((el) =>
+    el && el.kind === "prayer" && el.requests);
+  if (requesting.length) {
+    return requesting
+        .filter((el) => el.elderDigest !== false)
+        .map((el) => {
+          const named = Array.isArray(liturgy[el.id]) ? liturgy[el.id] : [];
+          const subjects = named
+              .filter((p) => p && p.id)
+              .map((p) => ({id: p.id, name: p.name || ""}));
+          return {id: el.id, subjects};
+        })
+        .filter((g) => g.subjects.length > 0);
+  }
+  const legacy = [];
+  if (liturgy.prayerMale && liturgy.prayerMale.id) {
+    legacy.push({
+      id: liturgy.prayerMale.id,
+      name: liturgy.prayerMale.name || "",
+    });
+  }
+  if (liturgy.prayerFemale && liturgy.prayerFemale.id) {
+    legacy.push({
+      id: liturgy.prayerFemale.id,
+      name: liturgy.prayerFemale.name || "",
+    });
+  }
+  return legacy.length ? [{id: "_legacy", subjects: legacy}] : [];
+}
+
+/**
+ * Calendar dates (YYYY-MM-DD) when ask texts are scheduled for a Sunday,
+ * derived from that prayer's notice-day list. Sorted soonest first.
+ * @param {string} serviceDate
+ * @param {Array<number>|number|null} noticeDays
+ * @return {Array<string>}
+ */
+function scheduledTextDates(serviceDate, noticeDays) {
+  const [y, m, d] = String(serviceDate || "").split("-").map(Number);
+  if (!y || !m || !d) return [];
+  let list = [];
+  if (Array.isArray(noticeDays)) {
+    list = noticeDays.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  } else {
+    const n = Number(noticeDays);
+    if (Number.isFinite(n) && n > 0) list = [n];
+  }
+  const uniq = Array.from(new Set(list)).sort((a, b) => b - a);
+  return uniq.map((n) => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - n);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  });
+}
+
 const DIGEST_MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -813,6 +883,8 @@ if (typeof module !== "undefined" && module.exports) {
     tiptapFromText,
     buildPrayerRequestNote,
     elderDigestDecision,
+    elderDigestGroups,
+    scheduledTextDates,
     formatServiceDate,
     renderElderDigest,
   };

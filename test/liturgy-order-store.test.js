@@ -48,6 +48,7 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
         who: 'either',
     });
     assert.deepEqual(storedPrayer.noticeDays, [5, 3, 1]);
+    assert.equal(storedPrayer.elderDigest, true);
     assert.equal(storedPrayer.message, 'Hello {name}');
     assert.equal(storedPrayer.response, 'Thanks {name}');
     assert.ok(!storedPrayer.hasRole);

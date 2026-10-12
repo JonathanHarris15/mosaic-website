@@ -209,6 +209,9 @@ test('toggleRequests seeds default notice days', async () => {
     const el = Core.elementById(page.catalog, prayer.id);
     assert.ok(el.requests);
     assert.deepEqual(el.noticeDays, Core.DEFAULT_NOTICE_LIST);
+    assert.equal(el.elderDigest, true);
+    page.toggleRequests(el, false);
+    assert.equal(Core.elementById(page.catalog, prayer.id).elderDigest, false);
 });
 
 test('a successful read clears the problem and can be saved', async () => {

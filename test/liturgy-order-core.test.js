@@ -334,6 +334,16 @@ test('a prayer that sends requests keeps one line per person and a list of days'
     const written = Core.elementById(words, el.id);
     assert.equal(written.message, 'Pray for {name}. {link}');
     assert.equal(written.response, 'Thank you, {name}.');
+    assert.equal(el.elderDigest, true);
+    const digestOff = Core.updateElement(on, el.id, { elderDigest: false });
+    assert.equal(Core.elementById(digestOff, el.id).elderDigest, false);
+    const roundDigest = Core.normaliseElement({
+        id: el.id, kind: 'prayer', name: el.name,
+        requests: { people: [{ who: 'either' }] },
+    });
+    assert.equal(roundDigest.elderDigest, true);
+    const cleared = Core.updateElement(digestOff, el.id, { requests: null });
+    assert.equal(Core.elementById(cleared, el.id).elderDigest, false);
 });
 
 test('older prayer fields sit under the seed rows they belong with', () => {

@@ -1499,6 +1499,46 @@ function serviceForm() {
             return { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
         },
 
+        // Notice-day list on the prayer that named this person (or the
+        // shared list when only the older male/female fields are in use).
+        noticeDaysFor(which) {
+            if (which === 'male' || which === 'female') {
+                let best = null;
+                for (const el of this.orderElements) {
+                    if (!el.requests || !Array.isArray(el.noticeDays)) continue;
+                    if (!best || (el.noticeDays[0] || 0) > (best[0] || 0)) {
+                        best = el.noticeDays;
+                    }
+                }
+                return best ? best.slice() : [5, 3, 1];
+            }
+            for (const el of this.orderElements) {
+                if (!el.requests) continue;
+                const list = this.service.liturgy[el.id];
+                if (!Array.isArray(list)) continue;
+                if (list.some(p => p && p.id === which)) {
+                    return Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [];
+                }
+            }
+            return [];
+        },
+
+        // YYYY-MM-DD dates when ask texts are scheduled for this person.
+        prayerScheduledDates(which) {
+            if (!this.date || typeof DateUtils === 'undefined') return [];
+            const days = this.noticeDaysFor(which)
+                .map(Number)
+                .filter(n => Number.isFinite(n) && n > 0);
+            const uniq = Array.from(new Set(days)).sort((a, b) => b - a);
+            return uniq.map(n => DateUtils.addDays(this.date, -n));
+        },
+
+        prayerScheduleLabel(which) {
+            const dates = this.prayerScheduledDates(which);
+            if (!dates.length) return 'No texts scheduled';
+            return 'Scheduled texts: ' + dates.join(', ');
+        },
+
         subjectFor(which) {
             if (which === 'male') return this.service.liturgy.prayerMale || { id: null, name: '' };
             if (which === 'female') return this.service.liturgy.prayerFemale || { id: null, name: '' };
@@ -1578,7 +1618,7 @@ function serviceForm() {
         prayerRequestStatus(which) {
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return '';
-            const s = this.prayerRequests[which];
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
             if ((s.text || '').trim()) return s.source === 'reply' ? 'Replied' : 'Filled in';
             const person = this.peopleRegistry.find(p => p.id === subject.id);
             const phone = person && person.contact ? (person.contact.phone || '') : '';
@@ -1595,7 +1635,8 @@ function serviceForm() {
                 alert('Save the service with this person selected before adding a prayer request.');
                 return;
             }
-            const state = this.prayerRequests[which];
+            const state = this.prayerRequests[which] || this.blankPrayerRequest();
+            this.prayerRequests[which] = state;
             const text = (state.text || '').trim();
             const personRef = db.collection('people').doc(subject.id);
             const reqRef = personRef.collection('prayer_requests').doc(this.date);
@@ -1638,14 +1679,16 @@ function serviceForm() {
             if (!this.canDecide) return false;
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return false;
-            if ((this.prayerRequests[which].text || '').trim()) return false;
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
+            if ((s.text || '').trim()) return false;
             return true;
         },
 
         prayerSendTitle(which) {
             const subject = this.subjectFor(which);
             if (!subject || !subject.id) return 'Select this person and save first';
-            if ((this.prayerRequests[which].text || '').trim()) return 'Already filled — nothing to send';
+            const s = this.prayerRequests[which] || this.blankPrayerRequest();
+            if ((s.text || '').trim()) return 'Already filled — nothing to send';
             if (!this.canSendPrayerText(which)) return 'Nothing to send';
             return 'Tell this person — Mosaic picks how';
         },
@@ -2138,6 +2181,7 @@ function serviceForm() {
                 requests: el.requests || null,
                 requestsWho: el.requests ? el.requests.who : 'either',
                 requestPeople: el.requests && el.requests.people ? el.requests.people : [],
+                noticeDays: el.requests && Array.isArray(el.noticeDays) ? el.noticeDays.slice() : [],
                 prayedByOther: !!el.prayedByOther,
                 hasRole: el.hasRole,
                 carrierName: carrier ? carrier.name : '',

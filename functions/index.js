@@ -3463,67 +3463,29 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         event.data.before.data() : null;
       const db = admin.firestore();
 
-      // Designated subjects for this service.
+      // Designated subjects for this service, grouped by the prayer that
+      // opted into Elder Digest (or the older male/female pair).
       const svcSnap = await db.collection("services").doc(serviceDate).get();
       if (!svcSnap.exists) return;
       const service = svcSnap.data() || {};
       const liturgy = service.liturgy || {};
-      const plan = await prayerPlanForService(db, service, liturgy);
-      const subjects = plan.subjects;
-      if (subjects.length === 0) return;
-
-      // Current request docs for each subject (the changed one uses the write's
-      // after-state; the others are unchanged by this event).
-      const reqSnaps = await Promise.all(subjects.map((s) =>
-        db.collection("people").doc(s.id)
-            .collection("prayer_requests").doc(serviceDate).get()));
-      const filledText = (i) => {
-        if (subjects[i].id === personId) {
-          return (after.prayerRequest || "").trim();
-        }
-        const snap = reqSnaps[i];
-        return ((snap.exists && snap.data().prayerRequest) || "").trim();
-      };
-
-      const subjectStates = subjects.map((s, i) => ({filled: !!filledText(i)}));
-      const wasCompleteBefore = subjects.every((s, i) =>
-        s.id === personId ?
-          !!(before && (before.prayerRequest || "").trim()) :
-          !!filledText(i));
-
-      if (!pr.elderDigestDecision({
-        subjectStates,
-        changedSource: after.prayerRequestSource || null,
-        wasCompleteBefore,
-      })) {
-        return;
-      }
-
-      // Idempotency lock: a deterministic marker doc, created atomically. If it
-      // already exists, another invocation has the digest.
-      const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
-          .doc(`elder_digest_${serviceDate}`);
+      let catalog = null;
       try {
-        await markerRef.create({
-          direction: "outbound",
-          channel: "text",
-          purpose: "elder_digest",
-          serviceDate,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        log(`Elder digest already handled for ${serviceDate}; skipping.`);
-        return;
+        catalog = await liturgyCatalog.loadLiturgyCatalog(db);
+      } catch (err) {
+        log("Elder digest: liturgy orders could not be read. " + err);
+        catalog = false;
       }
+      let elements = [];
+      if (catalog && catalog !== false) {
+        elements = LiturgyOrders.orderFor(service, catalog).elements || [];
+      }
+      const groups = pr.elderDigestGroups({liturgy, elements});
+      const touched = groups.filter((g) =>
+        g.subjects.some((s) => s.id === personId));
+      if (!touched.length) return;
 
-      // Render the digest from each subject's name + request.
-      const subjectLines = subjects.map((s, i) => ({
-        name: s.name || "", request: filledText(i),
-      }));
       const {templates} = await loadPrayerConfig(db);
-      const body = pr.renderElderDigest(templates.elderDigest, {
-        serviceDate, subjects: subjectLines,
-      });
 
       // Recipients: everyone with the "Elder" tag and a phone, deduped.
       const eldersSnap = await db.collection("people")
@@ -3536,27 +3498,83 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
         seen.add(to);
         recipients.push({personId: doc.id, to});
       }
-      if (recipients.length === 0) {
-        log(`Elder digest ${serviceDate}: no Elder-tagged recipients ` +
-            `with a phone.`);
-        return;
-      }
 
-      for (const r of recipients) {
-        try {
-          const result = await sendViaTextbelt({
-            to: r.to, body, withReplyWebhook: false,
-          });
-          if (result.success) {
-            await recordOutbound(db, {
-              to: r.to, body, textId: result.textId,
-              purpose: "elder_digest", personId: r.personId, serviceDate,
-            });
-          } else {
-            log(`Elder digest send failed for ${r.to}: ${result.error}`);
+      for (const group of touched) {
+        const subjects = group.subjects;
+        const reqSnaps = await Promise.all(subjects.map((s) =>
+          db.collection("people").doc(s.id)
+              .collection("prayer_requests").doc(serviceDate).get()));
+        const filledText = (i) => {
+          if (subjects[i].id === personId) {
+            return (after.prayerRequest || "").trim();
           }
+          const snap = reqSnaps[i];
+          return ((snap.exists && snap.data().prayerRequest) || "").trim();
+        };
+
+        const subjectStates = subjects.map((s, i) => (
+          {filled: !!filledText(i)}
+        ));
+        const wasCompleteBefore = subjects.every((s, i) =>
+          s.id === personId ?
+            !!(before && (before.prayerRequest || "").trim()) :
+            !!filledText(i));
+
+        if (!pr.elderDigestDecision({
+          subjectStates,
+          changedSource: after.prayerRequestSource || null,
+          wasCompleteBefore,
+        })) {
+          continue;
+        }
+
+        // Idempotency lock per prayer (or the legacy pair).
+        const markerRef = db.collection(NOTIFICATIONS_COLLECTION)
+            .doc(`elder_digest_${serviceDate}_${group.id}`);
+        try {
+          await markerRef.create({
+            direction: "outbound",
+            channel: "text",
+            purpose: "elder_digest",
+            serviceDate,
+            prayerElementId: group.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         } catch (e) {
-          log(`Elder digest send error for ${r.to}: ${e.message}`);
+          log(`Elder digest already handled for ${serviceDate} ` +
+              `(${group.id}); skipping.`);
+          continue;
+        }
+
+        if (recipients.length === 0) {
+          log(`Elder digest ${serviceDate}: no Elder-tagged recipients ` +
+              `with a phone.`);
+          continue;
+        }
+
+        const subjectLines = subjects.map((s, i) => ({
+          name: s.name || "", request: filledText(i),
+        }));
+        const body = pr.renderElderDigest(templates.elderDigest, {
+          serviceDate, subjects: subjectLines,
+        });
+
+        for (const r of recipients) {
+          try {
+            const result = await sendViaTextbelt({
+              to: r.to, body, withReplyWebhook: false,
+            });
+            if (result.success) {
+              await recordOutbound(db, {
+                to: r.to, body, textId: result.textId,
+                purpose: "elder_digest", personId: r.personId, serviceDate,
+              });
+            } else {
+              log(`Elder digest send failed for ${r.to}: ${result.error}`);
+            }
+          } catch (e) {
+            log(`Elder digest send error for ${r.to}: ${e.message}`);
+          }
         }
       }
       log(`Elder digest sent for ${serviceDate} to ` +

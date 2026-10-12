@@ -282,6 +282,66 @@ test('digest: no designated subjects → never', () => {
     }), false);
 });
 
+test('elderDigestGroups: one group per requesting prayer with digest on', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            pastoral: [{ id: 'p-ada', name: 'Ada' }, { id: 'p-bea', name: 'Bea' }],
+            quiet: [{ id: 'p-cal', name: 'Cal' }],
+        },
+        elements: [
+            {
+                id: 'pastoral', kind: 'prayer',
+                requests: { people: [{ who: 'either' }, { who: 'either' }] },
+                elderDigest: true,
+            },
+            {
+                id: 'quiet', kind: 'prayer',
+                requests: { people: [{ who: 'either' }] },
+                elderDigest: false,
+            },
+        ],
+    });
+    assert.strictEqual(groups.length, 1);
+    assert.strictEqual(groups[0].id, 'pastoral');
+    assert.deepStrictEqual(groups[0].subjects.map((s) => s.id), ['p-ada', 'p-bea']);
+});
+
+test('elderDigestGroups: legacy male/female when no requesting prayer', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            prayerMale: { id: 'p-ada', name: 'Ada' },
+            prayerFemale: { id: 'p-bea', name: 'Bea' },
+        },
+        elements: [],
+    });
+    assert.strictEqual(groups.length, 1);
+    assert.strictEqual(groups[0].id, '_legacy');
+    assert.deepStrictEqual(groups[0].subjects.map((s) => s.id), ['p-ada', 'p-bea']);
+});
+
+test('elderDigestGroups: requesting prayer with digest off yields no group', () => {
+    const groups = pr.elderDigestGroups({
+        liturgy: {
+            quiet: [{ id: 'p-ada', name: 'Ada' }],
+            prayerMale: { id: 'p-bea', name: 'Bea' },
+        },
+        elements: [{
+            id: 'quiet', kind: 'prayer',
+            requests: { people: [{ who: 'either' }] },
+            elderDigest: false,
+        }],
+    });
+    assert.deepStrictEqual(groups, []);
+});
+
+test('scheduledTextDates subtracts notice days from the Sunday', () => {
+    assert.deepStrictEqual(
+        pr.scheduledTextDates('2026-10-12', [5, 3, 1]),
+        ['2026-10-07', '2026-10-09', '2026-10-11']);
+    assert.deepStrictEqual(pr.scheduledTextDates('2026-10-12', []), []);
+    assert.deepStrictEqual(pr.scheduledTextDates('', [5]), []);
+});
+
 // ── Elder digest rendering ─────────────────────────────────────────────────
 test('formatServiceDate renders a friendly Sunday date', () => {
     assert.strictEqual(pr.formatServiceDate('2026-06-28'), 'Sunday, June 28, 2026');

@@ -242,6 +242,9 @@
             hasNote: src.hasNote !== false,
             requests: requests,
             noticeDays: requests ? normaliseNoticeDays(src.noticeDays) : null,
+            // Absent on an older requesting prayer means on — that is how
+            // Pastoral Prayer behaved before the checkbox existed.
+            elderDigest: requests ? src.elderDigest !== false : false,
             prayedByOther: prayedByOtherOf(kind, src),
             hasRole: false,
         };
@@ -288,6 +291,7 @@
             hasNote: src.hasNote,
             requests: src.requests,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
@@ -758,6 +762,7 @@
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
@@ -787,6 +792,7 @@
             hasNote: src.hasNote !== false,
             requests: kind === 'prayer' ? src.requests : null,
             noticeDays: src.noticeDays,
+            elderDigest: src.elderDigest,
             prayedByOther: src.prayedByOther,
             message: src.message,
             response: src.response,
@@ -811,11 +817,19 @@
             if (src.hasNote !== undefined) el.hasNote = src.hasNote === true;
             if (el.kind === 'prayer' && src.requests !== undefined) {
                 el.requests = src.requests ? normaliseRequests('prayer', src.requests) : null;
-                if (!el.requests) el.noticeDays = null;
-                else if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_LIST.slice();
+                if (!el.requests) {
+                    el.noticeDays = null;
+                    el.elderDigest = false;
+                } else {
+                    if (el.noticeDays == null) el.noticeDays = DEFAULT_NOTICE_LIST.slice();
+                    if (src.elderDigest === undefined) el.elderDigest = true;
+                }
             }
             if (el.kind === 'prayer' && src.noticeDays !== undefined) {
                 el.noticeDays = el.requests ? normaliseNoticeDays(src.noticeDays) : null;
+            }
+            if (el.kind === 'prayer' && src.elderDigest !== undefined) {
+                el.elderDigest = !!(el.requests && src.elderDigest === true);
             }
             if (el.kind === 'prayer' && src.prayedByOther !== undefined) {
                 el.prayedByOther = src.prayedByOther === true;
