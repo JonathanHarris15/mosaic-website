@@ -66,7 +66,8 @@
         const bundle = {
             people: [], families: [], households: [], services: {}, hymns: {},
             series: [], occurrences: [], roles: [], forms: [], responses: [],
-            printedEventsBySunday: {}, liturgy: null, prayerRequests: {},
+            printedEventsBySunday: {}, linkedEventAnnouncements: [],
+            liturgy: null, prayerRequests: {},
         };
         const jobs = [];
 
@@ -115,6 +116,15 @@
                 const lists = await Promise.all(dates.map(date => safely(Guide.eventsForSunday(db, date, v), [])));
                 dates.forEach((date, i) => { bundle.printedEventsBySunday[date] = lists[i]; });
             })());
+        }
+
+        // The occurrence this printable opened from — its printed
+        // announcements join the Events → Announcements query even when
+        // that event sits outside the weeks window.
+        if (n.linkedOccurrenceId) {
+            jobs.push(loadLinkedAnnouncements(db, n.linkedOccurrenceId).then(list => {
+                bundle.linkedEventAnnouncements = list;
+            }));
         }
 
         if (n.series || n.occurrenceRange) {
@@ -198,6 +208,28 @@
             }
         }));
         bundle.prayerRequests = bag;
+    }
+
+    async function loadLinkedAnnouncements(db, occurrenceId) {
+        const AnnStore = global.EventAnnouncementStore;
+        if (!AnnStore || !occurrenceId) return [];
+        const doc = await safely(db.collection('event_occurrences').doc(occurrenceId).get(), null);
+        if (!doc || !doc.exists) return [];
+        const data = doc.data() || {};
+        const name = data.name || '';
+        const date = data.date || '';
+        let place;
+        if (data.seriesId) {
+            place = { kind: 'repeating', seriesId: data.seriesId, onDate: false };
+        } else {
+            place = { kind: 'one-off', occurrenceId: occurrenceId };
+        }
+        const list = await safely(AnnStore.loadPrintedAnnouncements(db, place), []);
+        return (list || []).map(ann => ({
+            announcement: ann,
+            eventName: name,
+            date: date,
+        }));
     }
 
     // Values typed on the event this Printable is linked to, for this date.

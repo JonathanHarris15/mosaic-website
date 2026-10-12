@@ -199,7 +199,7 @@ test('a five-Sunday preaching schedule: pick Sundays for a box, count five, and 
 test('hymn overflow and order rows: the Sunday lists a box can repeat over are all in the builder', () => {
     const { ed } = editor({ nodes: [box('sheet', [])], select: 'sheet', level: 'viewer' });
     const keys = ed.queryOffered.map(s => s.key);
-    ['sunday_hymns', 'sunday_rows', 'sunday_announcements', 'sunday_kids_questions', 'sundays'].forEach(k => {
+    ['sunday_hymns', 'sunday_rows', 'sunday_announcements', 'sunday_kids_questions', 'sundays', 'event_announcements'].forEach(k => {
         assert.ok(keys.includes(k), k + ' is offered');
     });
     ed.setQuerySource('sunday_hymns');
