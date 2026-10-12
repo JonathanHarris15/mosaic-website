@@ -164,18 +164,25 @@ test('dotted liturgy keys fold into the nested liturgy', () => {
 });
 
 test('the glance lifts the theme out and keeps the other facts', () => {
+    const added = Liturgy.addElement(Liturgy.standardCatalog(), {
+        name: 'Pastoral Prayer',
+        kind: 'prayer',
+        requests: { people: [{ who: 'either' }] },
+    });
+    const catalog = Liturgy.addToOrder(added.catalog, 'standard', added.element.id);
+    const liturgy = {
+        sermon: 'Psalm 23',
+        baptism: [{ name: 'Ada' }],
+    };
+    liturgy[added.element.id] = [{ id: 'p-owen', name: 'Owen' }];
     const view = Home.glance({
         theme: 'The Lord Is My Shepherd',
         preacher: 'Daniel',
         serviceLeader: 'Mark',
         musicLeader: 'Hannah',
         hasBaptism: true,
-        liturgy: {
-            sermon: 'Psalm 23',
-            prayerMale: { name: 'Owen' },
-            baptism: [{ name: 'Ada' }],
-        },
-    });
+        liturgy: liturgy,
+    }, catalog);
     assert.equal(view.theme, 'The Lord Is My Shepherd');
     assert.equal(view.sermon, 'Psalm 23');
     assert.deepEqual(view.pairs.map(function (pair) { return pair.k; }),

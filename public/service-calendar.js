@@ -126,12 +126,7 @@ function calendarPage() {
             this.selectedPersonRef.name = current.name || '';
             this.selectorRoleName = this.getRoleName(field);
             
-            // Set suggestions key if applicable
-            if (field === 'prayerMale') this.activeSuggestionsKey = 'males';
-            else if (field === 'prayerFemale') this.activeSuggestionsKey = 'females';
-            else this.activeSuggestionsKey = null;
-
-            if (this.activeSuggestionsKey) this.fetchPrayerSuggestions();
+            this.activeSuggestionsKey = null;
         },
         
         // One field, one write, nothing else. See the guard in
@@ -186,8 +181,6 @@ function calendarPage() {
                 'musicLeader': 'Music Leader',
                 'prayerPraiseName': 'Prayer Leader (Praise)',
                 'prayerConfessionName': 'Prayer Leader (Confession)',
-                'prayerMale': 'Male Being Prayed For',
-                'prayerFemale': 'Female Being Prayed For'
             };
             return names[field] || 'Person';
         },
@@ -226,8 +219,6 @@ function calendarPage() {
                     'preacher': 'preacherId',
                     'prayerPraiseName': 'prayerPraiseId',
                     'prayerConfessionName': 'prayerConfessionId',
-                    'prayerMale': null,
-                    'prayerFemale': null
                 };
                 const roleMap = {
                     'serviceLeader': 'service_leader',
@@ -235,8 +226,6 @@ function calendarPage() {
                     'preacher': 'preacher',
                     'prayerPraiseName': 'prayer',
                     'prayerConfessionName': 'prayer',
-                    'prayerMale': 'pastoral_prayer',
-                    'prayerFemale': 'pastoral_prayer'
                 };
 
                 const idField = idFieldMap[this.selectorField];
@@ -247,13 +236,12 @@ function calendarPage() {
                 const chosenName = this.selectedPersonRef.name || '';
                 const newId = chosenId;
                 const role = roleMap[this.selectorField];
-                const isPastoralPrayer = role === 'pastoral_prayer';
 
                 let metadata = null;
                 if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
                 if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
 
-                if (!isPastoralPrayer && oldId !== newId) {
+                if (oldId !== newId) {
                     if (oldId) {
                         const oldPersonRef = db.collection('people').doc(oldId);
                         let query = oldPersonRef.collection('involvement')
@@ -283,38 +271,6 @@ function calendarPage() {
                     }
                 }
 
-                if (isPastoralPrayer) {
-                    const storedSubjects = PastoralPrayerCore.subjectsFromStoredService(
-                        this.selectorDateKey, svc);
-                    const loaded = {
-                        date: storedSubjects.date,
-                        prayerMaleId: storedSubjects.prayerMaleId,
-                        prayerFemaleId: storedSubjects.prayerFemaleId,
-                    };
-                    const saved = {
-                        date: loaded.date,
-                        prayerMaleId: loaded.prayerMaleId,
-                        prayerFemaleId: loaded.prayerFemaleId,
-                    };
-                    saved[this.selectorField === 'prayerMale' ? 'prayerMaleId' : 'prayerFemaleId'] = chosenId;
-                    const personIds = PastoralPrayerCore.pastoralSubjectIds(loaded, saved);
-                    const historyByPerson = {};
-                    await Promise.all(personIds.map(async (personId) => {
-                        const snap = await db.collection('people').doc(personId)
-                            .collection(PastoralPrayerCore.HISTORY_COLLECTION)
-                            .get(FRESH_READ);
-                        historyByPerson[personId] = snap.docs.map(doc => doc.id);
-                    }));
-                    const decision = PastoralPrayerCore.decidePastoralPrayerSave(
-                        loaded, saved, historyByPerson);
-                    // Cache in this batch, not a follow-up write. A failed
-                    // second write used to leave the history present and the
-                    // picker still saying never.
-                    PastoralPrayerCore.writePastoralPrayerDecision(
-                        batch, db.collection('people'), decision,
-                        firebase.firestore.FieldValue.serverTimestamp());
-                }
-
                 const updates = {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
@@ -323,33 +279,11 @@ function calendarPage() {
                 if (!serviceDataMap[this.selectorDateKey]) serviceDataMap[this.selectorDateKey] = {};
                 const localSvc = serviceDataMap[this.selectorDateKey];
 
-                if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
-                    // Update liturgy in Firestore
-                    const currentLiturgy = (svc.liturgy && typeof svc.liturgy === 'object') ? { ...svc.liturgy } : {};
-                    currentLiturgy[this.selectorField] = { id: chosenId, name: chosenName };
-                    updates.liturgy = currentLiturgy;
+                updates[this.selectorField] = chosenName;
+                if (idField) updates[idField] = newId || null;
 
-                    // Sync names to Guide elements if they exist
-                    if (svc.guide && svc.guide.elements) {
-                        const prayerEl = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
-                        if (prayerEl) {
-                            if (this.selectorField === 'prayerMale') prayerEl.maleMember = chosenName;
-                            if (this.selectorField === 'prayerFemale') prayerEl.femaleMember = chosenName;
-                            updates.guide = svc.guide;
-                        }
-                    }
-
-                    // Update Local State
-                    if (!localSvc.liturgy) localSvc.liturgy = {};
-                    localSvc.liturgy[this.selectorField] = { id: chosenId, name: chosenName };
-                } else {
-                    updates[this.selectorField] = chosenName;
-                    if (idField) updates[idField] = newId || null;
-
-                    // Update Local State
-                    localSvc[this.selectorField] = chosenName;
-                    if (idField) localSvc[idField] = newId || null;
-                }
+                localSvc[this.selectorField] = chosenName;
+                if (idField) localSvc[idField] = newId || null;
 
                 // Trigger optimistic update
                 injectServiceData(serviceDataMap);
@@ -1755,43 +1689,33 @@ function injectServiceData(serviceMap) {
             if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
         }
 
-        const prayerFemaleCell = el.querySelector('.prayer-female-cell');
-        if (prayerFemaleCell) {
-            const val = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
-            const id = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            if (setCellText(prayerFemaleCell, val || '—')) {
-                prayerFemaleCell.setAttribute('data-person-id', id || '');
-            }
-            if (canEdit) setupInlineEdit(prayerFemaleCell, dateKey, 'prayerFemale');
-        }
-
-        // These two cells are rebuilt from innerHTML rather than written into,
-        // so a snapshot landing mid-edit would take the box away underneath the
-        // person typing in it. Leave the whole cell alone until they are out.
+        // Requesting-prayer subjects are filled on the Order of Service. The
+        // calendar shows the names read-only.
         const pastoralPrayerCell = el.querySelector('.pastoral-prayer-cell');
         if (pastoralPrayerCell && !hasEditorOpen(pastoralPrayerCell)) {
             pastoralPrayerCell.innerHTML = '';
-            
-            const maleRow = document.createElement('div');
-            maleRow.className = 'flex gap-1 items-center';
-            const maleName = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.name : '—';
-            const maleId = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.id : '';
-            maleRow.innerHTML = `<span class="opacity-50">M:</span> <span class="male-name-cell">${maleName || '—'}</span>`;
-            maleRow.querySelector('.male-name-cell').setAttribute('data-person-id', maleId || '');
-            
-            const femaleRow = document.createElement('div');
-            femaleRow.className = 'flex gap-1 items-center';
-            const femaleName = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
-            const femaleId = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            femaleRow.innerHTML = `<span class="opacity-50">F:</span> <span class="female-name-cell">${femaleName || '—'}</span>`;
-            femaleRow.querySelector('.female-name-cell').setAttribute('data-person-id', femaleId || '');
-            
-            pastoralPrayerCell.appendChild(maleRow);
-            pastoralPrayerCell.appendChild(femaleRow);
-
-            if (canEdit) {
-                setupInlineEdit(maleRow.querySelector('.male-name-cell'), dateKey, 'prayerMale');
-                setupInlineEdit(femaleRow.querySelector('.female-name-cell'), dateKey, 'prayerFemale');
+            const names = [];
+            const seen = {};
+            const lit = (svc && svc.liturgy) || {};
+            LiturgyOrderCore.elementsFor(svc, currentCatalog()).forEach((el) => {
+                if (!el || el.kind !== 'prayer' || !el.requests) return;
+                const list = lit[el.id];
+                if (!Array.isArray(list)) return;
+                list.forEach((person) => {
+                    if (!person || !person.id || !person.name || seen[person.id]) return;
+                    seen[person.id] = true;
+                    names.push(person.name);
+                });
+            });
+            if (!names.length) {
+                pastoralPrayerCell.textContent = '—';
+            } else {
+                names.forEach((name) => {
+                    const row = document.createElement('div');
+                    row.className = 'font-body-md text-on-surface-variant text-xs';
+                    row.textContent = name;
+                    pastoralPrayerCell.appendChild(row);
+                });
             }
         }
 
@@ -2239,7 +2163,7 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
 
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName'];
     const element = liturgyElementFor(field);
 
     el.onclick = (e) => {

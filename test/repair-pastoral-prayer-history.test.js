@@ -19,6 +19,8 @@ test('a Service doc becomes the two pastoral-prayer subjects', () => {
     });
     assert.deepStrictEqual(service, {
         date: SUNDAY,
+        subjectIds: [AVA],
+        subjectNames: { [AVA]: 'Ava Vance' },
         prayerMaleId: null,
         prayerMaleName: '',
         prayerFemaleId: AVA,

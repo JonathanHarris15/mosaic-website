@@ -764,7 +764,7 @@
             }
 
             const svc = HD.normalizeService(opts.svc);
-            const view = HD.glance(svc);
+            const view = HD.glance(svc, opts.catalog);
             const ready = HD.readiness(svc, opts.catalog);
             setHiddenText(desk, view.theme);
             setHiddenText(phone, [view.theme, view.sermon].filter(Boolean).join(' · '));

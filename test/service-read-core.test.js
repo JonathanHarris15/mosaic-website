@@ -66,12 +66,26 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
     });
 
     test('the people prayed for read beside the order, never as rows', () => {
-        const s = Read.readableService('2031-03-30', {
-            liturgy: { prayerMale: { id: 'p-1', name: 'Sam Sample' }, prayerFemale: { id: null, name: '' } },
-            preacher: 'Pat Placeholder',
+        const added = Liturgy.addElement(Liturgy.standardCatalog(), {
+            name: 'Pastoral Prayer',
+            kind: 'prayer',
+            requests: { people: [{ who: 'male' }, { who: 'female' }] },
         });
+        const withPrayer = Liturgy.addToOrder(added.catalog, 'standard', added.element.id);
+        const liturgy = {};
+        liturgy[added.element.id] = [
+            { id: 'p-1', name: 'Sam Sample' },
+            { id: 'p-2', name: 'Pat Sample' },
+        ];
+        const s = Read.readableService('2031-03-30', {
+            liturgy,
+            preacher: 'Pat Placeholder',
+        }, withPrayer);
         assert.ok(!fields(s).includes('prayerMale'));
-        assert.deepStrictEqual(s.prayedFor, { 'Male Being Prayed For': { id: 'p-1', name: 'Sam Sample' } });
+        assert.deepStrictEqual(s.prayedFor, {
+            'Pastoral Prayer 1': { id: 'p-1', name: 'Sam Sample' },
+            'Pastoral Prayer 2': { id: 'p-2', name: 'Pat Sample' },
+        });
         assert.strictEqual(s.people.Preacher, 'Pat Placeholder');
     });
 

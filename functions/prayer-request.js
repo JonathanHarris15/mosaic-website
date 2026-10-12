@@ -223,19 +223,16 @@ function daysUntil(serviceDate, todayDate) {
 }
 
 /**
- * Whether personId is pastoral prayer on this service's liturgy.
- * @param {?Object} liturgy
+ * Whether personId is named on a requesting prayer for this Sunday.
+ * @param {?Object} liturgy unused; kept so callers need not change shape
  * @param {?string} personId
- * @param {?Array<string>} subjectIds people the order names, when known
+ * @param {?Array<string>} subjectIds people the order names
  * @return {boolean}
  */
 function isPastoralPrayerSubject(liturgy, personId, subjectIds) {
   if (!personId) return false;
-  if (Array.isArray(subjectIds)) return subjectIds.indexOf(personId) !== -1;
-  if (!liturgy) return false;
-  const male = liturgy.prayerMale && liturgy.prayerMale.id;
-  const female = liturgy.prayerFemale && liturgy.prayerFemale.id;
-  return personId === male || personId === female;
+  if (!Array.isArray(subjectIds)) return false;
+  return subjectIds.indexOf(personId) !== -1;
 }
 
 /**
@@ -321,9 +318,8 @@ function reminderDaysFor(noticeDays) {
 }
 
 /**
- * Everyone a Sunday's pastoral prayer asks, from a prayer that sends
- * requests and from the older male and female fields. One person is one
- * row. A prayer's own days win over the older fields.
+ * Everyone a Sunday's requesting prayers ask. One person is one row. A
+ * prayer's own days and prose win when the same person is named twice.
  * @param {Object} args
  * @param {?Object} args.liturgy
  * @param {Array} [args.elements] the Sunday's order
@@ -334,7 +330,7 @@ function pastoralSubjects(args) {
   const liturgy = (args && args.liturgy) || {};
   const elements = (args && args.elements) || [];
   const byId = new Map();
-  const consider = (person, noticeList, fromElement, prose) => {
+  const consider = (person, noticeList, prose) => {
     if (!person || !person.id) return;
     const list = Array.isArray(noticeList) ? noticeList : [];
     const days = list.length ? list[0] : 0;
@@ -348,47 +344,25 @@ function pastoralSubjects(args) {
         noticeList: list.slice(),
         message: words.message || "",
         response: words.response || "",
-        fromElement: !!fromElement,
+        fromElement: true,
       });
       return;
     }
-    if (fromElement && !prev.fromElement) {
-      prev.noticeDays = days;
-      prev.noticeList = list.slice();
-      prev.message = words.message || "";
-      prev.response = words.response || "";
-      prev.fromElement = true;
-      if (person.name) prev.name = person.name;
-    } else if (fromElement && days > prev.noticeDays) {
+    if (days > prev.noticeDays) {
       prev.noticeDays = days;
       prev.noticeList = list.slice();
       if (words.message) prev.message = words.message;
       if (words.response) prev.response = words.response;
     }
+    if (person.name) prev.name = person.name;
   };
-  const prayers = elements.filter((el) =>
-    el && el.kind === "prayer" && el.requests);
-  prayers.forEach((el) => {
-    const value = liturgy[el.id];
-    const named = Array.isArray(value) ? value : [];
-    const words = proseOf(el);
-    named.forEach((person) =>
-      consider(person, noticeListOf(el), true, words));
-  });
-  let legacyList = null;
-  prayers.forEach((el) => {
-    const list = noticeListOf(el);
-    if (!list.length) return;
-    if (!legacyList || list[0] > legacyList[0]) legacyList = list;
-  });
-  if (!legacyList) {
-    legacyList = noticeListOf({
-      requests: {count: 1}, noticeDays: INITIAL_DAYS_OUT,
-    });
-  }
-  const quiet = {message: "", response: ""};
-  consider(liturgy.prayerMale, legacyList, false, quiet);
-  consider(liturgy.prayerFemale, legacyList, false, quiet);
+  elements.filter((el) => el && el.kind === "prayer" && el.requests)
+      .forEach((el) => {
+        const value = liturgy[el.id];
+        const named = Array.isArray(value) ? value : [];
+        const words = proseOf(el);
+        named.forEach((person) => consider(person, noticeListOf(el), words));
+      });
   return Array.from(byId.values());
 }
 
@@ -423,7 +397,8 @@ function serviceDateHasEnded(todayDate, serviceDate) {
  * @param {string} state.personId
  * @param {string} state.serviceDate
  * @param {string} state.todayDate church-local today
- * @param {?Object} state.liturgy prayerMale / prayerFemale
+ * @param {?Object} state.liturgy unused when subjectIds is set
+ * @param {?Array<string>} state.subjectIds people named on requesting prayers
  * @param {boolean} state.viaAnswerLink
  * @param {?string} state.initialSentDate
  * @return {boolean}
@@ -736,8 +711,7 @@ function elderDigestDecision({
 
 /**
  * Which subject sets may fire an Elder Digest. Each requesting prayer with
- * elderDigest on is its own group. When the order has no requesting prayer,
- * the older male/female fields are one legacy group (digest on).
+ * elderDigest on is its own group.
  * @param {Object} args
  * @param {?Object} args.liturgy
  * @param {Array} [args.elements]
@@ -746,34 +720,16 @@ function elderDigestDecision({
 function elderDigestGroups(args) {
   const liturgy = (args && args.liturgy) || {};
   const elements = (args && args.elements) || [];
-  const requesting = elements.filter((el) =>
-    el && el.kind === "prayer" && el.requests);
-  if (requesting.length) {
-    return requesting
-        .filter((el) => el.elderDigest !== false)
-        .map((el) => {
-          const named = Array.isArray(liturgy[el.id]) ? liturgy[el.id] : [];
-          const subjects = named
-              .filter((p) => p && p.id)
-              .map((p) => ({id: p.id, name: p.name || ""}));
-          return {id: el.id, subjects};
-        })
-        .filter((g) => g.subjects.length > 0);
-  }
-  const legacy = [];
-  if (liturgy.prayerMale && liturgy.prayerMale.id) {
-    legacy.push({
-      id: liturgy.prayerMale.id,
-      name: liturgy.prayerMale.name || "",
-    });
-  }
-  if (liturgy.prayerFemale && liturgy.prayerFemale.id) {
-    legacy.push({
-      id: liturgy.prayerFemale.id,
-      name: liturgy.prayerFemale.name || "",
-    });
-  }
-  return legacy.length ? [{id: "_legacy", subjects: legacy}] : [];
+  return elements.filter((el) =>
+    el && el.kind === "prayer" && el.requests && el.elderDigest !== false)
+      .map((el) => {
+        const named = Array.isArray(liturgy[el.id]) ? liturgy[el.id] : [];
+        const subjects = named
+            .filter((p) => p && p.id)
+            .map((p) => ({id: p.id, name: p.name || ""}));
+        return {id: el.id, subjects};
+      })
+      .filter((g) => g.subjects.length > 0);
 }
 
 /**

@@ -58,9 +58,11 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.doesNotMatch(js, /function indexInList/);
     assert.match(html, /showsPraise\(item\)/);
     assert.match(html, /showsConfession\(item\)/);
-    assert.match(html, /showsPastoral\(item\)/);
+    assert.doesNotMatch(html, /showsPastoral\(item\)/);
+    assert.doesNotMatch(html, /Male Being Prayed For/);
+    assert.doesNotMatch(html, /Prayer Type/);
+    assert.doesNotMatch(js, /showsPastoral/);
     assert.match(html, /Prayer Leader \(Praise\)/);
-    assert.match(html, /Male Being Prayed For/);
     assert.match(html, /item\.type === 'prayer'/);
     assert.match(html, /Who prays /);
     assert.match(html, /prayerScheduleLabel\(slot\.id\)/);
@@ -82,7 +84,6 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.ok(panel !== -1, 'the row panel is the dropdown');
     assert.ok(panel < html.indexOf('Prayer Leader (Confession)'), 'the confession leader is inside the dropdown');
     assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
-    assert.ok(panel < html.indexOf('>Pastoral Prayer<'), 'the pastoral fields are inside the dropdown');
     assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
     const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
     const who = html.indexOf("'Who prays '");

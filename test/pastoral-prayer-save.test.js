@@ -20,6 +20,8 @@ test('the Order of Service save decides pastoral prayer from the Sunday it write
     assert.match(save, /decidePastoralPrayerSave/);
     assert.match(save, /writePastoralPrayerDecision/);
     assert.match(save, /flattenServiceForSave\(frozenService\)/);
+    assert.match(save, /pastoralSunday\(/);
+    assert.match(builder, /subjectIds/);
     const commit = save.indexOf('await batch.commit()');
     const recorded = save.indexOf('this.originalService = serviceSnapshot(frozenService)');
     assert.ok(commit > -1 && recorded > commit,
@@ -28,14 +30,11 @@ test('the Order of Service save decides pastoral prayer from the Sunday it write
         'a subject chosen during the commit must not be marked saved');
 });
 
-test('the calendar picker writes the cached date in the same batch as the history', () => {
+test('the calendar no longer edits pastoral prayer subjects inline', () => {
     const save = sliceBetween(calendar, 'async savePersonSelection()', 'promptAddPerson(name, callback)');
-    assert.match(save, /decidePastoralPrayerSave/);
-    assert.match(save, /writePastoralPrayerDecision/);
-    assert.ok(!save.includes('recomputeLastPrayerDate'),
-        'the cached date is not a follow-up write');
-    const commit = save.indexOf('await batch.commit()');
-    const write = save.indexOf('writePastoralPrayerDecision');
-    assert.ok(write > -1 && write < commit);
-    assert.match(save, /chosenId/);
+    assert.doesNotMatch(save, /decidePastoralPrayerSave/);
+    assert.doesNotMatch(save, /prayerMale/);
+    assert.doesNotMatch(save, /prayerFemale/);
+    assert.doesNotMatch(calendar, /Male Being Prayed For/);
+    assert.match(calendar, /Requesting-prayer subjects are filled on the Order of Service/);
 });

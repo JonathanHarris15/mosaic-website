@@ -50,14 +50,6 @@
         require('./liturgy-order-core.js') :
         (global && global.LiturgyOrderCore);
 
-    // The two people prayed for in the pastoral prayer. They are stored under
-    // `liturgy` but are people on the Sunday, not Liturgy Elements, so they
-    // read back beside the order rather than as rows of it.
-    const PRAYED_FOR_FIELDS = Object.freeze([
-        ['prayerMale', 'Male Being Prayed For'],
-        ['prayerFemale', 'Female Being Prayed For'],
-    ]);
-
     // The people fields, as document-field -> readable name. Read-only here:
     // this tool can SAY who is preaching, and oos_update_liturgy still
     // cannot change it (that needs a find-this-person tool nothing builds
@@ -173,10 +165,19 @@
             };
         });
 
+        // People named on requesting prayers, keyed by the prayer's display
+        // name plus a slot index when a prayer asks for more than one person.
         const prayedFor = {};
-        PRAYED_FOR_FIELDS.forEach(([field, label]) => {
-            const value = slotValue(liturgy[field]);
-            if (value && value.name) prayedFor[label] = value;
+        Liturgy.elementsOf(order, catalog).forEach((el) => {
+            if (!el || el.kind !== 'prayer' || !el.requests) return;
+            const list = Array.isArray(liturgy[el.id]) ? liturgy[el.id] : [];
+            const label = Liturgy.elementDisplayName(el);
+            list.forEach((person, i) => {
+                const value = slotValue(person);
+                if (!value || !value.name) return;
+                const key = list.length > 1 ? (label + ' ' + (i + 1)) : label;
+                prayedFor[key] = value;
+            });
         });
 
         const people = {};
@@ -231,7 +232,6 @@
 
     const ServiceReadCore = {
         PEOPLE_FIELDS,
-        PRAYED_FOR_FIELDS,
         normalizeServiceDoc,
         readableService,
         isBlank,
