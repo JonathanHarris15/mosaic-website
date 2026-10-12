@@ -8,6 +8,10 @@ const Core = require('../public/liturgy-order-core.js');
 function pageWith(load) {
     global.window = global.window || {};
     global.window.LiturgyOrderCore = Core;
+    global.document = global.document || {
+        getElementById() { return null; },
+        querySelector() { return null; },
+    };
     global.db = global.db || {};
     global.LiturgyOrderStore = { load: load, save: async () => { throw new Error('save should not run'); } };
     delete require.cache[require.resolve('../public/liturgy-orders.js')];
@@ -235,4 +239,44 @@ test('a successful read clears the problem and can be saved', async () => {
 test('order subtitle names Standard as the default', async () => {
     const page = await loadedPage();
     assert.match(page.orderSubtitle(), /cannot be deleted/);
+});
+
+test('duplicate order copies the open sequence as a draft and focuses rename', async () => {
+    const page = await loadedPage();
+    const sourceIds = page.selectedOrder.elementIds.slice();
+    let focused = false;
+    const realGet = document.getElementById.bind(document);
+    document.getElementById = (id) => {
+        if (id !== 'order-name') return realGet(id);
+        return {
+            focus() { focused = true; },
+            select() {},
+        };
+    };
+    try {
+        page.duplicateOrder();
+    } finally {
+        document.getElementById = realGet;
+    }
+
+    assert.equal(page.selectedOrder.name, 'Standard copy');
+    assert.deepEqual(page.selectedOrder.elementIds, sourceIds);
+    assert.notEqual(page.selectedOrder.id, 'standard');
+    assert.equal(page.dirty, true);
+    assert.equal(Core.orderById(page.catalog, 'standard').elementIds.length, sourceIds.length);
+    assert.equal(focused, true);
+
+    const first = page.selectedOrder.elementIds[0];
+    page.removeFromOrder(first);
+    assert.equal(page.selectedOrder.elementIds.indexOf(first), -1);
+    assert.ok(Core.orderById(page.catalog, 'standard').elementIds.indexOf(first) !== -1);
+});
+
+test('duplicate order names avoid colliding with an existing copy', async () => {
+    const page = await loadedPage();
+    page.duplicateOrder();
+    assert.equal(page.selectedOrder.name, 'Standard copy');
+    page.selectOrder('standard');
+    page.duplicateOrder();
+    assert.equal(page.selectedOrder.name, 'Standard copy 2');
 });

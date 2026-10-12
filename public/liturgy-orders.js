@@ -251,24 +251,49 @@ function liturgyOrdersPage() {
             this.selectedElementId = id;
         },
 
-        // An empty order, named so it does not collide with one already open,
-        // then the name field is ready to replace "New order".
-        addOrder() {
+        // Name a new order so it does not collide with one already open.
+        _freshOrderName(base) {
             const names = new Set(this.orders.map(o => o.name));
-            let name = 'New order';
-            for (let n = 2; names.has(name); n += 1) name = 'New order ' + n;
-            let made = null;
-            if (!this._apply(cat => {
-                made = Core.addOrder(cat, { name: name });
-                return made.catalog;
-            })) return;
-            this.selectOrder(made.order.id);
+            let name = base;
+            for (let n = 2; names.has(name); n += 1) name = base + ' ' + n;
+            return name;
+        },
+
+        _focusOrderName() {
             this.$nextTick(() => {
                 const input = document.getElementById('order-name');
                 if (!input) return;
                 input.focus();
                 input.select();
             });
+        },
+
+        // An empty order, named so it does not collide with one already open,
+        // then the name field is ready to replace "New order".
+        addOrder() {
+            const name = this._freshOrderName('New order');
+            let made = null;
+            if (!this._apply(cat => {
+                made = Core.addOrder(cat, { name: name });
+                return made.catalog;
+            })) return;
+            this.selectOrder(made.order.id);
+            this._focusOrderName();
+        },
+
+        // A draft copy of the open order: same sequence and element ids, so a
+        // Sunday that switches onto it keeps those slots. Not live until Save.
+        duplicateOrder() {
+            const source = this.selectedOrder;
+            if (!source) return;
+            const name = this._freshOrderName(source.name + ' copy');
+            let made = null;
+            if (!this._apply(cat => {
+                made = Core.addOrder(cat, { name: name, copyFrom: source.id });
+                return made.catalog;
+            })) return;
+            this.selectOrder(made.order.id);
+            this._focusOrderName();
         },
 
         renameOrder() {

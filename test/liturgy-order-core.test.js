@@ -371,6 +371,20 @@ test('Standard cannot be deleted; another order can', () => {
     assert.deepEqual(Core.deleteOrder(cat, 'lessonsAndCarols').orders.map(o => o.id), ['standard']);
 });
 
+test('copyFrom duplicates an order\'s sequence and keeps the same element ids', () => {
+    const source = twoOrderCatalog();
+    const made = Core.addOrder(source, { name: 'Baptism Sunday', copyFrom: 'lessonsAndCarols' });
+    const copy = made.order;
+    const original = Core.orderById(made.catalog, 'lessonsAndCarols');
+    assert.notEqual(copy.id, original.id);
+    assert.deepEqual(copy.elementIds, original.elementIds);
+    assert.ok(copy.elementIds.length > 0);
+
+    const trimmed = Core.removeFromOrder(made.catalog, copy.id, copy.elementIds[0]);
+    assert.equal(Core.orderById(trimmed, copy.id).elementIds.indexOf(original.elementIds[0]), -1);
+    assert.deepEqual(Core.orderById(trimmed, 'lessonsAndCarols').elementIds, original.elementIds);
+});
+
 test('an element is one record; each order keeps its own sequence of ids', () => {
     let cat = Core.standardCatalog();
     const made = Core.addElement(cat, { name: 'Offertory', primitive: 'text' });

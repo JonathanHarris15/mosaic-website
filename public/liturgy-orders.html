@@ -116,10 +116,16 @@
                                :disabled="!editing" aria-labelledby="order-canvas-title" />
                         <p class="lo-order-sub" id="order-canvas-title" x-text="orderSubtitle()"></p>
                     </div>
-                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="editing && !isStandard" @click="deleteOrder()">
-                        <span class="material-symbols-outlined">delete</span>
-                        <span class="m-btn__label">Delete order</span>
-                    </button>
+                    <div class="lo-canvas__acts" x-show="editing">
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="duplicateOrder()">
+                            <span class="material-symbols-outlined">content_copy</span>
+                            <span class="m-btn__label">Duplicate order</span>
+                        </button>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="!isStandard" @click="deleteOrder()">
+                            <span class="material-symbols-outlined">delete</span>
+                            <span class="m-btn__label">Delete order</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="lo-list" id="order-elements">
@@ -381,6 +387,7 @@
             padding: 20px 16px 0; overflow: hidden;
         }
         .lo-canvas__head { display: flex; align-items: flex-end; gap: var(--space-sm); }
+        .lo-canvas__acts { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-xs); flex-wrap: wrap; justify-content: flex-end; }
         .lo-canvas__titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
         .lo-order-name {
             width: 100%; border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 0;
