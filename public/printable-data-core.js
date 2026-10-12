@@ -314,11 +314,15 @@
     ];
 
     // Aspects of a placement beyond its Sunday value. The value stays at
-    // `el.id`; these are `el.id.name`, `el.id.message`, and the rest.
+    // `el.id`; these are `el.id.name`, `el.id.message`, and the rest. A
+    // prayer with request lines also exposes `el.id.person.0`,
+    // `el.id.message.0`, `el.id.response.0` — one chip per line, never a
+    // comma-joined People pill.
     const SUNDAY_ASPECTS = Object.freeze({
         name: 'name',
         message: 'message',
         response: 'response',
+        person: 'person',
         carriedBy: 'carriedBy',
         note: 'note',
     });
@@ -350,9 +354,31 @@
         return Liturgy.elementDisplayName ? Liturgy.elementDisplayName(el) : (el && el.name) || '';
     }
 
+    // The request lines a prayer sends (or empty). Index is stable: Sunday
+    // people sit at the same index under `liturgy.<id>`.
+    function prayerRequestLines(el) {
+        if (!el || el.kind !== 'prayer' || !el.requests) return [];
+        return Array.isArray(el.requests.people) ? el.requests.people : [];
+    }
+
+    function prayerLineWhoLabel(line, index, total) {
+        const who = line && line.who;
+        if (who === 'male') return 'Man';
+        if (who === 'female') return 'Woman';
+        return total > 1 ? ('Person ' + (index + 1)) : 'Person';
+    }
+
+    // {name} → first name on the message/response a prayer sends. {link} is
+    // left alone — a Printable does not mint answer links.
+    function fillPrayerProse(template, person) {
+        const first = firstName(person && person.name);
+        return String(template == null ? '' : template).replace(/\{name\}/g, first);
+    }
+
     // Fields one placement offers: its Sunday value, the name on the order,
-    // and for a prayer the message and response. Carried-by and note follow
-    // what the order toggled on that placement.
+    // and for a prayer the message and response — one chip per request line
+    // when the order lists people, so two subjects are never one pill.
+    // Carried-by and note follow what the order toggled on that placement.
     function fieldsForElement(el) {
         if (!el || !el.id) return [];
         const kind = el.kind || el.primitive || '';
@@ -365,35 +391,71 @@
             aspect: SUNDAY_ASPECTS.name,
             elementId: el.id,
         });
-        // Other has nothing to fill on the Sunday — the name is the print.
-        // Scripture's citation is the Reference chip (same key as the value).
-        if (kind !== 'other') {
-            out.push({
-                key: el.id,
-                label: valueFieldLabel(el),
-                kind: 'text',
-                element: kind,
-                aspect: 'value',
-                elementId: el.id,
+        const lines = prayerRequestLines(el);
+        if (kind === 'prayer' && lines.length) {
+            lines.forEach((line, i) => {
+                const who = prayerLineWhoLabel(line, i, lines.length);
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.person + '.' + i),
+                    label: who,
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.person,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message + '.' + i),
+                    label: lines.length > 1 ? ('Message · ' + who) : 'Message',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.message,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response + '.' + i),
+                    label: lines.length > 1 ? ('Response · ' + who) : 'Response',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.response,
+                    lineIndex: i,
+                    elementId: el.id,
+                });
             });
-        }
-        if (kind === 'prayer') {
-            out.push({
-                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message),
-                label: 'Message',
-                kind: 'text',
-                element: kind,
-                aspect: SUNDAY_ASPECTS.message,
-                elementId: el.id,
-            });
-            out.push({
-                key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response),
-                label: 'Response',
-                kind: 'text',
-                element: kind,
-                aspect: SUNDAY_ASPECTS.response,
-                elementId: el.id,
-            });
+        } else {
+            // Other has nothing to fill on the Sunday — the name is the print.
+            // Scripture's citation is the Reference chip (same key as the value).
+            // A prayer with no request lines keeps one People chip + the
+            // order's message/response templates.
+            if (kind !== 'other') {
+                out.push({
+                    key: el.id,
+                    label: valueFieldLabel(el),
+                    kind: 'text',
+                    element: kind,
+                    aspect: 'value',
+                    elementId: el.id,
+                });
+            }
+            if (kind === 'prayer') {
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.message),
+                    label: 'Message',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.message,
+                    elementId: el.id,
+                });
+                out.push({
+                    key: sundayAspectKey(el.id, SUNDAY_ASPECTS.response),
+                    label: 'Response',
+                    kind: 'text',
+                    element: kind,
+                    aspect: SUNDAY_ASPECTS.response,
+                    elementId: el.id,
+                });
+            }
         }
         if (el.prayedByOther || el.hasRole) {
             out.push({
@@ -1139,8 +1201,22 @@
             row[el.id] = dropsOut ? '' : (el.kind === 'other' ? (stored || el.name) : stored);
             row[sundayAspectKey(el.id, SUNDAY_ASPECTS.name)] = displayName;
             if (el.kind === 'prayer') {
-                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message)] = String(el.message || '');
-                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response)] = String(el.response || '');
+                const msg = String(el.message || '');
+                const res = String(el.response || '');
+                // Order templates stay resolvable for older wires.
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message)] = msg;
+                row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response)] = res;
+                const lines = prayerRequestLines(el);
+                const people = Array.isArray(lit[el.id]) ? lit[el.id] : [];
+                lines.forEach((line, i) => {
+                    const person = people[i] || null;
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.person + '.' + i)] =
+                        person ? slotText(person) : '';
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.message + '.' + i)] =
+                        fillPrayerProse(msg, person);
+                    row[sundayAspectKey(el.id, SUNDAY_ASPECTS.response + '.' + i)] =
+                        fillPrayerProse(res, person);
+                });
             }
             if (el.prayedByOther || el.hasRole) {
                 const carrier = Liturgy.carrierOf ? Liturgy.carrierOf(s, el) : null;

@@ -287,9 +287,15 @@ test('This Sunday chips follow the order the Sunday uses, not the seed names', (
     const pastoral = fields.elements.find(e => e.id === 'pastoralPrayer');
     assert.ok(pastoral, 'Pastoral Prayer is a placement group');
     assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.name' && f.label === 'Name'));
-    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer' && f.label === 'People'));
-    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.message'));
-    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.response'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.person.0' && f.label === 'Person 1'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.person.1' && f.label === 'Person 2'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.message.0'));
+    assert.ok(pastoral.chips.some(f => f.key === 'pastoralPrayer.response.1'));
+    assert.ok(!pastoral.chips.some(f => f.key === 'pastoralPrayer' && f.label === 'People'),
+        'two subjects are never one People pill');
+    const praise = fields.elements.find(e => e.id === 'prayerOfPraise');
+    assert.ok(praise.chips.some(f => f.key === 'prayerOfPraise' && f.label === 'People'),
+        'a prayer with no request lines keeps one People chip');
     assert.ok(!fields.elements.some(e => e.id === 'baptism'), 'Baptism is not on this order');
     assert.ok(!fields.elements.some(e => e.label === 'Hymn of Praise'), 'seed hymn names stay off');
     assert.ok(!fields.elements.some(e => e.id === 'benediction'), 'scripture off the order stays off');
