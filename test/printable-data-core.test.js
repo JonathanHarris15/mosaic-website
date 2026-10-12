@@ -537,6 +537,60 @@ test('a Sunday\'s fields are the value plus order aspects for each element', () 
     assert.ok(!seedKeys.includes('prayerFemale'));
 });
 
+test('a prayer with two request lines exposes each person and their filled message and response', () => {
+    const Liturgy = require('../public/liturgy-order-core.js');
+    const liturgy = Liturgy.catalogFrom({
+        orders: [{
+            id: 'standard',
+            name: 'Standard',
+            elements: [
+                { id: 'pastoralPrayer', name: 'Pastoral Prayer', kind: 'prayer', hasNote: false,
+                    requests: { people: [{ who: 'male' }, { who: 'female' }] },
+                    message: 'Hi {name}, please share.',
+                    response: 'Thank you, {name}.' },
+            ],
+        }],
+    });
+    const keys = Data.fieldsFor('sunday', {}, { liturgy: liturgy }).map(f => f.key);
+    assert.ok(keys.includes('pastoralPrayer.person.0'));
+    assert.ok(keys.includes('pastoralPrayer.person.1'));
+    assert.ok(keys.includes('pastoralPrayer.message.0'));
+    assert.ok(keys.includes('pastoralPrayer.response.1'));
+    assert.ok(!keys.includes('pastoralPrayer') || Data.fieldsFor('sunday', {}, { liturgy: liturgy })
+        .filter(f => f.key === 'pastoralPrayer').length === 0,
+        'no combined People field when lines are listed');
+    const fields = Data.fieldsForElement(liturgy.elements.find(e => e.id === 'pastoralPrayer'));
+    assert.equal(fields.find(f => f.key === 'pastoralPrayer.person.0').label, 'Man');
+    assert.equal(fields.find(f => f.key === 'pastoralPrayer.person.1').label, 'Woman');
+    assert.equal(fields.find(f => f.key === 'pastoralPrayer.message.0').label, 'Message · Man');
+    assert.equal(fields.find(f => f.key === 'pastoralPrayer.response.1').label, 'Response · Woman');
+
+    const data = {
+        services: {
+            // this Sunday from TODAY (Thu 2026-09-03) is 2026-09-06
+            '2026-09-06': {
+                liturgyOrderId: 'standard',
+                liturgy: {
+                    pastoralPrayer: [
+                        { id: 'p-m', name: 'Tyler Cruzen' },
+                        { id: 'p-f', name: 'Madison Myers' },
+                    ],
+                },
+            },
+        },
+        liturgy: liturgy,
+    };
+    const row = Data.resolve('sunday', {}, data, { today: TODAY }).rows[0];
+    assert.equal(row['pastoralPrayer.person.0'], 'Tyler Cruzen');
+    assert.equal(row['pastoralPrayer.person.1'], 'Madison Myers');
+    assert.equal(row['pastoralPrayer.message.0'], 'Hi Tyler, please share.');
+    assert.equal(row['pastoralPrayer.message.1'], 'Hi Madison, please share.');
+    assert.equal(row['pastoralPrayer.response.0'], 'Thank you, Tyler.');
+    assert.equal(row['pastoralPrayer.response.1'], 'Thank you, Madison.');
+    assert.equal(row['pastoralPrayer.message'], 'Hi {name}, please share.', 'the order template still resolves');
+    assert.equal(row.pastoralPrayer, 'Tyler Cruzen, Madison Myers', 'joined value stays for older wires');
+});
+
 test('the hymn sheets are the song elements of the Sunday\'s order', () => {
     const r = Data.resolve('sunday_hymns', {}, WITH_ORDERS(), { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.slot), ['Offertory', 'Hymn of Praise']);
