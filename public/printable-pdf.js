@@ -122,24 +122,80 @@
         return pairs.map(p => [p[0] / vw * width, p[1] / vh * height]);
     }
 
+    // These have to beat the preview's own marker rules. Those set
+    // `content: "" !important` on `.pr-page .m-qlist li::before` (and the
+    // ordinary-list dot). A shorter `.pr-raster-nobefore::before` loses that
+    // fight, html2canvas still paints the ::before, and because it ignores
+    // clip-path the marker comes out as the square behind the hexagon.
+    const RASTER_HIDE = [
+        '.pr-page .m-qlist li.pr-raster-nobefore::before,',
+        '.preview-page .m-qlist li.pr-raster-nobefore::before,',
+        '.pr-page ul:not(.m-qlist) > li.pr-raster-nobefore::before,',
+        '.preview-page ul:not(.m-qlist) > li.pr-raster-nobefore::before,',
+        '.pr-page .pr-raster-nobefore::before,',
+        '.preview-page .pr-raster-nobefore::before,',
+        '.pr-raster-nobefore::before { content: none !important; background: none !important; display: none !important; }',
+        '.pr-page .pr-raster-noafter::after,',
+        '.preview-page .pr-raster-noafter::after,',
+        '.pr-raster-noafter::after { content: none !important; background: none !important; display: none !important; }',
+    ].join('\n');
+
     function ensureRasterStyle() {
         if (typeof document === 'undefined' || document.getElementById('pr-raster-style')) return;
         const style = document.createElement('style');
         style.id = 'pr-raster-style';
         style.textContent = [
-            '.pr-raster-nobefore::before { content: none !important; }',
-            '.pr-raster-noafter::after { content: none !important; }',
+            RASTER_HIDE,
             '.pr-raster-mark { position: absolute; margin: 0; padding: 0; border: 0; display: block; }',
         ].join('\n');
         (document.head || document.documentElement).appendChild(style);
     }
 
-    function fittedImageUrl(img, px) {
+    function canvasTaintedBy(source) {
+        try {
+            const probe = document.createElement('canvas');
+            probe.width = 1;
+            probe.height = 1;
+            probe.getContext('2d').drawImage(source, 0, 0, 1, 1);
+            probe.toDataURL();
+            return false;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    // A picture loaded without CORS cannot be copied onto a canvas. Reload
+    // it the same way html2canvas does (anonymous CORS) so the letterbox can
+    // be baked. If that fails, the caller leaves the picture as it was.
+    function loadCorsImage(src) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('cors'));
+            image.src = src;
+        });
+    }
+
+    async function fittedImageUrl(img, px) {
         const cs = global.getComputedStyle(img);
         const fit = cs.objectFit || 'fill';
         if (fit !== 'contain' && fit !== 'cover' && fit !== 'scale-down') return null;
         const box = img.getBoundingClientRect();
-        const rect = fittedDrawRect(box.width, box.height, img.naturalWidth, img.naturalHeight, fit, cs.objectPosition);
+        let source = img;
+        let natW = img.naturalWidth;
+        let natH = img.naturalHeight;
+        if (!(natW > 0 && natH > 0)) return null;
+        if (canvasTaintedBy(img)) {
+            try {
+                source = await loadCorsImage(img.currentSrc || img.src);
+                natW = source.naturalWidth;
+                natH = source.naturalHeight;
+            } catch (e) {
+                return null;
+            }
+        }
+        const rect = fittedDrawRect(box.width, box.height, natW, natH, fit, cs.objectPosition);
         if (!rect) return null;
         if (Math.abs(rect.x) < 0.5 && Math.abs(rect.y) < 0.5
             && Math.abs(rect.w - box.width) < 0.5 && Math.abs(rect.h - box.height) < 0.5) return null;
@@ -148,7 +204,7 @@
         canvas.height = Math.max(1, Math.round(box.height * px));
         const ctx = canvas.getContext('2d');
         ctx.scale(px, px);
-        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+        ctx.drawImage(source, rect.x, rect.y, rect.w, rect.h);
         return canvas.toDataURL('image/png');
     }
 
@@ -219,7 +275,7 @@
         await Promise.all(imgs.map(async img => {
             if (!img.naturalWidth || !img.naturalHeight) return;
             let url = null;
-            try { url = fittedImageUrl(img, px); } catch (e) { return; }
+            try { url = await fittedImageUrl(img, px); } catch (e) { return; }
             if (!url) return;
             img.src = url;
             img.style.objectFit = 'fill';
