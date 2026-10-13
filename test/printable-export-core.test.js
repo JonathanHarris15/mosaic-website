@@ -212,6 +212,15 @@ test('fill-in header drops status chips; Folio pad offers Save; Print menu offer
     assert.match(pdfJs, /folioSpreads/, 'folio PDF uses the same pairing as print');
 });
 
+test('containedSize keeps a wide picture inside a square box', () => {
+    const Pdf = require('../public/printable-pdf.js');
+    assert.deepEqual(Pdf.containedSize(148, 148, 300, 150), { width: 148, height: 74 });
+    assert.deepEqual(Pdf.containedSize(148, 148, 100, 100), { width: 148, height: 148 });
+    assert.deepEqual(Pdf.containedSize(200, 100, 100, 100), { width: 100, height: 100 });
+    assert.equal(Pdf.containedSize(0, 148, 300, 150), null);
+    assert.equal(Pdf.containedSize(148, 148, 0, 150), null);
+});
+
 test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
     const Pdf = require('../public/printable-pdf.js');
     assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13'), 'Directory — 2026-10-13.pdf');

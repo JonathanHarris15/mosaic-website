@@ -23,7 +23,9 @@
     const BASE_CSS = [
         '.pr-page { font-family: "EB Garamond", Georgia, serif; color: #000; background: #fff; }',
         '.pr-page * { box-sizing: border-box; }',
-        '.pr-page img { display: block; }',
+        '.pr-page img { display: block; max-width: 100%; }',
+        '.pr-page ul { list-style: disc; padding-left: 1.25em; margin: 0.35em 0; }',
+        '.pr-page ol { list-style: decimal; padding-left: 1.25em; margin: 0.35em 0; }',
         '.pr-page .m-scripture { line-height: 1.45; }',
         '.pr-page .m-scripture__line { display: block; }',
         '.pr-page .m-scripture__line--poetry { padding-left: 1.25em; }',
@@ -75,6 +77,9 @@
         }
 
         if (node.tag === 'img') {
+            // fill is the default once both axes are set, and it stretches.
+            // Cover and contain stay whatever the element asked for.
+            if (!node.style || !node.style['object-fit']) el.style.objectFit = 'contain';
             const src = (values && values.src) || (node.attrs && node.attrs.src) || '';
             if (src) {
                 el.src = src;
@@ -180,6 +185,13 @@
         const src = fill.value || (node.attrs && node.attrs.src) || '';
         if (src) img.src = src;
         img.alt = '';
+        img.style.objectFit = (node.style && node.style['object-fit']) || 'contain';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.minWidth = '0';
+        img.style.minHeight = '0';
         const file = document.createElement('input');
         file.type = 'file';
         file.accept = 'image/*';

@@ -179,7 +179,30 @@
             return out;
         }
 
+        // A flex or grid wrapper blockifies its children. An li (or dt/dd)
+        // that has been blockified draws no marker, so a bullet list comes
+        // out as bare lines. `display: contents` puts the copies back under
+        // the ul/ol. Cards and other boxes keep the grid/flex layout.
         function wrap(node, copies, count) {
+            const tag = node && node.tag;
+            const marker = tag === 'li' || tag === 'dt' || tag === 'dd';
+            if (marker) {
+                const gap = Math.max(0, Number((node.repeat && node.repeat.layout && node.repeat.layout.gap) || 0));
+                if (gap) {
+                    copies.forEach((copy, i) => {
+                        if (i === 0 || (copy.style && copy.style['margin-top'])) return;
+                        copy.style = Object.assign({}, copy.style, { 'margin-top': gap + 'px' });
+                    });
+                }
+                return {
+                    id: wrapperId(node.id),
+                    tag: 'div',
+                    name: '',
+                    attrs: { 'data-list-of': node.id },
+                    style: { display: 'contents' },
+                    children: copies,
+                };
+            }
             return {
                 id: wrapperId(node.id),
                 tag: 'div',
