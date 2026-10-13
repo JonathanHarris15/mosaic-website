@@ -4,7 +4,8 @@
  * Pixel layout matches the old half-letter booklet (service-guide.html /
  * test/fixtures/service-guide-golden.html). Wires use only what the printable
  * editor offers: sunday / sunday_hymns / sunday_announcements / sundays /
- * sunday_prayer_requests / event_field / event_list / insert_page_number.
+ * sunday_prayer_requests / event_field / event_list. A page number is an
+ * element on the page, not a data source.
  *
  * Hymn sheets are one sunday_hymns list split with from/to around pastoral
  * prayer and sermon notes (MS-743). Adjust to when a Sunday has more opening

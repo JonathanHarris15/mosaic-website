@@ -251,7 +251,7 @@ test('MS-730: the query builder offers every source a level may read, single and
         assert.ok(member.includes(key), key + ' is in a member\'s query builder');
     });
     assert.ok(member.includes('sunday') && Data.sourceByKey('sunday').shape === 'single', 'a single is queried too');
-    ['sunday_typed', 'insert_date', 'insert_page_number', 'sunday_prayer_requests'].forEach(key => {
+    ['sunday_typed', 'insert_date', 'sunday_prayer_requests'].forEach(key => {
         assert.ok(!member.includes(key), key + ' is not in a member\'s query builder');
     });
     assert.ok(!member.includes('household_children'), 'a related list waits for its parent row');
@@ -284,7 +284,7 @@ test('MS-730: every catalog source is query, general, or off the drawer', () => 
     });
     assert.equal(homes.sunday_typed, '');
     assert.equal(homes.insert_date, 'general');
-    assert.equal(homes.insert_page_number, 'general');
+    assert.equal(Data.sourceByKey('insert_page_number'), null, 'a page number is an element, not a source');
     Data.SOURCES.filter(s => !s.noDrawer && !s.scalar && !s.blank).forEach(s => {
         assert.equal(homes[s.key], 'query', s.key + ' is queried');
     });
@@ -1157,7 +1157,7 @@ test('params read back as a sentence for the element panel', () => {
     assert.match(Data.describeParams('event_dates', {}), /from today to 14 days from now/);
 });
 
-// MS-689 — scalar inserts below the query (date, page number)
+// Scalar insert below the query (the date)
 
 test('insert_date resolves today, offset, and fixed dates without fetching', () => {
     const today = Data.resolve('insert_date', { mode: 'today' }, {}, { today: TODAY });
@@ -1167,13 +1167,6 @@ test('insert_date resolves today, offset, and fixed dates without fetching', () 
     const fixed = Data.resolve('insert_date', { mode: 'fixed', fixed: '2026-12-25' }, {}, { today: TODAY });
     assert.match(fixed.rows[0].value, /December 2026/);
     assert.deepEqual(Data.needsFor('insert_date', {}, TODAY), {});
-});
-
-test('page numbering respects a custom start page in the project order', () => {
-    assert.equal(Data.insertPageNumberDisplay(0, 1), 1);
-    assert.equal(Data.insertPageNumberDisplay(2, 3), 1);
-    assert.equal(Data.insertPageNumberDisplay(1, 3), null);
-    assert.equal(Data.describeParams('insert_page_number', { startAt: 3 }), 'numbering from page 3');
 });
 
 test('before a Sunday is the previous Sunday, and before any other day is yesterday', () => {

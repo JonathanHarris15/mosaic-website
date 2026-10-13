@@ -195,19 +195,6 @@
                 if (a.kind === 'font') return { ok: false, why: 'Drag this font onto text, not a picture.' };
                 return { ok: true, value: a.url || '' };
             }
-            if (bind.source === 'insert_page_number') {
-                const idx = pageCtx && pageCtx.pageIndex != null ? pageCtx.pageIndex : -1;
-                if (idx < 0) return { ok: false, why: 'No page.' };
-                // The designed booklet puts the number in the outer margin:
-                // an odd physical page (even index) sits on the right.
-                if (bind.field === 'edgeClass') {
-                    const edge = idx % 2 === 1 ? 'left' : 'right';
-                    return { ok: true, value: 'm-pagenum m-pagenum--' + edge };
-                }
-                const n = Data.insertPageNumberDisplay(idx, (bind.params || {}).startAt);
-                if (n == null) return { ok: false, why: 'This page is before numbering starts.' };
-                return { ok: true, value: String(n) };
-            }
             if (bind.scope === 'item') {
                 if (!row) return { ok: false, why: 'This element is wired to a row but is not inside an iterated element.' };
                 const v = row[bind.field];
@@ -366,18 +353,27 @@
         const assets = project.assets || [];
         const canPaginate = !!(res && (host || o.fitsOn));
 
-        function emitEmptyContinuations(chain, originRepeat, pageIndex, data) {
+        // A drawn sheet is `out.length` at the moment it is emitted. Page
+        // numbers and mirroring follow that, not the stored page's index:
+        // an omitted hymn and a list that spills both close the count up.
+        function emit(page, data, expandOpts, extras) {
+            const sheet = out.length;
+            const expanded = Render.expandPage(page, data, Object.assign({}, expandOpts || {}, { pageIndex: sheet }));
+            out.push(entryOf(page, expanded, Object.assign({}, extras || {}, { pageIndex: sheet })));
+        }
+
+        function emitEmptyContinuations(chain, originRepeat) {
             chain.slice(1).forEach((pg, i) => {
                 claimed[pg.id] = true;
                 const r = overflowingRepeatOn(pg);
-                const expanded = Render.expandPage(pg, (res && originRepeat && r)
+                const data = (res && originRepeat && r)
                     ? emptySlice(res, originRepeat, r.id, out.length, assets)
-                    : dataForPage(res, out.length, assets));
-                out.push(entryOf(pg, expanded, { originId: chain[0].id, pageIndex: pageIndex, continuation: i + 1, rowsFrom: 0, rowsTo: 0 }));
+                    : dataForPage(res, out.length, assets);
+                emit(pg, data, null, { originId: chain[0].id, continuation: i + 1, rowsFrom: 0, rowsTo: 0 });
             });
         }
 
-        pages.forEach((page, pageIndex) => {
+        pages.forEach(page => {
             if (claimed[page.id]) return;
             // Page numbers follow the sheet about to be drawn, not the stored
             // page. A hymn that spills keeps the next sheet's own number.
@@ -393,8 +389,7 @@
                 const sliced = (res && mine)
                     ? emptySlice(res, originRepeat || mine, mine.id, out.length, assets)
                     : STAND_INS;
-                const expanded = Render.expandPage(page, sliced);
-                out.push(entryOf(page, expanded, { originId: page.continues.from, pageIndex: pageIndex }));
+                emit(page, sliced, null, { originId: page.continues.from });
                 return;
             }
 
@@ -413,9 +408,8 @@
             }
 
             if (!repeat || !rows || !rows.length || !canPaginate) {
-                const expanded = Render.expandPage(page, data);
-                out.push(entryOf(page, expanded, { originId: page.id, pageIndex: pageIndex }));
-                emitEmptyContinuations(chain, repeat || overflowingRepeatOn(page), pageIndex, data);
+                emit(page, data, null, { originId: page.id });
+                emitEmptyContinuations(chain, repeat || overflowingRepeatOn(page));
                 return;
             }
 
@@ -448,28 +442,24 @@
                     chain.push(bg);
                 }
                 const r = overflowingRepeatOn(bg) || repeat;
-                const expanded = Render.expandPage(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, out.length, assets), { warnEveryRow: false, copyStart: slice.start, pageIndex: pageIndex });
-                out.push(entryOf(bg, expanded, {
+                emit(bg, sliceFrom(res, repeat, r.id, slice.start, slice.end, out.length, assets), { warnEveryRow: false, copyStart: slice.start }, {
                     needsPersist: needsPersist,
                     originId: page.id,
-                    pageIndex: pageIndex,
                     continuation: i,
                     rowsFrom: slice.start,
                     rowsTo: slice.end,
-                }));
+                });
             });
 
             for (let i = plan.length; i < chain.length; i++) {
                 const bg = chain[i];
                 const r = overflowingRepeatOn(bg);
-                const expanded = Render.expandPage(bg, r ? emptySlice(res, repeat, r.id, out.length, assets) : dataForPage(res, out.length, assets), { warnEveryRow: false, pageIndex: pageIndex });
-                out.push(entryOf(bg, expanded, {
+                emit(bg, r ? emptySlice(res, repeat, r.id, out.length, assets) : dataForPage(res, out.length, assets), { warnEveryRow: false }, {
                     originId: page.id,
-                    pageIndex: pageIndex,
                     continuation: i,
                     rowsFrom: 0,
                     rowsTo: 0,
-                }));
+                });
             }
         });
         return out;

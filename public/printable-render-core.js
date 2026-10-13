@@ -168,6 +168,10 @@
             }
             const out = clone(node);
             if (index > 0) out.id = copyId(node.id, index);
+            if (out.pageNumber && o.pageIndex != null && Number.isFinite(Number(o.pageIndex))) {
+                out.text = String(Math.round(Number(o.pageIndex)) + 1);
+                out.children = [];
+            }
             applyBindings(out, row, index);
             if (out.children && out.children.length) {
                 out.children = out.children.map(child => expandNode(child, row, index));

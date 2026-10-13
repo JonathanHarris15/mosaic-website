@@ -86,7 +86,7 @@ test('the query builder menu is every source this viewer may read, single or lis
     ['sunday', 'role_holder', 'people', 'households', 'sundays', 'event_dates', 'form_answers'].forEach(k => {
         assert.ok(keys.includes(k), k + ' is offered');
     });
-    ['sunday_typed', 'insert_date', 'insert_page_number', 'household_children'].forEach(k => {
+    ['sunday_typed', 'insert_date', 'household_children'].forEach(k => {
         assert.ok(!keys.includes(k), k + ' is not a top-level query');
     });
     assert.ok(!regions.some(r => r.related), 'no "Of this" group outside a card');
@@ -260,7 +260,10 @@ test('a Sunday in the query builder walks Service then the liturgy order; fill-i
     assert.match(fill, /addEventInput\('list'\)/);
     assert.doesNotMatch(query, /sundayTypedChips/);
     assert.match(general, /onScalarChipDragStart\(\$event, 'insert_date', 'value'\)/);
-    assert.match(general, /onScalarChipDragStart\(\$event, 'insert_page_number', 'number'\)/);
+    assert.doesNotMatch(general, /insert_page_number/, 'the page number is not a data chip');
+    assert.match(html, /addElement\('page-number'\)/, 'a page number is added like a box or text');
+    assert.match(html, /Mirror on the facing page/);
+    assert.match(html, /class="pe-place"/);
     assert.match(general, /onAssetChipDragStart/);
     assert.match(js, /sundayDrawerFields\(Data,[\s\S]*\{[\s\S]*liturgy/,
         'the Sunday groups read the loaded liturgy, not only the seed fields');
@@ -330,7 +333,7 @@ test('every catalog source is query, general live data, or off the drawer', () =
     });
     assert.equal(homes.sunday_typed, '', 'legacy typed Sunday fields are not a drawer card');
     assert.equal(homes.insert_date, 'general');
-    assert.equal(homes.insert_page_number, 'general');
+    assert.equal(homes.insert_page_number, undefined);
     ['people', 'households', 'household_children', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',
         'sunday_kids_questions', 'sunday_prayer_requests', 'sundays', 'event_dates', 'role_holder', 'form_answers'].forEach(k => {
         assert.equal(homes[k], 'query', k + ' is queried');

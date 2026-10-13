@@ -260,48 +260,14 @@
         return opts;
     }
 
-    function pageNumberDisplay(pageIndex, startAt) {
-        const start = Math.max(1, Math.round(Number(startAt)) || 1);
-        const physical = Math.round(Number(pageIndex)) + 1;
-        if (!Number.isFinite(physical) || physical < 1) return null;
-        if (physical < start) return null;
-        return physical - start + 1;
-    }
-
     function restampPageNumberNodes(nodes, pageIndex) {
+        const n = Math.round(Number(pageIndex));
+        const text = Number.isFinite(n) && n >= 0 ? String(n + 1) : '';
         (nodes || []).forEach(node => {
             if (!node) return;
-            if (node.bind) {
-                Object.keys(node.bind).forEach(prop => {
-                    const bind = node.bind[prop];
-                    if (!bind || bind.source !== 'insert_page_number') return;
-                    if (bind.field === 'edgeClass') {
-                        const edge = pageIndex % 2 === 1 ? 'left' : 'right';
-                        const val = 'm-pagenum m-pagenum--' + edge;
-                        if (prop === 'class' || prop === 'className') {
-                            node.attrs = Object.assign({}, node.attrs, { class: val });
-                        } else if (prop === 'text') {
-                            node.text = val;
-                        } else {
-                            node.attrs = Object.assign({}, node.attrs, { [prop]: val });
-                        }
-                        return;
-                    }
-                    const n = pageNumberDisplay(pageIndex, (bind.params || {}).startAt);
-                    if (n == null) {
-                        if (prop === 'text') {
-                            node.text = '';
-                            node.children = [];
-                        } else {
-                            node.attrs = Object.assign({}, node.attrs, { [prop]: '' });
-                        }
-                    } else if (prop === 'text') {
-                        node.text = String(n);
-                        node.children = [];
-                    } else {
-                        node.attrs = Object.assign({}, node.attrs, { [prop]: String(n) });
-                    }
-                });
+            if (node.pageNumber) {
+                node.text = text;
+                node.children = [];
             }
             if (node.children) restampPageNumberNodes(node.children, pageIndex);
         });
@@ -425,7 +391,6 @@
         canInsertAfterEntry,
         folioInsertAfterOptions,
         folioSourceOptions,
-        pageNumberDisplay,
         restampFolioPageNumbers,
         applyFolioPad,
         removeFolioPadAt,

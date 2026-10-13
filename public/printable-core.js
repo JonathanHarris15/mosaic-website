@@ -137,11 +137,16 @@
     // box holds children; text holds a run of text; an image holds a src.
     function kindOf(node) {
         if (!node) return 'box';
+        if (isPageNumber(node)) return 'page-number';
         if (node.tag === 'img') return 'image';
         if (node.children && node.children.length) return 'box';
         if (TEXT_TAGS.includes(node.tag)) return 'text';
         if (typeof node.text === 'string' && node.text.length) return 'text';
         return 'box';
+    }
+
+    function isPageNumber(node) {
+        return !!(node && node.pageNumber);
     }
 
     function buildNode(spec) {
@@ -166,6 +171,7 @@
         }
         if (s.bind && Object.keys(s.bind).length) node.bind = clone(s.bind);
         if (s.repeat) node.repeat = buildRepeat(s.repeat);
+        adoptPageNumber(node, s.pageNumber);
         return node;
     }
 
@@ -231,6 +237,165 @@
         return buildNode({ tag: 'img', name: 'Image', attrs: { src: '', alt: '' }, style: {
             'width': px(u * 120), 'height': px(u * 120), 'object-fit': 'cover',
         } });
+    }
+
+    // A page number sits on the page, out of the flow, above every other
+    // element. `mirror` is off until someone asks: the place they set is the
+    // place on every sheet. On, every other sheet (page 2, 4, 6…) reflects
+    // that place across the vertical middle. `anchor` is a snap; `free` is
+    // where a drag left it. `inset` is how far a snap sits from the paper edge.
+    const PAGE_NUMBER_ANCHORS = ['free', 'top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
+
+    function normalizePageNumber(spec) {
+        const s = spec || {};
+        const anchor = PAGE_NUMBER_ANCHORS.indexOf(s.anchor) >= 0 ? s.anchor : 'free';
+        let inset = Math.round(Number(s.inset));
+        if (!Number.isFinite(inset) || inset < 0) inset = 36;
+        const left = Math.round(Number(s.left));
+        const top = Math.round(Number(s.top));
+        return {
+            mirror: s.mirror === true,
+            anchor: anchor,
+            inset: inset,
+            left: Number.isFinite(left) ? left : 0,
+            top: Number.isFinite(top) ? top : 0,
+        };
+    }
+
+    function parsePx(v) {
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? Math.round(n) : 0;
+    }
+
+    // A text wire to the old page-number chip becomes this element. The class
+    // hook that used to say "outer edge" turns mirroring on.
+    function legacyPageNumber(bind) {
+        if (!bind || !bind.text || bind.text.source !== 'insert_page_number') return null;
+        const cls = bind.class || bind.className;
+        const mirror = !!(cls && cls.source === 'insert_page_number');
+        return { mirror: mirror };
+    }
+
+    function stripLegacyPageNumber(bind) {
+        const next = Object.assign({}, bind || {});
+        if (next.text && next.text.source === 'insert_page_number') delete next.text;
+        ['class', 'className'].forEach(k => {
+            if (next[k] && next[k].source === 'insert_page_number') delete next[k];
+        });
+        return Object.keys(next).length ? next : null;
+    }
+
+    function adoptPageNumber(node, explicit) {
+        const legacy = legacyPageNumber(node.bind);
+        let pageNumber = explicit ? normalizePageNumber(explicit) : null;
+        if (!pageNumber && legacy) {
+            const style = node.style || {};
+            const placed = style.left || style.right || style.top || style.bottom;
+            pageNumber = normalizePageNumber({
+                mirror: legacy.mirror,
+                anchor: placed ? 'free' : 'bottom-right',
+                inset: 36,
+                left: parsePx(style.left),
+                top: parsePx(style.top),
+            });
+        }
+        if (legacy) {
+            const rest = stripLegacyPageNumber(node.bind);
+            if (rest) node.bind = rest;
+            else delete node.bind;
+        }
+        if (!pageNumber) return;
+        node.pageNumber = pageNumber;
+        delete node.repeat;
+        node.children = [];
+        if (typeof node.text !== 'string') node.text = '';
+    }
+
+    function newPageNumber(dpi) {
+        const u = unit(dpi);
+        const inset = Math.round(u * 36);
+        return buildNode({
+            tag: 'p',
+            name: 'Page number',
+            text: '',
+            pageNumber: { mirror: false, anchor: 'bottom-right', inset: inset, left: inset, top: inset },
+            style: {
+                'font-family': 'EB Garamond, Georgia, serif',
+                'font-size': px(u * 12),
+                'line-height': '1',
+                'color': '#000000',
+            },
+        });
+    }
+
+    function pageNumberMirrored(node, pageIndex) {
+        if (!node || !node.pageNumber || node.pageNumber.mirror !== true) return false;
+        const idx = Math.round(Number(pageIndex));
+        return Number.isFinite(idx) && idx >= 0 && idx % 2 === 1;
+    }
+
+    // Where a drag on this sheet is stored. The stored left is the place on
+    // pages 1, 3, 5. A drag on a mirrored sheet is reflected back.
+    function pageNumberHomeLeft(visualLeft, width, pageWidth, mirrored) {
+        const v = Number(visualLeft) || 0;
+        const w = Number(width) || 0;
+        const pw = Number(pageWidth) || 0;
+        if (!mirrored) return Math.round(v);
+        return Math.round(pw - v - w);
+    }
+
+    function pageNumberGeometry(spec, mirror) {
+        const inset = px(spec.inset);
+        const left = px(spec.left);
+        const top = px(spec.top);
+        let style;
+        switch (spec.anchor) {
+            case 'top-left': style = { left: inset, top: inset }; break;
+            case 'top': style = { left: '50%', top: inset, transform: 'translateX(-50%)' }; break;
+            case 'top-right': style = { right: inset, top: inset }; break;
+            case 'left': style = { left: inset, top: '50%', transform: 'translateY(-50%)' }; break;
+            case 'center': style = { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }; break;
+            case 'right': style = { right: inset, top: '50%', transform: 'translateY(-50%)' }; break;
+            case 'bottom-left': style = { left: inset, bottom: inset }; break;
+            case 'bottom': style = { left: '50%', bottom: inset, transform: 'translateX(-50%)' }; break;
+            case 'bottom-right': style = { right: inset, bottom: inset }; break;
+            default: style = { left: left, top: top }; break;
+        }
+        if (!mirror) return style;
+        const out = Object.assign({}, style);
+        if (out.left && out.left !== '50%' && !out.right) {
+            out.right = out.left;
+            delete out.left;
+        } else if (out.right && !out.left) {
+            out.left = out.right;
+            delete out.right;
+        }
+        return out;
+    }
+
+    // The element as it draws on one sheet: the digits, and a place that does
+    // not take part in the flow. Does not change `node`.
+    function placePageNumber(node, ctx) {
+        const spec = normalizePageNumber(node && node.pageNumber);
+        const pageIndex = Math.max(0, Math.round(Number(ctx && ctx.pageIndex)) || 0);
+        const geom = pageNumberGeometry(spec, pageNumberMirrored({ pageNumber: spec }, pageIndex));
+        const style = Object.assign({}, (node && node.style) || {});
+        ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index', 'margin', 'white-space', 'user-select'].forEach(k => {
+            delete style[k];
+        });
+        Object.assign(style, geom, {
+            'position': 'absolute',
+            'z-index': '1000',
+            'margin': '0',
+            'white-space': 'nowrap',
+            'user-select': 'none',
+        });
+        return Object.assign({}, node, {
+            text: String(pageIndex + 1),
+            style: style,
+            pageNumber: spec,
+            children: [],
+        });
     }
 
     function unit(dpi) { return (Number(dpi) || 96) / 96; }
@@ -655,12 +820,17 @@
     function insertNode(page, parentId, node, index) {
         const next = clone(page);
         const fresh = buildNode(node);
+        // A page number is never inside another element. It sits on the page.
+        if (isPageNumber(fresh)) parentId = null;
         let list = next.nodes;
         if (parentId) {
             const at = locate(next, parentId);
             if (!at) return page;
             const parent = at.list[at.index];
-            if (kindOf(parent) === 'box' && parent.tag !== 'img') {
+            if (isPageNumber(parent)) {
+                list = at.list;
+                index = at.index + 1;
+            } else if (kindOf(parent) === 'box' && parent.tag !== 'img') {
                 if (!parent.children) parent.children = [];
                 delete parent.text;
                 list = parent.children;
@@ -694,6 +864,7 @@
         if (typeof p.text === 'string') node.text = p.text;
         if (typeof p.name === 'string') node.name = p.name.slice(0, 40);
         if (typeof p.tag === 'string') node.tag = p.tag.toLowerCase();
+        if (p.pageNumber) node.pageNumber = normalizePageNumber(Object.assign({}, node.pageNumber, p.pageNumber));
         if (p.bind !== undefined) {
             if (p.bind === null) delete node.bind; else node.bind = clone(p.bind);
         }
@@ -715,6 +886,12 @@
         }
         const at = locate(page, id);
         if (!at) return { ok: false, why: 'That element no longer exists.', page: page };
+        if (isPageNumber(at.list[at.index]) && newParentId) {
+            return { ok: false, why: 'A page number sits on the page.', page: page };
+        }
+        if (newParentId && isPageNumber(findNode(page, newParentId))) {
+            return { ok: false, why: 'A page number does not hold other elements.', page: page };
+        }
         const node = clone(at.list[at.index]);
         // Removing first shifts the index when the move is within one list.
         let target = index;
@@ -743,6 +920,7 @@
     function wrapNode(page, id, dpi) {
         const at = locate(page, id);
         if (!at) return page;
+        if (isPageNumber(at.list[at.index])) return page;
         const inner = clone(at.list[at.index]);
         const box = newBox(dpi);
         box.children = [inner];
@@ -796,6 +974,7 @@
         if (css) attrs.push('style="' + escapeAttr(css) + '"');
         if (node.bind) attrs.push('data-bind="' + escapeAttr(JSON.stringify(node.bind)) + '"');
         if (node.repeat) attrs.push('data-repeat="' + escapeAttr(JSON.stringify(node.repeat)) + '"');
+        if (node.pageNumber) attrs.push('data-page-number="' + escapeAttr(JSON.stringify(normalizePageNumber(node.pageNumber))) + '"');
         const open = '<' + node.tag + ' ' + attrs.join(' ');
         if (VOID_TAGS.includes(node.tag)) return pad + open + '>';
         if (node.children && node.children.length) {
@@ -929,15 +1108,16 @@
         const id = attrs['data-pid'] || newId();
         const name = attrs['data-name'] || '';
         const style = cssToStyle(attrs.style);
-        let bind = null, repeat = null;
+        let bind = null, repeat = null, pageNumber = null;
         try { if (attrs['data-bind']) bind = JSON.parse(attrs['data-bind']); } catch (e) { bind = null; }
         try { if (attrs['data-repeat']) repeat = JSON.parse(attrs['data-repeat']); } catch (e) { repeat = null; }
-        ['data-pid', 'data-name', 'style', 'data-bind', 'data-repeat'].forEach(k => { delete attrs[k]; });
+        try { if (attrs['data-page-number']) pageNumber = JSON.parse(attrs['data-page-number']); } catch (e) { pageNumber = null; }
+        ['data-pid', 'data-name', 'style', 'data-bind', 'data-repeat', 'data-page-number'].forEach(k => { delete attrs[k]; });
 
         const kids = parsed.children || [];
         const elements = kids.filter(k => k.text == null);
         const texts = kids.filter(k => k.text != null);
-        const spec = { id, tag: parsed.tag, name, attrs, style, bind, repeat };
+        const spec = { id, tag: parsed.tag, name, attrs, style, bind, repeat, pageNumber: pageNumber };
         if (parsed.tag === 'img' || VOID_TAGS.includes(parsed.tag)) {
             // nothing inside
         } else if (elements.length) {
@@ -1178,6 +1358,13 @@
         newBox,
         newText,
         newImage,
+        newPageNumber,
+        isPageNumber,
+        normalizePageNumber,
+        placePageNumber,
+        pageNumberMirrored,
+        pageNumberHomeLeft,
+        PAGE_NUMBER_ANCHORS,
         buildPage,
         buildContinues,
         clonePage,
