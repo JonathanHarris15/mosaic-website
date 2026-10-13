@@ -57,3 +57,15 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
     assert.equal(storedScripture.name, 'The Epistle');
     assert.ok(!storedScripture.prayedByOther);
 });
+
+test('planSave writes printableId on an order when set, and omits it when cleared', () => {
+    let cat = Core.setOrderPrintable(Core.standardCatalog(), 'standard', 'sunday-guide');
+    let plan = Store.planSave(cat, { elementIds: [], orderIds: ['standard'] });
+    let standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
+    assert.equal(standard.printableId, 'sunday-guide');
+
+    cat = Core.setOrderPrintable(cat, 'standard', '');
+    plan = Store.planSave(cat, { elementIds: [], orderIds: ['standard'] });
+    standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
+    assert.equal(standard.printableId, undefined);
+});

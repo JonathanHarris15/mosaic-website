@@ -37,12 +37,15 @@
 
     function orderDoc(order) {
         const elements = (order.elements || []).map(elementDoc);
-        return {
+        const doc = {
             id: order.id,
             name: order.name,
             elements: elements,
             elementIds: elements.map(function (el) { return el.id; }),
         };
+        const printableId = order && order.printableId ? String(order.printableId).trim() : '';
+        if (printableId) doc.printableId = printableId;
+        return doc;
     }
 
     // What a save writes and deletes, given the ids already stored.

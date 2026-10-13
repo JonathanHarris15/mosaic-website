@@ -280,3 +280,22 @@ test('duplicate order names avoid colliding with an existing copy', async () => 
     page.duplicateOrder();
     assert.equal(page.selectedOrder.name, 'Standard copy 2');
 });
+
+test('linking a printable on the open order is a draft until Save', async () => {
+    const page = await loadedPage();
+    assert.equal(page.linkedPrintableId, '');
+    page.linkPrintable({ id: 'sunday-guide', name: 'Sunday Guide', template: { label: 'Half Letter' } });
+    assert.equal(page.linkedPrintableId, 'sunday-guide');
+    assert.equal(page.dirty, true);
+    assert.equal(page.linkedPrintable.name, 'Sunday Guide');
+    page.clearPrintable();
+    assert.equal(page.linkedPrintableId, '');
+});
+
+test('duplicate order keeps the Service Guide printable id', async () => {
+    const page = await loadedPage();
+    page.linkPrintable({ id: 'sunday-guide', name: 'Sunday Guide', template: { label: 'Half Letter' } });
+    page.duplicateOrder();
+    assert.equal(page.linkedPrintableId, 'sunday-guide');
+    assert.notEqual(page.selectedOrderId, 'standard');
+});

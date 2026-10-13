@@ -72,6 +72,7 @@ function calendarPage() {
             if (typeof db === 'undefined') return;
             setLiturgyCatalog(await LiturgyOrderStore.loadCatalog(db));
             this.syncTableOrders();
+            await loadLiturgyPrintables();
             if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
         },
 
@@ -1095,42 +1096,11 @@ function renderSidebar(grouped) {
 }
 
 window.navigateToGuide = function(date) {
-    const svc = serviceDataMap[date];
-    const guide = svc && svc.guide;
-    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
-
-    // One shared rule (GuideStore) so the calendar and the editor's
-    // "Generate" button never drift.
-    const target = window.GuideStore
-        ? GuideStore.guideHref(svc || {}, date)
-        : `service-guide-editor.html?date=${encodeURIComponent(date)}`;
-
-    if (!isViewer && svc) {
-        let incomplete = false;
-        if (guide && guide.format === 'v2') {
-            // Compute completeness from the frozen snapshot's required Entry
-            // Fields — the single source of truth the editor uses — so this never
-            // drifts as templates are customised. Fall back to a field heuristic
-            // if the guide modules aren't available for some reason.
-            if (window.GuideStore && guide.snapshot) {
-                incomplete = window.GuideStore.tasksRemaining(guide.snapshot, guide.values || {}) > 0;
-            } else {
-                const v = guide.values || {};
-                const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && (a.title || a.content));
-                incomplete = (!v.pp_nation || !v.pp_capital) || (!v.kids_lesson_title || !v.kids_lesson_verse) || !annFilled;
-            }
-        } else {
-            // No template guide yet (none at all, or one from before the
-            // template system that the editor will offer to rebuild).
-            incomplete = true;
-        }
-
-        if (incomplete) {
-            const proceed = confirm("Warning: There are elements that you have not completed yet. Please do so before going to the service guide page.\n\nDo you still want to proceed to the editor?");
-            if (!proceed) return;
-        }
-    }
-    window.location.href = target;
+    // Liturgy Order → linked Printable fill-in view (MS-762). Disabled when
+    // the order has no Printable; no fallback to the old guide editor.
+    const target = serviceGuideForDate(date);
+    if (!target.enabled || !target.href) return;
+    window.location.href = target.href;
 };
 
 function renderList(grouped) {
@@ -1186,10 +1156,7 @@ function renderList(grouped) {
                     const actions = document.createElement('div');
                     actions.className = 'flex flex-col sm:flex-row gap-sm w-full sm:w-auto justify-end flex-shrink-0';
                     actions.innerHTML = `
-                        <button onclick="window.navigateToGuide('${formattedDate}')" class="flex-grow sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
-                            <span class="material-symbols-outlined text-[18px]">auto_stories</span>
-                            <span>Service Guide</span>
-                        </button>
+                        ${serviceGuideButtonHtml(formattedDate)}
                         <a href="service-builder.html?date=${formattedDate}" class="flex-grow sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">list_alt</span>
                             <span>Order of Service</span>
@@ -1224,10 +1191,79 @@ function renderList(grouped) {
 const TABLE_ORDERS_KEY = 'calendarLiturgyOrders';
 let liturgyCatalog = null;
 let tableOrderIds = null;
+// Printables linked on Liturgy Orders — enables Service Guide buttons (MS-762).
+let liturgyPrintables = {};
 
 function currentCatalog() {
     if (!liturgyCatalog) liturgyCatalog = LiturgyOrderCore.standardCatalog();
     return liturgyCatalog;
+}
+
+async function loadLiturgyPrintables() {
+    const ids = [];
+    (currentCatalog().orders || []).forEach(o => {
+        if (o && o.printableId) ids.push(o.printableId);
+    });
+    if (!ids.length || typeof PrintableStore === 'undefined' || typeof db === 'undefined') {
+        liturgyPrintables = {};
+        return;
+    }
+    try {
+        const list = await PrintableStore.loadLinked(db, ids);
+        const map = {};
+        (list || []).forEach(p => { if (p && p.id) map[p.id] = { memberVisible: !!p.memberVisible }; });
+        liturgyPrintables = map;
+    } catch (e) {
+        console.warn('Liturgy order printables could not be read', e);
+        liturgyPrintables = {};
+    }
+}
+
+function serviceGuideForDate(date) {
+    const svc = serviceDataMap[date] || {};
+    const canEdit = ['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
+    const occurrenceId = (typeof EventsOccurrenceCore !== 'undefined')
+        ? EventsOccurrenceCore.occurrenceId(EventsOccurrenceCore.SUNDAY_SERVICE_ID, date)
+        : '';
+    return LiturgyOrderCore.serviceGuideTarget(svc, currentCatalog(), {
+        date: date,
+        occurrenceId: occurrenceId,
+        printables: liturgyPrintables,
+        viewerCanEdit: canEdit,
+    });
+}
+
+function serviceGuideButtonHtml(date, opts) {
+    const options = opts || {};
+    const target = serviceGuideForDate(date);
+    const label = options.label || 'Service Guide';
+    const title = target.enabled
+        ? 'Service Guide'
+        : 'Link a Printable to this Sunday’s Liturgy Order first';
+    if (options.compact) {
+        if (!target.enabled) {
+            return `<button type="button" disabled title="${escapeHtml(title)}" aria-disabled="true"
+                class="p-2 text-outline opacity-40 cursor-not-allowed rounded-full">
+                <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+            </button>`;
+        }
+        return `<button type="button" onclick="window.navigateToGuide('${date}')" title="${escapeHtml(title)}"
+            class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
+            <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+        </button>`;
+    }
+    if (!target.enabled) {
+        return `<button type="button" disabled title="${escapeHtml(title)}" aria-disabled="true"
+            class="flex-grow sm:flex-none bg-outline-variant text-on-surface-variant opacity-50 cursor-not-allowed px-4 py-2 rounded-full font-label-md text-label-md flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">auto_stories</span>
+            <span>${escapeHtml(label)}</span>
+        </button>`;
+    }
+    return `<button type="button" onclick="window.navigateToGuide('${date}')" title="${escapeHtml(title)}"
+        class="flex-grow sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
+        <span class="material-symbols-outlined text-[18px]">auto_stories</span>
+        <span>${escapeHtml(label)}</span>
+    </button>`;
 }
 
 function rememberedTableOrders() {
@@ -1422,9 +1458,7 @@ function renderTable(grouped) {
                         </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
-                                <button onclick="window.navigateToGuide('${formattedDate}')" title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
-                                    <span class="material-symbols-outlined text-[20px]">auto_stories</span>
-                                </button>
+                                ${serviceGuideButtonHtml(formattedDate, { compact: true })}
                                 <a href="service-builder.html?date=${formattedDate}" title="Order of Service" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
                                     <span class="material-symbols-outlined text-[20px]">list_alt</span>
                                 </a>
