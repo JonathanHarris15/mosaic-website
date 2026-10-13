@@ -41,53 +41,11 @@
         if (!global.jspdf || !global.jspdf.jsPDF) await loadScript(JSPDF);
     }
 
-    // The size an image occupies inside a box when it keeps its own shape.
-    // html2canvas paints the bitmap into the element box and ignores
-    // object-fit, so a 100%×100% box stretches a picture. Callers shrink the
-    // element to this size first; filling that box no longer distorts.
-    function containedSize(boxW, boxH, natW, natH) {
-        const bw = Number(boxW) || 0;
-        const bh = Number(boxH) || 0;
-        const nw = Number(natW) || 0;
-        const nh = Number(natH) || 0;
-        if (!(bw > 0 && bh > 0 && nw > 0 && nh > 0)) return null;
-        const scale = Math.min(bw / nw, bh / nh);
-        return {
-            width: Math.max(1, Math.round(nw * scale)),
-            height: Math.max(1, Math.round(nh * scale)),
-        };
-    }
-
-    function fitContainedImages(root) {
-        if (!root || typeof root.querySelectorAll !== 'function') return;
-        root.querySelectorAll('img').forEach(img => {
-            if (!img.naturalWidth || !img.naturalHeight) return;
-            const fit = (global.getComputedStyle ? global.getComputedStyle(img).objectFit : '') || '';
-            if (fit !== 'contain' && fit !== 'scale-down') return;
-            const box = img.getBoundingClientRect();
-            const size = containedSize(box.width, box.height, img.naturalWidth, img.naturalHeight);
-            if (!size) return;
-            // The snapshot ignores object-fit and paints the bitmap into the
-            // element box. Shrink the box to the picture. Leftover space is
-            // centered with top/left: the rasterizer drops margin on an image.
-            const extraX = Math.max(0, Math.round((box.width - size.width) / 2));
-            const extraY = Math.max(0, Math.round((box.height - size.height) / 2));
-            img.style.width = size.width + 'px';
-            img.style.height = size.height + 'px';
-            img.style.maxWidth = 'none';
-            img.style.maxHeight = 'none';
-            img.style.objectFit = 'fill';
-            if (extraX || extraY) {
-                const parent = img.parentElement;
-                if (parent && global.getComputedStyle(parent).position === 'static') {
-                    parent.style.position = 'relative';
-                }
-                img.style.position = 'absolute';
-                img.style.left = extraX + 'px';
-                img.style.top = extraY + 'px';
-            }
-        });
-    }
+    // Snapshot the page the editor already laid out. Do not resize or
+    // reposition images here. A second fit — shrinking the box, then
+    // absolute-positioning the leftover gap — pulls the cover seal and the
+    // Connect & Give QR out of the flex flow the preview already got right.
+    // html2canvas photographs that layout.
 
     function waitForImages(root) {
         const imgs = Array.from(root.querySelectorAll('img')).filter(img => img.getAttribute('src'));
@@ -139,7 +97,6 @@
                 });
                 host.appendChild(page);
                 await waitForImages(page);
-                fitContainedImages(page);
                 const canvas = await global.html2canvas(page, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: t.widthPx, height: t.heightPx, windowWidth: t.widthPx, windowHeight: t.heightPx,
@@ -204,7 +161,6 @@
                 });
                 host.appendChild(sheetEl);
                 await waitForImages(sheetEl);
-                fitContainedImages(sheetEl);
                 const canvas = await global.html2canvas(sheetEl, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: sheetWpx, height: sheetHpx, windowWidth: sheetWpx, windowHeight: sheetHpx,
@@ -233,7 +189,7 @@
         return base;
     }
 
-    const PrintablePdf = { render, renderFolio, fileName, ready, containedSize, fitContainedImages };
+    const PrintablePdf = { render, renderFolio, fileName, ready };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintablePdf;
