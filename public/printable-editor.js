@@ -1245,6 +1245,10 @@ function printableEditor() {
             }, { passive: false });
 
             vp.addEventListener('mousedown', (e) => {
+                // The menu is drawn in the viewport. Taking it down on this
+                // press hides the command before mouseup, the click falls
+                // through onto the canvas, and the element is only deselected.
+                if (e.target.closest('.pe-menu')) return;
                 if (this.menu.open) this.menu.open = false;
                 if (e.button === 1 || (e.button === 0 && (this.spaceHeld || !e.target.closest('.pr-page')))) {
                     if (ui.editingText) return;
@@ -1303,7 +1307,9 @@ function printableEditor() {
 
             vp.addEventListener('click', (e) => {
                 if (ui.drag && ui.drag.moved) return;
-                if (e.target.closest('.pe-add-page') || e.target.closest('.pe-overlay')) return;
+                // A command's click bubbles here after it has run. It is not
+                // a click on empty canvas, so it must not clear the selection.
+                if (e.target.closest('.pe-menu') || e.target.closest('.pe-add-page') || e.target.closest('.pe-overlay')) return;
                 const target = e.target.closest('[data-pid]');
                 if (target) {
                     const nodeId = this.originalId(target.getAttribute('data-pid'));
