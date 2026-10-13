@@ -453,10 +453,10 @@
                                             <label class="pe-f"><span x-text="selectedNode.repeat.layout.direction === 'row' ? 'Per row' : 'Columns'"></span><input class="pe-in" type="number" min="1" max="12" :value="selectedNode.repeat.layout.perLine" @change="setRepeatLayout('perLine', Number($event.target.value))" /></label>
                                             <label class="pe-f"><span>Gap (px)</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.gap" @change="setRepeatLayout('gap', Number($event.target.value))" /></label>
                                             <label class="pe-f"><span>Max per page</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.layout.maxPerPage" @change="setRepeatLayout('maxPerPage', Number($event.target.value))" placeholder="0 = as many as fit" /></label>
-                                            <label class="pe-f"><span>From row</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.from || 0" @change="setRepeatRange('from', Number($event.target.value))" placeholder="1" /></label>
-                                            <label class="pe-f"><span>To row</span><input class="pe-in" type="number" min="0" :value="selectedNode.repeat.to || 0" @change="setRepeatRange('to', Number($event.target.value))" placeholder="0 = through end" /></label>
+                                            <label class="pe-f"><span>Start</span><input class="pe-in" type="number" min="1" step="1" :value="selectedNode.repeat.from || ''" @change="setRepeatRange('from', $event.target.value)" placeholder="1" aria-label="Start at row" /></label>
+                                            <label class="pe-f"><span>Stop</span><input class="pe-in" type="number" min="1" step="1" :value="selectedNode.repeat.to || ''" @change="setRepeatRange('to', $event.target.value)" placeholder="end" aria-label="Stop at row" /></label>
                                         </div>
-                                        <p class="pe-hint">Rows are numbered from 1. Leave From at 0 (or 1) and To at 0 for the whole list — or set both to put the first half on one page and the rest on another.</p>
+                                        <p class="pe-hint">The same start and stop are in the query builder, next to the rows. Counting from 1. Leave stop empty to run through the end — one page can take the first hymn and the next page the second.</p>
                                         <h3 class="pe-h pe-h--sub">When the list runs past the page</h3>
                                         <div class="pe-f"><span>Overflow</span>
                                             <span class="pe-seg pe-seg--text pe-seg--tiny">
@@ -700,11 +700,22 @@
                                 </div>
                             </template>
 
+                            <div class="pe-query__range" x-show="showIterationRange">
+                                <p class="pe-sun__label">Rows on this page</p>
+                                <div class="pe-grid2">
+                                    <label class="pe-f"><span>Start</span><input class="pe-in" type="number" min="1" step="1" inputmode="numeric" :value="iterationRangeValue('from')" @change="setRepeatRange('from', $event.target.value)" placeholder="1" aria-label="Start at row" /></label>
+                                    <label class="pe-f"><span>Stop</span><input class="pe-in" type="number" min="1" step="1" inputmode="numeric" :value="iterationRangeValue('to')" @change="setRepeatRange('to', $event.target.value)" placeholder="end" aria-label="Stop at row" /></label>
+                                </div>
+                                <p class="pe-hint">Positions in the list, counting from 1. Leave stop empty to keep every row through the end.</p>
+                            </div>
+
                             <p class="pe-hint" x-show="queryResults.loading">Reading today's rows…</p>
                             <p class="pe-drawer__error" x-show="queryResults.error" x-text="queryResults.error"></p>
-                            <p class="pe-query__count" x-show="queryResults.count !== null && queryResults.count !== undefined" x-text="queryResults.count + ' row' + (queryResults.count === 1 ? '' : 's') + ' today'"></p>
-                            <ul class="pe-query__preview" x-show="queryResults.names.length">
-                                <template x-for="(name, i) in queryResults.names" :key="'prev-' + i"><li x-text="name"></li></template>
+                            <p class="pe-query__count" x-show="queryResults.count !== null && queryResults.count !== undefined" x-text="queryCountLabel()"></p>
+                            <ul class="pe-query__preview" :class="showIterationRange ? 'pe-query__preview--indexed' : ''" x-show="queryResults.names.length">
+                                <template x-for="(name, i) in queryResults.names" :key="'prev-' + i">
+                                    <li><span class="pe-query__idx" x-show="showIterationRange" x-text="queryRowIndex(i)"></span><span x-text="name"></span></li>
+                                </template>
                             </ul>
                             <ul class="pe-query__notes" x-show="queryResults.warnings.length">
                                 <template x-for="(w, i) in queryResults.warnings" :key="'qwarn-' + i"><li x-text="w"></li></template>
@@ -1395,8 +1406,13 @@
         .pe-warn__n { margin-left: 4px; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--warning-container, var(--surface-container)); color: var(--on-surface); font: 700 11px var(--font-sans); letter-spacing: 0; text-transform: none; }
         .pe-query__locked { padding: 4px 0 2px; }
         .pe-query__count { margin: 8px 0 4px; font: 600 12px var(--font-sans); color: var(--on-surface); }
+        .pe-query__range { margin: 8px 0 4px; }
+        .pe-query__range .pe-sun__label { margin-bottom: 4px; }
         .pe-query__preview { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 12px; line-height: 1.4; }
         .pe-query__preview li { margin: 0; }
+        .pe-query__preview--indexed { padding: 0; list-style: none; }
+        .pe-query__preview--indexed li { display: flex; gap: 8px; }
+        .pe-query__idx { flex: 0 0 1.5em; font-variant-numeric: tabular-nums; color: var(--on-surface); font-weight: 600; }
         .pe-query__notes { margin: 0 0 8px; padding: 0 0 0 16px; color: var(--on-surface-variant); font-size: 11.5px; line-height: 1.35; list-style: disc; }
         .pe-query__pick .m-dropdown__opt { font-size: 13px; padding: 7px 10px; }
         .pe-query__pick .m-dropdown__opt .m-badge { flex: 0 0 auto; font-size: 10.5px; padding: 0 6px; }

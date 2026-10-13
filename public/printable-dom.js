@@ -115,22 +115,56 @@
         return el;
     }
 
-    // An editor's blank, drawn in the element's own box. Output and print
-    // never pass fillFor, so a member's page and the printed sheet stay static.
+    // Text flows in the element's own type and measure: a textarea the width
+    // of the box, not a one-line field. A number stays a field. A date stays
+    // a date.
+    // Output and print never pass fillFor, so those sheets stay static.
+    // Output and print never pass fillFor, so those sheets stay static.
+    function isFlowingFill(fill) {
+        return fill.kind !== 'date' && fill.kind !== 'number';
+    }
+
+    // A textarea's default box is one line and does not grow. After it is in
+    // the page, grow it to the wrapped text so the blank takes the same
+    // height the printed words will.
+    function fitFlowingFill(el) {
+        if (!el || el.tagName !== 'TEXTAREA') return;
+        el.style.height = '0px';
+        el.style.height = el.scrollHeight + 'px';
+    }
+
+    function renderFlowingFill(fill) {
+        const el = document.createElement('textarea');
+        el.className = 'pv-fill pv-fill--text';
+        el.rows = 1;
+        el.wrap = 'soft';
+        el.spellcheck = true;
+        el.setAttribute('aria-multiline', 'true');
+        const written = fill.value == null ? '' : String(fill.value);
+        el.value = written;
+        if (!written) el.placeholder = fill.label || '';
+        el.addEventListener('input', function () { fitFlowingFill(el); });
+        return el;
+    }
+
     function renderFillControl(fill) {
-        const input = document.createElement(fill.multiline ? 'textarea' : 'input');
+        if (isFlowingFill(fill)) {
+            const el = renderFlowingFill(fill);
+            el.setAttribute('data-fill-id', fill.id);
+            el.setAttribute('aria-label', fill.label || 'Fill in');
+            return el;
+        }
+        const input = document.createElement('input');
         input.className = 'pv-fill';
         input.name = fill.id;
         input.setAttribute('data-fill-id', fill.id);
         input.setAttribute('aria-label', fill.label || 'Fill in');
         input.autocomplete = 'off';
-        if (fill.multiline) {
-            input.rows = 3;
-        } else if (fill.kind === 'date') {
+        if (fill.kind === 'date') {
             input.type = 'date';
         } else {
             input.type = 'text';
-            if (fill.kind === 'number') input.setAttribute('inputmode', 'decimal');
+            input.setAttribute('inputmode', 'decimal');
         }
         input.value = fill.value == null ? '' : String(fill.value);
         if (!input.value) input.placeholder = fill.label || '';
@@ -403,7 +437,7 @@
     }
 
     const PrintableDom = {
-        renderNode, renderPage, renderFillControl, renderFillImage,
+        renderNode, renderPage, renderFillControl, renderFillImage, fitFlowingFill,
         scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, mountFolioPadBoard, BASE_CSS,
     };
 
