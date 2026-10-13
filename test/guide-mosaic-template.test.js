@@ -107,6 +107,41 @@ test('the Order of Service page renders granular liturgy values, not <oos-list>'
     assert.match(oos, /Moment of Silent Preparation/);
 });
 
+test('a filled country image keeps its shape, and kids lists keep their markers', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const vals = Object.assign({}, values, {
+        pp_country_image: 'samoa.png',
+        kids_summary: '<ul><li>A Canaanite woman asked Jesus to heal her daughter.</li></ul>',
+    });
+    const { result } = resolveMosaic(ctx(), vals);
+    const prayer = result.pages.find(p => p.pageTemplateId === 'seed_m_prayer');
+    assert.match(prayer.html, /src="samoa\.png"/);
+    assert.match(prayer.html, /object-fit:contain/);
+    assert.doesNotMatch(prayer.html, /class="w-full h-full/);
+    const kids = result.pages.find(p => p.pageTemplateId === 'seed_m_kids');
+    assert.match(kids.html, /<ul><li>A Canaanite woman asked Jesus to heal her daughter\.<\/li><\/ul>/);
+    assert.match(kids.html, /class="m-qlist"/);
+    assert.match(kids.html, /<li>Why\?<\/li>/);
+    assert.match(kids.html, /<li>How\?<\/li>/);
+    const seed = Seed.buildSeed(catalog);
+    const preset = seed.stylePresets.find(p => p.id === 'seed_mosaic_print');
+    assert.match(preset.css, /\.m-qlist li::before\{[^}]*clip-path:polygon/);
+    assert.match(preset.css, /\.m-body ul\{ list-style:disc/);
+    assert.doesNotMatch(preset.css, /\.m-qlist li::before\{[^}]*-webkit-mask:url/);
+    const preview = fs.readFileSync(path.join(__dirname, '../public/guide-preview.css'), 'utf8');
+    assert.match(preview, /object-fit:\s*contain/);
+    assert.match(preview, /clip-path:\s*polygon/);
+    assert.match(preview, /ul:not\(\.m-qlist\) > li::before/);
+    for (const file of [
+        'service-guide-editor.html', 'service-guide.html', 'service-guide-manager.html',
+        'printable-editor.html', 'printable-view.html',
+    ]) {
+        const html = fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
+        assert.match(html, /guide-preview\.css/, file + ' loads the preview rules');
+    }
+});
+
 test('hymn pages bind their slot via params.field and show name + image', () => {
     const { result } = resolveMosaic(ctx(), values);
     const prep = result.pages.find(p => p.pageTemplateId === 'seed_m_hymn');

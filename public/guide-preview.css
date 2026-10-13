@@ -1,0 +1,111 @@
+/* Booklet preview — image shape and list markers.
+   Loaded by the service-guide pages and the printable editor/view, after
+   Tailwind. A frozen Style Preset cannot turn these off: the selectors here
+   are more specific than the preset, and the marker rules are !important
+   where a preset mask would otherwise hide them.
+
+   A filled image with both width and height set to 100% paints stretched
+   wherever object-fit is missing (the default is fill) and in the PDF
+   snapshot, which draws the bitmap into the element box and ignores
+   object-fit. Height auto lets the box follow the picture. A picture that
+   asks to be cropped (object-cover) still fills its frame.
+
+   A list marker drawn outside the line, or a hexagon drawn only as a CSS
+   mask, disappears: the sheet is overflow:hidden, and a mask that does not
+   paint leaves the questions blank. Markers sit in the line. An ordinary
+   list draws a dot; a question list (.m-qlist) draws its hexagon as a clip,
+   not a mask. */
+
+.preview-page img.w-full,
+.preview-page img.h-full,
+.pr-page img.w-full,
+.pr-page img.h-full {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.preview-page img.object-cover.w-full,
+.preview-page img.object-cover.h-full,
+.pr-page img.object-cover.w-full,
+.pr-page img.object-cover.h-full {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+}
+
+.preview-page ul:not(.m-qlist),
+.pr-page ul:not(.m-qlist) {
+  list-style: none !important;
+  margin: 0.35em 0;
+  padding: 0 !important;
+}
+
+.preview-page ul:not(.m-qlist) > li,
+.pr-page ul:not(.m-qlist) > li {
+  position: relative;
+  display: block;
+  list-style: none !important;
+  padding-left: 1.15em;
+  margin: 0.2em 0;
+}
+
+.preview-page ul:not(.m-qlist) > li::before,
+.pr-page ul:not(.m-qlist) > li::before {
+  content: "" !important;
+  position: absolute;
+  left: 0.15em;
+  top: 0.55em;
+  width: 0.34em;
+  height: 0.34em;
+  border-radius: 50%;
+  background: currentColor;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+.preview-page ol:not(.m-qlist),
+.pr-page ol:not(.m-qlist) {
+  list-style: decimal outside !important;
+  padding-left: 1.25rem;
+}
+
+.preview-page ol:not(.m-qlist) > li,
+.pr-page ol:not(.m-qlist) > li {
+  display: list-item !important;
+}
+
+.preview-page .m-qlist,
+.pr-page .m-qlist {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0;
+}
+
+.preview-page .m-qlist li,
+.pr-page .m-qlist li {
+  position: relative;
+  display: list-item;
+  list-style: none !important;
+  padding-left: 22px;
+}
+
+.preview-page .m-qlist li::before,
+.pr-page .m-qlist li::before {
+  content: "" !important;
+  position: absolute;
+  left: 2px;
+  top: 0.42em;
+  width: 8px;
+  height: 9px;
+  background: #C2B79D !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}

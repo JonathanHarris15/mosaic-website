@@ -132,7 +132,10 @@
    so the hexagon ::before is the ONLY marker (needs the !important + specificity). */
 .preview-page ul.m-qlist, ul.m-qlist{ list-style:none !important; padding:0 !important; margin:0; }
 .m-qlist li{ position:relative; padding-left:22px; font-size:13px; line-height:1.55; color:var(--text); margin-top:9px; }
-.m-qlist li::before{ content:""; position:absolute; left:2px; top:.42em; width:8px; height:9px; background:var(--sand); -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17.32 20'%3E%3Cpolygon points='8.66,0 17.32,5 17.32,15 8.66,20 0,15 0,5'/%3E%3C/svg%3E") no-repeat center/contain; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17.32 20'%3E%3Cpolygon points='8.66,0 17.32,5 17.32,15 8.66,20 0,15 0,5'/%3E%3C/svg%3E") no-repeat center/contain; }
+.m-body ul{ list-style:disc; padding-left:1.25rem; margin:0.4em 0; }
+.m-body ol{ list-style:decimal; padding-left:1.25rem; margin:0.4em 0; }
+.m-body li{ display:list-item; }
+.m-qlist li::before{ content:""; position:absolute; left:2px; top:.42em; width:8px; height:9px; background:#C2B79D; -webkit-mask:none; mask:none; clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 .m-blank{ border-bottom:1px solid var(--border); }   /* handwriting space */
 
 /* ===== Back cover: announcements + schedule ===== */
