@@ -217,6 +217,44 @@ test('hymn overflow and order rows: the Sunday lists a box can repeat over are a
     assert.equal(ranged.to, 3);
 });
 
+test('start and stop in the query builder are the slice this page draws', () => {
+    const hymns = ['A Christian\'s Daily Prayer', 'Only a Holy God', 'Firm Foundation', 'He Leadeth Me', 'Take My Life'];
+    const { ed, ui } = editor({
+        nodes: [box('sheet', [text('title')], { repeat: repeat('sunday_hymns') })],
+        select: 'sheet',
+    });
+    ui.resolver = {
+        rowsFor(node) {
+            return Core.sliceRows(hymns.map(name => ({ name: name })), node.repeat.from, node.repeat.to);
+        },
+    };
+    assert.equal(ed.queryScope, 'own');
+    assert.equal(ed.showIterationRange, true);
+    assert.equal(ed.iterationSlice.active, false);
+    assert.equal(ed.iterationRangeValue('from'), '');
+    assert.equal(ed.iterationRangeValue('to'), '');
+    assert.equal(ed.queryCountLabel(), '5 rows today');
+    assert.equal(ed.queryRowIndex(0), 1);
+    assert.equal(ed.queryRowIndex(4), 5);
+    ed.setRepeatRange('from', 2);
+    ed.setRepeatRange('to', 2);
+    const slice = ed.iterationSlice;
+    assert.equal(slice.from, 2);
+    assert.equal(slice.to, 2);
+    assert.equal(slice.active, true);
+    assert.equal(ed.iterationRangeValue('from'), 2);
+    assert.equal(ed.iterationRangeValue('to'), 2);
+    assert.equal(ed.queryRowIndex(0), 2);
+    assert.equal(ed.queryCountLabel(), '1 row on this page (rows 2–2)');
+    assert.deepEqual(ed.queryResults.names, ['Only a Holy God']);
+    ed.selection.nodeId = 'title';
+    assert.equal(ed.queryScope, 'row', 'inside the card the builder still shows that card\'s rows');
+    assert.equal(ed.showIterationRange, true);
+    ed.setRepeatRange('to', '');
+    assert.equal(Core.findNode(ed.currentPage, 'sheet').repeat.to, 0, 'an empty stop runs through the end');
+    assert.equal(ed.queryCountLabel(), '4 rows on this page (rows 2–end)');
+});
+
 test('an editor-locked query still runs, and a member can neither change nor rebuild it', () => {
     const nodes = [box('answers', [text('a')], { repeat: repeat('form_answers', { formId: 'f1' }) })];
     const { ed } = editor({ nodes: nodes, select: 'answers', level: 'member' });

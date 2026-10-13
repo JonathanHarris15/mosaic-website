@@ -317,6 +317,9 @@ function printableView() {
             });
             this.recount();
             if (fillFor) this.wireFills(stage);
+            if (fillFor && PrintableDom.fitFlowingFill) {
+                stage.querySelectorAll('textarea.pv-fill--text').forEach(el => PrintableDom.fitFlowingFill(el));
+            }
             this.focusPendingRow();
             this.fit();
         },
@@ -521,7 +524,10 @@ function printableView() {
                     });
                     return;
                 }
-                el.addEventListener('input', () => this.onFillInput(id, el.value, el));
+                el.addEventListener('input', () => {
+                    if (el.tagName === 'TEXTAREA' && PrintableDom.fitFlowingFill) PrintableDom.fitFlowingFill(el);
+                    this.onFillInput(id, el.value, el);
+                });
                 el.addEventListener('change', () => this.onFillCommit(id));
                 el.addEventListener('blur', () => this.onFillCommit(id));
             });
@@ -552,7 +558,10 @@ function printableView() {
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
             }
             document.querySelectorAll(this.fillSelector(id)).forEach(el => {
-                if (el !== source && el.type !== 'file' && el.value !== value) el.value = value;
+                if (el !== source && el.type !== 'file' && el.value !== value) {
+                    el.value = value;
+                    if (el.tagName === 'TEXTAREA' && PrintableDom.fitFlowingFill) PrintableDom.fitFlowingFill(el);
+                }
             });
             this.recount();
         },

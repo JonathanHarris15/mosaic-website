@@ -1905,6 +1905,60 @@
                 this.renderAll();
             },
 
+            // The repeating box whose slice the query builder is showing.
+            get iterationNode() {
+                if (this.queryScope === 'own') {
+                    const node = this.selectedNode;
+                    return node && node.repeat ? node : null;
+                }
+                if (this.queryScope === 'row') return this.repeatContext;
+                return null;
+            },
+
+            // Start and stop are 1-based positions in the list. 0 is the
+            // default: start at the first row, or run through the end.
+            get iterationSlice() {
+                const node = this.iterationNode;
+                if (!node || !node.repeat || !node.repeat.source) return null;
+                const from = Math.max(0, Math.round(Number(node.repeat.from)) || 0);
+                const to = Math.max(0, Math.round(Number(node.repeat.to)) || 0);
+                return { from: from, to: to, active: from > 1 || to > 0 };
+            },
+
+            get showIterationRange() {
+                return !!this.iterationSlice;
+            },
+
+            // Blank when the default is in force, so the field reads as
+            // "from the start" / "through the end" instead of a zero.
+            iterationRangeValue(key) {
+                const slice = this.iterationSlice;
+                if (!slice) return '';
+                const n = key === 'to' ? slice.to : slice.from;
+                return n > 0 ? n : '';
+            },
+
+            // The name list is already the slice. Number it from the start
+            // row so row 2 still says 2 when the page begins there.
+            queryRowIndex(i) {
+                const slice = this.iterationSlice;
+                const start = slice && slice.from > 1 ? slice.from : 1;
+                return start + Number(i || 0);
+            },
+
+            queryCountLabel() {
+                const n = this.queryResults.count;
+                if (n == null || n === undefined) return '';
+                const word = n === 1 ? 'row' : 'rows';
+                const slice = this.iterationSlice;
+                if (slice && slice.active) {
+                    const start = slice.from > 1 ? slice.from : 1;
+                    const stop = slice.to > 0 ? String(slice.to) : 'end';
+                    return n + ' ' + word + ' on this page (rows ' + start + '–' + stop + ')';
+                }
+                return n + ' ' + word + ' today';
+            },
+
             // Inclusive 1-based row range on the Repeat (MS-743). 0 means
             // default: from the start, or through the end.
             setRepeatRange(key, value) {
