@@ -31,28 +31,12 @@
             </div>
             <div class="m-header__actions">
                 <a :href="editorHref" x-show="canEdit" class="m-btn m-btn--secondary m-btn--sm"><span class="material-symbols-outlined">edit</span><span class="m-btn__label">Open in editor</span></a>
-                <div class="pv-export">
-                    <button type="button" class="m-btn m-btn--secondary m-btn--sm m-btn--named"
-                            @click="onFolioClick()" :disabled="!entries.length || !!snapshotProgress"
-                            aria-label="Print folio" :title="folioTitle"
-                            :aria-haspopup="canSaveSnapshot ? 'menu' : null"
-                            :aria-expanded="canSaveSnapshot ? (exportMenu === 'folio') : null">
-                        <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-                        <span class="m-btn__label">Folio</span>
-                    </button>
-                    <div class="pv-menu" role="menu" x-show="exportMenu === 'folio'" x-cloak
-                         @click.outside="exportMenu = ''" @keydown.escape.window="exportMenu = ''">
-                        <button type="button" role="menuitem" @click="chooseFolioPrint()">
-                            <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
-                            Print folio…
-                        </button>
-                        <button type="button" role="menuitem" @click="chooseSaveSnapshot()"
-                                :disabled="!!snapshotProgress">
-                            <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
-                            Save PDF to event files
-                        </button>
-                    </div>
-                </div>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm m-btn--named"
+                        @click="printFolio()" :disabled="!entries.length || !!snapshotProgress"
+                        aria-label="Print folio" :title="folioTitle">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <span class="m-btn__label">Folio</span>
+                </button>
                 <div class="pv-export">
                     <button type="button" class="m-btn m-btn--primary m-btn--sm m-btn--named"
                             @click="onPrintClick()" :disabled="!entries.length || !!snapshotProgress"
@@ -69,7 +53,7 @@
                             <span class="material-symbols-outlined" aria-hidden="true">print</span>
                             <span x-text="wantsBookletExport ? 'Print booklet…' : 'Print…'"></span>
                         </button>
-                        <button type="button" role="menuitem" @click="chooseSaveSnapshot()"
+                        <button type="button" role="menuitem" @click="chooseFlatSaveSnapshot()"
                                 :disabled="!!snapshotProgress">
                             <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                             Save PDF to event files
@@ -102,6 +86,31 @@
 
     <div id="pv-print" class="pv-print"></div>
 
+    <div class="pv-scrim" x-show="snapshotTitleOpen" x-cloak @click.self="closeSnapshotTitle()" @keydown.escape.window="closeSnapshotTitle()">
+        <div class="pv-dialog" role="dialog" aria-modal="true" aria-labelledby="pv-snapshot-title">
+            <h2 id="pv-snapshot-title" class="m-headline-lg">Name this PDF</h2>
+            <p class="pv-dialog__hint" x-show="pendingSnapshotMode === 'folio'">
+                Folio PDF — two pages on each landscape sheet, from the fold you just filled. Filed on the linked event.
+            </p>
+            <p class="pv-dialog__hint" x-show="pendingSnapshotMode !== 'folio'">
+                Flat PDF of these pages as they stand. Filed on the linked event.
+            </p>
+            <label class="pv-snapshot-label">
+                <span>File name</span>
+                <input type="text" class="m-input" maxlength="120" autocomplete="off"
+                       x-model="snapshotTitle" @keydown.enter.prevent="confirmSnapshotTitle()"
+                       aria-label="PDF file name" />
+            </label>
+            <p class="m-notice m-notice--error" x-show="snapshotTitleError" x-text="snapshotTitleError" aria-live="polite"></p>
+            <div class="pv-dialog__acts">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="closeSnapshotTitle()" :disabled="!!snapshotProgress">Cancel</button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="confirmSnapshotTitle()" :disabled="!!snapshotProgress">
+                    <span class="m-btn__label" x-text="snapshotProgress ? 'Filing…' : 'Save to event files'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="pv-scrim" x-show="folioPadOpen" x-cloak @click.self="closeFolioPad()" @keydown.escape.window="closeFolioPad()">
         <div class="pv-dialog pv-dialog--folio" role="dialog" aria-modal="true" aria-labelledby="pv-folio-pad-title">
             <div class="folio-pad">
@@ -123,9 +132,15 @@
                     </p>
                     <p class="folio-pad__brush folio-pad__brush--empty" x-show="!folioPadBrushLabel">Click a page to set the brush.</p>
                     <p class="folio-pad__tip" x-show="folioPadNeedCount > 0 && folioPadBrushLabel">Then click a gap between pages to insert it.</p>
-                    <p class="folio-pad__tip" x-show="folioPadReady">Fold is full. Print when ready.</p>
+                    <p class="folio-pad__tip" x-show="folioPadReady && !canSaveSnapshot">Fold is full. Print when ready.</p>
+                    <p class="folio-pad__tip" x-show="folioPadReady && canSaveSnapshot">Fold is full. Print or save a PDF when ready.</p>
                     <div class="folio-pad__acts">
                         <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="closeFolioPad()">Cancel</button>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="canSaveSnapshot"
+                                :disabled="!folioPadReady || !!snapshotProgress" @click="confirmFolioPadSave()">
+                            <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+                            <span class="m-btn__label">Save PDF to event files</span>
+                        </button>
                         <button type="button" class="m-btn m-btn--primary m-btn--sm" :disabled="!folioPadReady" @click="confirmFolioPadPrint()">Print folio</button>
                     </div>
                 </aside>
@@ -264,6 +279,9 @@
         }
         .pv-dialog--folio { max-width: min(1120px, 96vw); padding: 20px; }
         .pv-dialog__hint { margin: 0; font-size: 13.5px; color: var(--on-surface-variant); line-height: 1.45; }
+        .pv-dialog__acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+        .pv-snapshot-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--on-surface-variant); }
+        .pv-snapshot-label .m-input { width: 100%; }
         .folio-pad {
             display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px;
             min-height: 0; max-height: calc(92vh - 40px);

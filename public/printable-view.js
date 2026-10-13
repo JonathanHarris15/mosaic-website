@@ -24,6 +24,11 @@ function printableView() {
         exportMenu: '',
         snapshotProgress: '',
         snapshotError: '',
+        snapshotTitleOpen: false,
+        snapshotTitle: '',
+        snapshotTitleError: '',
+        pendingSnapshotMode: '',
+        pendingSnapshotEntries: null,
         uid: '',
         fillTotal: 0,
         fillLeft: 0,
@@ -777,14 +782,6 @@ function printableView() {
             setTimeout(() => window.print(), 150);
         },
 
-        onFolioClick() {
-            if (this.canSaveSnapshot) {
-                this.exportMenu = this.exportMenu === 'folio' ? '' : 'folio';
-                return;
-            }
-            this.printFolio();
-        },
-
         onPrintClick() {
             if (this.canSaveSnapshot) {
                 this.exportMenu = this.exportMenu === 'print' ? '' : 'print';
@@ -793,51 +790,107 @@ function printableView() {
             this.printPrintable();
         },
 
-        chooseFolioPrint() {
-            this.exportMenu = '';
-            this.printFolio();
-        },
-
         chooseFlatPrint() {
             this.exportMenu = '';
             this.printPrintable();
         },
 
-        chooseSaveSnapshot() {
+        chooseFlatSaveSnapshot() {
             this.exportMenu = '';
-            this.saveSnapshotToEvent();
+            if (this.canFill) this.relayout();
+            this.openSnapshotTitle('flat', this.entries.slice());
         },
 
-        // Flat PDF of the pages as they stand, filed on the linked occurrence
-        // (ADR 0057 / MS-711). Same shape as the event Files tab snapshot.
-        async saveSnapshotToEvent() {
+        // After the folio pad is ×4: title, then file a folio-imposed PDF.
+        confirmFolioPadSave() {
+            if (!this.folioPadReady || !this.canSaveSnapshot || this.snapshotProgress) return;
+            const stack = this.folioPadEntries.slice();
+            this.closeFolioPad();
+            this.openSnapshotTitle('folio', stack);
+        },
+
+        openSnapshotTitle(mode, entries) {
+            if (!this.canSaveSnapshot || !(entries || []).length) return;
+            this.pendingSnapshotMode = mode === 'folio' ? 'folio' : 'flat';
+            this.pendingSnapshotEntries = entries.slice();
+            const date = this.viewDate || new Date().toISOString().slice(0, 10);
+            this.snapshotTitle = typeof PrintablePdf !== 'undefined'
+                ? PrintablePdf.fileName(this.project, date).replace(/\.pdf$/i, '')
+                : ((this.project && this.project.name) || 'Printable') + ' — ' + date;
+            this.snapshotTitleError = '';
+            this.snapshotError = '';
+            this.snapshotTitleOpen = true;
+        },
+
+        closeSnapshotTitle() {
+            if (this.snapshotProgress) return;
+            this.snapshotTitleOpen = false;
+            this.snapshotTitle = '';
+            this.snapshotTitleError = '';
+            this.pendingSnapshotMode = '';
+            this.pendingSnapshotEntries = null;
+        },
+
+        confirmSnapshotTitle() {
+            const title = String(this.snapshotTitle || '').trim();
+            if (!title) {
+                this.snapshotTitleError = 'Give the PDF a name.';
+                return;
+            }
+            this.snapshotTitleError = '';
+            this.saveSnapshotToEvent(title);
+        },
+
+        // File on the linked occurrence. Folio mode uses the pad stack and
+        // imposed landscape sheets; flat matches the event Files tab snapshot.
+        async saveSnapshotToEvent(title) {
             if (!this.canSaveSnapshot || this.snapshotProgress) return;
             if (typeof PrintablePdf === 'undefined' || typeof EventAttachmentsCore === 'undefined') {
                 this.snapshotError = 'PDF filing is not available on this page.';
+                this.snapshotTitleOpen = false;
                 return;
             }
             const Store = window.EventsStore;
             if (!Store) {
                 this.snapshotError = 'PDF filing is not available on this page.';
+                this.snapshotTitleOpen = false;
                 return;
             }
+            const mode = this.pendingSnapshotMode === 'folio' ? 'folio' : 'flat';
+            const entries = (this.pendingSnapshotEntries && this.pendingSnapshotEntries.length)
+                ? this.pendingSnapshotEntries
+                : this.entries;
             this.snapshotError = '';
             this.snapshotProgress = 'Preparing…';
             try {
-                if (this.canFill) this.relayout();
-                if (!this.project || !this.entries.length) throw new Error('not laid out');
+                if (!this.project || !(entries || []).length) throw new Error('not laid out');
                 const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-                const booklet = !!(Ex && Ex.isSundayBookletPath(this.project));
-                const printCount = Ex ? Ex.exportPageCount(this.entries.length, this.project) : this.entries.length;
-                this.snapshotProgress = booklet
-                    ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
-                    : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
-                const blob = await PrintablePdf.render(this.project, this.entries, {
-                    scale: 1,
-                    onProgress: (done, total) => {
-                        this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…';
-                    },
-                });
+                let blob;
+                if (mode === 'folio') {
+                    if (!Ex || !Ex.folioReadyToPrint(entries)) {
+                        throw new Error('folio fold not ready');
+                    }
+                    const sheets = Ex.folioSpreads(entries).length;
+                    this.snapshotProgress = 'Drawing ' + sheets + ' folio sheet' + (sheets === 1 ? '' : 's') + '…';
+                    blob = await PrintablePdf.renderFolio(this.project, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => {
+                            this.snapshotProgress = 'Drawing sheet ' + done + ' of ' + total + '…';
+                        },
+                    });
+                } else {
+                    const booklet = !!(Ex && Ex.isSundayBookletPath(this.project));
+                    const printCount = Ex ? Ex.exportPageCount(entries.length, this.project) : entries.length;
+                    this.snapshotProgress = booklet
+                        ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
+                        : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
+                    blob = await PrintablePdf.render(this.project, entries, {
+                        scale: 1,
+                        onProgress: (done, total) => {
+                            this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…';
+                        },
+                    });
+                }
                 this.snapshotProgress = 'Filing…';
                 let occurrence = null;
                 if (Store.loadOccurrence) {
@@ -847,7 +900,7 @@ function printableView() {
                     }
                 }
                 const date = (occurrence && occurrence.date) || this.viewDate;
-                const name = PrintablePdf.fileName(this.project, date);
+                const name = PrintablePdf.fileName(this.project, date, title);
                 const attachmentId = Store.newAttachmentId(db, this.occurrenceId);
                 const path = EventAttachmentsCore.storagePath(this.occurrenceId, attachmentId, name);
                 await firebase.storage().ref().child(path).put(blob, { contentType: 'application/pdf' });
@@ -865,14 +918,21 @@ function printableView() {
                 });
                 await Store.saveAttachment(db, this.occurrenceId, attachmentId, attachment);
                 this.snapshotProgress = '';
-                this.fillNote = 'Filed on the event · ' + (date || 'this date') + '.';
+                this.snapshotTitleOpen = false;
+                this.pendingSnapshotMode = '';
+                this.pendingSnapshotEntries = null;
+                this.snapshotTitle = '';
+                this.fillNote = 'Filed on the event · ' + name + '.';
             } catch (e) {
                 console.error('Printable snapshot failed:', e);
                 this.snapshotProgress = '';
-                this.snapshotError = 'That snapshot could not be filed. '
-                    + (String(e && e.message).includes('not laid out')
+                const msg = String(e && e.message || '');
+                this.snapshotTitleError = 'That snapshot could not be filed. '
+                    + (msg.includes('not laid out')
                         ? 'The printable has no pages yet.'
-                        : 'Try again.');
+                        : msg.includes('folio fold')
+                            ? 'Finish filling the folio fold first.'
+                            : 'Try again.');
             }
         },
 

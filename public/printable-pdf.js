@@ -7,6 +7,12 @@
 // and loaded on demand: a calendar page should not pay for a PDF engine it
 // may never use.
 //
+// Two shapes:
+//   • `render` — flat stack (one page per PDF page). Sunday booklet path
+//     pads to ×4; no imposition (MS-589 / MS-592).
+//   • `renderFolio` — landscape sheets, two pages each, saddle-stitch
+//     order from PrintableExportCore.folioSpreads (the Folio print path).
+//
 // Browser-only. Nothing here reads Firestore — the caller lays the pages out
 // through PrintableLive and hands them in.
 
@@ -33,6 +39,28 @@
     async function ready() {
         if (typeof global.html2canvas !== 'function') await loadScript(HTML2CANVAS);
         if (!global.jspdf || !global.jspdf.jsPDF) await loadScript(JSPDF);
+    }
+
+    function waitForImages(root) {
+        const imgs = Array.from(root.querySelectorAll('img')).filter(img => img.getAttribute('src'));
+        return Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+        })));
+    }
+
+    function pageForEntry(entry, blankN) {
+        if (entry && entry.page) {
+            return Object.assign({}, entry.page, {
+                nodes: entry.nodes || entry.page.nodes || [],
+            });
+        }
+        return {
+            id: 'folio-blank-' + blankN,
+            nodes: [],
+            margins: { top: 0, right: 0, bottom: 0, left: 0 },
+            style: { 'background-color': '#ffffff' },
+        };
     }
 
     // `entries` is what PrintableLive.layoutPages returns. `opts.scale` is
@@ -77,21 +105,85 @@
         }
     }
 
-    function waitForImages(root) {
-        const imgs = Array.from(root.querySelectorAll('img')).filter(img => img.getAttribute('src'));
-        return Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
-            img.addEventListener('load', resolve, { once: true });
-            img.addEventListener('error', resolve, { once: true });
-        })));
+    // Folio-imposed PDF: two pages per landscape sheet, same pairing as
+    // Print folio / PrintableExportCore.folioSpreads. Prefer a pad-ready
+    // stack (multiple of 4) so blanks are only what the operator left.
+    async function renderFolio(project, entries, opts) {
+        const o = opts || {};
+        await ready();
+        const Dom = global.PrintableDom;
+        const Export = global.PrintableExportCore;
+        if (!Export || typeof Export.folioSpreads !== 'function' || typeof Export.folioSheet !== 'function') {
+            throw new Error('folio export is not available');
+        }
+        const t = project.template;
+        const sheet = Export.folioSheet(t);
+        const spreads = Export.folioSpreads(entries || []);
+        if (!spreads.length) throw new Error('not laid out');
+        const sheetWpx = t.widthPx * 2;
+        const sheetHpx = t.heightPx;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + sheetWpx + 'px;pointer-events:none;';
+        document.body.appendChild(host);
+        try {
+            const doc = new global.jspdf.jsPDF({
+                unit: 'in',
+                format: [sheet.widthIn, sheet.heightIn],
+                orientation: 'landscape',
+                compress: true,
+            });
+            let blankN = 0;
+            for (let i = 0; i < spreads.length; i++) {
+                const spread = spreads[i];
+                host.innerHTML = '';
+                const sheetEl = document.createElement('div');
+                sheetEl.style.cssText = 'display:flex;flex-direction:row;align-items:stretch;overflow:hidden;'
+                    + 'width:' + sheetWpx + 'px;height:' + sheetHpx + 'px;background:#fff;';
+                ['left', 'right'].forEach((side) => {
+                    const entry = spread[side];
+                    const idx = side === 'left' ? spread.leftIdx : spread.rightIdx;
+                    const leaf = document.createElement('div');
+                    leaf.style.cssText = 'width:' + t.widthPx + 'px;height:' + t.heightPx + 'px;'
+                        + 'flex:0 0 ' + t.widthPx + 'px;overflow:hidden;position:relative;background:#fff;';
+                    if (!entry || !entry.page) blankN += 1;
+                    const page = pageForEntry(entry, blankN);
+                    leaf.appendChild(Dom.renderPage(page, t, {
+                        scopeId: page.id,
+                        pageIndex: idx == null ? 0 : idx,
+                    }));
+                    sheetEl.appendChild(leaf);
+                });
+                host.appendChild(sheetEl);
+                await waitForImages(sheetEl);
+                const canvas = await global.html2canvas(sheetEl, {
+                    scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
+                    width: sheetWpx, height: sheetHpx, windowWidth: sheetWpx, windowHeight: sheetHpx,
+                });
+                if (i > 0) doc.addPage([sheet.widthIn, sheet.heightIn], 'landscape');
+                doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, sheet.widthIn, sheet.heightIn, undefined, 'FAST');
+                if (o.onProgress) o.onProgress(i + 1, spreads.length);
+            }
+            return doc.output('blob');
+        } finally {
+            host.remove();
+        }
     }
 
-    // "Membership directory — 2026-09-13.pdf"
-    function fileName(project, date) {
-        const base = String(project.name || 'Printable').replace(/[\\/:*?"<>|]+/g, ' ').trim();
-        return base + ' — ' + (date || new Date().toISOString().slice(0, 10)) + '.pdf';
+    // Attachment file name. Optional `title` is what the editor typed; empty
+    // falls back to "Name — date". Always ends in .pdf.
+    function fileName(project, date, title) {
+        const fallback = String(project && project.name || 'Printable').replace(/[\\/:*?"<>|]+/g, ' ').trim()
+            + ' — ' + (date || new Date().toISOString().slice(0, 10));
+        let base = String(title != null && String(title).trim() !== '' ? title : fallback)
+            .replace(/[\\/:*?"<>|]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!base) base = 'Printable';
+        if (!/\.pdf$/i.test(base)) base += '.pdf';
+        return base;
     }
 
-    const PrintablePdf = { render, fileName, ready };
+    const PrintablePdf = { render, renderFolio, fileName, ready };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintablePdf;
