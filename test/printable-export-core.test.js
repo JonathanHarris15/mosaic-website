@@ -184,24 +184,40 @@ test('view-only print chrome distinguishes folio from flat print and has no book
     assert.match(dom, /function mountFolioPadBoard/, 'shared board painter lives in printable-dom');
 });
 
-// MS-763: quieter fill-in header; Folio/Print can file a flat snapshot on the linked event.
-test('fill-in header drops status chips and offers Save PDF on Folio and Print when linked', () => {
+// MS-763: quieter fill-in header; Folio pad first, then print or titled snapshot.
+test('fill-in header drops status chips; Folio pad offers Save; Print menu offers flat Save', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const html = fs.readFileSync(path.join(__dirname, '../public/printable-view.html'), 'utf8');
     const viewJs = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
+    const pdfJs = fs.readFileSync(path.join(__dirname, '../public/printable-pdf.js'), 'utf8');
     assert.doesNotMatch(html, /m-header__chip/, 'As-of / paper chips are gone from the fill-in header');
     assert.doesNotMatch(html, /As of '\s*\+\s*viewDate/, 'As-of chip text is gone');
     assert.doesNotMatch(html, /showWarnings/, 'gaps warning toggle is gone');
     assert.doesNotMatch(html, /m-notice--warning/, 'gaps warning notice is gone');
-    assert.match(html, /Save PDF to event files/, 'Folio and Print offer filing a snapshot');
+    assert.doesNotMatch(html, /exportMenu === 'folio'/, 'Folio no longer opens a header menu before the pad');
+    assert.match(html, /@click="printFolio\(\)"/, 'Folio goes straight to the pad');
+    assert.match(html, /confirmFolioPadSave/, 'folio pad offers save when linked');
+    assert.match(html, /Save PDF to event files/, 'save is offered');
+    assert.match(html, /snapshotTitleOpen|snapshotTitle/, 'editor titles the snapshot before filing');
     assert.match(html, /canSaveSnapshot/, 'save option is gated on a linked occurrence');
     assert.match(html, /event-attachments-core\.js/, 'view page loads attachment helpers');
     assert.match(html, /printable-pdf\.js/, 'view page loads the PDF renderer');
     assert.match(viewJs, /get canSaveSnapshot/, 'linked occurrence gates the save option');
     assert.match(viewJs, /saveSnapshotToEvent/, 'view can file a snapshot on the linked event');
-    assert.match(viewJs, /PrintablePdf\.render/, 'snapshot uses the same flat PDF path as the event Files tab');
+    assert.match(viewJs, /PrintablePdf\.renderFolio/, 'folio save uses the imposed PDF path');
+    assert.match(viewJs, /pendingSnapshotMode|snapshotMode/, 'flat and folio saves stay distinct');
     assert.match(viewJs, /saveAttachment/, 'snapshot is an ordinary event attachment');
+    assert.match(pdfJs, /function renderFolio/, 'PDF module can draw folio sheets');
+    assert.match(pdfJs, /folioSpreads/, 'folio PDF uses the same pairing as print');
+});
+
+test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
+    const Pdf = require('../public/printable-pdf.js');
+    assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13'), 'Directory — 2026-10-13.pdf');
+    assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13', 'Sunday service guide'), 'Sunday service guide.pdf');
+    assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13', 'Guide.pdf'), 'Guide.pdf');
+    assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13', '  bad/name:here  '), 'bad name here.pdf');
 });
 
 test('folioSpreads matches the service guide imposition table', () => {

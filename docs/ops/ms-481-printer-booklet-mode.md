@@ -64,11 +64,12 @@ copier is already in booklet mode — either one imposes twice.
 
 ## What Mosaic does not do
 
-- No reordering on the flat **Print** path or the filed PDF snapshot
-- No change to ADR-0057 snapshots (the filed PDF is still the
-  frozen copy of live pages; Sunday booklets stay padded, flat)
+- No reordering on the flat **Print** path or the flat PDF snapshot
+  filed from **Print** / the event Files tab
 - No auto-clear of the MS-401 HITL gate (MS-454). A real Sunday
   booklet still has to be printed and handed out.
 
-Folio print is the software imposition path, and only when someone
-chooses **Print folio**.
+Folio print is the software imposition path. From the fill-in page,
+**Folio** always opens the pad first; **Save PDF to event files** on
+that pad files a folio-imposed PDF of that stack (MS-763), not a
+flat padded stack. The event Files tab snapshot button stays flat.
