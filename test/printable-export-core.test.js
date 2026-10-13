@@ -162,7 +162,7 @@ test('view-only print chrome distinguishes folio from flat print and has no book
         'the booklet-mode banner is gone; the buttons carry the distinction');
     assert.doesNotMatch(html, /pv-booklet/,
         'the booklet-mode banner class must not return');
-    assert.match(html, /printFolio\(\)/, 'the view page offers folio print');
+    assert.match(html, /printFolio\(\)|onFolioClick/, 'the view page offers folio print');
     assert.match(html, />menu_book</, 'folio uses the menu_book icon');
     assert.match(html, /aria-label="Print folio"/);
     assert.match(html, /aria-label="Print"/);
@@ -182,6 +182,26 @@ test('view-only print chrome distinguishes folio from flat print and has no book
     assert.match(viewJs, /mountFolioPadBoard|insertFolioBrushAt/, 'view folio pad uses brush + gap insert');
     const dom = fs.readFileSync(path.join(__dirname, '../public/printable-dom.js'), 'utf8');
     assert.match(dom, /function mountFolioPadBoard/, 'shared board painter lives in printable-dom');
+});
+
+// MS-763: quieter fill-in header; Folio/Print can file a flat snapshot on the linked event.
+test('fill-in header drops status chips and offers Save PDF on Folio and Print when linked', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const html = fs.readFileSync(path.join(__dirname, '../public/printable-view.html'), 'utf8');
+    const viewJs = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
+    assert.doesNotMatch(html, /m-header__chip/, 'As-of / paper chips are gone from the fill-in header');
+    assert.doesNotMatch(html, /As of '\s*\+\s*viewDate/, 'As-of chip text is gone');
+    assert.doesNotMatch(html, /showWarnings/, 'gaps warning toggle is gone');
+    assert.doesNotMatch(html, /m-notice--warning/, 'gaps warning notice is gone');
+    assert.match(html, /Save PDF to event files/, 'Folio and Print offer filing a snapshot');
+    assert.match(html, /canSaveSnapshot/, 'save option is gated on a linked occurrence');
+    assert.match(html, /event-attachments-core\.js/, 'view page loads attachment helpers');
+    assert.match(html, /printable-pdf\.js/, 'view page loads the PDF renderer');
+    assert.match(viewJs, /get canSaveSnapshot/, 'linked occurrence gates the save option');
+    assert.match(viewJs, /saveSnapshotToEvent/, 'view can file a snapshot on the linked event');
+    assert.match(viewJs, /PrintablePdf\.render/, 'snapshot uses the same flat PDF path as the event Files tab');
+    assert.match(viewJs, /saveAttachment/, 'snapshot is an ordinary event attachment');
 });
 
 test('folioSpreads matches the service guide imposition table', () => {

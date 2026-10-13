@@ -247,7 +247,7 @@ A secondary part of a side panel is a `<details>` whose `<summary>` is the part'
 
 ## View date
 
-The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The view-only page names the same date in the header. **Send snapshot to…** stays in the File menu, next to Print.
+The clock a printable is read as of sits in the editor header, always visible: a week-earlier control, an **As of** date, and a week-later control (`.pe-asof`). It is not only in the File menu. The fill-in / view-only page keeps that clock out of the sticky header — no As-of chip, paper strip, or gaps warning there. **Send snapshot to…** stays in the editor File menu, next to Print.
 
 On a Sunday's Files tab, a linked printable offers two text buttons, **From this date** and **Before this date**. A date that is not a Sunday keeps the edit icon and opens as of that date. A scripture wire offers **Citation** and **Passage** in the element panel; a passage then offers **Styled** / **Plain** and the verse-number, heading, footnote, citation-line, and copyright-line checks. The same Reference and Words chips live on each scripture placement (and Key verse) in a Sunday's query-builder walk.
 
@@ -257,7 +257,7 @@ A printable is linked from the recurring event's **Printables** tab, and from a 
 
 Where a printable is linked, the row opens the preview. An editor — and anyone who writes as an editor — types on that preview, in the spot the blank already occupies. Below editor the same page is static: no boxes and no count. Print and folio stay static either way.
 
-The preview header stays on screen (`.m-header--sticky`) while the pages scroll under it. Zoom sits in the bottom-right corner (`.pv-zoom`): minus, the percent, plus. The percent fits the page again. Control-scroll, or command-scroll, zooms the same way, and so do Control-plus, Control-minus, and Control-zero. A zoom someone chose stays until they fit the page again.
+The preview header stays on screen (`.m-header--sticky`) while the pages scroll under it. When the preview was opened with a linked occurrence, **Folio** and **Print** each open a short menu: print as today, or **Save PDF to event files** — the same flat snapshot the event Files tab files (ADR 0057). With no linked occurrence, both buttons still go straight to folio pad / print. Zoom sits in the bottom-right corner (`.pv-zoom`): minus, the percent, plus. The percent fits the page again. Control-scroll, or command-scroll, zooms the same way, and so do Control-plus, Control-minus, and Control-zero. A zoom someone chose stays until they fit the page again.
 
 A blank is a value a person supplies on the linked event: a fill-in (text, image, number, date, or one cell of a list). A live Sunday, a hymn, scripture, and announcements from the query builder are not blanks. Announcements stay on the Announcements tab. The same blank placed twice is one blank. An empty list that drew no rows is one blank, with **Add a row** or **Add a question** on the list itself.
 
