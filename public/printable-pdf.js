@@ -2,7 +2,7 @@
 //
 // The snapshot filed on an event (MS-400, ADR-0057): the one frozen thing in
 // a live system. Every page — overflow pages included — is drawn at true
-// pixel size, rasterised with html2canvas, and placed on a PDF page of the
+// pixel size, rasterised for the PDF, and placed on a PDF page of the
 // paper's physical size with jsPDF. Both libraries are vendored (ADR-0050)
 // and loaded on demand: a calendar page should not pay for a PDF engine it
 // may never use.
@@ -41,11 +41,198 @@
         if (!global.jspdf || !global.jspdf.jsPDF) await loadScript(JSPDF);
     }
 
-    // Snapshot the page the editor already laid out. Do not resize or
-    // reposition images here. A second fit — shrinking the box, then
-    // absolute-positioning the leftover gap — pulls the cover seal and the
-    // Connect & Give QR out of the flex flow the preview already got right.
-    // html2canvas photographs that layout.
+    // html2canvas paints a bitmap into the element box. It ignores
+    // object-fit, clip-path, and mask, so a contained picture stretches and
+    // a shaped marker comes out as the square behind the shape. The browser
+    // paint of this same DOM is correct, and a foreignObject copy of it
+    // cannot be exported (the canvas is tainted). So, in the snapshot DOM
+    // only, paint the picture and the marker the browser already showed,
+    // into the boxes the page already laid out. Do not move those boxes.
+
+    // Where a picture is drawn inside its box. `cover` crops, `contain` and
+    // `scale-down` letterbox. The box itself does not change.
+    function fittedDrawRect(boxW, boxH, natW, natH, fit, objectPosition) {
+        const bw = Number(boxW) || 0;
+        const bh = Number(boxH) || 0;
+        const nw = Number(natW) || 0;
+        const nh = Number(natH) || 0;
+        if (!(bw > 0 && bh > 0 && nw > 0 && nh > 0)) return null;
+        let scale = fit === 'cover' ? Math.max(bw / nw, bh / nh) : Math.min(bw / nw, bh / nh);
+        if (fit === 'scale-down') scale = Math.min(1, scale);
+        const w = nw * scale;
+        const h = nh * scale;
+        const parts = String(objectPosition || '50% 50%').trim().split(/\s+/);
+        return {
+            x: axisOffset(parts[0], bw - w),
+            y: axisOffset(parts.length > 1 ? parts[1] : 'center', bh - h),
+            w: w,
+            h: h,
+        };
+    }
+
+    function axisOffset(token, space) {
+        const t = String(token || 'center').trim();
+        if (t === 'left' || t === 'top') return 0;
+        if (t === 'right' || t === 'bottom') return space;
+        if (t === 'center') return space / 2;
+        if (/%$/.test(t)) return space * (parseFloat(t) / 100);
+        const n = parseFloat(t);
+        return Number.isFinite(n) ? n : space / 2;
+    }
+
+    function cssLen(token, ref) {
+        const t = String(token || '0').trim();
+        if (/%$/.test(t)) return ref * (parseFloat(t) / 100);
+        const n = parseFloat(t);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    // Chrome reports clip-path as `polygon(50% 0px, 8px 2.25px, …)`.
+    function parseClipPolygon(clip, width, height) {
+        if (!clip || clip === 'none') return null;
+        const m = String(clip).match(/polygon\(\s*([^)]*)\)/i);
+        if (!m) return null;
+        const pts = m[1].split(',').map(pair => {
+            const bits = pair.trim().split(/\s+/);
+            if (bits.length < 2) return null;
+            return [cssLen(bits[0], width), cssLen(bits[1], height)];
+        }).filter(Boolean);
+        return pts.length >= 3 ? pts : null;
+    }
+
+    // A marker drawn with an SVG mask (the hexagon used to be one). The
+    // points are in the mask's viewBox; scale them into the marker box.
+    function parseMaskPolygon(maskImage, width, height) {
+        if (!maskImage || maskImage === 'none') return null;
+        let text = String(maskImage);
+        const data = text.match(/data:image\/svg\+xml(?:;charset=[^,]*)?,([^)]+)/i);
+        if (data) {
+            const body = data[1].replace(/["'\s]+$/, '');
+            try { text = decodeURIComponent(body); } catch (e) { text = body; }
+        }
+        const ptsMatch = text.match(/points=['"]([^'"]+)['"]/i);
+        if (!ptsMatch) return null;
+        const vb = text.match(/viewBox=['"]\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/i);
+        const raw = ptsMatch[1].trim().split(/\s+/).map(pair => pair.split(',').map(Number));
+        const pairs = raw.filter(p => p.length >= 2 && p.every(n => Number.isFinite(n)));
+        if (pairs.length < 3) return null;
+        const vw = vb ? parseFloat(vb[1]) : Math.max.apply(null, pairs.map(p => p[0]));
+        const vh = vb ? parseFloat(vb[2]) : Math.max.apply(null, pairs.map(p => p[1]));
+        if (!(vw > 0 && vh > 0)) return null;
+        return pairs.map(p => [p[0] / vw * width, p[1] / vh * height]);
+    }
+
+    function ensureRasterStyle() {
+        if (typeof document === 'undefined' || document.getElementById('pr-raster-style')) return;
+        const style = document.createElement('style');
+        style.id = 'pr-raster-style';
+        style.textContent = [
+            '.pr-raster-nobefore::before { content: none !important; }',
+            '.pr-raster-noafter::after { content: none !important; }',
+            '.pr-raster-mark { position: absolute; margin: 0; padding: 0; border: 0; display: block; }',
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function fittedImageUrl(img, px) {
+        const cs = global.getComputedStyle(img);
+        const fit = cs.objectFit || 'fill';
+        if (fit !== 'contain' && fit !== 'cover' && fit !== 'scale-down') return null;
+        const box = img.getBoundingClientRect();
+        const rect = fittedDrawRect(box.width, box.height, img.naturalWidth, img.naturalHeight, fit, cs.objectPosition);
+        if (!rect) return null;
+        if (Math.abs(rect.x) < 0.5 && Math.abs(rect.y) < 0.5
+            && Math.abs(rect.w - box.width) < 0.5 && Math.abs(rect.h - box.height) < 0.5) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(box.width * px));
+        canvas.height = Math.max(1, Math.round(box.height * px));
+        const ctx = canvas.getContext('2d');
+        ctx.scale(px, px);
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+        return canvas.toDataURL('image/png');
+    }
+
+    function markerCanvas(w, h, points, radius, color, px) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * px));
+        canvas.height = Math.max(1, Math.round(h * px));
+        const ctx = canvas.getContext('2d');
+        ctx.scale(px, px);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        if (points) {
+            ctx.moveTo(points[0][0], points[0][1]);
+            for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+            ctx.closePath();
+        } else if (radius + 0.5 >= Math.min(w, h) / 2) {
+            ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        } else {
+            const r = radius;
+            ctx.moveTo(r, 0);
+            ctx.arcTo(w, 0, w, h, r);
+            ctx.arcTo(w, h, 0, h, r);
+            ctx.arcTo(0, h, 0, 0, r);
+            ctx.arcTo(0, 0, w, 0, r);
+            ctx.closePath();
+        }
+        ctx.fill();
+        return canvas;
+    }
+
+    function paintPseudo(el, pseudo, px) {
+        const cs = global.getComputedStyle(el, pseudo);
+        const content = cs.content;
+        if (!content || content === 'none' || content === 'normal') return;
+        const w = parseFloat(cs.width);
+        const h = parseFloat(cs.height);
+        if (!(w > 0 && h > 0)) return;
+        if (cs.left === 'auto' || cs.top === 'auto') return;
+        const points = parseClipPolygon(cs.clipPath || cs.webkitClipPath, w, h)
+            || parseMaskPolygon(cs.webkitMaskImage || cs.maskImage, w, h);
+        const radius = cssLen(String(cs.borderRadius || '0').split(/\s+/)[0], Math.min(w, h));
+        if (!points && !(radius > 0.5)) return;
+        const color = cs.backgroundColor;
+        if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') return;
+        let canvas;
+        try { canvas = markerCanvas(w, h, points, radius, color, px); }
+        catch (e) { return; }
+        const img = document.createElement('img');
+        img.className = 'pr-raster-mark';
+        img.alt = '';
+        img.src = canvas.toDataURL('image/png');
+        img.style.left = cs.left;
+        img.style.top = cs.top;
+        img.style.width = w + 'px';
+        img.style.height = h + 'px';
+        img.style.maxWidth = 'none';
+        img.style.maxHeight = 'none';
+        if (global.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.classList.add(pseudo === '::before' ? 'pr-raster-nobefore' : 'pr-raster-noafter');
+        el.insertBefore(img, el.firstChild);
+    }
+
+    async function prepareRaster(root, scale) {
+        if (!root || typeof root.querySelectorAll !== 'function' || !global.getComputedStyle) return;
+        ensureRasterStyle();
+        const px = Math.max(2, Number(scale) || 1);
+        const imgs = Array.from(root.querySelectorAll('img')).filter(img => !img.classList.contains('pr-raster-mark'));
+        await Promise.all(imgs.map(async img => {
+            if (!img.naturalWidth || !img.naturalHeight) return;
+            let url = null;
+            try { url = fittedImageUrl(img, px); } catch (e) { return; }
+            if (!url) return;
+            img.src = url;
+            img.style.objectFit = 'fill';
+            try { await img.decode(); } catch (e) { /* the bitmap is already in memory */ }
+        }));
+        const nodes = [root].concat(Array.from(root.querySelectorAll('*')));
+        nodes.forEach(el => {
+            if (el.classList && el.classList.contains('pr-raster-mark')) return;
+            paintPseudo(el, '::before', px);
+            paintPseudo(el, '::after', px);
+        });
+        await Promise.all(Array.from(root.querySelectorAll('img.pr-raster-mark')).map(img => img.decode().catch(() => {})));
+    }
 
     function waitForImages(root) {
         const imgs = Array.from(root.querySelectorAll('img')).filter(img => img.getAttribute('src'));
@@ -97,6 +284,7 @@
                 });
                 host.appendChild(page);
                 await waitForImages(page);
+                await prepareRaster(page, o.scale || 1);
                 const canvas = await global.html2canvas(page, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: t.widthPx, height: t.heightPx, windowWidth: t.widthPx, windowHeight: t.heightPx,
@@ -161,6 +349,7 @@
                 });
                 host.appendChild(sheetEl);
                 await waitForImages(sheetEl);
+                await prepareRaster(sheetEl, o.scale || 1);
                 const canvas = await global.html2canvas(sheetEl, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: sheetWpx, height: sheetHpx, windowWidth: sheetWpx, windowHeight: sheetHpx,
@@ -189,7 +378,7 @@
         return base;
     }
 
-    const PrintablePdf = { render, renderFolio, fileName, ready };
+    const PrintablePdf = { render, renderFolio, fileName, ready, fittedDrawRect, parseClipPolygon, parseMaskPolygon, prepareRaster };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintablePdf;

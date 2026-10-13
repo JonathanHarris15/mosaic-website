@@ -212,15 +212,29 @@ test('fill-in header drops status chips; Folio pad offers Save; Print menu offer
     assert.match(pdfJs, /folioSpreads/, 'folio PDF uses the same pairing as print');
 });
 
-test('the PDF snapshot does not re-layout images', () => {
+test('the PDF paints a picture inside its box and does not move the box', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const pdfJs = fs.readFileSync(path.join(__dirname, '../public/printable-pdf.js'), 'utf8');
     const Pdf = require('../public/printable-pdf.js');
-    assert.equal(Pdf.containedSize, undefined, 'no second size pass is exported');
-    assert.equal(Pdf.fitContainedImages, undefined, 'no image re-layout is exported');
+    assert.equal(Pdf.containedSize, undefined);
+    assert.equal(Pdf.fitContainedImages, undefined);
     assert.doesNotMatch(pdfJs, /fitContainedImages|containedSize/);
     assert.doesNotMatch(pdfJs, /img\.style\.position\s*=\s*'absolute'/);
+    assert.match(pdfJs, /await prepareRaster\(/);
+    const wide = Pdf.fittedDrawRect(148, 148, 300, 150, 'contain', '50% 50%');
+    assert.ok(Math.abs(wide.x) < 0.01 && Math.abs(wide.w - 148) < 0.01);
+    assert.ok(Math.abs(wide.h - 74) < 0.01 && Math.abs(wide.y - 37) < 0.01);
+    const crop = Pdf.fittedDrawRect(200, 100, 100, 100, 'cover', 'center');
+    assert.ok(Math.abs(crop.w - 200) < 0.01 && Math.abs(crop.y + 50) < 0.01);
+    const hex = Pdf.parseClipPolygon('polygon(50% 0px, 100% 25%, 100% 75%, 50% 100%, 0px 75%, 0px 25%)', 8, 8);
+    assert.deepEqual(hex[0], [4, 0]);
+    assert.deepEqual(hex[1], [8, 2]);
+    assert.equal(hex.length, 6);
+    const mask = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17.32 20'%3E%3Cpolygon points='8.66,0 17.32,5 17.32,15 8.66,20 0,15 0,5'/%3E%3C/svg%3E\")";
+    const fromMask = Pdf.parseMaskPolygon(mask, 8, 9);
+    assert.equal(fromMask.length, 6);
+    assert.ok(Math.abs(fromMask[0][0] - 4) < 0.05 && Math.abs(fromMask[0][1]) < 0.05);
 });
 
 test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
