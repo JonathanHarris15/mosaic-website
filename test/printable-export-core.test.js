@@ -212,13 +212,15 @@ test('fill-in header drops status chips; Folio pad offers Save; Print menu offer
     assert.match(pdfJs, /folioSpreads/, 'folio PDF uses the same pairing as print');
 });
 
-test('containedSize keeps a wide picture inside a square box', () => {
+test('the PDF snapshot does not re-layout images', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const pdfJs = fs.readFileSync(path.join(__dirname, '../public/printable-pdf.js'), 'utf8');
     const Pdf = require('../public/printable-pdf.js');
-    assert.deepEqual(Pdf.containedSize(148, 148, 300, 150), { width: 148, height: 74 });
-    assert.deepEqual(Pdf.containedSize(148, 148, 100, 100), { width: 148, height: 148 });
-    assert.deepEqual(Pdf.containedSize(200, 100, 100, 100), { width: 100, height: 100 });
-    assert.equal(Pdf.containedSize(0, 148, 300, 150), null);
-    assert.equal(Pdf.containedSize(148, 148, 0, 150), null);
+    assert.equal(Pdf.containedSize, undefined, 'no second size pass is exported');
+    assert.equal(Pdf.fitContainedImages, undefined, 'no image re-layout is exported');
+    assert.doesNotMatch(pdfJs, /fitContainedImages|containedSize/);
+    assert.doesNotMatch(pdfJs, /img\.style\.position\s*=\s*'absolute'/);
 });
 
 test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
