@@ -5,10 +5,10 @@
    where a preset mask would otherwise hide them.
 
    A filled image with both width and height set to 100% paints stretched
-   wherever object-fit is missing (the default is fill) and in the PDF
-   snapshot, which draws the bitmap into the element box and ignores
-   object-fit. Height auto lets the box follow the picture. A picture that
-   asks to be cropped (object-cover) still fills its frame.
+   wherever object-fit is missing (the default is fill). Height auto lets
+   the box follow the picture. A picture that asks to be cropped
+   (object-cover) still fills its frame. The PDF paints that same fitted
+   picture into the box the page already gave it.
 
    A list marker drawn outside the line, or a hexagon drawn only as a CSS
    mask, disappears: the sheet is overflow:hidden, and a mask that does not
