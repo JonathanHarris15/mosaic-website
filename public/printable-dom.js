@@ -205,7 +205,10 @@
         ensureBaseStyles();
         const wrap = document.createElement('div');
         wrap.className = 'pr-page' + (o.className ? ' ' + o.className : '');
-        const scope = 'pr-' + (o.scopeId || page.id);
+        // `~` and other CSS combinators in an id (folio copies used to be
+        // `page~folio…`) turn `.pr-page~folio` into a sibling selector, so the
+        // page's own stylesheet never matches and the copy draws unstyled.
+        const scope = 'pr-' + cssScopeToken(o.scopeId || page.id);
         wrap.classList.add(scope);
         applyStyle(wrap, Core.pageContainerStyle(template, page));
         if (o.editing) wrap.setAttribute('data-page', page.id);
@@ -262,6 +265,12 @@
     // Prefixes every selector in a page's stylesheet with the page's own
     // class. Good enough for the CSS a page carries — rules and @media
     // blocks — without pulling in a CSS parser.
+    function cssScopeToken(id) {
+        const cleaned = String(id || 'page').replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        if (!cleaned) return 'page';
+        return /^[A-Za-z_]/.test(cleaned) ? cleaned : ('p-' + cleaned);
+    }
+
     function scopeCss(css, prefix) {
         return String(css).replace(/(^|\})\s*([^{}@]+)\{/g, (m, pre, selectors) => {
             const scoped = selectors.split(',').map(s => {

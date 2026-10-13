@@ -243,43 +243,52 @@ test('folioSpreads pads any Printable to a multiple of 4, including a one-page d
     const spreads = Export.folioSpreads(one);
     assert.equal(spreads.length, 2, '4 leaves → 2 sheets');
     for (const s of spreads) assert.equal(s.leftIdx + s.rightIdx, 3);
-    assert.equal(spreads[0].left.key, 'only');
-    assert.equal(spreads[0].right.folioDuplicate, true);
-    assert.deepEqual(spreads[0].right.nodes, [{ id: 'n', tag: 'p', text: 'Ada' }]);
+    assert.equal(spreads[0].right.key, 'only');
+    assert.equal(spreads[0].left.blank, true);
+    assert.deepEqual(spreads[0].left.nodes, []);
     assert.equal(Export.folioSpreads([]).length, 0);
 
     const five = [0, 1, 2, 3, 4].map(i => ({ key: 'k' + i, page: { id: 'k' + i }, nodes: [] }));
     const padded = Export.folioSpreads(five);
     assert.equal(padded.length, 4, '5 pages pad to 8 leaves, 4 sheets');
-    const leaves = padded.flatMap(s => [s.left, s.right]);
-    assert.equal(leaves.filter(e => e && e.blank).length, 0, 'folio pad clones the brush, not blank headers');
-    assert.equal(leaves.filter(e => e && e.folioDuplicate).length, 3);
+    assert.equal(padded[0].left.blank, true);
     for (const s of padded) assert.equal(s.leftIdx + s.rightIdx, 7);
 });
 
-test('MS-767: folio padding clones the brush at the filler slot with full content', () => {
-    const marker = 'SERMON-NOTES-BODY-MS767';
-    const pages = [0, 1, 2, 3, 4].map(i => ({
-        key: 'k' + i,
-        page: { id: 'k' + i, name: i === 4 ? 'Sermon notes' : 'Page ' + (i + 1) },
-        nodes: [{ id: 'n' + i, tag: 'p', text: i === 4 ? marker : 'body-' + i }],
-    }));
-    const filled = Export.fillFolioPadWithBrush(pages, 4);
-    assert.equal(filled.ok, true);
-    assert.equal(filled.entries.length, 8);
-    assert.equal(Export.folioReadyToPrint(filled.entries), true);
-    const pads = filled.entries.filter(e => e.folioPad);
-    assert.equal(pads.length, 3);
-    pads.forEach(p => {
-        assert.equal(p.nodes[0].text, marker);
-        assert.equal(p.page.nodes[0].text, marker);
-        assert.notEqual(p.blank, true);
-    });
-    assert.equal(filled.entries[7].nodes[0].text, marker, 'the original brush page stays at the end of the run');
-    assert.equal(filled.entries[4].folioPad, true, 'clones splice in at the filler slot, not appended after hymns');
-    const spreads = Export.folioSpreads(pages, { brushIndex: 4 });
-    const leaves = spreads.flatMap(s => [s.left, s.right]);
-    assert.equal(leaves.filter(e => e && e.blank).length, 0, 'imposition never injects blank header pages when a brush exists');
+test('MS-767: a brush copy keeps the page body and a CSS-safe id', () => {
+    const fs = require('node:fs');
+    const css = '.legacy-root { display: flex; }\n.border-b { border-bottom: 1px solid #000; }';
+    const notes = {
+        key: 'sermon-notes',
+        page: { id: 'sermon-notes', name: 'Sermon Notes', css: css, nodes: [] },
+        nodes: [{
+            id: 'root',
+            tag: 'div',
+            attrs: { class: 'legacy-root' },
+            text: '',
+            children: [
+                { id: 'heading', tag: 'span', text: 'Sermon Notes' },
+                { id: 'line', tag: 'div', attrs: { class: 'border-b' }, text: '' },
+            ],
+        }],
+    };
+    const before = Export.cloneEntriesForFolio([notes, notes]);
+    assert.equal(before.length, 2, 'opening the pad does not insert pages');
+    const stamped = Export.applyFolioPad(before, { kind: 'duplicate', sourceIndex: 0, afterIndex: 1 });
+    assert.equal(stamped.ok, true);
+    assert.equal(stamped.entries.length, 3, 'one stamp adds one page');
+    const leaf = stamped.leaf;
+    assert.match(leaf.page.id, /^[A-Za-z_][A-Za-z0-9_-]*$/, 'id is one CSS class, not a sibling combinator');
+    assert.doesNotMatch(leaf.page.id, /~/);
+    assert.equal(leaf.page.css, css);
+    assert.equal(leaf.nodes[0].attrs.class, 'legacy-root');
+    assert.equal(leaf.nodes[0].children[0].text, 'Sermon Notes');
+    assert.equal(leaf.nodes[0].children[1].attrs.class, 'border-b');
+    assert.equal(leaf.page.nodes[0].children[1].attrs.class, 'border-b');
+    const view = fs.readFileSync(require('node:path').join(__dirname, '../public/printable-view.js'), 'utf8');
+    const editor = fs.readFileSync(require('node:path').join(__dirname, '../public/printable-editor.js'), 'utf8');
+    assert.doesNotMatch(view, /fillFolioPadWithBrush|finalizeFolioPadForPrint/);
+    assert.doesNotMatch(editor, /fillFolioPadWithBrush|finalizeFolioPadForPrint/);
 });
 
 test('folio pad tool duplicates a page into a temporary stack until ×4 without splitting overflow runs', () => {

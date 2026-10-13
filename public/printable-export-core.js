@@ -159,13 +159,14 @@
     }
 
     // Saddle-stitch spreads, the same pairing as GuideEngine.imposeSpreads.
-    // Pages are padded to a multiple of 4. For spread k the two indices sum
-    // to n-1; even spreads put the high page on the left, odd spreads flip.
-    // When a brush page is known, padding clones that page at the filler slot
-    // (the same splice GuideEngine uses for filler pages), not blank headers
-    // appended at the end. Prefer a pad-ready `folioPadEntries` stack first.
-    function folioSpreads(entries, opts) {
-        const padded = padFolioEntries(Array.isArray(entries) ? entries : [], opts);
+    // Pages are padded with blanks to a multiple of 4. For spread k the two
+    // indices sum to n-1; even spreads put the high page on the left, odd
+    // spreads flip. Blank leaves are real empty pages so a print can draw them.
+    // This always pads — folio is a folded booklet, including for a Printable
+    // that would not pad on the flat path. Prefer a pad-ready `folioPadEntries`
+    // stack first so the operator's brush copies are what print, not blanks.
+    function folioSpreads(entries) {
+        const padded = padEntries(Array.isArray(entries) ? entries : []);
         const n = padded.length;
         const spreads = [];
         for (let k = 0; k < n / 2; k++) {
@@ -284,9 +285,19 @@
         return entries;
     }
 
+    // A page id is also the CSS scope class (`pr-` + id). `~` is a CSS
+    // sibling combinator, so an id like `notes~folio…` makes every rule in
+    // the page stylesheet fail to match and the copy draws unstyled.
+    function cssSafeId(value) {
+        const cleaned = String(value || 'pg').replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        if (!cleaned) return 'pg';
+        return /^[A-Za-z_]/.test(cleaned) ? cleaned : ('p-' + cleaned);
+    }
+
     function duplicateFolioEntry(entry, stamp) {
         const copy = deepClone(entry || {});
-        const id = ((entry && entry.key) || (entry && entry.page && entry.page.id) || 'pg') + '~folio' + stamp;
+        const base = (entry && entry.key) || (entry && entry.page && entry.page.id) || 'pg';
+        const id = cssSafeId(base) + '-folio-' + cssSafeId(stamp);
         copy.key = id;
         copy.folioPad = true;
         copy.folioDuplicate = true;
@@ -303,71 +314,6 @@
             });
         }
         return copy;
-    }
-
-    // Default brush: the last real (non-blank) page — usually the filler /
-    // sermon-notes sheet in a Sunday booklet.
-    function defaultFolioBrushIndex(entries) {
-        const list = entries || [];
-        for (let i = list.length - 1; i >= 0; i--) {
-            if (list[i] && !list[i].blank) return i;
-        }
-        return -1;
-    }
-
-    function resolveFolioBrushIndex(entries, hint) {
-        const list = entries || [];
-        if (hint != null && Number.isFinite(Number(hint))) {
-            const i = Math.round(Number(hint));
-            if (i >= 0 && i < list.length && list[i] && !list[i].blank) return i;
-        }
-        return defaultFolioBrushIndex(list);
-    }
-
-    // Pad a folio stack to a multiple of 4 by cloning the brush page at its
-    // filler slot (splice before the brush leaf), matching GuideEngine filler
-    // placement. Falls back to blank leaves only when no brush exists.
-    function padFolioEntries(entries, opts) {
-        const list = Array.isArray(entries) ? entries.slice() : [];
-        const need = blankPadCount(list.length);
-        if (need <= 0) return list;
-        const o = opts || {};
-        const brush = resolveFolioBrushIndex(list, o.brushIndex);
-        if (brush < 0) return padEntries(list);
-        const filled = fillFolioPadWithBrush(list, brush);
-        return filled.ok ? filled.entries : padEntries(list);
-    }
-
-    function fillFolioPadWithBrush(entries, brushIndex) {
-        const list = cloneEntriesForFolio(entries);
-        const need = blankPadCount(list.length);
-        if (need <= 0) return { ok: true, entries: list, inserted: 0 };
-        const brush = resolveFolioBrushIndex(list, brushIndex);
-        if (brush < 0) {
-            return { ok: false, why: 'Pick a real page to use as the brush.', entries: list };
-        }
-        const source = list[brush];
-        if (!source || source.blank) {
-            return { ok: false, why: 'Pick a real page to use as the brush.', entries: list };
-        }
-        const stamp = Date.now().toString(36);
-        const clones = [];
-        for (let i = 0; i < need; i++) {
-            clones.push(duplicateFolioEntry(source, stamp + '-' + i));
-        }
-        list.splice(brush, 0, ...clones);
-        restampFolioPageNumbers(list);
-        return { ok: true, entries: list, inserted: need };
-    }
-
-    // Finish the temporary folio stack before print or PDF export.
-    function finalizeFolioPadForPrint(entries, brushIndex) {
-        const filled = fillFolioPadWithBrush(entries, brushIndex);
-        if (!filled.ok) return filled;
-        if (!folioReadyToPrint(filled.entries)) {
-            return { ok: false, why: 'The fold is not a multiple of 4 yet.', entries: filled.entries };
-        }
-        return { ok: true, entries: filled.entries, inserted: filled.inserted };
     }
 
     function blankFolioPadEntry(proto, stamp) {
@@ -451,11 +397,7 @@
         folioSpreads,
         folioPrintCss,
         cloneEntriesForFolio,
-        defaultFolioBrushIndex,
-        resolveFolioBrushIndex,
-        padFolioEntries,
-        fillFolioPadWithBrush,
-        finalizeFolioPadForPrint,
+        cssSafeId,
         folioNeedsPad,
         folioPadNeed,
         entryLabel,
