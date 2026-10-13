@@ -251,14 +251,22 @@
         return decorate(el);
     }
 
+    function printableIdOf(raw) {
+        const id = cleanName(raw && raw.printableId != null ? raw.printableId : '');
+        return id || '';
+    }
+
     function copyOrder(order) {
         const elements = (order.elements || []).map(copyElement);
-        return {
+        const out = {
             id: order.id,
             name: order.name,
             elements: elements,
             elementIds: elements.map(function (el) { return el.id; }),
         };
+        const printableId = printableIdOf(order);
+        if (printableId) out.printableId = printableId;
+        return out;
     }
 
     function kindOf(raw) {
@@ -308,7 +316,15 @@
                 push(elId && looseById ? looseById.get(elId) : null);
             });
         }
-        return { id: id, name: cleanName(src.name) || id, elements: elements, elementIds: elements.map(function (el) { return el.id; }) };
+        const out = {
+            id: id,
+            name: cleanName(src.name) || id,
+            elements: elements,
+            elementIds: elements.map(function (el) { return el.id; }),
+        };
+        const printableId = printableIdOf(src);
+        if (printableId) out.printableId = printableId;
+        return out;
     }
 
     function poolFrom(orders, loose) {
@@ -863,9 +879,13 @@
         if (!name) throw new Error('An order needs a name.');
         const taken = new Set(next.orders.map(function (o) { return o.id; }));
         let elements = [];
+        let printableId = '';
         if (src.copyFrom) {
             const from = next.orders.find(function (o) { return o.id === src.copyFrom; });
-            if (from) elements = (from.elements || []).map(copyElement);
+            if (from) {
+                elements = (from.elements || []).map(copyElement);
+                printableId = printableIdOf(from);
+            }
         }
         const order = {
             id: freshId(slugFor(name), taken),
@@ -873,9 +893,53 @@
             elements: elements,
             elementIds: elements.map(function (el) { return el.id; }),
         };
+        if (printableId) order.printableId = printableId;
         next.orders.push(order);
         syncPool(next);
         return { catalog: next, order: copyOrder(order) };
+    }
+
+    // The optional Printable this Liturgy Order uses as its Service Guide
+    // (MS-762). Empty clears the link. Lives on the order draft until Save.
+    function setOrderPrintable(catalog, orderId, printableId) {
+        const next = cloneCatalog(catalog);
+        const order = next.orders.find(function (o) { return o.id === orderId; });
+        if (!order) throw new Error('That order is gone.');
+        const id = cleanName(printableId);
+        if (id) order.printableId = id;
+        else delete order.printableId;
+        return next;
+    }
+
+    // Where the Service Guide button goes for a Sunday: the fill-in view of
+    // the Printable linked on that Sunday's Liturgy Order, or disabled when
+    // none is linked / the Printable is gone / a member may not view it.
+    function serviceGuideHref(printableId, date, occurrenceId) {
+        let href = 'printable-view.html?id=' + encodeURIComponent(printableId);
+        if (date) href += '&asOf=' + encodeURIComponent(date);
+        if (occurrenceId) href += '&occurrence=' + encodeURIComponent(occurrenceId);
+        return href;
+    }
+
+    function serviceGuideTarget(service, catalog, opts) {
+        const options = opts || {};
+        const order = orderFor(service || {}, catalog);
+        const printableId = printableIdOf(order);
+        const disabled = { enabled: false, href: null, printableId: printableId || null };
+        if (!printableId) return disabled;
+
+        const printables = options.printables;
+        if (printables && typeof printables === 'object') {
+            const meta = printables[printableId];
+            if (!meta) return disabled;
+            if (!options.viewerCanEdit && !meta.memberVisible) return disabled;
+        }
+
+        return {
+            enabled: true,
+            href: serviceGuideHref(printableId, options.date || '', options.occurrenceId || ''),
+            printableId: printableId,
+        };
     }
 
     function renameOrder(catalog, id, name) {
@@ -1041,6 +1105,9 @@
         addOrder: addOrder,
         renameOrder: renameOrder,
         deleteOrder: deleteOrder,
+        setOrderPrintable: setOrderPrintable,
+        serviceGuideHref: serviceGuideHref,
+        serviceGuideTarget: serviceGuideTarget,
         addToOrder: addToOrder,
         removeFromOrder: removeFromOrder,
         moveInOrder: moveInOrder,

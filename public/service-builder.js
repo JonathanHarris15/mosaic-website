@@ -681,6 +681,8 @@ function serviceForm() {
         liturgyCatalogLoaded: false,
         liturgyStored: null,
         liturgyReadProblem: '',
+        // Printables named on Liturgy Orders — used to enable the Service Guide button (MS-762).
+        liturgyPrintables: {},
 
         async loadLiturgyCatalog() {
             if (!window.LiturgyOrderStore) return;
@@ -691,6 +693,7 @@ function serviceForm() {
                 this.liturgyCatalogLoaded = true;
                 this.liturgyReadProblem = '';
                 this.releaseQuietRow();
+                await this.loadLiturgyPrintables();
             } catch (err) {
                 // The seed stays on screen so the Sunday can still be read.
                 // This page does not write the order.
@@ -698,6 +701,26 @@ function serviceForm() {
                 this.liturgyCatalogLoaded = false;
                 this.liturgyStored = null;
                 this.liturgyReadProblem = describeLiturgyReadFailure(err);
+            }
+        },
+
+        async loadLiturgyPrintables() {
+            const ids = [];
+            (this.liturgyCatalog.orders || []).forEach(o => {
+                if (o && o.printableId) ids.push(o.printableId);
+            });
+            if (!ids.length || !window.PrintableStore) {
+                this.liturgyPrintables = {};
+                return;
+            }
+            try {
+                const list = await PrintableStore.loadLinked(db, ids);
+                const map = {};
+                (list || []).forEach(p => { if (p && p.id) map[p.id] = { memberVisible: !!p.memberVisible }; });
+                this.liturgyPrintables = map;
+            } catch (e) {
+                console.warn('Liturgy order printables could not be read', e);
+                this.liturgyPrintables = {};
             }
         },
 
@@ -859,10 +882,19 @@ function serviceForm() {
             s.hasBaptism = this._orderHasBaptism(s) && named;
         },
 
-        // The single shared routing rule (calendar + this page never drift).
+        // Service Guide button: Printable linked on this Sunday's Liturgy Order (MS-762).
+        serviceGuideTarget() {
+            return liturgyCore().serviceGuideTarget(this.service, this.liturgyCatalog, {
+                date: this.date,
+                occurrenceId: this.sundayOccurrenceId || '',
+                printables: this.liturgyPrintables,
+                viewerCanEdit: !!this.canEdit,
+            });
+        },
+        get serviceGuideEnabled() { return !!this.serviceGuideTarget().enabled; },
         guideGenerateHref() {
-            if (window.GuideStore) return GuideStore.guideHref(this.service, this.date);
-            return 'service-guide-editor.html?date=' + encodeURIComponent(this.date);
+            const target = this.serviceGuideTarget();
+            return target.enabled ? target.href : '#';
         },
 
         // --- Hymn Preview ---

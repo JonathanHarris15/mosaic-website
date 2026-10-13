@@ -415,3 +415,70 @@ test('validateCatalog finds a duplicate id and an order naming a missing element
     assert.ok(problems.some(p => /gone/.test(p)));
     assert.deepEqual(Core.validateCatalog(Core.standardCatalog()), []);
 });
+
+test('printableId round-trips on normalise, copy, and duplicate', () => {
+    const cat = Core.catalogFrom({
+        orders: [{
+            id: 'standard',
+            name: 'Standard',
+            printableId: 'guide-booklet',
+            elements: Core.STANDARD_ELEMENTS.map(el => ({ id: el.id, name: el.name, kind: el.kind, hasNote: true })),
+        }],
+    });
+    assert.equal(Core.orderById(cat, 'standard').printableId, 'guide-booklet');
+
+    const made = Core.addOrder(cat, { name: 'Communion', copyFrom: 'standard' });
+    assert.equal(made.order.printableId, 'guide-booklet');
+    assert.equal(Core.orderById(made.catalog, made.order.id).printableId, 'guide-booklet');
+
+    const cleared = Core.setOrderPrintable(made.catalog, made.order.id, '');
+    assert.equal(Core.orderById(cleared, made.order.id).printableId, undefined);
+
+    const set = Core.setOrderPrintable(cleared, 'standard', 'other-guide');
+    assert.equal(Core.orderById(set, 'standard').printableId, 'other-guide');
+});
+
+test('serviceGuideTarget enables the fill-in href when the order has a known Printable', () => {
+    let cat = Core.standardCatalog();
+    cat = Core.setOrderPrintable(cat, 'standard', 'sunday-guide');
+    const date = '2026-10-18';
+    const occurrenceId = 'sunday_service_2026-10-18';
+    const printables = { 'sunday-guide': { memberVisible: true } };
+
+    const editor = Core.serviceGuideTarget({ liturgyOrderId: 'standard' }, cat, {
+        date, occurrenceId, printables, viewerCanEdit: true,
+    });
+    assert.equal(editor.enabled, true);
+    assert.equal(editor.printableId, 'sunday-guide');
+    assert.equal(
+        editor.href,
+        'printable-view.html?id=sunday-guide&asOf=2026-10-18&occurrence=sunday_service_2026-10-18'
+    );
+
+    const member = Core.serviceGuideTarget({}, cat, {
+        date, occurrenceId, printables, viewerCanEdit: false,
+    });
+    assert.equal(member.enabled, true);
+
+    const hidden = Core.serviceGuideTarget({}, cat, {
+        date, occurrenceId,
+        printables: { 'sunday-guide': { memberVisible: false } },
+        viewerCanEdit: false,
+    });
+    assert.equal(hidden.enabled, false);
+    assert.equal(hidden.href, null);
+});
+
+test('serviceGuideTarget disables when no Printable is linked or the id is unknown', () => {
+    const bare = Core.standardCatalog();
+    assert.equal(Core.serviceGuideTarget({}, bare, { date: '2026-10-18', viewerCanEdit: true }).enabled, false);
+
+    let cat = Core.setOrderPrintable(Core.standardCatalog(), 'standard', 'gone');
+    const missing = Core.serviceGuideTarget({}, cat, {
+        date: '2026-10-18',
+        printables: {},
+        viewerCanEdit: true,
+    });
+    assert.equal(missing.enabled, false);
+    assert.equal(missing.printableId, 'gone');
+});

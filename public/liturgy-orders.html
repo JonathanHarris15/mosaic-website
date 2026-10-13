@@ -128,6 +128,52 @@
                     </div>
                 </div>
 
+                <!-- Service Guide Printable for this Liturgy Order (MS-762). -->
+                <div class="lo-guide" aria-label="Service Guide printable">
+                    <span class="m-label">Service Guide</span>
+                    <p class="lo-hint">The Printable the Service Guide button opens for Sundays that follow this order. Saves with the rest of the draft.</p>
+                    <p x-show="printableError" class="text-[12.5px] text-error mb-2" x-text="printableError"></p>
+                    <div class="lo-guide__row" x-show="linkedPrintable">
+                        <span class="lo-guide__name" x-text="linkedPrintable && linkedPrintable.name"></span>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="editing" @click="clearPrintable()"
+                                :aria-label="'Clear Service Guide printable'">
+                            <span class="m-btn__label">Clear</span>
+                        </button>
+                    </div>
+                    <p class="lo-hint" x-show="!linkedPrintable">No Printable linked. Service Guide buttons stay greyed out for Sundays on this order.</p>
+                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="editing"
+                            @click="startLinkPrintable()" id="lo-link-printable">
+                        <span class="material-symbols-outlined">link</span>
+                        <span class="m-btn__label" x-text="linkedPrintable ? 'Change printable' : 'Link a printable'"></span>
+                    </button>
+                </div>
+
+                <div x-show="linkingPrintable" @keydown.escape.window="linkingPrintable = false"
+                     class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+                    <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[10vh] p-md"
+                         role="dialog" aria-modal="true" aria-label="Link a printable">
+                        <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
+                        <p class="font-body-md text-on-surface-variant mb-sm">Sundays on this Liturgy Order open this Printable's fill-in view from the Service Guide button.</p>
+                        <p class="font-body-md text-on-surface-variant" x-show="libraryLoading">Loading the library…</p>
+                        <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkablePrintables.length">No laid-out printables are available to link.</p>
+                        <div class="m-card-list" x-show="!libraryLoading && linkablePrintables.length">
+                            <template x-for="p in linkablePrintables" :key="p.id">
+                                <button type="button" class="m-row m-row--interactive text-left" @click="linkPrintable(p)">
+                                    <span class="m-row__main">
+                                        <span class="m-row__title" x-text="p.name"></span>
+                                        <span class="m-row__sub" x-text="printablePath(p) + ' · ' + (p.template ? p.template.label : '')"></span>
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                        <div class="mt-md flex justify-end">
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="linkingPrintable = false">
+                                <span class="m-btn__label">Cancel</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="lo-list" id="order-elements">
                     <div class="m-empty lo-list__empty" x-show="!orderElements.length">
                         <span class="material-symbols-outlined">list_alt</span>
@@ -327,6 +373,9 @@
     <script src="desktop-header-lead.js"></script>
     <script src="desktop-nav-boot.js"></script>
     <script src="vendor/sortable-1.15.0.min.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-store.js"></script>
     <script src="liturgy-order-core.js"></script>
     <script src="liturgy-order-store.js"></script>
     <script src="liturgy-orders.js"></script>
@@ -449,6 +498,16 @@
         }
         .lo-inspector__acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
         .lo-hint { display: block; margin-top: var(--space-xs); font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); white-space: normal; }
+        .lo-guide {
+            display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px;
+            padding: 14px 14px 16px; border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-md); background: var(--surface-container-low);
+        }
+        .lo-guide__row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .lo-guide__name {
+            flex: 1 1 auto; min-width: 0; font: 600 14px var(--font-sans);
+            color: var(--on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         .lo-textarea { height: auto; padding-top: 10px; resize: vertical; }
         .lo-prayer { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--outline-variant); }
         .lo-requests { display: flex; flex-direction: column; gap: 12px; }

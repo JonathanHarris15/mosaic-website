@@ -98,6 +98,14 @@ function liturgyOrdersPage() {
         kinds: Core.KINDS,
         primitives: Core.PRIMITIVES,
         _sortable: null,
+        // Service Guide Printable linked on the open order (MS-762). Names
+        // come from the library so the draft can show what is linked.
+        printablesById: {},
+        linkingPrintable: false,
+        libraryLoading: false,
+        libraryPrintables: [],
+        libraryFolders: [],
+        printableError: '',
 
         get backHref() {
             return this.date ? 'service-builder.html?date=' + encodeURIComponent(this.date) : 'service-calendar.html';
@@ -138,6 +146,17 @@ function liturgyOrdersPage() {
         get addable() {
             const inOrder = new Set(this.selectedOrder.elementIds);
             return this.catalog.elements.filter(el => !inOrder.has(el.id));
+        },
+        get linkedPrintableId() {
+            return (this.selectedOrder && this.selectedOrder.printableId) || '';
+        },
+        get linkedPrintable() {
+            const id = this.linkedPrintableId;
+            return id ? (this.printablesById[id] || { id: id, name: id }) : null;
+        },
+        get linkablePrintables() {
+            const linked = this.linkedPrintableId;
+            return (this.libraryPrintables || []).filter(p => p && p.template && p.id !== linked);
         },
 
         kindLabel(kind) { return Core.KIND_LABELS[kind] || kind; },
@@ -201,6 +220,25 @@ function liturgyOrdersPage() {
             await this.load();
         },
 
+        async refreshPrintableNames() {
+            const ids = [];
+            (this.catalog.orders || []).forEach(o => {
+                if (o && o.printableId) ids.push(o.printableId);
+            });
+            if (!ids.length || !window.PrintableStore) {
+                this.printablesById = {};
+                return;
+            }
+            try {
+                const list = await PrintableStore.loadLinked(db, ids);
+                const map = {};
+                (list || []).forEach(p => { if (p && p.id) map[p.id] = p; });
+                this.printablesById = map;
+            } catch (e) {
+                console.warn('Linked printables could not be named', e);
+            }
+        },
+
         async load() {
             this.loading = true;
             try {
@@ -211,6 +249,7 @@ function liturgyOrdersPage() {
                 if (!Core.orderById(this.catalog, this.selectedOrderId)) this.selectedOrderId = Core.STANDARD_ORDER_ID;
                 this.orderName = this.selectedOrder.name;
                 this.problem = '';
+                await this.refreshPrintableNames();
             } catch (e) {
                 console.error('Liturgy orders did not load', e);
                 const catalog = Core.standardCatalog();
@@ -294,6 +333,45 @@ function liturgyOrdersPage() {
             })) return;
             this.selectOrder(made.order.id);
             this._focusOrderName();
+        },
+
+        // Link / clear the Service Guide Printable on this order (draft until Save).
+        async startLinkPrintable() {
+            if (!this.editing || !window.PrintableStore) return;
+            this.linkingPrintable = true;
+            this.libraryLoading = true;
+            this.printableError = '';
+            try {
+                const [printables, folders] = await Promise.all([
+                    PrintableStore.listPrintables(db),
+                    PrintableStore.listFolders(db).catch(() => []),
+                ]);
+                this.libraryPrintables = printables || [];
+                this.libraryFolders = folders || [];
+            } catch (e) {
+                this.printableError = 'The library did not load. Try again.';
+                this.linkingPrintable = false;
+            } finally {
+                this.libraryLoading = false;
+            }
+        },
+
+        printablePath(p) {
+            if (!window.FilingCore) return 'Printables';
+            const crumbs = FilingCore.breadcrumbFor(this.libraryFolders, p && p.folderId);
+            return crumbs.length ? crumbs.map(c => c.name).join(' / ') : 'Printables';
+        },
+
+        linkPrintable(p) {
+            if (!this.editing || !p || !p.id) return;
+            if (!this._apply(cat => Core.setOrderPrintable(cat, this.selectedOrderId, p.id))) return;
+            this.printablesById = Object.assign({}, this.printablesById, { [p.id]: p });
+            this.linkingPrintable = false;
+        },
+
+        clearPrintable() {
+            if (!this.editing) return;
+            this._apply(cat => Core.setOrderPrintable(cat, this.selectedOrderId, ''));
         },
 
         renameOrder() {

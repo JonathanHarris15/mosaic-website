@@ -1215,7 +1215,15 @@
                     <!-- Actions -->
                     <div class="flex flex-col items-center gap-4 mt-6" x-show="canEdit">
                         <div class="flex flex-wrap justify-center gap-3">
-                            <a :href="guideGenerateHref()" class="bg-secondary text-on-secondary hover:bg-primary transition-colors duration-200 flex items-center gap-1.5 px-6 py-2.5 rounded-lg text-[10px] font-label-md uppercase tracking-widest shadow-sm">
+                            <a id="generate-service-guide"
+                               :href="serviceGuideEnabled ? guideGenerateHref() : null"
+                               :aria-disabled="!serviceGuideEnabled"
+                               :tabindex="serviceGuideEnabled ? 0 : -1"
+                               :class="serviceGuideEnabled
+                                    ? 'bg-secondary text-on-secondary hover:bg-primary cursor-pointer'
+                                    : 'bg-outline-variant text-on-surface-variant opacity-50 cursor-not-allowed pointer-events-none'"
+                               class="transition-colors duration-200 flex items-center gap-1.5 px-6 py-2.5 rounded-lg text-[10px] font-label-md uppercase tracking-widest shadow-sm"
+                               :title="serviceGuideEnabled ? 'Open this order’s Service Guide printable' : 'Link a Printable to this Liturgy Order first'">
                                 <span class="material-symbols-outlined text-[16px]">auto_stories</span>
                                 <span>Generate Service Guide</span>
                             </a>
