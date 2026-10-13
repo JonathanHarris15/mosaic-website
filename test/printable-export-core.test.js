@@ -222,6 +222,8 @@ test('the PDF paints a picture inside its box and does not move the box', () => 
     assert.doesNotMatch(pdfJs, /fitContainedImages|containedSize/);
     assert.doesNotMatch(pdfJs, /img\.style\.position\s*=\s*'absolute'/);
     assert.match(pdfJs, /await prepareRaster\(/);
+    assert.match(pdfJs, /li\.pr-raster-nobefore::before/);
+    assert.match(fs.readFileSync(path.join(__dirname, '../public/guide-preview.css'), 'utf8'), /li\.pr-raster-nobefore::before/);
     const wide = Pdf.fittedDrawRect(148, 148, 300, 150, 'contain', '50% 50%');
     assert.ok(Math.abs(wide.x) < 0.01 && Math.abs(wide.w - 148) < 0.01);
     assert.ok(Math.abs(wide.h - 74) < 0.01 && Math.abs(wide.y - 37) < 0.01);

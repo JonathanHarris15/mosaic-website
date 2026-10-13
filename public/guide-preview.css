@@ -109,3 +109,15 @@
   mask: none !important;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
+
+/* The event-file snapshot paints this shape into an image, then has to
+   turn the original marker off. A shorter rule loses to the !important
+   above, and the raster draws the square behind the hexagon. */
+.preview-page .m-qlist li.pr-raster-nobefore::before,
+.pr-page .m-qlist li.pr-raster-nobefore::before,
+.preview-page ul:not(.m-qlist) > li.pr-raster-nobefore::before,
+.pr-page ul:not(.m-qlist) > li.pr-raster-nobefore::before {
+  content: none !important;
+  background: none !important;
+  display: none !important;
+}
