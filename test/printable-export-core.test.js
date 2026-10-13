@@ -243,16 +243,43 @@ test('folioSpreads pads any Printable to a multiple of 4, including a one-page d
     const spreads = Export.folioSpreads(one);
     assert.equal(spreads.length, 2, '4 leaves → 2 sheets');
     for (const s of spreads) assert.equal(s.leftIdx + s.rightIdx, 3);
-    assert.equal(spreads[0].right.key, 'only');
-    assert.equal(spreads[0].left.blank, true);
-    assert.deepEqual(spreads[0].left.nodes, []);
+    assert.equal(spreads[0].left.key, 'only');
+    assert.equal(spreads[0].right.folioDuplicate, true);
+    assert.deepEqual(spreads[0].right.nodes, [{ id: 'n', tag: 'p', text: 'Ada' }]);
     assert.equal(Export.folioSpreads([]).length, 0);
 
     const five = [0, 1, 2, 3, 4].map(i => ({ key: 'k' + i, page: { id: 'k' + i }, nodes: [] }));
     const padded = Export.folioSpreads(five);
     assert.equal(padded.length, 4, '5 pages pad to 8 leaves, 4 sheets');
-    assert.equal(padded[0].left.blank, true);
+    const leaves = padded.flatMap(s => [s.left, s.right]);
+    assert.equal(leaves.filter(e => e && e.blank).length, 0, 'folio pad clones the brush, not blank headers');
+    assert.equal(leaves.filter(e => e && e.folioDuplicate).length, 3);
     for (const s of padded) assert.equal(s.leftIdx + s.rightIdx, 7);
+});
+
+test('MS-767: folio padding clones the brush at the filler slot with full content', () => {
+    const marker = 'SERMON-NOTES-BODY-MS767';
+    const pages = [0, 1, 2, 3, 4].map(i => ({
+        key: 'k' + i,
+        page: { id: 'k' + i, name: i === 4 ? 'Sermon notes' : 'Page ' + (i + 1) },
+        nodes: [{ id: 'n' + i, tag: 'p', text: i === 4 ? marker : 'body-' + i }],
+    }));
+    const filled = Export.fillFolioPadWithBrush(pages, 4);
+    assert.equal(filled.ok, true);
+    assert.equal(filled.entries.length, 8);
+    assert.equal(Export.folioReadyToPrint(filled.entries), true);
+    const pads = filled.entries.filter(e => e.folioPad);
+    assert.equal(pads.length, 3);
+    pads.forEach(p => {
+        assert.equal(p.nodes[0].text, marker);
+        assert.equal(p.page.nodes[0].text, marker);
+        assert.notEqual(p.blank, true);
+    });
+    assert.equal(filled.entries[7].nodes[0].text, marker, 'the original brush page stays at the end of the run');
+    assert.equal(filled.entries[4].folioPad, true, 'clones splice in at the filler slot, not appended after hymns');
+    const spreads = Export.folioSpreads(pages, { brushIndex: 4 });
+    const leaves = spreads.flatMap(s => [s.left, s.right]);
+    assert.equal(leaves.filter(e => e && e.blank).length, 0, 'imposition never injects blank header pages when a brush exists');
 });
 
 test('folio pad tool duplicates a page into a temporary stack until ×4 without splitting overflow runs', () => {

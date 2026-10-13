@@ -118,7 +118,7 @@
         }
         const t = project.template;
         const sheet = Export.folioSheet(t);
-        const spreads = Export.folioSpreads(entries || []);
+        const spreads = Export.folioSpreads(entries || [], { brushIndex: o.brushIndex });
         if (!spreads.length) throw new Error('not laid out');
         const sheetWpx = t.widthPx * 2;
         const sheetHpx = t.heightPx;
