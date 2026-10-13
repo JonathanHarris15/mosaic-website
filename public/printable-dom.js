@@ -29,6 +29,8 @@
         '.pr-page .m-scripture__line--poetry { padding-left: 1.25em; }',
         '.pr-page .m-scripture__gap { display: block; height: 0.6em; }',
         '.pr-page .m-scripture__n { font-size: 0.65em; line-height: 0; margin-right: 0.2em; }',
+        '.pr-page .pr-pagenums { position: absolute; inset: 0; z-index: 1000; pointer-events: none; }',
+        '.pr-page .pr-pagenum { pointer-events: auto; cursor: grab; }',
     ].join('\n');
 
     function ensureBaseStyles() {
@@ -179,10 +181,48 @@
             style.textContent = scopeCss(page.css, '.' + scope);
             wrap.appendChild(style);
         }
-        (page.nodes || []).forEach(node => {
+        const numbers = [];
+        const content = pageNumbersAside(page.nodes, numbers);
+        const placeOpts = {
+            pageIndex: o.pageIndex == null ? 0 : o.pageIndex,
+            widthPx: (template && template.widthPx) || o.widthPx,
+            heightPx: (template && template.heightPx) || o.heightPx,
+        };
+        content.forEach(node => {
             wrap.appendChild(renderNode(node, o));
         });
+        if (numbers.length) {
+            const layer = document.createElement('div');
+            layer.className = 'pr-pagenums';
+            layer.setAttribute('data-pagenums', '');
+            numbers.forEach(node => {
+                const placed = Core.placePageNumber(node, placeOpts);
+                const el = renderNode(placed, o);
+                el.classList.add('pr-pagenum');
+                layer.appendChild(el);
+            });
+            wrap.appendChild(layer);
+        }
         return wrap;
+    }
+
+    // Page numbers draw in their own layer, above the rest of the page, and
+    // are taken out of whatever box they were stored in.
+    function pageNumbersAside(nodes, sink) {
+        const out = [];
+        (nodes || []).forEach(node => {
+            if (!node) return;
+            if (Core.isPageNumber(node)) { sink.push(node); return; }
+            if (node.children && node.children.length) {
+                const kids = pageNumbersAside(node.children, sink);
+                if (kids.length !== node.children.length) {
+                    out.push(Object.assign({}, node, { children: kids }));
+                    return;
+                }
+            }
+            out.push(node);
+        });
+        return out;
     }
 
     // Prefixes every selector in a page's stylesheet with the page's own
@@ -213,7 +253,7 @@
         style.textContent = PrintableExportCore.folioPrintCss(template, Core.printScale(template));
         layer.appendChild(style);
         let blankN = 0;
-        const leaf = (entry) => {
+        const leaf = (entry, pageIndex) => {
             const slot = document.createElement('div');
             slot.className = 'pr-folio-leaf';
             let page;
@@ -230,15 +270,16 @@
                     style: { 'background-color': '#ffffff' },
                 };
             }
-            slot.appendChild(renderPage(page, template, { scopeId: page.id }));
+            const idx = pageIndex == null ? (entry && entry.pageIndex) : pageIndex;
+            slot.appendChild(renderPage(page, template, { scopeId: page.id, pageIndex: idx == null ? 0 : idx }));
             return slot;
         };
         spreads.forEach(spread => {
             const sheet = document.createElement('div');
             sheet.className = 'pr-folio-sheet';
             sheet.setAttribute('x-ignore', '');
-            sheet.appendChild(leaf(spread.left));
-            sheet.appendChild(leaf(spread.right));
+            sheet.appendChild(leaf(spread.left, spread.leftIdx));
+            sheet.appendChild(leaf(spread.right, spread.rightIdx));
             layer.appendChild(sheet);
         });
         return spreads;
@@ -342,7 +383,7 @@
                 const page = entry && entry.page
                     ? Object.assign({}, entry.page, { nodes: entry.nodes || entry.page.nodes || [] })
                     : { id: 'folio-pad-' + i, nodes: [], margins: { top: 0, right: 0, bottom: 0, left: 0 }, style: { 'background-color': '#ffffff' } };
-                const mini = renderPage(page, t, { editing: false, scopeId: page.id || ('pad-' + i) });
+                const mini = renderPage(page, t, { editing: false, scopeId: page.id || ('pad-' + i), pageIndex: entry && entry.pageIndex != null ? entry.pageIndex : i });
                 mini.style.width = (t.widthPx || 0) + 'px';
                 mini.style.height = (t.heightPx || 0) + 'px';
                 inner.appendChild(mini);

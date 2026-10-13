@@ -57,7 +57,10 @@
             for (let i = 0; i < pages.length; i++) {
                 const entry = pages[i];
                 host.innerHTML = '';
-                const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id });
+                const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
+                    scopeId: entry.page.id,
+                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                });
                 host.appendChild(page);
                 await waitForImages(page);
                 const canvas = await global.html2canvas(page, {

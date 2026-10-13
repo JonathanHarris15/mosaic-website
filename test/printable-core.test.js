@@ -579,3 +579,105 @@ test('linking adds an id once and unlinking removes it, leaving the rest alone',
     assert.deepEqual(Core.unlinkPrintable(['a', 'b'], 'a'), ['b']);
     assert.deepEqual(Core.unlinkPrintable(undefined, 'a'), []);
 });
+
+test('a page number is an element that sits on the page, and mirroring is off until asked', () => {
+    const n = Core.newPageNumber(96);
+    assert.equal(Core.kindOf(n), 'page-number');
+    assert.equal(n.pageNumber.mirror, false);
+    assert.equal(n.pageNumber.anchor, 'bottom-right');
+    assert.equal(n.pageNumber.inset, 36);
+
+    const home = Core.placePageNumber(n, { pageIndex: 0 });
+    const next = Core.placePageNumber(n, { pageIndex: 1 });
+    assert.equal(home.text, '1');
+    assert.equal(next.text, '2');
+    assert.equal(home.style.position, 'absolute');
+    assert.equal(home.style.right, '36px');
+    assert.equal(home.style.bottom, '36px');
+    assert.equal(next.style.right, home.style.right, 'without mirroring the place does not move');
+    assert.equal(next.style.bottom, home.style.bottom);
+    assert.equal(n.pageNumber.mirror, false, 'drawing does not change the element');
+
+    const page = Core.buildPage(Core.buildTemplate({ paper: 'letter', dpi: 96 }), { nodes: [Core.newBox(96)] });
+    const boxId = page.nodes[0].id;
+    const inserted = Core.insertNode(page, boxId, n);
+    assert.equal(inserted.nodes.length, 2);
+    assert.equal(Core.kindOf(inserted.nodes[1]), 'page-number');
+    assert.equal(inserted.nodes[0].children.length, 0, 'it does not go inside the box');
+    const moved = Core.moveNode(inserted, inserted.nodes[1].id, boxId, 0);
+    assert.equal(moved.ok, false);
+    assert.equal(Core.wrapNode(inserted, inserted.nodes[1].id, 96).nodes.length, 2);
+});
+
+test('mirroring reflects a page number across the middle on every other page', () => {
+    const placed = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'bottom-right', inset: 48, left: 10, top: 10 },
+    });
+    const odd = Core.placePageNumber(placed, { pageIndex: 0 });
+    const even = Core.placePageNumber(placed, { pageIndex: 1 });
+    assert.equal(odd.style.right, '48px');
+    assert.equal(odd.style.left, undefined);
+    assert.equal(even.style.left, '48px');
+    assert.equal(even.style.right, undefined);
+    assert.equal(even.style.bottom, '48px');
+
+    const free = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'free', left: 40, top: 700, inset: 36 },
+    });
+    assert.equal(Core.placePageNumber(free, { pageIndex: 0 }).style.left, '40px');
+    assert.equal(Core.placePageNumber(free, { pageIndex: 1 }).style.right, '40px');
+    assert.equal(Core.placePageNumber(free, { pageIndex: 1 }).style.top, '700px');
+    assert.equal(Core.pageNumberHomeLeft(740, 20, 800, true), 40);
+    assert.equal(Core.pageNumberHomeLeft(40, 20, 800, false), 40);
+
+    const middle = Core.buildNode({
+        tag: 'p',
+        pageNumber: { mirror: true, anchor: 'center', inset: 0, left: 0, top: 0 },
+    });
+    const a = Core.placePageNumber(middle, { pageIndex: 0 });
+    const b = Core.placePageNumber(middle, { pageIndex: 2 });
+    const c = Core.placePageNumber(middle, { pageIndex: 1 });
+    assert.equal(a.style.left, '50%');
+    assert.equal(b.style.left, '50%');
+    assert.equal(c.style.left, '50%');
+    assert.equal(a.style.transform, c.style.transform);
+
+    const kept = Core.updateNode(
+        Core.buildPage(Core.buildTemplate({}), { nodes: [placed] }),
+        placed.id,
+        { pageNumber: { mirror: false } },
+    );
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.mirror, false);
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.anchor, 'bottom-right');
+    assert.equal(Core.findNode(kept, placed.id).pageNumber.inset, 48);
+});
+
+test('a page number round-trips through the code view, and an old chip becomes one', () => {
+    const n = Core.buildNode({
+        tag: 'p',
+        name: 'Folio',
+        pageNumber: { mirror: true, anchor: 'bottom-left', inset: 24, left: 8, top: 9 },
+    });
+    const back = Core.htmlToNodes(Core.nodeToHtml(n, 0));
+    assert.equal(back.ok, true);
+    assert.deepEqual(back.nodes[0].pageNumber, n.pageNumber);
+    assert.equal(back.nodes[0].name, 'Folio');
+
+    const legacy = Core.buildNode({
+        tag: 'p',
+        text: '1',
+        style: { left: '40px', top: '12px', position: 'absolute' },
+        bind: {
+            text: { source: 'insert_page_number', field: 'number', params: { startAt: 3 } },
+            class: { source: 'insert_page_number', field: 'edgeClass' },
+        },
+    });
+    assert.equal(Core.kindOf(legacy), 'page-number');
+    assert.equal(legacy.pageNumber.mirror, true);
+    assert.equal(legacy.pageNumber.anchor, 'free');
+    assert.equal(legacy.pageNumber.left, 40);
+    assert.equal(legacy.pageNumber.top, 12);
+    assert.equal(legacy.bind, undefined);
+});

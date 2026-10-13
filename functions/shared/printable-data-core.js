@@ -24,7 +24,7 @@
 //
 // The drawer's query builder offers every source a level may read, single
 // or list (`querySourcesFor`), except kinds that are not queried there: a
-// **scalar** insert (the date, the page number — General live data) and a
+// **scalar** insert (the date — General live data) and a
 // source marked **noDrawer** (kept for resolving stored wires; not offered
 // to author in the drawer). Fill-ins a person types live on the printable
 // as event blanks, not as catalog sources.
@@ -783,15 +783,6 @@
                 { key: 'format', label: 'Format', kind: 'text', default: 'long' },
             ],
             fields: [{ key: 'value', label: 'Date', kind: 'date' }],
-        },
-        {
-            key: 'insert_page_number', region: 'Insert', label: 'Page number', shape: 'single', scalar: true, minLevel: 'viewer',
-            blurb: 'The number of this page in the booklet, with an optional custom start page.',
-            params: [{ key: 'startAt', label: 'Start numbering at', kind: 'text', default: 1 }],
-            fields: [
-                { key: 'number', label: 'Page number', kind: 'number' },
-                { key: 'edgeClass', label: 'Outer edge', kind: 'text' },
-            ],
         },
     ];
 
@@ -1745,19 +1736,6 @@
         return { rows: [{ _id: 'date', value: formatted, date: dateStr }], warnings: [] };
     }
 
-    function resolveInsertPageNumber() {
-        return { rows: [{ _id: 'page', number: '1' }], warnings: [] };
-    }
-
-    // What prints on a physical page (1-based page index in the project).
-    function insertPageNumberDisplay(pageIndex, startAt) {
-        const start = Math.max(1, Math.round(Number(startAt)) || 1);
-        const physical = Math.round(Number(pageIndex)) + 1;
-        if (!Number.isFinite(physical) || physical < 1) return null;
-        if (physical < start) return null;
-        return physical - start + 1;
-    }
-
     function describeInsertDate(params) {
         const p = scalarDateParams(params);
         if (p.mode === 'fixed' && isDateStr(p.fixed)) return 'fixed ' + formatDate(p.fixed, 'medium');
@@ -1805,7 +1783,6 @@
         role_holder: resolveRoleHolder,
         form_answers: resolveFormAnswers,
         insert_date: resolveInsertDate,
-        insert_page_number: resolveInsertPageNumber,
     };
 
     // Rows for a source, for this viewer. A source above the viewer's level
@@ -1855,7 +1832,7 @@
                 return { series: true, roles: true, people: true, occurrenceRange: { from: from, to: addDays(from, 120) }, rosters: p.seriesId || true };
             }
             case 'form_answers': return { forms: true, responses: p.formId || true };
-            case 'insert_date': case 'insert_page_number': return {};
+            case 'insert_date': return {};
             default: return {};
         }
     }
@@ -1873,10 +1850,6 @@
         const p = Object.assign(defaultParams(sourceKey), params || {});
         if (!s) return '';
         if (sourceKey === 'insert_date') return describeInsertDate(p);
-        if (sourceKey === 'insert_page_number') {
-            const start = Math.max(1, Math.round(Number(p.startAt)) || 1);
-            return 'numbering from page ' + start;
-        }
         const bits = [];
         (s.params || []).forEach(param => {
             const v = p[param.key];
@@ -1942,7 +1915,6 @@
         needsFor,
         describeParams,
         roleLabel,
-        insertPageNumberDisplay,
         describeInsertDate,
         scalarDateParams,
         prayerSubjectsOf,

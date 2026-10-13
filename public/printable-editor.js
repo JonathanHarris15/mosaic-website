@@ -98,6 +98,17 @@ function printableEditor() {
         // and remembering which fidelity the panel is showing them at.
         sides: {},
         sideFields: [{ key: 'padding', label: 'Padding', min: 0 }, { key: 'margin', label: 'Margin', min: null }],
+        pageNumberSpots: [
+            { anchor: 'top-left', label: 'Top left', icon: 'north_west' },
+            { anchor: 'top', label: 'Top', icon: 'north' },
+            { anchor: 'top-right', label: 'Top right', icon: 'north_east' },
+            { anchor: 'left', label: 'Left', icon: 'west' },
+            { anchor: 'center', label: 'Middle', icon: 'adjust' },
+            { anchor: 'right', label: 'Right', icon: 'east' },
+            { anchor: 'bottom-left', label: 'Bottom left', icon: 'south_west' },
+            { anchor: 'bottom', label: 'Bottom', icon: 'south' },
+            { anchor: 'bottom-right', label: 'Bottom right', icon: 'south_east' },
+        ],
         borderFields: [{ key: 'border-width', label: 'Border', min: 0 }],
         customCss: '',
         pageProps: { marginMode: 'all', all: 0, tb: 0, lr: 0, top: 0, right: 0, bottom: 0, left: 0, bg: '#ffffff', name: '' },
@@ -640,10 +651,13 @@ function printableEditor() {
             const page = this.currentPage;
             if (!page) return;
             const dpi = this.template.dpi;
-            const node = kind === 'text' ? PrintableCore.newText(dpi) : kind === 'image' ? PrintableCore.newImage(dpi) : PrintableCore.newBox(dpi);
+            const node = kind === 'text' ? PrintableCore.newText(dpi)
+                : kind === 'image' ? PrintableCore.newImage(dpi)
+                : kind === 'page-number' ? PrintableCore.newPageNumber(dpi)
+                : PrintableCore.newBox(dpi);
             const sel = this.selectedNode;
             let parentId = null, index = null;
-            if (sel) {
+            if (sel && kind !== 'page-number') {
                 if (PrintableCore.kindOf(sel) === 'box') { parentId = sel.id; }
                 else {
                     const at = PrintableCore.locate(page, sel.id);
@@ -795,9 +809,17 @@ function printableEditor() {
         patchDrawn(node) {
             if (!ui.world || !node) return;
             const els = ui.world.querySelectorAll('[data-pid="' + node.id + '"], [data-pid^="' + node.id + '~"]');
+            const placed = PrintableCore.isPageNumber(node)
+                ? PrintableCore.placePageNumber(node, {
+                    pageIndex: this.pageIndexOf(node.id),
+                    widthPx: this.template && this.template.widthPx,
+                    heightPx: this.template && this.template.heightPx,
+                })
+                : null;
             els.forEach(el => {
                 Array.from(el.style).slice().forEach(k => el.style.removeProperty(k));
-                PrintableDom.applyStyle(el, node.style);
+                PrintableDom.applyStyle(el, placed ? placed.style : node.style);
+                if (placed && el.getAttribute('data-pid') === node.id) el.textContent = placed.text;
                 if (node.tag === 'img') {
                     if (!node.bind || !node.bind.src) {
                         const src = (node.attrs && node.attrs.src) || '';
@@ -1084,7 +1106,11 @@ function printableEditor() {
             label.style.top = (-Math.round(22 / Math.max(0.2, this.view.zoom))) + 'px';
             holder.appendChild(label);
 
-            const el = PrintableDom.renderPage(Object.assign({}, page, { nodes: entry.nodes }), t, { editing: true, scopeId: page.id });
+            const el = PrintableDom.renderPage(Object.assign({}, page, { nodes: entry.nodes }), t, {
+                editing: true,
+                scopeId: page.id,
+                pageIndex: entry.pageIndex == null ? index : entry.pageIndex,
+            });
             if (entry.generated) el.setAttribute('data-generated', '1');
             holder.appendChild(el);
 
@@ -1220,9 +1246,69 @@ function printableEditor() {
 
         tagLabel(node) {
             const kind = PrintableCore.kindOf(node);
+            if (kind === 'page-number') return 'Page number';
             if (kind === 'image') return 'Image';
             if (kind === 'text') return node.tag === 'p' || node.tag === 'span' ? 'Text' : node.tag.toUpperCase();
             return node.tag === 'div' ? 'Box' : node.tag;
+        },
+
+        pageIndexOf(nodeId) {
+            const entries = this.entries();
+            const hit = entries.find(e => e.page && PrintableCore.findNode(e.page, nodeId));
+            if (hit && hit.pageIndex != null) return hit.pageIndex;
+            const page = this.pageOfNode(nodeId);
+            const i = this.pages.findIndex(p => page && p.id === page.id);
+            return i < 0 ? 0 : i;
+        },
+
+        setPageNumber(patch) {
+            const page = this.currentPage;
+            const node = this.selectedNode;
+            if (!page || !node || !node.pageNumber) return;
+            const next = PrintableCore.updateNode(page, node.id, {
+                pageNumber: Object.assign({}, node.pageNumber, patch),
+            });
+            this.replacePage(next);
+            this.commit();
+            this.renderPage(next.id);
+            this.readProps();
+        },
+
+        matchPageInset() {
+            const page = this.currentPage;
+            const node = this.selectedNode;
+            if (!page || !node || !node.pageNumber) return;
+            const m = page.margins || {};
+            const anchor = node.pageNumber.anchor || 'free';
+            let inset = m.left;
+            if (anchor.indexOf('bottom') === 0 || anchor === 'free' || anchor === 'center') inset = m.bottom;
+            else if (anchor.indexOf('top') === 0) inset = m.top;
+            else if (anchor === 'right') inset = m.right;
+            this.setPageNumber({ inset: Math.max(0, Math.round(Number(inset) || 0)) });
+        },
+
+        livePageNumber(nodeId, patch) {
+            const page = this.pageOfNode(nodeId);
+            if (!page) return;
+            const node = PrintableCore.findNode(page, nodeId);
+            if (!node || !node.pageNumber) return;
+            const next = PrintableCore.updateNode(page, nodeId, {
+                pageNumber: Object.assign({}, node.pageNumber, patch),
+            });
+            this.replacePage(next);
+            const fresh = PrintableCore.findNode(next, nodeId);
+            const placed = PrintableCore.placePageNumber(fresh, {
+                pageIndex: this.pageIndexOf(nodeId),
+                widthPx: this.template && this.template.widthPx,
+                heightPx: this.template && this.template.heightPx,
+            });
+            const el = ui.world && ui.world.querySelector('[data-pid="' + nodeId + '"]');
+            if (el) {
+                ['left', 'right', 'top', 'bottom', 'transform', 'position', 'z-index', 'margin'].forEach(k => el.style.removeProperty(k));
+                PrintableDom.applyStyle(el, placed.style);
+                el.textContent = placed.text;
+            }
+            this.refreshOverlays();
         },
 
         // ── Canvas events ────────────────────────────────────────────────
@@ -1263,7 +1349,25 @@ function printableEditor() {
                         const nodeId = this.originalId(target.getAttribute('data-pid'));
                         const page = this.pageOfNode(nodeId);
                         const node = page && PrintableCore.findNode(page, nodeId);
-                        if (node && node.style.position === 'absolute') {
+                        if (node && PrintableCore.isPageNumber(node)) {
+                            const pageEl = target.closest('.pr-page');
+                            const pageRect = pageEl.getBoundingClientRect();
+                            const elRect = target.getBoundingClientRect();
+                            const zoom = this.view.zoom || 1;
+                            ui.drag = {
+                                kind: 'page-number',
+                                nodeId: nodeId,
+                                sx: e.clientX,
+                                sy: e.clientY,
+                                ox: (elRect.left - pageRect.left) / zoom,
+                                oy: (elRect.top - pageRect.top) / zoom,
+                                width: elRect.width / zoom,
+                                pageWidth: pageRect.width / zoom,
+                                mirrored: PrintableCore.pageNumberMirrored(node, this.pageIndexOf(nodeId)),
+                                moved: false,
+                            };
+                            e.preventDefault();
+                        } else if (node && node.style.position === 'absolute') {
                             ui.drag = { kind: 'move', nodeId: nodeId, sx: e.clientX, sy: e.clientY,
                                 ox: parseFloat(node.style.left) || 0, oy: parseFloat(node.style.top) || 0, moved: false };
                             e.preventDefault();
@@ -1285,6 +1389,17 @@ function printableEditor() {
                     if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
                     d.moved = true;
                     this.liveStyle(d.nodeId, { left: Math.round(d.ox + dx) + 'px', top: Math.round(d.oy + dy) + 'px' });
+                } else if (d.kind === 'page-number') {
+                    const dx = (e.clientX - d.sx) / this.view.zoom, dy = (e.clientY - d.sy) / this.view.zoom;
+                    if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
+                    d.moved = true;
+                    const visualLeft = d.ox + dx;
+                    const visualTop = d.oy + dy;
+                    this.livePageNumber(d.nodeId, {
+                        anchor: 'free',
+                        left: PrintableCore.pageNumberHomeLeft(visualLeft, d.width, d.pageWidth, d.mirrored),
+                        top: Math.round(visualTop),
+                    });
                 } else if (d.kind === 'resize') {
                     const dx = (e.clientX - d.sx) / this.view.zoom, dy = (e.clientY - d.sy) / this.view.zoom;
                     d.moved = true;
@@ -1297,7 +1412,7 @@ function printableEditor() {
                 if (!d) return;
                 ui.drag = null;
                 vp.classList.remove('pe-panning');
-                if ((d.kind === 'move' || d.kind === 'resize') && d.moved) {
+                if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'page-number') && d.moved) {
                     this.commit();
                     this.readProps();
                     this.renderPage(this.pageOfNode(d.nodeId).id);
@@ -1609,7 +1724,7 @@ function printableEditor() {
                     inner.style.width = t.widthPx + 'px';
                     inner.style.height = t.heightPx + 'px';
                     try {
-                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id });
+                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id, pageIndex: p });
                         mini.style.width = t.widthPx + 'px';
                         mini.style.height = t.heightPx + 'px';
                         inner.appendChild(mini);
@@ -1780,8 +1895,9 @@ function printableEditor() {
             row.style.paddingLeft = (8 + depth * 14) + 'px';
             row.setAttribute('draggable', 'true');
             row.setAttribute('data-node', node.id);
-            const icon = kind === 'image' ? 'image' : kind === 'text' ? 'title' : node.repeat ? 'repeat' : 'crop_square';
-            const preview = kind === 'text' ? (node.text || '').slice(0, 28) : '';
+            const icon = kind === 'page-number' ? 'numbers' : kind === 'image' ? 'image' : kind === 'text' ? 'title' : node.repeat ? 'repeat' : 'crop_square';
+            const pageAt = this.pages.findIndex(p => p.id === page.id);
+            const preview = kind === 'page-number' ? String(pageAt + 1) : kind === 'text' ? (node.text || '').slice(0, 28) : '';
             row.appendChild(kids.length ? this.treeTwist(node.id, folded, kids.length) : this.treeTwistSpacer());
             const ic = document.createElement('span');
             ic.className = 'material-symbols-outlined';
@@ -1988,11 +2104,14 @@ function printableEditor() {
                 + ' .pe-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pe-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            const pages = this.printPages ? this.printPages() : this.pages.map(p => ({ page: p }));
-            pages.forEach(entry => {
+            const pages = this.printPages ? this.printPages() : this.pages.map((p, i) => ({ page: p, pageIndex: i }));
+            pages.forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pe-sheet';
-                sheet.appendChild(PrintableDom.renderPage(entry.page, t, { values: entry.values || null }));
+                sheet.appendChild(PrintableDom.renderPage(entry.page, t, {
+                    values: entry.values || null,
+                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                }));
                 layer.appendChild(sheet);
             });
             this.beginPrint(layer);

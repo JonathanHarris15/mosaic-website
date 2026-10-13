@@ -304,6 +304,7 @@ function printableView() {
                 const page = PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
                     scopeId: entry.page.id,
                     fillFor: fillFor,
+                    pageIndex: entry.pageIndex,
                 });
                 page.style.transform = 'scale(' + this.zoom + ')';
                 page.style.transformOrigin = '0 0';
@@ -646,10 +647,13 @@ function printableView() {
                 + ' .pv-print-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pv-print-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            this.printEntries().forEach(entry => {
+            this.printEntries().forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-print-sheet';
-                sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, { scopeId: entry.page.id }));
+                sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
+                    scopeId: entry.page.id,
+                    pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                }));
                 layer.appendChild(sheet);
             });
             this.beginPrint(layer);

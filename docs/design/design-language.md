@@ -211,6 +211,12 @@ The editor chrome is four columns: **Pages** (`.pe-pages`), the element panel, t
 
 The **Elements** tree shows only the selected page's elements. Page management does not live in the tree.
 
+## Printable editor — a page number
+
+A page number is an element, added from the tools with **Number** (`.pe-tool`, icon `numbers`), the same way as a box, text, or an image. It is not a data chip and it is not in General live data. Omit it and the page prints with no number. The digit is which sheet this is, counting sheets that are drawn (1, 2, 3).
+
+It sits in `.pr-pagenums` (absolute, inset 0, above the page) as a `.pr-pagenum`. It does not take part in the flow, a repeat, a wrap, or a wire. Drag it to place it. The element panel (`.pe-pagenum`) offers **Mirror on the facing page** — off until turned on, so the place stays put; on, every other sheet that carries this number reflects it across the vertical middle. A 3×3 `.pe-place` snaps it to a corner, an edge, or the middle. **Inset** is how far a snap sits from the paper edge, in the page's pixels. **Use the page margin** sets that inset from the margin on the edge the snap uses. Dragging clears the snap.
+
 ## Printable editor — the data drawer (MS-730)
 
 The data drawer has three parts, in this order, above **Not all data could be pulled**. Catalog sources go in the query builder by default, or in General live data when marked `scalar`. A source marked `noDrawer` is not offered to author (legacy resolve / typedContent read-through only). The Fill-in library is not a catalog region — it is the printable's own list of blanks. Nothing in the drawer is named for one kind of printable (no Sunday-booklet card). Old `sunday_typed` wires rewrite to event fill-ins (`legacy_*`) on load. A selection wire runs from the element to the specific **data pill** (`[data-chip]`) for that bind when the bind is a query source; fill-ins and page inserts draw no line. When that pill is scrolled out of the drawer body, a **ghost chip** (`.pe-wire-ghost`) appears in the canvas margin beside the page — same icon, name, and value — and the wire lands on the ghost instead of disappearing off the edge of the screen.
@@ -231,7 +237,7 @@ On an iterated element's panel, **Layout of the copies** includes **From row** a
 
 **Fill-in library** (`details.pe-part.pe-part--fill`, open) is a list of blanks this printable defines, summarised **Blanks filled where this printable is linked**. Add **Text**, **Image**, **Number**, **Date**, or **List** (editors only). Drag a chip onto the page. A list iterates the selected box; its columns are `.pe-event-col` chips. The names live on the printable. The values are typed on the linked event for that date — any event, any printable. There is no pamphlet-specific form in this drawer. Migrated booklet fields (`legacy_prayerNation`, and the rest) appear here as ordinary fill-ins; empty slots still read through that Sunday's `typedContent` until the occurrence is filled. Each blank is its own `.pe-event-field` block inside `.pe-fill-list` (border, radius, surface, 10px gap) — not a hairline stack.
 
-**General live data** (`details.pe-part.pe-part--general`, shut) is summarised **Date · page number · brand files**. Its **Date**, **Page number**, and **Brand assets** cards belong to the page, not to a source.
+**General live data** (`details.pe-part.pe-part--general`, shut) is summarised **Date · brand files**. Its **Date** and **Brand assets** cards belong to the page, not to a source. A page number is an element on the page, not a card here.
 
 The cards in both folds are `.pe-typecard`s. Each configures inline (segmented mode controls, compact `.pe-in` fields) and ends with `.pe-typecard__foot`: a live preview (`.pe-typecard__live`) and one draggable `.pe-chip`. Brand assets are upload only, with no pre-seeded church constants, and list rows use `.pe-asset-row`. Dense desktop type (10–12px labels, 6px gaps) matches the rest of the printable drawer.
 

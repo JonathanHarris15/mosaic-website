@@ -124,6 +124,9 @@
                 <button type="button" class="pe-tool" @click="addElement('image')" title="Add an image">
                     <span class="material-symbols-outlined">image</span><span>Image</span>
                 </button>
+                <button type="button" class="pe-tool" @click="addElement('page-number')" title="Add a page number">
+                    <span class="material-symbols-outlined">numbers</span><span>Number</span>
+                </button>
             </div>
 
             <section class="pe-section pe-section--tree">
@@ -167,8 +170,32 @@
                 <!-- An element -->
                 <template x-if="selectedNode">
                     <div>
-                        <h2 class="pe-h" x-text="selectedKind === 'image' ? 'Image' : selectedKind === 'text' ? 'Text' : 'Box'"></h2>
+                        <h2 class="pe-h" x-text="selectedKind === 'image' ? 'Image' : selectedKind === 'page-number' ? 'Page number' : selectedKind === 'text' ? 'Text' : 'Box'"></h2>
                         <label class="pe-f"><span>Name</span><input id="pe-prop-name" class="pe-in" x-model="props.name" @change="applyProps(true)" placeholder="Header, Person card…" maxlength="40" /></label>
+
+                        <template x-if="selectedKind === 'page-number' && selectedNode.pageNumber">
+                            <div class="pe-pagenum">
+                                <label class="pe-check">
+                                    <input type="checkbox" :checked="selectedNode.pageNumber.mirror" @change="setPageNumber({ mirror: $event.target.checked })" />
+                                    Mirror on the facing page
+                                </label>
+                                <p class="pe-hint">Off, it stays where you place it. On, every other page that carries this number shows it reflected across the middle of the page.</p>
+                                <div class="pe-f"><span>Place</span></div>
+                                <div class="pe-place" role="group" aria-label="Place on the page">
+                                    <template x-for="spot in pageNumberSpots" :key="spot.anchor">
+                                        <button type="button" class="pe-place__btn" :aria-pressed="selectedNode.pageNumber.anchor === spot.anchor" :aria-label="spot.label" :title="spot.label" @click="setPageNumber({ anchor: spot.anchor })">
+                                            <span class="material-symbols-outlined" aria-hidden="true" x-text="spot.icon"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                                <p class="pe-hint" x-show="selectedNode.pageNumber.anchor === 'free'">Placed by hand. Drag it on the page, or pick a place above.</p>
+                                <label class="pe-f"><span>Inset</span>
+                                    <span class="pe-unit"><input class="pe-in" type="number" min="0" step="1" inputmode="numeric" autocomplete="off" :value="selectedNode.pageNumber.inset" @change="setPageNumber({ inset: Number($event.target.value) })" aria-label="Inset from the page edge" /><em>px</em></span>
+                                </label>
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="matchPageInset()">Use the page margin</button>
+                                <p class="pe-hint">Inset is how far a snapped place sits from the edge of the page. Dragging the number places it by hand and clears the snap.</p>
+                            </div>
+                        </template>
 
                         <template x-if="selectedKind === 'text'">
                             <div>
@@ -194,7 +221,7 @@
                             </select></label>
                         </template>
 
-                        <details open class="pe-group">
+                        <details open class="pe-group" x-show="selectedKind !== 'page-number'">
                             <summary>Size &amp; position</summary>
                             <div class="pe-f"><span>Width</span>
                                 <span class="pe-size">
@@ -258,7 +285,7 @@
                             </div>
                         </details>
 
-                        <details open class="pe-group">
+                        <details open class="pe-group" x-show="selectedKind !== 'page-number'">
                             <summary>Spacing</summary>
                             <template x-for="s in sideFields" :key="s.key">
                                 <div>
@@ -455,7 +482,7 @@
 
                         <div class="pe-row-acts">
                             <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="duplicateSelected()" title="Duplicate (Ctrl+D)"><span class="material-symbols-outlined">content_copy</span><span class="m-btn__label">Duplicate</span></button>
-                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="wrapSelected()" title="Put a box around it"><span class="material-symbols-outlined">select_all</span><span class="m-btn__label">Wrap</span></button>
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" x-show="selectedKind !== 'page-number'" @click="wrapSelected()" title="Put a box around it"><span class="material-symbols-outlined">select_all</span><span class="m-btn__label">Wrap</span></button>
                             <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="deleteSelected()" title="Delete"><span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span></button>
                         </div>
                     </div>
@@ -487,10 +514,10 @@
                 <div class="pe-menu pe-menu--ctx" x-show="menu.open" x-cloak :style="`left:${menu.x}px;top:${menu.y}px`" @click.outside="menu.open = false">
                     <template x-if="menu.nodeId">
                         <div>
-                            <button type="button" @click="menuAct('iterate')"><span class="material-symbols-outlined">repeat</span><span x-text="selectedNode && selectedNode.repeat ? 'Change what this element iterates over' : 'Make this element iterated'"></span></button>
+                            <button type="button" x-show="selectedKind !== 'page-number'" @click="menuAct('iterate')"><span class="material-symbols-outlined">repeat</span><span x-text="selectedNode && selectedNode.repeat ? 'Change what this element iterates over' : 'Make this element iterated'"></span></button>
                             <button type="button" @click="menuAct('rename')"><span class="material-symbols-outlined">edit</span>Rename</button>
                             <button type="button" @click="menuAct('duplicate')"><span class="material-symbols-outlined">content_copy</span>Duplicate <kbd>Ctrl+D</kbd></button>
-                            <button type="button" @click="menuAct('wrap')"><span class="material-symbols-outlined">select_all</span>Wrap in a box</button>
+                            <button type="button" x-show="selectedKind !== 'page-number'" @click="menuAct('wrap')"><span class="material-symbols-outlined">select_all</span>Wrap in a box</button>
                             <button type="button" @click="menuAct('back')"><span class="material-symbols-outlined">arrow_upward</span>Move earlier</button>
                             <button type="button" @click="menuAct('forward')"><span class="material-symbols-outlined">arrow_downward</span>Move later</button>
                             <button type="button" class="is-danger" @click="menuAct('delete')"><span class="material-symbols-outlined">delete</span>Delete <kbd>Del</kbd></button>
@@ -887,7 +914,7 @@
                     <summary class="pe-drawer__title pe-part__head">
                         <span class="material-symbols-outlined" aria-hidden="true">tune</span>
                         <span>General live data</span>
-                        <span class="pe-part__sum">Date · page number · brand files</span>
+                        <span class="pe-part__sum">Date · brand files</span>
                         <span class="material-symbols-outlined pe-src__chev" aria-hidden="true">expand_more</span>
                     </summary>
                     <div class="pe-typecards">
@@ -919,26 +946,6 @@
                                 <span class="pe-chip" draggable="true" tabindex="0"
                                       :data-chip="chipKey('global', 'insert_date', 'value')"
                                       @dragstart="onScalarChipDragStart($event, 'insert_date', 'value')" @dragend="onChipDragEnd()">
-                                    <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
-                                </span>
-                            </div>
-                        </article>
-                        <article class="pe-typecard">
-                            <div class="pe-typecard__head">
-                                <span class="material-symbols-outlined" aria-hidden="true">numbers</span>
-                                <strong>Page number</strong>
-                            </div>
-                            <label class="pe-f"><span>Start numbering at</span>
-                                <input class="pe-in" type="number" min="1" step="1" inputmode="numeric" autocomplete="off"
-                                       :value="scalarParams('insert_page_number').startAt"
-                                       @change="setScalarPageStart($event.target.value)" aria-label="First numbered page" />
-                            </label>
-                            <p class="pe-hint">Page 3 of this booklet prints as “1” when start is 3.</p>
-                            <div class="pe-typecard__foot">
-                                <span class="pe-typecard__live" x-text="scalarPagePreview()"></span>
-                                <span class="pe-chip" draggable="true" tabindex="0"
-                                      :data-chip="chipKey('global', 'insert_page_number', 'number')"
-                                      @dragstart="onScalarChipDragStart($event, 'insert_page_number', 'number')" @dragend="onChipDragEnd()">
                                     <span class="material-symbols-outlined" aria-hidden="true">drag_pan</span>Drag
                                 </span>
                             </div>
@@ -1263,6 +1270,14 @@
         .pe-tool { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); color: var(--primary); font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
         .pe-tool:hover { background: var(--surface-container); }
         .pe-tool .material-symbols-outlined { font-size: 22px; }
+        .pe-tool:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .pe-pagenum { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .pe-place { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .pe-place__btn { display: flex; align-items: center; justify-content: center; min-height: 32px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); color: var(--on-surface); cursor: pointer; }
+        .pe-place__btn .material-symbols-outlined { font-size: 18px; }
+        .pe-place__btn:hover { background: var(--surface-container); }
+        .pe-place__btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+        .pe-place__btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .pe-section { padding: 10px 12px; }
         /* The tree keeps a third of the panel whatever is selected below it.
            It must not shrink: the properties are what scroll. */

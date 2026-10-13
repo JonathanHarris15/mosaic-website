@@ -227,7 +227,7 @@ test('folio pad tool duplicates a page into a temporary stack until ×4 without 
             id: 'n' + i,
             tag: 'p',
             text: String(i + 1),
-            bind: { text: { source: 'insert_page_number', field: 'number', params: { startAt: 1 } } },
+            pageNumber: { mirror: false, anchor: 'free', inset: 36, left: 40, top: 700 },
         }],
     }));
     assert.equal(Export.folioNeedsPad(five), true);

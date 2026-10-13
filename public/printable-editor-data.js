@@ -10,7 +10,7 @@
 //         fields; a list meeting a selected box iterates that box;
 //       – the FILL-IN LIBRARY: blanks this printable defines; values are
 //         typed where it is linked (any event, any printable);
-//       – GENERAL LIVE DATA: the date, the page number, brand assets;
+//       – GENERAL LIVE DATA: the date and brand assets;
 //   • WIRING — drag a chip onto an element to bind it, with a wire drawn from
 //     the chip to the cursor and, once bound, from the selected element to
 //     that chip's pill (MS-760). When the pill is scrolled out of the drawer,
@@ -592,7 +592,7 @@
             async initData() {
                 if (!this.project) return;
                 if (!Array.isArray(this.project.assets)) this.project.assets = [];
-                ['insert_date', 'insert_page_number'].forEach(key => {
+                ['insert_date'].forEach(key => {
                     const src = Data.sourceByKey(key);
                     if (src && !this.data.params[key]) this.data.params[key] = Data.defaultParams(src);
                 });
@@ -718,7 +718,11 @@
                 const entries = this.computeLayout({ persist: false });
                 const Ex = global.PrintableExportCore;
                 const printed = Ex ? Ex.exportEntries(entries, this.project) : entries;
-                return printed.map(e => ({ page: Object.assign({}, e.page, { nodes: e.nodes }), blank: !!e.blank }));
+                return printed.map((e, i) => ({
+                    page: Object.assign({}, e.page, { nodes: e.nodes }),
+                    blank: !!e.blank,
+                    pageIndex: e.pageIndex == null ? i : e.pageIndex,
+                }));
             },
 
             // ── The drawer ───────────────────────────────────────────────
@@ -1106,12 +1110,6 @@
                 }
             },
 
-            get currentPageIndex() {
-                const page = this.currentPage;
-                if (!page) return -1;
-                return this.pages.findIndex(p => p.id === page.id);
-            },
-
             get brandAssets() {
                 return (this.project && this.project.assets) || [];
             },
@@ -1166,19 +1164,6 @@
             scalarDatePreview() {
                 const row = Data.resolve('insert_date', this.scalarParams('insert_date'), {}, { today: Data.toDateStr(new Date()) }).rows[0];
                 return row ? row.value : '';
-            },
-
-            setScalarPageStart(n) {
-                const p = this.scalarParams('insert_page_number');
-                p.startAt = Math.max(1, Math.round(Number(n) || 1));
-                this.renderAll();
-            },
-
-            scalarPagePreview() {
-                const idx = this.currentPageIndex;
-                if (idx < 0) return '—';
-                const n = Data.insertPageNumberDisplay(idx, this.scalarParams('insert_page_number').startAt);
-                return n == null ? 'Before numbering' : ('This page → ' + n);
             },
 
             assetChipKey(assetId) {
@@ -1432,6 +1417,7 @@
             // An item chip may only land inside its own list; a global chip
             // may land anywhere its kind fits.
             mayBind(node, field) {
+                if (Core.isPageNumber(node)) return false;
                 if (field.scope === 'asset') {
                     if (field.apply === 'font') return Core.kindOf(node) === 'text';
                     return Core.kindOf(node) === 'image';
@@ -1484,7 +1470,7 @@
                 }
                 this.commit();
                 if (field.scope === 'item' || field.scope === 'asset') { this.rebindData(); this.renderAll(); }
-                else if (field.source === 'insert_date' || field.source === 'insert_page_number') {
+                else if (field.source === 'insert_date') {
                     this.rebindData();
                     this.renderAll();
                 }
