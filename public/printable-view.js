@@ -34,6 +34,8 @@ function printableView() {
         fillSlots: [],
         fillById: {},
         fillCommitted: {},
+        extraSlots: [],
+        pendingFocus: null,
         folioPadOpen: false,
         folioPadEntries: [],
         folioPadBrushIndex: null,
@@ -287,6 +289,7 @@ function printableView() {
             this.entries = PrintableLive.layoutPages(this.project, ui.resolver, host);
             this.warnings = ui.resolver ? PrintableLive.warningsFor(this.entries, ui.resolver, this.project) : [];
             stage.innerHTML = '';
+            this.extraSlots = [];
             const t = this.template;
             const Fill = window.PrintableFillCore;
             const fillIndex = (this.canFill && Fill) ? Fill.indexProject(this.project) : null;
@@ -314,7 +317,25 @@ function printableView() {
             });
             this.recount();
             if (fillFor) this.wireFills(stage);
+            this.focusPendingRow();
             this.fit();
+        },
+
+        focusPendingRow() {
+            const pending = this.pendingFocus;
+            this.pendingFocus = null;
+            if (!pending) return;
+            const nodes = document.querySelectorAll('[data-fill-id]');
+            let el = null;
+            nodes.forEach(node => {
+                if (el || node.tagName === 'BUTTON') return;
+                const id = node.getAttribute('data-fill-id') || '';
+                if (pending.id && id === pending.id) el = node;
+                else if (pending.prefix && id.indexOf(pending.prefix) === 0) el = node;
+            });
+            if (!el || typeof el.focus !== 'function') return;
+            try { el.focus({ preventScroll: true }); }
+            catch (e) { el.focus(); }
         },
 
         recount() {
@@ -326,7 +347,7 @@ function printableView() {
                 this.fillLeft = 0;
                 return;
             }
-            this.fillSlots = Fill.slotsOn(this.project, this.entries.map(e => e.nodes));
+            this.fillSlots = Fill.slotsOn(this.project, this.entries.map(e => e.nodes)).concat(this.extraSlots || []);
             this.fillById = {};
             this.fillSlots.forEach(slot => { this.fillById[slot.id] = slot; });
             const tally = Fill.tally(this.fillSlots, slot => this.valueForSlot(slot));
@@ -398,6 +419,11 @@ function printableView() {
             page.querySelectorAll('[data-list-of]').forEach(el => {
                 const spec = Fill.listSpec(this.project, el.getAttribute('data-list-of'));
                 if (!spec) return;
+                Array.from(el.children).forEach(copy => {
+                    const raw = copy.getAttribute('data-copy');
+                    const rowIndex = raw != null && /^\d+$/.test(raw) ? Number(raw) : 0;
+                    this.mountRowFill(copy, spec, rowIndex);
+                });
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'pv-fill-add';
@@ -407,6 +433,79 @@ function printableView() {
                 btn.addEventListener('click', () => this.addFillRow(spec));
                 el.appendChild(btn);
             });
+        },
+
+        // A new row has to be somewhere a person can type, and somewhere they
+        // can take back. Columns already placed on the row stay where the
+        // page put them. A column that was never placed still gets a blank,
+        // so the row is not just empty space.
+        mountRowFill(copy, spec, rowIndex) {
+            const Fill = window.PrintableFillCore;
+            const Dom = window.PrintableDom;
+            if (!Fill || !Dom || !copy || !spec) return;
+            const present = [];
+            const prefix = spec.list === 'event'
+                ? ('row:' + spec.inputId + ':' + rowIndex + ':')
+                : '';
+            copy.querySelectorAll('[data-fill-id]').forEach(el => {
+                const id = el.getAttribute('data-fill-id') || '';
+                if (prefix && id.indexOf(prefix) === 0) present.push(id.slice(prefix.length));
+            });
+            const extra = document.createElement('div');
+            extra.className = 'pv-fill-extra';
+            if (spec.list === 'event') {
+                const input = this.inputById(spec.inputId);
+                Fill.unplacedColumns(input, present).forEach(col => {
+                    const slot = {
+                        id: 'row:' + input.id + ':' + rowIndex + ':' + col.id,
+                        store: 'event-row',
+                        inputId: input.id,
+                        columnId: col.id,
+                        rowIndex: rowIndex,
+                        kind: col.kind === 'image' ? 'image' : col.kind,
+                        label: (input.label || 'List') + ', ' + (col.label || 'Column'),
+                        multiline: false,
+                    };
+                    const value = Fill.eventValue(this.eventBag, slot);
+                    this.extraSlots.push(slot);
+                    const node = { tag: 'div', style: { width: '100%', 'min-height': '4.5em' }, attrs: {} };
+                    extra.appendChild(slot.kind === 'image'
+                        ? Dom.renderFillImage(node, Object.assign({}, slot, { value: value }))
+                        : Dom.renderFillControl(Object.assign({}, slot, { value: value })));
+                });
+            } else if (spec.list === 'kids') {
+                const whenKey = Fill.whenKey(spec.when);
+                const id = 'kids:' + whenKey + ':' + rowIndex;
+                const has = copy.querySelector('[data-fill-id="' + id.replace(/"/g, '\\"') + '"]');
+                if (!has) {
+                    const slot = {
+                        id: id,
+                        store: 'kids',
+                        rowIndex: rowIndex,
+                        when: spec.when,
+                        kind: 'text',
+                        label: 'Question ' + (rowIndex + 1),
+                        multiline: false,
+                    };
+                    this.extraSlots.push(slot);
+                    extra.appendChild(Dom.renderFillControl(Object.assign({}, slot, {
+                        value: this.valueForSlot(slot),
+                    })));
+                }
+            }
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'pv-fill-remove';
+            remove.textContent = 'Remove row';
+            remove.setAttribute('aria-label', 'Remove row ' + (rowIndex + 1));
+            remove.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.removeFillRow(spec, rowIndex);
+            });
+            extra.appendChild(remove);
+            if (copy.style && copy.style.overflow === 'hidden') copy.style.overflow = 'visible';
+            copy.appendChild(extra);
         },
 
         wireFills(stage) {
@@ -573,15 +672,40 @@ function printableView() {
                 const input = this.inputById(spec.inputId);
                 if (!input) return;
                 this.eventBag = Fill.addEventRow(this.eventBag, input);
+                const rows = this.eventBag[input.id];
+                const rowIndex = Array.isArray(rows) ? rows.length - 1 : 0;
+                this.pendingFocus = { prefix: 'row:' + input.id + ':' + rowIndex + ':' };
                 if (ui.bundle) ui.bundle.eventInputs = this.eventBag;
                 await this.persistEvent();
             } else if (spec.list === 'kids') {
                 const date = this.sundayDate(spec.when);
                 this.kidsLines[date] = Fill.addKidsLine(this.kidsLinesFor(date));
+                const rowIndex = this.kidsLines[date].length - 1;
+                this.pendingFocus = { id: 'kids:' + Fill.whenKey(spec.when) + ':' + rowIndex };
                 const draft = this.sundayDraft(date);
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
                 await this.persistSunday(date);
             }
+            this.relayout();
+        },
+
+        async removeFillRow(spec, rowIndex) {
+            const Fill = window.PrintableFillCore;
+            if (!Fill || !spec) return;
+            if (spec.list === 'event') {
+                const input = this.inputById(spec.inputId);
+                if (!input) return;
+                this.eventBag = Fill.removeEventRow(this.eventBag, input, rowIndex);
+                if (ui.bundle) ui.bundle.eventInputs = this.eventBag;
+                await this.persistEvent();
+            } else if (spec.list === 'kids') {
+                const date = this.sundayDate(spec.when);
+                this.kidsLines[date] = Fill.removeKidsLine(this.kidsLinesFor(date), rowIndex);
+                const draft = this.sundayDraft(date);
+                draft.kidsQuestions = this.kidsLines[date].join('\n');
+                await this.persistSunday(date);
+            }
+            this.pendingFocus = null;
             this.relayout();
         },
 

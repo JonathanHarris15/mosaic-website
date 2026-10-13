@@ -81,15 +81,34 @@
 
     function indexProject(project) {
         const inside = {};
+        // The repeat a node carries itself. A column wired on the element
+        // that repeats belongs to that list, not to whatever list wraps it.
+        const own = {};
         const walk = (nodes, repeat) => {
             (nodes || []).forEach(node => {
                 if (!node) return;
                 inside[node.id] = repeat || null;
+                if (node.repeat && node.repeat.source) own[node.id] = node.repeat;
                 walk(node.children, node.repeat || repeat || null);
             });
         };
         (project && project.pages || []).forEach(p => walk(p.nodes, null));
-        return { inside: inside, inputs: inputsOf(project), fields: typedFields() };
+        return { inside: inside, own: own, inputs: inputsOf(project), fields: typedFields() };
+    }
+
+    function isFillList(repeat) {
+        return !!(repeat && (repeat.source === 'event_list' || repeat.source === 'sunday_kids_questions'));
+    }
+
+    // The list this blank belongs to. A copy of the iterated element no longer
+    // carries `.repeat` (expand strips it); the project's own repeat is what
+    // the row is. A field inside the row uses the ancestor list.
+    function fillRepeat(node, index) {
+        if (!node || !index) return null;
+        const id = originalId(node.id);
+        const own = index.own && index.own[id];
+        if (isFillList(own)) return own;
+        return (index.inside && index.inside[id]) || null;
     }
 
     function boundProp(node) {
@@ -135,7 +154,7 @@
 
     function itemSlot(node, bind, index) {
         if (!bind || bind.scope !== 'item') return null;
-        const repeat = index.inside[originalId(node.id)];
+        const repeat = fillRepeat(node, index);
         if (!repeat) return null;
         const row = rowIndex(node.id);
         if (repeat.source === 'event_list') {
@@ -369,6 +388,31 @@
         return next;
     }
 
+    function rowAt(n) {
+        const i = Number(n);
+        return Number.isInteger(i) && i >= 0 ? i : -1;
+    }
+
+    function removeEventRow(bag, input, rowIndex) {
+        const id = input && input.id;
+        const next = Object.assign({}, bag || {});
+        if (!id) return next;
+        const rows = Array.isArray(next[id]) ? next[id].slice() : [];
+        const i = rowAt(rowIndex);
+        if (i < 0 || i >= rows.length) return next;
+        rows.splice(i, 1);
+        next[id] = rows;
+        return next;
+    }
+
+    // Columns of this list that this row does not already show as a blank.
+    // A row with none of them placed would otherwise be empty space.
+    function unplacedColumns(input, presentColumnIds) {
+        const have = {};
+        (presentColumnIds || []).forEach(id => { if (id) have[id] = true; });
+        return (input && input.fields || []).filter(col => col && col.id && !have[col.id]);
+    }
+
     function setSundayField(draft, field, value) {
         const next = Object.assign({}, draft || {});
         next[field] = value == null ? '' : String(value);
@@ -384,6 +428,14 @@
 
     function addKidsLine(lines) {
         return (lines || []).concat(['']);
+    }
+
+    function removeKidsLine(lines, index) {
+        const next = (lines || []).slice();
+        const i = rowAt(index);
+        if (i < 0 || i >= next.length) return next;
+        next.splice(i, 1);
+        return next;
     }
 
     const PrintableFillCore = {
@@ -405,9 +457,12 @@
         setEventScalar,
         setEventCell,
         addEventRow,
+        removeEventRow,
+        unplacedColumns,
         setSundayField,
         writeKidsLine,
         addKidsLine,
+        removeKidsLine,
         blankRow,
     };
 

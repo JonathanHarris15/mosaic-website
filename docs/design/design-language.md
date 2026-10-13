@@ -259,6 +259,8 @@ The preview header stays on screen (`.m-header--sticky`) while the pages scroll 
 
 A blank is a value a person supplies on the linked event: a fill-in (text, image, number, date, or one cell of a list). A live Sunday, a hymn, scripture, and announcements from the query builder are not blanks. Announcements stay on the Announcements tab. The same blank placed twice is one blank. An empty list that drew no rows is one blank, with **Add a row** or **Add a question** on the list itself.
 
+A row added there is a place to write. Each column already placed on the row is typed where the page put it. A column that was never placed still gets a blank on the row (`.pv-fill-extra`), so the row is not empty space. Each row has **Remove row** (`.pv-fill-remove`). Removing the last row leaves the list empty, with **Add a row** or **Add a question** again. Print and folio do not draw those controls.
+
 A card on the preview (`.pv-go`, `role="status"`) reads **16 left to go** or **1 left to go**. It is hidden when the page has no blanks. The words are a button: they open the next blank. Arrows on the card move through the blanks still empty, wrapping. The blank you land on is scrolled into view and focused. When the last blank is filled, the card becomes a green check (`.pv-go--done`) and the check pops once; a page that was already full shows the check still, without the pop. `prefers-reduced-motion` skips the pop. Typing saves when the box loses focus. The words stay on that occurrence. The Files tab does not list the blanks again.
 
 ## Sunday announcements

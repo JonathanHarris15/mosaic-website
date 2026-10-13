@@ -402,7 +402,10 @@
         });
     }
 
-    const PrintableDom = { renderNode, renderPage, scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, mountFolioPadBoard, BASE_CSS };
+    const PrintableDom = {
+        renderNode, renderPage, renderFillControl, renderFillImage,
+        scopeCss, applyStyle, ensureBaseStyles, mountFolioPrint, mountFolioPadBoard, BASE_CSS,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableDom;

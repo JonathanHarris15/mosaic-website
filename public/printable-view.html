@@ -470,6 +470,11 @@
             box-sizing: border-box;
             resize: vertical;
         }
+        .pv-fill-extra .pv-fill {
+            min-width: 8em;
+            min-height: 1.25em;
+            pointer-events: auto;
+        }
         .pv-fill:focus-visible {
             outline: 2px solid var(--primary);
             outline-offset: 1px;
@@ -529,6 +534,32 @@
             cursor: pointer;
         }
         .pv-fill-add:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+        .pv-fill-extra {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            width: 100%;
+            flex: 1 0 100%;
+            min-width: 8em;
+            margin-top: 4px;
+            box-sizing: border-box;
+            position: relative;
+            z-index: 1;
+        }
+        .pv-fill-remove {
+            align-self: flex-start;
+            margin: 0;
+            padding: 2px 8px;
+            font: 12px/1.3 "Source Sans 3", sans-serif;
+            color: var(--on-surface-variant);
+            background: #fff;
+            border: 1px solid var(--outline-variant);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .pv-fill-remove:hover { color: var(--error, #8c2f2f); border-color: currentColor; }
+        .pv-fill-remove:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
         @media print {
             body.pv-printing > *:not(.pv-print) { display: none !important; }
             .pv-print { display: block; }

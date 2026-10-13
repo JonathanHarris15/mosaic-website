@@ -78,6 +78,46 @@ test('a field filled on the event is a blank, including one cell of a list', () 
     assert.equal(Fill.tally(empty, () => '').left, 1);
 });
 
+test('a column wired on the repeating element itself is a cell of that row', () => {
+    const project = guide([
+        {
+            id: 'line', tag: 'p', text: 'Prompt',
+            repeat: { source: 'event_list', params: { inputId: 'prompts' } },
+            bind: { text: { scope: 'item', field: 'line' } },
+        },
+    ], [
+        { id: 'prompts', label: 'Prayer prompts', kind: 'list', fields: [{ id: 'line', label: 'Prompt', kind: 'text' }] },
+    ]);
+    const index = Fill.indexProject(project);
+    const first = Fill.slotFor(project.pages[0].nodes[0], index);
+    assert.equal(first.store, 'event-row');
+    assert.equal(first.id, 'row:prompts:0:line');
+    assert.equal(first.rowIndex, 0);
+    const second = Fill.slotFor({
+        id: 'line~1', tag: 'p', bind: { text: { scope: 'item', field: 'line' } },
+    }, index);
+    assert.equal(second.id, 'row:prompts:1:line');
+    assert.equal(second.rowIndex, 1);
+});
+
+test('adding a row leaves a blank that can be written and removed', () => {
+    const input = { id: 'prompts', label: 'Prayer prompts', kind: 'list', fields: [{ id: 'line', label: 'Prompt', kind: 'text' }] };
+    let bag = Fill.addEventRow({}, input);
+    assert.deepEqual(bag.prompts, [{ line: '' }]);
+    bag = Fill.setEventCell(bag, input, 0, 'line', 'Pray for churches');
+    bag = Fill.addEventRow(bag, input);
+    assert.deepEqual(bag.prompts, [{ line: 'Pray for churches' }, { line: '' }]);
+    assert.deepEqual(Fill.unplacedColumns(input, []).map(c => c.id), ['line']);
+    assert.deepEqual(Fill.unplacedColumns(input, ['line']), []);
+    bag = Fill.removeEventRow(bag, input, 0);
+    assert.deepEqual(bag.prompts, [{ line: '' }]);
+    bag = Fill.removeEventRow(bag, input, 0);
+    assert.deepEqual(bag.prompts, []);
+    assert.deepEqual(Fill.removeEventRow(bag, input, 3).prompts, []);
+    assert.deepEqual(Fill.removeKidsLine(['Jonah', ''], 1), ['Jonah']);
+    assert.deepEqual(Fill.removeKidsLine(['Jonah'], 4), ['Jonah']);
+});
+
 test('a kids question row is a blank and an announcement list is not', () => {
     const project = guide([
         {
