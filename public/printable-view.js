@@ -21,7 +21,10 @@ function printableView() {
         warnings: [],
         zoom: 1,
         zoomPinned: false,
-        showWarnings: false,
+        exportMenu: '',
+        snapshotProgress: '',
+        snapshotError: '',
+        uid: '',
         fillTotal: 0,
         fillLeft: 0,
         fillNote: '',
@@ -45,6 +48,11 @@ function printableView() {
         get template() { return this.project ? this.project.template : null; },
         get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
         get canFill() { return this.canEdit; },
+        // Linked from an event's Printables / Files row: Folio and Print can
+        // file the flat snapshot on that occurrence instead of printing.
+        get canSaveSnapshot() {
+            return !!(this.occurrenceId && this.canEdit && this.entries.length);
+        },
         get fillLeftText() {
             const Fill = window.PrintableFillCore;
             return Fill ? Fill.leftToGoText(this.fillLeft) : '';
@@ -106,6 +114,7 @@ function printableView() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'index.html'; return; }
                 try {
+                    this.uid = user.uid || '';
                     const userData = await getUserData(user.uid);
                     this.currentUserData = userData || null;
                     this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
@@ -766,6 +775,105 @@ function printableView() {
             const done = () => { document.body.classList.remove('pv-printing'); layer.innerHTML = ''; window.removeEventListener('afterprint', done); };
             window.addEventListener('afterprint', done);
             setTimeout(() => window.print(), 150);
+        },
+
+        onFolioClick() {
+            if (this.canSaveSnapshot) {
+                this.exportMenu = this.exportMenu === 'folio' ? '' : 'folio';
+                return;
+            }
+            this.printFolio();
+        },
+
+        onPrintClick() {
+            if (this.canSaveSnapshot) {
+                this.exportMenu = this.exportMenu === 'print' ? '' : 'print';
+                return;
+            }
+            this.printPrintable();
+        },
+
+        chooseFolioPrint() {
+            this.exportMenu = '';
+            this.printFolio();
+        },
+
+        chooseFlatPrint() {
+            this.exportMenu = '';
+            this.printPrintable();
+        },
+
+        chooseSaveSnapshot() {
+            this.exportMenu = '';
+            this.saveSnapshotToEvent();
+        },
+
+        // Flat PDF of the pages as they stand, filed on the linked occurrence
+        // (ADR 0057 / MS-711). Same shape as the event Files tab snapshot.
+        async saveSnapshotToEvent() {
+            if (!this.canSaveSnapshot || this.snapshotProgress) return;
+            if (typeof PrintablePdf === 'undefined' || typeof EventAttachmentsCore === 'undefined') {
+                this.snapshotError = 'PDF filing is not available on this page.';
+                return;
+            }
+            const Store = window.EventsStore;
+            if (!Store) {
+                this.snapshotError = 'PDF filing is not available on this page.';
+                return;
+            }
+            this.snapshotError = '';
+            this.snapshotProgress = 'Preparing…';
+            try {
+                if (this.canFill) this.relayout();
+                if (!this.project || !this.entries.length) throw new Error('not laid out');
+                const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+                const booklet = !!(Ex && Ex.isSundayBookletPath(this.project));
+                const printCount = Ex ? Ex.exportPageCount(this.entries.length, this.project) : this.entries.length;
+                this.snapshotProgress = booklet
+                    ? 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + ' (flat, padded ×4)…'
+                    : 'Drawing ' + printCount + ' page' + (printCount === 1 ? '' : 's') + '…';
+                const blob = await PrintablePdf.render(this.project, this.entries, {
+                    scale: 1,
+                    onProgress: (done, total) => {
+                        this.snapshotProgress = 'Drawing page ' + done + ' of ' + total + '…';
+                    },
+                });
+                this.snapshotProgress = 'Filing…';
+                let occurrence = null;
+                if (Store.loadOccurrence) {
+                    occurrence = await Store.loadOccurrence(db, this.occurrenceId);
+                    if (occurrence && Store.ensureOccurrenceDocument) {
+                        await Store.ensureOccurrenceDocument(db, occurrence);
+                    }
+                }
+                const date = (occurrence && occurrence.date) || this.viewDate;
+                const name = PrintablePdf.fileName(this.project, date);
+                const attachmentId = Store.newAttachmentId(db, this.occurrenceId);
+                const path = EventAttachmentsCore.storagePath(this.occurrenceId, attachmentId, name);
+                await firebase.storage().ref().child(path).put(blob, { contentType: 'application/pdf' });
+                const personId = (this.currentUserData && this.currentUserData.personId) || null;
+                const attachment = EventAttachmentsCore.buildAttachmentRecord({
+                    name: name,
+                    contentType: 'application/pdf',
+                    size: blob.size,
+                    storagePath: path,
+                    uploadedBy: this.uid,
+                    uploadedByName: personId
+                        ? null
+                        : (this.currentUserData && (this.currentUserData.displayName || this.currentUserData.name)) || null,
+                    uploadedAt: new Date().toISOString(),
+                });
+                await Store.saveAttachment(db, this.occurrenceId, attachmentId, attachment);
+                this.snapshotProgress = '';
+                this.fillNote = 'Filed on the event · ' + (date || 'this date') + '.';
+            } catch (e) {
+                console.error('Printable snapshot failed:', e);
+                this.snapshotProgress = '';
+                this.snapshotError = 'That snapshot could not be filed. '
+                    + (String(e && e.message).includes('not laid out')
+                        ? 'The printable has no pages yet.'
+                        : 'Try again.');
+            }
         },
 
         printPrintable() {
