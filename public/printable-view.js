@@ -803,15 +803,8 @@ function printableView() {
 
         // After the folio pad is ×4: title, then file a folio-imposed PDF.
         confirmFolioPadSave() {
-            if (!this.canSaveSnapshot || this.snapshotProgress) return;
-            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            if (!Ex) return;
-            const finalized = Ex.finalizeFolioPadForPrint(this.folioPadEntries, this.folioPadBrushIndex);
-            if (!finalized.ok) {
-                this.folioPadError = finalized.why || 'Could not finish the folio fold.';
-                return;
-            }
-            const stack = finalized.entries;
+            if (!this.folioPadReady || !this.canSaveSnapshot || this.snapshotProgress) return;
+            const stack = this.folioPadEntries.slice();
             this.closeFolioPad();
             this.openSnapshotTitle('folio', stack);
         },
@@ -980,14 +973,14 @@ function printableView() {
         openFolioPad() {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             if (!Ex || !this.entries.length) return;
-            let stack = Ex.cloneEntriesForFolio(this.entries);
+            this.folioPadEntries = Ex.cloneEntriesForFolio(this.entries);
             this.folioPadBaseCount = this.entries.length;
             this.folioPadError = '';
-            const brush = Ex.defaultFolioBrushIndex(stack);
-            const filled = Ex.fillFolioPadWithBrush(stack, brush);
-            if (filled.ok) stack = filled.entries;
-            this.folioPadEntries = stack;
-            this.folioPadBrushIndex = brush >= 0 ? brush + (filled.inserted || 0) : null;
+            let brush = null;
+            for (let i = this.folioPadEntries.length - 1; i >= 0; i--) {
+                if (this.folioPadEntries[i] && !this.folioPadEntries[i].blank) { brush = i; break; }
+            }
+            this.folioPadBrushIndex = brush;
             this.folioPadOpen = true;
             this.$nextTick(() => this.paintFolioPadBoard());
         },
@@ -1078,14 +1071,8 @@ function printableView() {
         },
 
         confirmFolioPadPrint() {
-            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
-            if (!Ex) return;
-            const finalized = Ex.finalizeFolioPadForPrint(this.folioPadEntries, this.folioPadBrushIndex);
-            if (!finalized.ok) {
-                this.folioPadError = finalized.why || 'Could not finish the folio fold.';
-                return;
-            }
-            const stack = finalized.entries;
+            if (!this.folioPadReady) return;
+            const stack = this.folioPadEntries.slice();
             this.closeFolioPad();
             this.runFolioPrint(stack);
         },
