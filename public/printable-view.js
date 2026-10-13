@@ -660,10 +660,8 @@ function printableView() {
             if (!this.template || !this.entries.length) return;
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             if (!Ex) return;
-            if (!Ex.folioNeedsPad(this.entries)) {
-                this.runFolioPrint(this.entries);
-                return;
-            }
+            // Always open the board so the operator can delete or stamp
+            // pages before printing — even when the count is already ×4.
             this.openFolioPad();
         },
 

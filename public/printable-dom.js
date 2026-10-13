@@ -306,12 +306,13 @@
                 || (isBlank ? 'Blank' : (isPad ? 'Print only' : 'Page'));
             name.title = label;
             meta.appendChild(name);
-            if (isPad) {
+            const canRemove = entries.length > 1;
+            if (canRemove) {
                 const rm = document.createElement('button');
                 rm.type = 'button';
                 rm.className = 'folio-pad__remove';
-                rm.setAttribute('aria-label', 'Remove temporary page ' + (i + 1));
-                rm.title = 'Remove';
+                rm.setAttribute('aria-label', 'Remove page ' + (i + 1) + ' from this print');
+                rm.title = 'Remove from this print';
                 rm.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
                 rm.addEventListener('click', (e) => {
                     e.stopPropagation();

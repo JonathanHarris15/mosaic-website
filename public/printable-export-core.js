@@ -381,14 +381,17 @@
         return { ok: true, entries: list, leaf: leaf };
     }
 
+    // Drop a leaf from the temporary print stack. Any page can go — this
+    // never writes the printable. Keep at least one page so there is still
+    // a fold to print.
     function removeFolioPadAt(entries, index) {
         const list = cloneEntriesForFolio(entries);
         const i = Math.round(Number(index));
         if (!Number.isFinite(i) || i < 0 || i >= list.length) {
             return { ok: false, why: 'That page is not in the print stack.', entries: list };
         }
-        if (!list[i] || !list[i].folioPad) {
-            return { ok: false, why: 'Only temporary print pages can be removed here.', entries: list };
+        if (list.length <= 1) {
+            return { ok: false, why: 'Keep at least one page to print.', entries: list };
         }
         list.splice(i, 1);
         restampFolioPageNumbers(list);

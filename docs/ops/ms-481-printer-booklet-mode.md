@@ -34,11 +34,11 @@ Folio print pads every Printable, because the fold needs four pages.
 1. Open the Printable (editor File menu, or the view-only page) and
    choose **Print folio** (book icon / **Folio**, not the printer
    **Print** control).
-2. If the page count is not a multiple of 4, **Fill the folio fold**
-   shows every page. Click a page to set the brush, then click a gap
-   between pages to place a copy. The side rail counts insertions
-   left to the next multiple of 4. Those pages print only; they are
-   not saved on the printable.
+2. **Fill the folio fold** shows every page. Click a page to set the
+   brush, then click a gap to place a copy; × drops a page from this
+   print only. The side rail counts insertions left to the next
+   multiple of 4. Changes are print-only; they are not saved on the
+   printable.
 3. The dialog's paper is one landscape sheet per pair of pages
    (letter landscape for a half-letter Printable). Print double-sided
    the same way the service guide is printed.
