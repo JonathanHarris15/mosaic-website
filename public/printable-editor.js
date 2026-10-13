@@ -2151,14 +2151,14 @@ function printableEditor() {
         openFolioPad(entries) {
             const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
             if (!Ex || !(entries || []).length) return;
-            this.folioPadEntries = Ex.cloneEntriesForFolio(entries);
+            let stack = Ex.cloneEntriesForFolio(entries);
             this.folioPadBaseCount = entries.length;
             this.folioPadError = '';
-            let brush = null;
-            for (let i = this.folioPadEntries.length - 1; i >= 0; i--) {
-                if (this.folioPadEntries[i] && !this.folioPadEntries[i].blank) { brush = i; break; }
-            }
-            this.folioPadBrushIndex = brush;
+            const brush = Ex.defaultFolioBrushIndex(stack);
+            const filled = Ex.fillFolioPadWithBrush(stack, brush);
+            if (filled.ok) stack = filled.entries;
+            this.folioPadEntries = stack;
+            this.folioPadBrushIndex = brush >= 0 ? brush + (filled.inserted || 0) : null;
             this.folioPadOpen = true;
             this.$nextTick(() => this.paintFolioPadBoard());
         },
@@ -2249,8 +2249,14 @@ function printableEditor() {
         },
 
         confirmFolioPadPrint() {
-            if (!this.folioPadReady) return;
-            const stack = this.folioPadEntries.slice();
+            const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
+            if (!Ex) return;
+            const finalized = Ex.finalizeFolioPadForPrint(this.folioPadEntries, this.folioPadBrushIndex);
+            if (!finalized.ok) {
+                this.folioPadError = finalized.why || 'Could not finish the folio fold.';
+                return;
+            }
+            const stack = finalized.entries;
             this.closeFolioPad();
             this.runFolioPrint(stack);
         },
