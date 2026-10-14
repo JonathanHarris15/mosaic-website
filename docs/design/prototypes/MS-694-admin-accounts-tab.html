@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-694 — Admin Accounts tab (prototype)</title>
+
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
+        .proto-body {
+            margin: 0;
+            background: var(--surface-container-highest);
+            color: var(--on-background);
+            font-family: var(--font-sans);
+            font-size: var(--body-md-size);
+            line-height: var(--body-md-line);
+            -webkit-font-smoothing: antialiased;
+        }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar__kicker {
+            margin: 0; font-size: var(--label-xs-size); letter-spacing: var(--label-xs-spacing);
+            text-transform: uppercase; color: var(--primary-fixed-dim);
+        }
+        .proto-bar__title {
+            margin: 2px 0 0; font-family: var(--font-serif); font-size: var(--headline-md-size);
+            line-height: var(--headline-md-line); font-weight: var(--headline-md-weight);
+        }
+        .proto-bar__sub { margin: 6px 0 0; font-size: 14px; color: var(--primary-fixed-dim); max-width: 72ch; }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: var(--space-base); margin-top: var(--space-sm); }
+        .proto-jump a {
+            padding: 6px 12px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 13px; font-weight: 600; text-decoration: none;
+        }
+        .proto-jump a:hover { background: var(--primary-fixed); color: var(--primary); }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        @media (min-width: 900px) { .proto-main { padding-left: var(--space-md); padding-right: var(--space-md); } }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: var(--space-md); }
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: var(--headline-lg-size);
+            color: var(--primary);
+        }
+        .proto-note { max-width: 68ch; margin: 0 0 var(--space-sm); font-size: 14px; line-height: 1.55; color: var(--on-surface-variant); }
+        .proto-stage {
+            background: var(--background); border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl); padding: var(--space-sm); overflow: hidden;
+        }
+        @media (min-width: 900px) { .proto-stage { padding: var(--space-md); } }
+        .proto-stage__tag {
+            display: inline-block; margin: 0 0 var(--space-sm); padding: 4px 10px;
+            border-radius: var(--radius-full); background: var(--secondary-container);
+            color: var(--on-secondary-container); font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* Mini admin page inside each stage — dense desktop scale */
+        .adm-shell { max-width: 960px; margin: 0 auto; }
+        .adm-body { padding: var(--space-sm) 0 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+        .adm-tabs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        .acct-card {
+            background: var(--surface-container-lowest); border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+            border-radius: var(--radius-xl); box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 6%)); overflow: hidden;
+        }
+        .acct-card__head {
+            padding: var(--space-sm) var(--space-md); background: color-mix(in srgb, var(--surface-container-low) 50%, transparent);
+            border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 20%, transparent);
+        }
+        .acct-card__body { padding: var(--space-sm) var(--space-md); }
+        .acct-kicker {
+            font-size: 10px; font-weight: var(--label-md-weight); letter-spacing: 0.2em; text-transform: uppercase;
+            color: var(--on-surface); display: flex; align-items: center; gap: 8px; margin: 0;
+        }
+        .acct-kicker__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--secondary); flex-shrink: 0; }
+        .acct-kicker__dot--muted { background: var(--outline-variant); }
+
+        .acct-row {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md); background: var(--surface-container-lowest);
+            border-bottom: 1px solid var(--surface-container);
+        }
+        .acct-row:last-child { border-bottom: none; }
+        .acct-row__email { font-family: var(--font-serif); font-size: 14px; color: var(--primary); margin: 0; }
+        .acct-row__meta {
+            display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600;
+            letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+        .acct-row__meta-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--outline-variant); }
+        .acct-row__meta-dot--admin { background: var(--primary); }
+        .acct-row__meta-dot--editor { background: var(--secondary); }
+        .acct-row__meta-dot--member { background: var(--tertiary); }
+        .acct-row__actions { display: flex; gap: var(--space-xs); align-items: center; flex-wrap: wrap; }
+        .acct-select {
+            font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+            padding: 6px 28px 6px 10px; border-radius: var(--radius-md);
+            border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+            background: var(--surface-container-low); appearance: none; cursor: pointer;
+        }
+
+        .acct-split { display: flex; flex-direction: column; gap: var(--space-sm); }
+        @media (min-width: 768px) {
+            .acct-split--b { flex-direction: row; align-items: stretch; }
+            .acct-split--b > * { flex: 1; min-width: 0; }
+        }
+
+        .acct-toolbar {
+            display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center;
+            justify-content: space-between; margin-bottom: var(--space-sm);
+        }
+        .acct-search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 320px; }
+        .acct-search-wrap .material-symbols-outlined {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            font-size: 18px; color: var(--outline-variant); pointer-events: none;
+        }
+        .acct-search {
+            width: 100%; padding: 8px 12px 8px 36px; font-size: 13px; border-radius: var(--radius-md);
+            border: 1px solid color-mix(in srgb, var(--outline-variant) 50%, transparent);
+            background: var(--surface-container-lowest);
+        }
+
+        .acct-dialog-backdrop {
+            position: absolute; inset: 0; background: color-mix(in srgb, var(--primary) 18%, transparent);
+            backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center;
+            padding: var(--space-sm); z-index: 5;
+        }
+        @media (min-width: 640px) {
+            .acct-dialog-backdrop { align-items: center; }
+        }
+        .acct-dialog {
+            width: 100%; max-width: 420px; background: var(--surface-container-lowest);
+            border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+            border-radius: var(--radius-xl); box-shadow: 0 12px 40px rgb(0 0 0 / 12%);
+        }
+        .acct-dialog__head {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-sm);
+            padding: var(--space-md); border-bottom: 1px solid var(--surface-container);
+        }
+        .acct-dialog__body { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+        .acct-stage-relative { position: relative; min-height: 280px; }
+
+        .acct-empty { padding: var(--space-md); font-size: 13px; color: var(--on-surface-variant); font-style: italic; }
+        .acct-error {
+            margin: var(--space-sm) var(--space-md); padding: var(--space-sm);
+            border-radius: var(--radius-md); background: color-mix(in srgb, var(--error) 8%, transparent);
+            border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+            color: var(--error); font-size: 13px; display: flex; gap: 8px; align-items: flex-start;
+        }
+
+        .proto-states-grid { display: grid; gap: var(--space-sm); }
+        @media (min-width: 768px) { .proto-states-grid { grid-template-columns: 1fr 1fr; } }
+        .proto-state-label {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+            color: var(--on-surface-variant); margin: 0 0 var(--space-base);
+        }
+    </style>
+</head>
+
+<body class="proto-body">
+    <header class="proto-bar">
+        <p class="proto-bar__kicker">Prototype · MS-694 · fictional data only</p>
+        <h1 class="proto-bar__title">Admin dashboard — Accounts tab</h1>
+        <p class="proto-bar__sub">Moves Account Management from profile.html into a third m-tabs panel on admin-dashboard.html. Pick A, B, or C; directory empty / one / many / error shown below.</p>
+        <nav class="proto-jump" aria-label="Jump to sections">
+            <a href="#variant-a">A — stacked tab</a>
+            <a href="#variant-b">B — split layout</a>
+            <a href="#variant-c">C — toolbar + dialog</a>
+            <a href="#directory-states">Directory states</a>
+        </nav>
+    </header>
+
+    <main class="proto-main">
+
+        <!-- ── Variant A ─────────────────────────────────────────── -->
+        <section class="proto-section" id="variant-a">
+            <h2>Variant A — tab panel, form then directory</h2>
+            <p class="proto-note">Closest to today’s admin-dashboard pattern: third tab “Accounts” with provision form stacked above the authorized directory (same information architecture as profile #admin-panel).</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">A</span>
+                <div class="adm-shell m-page" style="background: var(--background);">
+                    <header class="m-header">
+                        <div class="m-header__inner">
+                            <div class="m-header__lead">
+                                <span class="m-back"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></span>
+                                <div class="m-header__titles"><h1 class="m-header__title">Admin Dashboard</h1></div>
+                            </div>
+                            <div class="m-header__rule"></div>
+                        </div>
+                    </header>
+                    <div class="m-page__body adm-body">
+                        <div class="adm-tabs-scroll">
+                            <div class="m-tabs" role="tablist" aria-label="Admin dashboard sections">
+                                <button type="button" class="m-tabs__tab" role="tab" aria-selected="false">
+                                    <span class="material-symbols-outlined text-[18px]">handyman</span> System tools
+                                </button>
+                                <button type="button" class="m-tabs__tab" role="tab" aria-selected="false">
+                                    <span class="material-symbols-outlined text-[18px]">notifications_active</span> Push notifications
+                                </button>
+                                <button type="button" class="m-tabs__tab m-tabs__tab--current" role="tab" aria-selected="true">
+                                    <span class="material-symbols-outlined text-[18px]">shield_person</span> Accounts
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-md pt-sm">
+                            <div class="acct-card">
+                                <div class="acct-card__head">
+                                    <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-2 m-0" style="font-size: 1.125rem;">
+                                        <span class="material-symbols-outlined">shield_person</span> Account Management
+                                    </h2>
+                                    <p class="text-on-surface-variant text-sm mt-1 mb-0">Provision and audit accounts for the Mosaic Service Portal.</p>
+                                </div>
+                                <div class="acct-card__body">
+                                    <p class="acct-kicker"><span class="acct-kicker__dot"></span> Provision new account</p>
+                                    <form class="grid grid-cols-1 md:grid-cols-12 gap-sm items-end mt-sm">
+                                        <div class="md:col-span-4 flex flex-col gap-xs">
+                                            <label class="m-label">Email address</label>
+                                            <input type="email" class="w-full py-2 px-3 text-sm bg-surface border border-outline-variant/50 rounded-lg" placeholder="alex@example.church" value="" />
+                                        </div>
+                                        <div class="md:col-span-3 flex flex-col gap-xs">
+                                            <label class="m-label">Temp password</label>
+                                            <input type="password" class="w-full py-2 px-3 text-sm bg-surface border border-outline-variant/50 rounded-lg" value="••••••••" />
+                                        </div>
+                                        <div class="md:col-span-2 flex flex-col gap-xs">
+                                            <label class="m-label">Permission level</label>
+                                            <select class="acct-select w-full py-2 pl-3">
+                                                <option>Member</option>
+                                                <option>Editor</option>
+                                                <option>Admin</option>
+                                            </select>
+                                        </div>
+                                        <div class="md:col-span-3">
+                                            <button type="button" class="m-btn m-btn--primary m-btn--block">Authorize user</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="acct-card">
+                                <div class="acct-card__head flex justify-between items-center">
+                                    <p class="acct-kicker mb-0"><span class="acct-kicker__dot acct-kicker__dot--muted"></span> Authorized account directory</p>
+                                    <span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">3 active accounts</span>
+                                </div>
+                                <div>
+                                    <div class="acct-row">
+                                        <div>
+                                            <p class="acct-row__email">blake.finch@example.church</p>
+                                            <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--admin"></span> Admin · linked to Blake Finch</div>
+                                        </div>
+                                        <div class="acct-row__actions">
+                                            <select class="acct-select" aria-label="Role for blake.finch"><option selected>Admin</option><option>Editor</option></select>
+                                            <button type="button" class="m-btn m-btn--text text-xs">Link person</button>
+                                        </div>
+                                    </div>
+                                    <div class="acct-row">
+                                        <div>
+                                            <p class="acct-row__email">cora.mills@example.church</p>
+                                            <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--editor"></span> Editor · not linked</div>
+                                        </div>
+                                        <div class="acct-row__actions">
+                                            <select class="acct-select"><option selected>Editor</option></select>
+                                            <button type="button" class="m-btn m-btn--text text-xs">Link person</button>
+                                        </div>
+                                    </div>
+                                    <div class="acct-row">
+                                        <div>
+                                            <p class="acct-row__email">guest.kiosk@example.church</p>
+                                            <div class="acct-row__meta"><span class="acct-row__meta-dot"></span> Kiosk · not linked</div>
+                                        </div>
+                                        <div class="acct-row__actions">
+                                            <select class="acct-select"><option selected>Kiosk</option></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Variant B ─────────────────────────────────────────── -->
+        <section class="proto-section" id="variant-b">
+            <h2>Variant B — split provision / directory</h2>
+            <p class="proto-note">Same Accounts tab; on desktop the provision card sits left and the directory right. Stacks on phone width.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">B</span>
+                <div class="adm-shell">
+                    <div class="adm-tabs-scroll">
+                        <div class="m-tabs" role="tablist">
+                            <button type="button" class="m-tabs__tab" aria-selected="false"><span class="material-symbols-outlined text-[18px]">handyman</span> System tools</button>
+                            <button type="button" class="m-tabs__tab" aria-selected="false"><span class="material-symbols-outlined text-[18px]">notifications_active</span> Push</button>
+                            <button type="button" class="m-tabs__tab m-tabs__tab--current" aria-selected="true"><span class="material-symbols-outlined text-[18px]">shield_person</span> Accounts</button>
+                        </div>
+                    </div>
+                    <div class="acct-split acct-split--b pt-sm">
+                        <div class="acct-card">
+                            <div class="acct-card__head"><p class="acct-kicker mb-0"><span class="acct-kicker__dot"></span> Provision</p></div>
+                            <div class="acct-card__body flex flex-col gap-sm">
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Email</label>
+                                    <input type="email" class="w-full py-2 px-3 text-sm border border-outline-variant/50 rounded-lg bg-surface" placeholder="new@example.church" />
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Temp password</label>
+                                    <input type="password" class="w-full py-2 px-3 text-sm border border-outline-variant/50 rounded-lg bg-surface" />
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Permission</label>
+                                    <select class="acct-select w-full py-2"><option>Member</option><option>Viewer</option></select>
+                                </div>
+                                <button type="button" class="m-btn m-btn--primary m-btn--block mt-xs">Authorize user</button>
+                            </div>
+                        </div>
+                        <div class="acct-card flex flex-col">
+                            <div class="acct-card__head flex justify-between">
+                                <p class="acct-kicker mb-0"><span class="acct-kicker__dot acct-kicker__dot--muted"></span> Directory</p>
+                                <span class="text-[10px] uppercase tracking-widest text-on-surface-variant">3 accounts</span>
+                            </div>
+                            <div class="flex-grow overflow-y-auto max-h-[320px]">
+                                <div class="acct-row">
+                                    <div>
+                                        <p class="acct-row__email">blake.finch@example.church</p>
+                                        <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--admin"></span> Admin</div>
+                                    </div>
+                                    <select class="acct-select"><option>Admin</option></select>
+                                </div>
+                                <div class="acct-row">
+                                    <div>
+                                        <p class="acct-row__email">cora.mills@example.church</p>
+                                        <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--editor"></span> Editor</div>
+                                    </div>
+                                    <select class="acct-select"><option>Editor</option></select>
+                                </div>
+                                <div class="acct-row">
+                                    <div>
+                                        <p class="acct-row__email">guest.kiosk@example.church</p>
+                                        <div class="acct-row__meta"><span class="acct-row__meta-dot"></span> Kiosk</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Variant C ─────────────────────────────────────────── -->
+        <section class="proto-section" id="variant-c">
+            <h2>Variant C — directory-first, provision in dialog</h2>
+            <p class="proto-note">Accounts tab leads with search and a dense directory; “Add account” opens a modal (shown open here). Good when provisioning is rare.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">C</span>
+                <div class="adm-shell acct-stage-relative">
+                    <div class="adm-tabs-scroll">
+                        <div class="m-tabs" role="tablist">
+                            <button type="button" class="m-tabs__tab" aria-selected="false">System tools</button>
+                            <button type="button" class="m-tabs__tab" aria-selected="false">Push notifications</button>
+                            <button type="button" class="m-tabs__tab m-tabs__tab--current" aria-selected="true"><span class="material-symbols-outlined text-[18px]">shield_person</span> Accounts</button>
+                        </div>
+                    </div>
+                    <div class="pt-sm">
+                        <div class="acct-toolbar">
+                            <div class="acct-search-wrap">
+                                <span class="material-symbols-outlined">search</span>
+                                <input type="search" class="acct-search" placeholder="Search accounts…" value="mills" aria-label="Search accounts" />
+                            </div>
+                            <button type="button" class="m-btn m-btn--primary"><span class="material-symbols-outlined text-[18px]">person_add</span> Add account</button>
+                        </div>
+                        <div class="acct-card">
+                            <div class="acct-card__head flex justify-between">
+                                <p class="acct-kicker mb-0">Authorized accounts</p>
+                                <span class="text-[10px] text-on-surface-variant uppercase tracking-widest">1 match</span>
+                            </div>
+                            <div class="acct-row">
+                                <div>
+                                    <p class="acct-row__email">cora.mills@example.church</p>
+                                    <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--editor"></span> Editor · linked to Cora Mills</div>
+                                </div>
+                                <div class="acct-row__actions">
+                                    <select class="acct-select"><option>Editor</option></select>
+                                    <button type="button" class="m-btn m-btn--text text-xs">Link</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="acct-dialog-backdrop" aria-hidden="false">
+                        <div class="acct-dialog" role="dialog" aria-labelledby="add-acct-title">
+                            <header class="acct-dialog__head">
+                                <div>
+                                    <h2 id="add-acct-title" class="font-headline-md text-primary m-0 text-lg">Add account</h2>
+                                    <p class="text-[11px] text-on-surface-variant mt-1 mb-0 uppercase tracking-widest">Provision portal access</p>
+                                </div>
+                                <button type="button" class="m-btn m-btn--icon" aria-label="Close"><span class="material-symbols-outlined">close</span></button>
+                            </header>
+                            <div class="acct-dialog__body">
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Email address</label>
+                                    <input type="email" class="w-full py-2 px-3 text-sm border rounded-lg bg-surface border-outline-variant/50" placeholder="name@example.church" />
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Temp password</label>
+                                    <input type="password" class="w-full py-2 px-3 text-sm border rounded-lg bg-surface border-outline-variant/50" />
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="m-label">Permission level</label>
+                                    <select class="acct-select w-full py-2"><option>Member</option><option>Admin</option></select>
+                                </div>
+                                <button type="button" class="m-btn m-btn--primary m-btn--block">Authorize user</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Directory states ─────────────────────────────────── -->
+        <section class="proto-section" id="directory-states">
+            <h2>Authorized account directory — states</h2>
+            <p class="proto-note">Same directory block as in A/B/C; labelled for review. Error follows a failed load (not an empty congregation).</p>
+            <div class="proto-states-grid">
+                <div>
+                    <p class="proto-state-label">Empty</p>
+                    <div class="acct-card">
+                        <div class="acct-card__head"><p class="acct-kicker mb-0">Authorized account directory</p></div>
+                        <p class="acct-empty">No accounts found.</p>
+                    </div>
+                </div>
+                <div>
+                    <p class="proto-state-label">One</p>
+                    <div class="acct-card">
+                        <div class="acct-card__head flex justify-between">
+                            <p class="acct-kicker mb-0">Authorized account directory</p>
+                            <span class="text-[10px] uppercase tracking-widest text-on-surface-variant">1 active account</span>
+                        </div>
+                        <div class="acct-row">
+                            <div>
+                                <p class="acct-row__email">solo.viewer@example.church</p>
+                                <div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--member"></span> Viewer · not linked</div>
+                            </div>
+                            <select class="acct-select"><option>Viewer</option></select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <p class="proto-state-label">Many</p>
+                    <div class="acct-card">
+                        <div class="acct-card__head flex justify-between">
+                            <p class="acct-kicker mb-0">Authorized account directory</p>
+                            <span class="text-[10px] uppercase tracking-widest text-on-surface-variant">5 active accounts</span>
+                        </div>
+                        <div class="acct-row"><p class="acct-row__email">a.admin@example.church</p><div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--admin"></span> Admin</div></div>
+                        <div class="acct-row"><p class="acct-row__email">b.editor@example.church</p><div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--editor"></span> Editor</div></div>
+                        <div class="acct-row"><p class="acct-row__email">c.member@example.church</p><div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--member"></span> Member</div></div>
+                        <div class="acct-row"><p class="acct-row__email">d.elder@example.church</p><div class="acct-row__meta"><span class="acct-row__meta-dot acct-row__meta-dot--editor"></span> Elder</div></div>
+                        <div class="acct-row"><p class="acct-row__email">e.kiosk@example.church</p><div class="acct-row__meta"><span class="acct-row__meta-dot"></span> Kiosk</div></div>
+                    </div>
+                </div>
+                <div>
+                    <p class="proto-state-label">Error</p>
+                    <div class="acct-card">
+                        <div class="acct-card__head"><p class="acct-kicker mb-0">Authorized account directory</p></div>
+                        <div class="acct-error" role="alert">
+                            <span class="material-symbols-outlined text-[20px]">error</span>
+                            <span>Could not load accounts. Check your connection and try again.</span>
+                        </div>
+                        <div class="p-md pt-0">
+                            <button type="button" class="m-btn m-btn--outline text-sm">Retry</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</body>
+</html>
