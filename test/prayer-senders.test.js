@@ -51,6 +51,16 @@ test('dispatchPrayerAsk mints an Answer link for scheduler and send-now', () => 
     assert.match(ask, /purpose:\s*["']prayer_request["']/);
     assert.match(ask, /url:\s*minted\.url/);
     assert.doesNotMatch(ask, /args\.url/);
+    assert.match(ask, /recordOutbound/);
+});
+
+test('failed automatic sends stamp lastSendAttemptDate so the hour does not retry', () => {
+    const subject = sliceBetween(
+        index,
+        'async function processPrayerSubject',
+        'exports.sendPrayerRequestTexts');
+    assert.match(subject, /lastSendAttemptDate:\s*req\.lastSendAttemptDate/);
+    assert.match(subject, /lastSendAttemptDate:\s*today/);
 });
 
 test('answerLink is a v2 onCall door without App Check', () => {
