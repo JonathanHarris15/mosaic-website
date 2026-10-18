@@ -2956,13 +2956,28 @@ async function dispatchPrayerAsk(db, args) {
     message: pr.messageWithLink(args.message),
   });
   if (!result.accepted) {
+    const detail = result.providerError ?
+      String(result.providerError) : "";
     return {
       success: false,
       unreachable: !!result.unreachable,
+      providerError: detail || null,
       error: result.unreachable ?
         "This person cannot be reached — no phone number and no app." :
-        "Send failed.",
+        (detail || "Send failed."),
     };
+  }
+
+  if (result.channel === "text" && result.textId) {
+    await recordOutbound(db, {
+      to: result.to || toE164US(personSnap.data().contact &&
+          personSnap.data().contact.phone),
+      body: result.textBody || "",
+      textId: result.textId,
+      purpose: "prayer_request",
+      personId,
+      serviceDate,
+    });
   }
 
   const today = pr.churchDateParts(new Date()).date;
@@ -3017,6 +3032,7 @@ async function processPrayerSubject(db, args) {
     initialSentDate: req.initialSentDate || null,
     reminderSent: !!req.reminderSent,
     reminderSentDate: req.reminderSentDate || null,
+    lastSendAttemptDate: req.lastSendAttemptDate || null,
     sentDays: req.sentDays || [],
     today,
     noticeDays: args.noticeDays,
@@ -3035,6 +3051,10 @@ async function processPrayerSubject(db, args) {
   if (!result.success) {
     log(`Prayer-request ${plan.action} send failed for ${personId}: ` +
         `${result.error}`);
+    if (!args.manual) {
+      await reqRef.set(
+          {serviceDate, lastSendAttemptDate: today}, {merge: true});
+    }
   } else {
     log(`Sent prayer-request ${plan.action} to ${personId} ` +
         `(service ${serviceDate}).`);
@@ -3122,8 +3142,7 @@ exports.sendEventAnnouncementTells = onSchedule(
  * Hourly scheduled sender for pastoral-prayer Prayer Request texts.
  * A prayer on the Liturgy Order tells its people the number of days that
  * prayer sets, even when the older admin switch is off. A Sunday whose
- * order has no such prayer still follows that switch and the older male
- * and female fields.
+ * order has no such prayer still follows the automatic-sending switch.
  */
 exports.sendPrayerRequestTexts = onSchedule(
     {
@@ -3134,6 +3153,11 @@ exports.sendPrayerRequestTexts = onSchedule(
     },
     async () => {
       const db = admin.firestore();
+      if (!TEXTBELT_KEY.value()) {
+        log("sendPrayerRequestTexts: TEXTBELT_KEY is not configured; " +
+            "skipping this tick.");
+        return;
+      }
       const {templates, autoSendEnabled} = await loadPrayerConfig(db);
 
       const {date: today, hour: localHour} = pr.churchDateParts(new Date());

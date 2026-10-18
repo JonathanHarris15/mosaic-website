@@ -599,7 +599,8 @@ function prayerAskPlan(state) {
   const days = list.filter((n) => Number(n) > 0);
   if (!days.length) return {action: "none", day: null};
   const sent = sentNoticeDays(s, days);
-  const last = s.reminderSentDate || s.initialSentDate || null;
+  const last = s.reminderSentDate || s.initialSentDate ||
+    s.lastSendAttemptDate || null;
   if (last && last === s.today) return {action: "none", day: null};
   const due = days.filter((d) => s.daysUntilService <= d && !sent.has(d));
   if (!due.length) return {action: "none", day: null};

@@ -625,6 +625,10 @@ test('a list of days sends once on each day, and not twice in one day', () => {
         sentDays: [5], initialSentDate: baseAuto.today,
     }), {action: 'none', day: null});
     assert.deepStrictEqual(pr.prayerAskPlan({
+        ...baseAuto, daysUntilService: 5, noticeList: list,
+        lastSendAttemptDate: baseAuto.today,
+    }), {action: 'none', day: null});
+    assert.deepStrictEqual(pr.prayerAskPlan({
         ...baseAuto, daysUntilService: 1, noticeList: [],
     }), {action: 'none', day: null});
     assert.deepStrictEqual(pr.noticeListOf({
