@@ -31,12 +31,58 @@
         .proto-stage { background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); overflow: hidden; }
         .proto-stage__tag { display: block; padding: 6px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
             color: var(--on-surface-variant); background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); }
-        .proto-tiles { display: grid; gap: var(--space-sm); grid-template-columns: 1fr; padding: var(--space-sm); }
-        @media (min-width: 560px) { .proto-tiles { grid-template-columns: repeat(2, 1fr); } }
-        @media (min-width: 1024px) {
-            .proto-tiles .m-nav-card { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--space-sm); padding: var(--space-sm); text-align: left; }
-            .proto-tiles .m-nav-card .m-medallion { margin: 0; }
-            .proto-tiles .m-nav-card__body { min-width: 0; }
+        /* Match public/index.html .dash-tiles (phone + desktop tile sizing) */
+        .dash-tiles {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--space-sm);
+            min-width: 0;
+            padding: var(--space-sm);
+        }
+        @media (min-width: 720px) { .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .dash-tiles > .m-nav-card {
+            position: relative;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            text-align: left;
+            gap: 12px;
+            min-width: 0;
+            min-height: 132px;
+            padding: 16px;
+            border-radius: var(--radius-xl);
+        }
+        .dash-tiles > .m-nav-card .m-medallion {
+            margin-bottom: 0;
+            width: 36px; height: 36px;
+            border-radius: var(--radius);
+            background: var(--primary); color: var(--on-primary);
+        }
+        .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 20px; }
+        .dash-tiles > .m-nav-card .m-nav-card__body { margin-top: auto; min-width: 0; max-width: 100%; }
+        .dash-tiles > .m-nav-card .m-nav-card__title {
+            margin: 0;
+            font-family: var(--font-sans);
+            font-size: 15px; font-weight: 600; line-height: 1.25;
+            color: var(--on-surface);
+            text-wrap: pretty;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .dash-tiles > .m-nav-card .m-nav-card__desc {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            margin: 3px 0 0;
+            font-size: 13px; line-height: 1.35;
+        }
+        @media (max-width: 719px) {
+            .dash-tiles > .m-nav-card { min-height: 84px; padding: 12px; gap: 10px; }
+            .dash-tiles > .m-nav-card .m-nav-card__desc { display: none; }
+            .dash-tiles > .m-nav-card .m-medallion { width: 30px; height: 30px; border-radius: var(--radius-sm); }
+            .dash-tiles > .m-nav-card .m-medallion .material-symbols-outlined { font-size: 18px; }
+            .dash-tiles > .m-nav-card .m-nav-card__title { font-size: 13.5px; white-space: nowrap; }
         }
         .proto-ref { margin-top: var(--space-xl); border: 1px dashed var(--outline-variant); border-radius: var(--radius-md); padding: var(--space-sm); background: var(--surface-container); }
         .proto-ref summary { font-size: 12px; font-weight: 700; color: var(--on-surface-variant); cursor: pointer; }
@@ -61,35 +107,39 @@
         .fm-block-label--pinned { color: var(--primary); display: flex; align-items: center; gap: 4px; }
         .fm-block-label--pinned .material-symbols-outlined { font-size: 14px; font-variation-settings: 'FILL' 1; }
         .fm-pinned { border-bottom: 1px solid var(--outline-variant); background: color-mix(in srgb, var(--primary) 4%, var(--surface-container-lowest)); }
-        .fm-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--surface-container);
-            text-decoration: none; color: inherit; }
-        .fm-row--edit { grid-template-columns: auto auto 1fr auto; }
-        @media (max-width: 479px) {
-            .fm-row--edit { grid-template-columns: auto 1fr auto; }
-            .fm-row--edit .fm-reorder--desktop { display: none; }
-        }
-        @media (min-width: 480px) {
-            .fm-row--edit .fm-reorder--mobile { display: none; }
+        .fm-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            min-height: 44px;
+            border-bottom: 1px solid var(--surface-container);
+            text-decoration: none;
+            color: inherit;
         }
         .fm-row:hover { background: var(--surface-container-low); }
-        .fm-row__name { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .fm-row__name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; }
-        .fm-row__meta { font-size: 10px; color: var(--on-surface-variant); grid-column: 1 / -1; padding-left: 26px; }
-        @media (min-width: 640px) {
-            .fm-row { grid-template-columns: 1fr auto auto; }
-            .fm-row--edit { grid-template-columns: auto auto 1fr auto auto; }
-            .fm-row__meta { grid-column: auto; padding-left: 0; }
-        }
-        .fm-row__acts { display: flex; gap: 2px; align-items: center; }
+        .fm-row__icon { flex: 0 0 auto; font-size: 20px; line-height: 1; }
+        .fm-row__icon.material-symbols-outlined { font-size: 20px; }
+        .fm-row__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+        .fm-row__title { font-weight: 600; font-size: 12px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-row__meta { font-size: 10px; line-height: 1.2; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-row__acts { flex: 0 0 auto; display: flex; gap: 0; align-items: center; margin-left: auto; }
         .fm-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; border-radius: var(--radius-md);
             background: transparent; color: var(--on-surface-variant); cursor: default; }
         .fm-icon-btn--pin { color: var(--primary); }
         .fm-icon-btn--pin .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
-        .fm-drag { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 32px; color: var(--outline); cursor: grab; }
-        .fm-reorder { display: flex; flex-direction: column; gap: 0; }
-        .fm-reorder button { width: 28px; height: 22px; border: none; background: var(--surface-container); color: var(--on-surface-variant);
-            border-radius: var(--radius-sm); font-size: 0; padding: 0; cursor: default; }
-        .fm-reorder button .material-symbols-outlined { font-size: 16px; }
+        .fm-drag { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; color: var(--outline); cursor: grab; }
+        .fm-drag .material-symbols-outlined { font-size: 20px; }
+        .fm-drag--ghost { visibility: hidden; }
+        .fm-reorder--wide { display: none; flex: 0 0 auto; flex-direction: column; gap: 0; }
+        @media (min-width: 720px) {
+            .fm-reorder--wide { display: flex; }
+        }
+        .fm-reorder--wide button { width: 26px; height: 20px; border: none; background: var(--surface-container); color: var(--on-surface-variant);
+            border-radius: var(--radius-sm); padding: 0; cursor: default; }
+        .fm-reorder--wide button .material-symbols-outlined { font-size: 16px; }
+        .fm-menu-hint { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
         .fm-empty, .fm-error { padding: var(--space-md); text-align: center; color: var(--on-surface-variant); font-size: 13px; }
         .fm-error { color: var(--error); }
         .adm-hint { padding: 10px; border-top: 1px dashed var(--outline-variant); background: color-mix(in srgb, var(--tertiary-container) 40%, var(--surface-container-low)); font-size: 11px; }
@@ -114,14 +164,21 @@
             <p class="proto-note">Resources tile opens the root folder below.</p>
             <div class="proto-stage">
                 <span class="proto-stage__tag">Member home</span>
-                <div class="proto-tiles">
+                <div class="dash-tiles">
                     <a class="m-nav-card" href="#member-root">
-                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span>
+                        <span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span>
                         <span class="m-nav-card__body">
-                            <span class="m-nav-card__title">Resources</span>
-                            <span class="m-nav-card__desc">Studies, manuscripts, and church files</span>
+                            <h2 class="m-nav-card__title">Resources</h2>
+                            <p class="m-nav-card__desc">Studies, manuscripts, and church files</p>
                         </span>
                     </a>
+                    <span class="m-nav-card" aria-hidden="true">
+                        <span class="m-medallion"><span class="material-symbols-outlined">menu_book</span></span>
+                        <span class="m-nav-card__body">
+                            <h2 class="m-nav-card__title">Hymns</h2>
+                            <p class="m-nav-card__desc">Browse the book</p>
+                        </span>
+                    </span>
                 </div>
             </div>
         </section>
@@ -157,13 +214,13 @@
                         <div class="fm-list">
                             <div class="fm-pinned">
                                 <p class="fm-block-label fm-block-label--pinned"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned</p>
-                                <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-folder">folder</span><span>Bible studies</span></span><span class="fm-row__meta">Folder · 24 files</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open folder"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
-                                <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-pdf">picture_as_pdf</span><span>New member packet.pdf</span></span><span class="fm-row__meta">PDF · 210 KB</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Download"><span class="material-symbols-outlined">download</span></button></span></a>
-                                <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-link">link</span><span>Sunday bulletin (Google Doc)</span></span><span class="fm-row__meta">Link · updated today</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
+                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder · 24 files</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open folder"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span><span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF · 210 KB</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Download"><span class="material-symbols-outlined">download</span></button></span></a>
+                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span><span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link · updated today</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
                             </div>
                             <p class="fm-block-label">Folders</p>
-                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-folder">folder</span><span>Archive · 2019–2022</span></span><span class="fm-row__meta">Folder</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
-                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-folder">folder</span><span>Worship team</span></span><span class="fm-row__meta">Folder · leaders</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Worship team</span><span class="fm-row__meta">Folder · leaders</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
                         </div>
                     </div>
                 </div>
@@ -172,7 +229,7 @@
 
         <section class="proto-section" id="editor-root">
             <h2>Editor · root directory (pin &amp; reorder)</h2>
-            <p class="proto-note">Editors and up: pin/unpin from the row (filled pin = pinned). Reorder pins via drag handle or move up/down.</p>
+            <p class="proto-note">Editors: pin on the row; reorder via drag handle. On phone, move up/down live in the row menu (⋯); desktop shows arrow buttons.</p>
             <div class="proto-stage">
                 <span class="proto-stage__tag">All resources · editor</span>
                 <header class="m-header">
@@ -205,61 +262,49 @@
                                 <p class="fm-block-label fm-block-label--pinned"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned · drag to reorder</p>
                                 <div class="fm-row fm-row--edit">
                                     <span class="fm-drag" aria-hidden="true" title="Drag to reorder"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="fm-reorder fm-reorder--mobile" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__name"><span class="material-symbols-outlined type-folder">folder</span><span>Bible studies</span></span>
-                                    <span class="fm-row__meta">Folder</span>
-                                    <span class="fm-reorder fm-reorder--desktop" aria-label="Reorder">
+                                    <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
+                                    <span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder</span></span>
+                                    <span class="fm-reorder--wide" aria-label="Reorder">
                                         <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
                                         <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
                                     </span>
                                     <span class="fm-row__acts">
                                         <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
                                     </span>
                                 </div>
                                 <div class="fm-row fm-row--edit">
                                     <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="fm-reorder fm-reorder--mobile" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__name"><span class="material-symbols-outlined type-pdf">picture_as_pdf</span><span>New member packet.pdf</span></span>
-                                    <span class="fm-row__meta">PDF</span>
-                                    <span class="fm-reorder fm-reorder--desktop" aria-label="Reorder">
+                                    <span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span>
+                                    <span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF</span></span>
+                                    <span class="fm-reorder--wide" aria-label="Reorder">
                                         <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
                                         <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
                                     </span>
                                     <span class="fm-row__acts">
                                         <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
                                     </span>
                                 </div>
                                 <div class="fm-row fm-row--edit">
                                     <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="fm-reorder fm-reorder--mobile" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__name"><span class="material-symbols-outlined type-link">link</span><span>Sunday bulletin (Google Doc)</span></span>
-                                    <span class="fm-row__meta">Link</span>
-                                    <span class="fm-reorder fm-reorder--desktop" aria-label="Reorder">
+                                    <span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span>
+                                    <span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link</span></span>
+                                    <span class="fm-reorder--wide" aria-label="Reorder">
                                         <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
                                         <button type="button" aria-label="Move down" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
                                     </span>
                                     <span class="fm-row__acts">
                                         <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
                                     </span>
                                 </div>
                             </div>
                             <p class="fm-block-label">Folders · not pinned</p>
                             <div class="fm-row fm-row--edit">
-                                <span class="fm-drag" style="visibility:hidden" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                <span class="fm-row__name"><span class="material-symbols-outlined type-folder">folder</span><span>Archive · 2019–2022</span></span>
-                                <span class="fm-row__meta">Folder</span>
+                                <span class="fm-drag fm-drag--ghost" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
+                                <span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span>
                                 <span class="fm-row__acts">
                                     <button type="button" class="fm-icon-btn" aria-label="Pin to top" aria-pressed="false"><span class="material-symbols-outlined">keep</span></button>
                                     <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
@@ -292,7 +337,7 @@
                 </div>
                 <div class="proto-stage" style="margin-bottom:var(--space-md);">
                     <span class="proto-stage__tag">One file</span>
-                    <a class="fm-row" href="#" style="display:grid;"><span class="fm-row__name"><span class="material-symbols-outlined type-pdf">picture_as_pdf</span><span>Guest-welcome.pdf</span></span><span class="fm-row__meta">PDF · 210 KB</span></a>
+                    <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span><span class="fm-row__text"><span class="fm-row__title">Guest-welcome.pdf</span><span class="fm-row__meta">PDF · 210 KB</span></span></a>
                 </div>
                 <div class="proto-stage">
                     <span class="proto-stage__tag">Error</span>
