@@ -186,6 +186,25 @@ On a wide window the book is two panes that scroll on their own.
 
 Below 1024px the reading and the editor stack, sheets first. On a phone the tag rail gives way to the tag menu, and the frame around a sheet goes so the staves get the width of the phone.
 
+## A shelf you browse (MS-693)
+
+The Resources library (`resources.html`) is the first of these. A **shelf** is a library whose point is finding one thing fast among many, as against a library you *navigate into* one folder at a time ([ADR 0053](../adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)) — Forms and Printables are those. Pick the shelf when somebody usually arrives knowing the name but not the folder.
+
+- **Two panes, one card.** A folder tree on the left (200px), the contents on the right, both inside a single bordered card — the tree is a way of looking at the list, not a second subject. Below 720px they stack, tree first, and the tree keeps its full indented shape rather than becoming a select.
+- **Dense, not roomy.** A row is 44px: a kind icon, the name at 12px, and one line of 10px quiet meta. A shelf is read by scanning, so it is tighter than a `.m-card-list` of `.m-row` even when the page around it is not.
+- **Search crosses every folder, and says where each hit lives.** The box searches the whole library, not the open folder, and while a search is live every matching row appends its folder path to its meta line and the "you are here" label goes. Narrowing a search to the folder you happen to be standing in is the failure this avoids: the thing is always somewhere else. Choosing a folder clears the search, because the two are different questions.
+- **Pinned is its own card, above the browser, at the root only, and is not shown when empty.** It goes while you are inside a folder or reading a search, because both of those are a narrower question than "what does this church want to hand". The pin is a rank on the record, so pinning is one write and the card cannot fall out of step with the shelf ([ADR 0083](../adr/0083-a-pin-is-a-rank-on-the-record.md)). An empty "nothing pinned yet" box at the top of a page is a thing to read and dismiss on every single visit; hide the card instead. Reordering follows **Reordering a list** above — grip plus move-up and move-down, with the buttons as the keyboard path.
+- **Row actions live in one menu.** Rename, move, delete, pin and the two nudges are one `more_vert` menu per row, not five squares. Only the kind icon and the name are the row's own click target.
+- **Editor actions collapse to icons on a phone.** Upload, Add link and New folder keep their words at desktop width and become `m-icon-btn`s below 640px, with the word in the `aria-label`. A member sees none of them, and sees no disabled ghosts of them either.
+
+The `fm-*` classes carrying this are page-local to `resources.html` on purpose: one shelf is not yet a shape two pages share, and the honest moment to lift them into `build/design-components.mjs` is when a second page needs them. Until then the convention is here and the CSS is there.
+
+## A page reached only from a tile wears a back arrow
+
+The dashboard tiles and the desktop drawer are built from one list (`dashboard-nav.js`), so a new tile is in both by default and `classifyPage` gives its page the hamburger. A tile may set `drawer: false`, which keeps it on the dashboard, keeps it out of the drawer, and gives its page the `.m-back` arrow instead.
+
+Use it for somewhere you **go and come back from** — a shelf, a one-off tool — as against a standing destination you move between (People, Calendar, Services). The drawer is a list of places you live in; the dashboard is everything you can reach. Do not hand-write a back arrow onto a page that is in the drawer, and do not hand-write a hamburger onto one that is not: both answers come from the tile.
+
 ## States
 
 Every list and every reading page has four states, using the same components:
