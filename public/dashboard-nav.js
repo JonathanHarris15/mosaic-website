@@ -43,6 +43,19 @@
             },
         },
         {
+            // MS-693. `drawer: false` is the only one of these, and it is why
+            // the Resources page wears a back arrow rather than a hamburger:
+            // the shelf is somewhere you go and come back from, not one of the
+            // standing destinations the drawer lists.
+            key: 'resources', domId: 'resources-card', href: 'resources.html', symbol: 'folder_open',
+            label: 'Resources', desc: 'Studies, manuscripts, and church files',
+            insertAfter: 'directory', drawer: false,
+            visible: function (account) {
+                const Access = accessCore();
+                return !!(Access && Access.readsAsMember(account));
+            },
+        },
+        {
             key: 'mcp-manager', domId: 'mcp-manager-card', href: 'mcp-manager.html', symbol: 'smart_toy',
             label: 'MCP Manager', desc: 'Guide the assistant, and see what it can do.',
             visible: function (account) {
@@ -93,7 +106,9 @@
     ]);
 
     const DRAWER_HREFS = new Set(
-        BASE_TILES.concat(GATED_TILES).map(function (t) { return t.href; })
+        BASE_TILES.concat(GATED_TILES)
+            .filter(function (t) { return t.drawer !== false; })
+            .map(function (t) { return t.href; })
     );
     DRAWER_HREFS.add('index.html');
 
@@ -109,6 +124,7 @@
         'login.html': { href: 'index.html', label: 'Home' },
         'privacy.html': { href: 'index.html', label: 'Home' },
         'profile.html': { href: 'index.html', label: 'Home' },
+        'resources.html': { href: 'index.html', label: 'Home' },
         'printable-editor.html': { href: 'printables.html', label: 'Printables' },
         'printable-view.html': { href: 'printables.html', label: 'Printables' },
         'service-builder.html': { href: 'service-calendar.html', label: 'Services' },
@@ -148,12 +164,13 @@
     /** Tiles this account may see, in the dashboard's default arrangement. */
     function visibleTiles(account) {
         const tiles = BASE_TILES.map(function (t) {
-            return { key: t.key, href: t.href, symbol: t.symbol, label: t.label };
+            return { key: t.key, href: t.href, symbol: t.symbol, label: t.label, drawer: t.drawer !== false };
         });
         GATED_TILES.forEach(function (def) {
             if (!def.visible(account)) return;
             const tile = {
                 key: def.key, href: def.href, symbol: def.symbol, label: def.label,
+                drawer: def.drawer !== false,
             };
             if (def.insertAfter) {
                 const at = tiles.findIndex(function (t) { return t.key === def.insertAfter; });
@@ -180,6 +197,16 @@
 
     function orderedTiles(account, savedOrder) {
         return applyOrder(visibleTiles(account), savedOrder);
+    }
+
+    // What the desktop drawer lists. The dashboard shows every tile; the
+    // drawer shows the standing destinations, and a tile that opted out
+    // (MS-693) is reached from the dashboard and left by its back arrow.
+    // Keeping both off one list is what stops a page appearing in the drawer
+    // while classifyPage() hands it a back arrow.
+    function drawerTiles(account, savedOrder) {
+        return orderedTiles(account, savedOrder)
+            .filter(function (t) { return t.drawer !== false; });
     }
 
     function isDrawerDestination(page) {
@@ -261,6 +288,7 @@
         visibleTiles,
         applyOrder,
         orderedTiles,
+        drawerTiles,
         isDrawerDestination,
         classifyPage,
         tileForPage,

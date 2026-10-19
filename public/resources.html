@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Resources · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="permission-catalog.js"></script>
+    <script src="account-levels-core.js"></script>
+    <script src="access-core.js"></script>
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Resources', menu: false, back: 'index.html', route: 'home' };</script>
+    <script src="person-photo-core.js"></script>
+    <script src="mobile-shell-header.js"></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+
+<body class="m-page" x-data="resourcesPage()" x-init="init()" x-cloak>
+
+    <!-- Reached from the dashboard tile, so the lead is a back arrow rather
+         than the drawer's hamburger (dashboard-nav.js opts this page out). -->
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a class="m-back" :href="homeHref">
+                    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles"><h1 class="m-header__title">Resources</h1></div>
+            </div>
+            <div class="m-header__actions fm-ed-actions" x-show="canEdit">
+                <!-- Words on a desktop, glyphs on a phone: the same three
+                     actions, and the narrow set never wraps the header. -->
+                <span class="fm-ed-actions__wide">
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm"
+                            @click="pickFile()" :disabled="uploading">
+                        <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+                        <span class="m-btn__label" x-text="uploading ? 'Uploading…' : 'Upload'"></span>
+                    </button>
+                    <button type="button" class="m-btn m-btn--tonal m-btn--sm" @click="startLink()">
+                        <span class="m-btn__label">Add link</span>
+                    </button>
+                    <button type="button" class="m-btn m-btn--tonal m-btn--sm" @click="startFolder()">
+                        <span class="m-btn__label">New folder</span>
+                    </button>
+                </span>
+                <span class="fm-ed-actions__narrow">
+                    <button type="button" class="fm-icon-btn" aria-label="Upload a file"
+                            @click="pickFile()" :disabled="uploading">
+                        <span class="material-symbols-outlined" x-text="uploading ? 'hourglass_top' : 'upload'"></span>
+                    </button>
+                    <button type="button" class="fm-icon-btn" aria-label="Add a link" @click="startLink()">
+                        <span class="material-symbols-outlined">add_link</span>
+                    </button>
+                    <button type="button" class="fm-icon-btn" aria-label="New folder" @click="startFolder()">
+                        <span class="material-symbols-outlined">create_new_folder</span>
+                    </button>
+                </span>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <input type="file" id="resource-file" class="fm-file-input" @change="onFilePicked($event)" />
+
+    <main class="m-page__body">
+
+        <div class="m-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+        <div class="fm-error" x-show="problem" role="alert">
+            <span x-text="problem"></span>
+            <button type="button" class="m-btn m-btn--text m-btn--sm" @click="problem = ''">Dismiss</button>
+        </div>
+
+        <template x-if="!loading">
+            <div class="fm-root-stack">
+
+                <!-- Pinned: its own card, above the browser, at the root only
+                     and only when something is in it. An empty Pinned card
+                     would be a promise nobody made. -->
+                <section class="fm-pin-card" aria-label="Pinned" x-show="showPinCard">
+                    <h2 class="fm-pin-card__head">
+                        <span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned
+                    </h2>
+                    <div class="fm-pin-card__body">
+                        <template x-for="(item, i) in pinned" :key="keyOf(item)">
+                            <div class="fm-row fm-row--edit"
+                                 :class="dragOverKey === keyOf(item) ? 'fm-row--drop' : ''"
+                                 :draggable="canEdit"
+                                 @dragstart="startPinDrag(item)"
+                                 @dragend="endPinDrag()"
+                                 @dragover.prevent="overPin(item)"
+                                 @drop.prevent="dropOnPin(item)">
+                                <span class="fm-drag" aria-hidden="true" title="Drag to reorder" x-show="canEdit">
+                                    <span class="material-symbols-outlined">drag_indicator</span>
+                                </span>
+                                <span class="material-symbols-outlined fm-row__icon"
+                                      :class="typeClassFor(item)" aria-hidden="true"
+                                      x-text="iconFor(item)"></span>
+                                <button type="button" class="fm-row__text" @click="openItem(item)">
+                                    <span class="fm-row__title" x-text="item.name"></span>
+                                    <span class="fm-row__meta" x-text="metaFor(item)"></span>
+                                </button>
+                                <span class="fm-reorder--wide" role="group" aria-label="Reorder" x-show="canEdit">
+                                    <button type="button" aria-label="Move up"
+                                            :disabled="!canNudge(item, -1)" @click="nudge(item, -1)">
+                                        <span class="material-symbols-outlined">keyboard_arrow_up</span>
+                                    </button>
+                                    <button type="button" aria-label="Move down"
+                                            :disabled="!canNudge(item, 1)" @click="nudge(item, 1)">
+                                        <span class="material-symbols-outlined">keyboard_arrow_down</span>
+                                    </button>
+                                </span>
+                                <span class="fm-row__acts">
+                                    <button type="button" class="fm-icon-btn fm-icon-btn--pin"
+                                            aria-label="Unpin" aria-pressed="true"
+                                            x-show="canEdit" @click="togglePin(item)">
+                                        <span class="material-symbols-outlined">keep</span>
+                                    </button>
+                                    <button type="button" class="fm-icon-btn"
+                                            aria-label="More actions, including move up and move down"
+                                            :aria-expanded="menuOpen(item)"
+                                            x-show="canEdit" @click="toggleMenu(item)">
+                                        <span class="material-symbols-outlined">more_vert</span>
+                                    </button>
+                                </span>
+                                <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                    <button type="button" @click="startRename(item)">Rename</button>
+                                    <button type="button" @click="startMove(item)">Move to…</button>
+                                    <button type="button" @click="togglePin(item)">Unpin</button>
+                                    <button type="button" :disabled="!canNudge(item, -1)" @click="nudge(item, -1)">Move up</button>
+                                    <button type="button" :disabled="!canNudge(item, 1)" @click="nudge(item, 1)">Move down</button>
+                                    <button type="button" class="fm-menu__danger" @click="startDelete(item)">Delete</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </section>
+
+                <div class="fm-browser-card">
+                    <div class="fm">
+                        <aside class="fm-tree" aria-label="Folders">
+                            <div class="fm-tree__head">Folders</div>
+                            <ul>
+                                <li>
+                                    <button type="button" :aria-current="atRoot ? 'true' : 'false'"
+                                            @click="openFolder(null)">
+                                        <span class="material-symbols-outlined">home</span> All resources
+                                    </button>
+                                </li>
+                                <template x-for="node in treeNodes" :key="node.id">
+                                    <li>
+                                        <button type="button"
+                                                :aria-current="currentFolderId === node.id ? 'true' : 'false'"
+                                                :style="'padding-left:' + (8 + node.depth * 14) + 'px'"
+                                                @click="openFolder(node.id)">
+                                            <span class="material-symbols-outlined">folder</span>
+                                            <span x-text="node.name"></span>
+                                        </button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </aside>
+
+                        <div class="fm-main">
+                            <div class="fm-toolbar">
+                                <label class="fm-search">
+                                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                                    <input type="search" placeholder="Search all resources"
+                                           aria-label="Search all resources" x-model="search" />
+                                </label>
+                                <span class="fm-where" x-show="!searching" x-text="hereName"></span>
+                            </div>
+
+                            <!-- A folder appears where you are with its name
+                                 already editable. No dialog: filing is
+                                 something you do while thinking about files. -->
+                            <div class="fm-inline" x-show="creatingFolder">
+                                <span class="material-symbols-outlined type-folder" aria-hidden="true">folder</span>
+                                <input id="new-folder-name" type="text" class="m-input"
+                                       placeholder="Name it — Bible studies" maxlength="60"
+                                       x-model="newFolderName"
+                                       @keydown.enter.prevent="createFolder()"
+                                       @keydown.escape.prevent="cancelFolder()" />
+                                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createFolder()">Create</button>
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelFolder()">Cancel</button>
+                            </div>
+
+                            <!-- A Google Doc is a link, never a copy: the
+                                 church edits it where it lives (ADR-0083). -->
+                            <div class="fm-inline fm-inline--wrap" x-show="addingLink">
+                                <span class="material-symbols-outlined type-link" aria-hidden="true">link</span>
+                                <input id="new-link-url" type="url" class="m-input"
+                                       placeholder="https://docs.google.com/…" x-model="linkUrl"
+                                       @keydown.enter.prevent="createLink()"
+                                       @keydown.escape.prevent="cancelLink()" />
+                                <input type="text" class="m-input" placeholder="Call it…" maxlength="120"
+                                       x-model="linkName"
+                                       @keydown.enter.prevent="createLink()"
+                                       @keydown.escape.prevent="cancelLink()" />
+                                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createLink()">Add it</button>
+                                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelLink()">Cancel</button>
+                            </div>
+
+                            <div class="fm-list">
+                                <p class="fm-block-label" x-show="visibleFolders.length">Folders</p>
+                                <template x-for="item in visibleFolders" :key="keyOf(item)">
+                                    <div class="fm-row" :class="canEdit ? 'fm-row--edit' : ''">
+                                        <span class="fm-drag fm-drag--ghost" aria-hidden="true" x-show="canEdit && showPinCard">
+                                            <span class="material-symbols-outlined">drag_indicator</span>
+                                        </span>
+                                        <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
+                                        <template x-if="renaming(item)">
+                                            <input :id="'rename-folder-' + item.id" type="text" class="m-input fm-rename"
+                                                   maxlength="60" x-model="renameText"
+                                                   @keydown.enter.prevent="commitRename(item)"
+                                                   @keydown.escape.prevent="cancelRename()"
+                                                   @blur="commitRename(item)" />
+                                        </template>
+                                        <template x-if="!renaming(item)">
+                                            <button type="button" class="fm-row__text" @click="openItem(item)">
+                                                <span class="fm-row__title" x-text="item.name"></span>
+                                                <span class="fm-row__meta" x-text="metaFor(item)"></span>
+                                            </button>
+                                        </template>
+                                        <span class="fm-row__acts">
+                                            <button type="button" class="fm-icon-btn"
+                                                    :class="isPinned(item) ? 'fm-icon-btn--pin' : ''"
+                                                    :aria-label="isPinned(item) ? 'Unpin' : 'Pin to top'"
+                                                    :aria-pressed="isPinned(item)"
+                                                    x-show="canEdit" @click="togglePin(item)">
+                                                <span class="material-symbols-outlined">keep</span>
+                                            </button>
+                                            <button type="button" class="fm-icon-btn" aria-label="More actions"
+                                                    :aria-expanded="menuOpen(item)"
+                                                    x-show="canEdit" @click="toggleMenu(item)">
+                                                <span class="material-symbols-outlined">more_vert</span>
+                                            </button>
+                                            <button type="button" class="fm-icon-btn" aria-label="Open folder"
+                                                    x-show="!canEdit" @click="openItem(item)">
+                                                <span class="material-symbols-outlined">chevron_right</span>
+                                            </button>
+                                        </span>
+                                        <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                            <button type="button" @click="startRename(item)">Rename</button>
+                                            <button type="button" @click="startMove(item)">Move to…</button>
+                                            <button type="button" @click="togglePin(item)"
+                                                    x-text="isPinned(item) ? 'Unpin' : 'Pin to top'"></button>
+                                            <button type="button" class="fm-menu__danger" @click="startDelete(item)">Delete</button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <p class="fm-block-label" x-show="visibleResources.length">Files</p>
+                                <template x-for="item in visibleResources" :key="keyOf(item)">
+                                    <div class="fm-row" :class="canEdit ? 'fm-row--edit' : ''">
+                                        <span class="fm-drag fm-drag--ghost" aria-hidden="true" x-show="canEdit && showPinCard">
+                                            <span class="material-symbols-outlined">drag_indicator</span>
+                                        </span>
+                                        <span class="material-symbols-outlined fm-row__icon"
+                                              :class="typeClassFor(item)" aria-hidden="true"
+                                              x-text="iconFor(item)"></span>
+                                        <template x-if="renaming(item)">
+                                            <input :id="'rename-resource-' + item.id" type="text" class="m-input fm-rename"
+                                                   maxlength="120" x-model="renameText"
+                                                   @keydown.enter.prevent="commitRename(item)"
+                                                   @keydown.escape.prevent="cancelRename()"
+                                                   @blur="commitRename(item)" />
+                                        </template>
+                                        <template x-if="!renaming(item)">
+                                            <button type="button" class="fm-row__text" @click="openItem(item)">
+                                                <span class="fm-row__title" x-text="item.name"></span>
+                                                <span class="fm-row__meta" x-text="metaFor(item)"></span>
+                                            </button>
+                                        </template>
+                                        <span class="fm-row__acts">
+                                            <button type="button" class="fm-icon-btn"
+                                                    :class="isPinned(item) ? 'fm-icon-btn--pin' : ''"
+                                                    :aria-label="isPinned(item) ? 'Unpin' : 'Pin to top'"
+                                                    :aria-pressed="isPinned(item)"
+                                                    x-show="canEdit" @click="togglePin(item)">
+                                                <span class="material-symbols-outlined">keep</span>
+                                            </button>
+                                            <button type="button" class="fm-icon-btn" aria-label="More actions"
+                                                    :aria-expanded="menuOpen(item)"
+                                                    x-show="canEdit" @click="toggleMenu(item)">
+                                                <span class="material-symbols-outlined">more_vert</span>
+                                            </button>
+                                            <button type="button" class="fm-icon-btn"
+                                                    :aria-label="item.kind === 'link' ? 'Open' : 'Download'"
+                                                    x-show="!canEdit" @click="openItem(item)">
+                                                <span class="material-symbols-outlined"
+                                                      x-text="item.kind === 'link' ? 'open_in_new' : 'download'"></span>
+                                            </button>
+                                        </span>
+                                        <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                            <button type="button" @click="openItem(item)"
+                                                    x-text="item.kind === 'link' ? 'Open link' : 'Download'"></button>
+                                            <button type="button" @click="startRename(item)">Rename</button>
+                                            <button type="button" @click="startMove(item)">Move to…</button>
+                                            <button type="button" @click="togglePin(item)"
+                                                    x-text="isPinned(item) ? 'Unpin' : 'Pin to top'"></button>
+                                            <button type="button" class="fm-menu__danger" @click="startDelete(item)">Delete</button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <div class="fm-empty" x-show="nothingHere" x-text="emptyLine"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- "Move to…" — the fallback for a device where dragging is awkward. -->
+        <div x-show="moving" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelMove()" @keydown.escape.window="cancelMove()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary">Move to…</h2>
+                <p class="font-body-md text-on-surface-variant" x-text="moving ? moving.name : ''"></p>
+                <div class="flex flex-col gap-xs max-h-64 overflow-y-auto">
+                    <template x-for="opt in moveOptions" :key="opt.id">
+                        <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer"
+                               :style="`padding-left: ${12 + opt.depth * 20}px`">
+                            <input type="radio" x-model="moveTargetId" :value="opt.id" class="accent-primary" />
+                            <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                            <span class="font-body-md text-on-surface" x-text="opt.name"></span>
+                        </label>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelMove()">Cancel</button>
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="confirmMove()">Move it</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deleting asks first, and a folder's question names the count. -->
+        <div x-show="deleting" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary"
+                    x-text="deleting ? ('Delete ' + deleting.name + '?') : ''"></h2>
+                <p class="font-body-md text-on-surface" x-text="deleteLine"></p>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelDelete()">Keep it</button>
+                    <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="confirmDelete()">Delete it</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+
+    <script src="dashboard-nav.js"></script>
+    <script src="drawer-who.js"></script>
+    <script src="desktop-drawer.js"></script>
+    <script src="desktop-header-lead.js"></script>
+    <script src="desktop-nav-boot.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="resources-core.js"></script>
+    <script src="resources-store.js"></script>
+    <script src="resources.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        /* The dense file-manager shelf (MS-693, Variant A). Page-local the
+           way printables.html keeps its own `pl-*`: no other page draws a
+           folder tree beside a file list, and the moment a second one does,
+           these move to build/design-components.mjs. */
+        .fm-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .fm-root-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+        .fm-pin-card {
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-lg);
+            background: var(--surface-container-lowest);
+            overflow: hidden;
+        }
+        .fm-pin-card__head {
+            display: flex; align-items: center; gap: 6px;
+            margin: 0;
+            padding: 8px 10px;
+            font-family: var(--font-sans);
+            font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--primary);
+            background: var(--surface-container-low);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .fm-pin-card__head .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 1; }
+        .fm-pin-card__body .fm-row:last-child { border-bottom: none; }
+        .fm-browser-card {
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-lg);
+            background: var(--background);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            min-height: 240px;
+        }
+        .fm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        @media (min-width: 720px) { .fm { flex-direction: row; min-height: 320px; } }
+
+        .fm-ed-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .fm-ed-actions__wide { display: none; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .fm-ed-actions__narrow { display: flex; gap: 2px; }
+        @media (min-width: 640px) {
+            .fm-ed-actions__wide { display: flex; }
+            .fm-ed-actions__narrow { display: none; }
+        }
+
+        .fm-tree { border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+        @media (min-width: 720px) {
+            .fm-tree { width: 200px; flex-shrink: 0; border-bottom: none; border-right: 1px solid var(--outline-variant); overflow: auto; }
+        }
+        .fm-tree__head { padding: 8px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .fm-tree ul { list-style: none; margin: 0; padding: 4px 6px 8px; }
+        .fm-tree button {
+            display: flex; align-items: center; gap: 6px; width: 100%;
+            min-height: 32px; padding: 6px 8px;
+            border: none; border-radius: var(--radius-md);
+            background: transparent; font: inherit; font-size: 12px;
+            text-align: left; color: var(--on-surface); cursor: pointer;
+        }
+        .fm-tree button:hover { background: var(--surface-container); }
+        .fm-tree button[aria-current="true"] { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; }
+        .fm-tree .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex: 0 0 auto; }
+
+        .fm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .fm-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--outline-variant); }
+        .fm-search {
+            flex: 1; min-width: 140px; display: flex; align-items: center; gap: 6px;
+            padding: 5px 8px; border-radius: var(--radius-md);
+            border: 1px solid var(--outline-variant); background: var(--surface);
+        }
+        .fm-search input { border: none; background: transparent; font: inherit; font-size: 12px; width: 100%; outline: none; }
+        .fm-search .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+        .fm-where { font-size: 10px; color: var(--on-surface-variant); white-space: nowrap; }
+
+        .fm-inline { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--outline-variant); }
+        .fm-inline--wrap { flex-wrap: wrap; }
+        .fm-inline .m-input { flex: 1; min-width: 120px; font-size: 12px; }
+        .fm-inline .material-symbols-outlined { font-size: 20px; }
+
+        .fm-list { flex: 1; overflow: auto; }
+        .fm-block-label { margin: 0; padding: 10px 10px 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .fm-row {
+            position: relative;
+            display: flex; flex-direction: row; align-items: center; gap: 6px;
+            padding: 6px 8px;
+            min-height: 44px;
+            border-bottom: 1px solid var(--surface-container);
+            color: inherit;
+        }
+        .fm-row:hover { background: var(--surface-container-low); }
+        .fm-row--drop { outline: 2px solid var(--primary); outline-offset: -2px; }
+        .fm-row__icon { flex: 0 0 auto; font-size: 20px; line-height: 1; }
+        .fm-row__text {
+            flex: 1 1 auto; min-width: 0;
+            display: flex; flex-direction: column; gap: 1px;
+            border: none; background: none; padding: 0;
+            font: inherit; text-align: left; color: inherit; cursor: pointer;
+        }
+        .fm-row__title { font-weight: 600; font-size: 12px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-row__meta { font-size: 10px; line-height: 1.2; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-rename { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+        .fm-row__acts { flex: 0 0 auto; display: flex; gap: 0; align-items: center; margin-left: auto; }
+        .fm-icon-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; border: none; border-radius: var(--radius-md);
+            background: transparent; color: var(--on-surface-variant); cursor: pointer;
+        }
+        .fm-icon-btn:hover { background: var(--surface-container); }
+        .fm-icon-btn[disabled] { opacity: 0.4; cursor: default; }
+        .fm-icon-btn--pin { color: var(--primary); }
+        .fm-icon-btn--pin .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+        .fm-drag { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; color: var(--outline); cursor: grab; }
+        .fm-drag .material-symbols-outlined { font-size: 20px; }
+        .fm-drag--ghost { visibility: hidden; }
+        .fm-reorder--wide { display: none; flex: 0 0 auto; flex-direction: column; gap: 0; }
+        @media (min-width: 720px) { .fm-reorder--wide { display: flex; } }
+        .fm-reorder--wide button {
+            width: 26px; height: 20px; padding: 0;
+            border: none; border-radius: var(--radius-sm);
+            background: var(--surface-container); color: var(--on-surface-variant); cursor: pointer;
+        }
+        .fm-reorder--wide button[disabled] { opacity: 0.4; cursor: default; }
+        .fm-reorder--wide button .material-symbols-outlined { font-size: 16px; }
+
+        /* The row menu carries every action, including the two the arrows
+           give a desktop — a phone has no arrows and must still reorder. */
+        .fm-menu {
+            position: absolute; top: 100%; right: 8px; z-index: 20;
+            min-width: 170px; padding: 4px;
+            display: flex; flex-direction: column;
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-md);
+            box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+        }
+        .fm-menu button {
+            border: none; background: none; font: inherit; font-size: 12px;
+            text-align: left; padding: 8px 10px; border-radius: var(--radius-sm);
+            color: var(--on-surface); cursor: pointer;
+        }
+        .fm-menu button:hover { background: var(--surface-container); }
+        .fm-menu button[disabled] { opacity: 0.4; cursor: default; }
+        .fm-menu__danger { color: var(--error); }
+
+        .fm-empty { padding: var(--space-md); text-align: center; color: var(--on-surface-variant); font-size: 13px; }
+        .fm-error {
+            display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+            margin-bottom: var(--space-sm); padding: 8px 10px;
+            border: 1px solid var(--error); border-radius: var(--radius-md);
+            color: var(--error); font-size: 12px;
+        }
+
+        .type-pdf { color: var(--resource-pdf); }
+        .type-doc { color: var(--resource-doc); }
+        .type-img { color: var(--resource-image); }
+        .type-link { color: var(--resource-link); }
+        .type-folder { color: var(--primary); }
+    </style>
+</body>
+</html>

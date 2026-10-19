@@ -77,7 +77,9 @@
             .replace(/[^A-Za-z0-9._ -]/g, '')
             .trim()
             .slice(0, 80);
-        return cleaned || 'file';
+        // A name made entirely of punctuation survives the filter and reads as
+        // a path segment of "-", so require something legible in it.
+        return /[A-Za-z0-9]/.test(cleaned) ? cleaned : 'file';
     }
 
     function storagePathFor(resourceId, fileName) {
@@ -279,7 +281,11 @@
     // between the same two neighbours before it ever happens.
     const MIN_PIN_GAP = 0.01;
 
+    // ⚠ `Number(null)` IS 0, AND 0 IS A PERFECTLY GOOD RANK. Leaning on
+    // Number.isFinite alone makes every unpinned record the first pin in the
+    // card, which is a bug that looks like a design.
     function normalisedRank(value) {
+        if (value === null || value === undefined || value === '') return null;
         const n = Number(value);
         return Number.isFinite(n) ? n : null;
     }
