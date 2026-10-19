@@ -205,6 +205,14 @@ The dashboard tiles and the desktop drawer are built from one list (`dashboard-n
 
 Use it for somewhere you **go and come back from** — a shelf, a one-off tool — as against a standing destination you move between (People, Calendar, Services). The drawer is a list of places you live in; the dashboard is everything you can reach. Do not hand-write a back arrow onto a page that is in the drawer, and do not hand-write a hamburger onto one that is not: both answers come from the tile.
 
+## A gated page carries its own way in on localhost
+
+A page that shows nothing until it knows who you are cannot be reviewed, photographed or smoke-tested from the outside: a signed-out visitor is redirected before any of it renders, and the one screen that matters most — the same page seen by a member and by an editor — is exactly the one nobody can reach.
+
+So load `emulator-connect.js` before `auth.js` and `emulator-signin.js` after it, and in the page's `onAuthStateChanged`, before the redirect, call `window.MosaicEmulatorSignIn()` when it exists. Both files are inert unless the host is localhost **and** `?emulator=1` is present, so this costs the deployed page nothing. `?emulatorUser=` names the account level, so `resources.html?emulator=1&emulatorUser=member` and `&emulatorUser=editor` are two URLs for the two screens. Seed the matching accounts with a script that refuses to run without `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` set (`scripts/seed-resources-emulator.js`).
+
+Review a gated page this way rather than describing what it would look like.
+
 ## States
 
 Every list and every reading page has four states, using the same components:

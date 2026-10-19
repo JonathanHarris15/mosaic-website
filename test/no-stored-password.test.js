@@ -191,16 +191,26 @@ const ALLOWED = [
     },
     {
         file: 'public/emulator-connect.js',
-        line: "password: 'ms716-emulator-pass',",
+        line: "password: 'mosaic-emulator-pass',",
         why: 'localhost-only emulator login handed to signInWithEmailAndPassword, never written to Firestore',
     },
     {
         file: 'scripts/seed-liturgy-orders-emulator.js',
-        line: "password: 'ms716-emulator-pass'",
+        line: "password: 'mosaic-emulator-pass'",
         why: 'emulator-only seed handed to admin.auth().createUser; refuses to run without emulator env vars',
     },
     {
         file: 'scripts/seed-liturgy-orders-emulator.js',
+        line: 'password: spec.password',
+        why: 'emulator-only seed handed to admin.auth().createUser/updateUser',
+    },
+    {
+        file: 'scripts/seed-resources-emulator.js',
+        line: "password: 'mosaic-emulator-pass'",
+        why: 'emulator-only seed handed to admin.auth().createUser; refuses to run without emulator env vars',
+    },
+    {
+        file: 'scripts/seed-resources-emulator.js',
         line: 'password: spec.password',
         why: 'emulator-only seed handed to admin.auth().createUser/updateUser',
     },

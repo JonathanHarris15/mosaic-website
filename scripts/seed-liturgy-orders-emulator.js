@@ -14,8 +14,8 @@ const Core = require('../public/liturgy-order-core.js');
 const Store = require('../public/liturgy-order-store.js');
 const Levels = require('../public/account-levels-core.js');
 const PROJECT = 'demo-ms716-liturgy-orders';
-const EDITOR = { uid: 'ms716-editor', email: 'editor@ms716.emulator.test', password: 'ms716-emulator-pass' };
-const VIEWER = { uid: 'ms716-viewer', email: 'viewer@ms716.emulator.test', password: 'ms716-emulator-pass' };
+const EDITOR = { uid: 'ms716-editor', email: 'editor@mosaic.emulator.test', password: 'mosaic-emulator-pass' };
+const VIEWER = { uid: 'ms716-viewer', email: 'viewer@mosaic.emulator.test', password: 'mosaic-emulator-pass' };
 
 function el(id, kind, name, extra) {
     return Object.assign({

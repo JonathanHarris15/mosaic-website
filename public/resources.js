@@ -573,6 +573,14 @@ function resourcesPage() {
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
+                // Localhost with ?emulator=1 only; the hook is undefined
+                // anywhere else, so this costs the real page nothing. It is
+                // what lets a read-only smoke test arrive as a member without
+                // anybody driving a login form.
+                if (!user && typeof window.MosaicEmulatorSignIn === 'function') {
+                    try { await window.MosaicEmulatorSignIn(); return; }
+                    catch (e) { /* fall through to the sign-in redirect */ }
+                }
                 if (!user) { window.location.href = this.signInHref; return; }
                 // ⚠ The read of WHO YOU ARE is inside the try, not before it,
                 // so a throw there shows a message rather than a spinner for
