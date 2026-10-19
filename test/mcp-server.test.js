@@ -262,7 +262,8 @@ describe('the Order of Service MCP server', () => {
         // reason MS-262 chose `oos_` over bare names: a later group can be added
         // without renaming anything a connected client already knows, which is
         // exactly what MS-278 then did.
-        names.forEach((n) => assert.match(n, /^(oos|shep|cal|printable)_/, n));
+        names.forEach(
+            (n) => assert.match(n, /^(oos|shep|cal|printable|resource)_/, n));
     });
 
     // -- The shepherding and calendar groups (MS-278) ---------------------
@@ -1207,6 +1208,33 @@ describe('what the MCP Manager is told', () => {
         const writes = caps.tools.filter(t => t.writes).map(t => t.name);
         assert.ok(writes.includes('oos_update_liturgy'));
         assert.ok(!writes.includes('oos_get_service'));
+    });
+
+    // ⚠ THE PAGE HIDES A GROUP AN EDITOR CANNOT USE, so a group marked
+    // elder-only that is not one is a capability an editor is never shown.
+    // This used to be worked out as "anything that is not oos_", which was
+    // true until `printable_` arrived and wrong from then on.
+    test('only the genuinely elder-only groups are marked so', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        const groups = {};
+        caps.tools.forEach(t => {
+            groups[t.group] = groups[t.group] || new Set();
+            groups[t.group].add(t.eldersOnly);
+        });
+        assert.deepStrictEqual(Object.keys(groups).sort(),
+            ['cal', 'oos', 'printable', 'resource', 'shep']);
+        ['shep', 'cal'].forEach(
+            g => assert.deepStrictEqual([...groups[g]], [true], g));
+        ['oos', 'printable', 'resource'].forEach(
+            g => assert.deepStrictEqual([...groups[g]], [false], g));
+    });
+
+    test('the Resources tools are on the manifest, writes and read apart', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        const mine = caps.tools.filter(t => t.group === 'resource');
+        assert.deepStrictEqual(mine.filter(t => !t.writes).map(t => t.name),
+            ['resource_list']);
+        assert.equal(mine.filter(t => t.writes).length, 9);
     });
 });
 

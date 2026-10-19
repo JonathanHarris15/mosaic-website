@@ -37,10 +37,12 @@ const {FirebaseOAuthProvider} = require("./mcp-auth");
  *     the sign-in page
  * @param {function(): string} deps.geminiKey reads the Gemini secret
  * @param {object} deps.fieldValues {serverTimestamp, deleteField} factories
+ * @param {object} [deps.bucket] the Cloud Storage bucket resource uploads
+ *     land in (MS-693)
  * @return {Promise<object>} the Express app
  */
 async function buildApp(
-    {db, auth, issuerUrl, webConfig, geminiKey, fieldValues}) {
+    {db, auth, issuerUrl, webConfig, geminiKey, fieldValues, bucket}) {
   const [{mcpAuthRouter, getOAuthProtectedResourceMetadataUrl},
     {requireBearerAuth}] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/auth/router.js"),
@@ -145,9 +147,13 @@ async function buildApp(
         uid: extra.uid,
         permissionLevel: extra.permissionLevel,
         pastoralAssistant: extra.pastoralAssistant === true,
+        // The map as users/{uid} stores it, or null. A key gate reads this
+        // and nothing else, so it answers what firestore.rules answers.
+        savedPermissions: extra.savedPermissions || null,
       },
       geminiKey,
       fieldValues,
+      bucket,
       // The server announces its seal at this origin. Threaded from the one
       // place that decides the origin rather than written down a second
       // time, so a move cannot leave a dead image behind.

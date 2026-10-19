@@ -158,6 +158,15 @@ const MODULES = [
     // writing a cell has to follow exactly the page's rules, or its write lands
     // somewhere the page does not read — or wipes what the page wrote.
     'care-list-core.js',
+    // MS-693. The Resources library. Where a thing is filed is FilingCore's
+    // answer on the page and has to be the same answer here — "may this
+    // folder go inside that one", "what is under this folder" — and
+    // resources-core.js carries the rest: the size cap, where the bytes go,
+    // and the pin rank a drag produces. An assistant tidying the shelf and a
+    // person dragging it write the same numbers only because this is one
+    // copy. FilingCore first: resources-core requires it.
+    'filing-core.js',
+    'resources-core.js',
 ];
 
 const BANNER = [

@@ -228,7 +228,14 @@ test('the manifest carries what the page groups on', () => {
     const server = fs.readFileSync(
         path.join(ROOT, 'functions', 'mcp-server.js'), 'utf8');
     assert.match(server, /group: String\(t\.name\)\.split\("_"\)\[0\]/);
-    assert.match(server, /eldersOnly: String\(t\.name\)\.split\("_"\)\[0\] !== "oos"/);
+
+    // ⚠ WHICH GROUPS ARE ELDER-ONLY IS NAMED, NOT INFERRED. It was once
+    // `!== "oos"`, which was true while shep_ and cal_ were the only other
+    // groups and silently wrong from printable_ onwards — the page hid an
+    // editor-and-above group from the editors it was built for. MS-693 adds a
+    // fourth group that is not elder-only either.
+    assert.match(server, /ELDER_ONLY_GROUPS = new Set\(\["shep", "cal"\]\)/);
+    assert.match(server, /eldersOnly: ELDER_ONLY_GROUPS\.has\(/);
 });
 
 // ── Locking a guidance file to elders (MS-278) ─────────────────────────────

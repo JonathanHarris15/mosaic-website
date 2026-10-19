@@ -313,17 +313,39 @@ class FirebaseOAuthProvider {
 
   /**
    * The caller's account, read fresh — Permission Level plus the Pastoral
-   * Assistant grant (MS-426).
+   * Assistant grant (MS-426), plus the saved permission map (MS-693).
+   *
+   * ⚠ `savedPermissions` IS THE RAW MAP OR NULL, AND THAT DISTINCTION IS THE
+   * WHOLE POINT (ADR-0082). Once an admin has saved a map on the account, the
+   * key is the whole answer and the level names stop counting; an account
+   * that has never been through Admin → Accounts has no map, and keeps them.
+   * `firestore.rules` reads exactly this field, and a gate over here that
+   * read anything else would answer a different question from the rule.
+   *
+   * It is deliberately NOT called `permissions`: AccessCore's older
+   * editor gates read that name and would start answering by key for tools
+   * whose gate has always been the level ladder. Only the gates written
+   * against `writesWith` look at this.
+   *
    * @param {string} uid the Firebase uid
-   * @return {Promise<{permissionLevel: ?string, pastoralAssistant: boolean}>}
+   * @return {Promise<{permissionLevel: ?string, pastoralAssistant: boolean,
+   *   savedPermissions: ?object}>} the account
    */
   async accountOf(uid) {
     const snap = await this.db.collection("users").doc(uid).get();
-    if (!snap.exists) return {permissionLevel: null, pastoralAssistant: false};
+    if (!snap.exists) {
+      return {
+        permissionLevel: null,
+        pastoralAssistant: false,
+        savedPermissions: null,
+      };
+    }
     const data = snap.data() || {};
+    const saved = data.permissions;
     return {
       permissionLevel: data.permissionLevel || data.role || null,
       pastoralAssistant: data.pastoralAssistant === true,
+      savedPermissions: (saved && typeof saved === "object") ? saved : null,
     };
   }
 
@@ -536,6 +558,7 @@ class FirebaseOAuthProvider {
         uid: data.uid,
         permissionLevel: account.permissionLevel,
         pastoralAssistant: account.pastoralAssistant,
+        savedPermissions: account.savedPermissions,
       },
     };
   }
