@@ -79,6 +79,12 @@
             <p class="pa-quiet">The address may be wrong, or you may need to open the link from your text message while signed out, or sign in from your profile.</p>
         </div>
 
+        <div x-show="state === 'invalid'" class="pa-centred">
+            <span class="material-symbols-outlined pa-centred__icon">link_off</span>
+            <h1 class="m-headline-md">This link is invalid or has expired.</h1>
+            <p class="pa-quiet">If you expected this to work, contact the church office and ask for a fresh link from your prayer text.</p>
+        </div>
+
         <div x-show="state === 'error'" class="pa-centred">
             <span class="material-symbols-outlined pa-centred__icon">cloud_off</span>
             <h1 class="m-headline-md">This did not load.</h1>
@@ -140,6 +146,7 @@
     </main>
 
     <script src="/firebase-config.js"></script>
+    <script src="/answer-link-page-core.js"></script>
     <script src="/prayer-answer.js"></script>
 </body>
 </html>

@@ -29,7 +29,7 @@ test('every asset the prayer answer page loads is root-absolute', () => {
 });
 
 test('the page loads what it needs and never loads Firestore', () => {
-    for (const needed of ['/mosaic.css', '/fonts.css', '/prayer-answer.js', '/firebase-config.js', '/vendor/alpine-3.15.12.min.js']) {
+    for (const needed of ['/mosaic.css', '/fonts.css', '/answer-link-page-core.js', '/prayer-answer.js', '/firebase-config.js', '/vendor/alpine-3.15.12.min.js']) {
         assert.ok(html.includes('"' + needed + '"'), 'prayer-answer.html no longer loads ' + needed);
     }
     assert.ok(!html.includes('firebase-firestore-compat'),

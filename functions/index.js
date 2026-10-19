@@ -3642,7 +3642,8 @@ function callerAddressOf(request) {
  * with no token for their own open items.
  */
 exports.answerLink = onCall(
-    {cors: true, region: "us-central1", enforceAppCheck: false},
+    {cors: true, region: "us-central1", enforceAppCheck: false,
+      invoker: "public"},
     async (request) => {
       const db = admin.firestore();
       const data = request.data || {};
@@ -3793,7 +3794,8 @@ exports.publicForm = onCall(
     // collects tokens whenever `mode` in public/app-check-config.js is
     // monitor or enforce (test/app-check-agreement.test.js). The door
     // itself is app-check-door.js, keyed on PUBLIC_FORM_APP_CHECK_MODE.
-    {cors: true, region: "us-central1", enforceAppCheck: false},
+    {cors: true, region: "us-central1", enforceAppCheck: false,
+      invoker: "public"},
     async (request) => {
       const db = admin.firestore();
       // `files` is question id → {name, contentType, size, dataBase64}. It

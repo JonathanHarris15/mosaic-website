@@ -69,7 +69,13 @@ test('answerLink is a v2 onCall door without App Check', () => {
     const door = sliceBetween(
         index, 'exports.answerLink = onCall', 'exports.publicForm');
     assert.match(door, /enforceAppCheck:\s*false/);
+    assert.match(door, /invoker:\s*["']public["']/);
     assert.match(door, /handleAnswerLink/);
+});
+
+test('publicForm is publicly invokable like the signed-out pages need', () => {
+    const door = sliceBetween(index, 'exports.publicForm = onCall', '/**');
+    assert.match(door, /invoker:\s*["']public["']/);
 });
 
 test('service builder does not hide Send Now for a missing phone', () => {
