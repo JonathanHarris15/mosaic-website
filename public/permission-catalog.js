@@ -58,6 +58,7 @@
         'printables.edit',
         'roles.manager.view',
         'roles.manager.edit',
+        'resources.edit',
         'analytics.view',
         'admin.dashboard.access',
         'admin.sms.manage',
@@ -124,6 +125,7 @@
         ['printables.edit', 'Edit printables'],
         ['roles.manager.view', 'View roles manager'],
         ['roles.manager.edit', 'Edit serving roles'],
+        ['resources.edit', 'Add and organise resources'],
         ['analytics.view', 'View analytics'],
         ['admin.dashboard.access', 'Admin dashboard'],
         ['admin.sms.manage', 'SMS and prayer templates'],
@@ -241,6 +243,17 @@
             ],
         },
         {
+            // MS-693. One write key and no matching `resources.view`: the
+            // library is one shelf the whole congregation reads, so its read
+            // gate is the member rung the catalog already has
+            // (visibility.rung.member). A view key here would be a switch that
+            // turned nothing off.
+            id: 'resources',
+            title: 'Resources library',
+            icon: 'folder_open',
+            keys: ['resources.edit'],
+        },
+        {
             id: 'analytics',
             title: 'Analytics',
             icon: 'insights',
@@ -292,6 +305,7 @@
         'printables.edit',
         'roles.manager.view',
         'roles.manager.edit',
+        'resources.edit',
         'shep.forms.view',
     ]);
 

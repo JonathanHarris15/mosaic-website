@@ -38,6 +38,7 @@ const gs = require("./guidance-store");
 const gw = require("./guidance-writes");
 const shepTools = require("./mcp-shepherding-tools.js");
 const printableTools = require("./mcp-printable-tools.js");
+const resourceTools = require("./mcp-resource-tools.js");
 const NoteCore = require("./shared/service-note-core.js");
 const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
@@ -84,6 +85,19 @@ const SEAL_SIZE = "328x328";
 const MCP_ENDPOINT_PATH = "/mcp";
 
 const EDITOR_LEVELS = Access.EDITOR_WRITE_LEVELS.slice();
+
+/**
+ * Which capability groups an editor would simply be refused on.
+ *
+ * ⚠ NAMED, NOT INFERRED FROM "NOT oos". The MCP Manager page hides a group an
+ * editor cannot use, and it used to work that out as "anything that is not
+ * `oos_`" — true when `shep_` and `cal_` were the only other groups, and
+ * wrong from `printable_` onwards, which is editor-and-above and was being
+ * hidden from the editors it was built for. MS-693 adds a fourth group that
+ * is not elder-only either, so the question is answered by listing the two
+ * groups that genuinely are.
+ */
+const ELDER_ONLY_GROUPS = new Set(["shep", "cal"]);
 
 // One import, reused on a warm instance. Holds no per-caller state.
 let sdkPromise = null;
@@ -234,9 +248,12 @@ function serverInfo(siteUrl) {
  * @param {function(): string} deps.geminiKey reads the Gemini secret
  * @param {object} deps.fieldValues {serverTimestamp, deleteField, documentId}
  * @param {string} [deps.siteUrl] the MCP's public base URL, for the seal
+ * @param {object} [deps.bucket] the Cloud Storage bucket resource uploads
+ *     land in. Absent on the throwaway server describeCapabilities builds.
  * @return {Promise<object>} an McpServer with tools registered
  */
-async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
+async function buildServer(
+    {db, auth, geminiKey, fieldValues, siteUrl, bucket}) {
   const {McpServer, ResourceTemplate} = await loadSdk();
   const server = new McpServer(serverInfo(siteUrl));
 
@@ -733,6 +750,18 @@ async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
   // firebase-admin. The check in mcp-printable-tools.js is the only one.
   printableTools.register(server, {db, auth, fieldValues});
 
+  // The Resources library (MS-693). A fourth gate, and the first that is a
+  // permission KEY rather than a rung: `resources.edit`, read off the saved
+  // map this caller's token was verified against. mcp-resource-tools.js says
+  // why that is the only check these calls meet.
+  //
+  // ⚠ NO BUCKET MEANS NO UPLOAD, NOT A CRASH. Only `exports.mcp` hands one
+  // over; describeCapabilities builds a throwaway server to ask what tools
+  // exist and has no business holding the church's bucket. Every other
+  // Resources tool works without it, and resource_upload says plainly that it
+  // cannot store bytes here.
+  resourceTools.register(server, {db, auth, fieldValues, bucket});
+
   return server;
 }
 
@@ -840,7 +869,7 @@ async function describeCapabilities(deps) {
         // Note, because it cannot: it will be refused, by rank, on the first
         // call. So the manifest says which are elder-only and the page shows
         // it (MS-278).
-        eldersOnly: String(t.name).split("_")[0] !== "oos",
+        eldersOnly: ELDER_ONLY_GROUPS.has(String(t.name).split("_")[0]),
         inputs: Object.keys(
             (t.inputSchema && t.inputSchema.properties) || {}),
       })).sort((a, b) => a.name.localeCompare(b.name)),

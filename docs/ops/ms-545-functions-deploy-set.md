@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
 ```
 
 | Target | Why it is in the set |
@@ -34,6 +34,7 @@ rides on `notificationOverview` because on the server both halves are the same
 two reads — every Device token, and thirty days of the log. A second callable
 meant opening the tab did each of them twice.
 | `firestore:rules` | Live `firestore.rules` (MS-565). Without this target a Hosting merge that needs a rules hole (MS-530 / #69 Pastoral Assistant `lastNoteAt`) ships writers against the old rules. `firestore:indexes` stays out of this set. |
+| `storage` | Live `storage.rules` (MS-693). The Firebase CLI storage target is the rules file and nothing else — it uploads no objects. It was missing from this set until MS-693, so **every change to `storage.rules` since the file existed has gone unshipped by this job**. The Resources library is the first surface whose read gate lives there: without this target members would be refused every file in it. |
 
 ### MS-682 did not need `firestore:indexes`, and did not take a rules hole
 
@@ -48,10 +49,13 @@ Firestore's automatic single-field indexes. Nothing was added to
 something to widen. The `firestore:rules` target above is the standing one
 from MS-565.
 
-Ship order still matters. These five functions must be live **before** the
-Hosting that calls them, which the single workflow run already guarantees —
-`firebase deploy` installs functions before hosting in one invocation. Do not
-split them across two runs.
+Ship order still matters. The rules and the functions must be live **before**
+the Hosting that calls them, which the single workflow run already guarantees.
+The guarantee is the CLI's, not this list's: `firebase deploy` filters `--only`
+through its own `VALID_DEPLOY_TARGETS`, which runs **storage → firestore →
+functions → hosting**, so `hosting` being written first above changes nothing.
+What the list decides is whether a target ships **at all**. Do not split a
+deploy across two runs.
 
 The CLI filter uses the **export name** (`publicForm`, `answerLink`,
 `onAttendanceCreated`, `syncAccountRankToPerson`, `sendPrayerRequestNow`,
@@ -100,7 +104,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits

@@ -104,6 +104,19 @@ module.exports = {
         "event-plum":   "#7A5578",  "event-plum-tint":   "#E7DAE6",
         "event-rose":   "#B0697C",  "event-rose-tint":   "#F0DBE0",
 
+        /* ---- Resource types (Resources library, MS-693) ----
+           What kind of thing a row on the church's shelf is, read at a
+           glance down a dense list: a PDF, a Word document, an image, a
+           link to a Google Doc. Outside the brand on purpose — these have
+           to be four colours a reader can tell apart at 20px in a column,
+           and four warm neighbours cannot do that. A folder is NOT here:
+           it is the one row that belongs to the app rather than to a file
+           format, and it takes --primary. */
+        "resource-pdf":   "#B45309",
+        "resource-doc":   "#1D4ED8",
+        "resource-image": "#047857",
+        "resource-link":  "#6D28D9",
+
         /* ---- Highlighter (Note Module) ----
            Pen colours for highlighting a Note Body. Deliberately outside the
            brand — a highlight has to sit under navy ink and stay readable,

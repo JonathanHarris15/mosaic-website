@@ -78,6 +78,7 @@ test('storedPermissionLevel reads the stored string, not the canonical rung', ()
 const DOOR_KEYS = [
     'hymns.edit', 'roles.manager.edit', 'calendar.events.edit',
     'services.builder.edit', 'calendar.away.edit', 'printables.edit',
+    'resources.edit',
 ];
 
 test('every door key is a real MS-695 permission key', () => {

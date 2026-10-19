@@ -213,7 +213,7 @@
                 return { toggle, mode };
             }
             const session = await loadSession();
-            const tiles = DashboardNav.orderedTiles(session.account, session.savedOrder);
+            const tiles = DashboardNav.drawerTiles(session.account, session.savedOrder);
             if (typeof global.DesktopDrawer !== 'undefined') {
                 global.DesktopDrawer.mount({
                     toggle: toggle,

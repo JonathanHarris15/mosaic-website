@@ -42,8 +42,28 @@ test('the header lead helper builds a hamburger on drawer destinations', () => {
     const src = read('desktop-header-lead.js');
     assert.match(src, /createHamburger/);
     assert.match(src, /DesktopDrawer\.mount/);
-    assert.match(src, /DashboardNav\.orderedTiles/);
+    assert.match(src, /DashboardNav\.drawerTiles/);
     assert.match(src, /aria-label/);
+});
+
+// MS-693: the drawer lists the standing destinations, and a tile may opt out
+// of being one. Drawing it in the drawer while classifyPage() hands its page
+// a back arrow would be the drawer offering a way in that the page then
+// disowns on arrival.
+test('a tile that opted out of the drawer is on the dashboard and not in it', () => {
+    const AccessCore = require('../public/access-core.js');
+    const account = AccessCore.accountOf({ permissionLevel: 'editor' });
+    const optedOut = DashboardNav.GATED_TILES.filter((t) => t.drawer === false);
+    assert.ok(optedOut.length, 'nothing opts out any more — drop this test with the flag');
+
+    const onDashboard = DashboardNav.orderedTiles(account, null).map((t) => t.href);
+    const inDrawer = DashboardNav.drawerTiles(account, null).map((t) => t.href);
+    for (const tile of optedOut) {
+        assert.ok(onDashboard.includes(tile.href), tile.href + ' left the dashboard');
+        assert.ok(!inDrawer.includes(tile.href), tile.href + ' is still in the drawer');
+        assert.ok(!DashboardNav.isDrawerDestination(tile.href), tile.href);
+        assert.equal(DashboardNav.classifyPage(tile.href).mode, 'back');
+    }
 });
 
 test('registry tiles become drawer entries on a non-dashboard page', () => {

@@ -29,6 +29,8 @@ const KEYS = {
     printables: 'printables.edit',
     printable_folders: 'printables.edit',
     printable_templates: 'printables.edit',
+    resources: 'resources.edit',
+    resource_folders: 'resources.edit',
 };
 
 // MS-725 (ADR 0082): a saved map is the whole answer. The level names are
@@ -110,6 +112,7 @@ test('shepherding_presence stays elders-only', () => {
 // caught above; this catches a write door being dropped.
 test('the editor-ladder write doors are all still there', () => {
     const used = [...rules.matchAll(/editsWith\('([^']+)'\)/g)].map(m => m[1]);
-    // MS-722/725's 19, plus MS-727's four guide collections and people create.
-    assert.equal(used.length, 24);
+    // MS-722/725's 19, plus MS-727's four guide collections and people
+    // create, plus MS-693's two Resources collections.
+    assert.equal(used.length, 26);
 });

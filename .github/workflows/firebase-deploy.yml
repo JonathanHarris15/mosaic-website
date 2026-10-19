@@ -1,6 +1,6 @@
 name: Deploy Firebase (hosting + publicForm)
 
-# Production Hosting + the documented functions set + firestore:rules
+# Production Hosting + the documented functions set + the two rules files
 # (MS-545 option B, widened again by MS-565 then MS-598). Agents must not
 # `firebase deploy` from the box (AGENTS.md). Standing ship path after
 # dry_run green + Maintain CLEAR live:
@@ -8,8 +8,16 @@ name: Deploy Firebase (hosting + publicForm)
 #   - workflow_dispatch can still plan only:
 #       gh workflow run "Deploy Firebase (hosting + publicForm)" --ref <branch> -f dry_run=true
 #
+# ⚠ THE RULES SHIP BEFORE THE PAGES THAT NEED THEM, and that is the CLI's
+# doing rather than the order of this list. firebase-tools filters --only
+# through its own VALID_DEPLOY_TARGETS, which runs storage, then firestore,
+# then functions, then hosting — so writing `hosting` first here changes
+# nothing. What DOES matter is that a target absent from this list never
+# ships at all: storage.rules sat outside it until MS-693 and so was never
+# deployed by this job. test/app-check-agreement.test.js pins both facts.
+#
 # Standing --only targets (do not one-off around this list):
-#   hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules
+#   hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
 # Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
 # The runtime this ships on comes from functions/package.json `engines.node`,
@@ -141,7 +149,7 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy hosting + documented functions set + firestore:rules
+      - name: Deploy hosting + documented functions set + firestore and storage rules
         run: |
           set -euo pipefail
           # Pinned. Do not read .firebaserc default — flipping that alias
@@ -149,7 +157,7 @@ jobs:
           PROJECT_ID="mosaic-hymn-database"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
-          echo "targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules"
+          echo "targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           echo "MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app"
           EXTRA=()
@@ -158,7 +166,7 @@ jobs:
             echo "dry_run=true"
           fi
           npx firebase deploy \
-            --only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules \
+            --only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage \
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"

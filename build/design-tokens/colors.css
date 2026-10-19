@@ -140,5 +140,11 @@
   --graph-4:                   #6F9E5C;
   --graph-5:                   #C26B6B;
   --graph-6:                   #4E7BA6;
+
+  /* ---- Other ---- */
+  --resource-pdf:              #B45309;
+  --resource-doc:              #1D4ED8;
+  --resource-image:            #047857;
+  --resource-link:             #6D28D9;
 /* @generated:end */
 }

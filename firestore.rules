@@ -1238,6 +1238,50 @@ service cloud.firestore {
       allow write: if editsWith('printables.edit');
     }
 
+    // ── The Resources library (MS-693, ADR-0083) ────────────────────────────
+    //
+    // The church's shelf: old Bible studies, sermon manuscripts, the new
+    // member packet, a Google Doc somebody keeps updating. ONE library, not
+    // one per group — every member reads the same shelf.
+    //
+    // ⚠ THE READ IS isMember(), AND THAT IS A DELIBERATELY DIFFERENT FLOOR
+    // FROM THE PRINTABLES BLOCK ABOVE. Printables are an editor's working
+    // material that a member sees only when one is published to them.
+    // Resources are published BY DEFINITION — the whole feature is "here is
+    // the shelf" — so there is no per-record visibility flag to check and no
+    // rung above member to climb. What it is NOT is `isSignedIn()`: a viewer
+    // is an account somebody made for themselves on a self-service sign-up
+    // page (MS-240), and handing that account the congregation's study
+    // material would make the shelf public with an email address in front of
+    // it.
+    //
+    // The write is one key on the ordinary editor ladder. Resources is a new
+    // surface, so a saved map that lacks the key takes nothing away from
+    // anybody: there was nothing here to lose.
+    //
+    // No field-shape clauses. A resource record is a name, a folder id, a
+    // storage path or a URL, and a pin rank; nothing in it is a permission, a
+    // visibility stamp, or a claim about a person, so there is no field whose
+    // forging would buy an editor something they cannot already do by writing
+    // the whole document.
+    match /resources/{resourceId} {
+      allow read: if isMember();
+      allow create, update, delete: if editsWith('resources.edit');
+    }
+
+    // Where a resource is filed: a name and the folder it sits in. A resource
+    // remembers its folder; a folder does not remember its resources
+    // (ADR-0054), so two editors filing at the same moment write two
+    // different records instead of two versions of one tree.
+    //
+    // A folder carries a pinRank of its own — the Pinned card holds folders
+    // and files in one order (ADR-0083) — which is why this collection takes
+    // the same gate rather than a narrower one.
+    match /resource_folders/{folderId} {
+      allow read: if isMember();
+      allow create, update, delete: if editsWith('resources.edit');
+    }
+
     // One person's answers. Editors read them on the Responses tab; the
     // function writes them. No client writes — validation (required questions,
     // the rung, whether the form is closed) happens on the server, because a

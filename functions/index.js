@@ -1842,6 +1842,11 @@ exports.mcp = onRequest(
           issuerUrl: MCP_ISSUER_URL.value(),
           webConfig: MCP_WEB_CONFIG,
           geminiKey: () => GEMINI_KEY.value(),
+          // Where an uploaded Resource's bytes land (MS-693). The default
+          // bucket, resolved here at request time rather than at load: the
+          // comment at the top of this file says why a bucket read during
+          // deploy analysis is a bucket that is not there yet.
+          bucket: admin.storage().bucket(),
           fieldValues: {
             serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
             deleteField: () => admin.firestore.FieldValue.delete(),

@@ -1219,6 +1219,20 @@ _Avoid_: booklet mode (that is the copier setting for the flat stack), impositio
 A Printable an [[Event]] series carries (`events/{id}.printables`), so every date of it offers the Printable on its Files tab: open in the editor, view, **Members may view**, unlink, and **File a PDF snapshot**. A Sunday opens the editor **from this date** or **before this date**. The editor can also **Send snapshot to…** an occurrence in the week of the [[View date]], with that week's Sunday Service pinned. The snapshot is rendered as of the view date (from the Files tab, that is the occurrence's date), every page — overflow continuation pages included — with vendored html2canvas and jsPDF, and filed as an ordinary [[Event Attachment]] on that date, fetched and never linked ([ADR 0046](docs/adr/0046-an-event-attachment-is-fetched-never-linked.md)). It is the one frozen copy in a live system ([ADR 0057](docs/adr/0057-a-printable-reads-live-data-the-snapshot-on-an-event-is-the-frozen-copy.md)); unlinking keeps both the Printable and the snapshot.
 _Avoid_: attached Printable, event printable
 
+## Resources — MS-693
+
+**Resource**:
+One thing on the church's shelf: a **file** the church keeps its own copy of (a PDF, a Word document, a picture, a slide deck) or a **link** out to something that lives somewhere else, nearly always a Google Doc. The two are one record in `resources` and differ in one field. A file's bytes are in Cloud Storage under the record's own id and the record keeps the **path**, never a download URL ([ADR 0046](docs/adr/0046-an-event-attachment-is-fetched-never-linked.md)); a link keeps the address and the church keeps no copy, so the Doc the church edits is the Doc the church reads. Uploading a Doc instead of linking it is the mistake the words are chosen to prevent.
+_Avoid_: document (reserved — a Resource is not a [[Document]] and never appears in the [[Document Library]]), attachment (that belongs to an [[Event]]), file (fine for the file kind; it is half the word)
+
+**Resources library**:
+The page (`resources.html`) where every [[Resource]] lives, filed in folders exactly the way the [[Printables library]] and the [[Forms library]] file theirs — flat records where a Resource remembers its folder and a folder does not remember its Resources ([ADR 0054](docs/adr/0054-a-form-remembers-its-folder-a-folder-does-not-remember-its-forms.md)), walked by the one shared `filing-core.js`. **One shelf for the whole congregation**: every member reads all of it, and there is no per-folder audience. Filling it is the `resources.edit` permission, which the Editor rung and everything above it carries ([ADR 0083](docs/adr/0083-a-pin-is-a-rank-on-the-record.md)). Reached from the dashboard tile, so the page wears a back arrow rather than the drawer's menu button.
+_Avoid_: files page, downloads, shared drive, Resource manager
+
+**Pinned**:
+The small card above the folders holding whatever the church wants to hand without going looking — this term's study notes, the current bulletin. A pin is a **rank on the record itself** (`pinRank`), not a list kept somewhere else, so pinning is one write and nothing can fall out of step ([ADR 0083](docs/adr/0083-a-pin-is-a-rank-on-the-record.md)). Pinning puts a thing at the BOTTOM of the card; where it sits is said separately, by dragging or by `resource_reorder_pins`. A folder can be pinned beside a file. The card is **not shown at all** when nothing is pinned — an empty box at the top of the page is a thing to read and dismiss every single visit.
+_Avoid_: favourites, starred, featured, bookmarks
+
 ## The MCP — MS-262, MS-278
 
 ### MCP
@@ -1231,7 +1245,8 @@ _Avoid_: the API, the bot, the integration
 
 ### Capability group
 A prefix on a tool's name marking what it is for: `oos_` the Order of Service,
-`shep_` the Shepherding System, `cal_` the Calendar. Not decoration — it is what
+`shep_` the Shepherding System, `cal_` the Calendar, `printable_` the
+[[Printable]]s, `resource_` the [[Resources library]]. Not decoration — it is what
 lets a later group be added without renaming anything a connected assistant
 already knows, which is exactly what MS-278 did to MS-262's twelve tools.
 _Avoid_: namespace, module, category
@@ -1251,6 +1266,16 @@ still *listed* to an editor and refuse with a sentence naming the rank they hold
 — a tool that cannot be seen answers "unknown tool", which reads as a broken
 server rather than as a closed door.
 _Avoid_: permission check, auth (both are the first gate)
+
+### The key gate
+The same idea one step finer, and what a `resource_` tool uses: not a rung but a
+[[Permission]] key, `resources.edit`, read off the saved permission map this
+caller's token was verified against. It answers exactly what
+`editsWith('resources.edit')` answers in `firestore.rules`, which matters because
+an MCP write goes through firebase-admin and **never meets those rules at all**.
+So an editor whose saved map says no is refused here too ([ADR
+0082](docs/adr/0082-a-saved-permission-map-is-the-whole-answer.md)).
+_Avoid_: scope, role check
 
 ### Written via MCP
 The provenance mark on any record an assistant wrote: `writtenVia: 'mcp'` on the

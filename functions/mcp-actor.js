@@ -322,6 +322,65 @@ function editorRefusalFor(value) {
 }
 
 /**
+ * May this caller fill the Resources library (MS-693)?
+ *
+ * ⚠ THIS IS THE ONLY GATE ON A RESOURCE WRITE, and it is a different shape
+ * from isEditor() above on purpose. An MCP tool writes through firebase-admin,
+ * which never consults firestore.rules, so `editsWith('resources.edit')` never
+ * runs for these calls — this is its restatement. AccessCore.writesWith is
+ * that rule clause for clause (ADR-0082): once a map has been saved on the
+ * account the key is the whole answer, and a level name does not override it.
+ *
+ * It needs `savedPermissions` on the account to answer correctly, which
+ * mcp-auth.js reads fresh on every call.
+ *
+ * @param {string|object} account the caller's account
+ * @return {boolean} whether they may write the library
+ */
+function mayEditResources(account) {
+  return Access.writesWith(account, "resources.edit");
+}
+
+/**
+ * May this caller read the Resources library?
+ *
+ * The member rung, restating `isMember()` in firestore.rules. Today every
+ * caller holding an MCP token is already an editor (mcp-auth.js's front
+ * door), so this never refuses anybody — it is here so that the day that
+ * door widens, the read gate is the rule rather than an accident.
+ *
+ * @param {string|object} account the caller's account
+ * @return {boolean} whether they may browse the library
+ */
+function mayReadResources(account) {
+  return Access.readsAsMember(account);
+}
+
+/**
+ * Why a Resources read said no.
+ * @param {string|object} value the caller's level or account
+ * @return {string} the refusal
+ */
+function resourcesReadRefusalFor(value) {
+  return "The Resources library is for members of this church. This " +
+    "account holds " + heldLabel(value) + ". Ask an admin to make it a " +
+    "member.";
+}
+
+/**
+ * Why a Resources tool said no, in words an assistant can pass on.
+ * @param {string|object} value the caller's level or account
+ * @return {string} the refusal
+ */
+function resourcesRefusalFor(value) {
+  const held = heldLabel(value);
+  return "The Resources library is read by every member and filled by " +
+    "editors. This account holds " + held + ", which can browse the shelf " +
+    "but cannot add to it. Ask an admin for the \"Add and organise " +
+    "resources\" permission.";
+}
+
+/**
  * Who is calling, as an author — freshly resolved every call.
  *
  * The Person behind the account is preferred, because that is the name every
@@ -420,6 +479,10 @@ module.exports = {
   refusalFor,
   directoryRefusalFor,
   editorRefusalFor,
+  mayEditResources,
+  mayReadResources,
+  resourcesRefusalFor,
+  resourcesReadRefusalFor,
   resolveActor,
   requireActor,
   provenance,

@@ -29,6 +29,14 @@
 
     const ELDER_LEVELS = Object.freeze(['elder', 'super_admin']);
 
+    // The floor of the `member` visibility rung, as firestore.rules isMember()
+    // reads it — the STORED level string, not a permission key. Kept beside
+    // the editor list so the two mirrors sit together.
+    const MEMBER_READ_LEVELS = Object.freeze([
+        'member', 'editor', 'admin', 'elder', 'super_admin',
+        PASTORAL_ASSISTANT_LEVEL,
+    ]);
+
     const VISIBILITY_RUNGS = Object.freeze([
         'public', 'member', 'participant', 'editor', 'elder',
     ]);
@@ -240,6 +248,21 @@
         return writesWith(value, 'calendar.events.edit');
     }
 
+    // MS-693: who may open the Resources library. The mirror of
+    // firestore.rules isMember(), clause for clause — the stored level, or the
+    // leftover Pastoral Assistant flag. NOT writesWith: there is no
+    // `resources.view` key, because one shelf the whole congregation reads has
+    // nothing a view key could turn off (ADR-0083).
+    function readsAsMember(value) {
+        return MEMBER_READ_LEVELS.indexOf(storedPermissionLevel(value)) !== -1
+            || storedPastoralAssistant(value);
+    }
+
+    // MS-693: who may add to it, rename, move, delete, pin and reorder.
+    function canEditResources(value) {
+        return writesWith(value, 'resources.edit');
+    }
+
     function pageFlags(userData) {
         const account = accountOf(userData);
         return {
@@ -260,6 +283,7 @@
         PASTORAL_ASSISTANT_LABEL,
         EDITOR_WRITE_LEVELS,
         ELDER_LEVELS,
+        MEMBER_READ_LEVELS,
         VISIBILITY_RUNGS,
         accountOf,
         permissionLevelOf,
@@ -281,6 +305,8 @@
         writesWith,
         canFixSundayService,
         canEditEvents,
+        readsAsMember,
+        canEditResources,
         pageFlags,
     };
 
