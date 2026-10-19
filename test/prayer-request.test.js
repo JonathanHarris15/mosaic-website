@@ -565,12 +565,39 @@ test('DEFAULT_PRAYER_MESSAGES initial and reminder carry {link}', () => {
     assert.ok(pr.DEFAULT_PRAYER_MESSAGES.reminder.includes('{link}'));
 });
 
-test('renderPrayerRequestMessage substitutes {link} when sending', () => {
+test('renderPrayerRequestMessage substitutes {link} when links are enabled', () => {
     const url = 'https://mosaic-hymn-database.web.app/a/tok';
     const msg = pr.renderPrayerRequestMessage('initial', 'Jane', {
         initial: 'Hi {name}. Answer: {link}',
-    }, url);
+    }, url, true);
     assert.strictEqual(msg, 'Hi Jane. Answer: ' + url);
+});
+
+test('prayerSmsIncludeAnswerLink is off unless includeAnswerLinkInSms is true', () => {
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink(null), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({}), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({ includeAnswerLinkInSms: false }), false);
+    assert.strictEqual(pr.prayerSmsIncludeAnswerLink({ includeAnswerLinkInSms: true }), true);
+});
+
+test('preparePrayerSmsTextTemplates strips link wording when links are off', () => {
+    const out = pr.preparePrayerSmsTextTemplates(pr.DEFAULT_PRAYER_MESSAGES, false);
+    assert.ok(!out.initial.includes('{link}'));
+    assert.ok(!out.reminder.includes('{link}'));
+    assert.ok(!/answer here/i.test(out.initial));
+    assert.ok(!/answer here/i.test(out.reminder));
+    assert.ok(!out.initial.includes('http'));
+    const rendered = pr.renderPrayerRequestMessage('initial', 'Jane', out, 'https://example.test/a/x', false);
+    assert.ok(!rendered.includes('http'));
+    assert.ok(rendered.includes('Just reply to this message'));
+});
+
+test('messageWithLink does not append {link} when links are off', () => {
+    const prose = 'Hello {name}, or answer here: {link}';
+    const stripped = pr.messageWithLink(prose, false);
+    assert.ok(!stripped.includes('{link}'));
+    assert.ok(!/answer here/i.test(stripped));
+    assert.ok(!stripped.includes('http'));
 });
 
 test('templatesWithAnswerLink adds a {link} slot when a saved template omitted it', () => {
@@ -748,7 +775,7 @@ test('ensureAnswerLinkInTemplate appends the link when {link} is missing', () =>
     assert.strictEqual(appended, 'Custom wording only.\n' + url);
     const rendered = pr.renderPrayerRequestMessage('initial', 'Sam', {
         initial: appended,
-    }, url);
+    }, url, true);
     assert.ok(rendered.endsWith(url));
     assert.ok(!rendered.includes('{link}'));
 });

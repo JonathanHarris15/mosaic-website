@@ -7,6 +7,8 @@
 // first name when sent (falls back to "there"). These mirror the constants in
 // the prayer-request sending flow; the admin can override them, and the saved
 // values in Firestore (app_config/prayer_request_sms) take precedence.
+// Optional boolean on the same doc: includeAnswerLinkInSms (default false).
+// When false, server SMS omits the Answer URL and uses reply-to-this-message only.
 const PRAYER_MESSAGE_DEFAULTS = {
     initial: "Hi {name}, this is Mosaic Church. You're in our pastoral prayer " +
         "this Sunday. What would you like us to pray about? (This information " +

@@ -2340,6 +2340,7 @@ async function loadPrayerConfig(db) {
     templates: pr.resolveTemplates(data),
     push: pr.resolvePushWording(data),
     autoSendEnabled: !!data.autoSendEnabled,
+    includeAnswerLinkInSms: pr.prayerSmsIncludeAnswerLink(data),
   };
 }
 
@@ -2380,9 +2381,11 @@ function notifierDeps(db) {
     loadTokens: (uid) => loadDeviceTokens(db, uid),
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
+      const includeLink = loaded.includeAnswerLinkInSms;
       return {
-        text: pr.templatesWithAnswerLink(loaded.templates),
-        textFallback: pr.templatesWithAnswerLink(pr.DEFAULT_PRAYER_MESSAGES),
+        text: pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
+        textFallback: pr.preparePrayerSmsTextTemplates(
+            pr.DEFAULT_PRAYER_MESSAGES, includeLink),
         push: loaded.push,
         pushFallback: pr.DEFAULT_PUSH_WORDING,
       };
@@ -2935,6 +2938,14 @@ async function dispatchPrayerAsk(db, args) {
   const intent = pr.prayerNotifyRequest(kind);
   if (!intent) return {success: false, error: "Nothing to send."};
 
+  let includeLinkInSms = false;
+  if (typeof args.includeAnswerLinkInSms === "boolean") {
+    includeLinkInSms = args.includeAnswerLinkInSms;
+  } else {
+    const cfg = await loadPrayerConfig(db);
+    includeLinkInSms = cfg.includeAnswerLinkInSms;
+  }
+
   const minted = await answerDoor.mintAnswerLink(db, {
     purpose: "prayer_request",
     personId,
@@ -2950,10 +2961,10 @@ async function dispatchPrayerAsk(db, args) {
     manual: !!args.manual,
     serviceDate,
     previousChannel: args.previousChannel || null,
-    url: minted.url,
+    url: includeLinkInSms ? minted.url : null,
     values: {name: pr.firstNameOf(personSnap.data().name)},
     expectReply: true,
-    message: pr.messageWithLink(args.message),
+    message: pr.messageWithLink(args.message, includeLinkInSms),
   });
   if (!result.accepted) {
     const detail = result.providerError ?
