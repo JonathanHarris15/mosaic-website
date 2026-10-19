@@ -290,13 +290,26 @@ service firebase.storage {
     // manuscripts, outlines and packets. One resource record, one prefix named
     // after its id, one file inside it.
     //
-    // ⚠ READ IS isMemberAccount(), NOT `request.auth != null`, AND THE
-    // CATCH-ALL BELOW IS EXACTLY WHY THIS BLOCK EXISTS. Sign-up is
-    // self-service, so `request.auth != null` is "anybody who typed an email
-    // address", and the rule under this one would hand them the whole shelf.
-    // The Firestore rule on `resources` says isMember(); if the bytes answered
-    // a looser question than the record pointing at them, the record's rule
-    // would be decoration.
+    // ⚠ READ IS isMemberAccount(), NOT `request.auth != null`, BECAUSE THE
+    // FIRESTORE RULE ON `resources` SAYS isMember() AND THE BYTES MUST NOT
+    // ANSWER A LOOSER QUESTION THAN THE RECORD POINTING AT THEM.
+    //
+    // ⚠ BUT THIS BLOCK DOES NOT YET BIND, AND SAYING SO HERE IS THE POINT.
+    // Firebase Security Rules OR every matching rule together — "if any rule
+    // the file matches evaluates to true, the result is true" — and rule
+    // ORDER IN THE FILE IS NOT SIGNIFICANT. The `{allPaths=**}` catch-all at
+    // the bottom therefore grants read and write on this prefix too, to any
+    // `request.auth != null`, which on this project includes an ANONYMOUS
+    // sign-in. Every condition above is the rule this path should have and
+    // the rule it will have the moment that catch-all goes; none of them
+    // narrows anything while it is there. See
+    // docs/ops/ms-693-storage-rules-vs-live.md — the catch-all cannot be
+    // removed here because hymn sheets are written to the bucket root under
+    // arbitrary hymn names and nothing else would match them.
+    //
+    // What does hold today is the Firestore half: `resources` and
+    // `resource_folders` are isMember() / `resources.edit`, so the library as
+    // a SCREEN is gated. It is the raw object path that is not.
     //
     // ⚠ AND NOTHING MAY CALL getDownloadURL() ON THIS PATH (ADR-0046). That
     // mints a token which serves the bytes past these rules, to anyone holding
@@ -325,6 +338,23 @@ service firebase.storage {
       allow delete: if editsWithAccount('resources.edit');
     }
 
+    // ⚠ THIS IS NOT A FLOOR. IT IS A CEILING OVER EVERYTHING ABOVE IT.
+    //
+    // Rules are OR-ed, not ordered: a file matching both this and a narrower
+    // block above is granted if EITHER says yes. So every condition in this
+    // file — the 5MB image cap on a photo, `allow write: if false` on a form
+    // upload, an elder-only read, the Resources member gate — is currently
+    // decoration for anyone holding an auth token. Anonymous sign-in is
+    // enabled on this project, so that is anyone at all.
+    //
+    // It is here because hymn sheets are written to the bucket ROOT under the
+    // hymn's own name (`hymns.js`: `storage.ref().child(hymn_name)`), so there
+    // is no prefix to match them on. Closing this means giving hymn sheets a
+    // namespace and migrating the objects already in the bucket; that is its
+    // own ticket, not a line to change here.
+    //
+    // Audit, with the live-ruleset comparison that found it:
+    // docs/ops/ms-693-storage-rules-vs-live.md
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
