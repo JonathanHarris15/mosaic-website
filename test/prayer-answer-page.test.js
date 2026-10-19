@@ -15,9 +15,9 @@ function loadPage(reply, locationOver) {
     sandbox.globalThis = sandbox;
     sandbox.MOSAIC_SHELL = 'web';
     sandbox.location = Object.assign({
-        pathname: '/a/testtoken123',
+        pathname: '/a/123456789ABCDEFGHJK',
         search: '',
-        href: 'https://x/a/testtoken123',
+        href: 'https://x/a/123456789ABCDEFGHJK',
         hostname: 'x',
         origin: 'https://x',
         protocol: 'https:',
@@ -62,6 +62,7 @@ function loadPage(reply, locationOver) {
     const code = fs.readFileSync(path.join(__dirname, '..', 'public', 'prayer-answer.js'), 'utf8');
     vm.createContext(sandbox);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'answer-link-page-core.js'), 'utf8'), sandbox);
     vm.runInContext(code, sandbox);
 
     const page = sandbox.prayerAnswerPage();
@@ -86,7 +87,7 @@ test('read with a token opens the answer box', async () => {
     });
     await page.load();
     assert.strictEqual(calls[0].op, 'read');
-    assert.strictEqual(calls[0].token, 'testtoken123');
+    assert.strictEqual(calls[0].token, '123456789ABCDEFGHJK');
     assert.strictEqual(page.state, 'open');
     assert.strictEqual(page.view.firstName, 'Jane');
 });
@@ -126,6 +127,40 @@ test('closed and rate-limited each get their own screen', async () => {
     const limited = loadPage({ ok: false, code: 'rate-limited' });
     await limited.page.load();
     assert.strictEqual(limited.page.state, 'limited');
+});
+
+test('an invalid or expired token shows the invalid screen, not a retry', async () => {
+    for (const code of ['not-found', 'failed-precondition']) {
+        const { page } = loadPage({ ok: false, code });
+        await page.load();
+        assert.strictEqual(page.state, 'invalid');
+        assert.strictEqual(page.problem, '');
+    }
+});
+
+test('a malformed short token never offers try again', async () => {
+    const { page, calls } = loadPage({ ok: true, view: OPEN_VIEW }, {
+        pathname: '/a/example',
+        href: 'https://x/a/example',
+    });
+    await page.load();
+    assert.strictEqual(page.state, 'invalid');
+    assert.strictEqual(calls.length, 0);
+});
+
+test('a callable rejection for a bad link maps to invalid', async () => {
+    const err = Object.assign(new Error('not found'), { code: 'functions/not-found' });
+    const { page } = loadPage(err);
+    await page.load();
+    assert.strictEqual(page.state, 'invalid');
+});
+
+test('a real network failure still offers try again', async () => {
+    const err = Object.assign(new Error('network down'), { code: 'functions/unavailable' });
+    const { page } = loadPage(err);
+    await page.load();
+    assert.strictEqual(page.state, 'error');
+    assert.match(page.problem, /connection/i);
 });
 
 test('save moves to thanks and keeps the text on failure', async () => {
@@ -206,6 +241,7 @@ function loadPageWithUser(reply) {
     };
     vm.createContext(sandbox);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'answer-link-page-core.js'), 'utf8'), sandbox);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'prayer-answer.js'), 'utf8'), sandbox);
     return { page: sandbox.prayerAnswerPage(), calls };
 }

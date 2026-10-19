@@ -156,22 +156,25 @@ suite("the Answer link door", () => {
     assert.strictEqual(later, false);
   });
 
-  test("expired, no-longer-subject, and unknown refuse the same way",
+  test("unknown and malformed tokens refuse as not-found; expiry as failed-precondition",
       async () => {
         const expired = await mintFor(db, JANE, SERVICE,
             new Date("2026-01-01T12:00:00.000Z"));
-        const live = await mintFor(db, JANE, SERVICE);
-        await seedService(db, SERVICE, "other", JOHN);
-
         const unknownTok = al.mintAnswerToken(crypto.randomBytes(16));
         const a = await handle(db, {op: "read", token: unknownTok});
         const b = await handle(db, {op: "read", token: expired.token});
+        const badShape = await handle(db, {op: "read", token: "example"});
+        assert.deepStrictEqual(a, door.NOT_FOUND);
+        assert.deepStrictEqual(b, door.EXPIRED);
+        assert.deepStrictEqual(badShape, door.NOT_FOUND);
+      });
+
+  test("a live token for someone no longer on the liturgy is closed",
+      async () => {
+        const live = await mintFor(db, JANE, SERVICE);
+        await seedService(db, SERVICE, "other", JOHN);
         const c = await handle(db, {op: "read", token: live.token});
-        assert.deepStrictEqual(a, door.CLOSED);
-        assert.deepStrictEqual(b, door.CLOSED);
         assert.deepStrictEqual(c, door.CLOSED);
-        assert.deepStrictEqual(a, b);
-        assert.deepStrictEqual(b, c);
       });
 
   test("the 11th save in an hour on one link is refused", async () => {

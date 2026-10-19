@@ -32,6 +32,7 @@
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
     const fns = firebase.app().functions('us-central1');
+    const linkCore = window.AnswerLinkPageCore;
     const CALL_TIMEOUT = 20000;
     const AUTH_TIMEOUT = 8000;
 
@@ -134,6 +135,10 @@
                 this.state = 'loading';
                 const payload = { op: 'read' };
                 if (this.token) {
+                    if (linkCore && !linkCore.looksLikeAnswerToken(this.token)) {
+                        this.state = 'invalid';
+                        return;
+                    }
                     payload.token = this.token;
                 } else if (thingHint) {
                     payload.thing = thingHint;
@@ -146,19 +151,28 @@
                         'the server did not answer in time');
                     this.settleRead(res.data || {}, thingHint);
                 } catch (e) {
-                    console.error('answerLink read failed:', e && e.message);
+                    console.error('answerLink read failed:', e && (e.code || ''), e && e.message);
+                    const refused = linkCore && linkCore.readCallableErrorState(e);
+                    if (refused) {
+                        this.state = refused;
+                        return;
+                    }
                     this.problem = 'This did not load. Check your connection and try again.';
                     this.state = 'error';
                 }
             },
 
             settleRead(data, thingHint) {
+                const refused = linkCore && linkCore.readRefusalState(
+                    data, !this.token);
+                if (refused) {
+                    this.state = refused;
+                    return;
+                }
                 if (!data.ok) {
-                    if (data.code === 'rate-limited') {
-                        this.state = 'limited';
-                        return;
-                    }
-                    this.state = 'closed';
+                    this.state = 'error';
+                    this.problem = data.message ||
+                        'This did not load. Try again in a moment.';
                     return;
                 }
 
@@ -220,7 +234,12 @@
                         'the server did not answer in time');
                     this.settleSave(res.data || {});
                 } catch (e) {
-                    console.error('answerLink save failed:', e && e.message);
+                    console.error('answerLink save failed:', e && (e.code || ''), e && e.message);
+                    const refused = linkCore && linkCore.readCallableErrorState(e);
+                    if (refused) {
+                        this.state = refused;
+                        return;
+                    }
                     this.problem = 'That did not save. Nothing has been lost — try again.';
                 }
                 this.sending = false;
@@ -232,17 +251,14 @@
                     this.state = 'thanks';
                     return;
                 }
-                if (data.code === 'rate-limited') {
-                    this.state = 'limited';
+                const refused = linkCore && linkCore.readRefusalState(data);
+                if (refused === 'limited' || refused === 'invalid' || refused === 'closed') {
+                    this.state = refused;
                     return;
                 }
                 if (data.code === 'already-have-it' || (data.view && data.view.eldersAlreadyHaveIt)) {
                     if (data.view) this.view = data.view;
                     this.state = 'elders';
-                    return;
-                }
-                if (data.code === 'closed') {
-                    this.state = 'closed';
                     return;
                 }
                 this.problem = data.message || 'That did not work.';
