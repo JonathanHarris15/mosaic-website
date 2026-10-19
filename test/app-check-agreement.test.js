@@ -116,7 +116,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     // sendPrayerRequestNow, mcp, AND firestore:rules. The old prefix
     // without the two new functions still matches a shorter string, so
     // pin the full list (and fail if either export is dropped).
-    assert.match(wf, /--only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules/,
+    assert.match(wf, /--only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage/,
         'the deploy workflow no longer ships the standing --only set');
     assert.match(wf, /PUBLIC_FORM_APP_CHECK_MODE=monitor/,
         'the deploy workflow no longer pins App Check to monitor');
@@ -127,7 +127,7 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
     assert.ok(fs.existsSync(opsPath),
         'docs/ops/ms-545-functions-deploy-set.md is missing; the standing set is undocumented');
     const ops = fs.readFileSync(opsPath, 'utf8');
-    assert.match(ops, /hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules/,
+    assert.match(ops, /hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage/,
         'the ops note no longer lists the standing --only targets');
     assert.match(ops, /functions:answerLink/,
         'the ops note dropped functions:answerLink');
@@ -137,6 +137,8 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'the ops note dropped functions:mcp');
     assert.match(ops, /firestore:rules/,
         'the ops note dropped firestore:rules');
+    assert.match(ops, /\bstorage\b/,
+        'the ops note dropped the storage rules target');
 
     // MS-682. The Push notifications tab is Hosting that cannot work until
     // four callables are live — notificationOverview is the ONLY way a
@@ -183,4 +185,43 @@ test('the GitHub Actions deploy workflow ships both halves and stays on monitor'
         'notifyEldersOnPrayerComplete is not exported; the standing --only target would deploy nothing');
     assert.match(index, /exports\.mcp\s*=\s*onRequest/,
         'mcp is not exported; the standing --only target would deploy nothing');
+});
+
+// ── Ship order: the rules before the pages that need them (MS-693) ─────────
+//
+// The Resources library is the first surface whose READ gate lives in
+// storage.rules, so "did the rules ship, and did they ship first?" stopped
+// being a question only an infra PR cares about. Both halves are checked:
+// a target absent from the set never ships at all, and the ORDER within one
+// run is the CLI's, not ours.
+
+test('storage.rules is in the standing set, with a bucket rule to ship', () => {
+    const wf = fs.readFileSync(
+        path.join(ROOT, '.github/workflows/firebase-deploy.yml'), 'utf8');
+    assert.match(wf, /--only[^\n]*(^|,)storage(,|\s|$)/m,
+        'storage is not in the standing --only set, so storage.rules never ships');
+
+    // The CLI storage target is the rules file named in firebase.json and
+    // nothing else. Without that key the target is silently filtered out.
+    const firebaseJson = JSON.parse(
+        fs.readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
+    assert.equal(firebaseJson.storage && firebaseJson.storage.rules,
+        'storage.rules',
+        'firebase.json names no storage rules file, so --only storage deploys nothing');
+});
+
+test('⚠ the CLI itself runs storage and firestore and functions before hosting', () => {
+    // Asked of firebase-tools rather than asserted about our own list,
+    // because the ordering is entirely the CLI's: `filterTargets` intersects
+    // --only with VALID_DEPLOY_TARGETS and KEEPS THAT ARRAY'S ORDER, so
+    // writing `hosting` first in the workflow changes nothing. If a
+    // firebase-tools upgrade ever reorders those, this is where it shows up
+    // — and the fix would be two runs, not a reshuffled --only string.
+    const {VALID_DEPLOY_TARGETS} = require('firebase-tools/lib/commands/deploy');
+    const at = (name) => VALID_DEPLOY_TARGETS.indexOf(name);
+    ['storage', 'firestore', 'functions'].forEach((target) => {
+        assert.ok(at(target) !== -1, `${target} is no longer a deploy target`);
+        assert.ok(at(target) < at('hosting'),
+            `${target} would now ship AFTER hosting, which serves pages against stale rules`);
+    });
 });
