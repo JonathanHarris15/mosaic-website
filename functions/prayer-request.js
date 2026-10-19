@@ -24,6 +24,17 @@ const INITIAL_DAYS_OUT = 5;
 const REMINDER_DAYS_OUT = 3;
 
 /**
+ * Church setting on app_config/prayer_request_sms (MS-768). Default false: SMS
+ * is reply-to-this-message only (no https in the body; Textbelt URL stopgap).
+ * When true, the send path **adds** the minted Answer URL **alongside** the
+ * same reply instructions in the template — it does not replace texting back.
+ * Inbound reply (`prayerRequestSource: reply`) and Answer form (`form`) must
+ * stay equivalent on the request doc, note, digest, and thank-you; dedupe if
+ * both arrive is MS-768 follow-up, not this flag's semantics.
+ */
+const PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD = "includeAnswerLinkInSms";
+
+/**
  * Canonical default Prayer Request message templates. {name} is replaced with
  * the subject's first name when sent. These are the server-side fallback when
  * app_config/prayer_request_sms has no (or a blank) value for a kind. KEEP IN
@@ -120,6 +131,30 @@ function resolveTemplates(config) {
 }
 
 /**
+ * Whether pastoral-prayer SMS bodies should include the Answer URL. Off unless
+ * the church explicitly sets includeAnswerLinkInSms on prayer_request_sms.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {boolean}
+ */
+function prayerSmsIncludeAnswerLink(config) {
+  const data = config || {};
+  return data[PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD] === true;
+}
+
+/**
+ * Remove {link} and the wording that only makes sense with a URL in the SMS.
+ * @param {?string} text
+ * @return {string}
+ */
+function stripAnswerLinkFromPrayerText(text) {
+  let s = String(text == null ? "" : text);
+  s = s.split("{link}").join("");
+  s = s.replace(/,?\s*or answer here:\s*/gi, "");
+  s = s.replace(/\s{2,}/g, " ");
+  return s.trimEnd();
+}
+
+/**
  * Push title and body per purpose. A blank field uses that field's default,
  * so a half-filled config still renders a complete lock screen.
  * @param {?Object} config app_config/prayer_request_sms, or null.
@@ -148,15 +183,21 @@ function resolvePushWording(config) {
  * @param {string} firstName
  * @param {{initial: string, reminder: string, thankyou: string}} [templates]
  * @param {?string} [answerLink] substituted for {link} on initial/reminder
+ * @param {boolean} [includeLinkInSms] when false, strip link wording (default)
  * @return {string}
  */
-function renderPrayerRequestMessage(kind, firstName, templates, answerLink) {
+function renderPrayerRequestMessage(
+    kind, firstName, templates, answerLink, includeLinkInSms) {
   let tpl = (templates && templates[kind]) ||
     DEFAULT_PRAYER_MESSAGES[kind] || "";
   const name = (typeof firstName === "string" && firstName.trim()) ?
     firstName.trim() : "there";
-  const link = typeof answerLink === "string" ? answerLink.trim() : "";
-  if (link && (kind === "initial" || kind === "reminder")) {
+  const includeLink = includeLinkInSms === true;
+  let link = typeof answerLink === "string" ? answerLink.trim() : "";
+  if (!includeLink) {
+    tpl = stripAnswerLinkFromPrayerText(tpl);
+    link = "";
+  } else if (link && (kind === "initial" || kind === "reminder")) {
     tpl = ensureAnswerLinkInTemplate(tpl, link);
   }
   return tpl.split("{name}").join(name).split("{link}").join(link);
@@ -194,6 +235,26 @@ function templatesWithAnswerLink(templates) {
   return Object.assign({}, t, {
     initial: addSlot("initial"),
     reminder: addSlot("reminder"),
+  });
+}
+
+/**
+ * Prayer-request SMS templates for the send path: either link slots for MS-247
+ * or reply-only wording with no URL placeholder.
+ * @param {?Object} templates resolved initial/reminder/thankyou
+ * @param {boolean} includeLinkInSms
+ * @return {Object}
+ */
+function preparePrayerSmsTextTemplates(templates, includeLinkInSms) {
+  const t = templates || {};
+  if (includeLinkInSms === true) {
+    return templatesWithAnswerLink(t);
+  }
+  const stripKind = (kind) => stripAnswerLinkFromPrayerText(
+      typeof t[kind] === "string" ? t[kind] : "");
+  return Object.assign({}, t, {
+    initial: stripKind("initial"),
+    reminder: stripKind("reminder"),
   });
 }
 
@@ -295,15 +356,19 @@ function proseOf(element) {
 }
 
 /**
- * A custom message still carries the answer link.
+ * Liturgy-order prose for an ask. Adds {link} only when links are enabled.
  * @param {?string} text
+ * @param {boolean} [includeLinkInSms]
  * @return {string}
  */
-function messageWithLink(text) {
+function messageWithLink(text, includeLinkInSms) {
   const raw = typeof text === "string" ? text.trim() : "";
   if (!raw) return "";
-  if (raw.includes("{link}")) return raw;
-  return `${raw}\n{link}`;
+  if (includeLinkInSms === true) {
+    if (raw.includes("{link}")) return raw;
+    return `${raw}\n{link}`;
+  }
+  return stripAnswerLinkFromPrayerText(raw);
 }
 
 /**
@@ -814,11 +879,15 @@ if (typeof module !== "undefined" && module.exports) {
     PRAYER_ANSWER_PRIVACY_LINE,
     pushConfigKey,
     firstNameOf,
+    PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD,
     resolveTemplates,
     resolvePushWording,
+    prayerSmsIncludeAnswerLink,
+    stripAnswerLinkFromPrayerText,
     renderPrayerRequestMessage,
     ensureAnswerLinkInTemplate,
     templatesWithAnswerLink,
+    preparePrayerSmsTextTemplates,
     churchDateParts,
     daysUntil,
     isPastoralPrayerSubject,

@@ -2,6 +2,10 @@
  * @fileoverview Firestore writes for a Prayer Request (MS-513). Reply path
  * and page (form) path share the note decision so a second note is never
  * minted. No network — the caller sends any thank-you.
+ *
+ * MS-768: when SMS carries both reply and Answer link, these two entry points
+ * should converge on one shared fill helper (same `prayer_requests` shape,
+ * `prayerRequestSource` distinguishes reply vs form, one thank-you/digest).
  */
 
 const pr = require("./prayer-request");
