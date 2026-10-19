@@ -128,6 +128,35 @@ service firebase.storage {
       return isEditorAccount() || isPastoralAssistantAccount();
     }
 
+    // The floor of the `member` rung, restating firestore.rules isMember().
+    // Note what it is not: `request.auth != null`, which on this project is a
+    // self-service account with no rung at all.
+    function isMemberAccount() {
+      return isSignedIn() && (
+        levelOf(myUserDoc()) in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || isPastoralAssistantAccount()
+      );
+    }
+
+    // MS-722 / MS-725 (ADR 0082): the permission-key write door, restated.
+    // A saved map is the whole answer when there is one; an account that has
+    // never been through Admin → Accounts keeps the level names. Same three
+    // clauses as firestore.rules editsWith(), in the engine that cannot
+    // import them.
+    function usesPermissionMapAccount() {
+      return isSignedIn() && ('permissions' in myUserDoc());
+    }
+
+    function hasPermissionAccount(key) {
+      return usesPermissionMapAccount()
+        && myUserDoc().permissions[key] == true;
+    }
+
+    function editsWithAccount(key) {
+      return hasPermissionAccount(key)
+        || (!usesPermissionMapAccount() && isEditorAccount());
+    }
+
     // MS-594: restates AccessCore.canDecide. Storage has no elder-only
     // shepherding write path today; the helper is here so the restatement
     // cannot drift from Firestore / the core.
@@ -255,6 +284,45 @@ service firebase.storage {
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;
+    }
+
+    // The Resources library (MS-693, ADR-0083): the church's shelf of studies,
+    // manuscripts, outlines and packets. One resource record, one prefix named
+    // after its id, one file inside it.
+    //
+    // ⚠ READ IS isMemberAccount(), NOT `request.auth != null`, AND THE
+    // CATCH-ALL BELOW IS EXACTLY WHY THIS BLOCK EXISTS. Sign-up is
+    // self-service, so `request.auth != null` is "anybody who typed an email
+    // address", and the rule under this one would hand them the whole shelf.
+    // The Firestore rule on `resources` says isMember(); if the bytes answered
+    // a looser question than the record pointing at them, the record's rule
+    // would be decoration.
+    //
+    // ⚠ AND NOTHING MAY CALL getDownloadURL() ON THIS PATH (ADR-0046). That
+    // mints a token which serves the bytes past these rules, to anyone holding
+    // it, signed out, forever. The library downloads through an authenticated
+    // request instead (resources-store.js `openResource`), which IS checked
+    // here on every fetch — the same shape as an Event Attachment.
+    //
+    // No content-type restriction: Word, PDF, images, and whatever the church
+    // needs next. The size cap is the one guard, and it matches
+    // ResourcesCore.MAX_FILE_BYTES, which the browser refuses at first.
+    match /resources/{resourceId}/{fileName} {
+      allow read: if isMemberAccount();
+      allow write: if editsWithAccount('resources.edit')
+        && request.resource.size < 25 * 1024 * 1024;
+
+      // Unlike every other path in this file, a client MAY delete here, and
+      // the difference is that this one knows whose bytes these are. A
+      // Directory Photo's rule cannot tell an uploader from a stranger, and an
+      // Event Attachment is tidied by a trigger. A resource blob lives under
+      // the id of the record that owns it, and the only person allowed to
+      // delete it is the person already allowed to delete that record.
+      //
+      // The page deletes the record FIRST. A failure after that leaves bytes
+      // nothing points at — inert, unreachable through any screen — rather
+      // than a row whose file has gone.
+      allow delete: if editsWithAccount('resources.edit');
     }
 
     match /{allPaths=**} {
