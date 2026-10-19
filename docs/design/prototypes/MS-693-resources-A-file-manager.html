@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-693 — Resources · Variant A (file manager)</title>
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+        }
+        body { margin: 0; background: var(--surface-container-highest); font-family: var(--font-sans); font-size: 13px; line-height: 1.45; color: var(--on-background); }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar h1 { margin: 0; font-family: var(--font-serif); font-size: 20px; font-weight: 500; }
+        .proto-bar p { margin: 4px 0 0; font-size: 12px; color: var(--primary-fixed-dim); max-width: 70ch; }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: 12px; }
+        .proto-section > h2 { margin: 0 0 6px; font-family: var(--font-serif); font-size: 18px; color: var(--primary); }
+        .proto-note { margin: 0 0 var(--space-sm); font-size: 12px; color: var(--on-surface-variant); max-width: 72ch; }
+        .proto-stage { background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); overflow: hidden; }
+        .proto-stage__tag { display: block; padding: 6px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--on-surface-variant); background: var(--surface-container-low); border-bottom: 1px solid var(--outline-variant); }
+        .proto-tiles { display: grid; gap: var(--space-sm); grid-template-columns: 1fr; padding: var(--space-sm); }
+        @media (min-width: 560px) { .proto-tiles { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 900px) { .proto-tiles { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 1024px) {
+            .proto-tiles .m-nav-card { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--space-sm); padding: var(--space-sm); text-align: left; }
+            .proto-tiles .m-nav-card .m-medallion { margin: 0; }
+            .proto-tiles .m-nav-card__body { min-width: 0; }
+        }
+        .fm { display: flex; flex-direction: column; min-height: 280px; }
+        @media (min-width: 720px) { .fm { flex-direction: row; min-height: 360px; } }
+        .fm-tree { border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+        @media (min-width: 720px) { .fm-tree { width: 200px; flex-shrink: 0; border-bottom: none; border-right: 1px solid var(--outline-variant); } }
+        .fm-tree__head { padding: 8px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .fm-tree ul { list-style: none; margin: 0; padding: 4px 6px 8px; }
+        .fm-tree button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: none; border-radius: var(--radius-md);
+            background: transparent; font: inherit; font-size: 12px; text-align: left; color: var(--on-surface); cursor: default; }
+        .fm-tree button[aria-current="true"] { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; }
+        .fm-tree .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+        .fm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .fm-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--outline-variant); }
+        .fm-search { flex: 1; min-width: 140px; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: var(--radius-md);
+            border: 1px solid var(--outline-variant); background: var(--surface); }
+        .fm-search input { border: none; background: transparent; font: inherit; font-size: 12px; width: 100%; outline: none; }
+        .fm-search .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+        .fm-list { flex: 1; overflow: auto; }
+        .fm-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--surface-container);
+            text-decoration: none; color: inherit; }
+        .fm-row:hover { background: var(--surface-container-low); }
+        .fm-row__name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .fm-row__name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; }
+        .fm-row__meta { font-size: 10px; color: var(--on-surface-variant); }
+        .fm-row__acts { display: flex; gap: 2px; }
+        .fm-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; border-radius: var(--radius-md);
+            background: transparent; color: var(--on-surface-variant); cursor: default; }
+        .fm-empty, .fm-error { padding: var(--space-md); text-align: center; color: var(--on-surface-variant); font-size: 13px; }
+        .fm-error { color: var(--error); }
+        .adm-hint { padding: 10px; border-top: 1px dashed var(--outline-variant); background: color-mix(in srgb, var(--tertiary-container) 40%, var(--surface-container-low)); font-size: 11px; }
+        .adm-hint strong { color: var(--primary); }
+        .drop { margin-top: 8px; padding: 12px; border: 1px dashed var(--outline); border-radius: var(--radius-md); text-align: center; font-size: 11px; color: var(--on-surface-variant); }
+        .type-pdf { color: #b45309; }
+        .type-doc { color: #1d4ed8; }
+        .type-img { color: #047857; }
+        .type-link { color: #6d28d9; }
+        a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    </style>
+</head>
+<body>
+    <header class="proto-bar">
+        <h1>MS-693 · Variant A — Folder tree + file list</h1>
+        <p>Dense file-manager browse for members; dashboard tile entry; admin organize glimpse. Fictional congregation “Riverside Chapel.”</p>
+    </header>
+    <main class="proto-main">
+        <section class="proto-section" id="dashboard">
+            <h2>Dashboard entry</h2>
+            <p class="proto-note">New <strong>Resources</strong> tile beside existing places. Compact tiles on desktop.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Member home · many tiles</span>
+                <div class="proto-tiles">
+                    <a class="m-nav-card" href="#member-many">
+                        <span class="m-medallion m-medallion--sm" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span>
+                        <span class="m-nav-card__body">
+                            <span class="m-nav-card__title">Resources</span>
+                            <span class="m-nav-card__desc">Studies, manuscripts, and church files</span>
+                        </span>
+                    </a>
+                    <span class="m-nav-card" aria-hidden="true">
+                        <span class="m-medallion m-medallion--sm"><span class="material-symbols-outlined">menu_book</span></span>
+                        <span class="m-nav-card__body">
+                            <span class="m-nav-card__title">Order of Worship</span>
+                            <span class="m-nav-card__desc">This Sunday’s bulletin</span>
+                        </span>
+                    </span>
+                    <span class="m-nav-card" aria-hidden="true">
+                        <span class="m-medallion m-medallion--sm"><span class="material-symbols-outlined">groups</span></span>
+                        <span class="m-nav-card__body">
+                            <span class="m-nav-card__title">Directory</span>
+                            <span class="m-nav-card__desc">Members and households</span>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section" id="member-many">
+            <h2>Member browse · many files</h2>
+            <p class="proto-note">Back arrow to home (not drawer-linked). Tree stays visible on desktop; collapses above list on phone.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Resources · Bible Studies / Romans</span>
+                <header class="m-header">
+                    <div class="m-header__inner">
+                        <div class="m-header__lead">
+                            <a class="m-back" href="#dashboard"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span><span class="m-back__label">Home</span></a>
+                            <div class="m-header__titles"><p class="m-header__title">Resources</p></div>
+                        </div>
+                        <div class="m-header__actions">
+                            <button type="button" class="m-btn m-btn--tonal m-btn--sm"><span class="material-symbols-outlined" aria-hidden="true">download</span> Download all</button>
+                        </div>
+                    </div>
+                </header>
+                <div class="fm">
+                    <aside class="fm-tree" aria-label="Folders">
+                        <div class="fm-tree__head">Folders</div>
+                        <ul>
+                            <li><button type="button"><span class="material-symbols-outlined">folder</span> All resources</button></li>
+                            <li><button type="button" aria-current="true"><span class="material-symbols-outlined">folder_open</span> Bible studies</button></li>
+                            <li><button type="button" style="padding-left: 22px;"><span class="material-symbols-outlined">folder</span> Romans (2024)</button></li>
+                            <li><button type="button" style="padding-left: 22px;"><span class="material-symbols-outlined">folder</span> Psalms retreat</button></li>
+                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Sermon manuscripts</button></li>
+                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Outlines &amp; handouts</button></li>
+                        </ul>
+                    </aside>
+                    <div class="fm-main">
+                        <div class="fm-toolbar">
+                            <label class="fm-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Filter this folder" aria-label="Filter files" /></label>
+                            <button type="button" class="m-btn m-btn--text m-btn--sm">Sort: Name</button>
+                        </div>
+                        <div class="fm-list">
+                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-pdf">picture_as_pdf</span><span>Romans-04-Justification.pdf</span></span><span class="fm-row__meta">PDF · 420 KB · Oct 2024</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Preview"><span class="material-symbols-outlined">visibility</span></button><button type="button" class="fm-icon-btn" aria-label="Download"><span class="material-symbols-outlined">download</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-doc">description</span><span>Romans-04-discussion.docx</span></span><span class="fm-row__meta">Word · 88 KB</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-link">link</span><span>Romans slides (Google)</span></span><span class="fm-row__meta">Link · View only</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open link"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="fm-row__name"><span class="material-symbols-outlined type-img">image</span><span>Romans-04-handout.png</span></span><span class="fm-row__meta">Image · 1.2 MB</span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Preview"><span class="material-symbols-outlined">visibility</span></button></span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section" id="states">
+            <h2>States</h2>
+            <div class="proto-stage" style="margin-bottom: var(--space-md);">
+                <span class="proto-stage__tag">Empty folder</span>
+                <div class="fm-empty"><span class="material-symbols-outlined" style="font-size:32px;display:block;margin:0 auto 8px;">folder_off</span>No files in <strong>Psalms retreat</strong> yet.<br /><span style="font-size:11px;">Check back after Wednesday Bible study.</span></div>
+            </div>
+            <div class="proto-stage" style="margin-bottom: var(--space-md);">
+                <span class="proto-stage__tag">One file</span>
+                <a class="fm-row" href="#" style="display:flex;"><span class="fm-row__name"><span class="material-symbols-outlined type-pdf">picture_as_pdf</span><span>Guest-welcome.pdf</span></span><span class="fm-row__meta">PDF · 210 KB</span></a>
+            </div>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Error loading folder</span>
+                <div class="fm-error"><span class="material-symbols-outlined" style="vertical-align:middle;">error</span> Could not load this folder. <button type="button" class="m-btn m-btn--text m-btn--sm">Try again</button></div>
+            </div>
+        </section>
+
+        <section class="proto-section" id="admin">
+            <h2>Admin · upload &amp; organize (glimpse)</h2>
+            <p class="proto-note">Editors see “Manage” on the same screen; members do not.</p>
+            <div class="proto-stage">
+                <span class="proto-stage__tag">Editor toolbar + drop zone</span>
+                <div class="fm-toolbar">
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" aria-hidden="true">upload</span> Upload</button>
+                    <button type="button" class="m-btn m-btn--tonal m-btn--sm">New folder</button>
+                    <button type="button" class="m-btn m-btn--text m-btn--sm">Link Google Doc</button>
+                    <span style="margin-left:auto;font-size:10px;color:var(--on-surface-variant);">2.4 GB of 5 GB used</span>
+                </div>
+                <div class="adm-hint">
+                    <strong>Organize:</strong> drag files between folders in the tree, or multi-select rows to move. Permissions inherit from the parent folder.
+                    <div class="drop"><span class="material-symbols-outlined">upload_file</span><br />Drop PDFs, Word docs, or images here</div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
