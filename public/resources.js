@@ -14,6 +14,10 @@
 // a resource remembers its folder, a folder does not remember its resources
 // (ADR-0054).
 
+// Roughly the tallest row menu (six items). Used only to pick which way a
+// menu opens, so near enough is enough.
+const MENU_HEIGHT = 200;
+
 function resourcesPage() {
     return {
         loading: true,
@@ -31,6 +35,7 @@ function resourcesPage() {
 
         // One open row menu at a time, keyed the way the core keys a pin.
         menuKey: '',
+        menuUp: false,
         renamingKey: '',
         renameText: '',
 
@@ -226,9 +231,33 @@ function resourcesPage() {
 
         // ── The row menu ─────────────────────────────────────────────────────
 
-        toggleMenu(item) {
+        // ⚠ THE LIST CLIPS WHAT HANGS OUT OF IT, so the menu on the bottom
+        // row opens upward or it is simply not there. The card scrolls its
+        // own contents, which is what makes the shelf dense; the cost is that
+        // an absolutely positioned menu is invisible rather than merely
+        // awkward, and "the last file has no actions" is a bug nobody reports
+        // because it reads as a dead button.
+        toggleMenu(item, event) {
             const key = this.keyOf(item);
-            this.menuKey = this.menuKey === key ? '' : key;
+            if (this.menuKey === key) {
+                this.menuKey = '';
+                return;
+            }
+            this.menuUp = this.opensUpward(event);
+            this.menuKey = key;
+        },
+
+        opensUpward(event) {
+            const button = event && event.currentTarget;
+            if (!button || typeof button.closest !== 'function') return false;
+            const clip = button.closest('.fm-list, .fm-pin-card');
+            if (!clip) return false;
+            const row = button.getBoundingClientRect();
+            const box = clip.getBoundingClientRect();
+            // Downward unless it would be cut off AND upward actually fits —
+            // a box too short for either way keeps the familiar direction.
+            return row.bottom + MENU_HEIGHT > box.bottom
+                && row.top - MENU_HEIGHT > box.top;
         },
 
         closeMenu() { this.menuKey = ''; },
@@ -577,4 +606,9 @@ function resourcesPage() {
             });
         },
     };
+}
+
+// Exposed for Node-based tests; ignored in the browser.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {resourcesPage, MENU_HEIGHT};
 }

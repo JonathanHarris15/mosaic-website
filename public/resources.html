@@ -125,11 +125,12 @@
                                     <button type="button" class="fm-icon-btn"
                                             aria-label="More actions, including move up and move down"
                                             :aria-expanded="menuOpen(item)"
-                                            x-show="canEdit" @click="toggleMenu(item)">
+                                            x-show="canEdit" @click="toggleMenu(item, $event)">
                                         <span class="material-symbols-outlined">more_vert</span>
                                     </button>
                                 </span>
-                                <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
+                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
                                     <button type="button" @click="startRename(item)">Rename</button>
                                     <button type="button" @click="startMove(item)">Move to…</button>
                                     <button type="button" @click="togglePin(item)">Unpin</button>
@@ -238,7 +239,7 @@
                                             </button>
                                             <button type="button" class="fm-icon-btn" aria-label="More actions"
                                                     :aria-expanded="menuOpen(item)"
-                                                    x-show="canEdit" @click="toggleMenu(item)">
+                                                    x-show="canEdit" @click="toggleMenu(item, $event)">
                                                 <span class="material-symbols-outlined">more_vert</span>
                                             </button>
                                             <button type="button" class="fm-icon-btn" aria-label="Open folder"
@@ -246,7 +247,8 @@
                                                 <span class="material-symbols-outlined">chevron_right</span>
                                             </button>
                                         </span>
-                                        <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                        <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
+                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
                                             <button type="button" @click="startRename(item)">Rename</button>
                                             <button type="button" @click="startMove(item)">Move to…</button>
                                             <button type="button" @click="togglePin(item)"
@@ -288,7 +290,7 @@
                                             </button>
                                             <button type="button" class="fm-icon-btn" aria-label="More actions"
                                                     :aria-expanded="menuOpen(item)"
-                                                    x-show="canEdit" @click="toggleMenu(item)">
+                                                    x-show="canEdit" @click="toggleMenu(item, $event)">
                                                 <span class="material-symbols-outlined">more_vert</span>
                                             </button>
                                             <button type="button" class="fm-icon-btn"
@@ -298,7 +300,8 @@
                                                       x-text="item.kind === 'link' ? 'open_in_new' : 'download'"></span>
                                             </button>
                                         </span>
-                                        <div class="fm-menu" x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                        <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
+                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
                                             <button type="button" @click="openItem(item)"
                                                     x-text="item.kind === 'link' ? 'Open link' : 'Download'"></button>
                                             <button type="button" @click="startRename(item)">Rename</button>
@@ -513,6 +516,7 @@
             border-radius: var(--radius-md);
             box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
         }
+        .fm-menu--up { top: auto; bottom: 100%; }
         .fm-menu button {
             border: none; background: none; font: inherit; font-size: 12px;
             text-align: left; padding: 8px 10px; border-radius: var(--radius-sm);

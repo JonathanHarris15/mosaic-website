@@ -41,7 +41,13 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         console.log("Connecting to Firebase emulators...");
         auth.useEmulator("http://localhost:9099");
         db.useEmulator("localhost", 8080);
-        firebase.functions().useEmulator("localhost", 5001);
+        // Only the pages that call a function load functions-compat, and on
+        // the ones that do not `firebase.functions` is undefined — which
+        // threw here and took the whole of auth.js with it, so the page came
+        // up signed out against the emulator and nothing said why.
+        if (typeof firebase.functions === "function") {
+            firebase.functions().useEmulator("localhost", 5001);
+        }
     } else {
         console.log("Localhost detected, but using production Firebase project.");
     }
