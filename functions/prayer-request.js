@@ -24,9 +24,13 @@ const INITIAL_DAYS_OUT = 5;
 const REMINDER_DAYS_OUT = 3;
 
 /**
- * Church setting on app_config/prayer_request_sms. When true, pastoral-prayer
- * SMS may include the minted Answer URL (requires a Textbelt URL-whitelisted
- * key). Default false: reply-to-this-message only, no https in the text body.
+ * Church setting on app_config/prayer_request_sms (MS-768). Default false: SMS
+ * is reply-to-this-message only (no https in the body; Textbelt URL stopgap).
+ * When true, the send path **adds** the minted Answer URL **alongside** the
+ * same reply instructions in the template — it does not replace texting back.
+ * Inbound reply (`prayerRequestSource: reply`) and Answer form (`form`) must
+ * stay equivalent on the request doc, note, digest, and thank-you; dedupe if
+ * both arrive is MS-768 follow-up, not this flag's semantics.
  */
 const PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD = "includeAnswerLinkInSms";
 
