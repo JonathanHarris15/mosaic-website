@@ -86,8 +86,43 @@
         }
         .proto-ref { margin-top: var(--space-xl); border: 1px dashed var(--outline-variant); border-radius: var(--radius-md); padding: var(--space-sm); background: var(--surface-container); }
         .proto-ref summary { font-size: 12px; font-weight: 700; color: var(--on-surface-variant); cursor: pointer; }
-        .fm { display: flex; flex-direction: column; min-height: 280px; }
-        @media (min-width: 720px) { .fm { flex-direction: row; min-height: 380px; } }
+        .fm-root-stack { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm); min-width: 0; }
+        .fm-pin-card {
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-lg);
+            background: var(--surface-container-lowest);
+            overflow: hidden;
+        }
+        .fm-pin-card[hidden] { display: none; }
+        .fm-pin-card__head {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 10px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--primary);
+            background: var(--surface-container-low);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .fm-pin-card__head .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 1; }
+        .fm-pin-card__body .fm-row:last-child { border-bottom: none; }
+        .fm-browser-card {
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-lg);
+            background: var(--background);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 240px;
+        }
+        .fm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        @media (min-width: 720px) { .fm { flex-direction: row; min-height: 320px; } }
+        .fm-ed-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .fm-ed-actions__wide { display: none; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .fm-ed-actions__narrow { display: flex; gap: 2px; }
+        @media (min-width: 640px) {
+            .fm-ed-actions__wide { display: flex; }
+            .fm-ed-actions__narrow { display: none; }
+        }
         .fm-tree { border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
         @media (min-width: 720px) { .fm-tree { width: 200px; flex-shrink: 0; border-bottom: none; border-right: 1px solid var(--outline-variant); } }
         .fm-tree__head { padding: 8px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
@@ -104,9 +139,6 @@
         .fm-search .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
         .fm-list { flex: 1; overflow: auto; }
         .fm-block-label { margin: 0; padding: 10px 10px 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
-        .fm-block-label--pinned { color: var(--primary); display: flex; align-items: center; gap: 4px; }
-        .fm-block-label--pinned .material-symbols-outlined { font-size: 14px; font-variation-settings: 'FILL' 1; }
-        .fm-pinned { border-bottom: 1px solid var(--outline-variant); background: color-mix(in srgb, var(--primary) 4%, var(--surface-container-lowest)); }
         .fm-row {
             display: flex;
             flex-direction: row;
@@ -185,7 +217,7 @@
 
         <section class="proto-section" id="member-root">
             <h2>Member · root directory</h2>
-            <p class="proto-note">Pinned items appear first at the library root only. No pin controls for members.</p>
+            <p class="proto-note">At library root only: <strong>Pinned</strong> is its own card above the folder browser card. Members read-only; card omitted when empty (see design reference).</p>
             <div class="proto-stage">
                 <span class="proto-stage__tag">All resources · member</span>
                 <header class="m-header">
@@ -196,31 +228,37 @@
                         </div>
                     </div>
                 </header>
-                <div class="fm">
-                    <aside class="fm-tree" aria-label="Folders">
-                        <div class="fm-tree__head">Folders</div>
-                        <ul>
-                            <li><button type="button" aria-current="true"><span class="material-symbols-outlined">home</span> All resources</button></li>
-                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Bible studies</button></li>
-                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Sermon manuscripts</button></li>
-                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Outlines &amp; handouts</button></li>
-                        </ul>
-                    </aside>
-                    <div class="fm-main">
-                        <div class="fm-toolbar">
-                            <label class="fm-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Search all resources" aria-label="Search" /></label>
-                            <button type="button" class="m-btn m-btn--text m-btn--sm">Sort: Name</button>
+                <div class="fm-root-stack">
+                    <section class="fm-pin-card" aria-label="Pinned">
+                        <h3 class="fm-pin-card__head"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned</h3>
+                        <div class="fm-pin-card__body">
+                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder · 24 files</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open folder"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span><span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF · 210 KB</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Download"><span class="material-symbols-outlined">download</span></button></span></a>
+                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span><span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link · updated today</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
                         </div>
-                        <div class="fm-list">
-                            <div class="fm-pinned">
-                                <p class="fm-block-label fm-block-label--pinned"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned</p>
-                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder · 24 files</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open folder"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
-                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span><span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF · 210 KB</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Download"><span class="material-symbols-outlined">download</span></button></span></a>
-                                <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span><span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link · updated today</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">open_in_new</span></button></span></a>
+                    </section>
+                    <div class="fm-browser-card">
+                        <div class="fm">
+                            <aside class="fm-tree" aria-label="Folders">
+                                <div class="fm-tree__head">Folders</div>
+                                <ul>
+                                    <li><button type="button" aria-current="true"><span class="material-symbols-outlined">home</span> All resources</button></li>
+                                    <li><button type="button"><span class="material-symbols-outlined">folder</span> Bible studies</button></li>
+                                    <li><button type="button"><span class="material-symbols-outlined">folder</span> Sermon manuscripts</button></li>
+                                    <li><button type="button"><span class="material-symbols-outlined">folder</span> Outlines &amp; handouts</button></li>
+                                </ul>
+                            </aside>
+                            <div class="fm-main">
+                                <div class="fm-toolbar">
+                                    <label class="fm-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Search all resources" aria-label="Search" /></label>
+                                    <button type="button" class="m-btn m-btn--text m-btn--sm">Sort: Name</button>
+                                </div>
+                                <div class="fm-list">
+                                    <p class="fm-block-label">Folders</p>
+                                    <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                                    <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Worship team</span><span class="fm-row__meta">Folder · leaders</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
+                                </div>
                             </div>
-                            <p class="fm-block-label">Folders</p>
-                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
-                            <a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span><span class="fm-row__text"><span class="fm-row__title">Worship team</span><span class="fm-row__meta">Folder · leaders</span></span><span class="fm-row__acts"><button type="button" class="fm-icon-btn" aria-label="Open"><span class="material-symbols-outlined">chevron_right</span></button></span></a>
                         </div>
                     </div>
                 </div>
@@ -238,77 +276,90 @@
                             <a class="m-back" href="#dashboard"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span><span class="m-back__label">Home</span></a>
                             <div class="m-header__titles"><p class="m-header__title">Resources</p></div>
                         </div>
-                        <div class="m-header__actions">
-                            <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" aria-hidden="true">upload</span> Upload</button>
-                            <button type="button" class="m-btn m-btn--tonal m-btn--sm">New folder</button>
+                        <div class="m-header__actions fm-ed-actions">
+                            <span class="fm-ed-actions__wide">
+                                <button type="button" class="m-btn m-btn--primary m-btn--sm"><span class="material-symbols-outlined" aria-hidden="true">upload</span> Upload</button>
+                                <button type="button" class="m-btn m-btn--tonal m-btn--sm">New folder</button>
+                            </span>
+                            <span class="fm-ed-actions__narrow">
+                                <button type="button" class="fm-icon-btn" aria-label="Upload"><span class="material-symbols-outlined">upload</span></button>
+                                <button type="button" class="fm-icon-btn" aria-label="New folder"><span class="material-symbols-outlined">create_new_folder</span></button>
+                                <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                            </span>
                         </div>
                     </div>
                 </header>
-                <div class="fm">
-                    <aside class="fm-tree" aria-label="Folders">
-                        <div class="fm-tree__head">Folders</div>
-                        <ul>
-                            <li><button type="button" aria-current="true"><span class="material-symbols-outlined">home</span> All resources</button></li>
-                            <li><button type="button"><span class="material-symbols-outlined">folder</span> Bible studies</button></li>
-                        </ul>
-                    </aside>
-                    <div class="fm-main">
-                        <div class="fm-toolbar">
-                            <label class="fm-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Search all resources" aria-label="Search" /></label>
-                            <span style="font-size:10px;color:var(--on-surface-variant);">2.4 GB of 5 GB</span>
-                        </div>
-                        <div class="fm-list">
-                            <div class="fm-pinned">
-                                <p class="fm-block-label fm-block-label--pinned"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned · drag to reorder</p>
-                                <div class="fm-row fm-row--edit">
-                                    <span class="fm-drag" aria-hidden="true" title="Drag to reorder"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
-                                    <span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder</span></span>
-                                    <span class="fm-reorder--wide" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__acts">
-                                        <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
-                                    </span>
-                                </div>
-                                <div class="fm-row fm-row--edit">
-                                    <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span>
-                                    <span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF</span></span>
-                                    <span class="fm-reorder--wide" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__acts">
-                                        <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
-                                    </span>
-                                </div>
-                                <div class="fm-row fm-row--edit">
-                                    <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
-                                    <span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span>
-                                    <span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link</span></span>
-                                    <span class="fm-reorder--wide" aria-label="Reorder">
-                                        <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                        <button type="button" aria-label="Move down" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                    </span>
-                                    <span class="fm-row__acts">
-                                        <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
-                                        <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
-                                    </span>
-                                </div>
-                            </div>
-                            <p class="fm-block-label">Folders · not pinned</p>
+                <div class="fm-root-stack">
+                    <section class="fm-pin-card" aria-label="Pinned">
+                        <h3 class="fm-pin-card__head"><span class="material-symbols-outlined" aria-hidden="true">keep</span> Pinned</h3>
+                        <div class="fm-pin-card__body">
                             <div class="fm-row fm-row--edit">
-                                <span class="fm-drag fm-drag--ghost" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                <span class="fm-drag" aria-hidden="true" title="Drag to reorder"><span class="material-symbols-outlined">drag_indicator</span></span>
                                 <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
-                                <span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span>
-                                <span class="fm-row__acts">
-                                    <button type="button" class="fm-icon-btn" aria-label="Pin to top" aria-pressed="false"><span class="material-symbols-outlined">keep</span></button>
-                                    <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                                <span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder</span></span>
+                                <span class="fm-reorder--wide" aria-label="Reorder">
+                                    <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
                                 </span>
+                                <span class="fm-row__acts">
+                                    <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
+                                    <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
+                                </span>
+                            </div>
+                            <div class="fm-row fm-row--edit">
+                                <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                <span class="material-symbols-outlined fm-row__icon type-pdf" aria-hidden="true">picture_as_pdf</span>
+                                <span class="fm-row__text"><span class="fm-row__title">New member packet.pdf</span><span class="fm-row__meta">PDF</span></span>
+                                <span class="fm-reorder--wide" aria-label="Reorder">
+                                    <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" aria-label="Move down"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                </span>
+                                <span class="fm-row__acts">
+                                    <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
+                                    <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
+                                </span>
+                            </div>
+                            <div class="fm-row fm-row--edit">
+                                <span class="fm-drag" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                <span class="material-symbols-outlined fm-row__icon type-link" aria-hidden="true">link</span>
+                                <span class="fm-row__text"><span class="fm-row__title">Sunday bulletin (Google Doc)</span><span class="fm-row__meta">Link</span></span>
+                                <span class="fm-reorder--wide" aria-label="Reorder">
+                                    <button type="button" aria-label="Move up"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" aria-label="Move down" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                </span>
+                                <span class="fm-row__acts">
+                                    <button type="button" class="fm-icon-btn fm-icon-btn--pin" aria-label="Unpin" aria-pressed="true"><span class="material-symbols-outlined">keep</span></button>
+                                    <button type="button" class="fm-icon-btn" aria-label="More actions, including move up and move down"><span class="material-symbols-outlined">more_vert</span></button>
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+                    <div class="fm-browser-card">
+                        <div class="fm">
+                            <aside class="fm-tree" aria-label="Folders">
+                                <div class="fm-tree__head">Folders</div>
+                                <ul>
+                                    <li><button type="button" aria-current="true"><span class="material-symbols-outlined">home</span> All resources</button></li>
+                                    <li><button type="button"><span class="material-symbols-outlined">folder</span> Bible studies</button></li>
+                                </ul>
+                            </aside>
+                            <div class="fm-main">
+                                <div class="fm-toolbar">
+                                    <label class="fm-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Search all resources" aria-label="Search" /></label>
+                                    <span style="font-size:10px;color:var(--on-surface-variant);white-space:nowrap;">2.4 GB of 5 GB</span>
+                                </div>
+                                <div class="fm-list">
+                                    <p class="fm-block-label">Folders · not pinned</p>
+                                    <div class="fm-row fm-row--edit">
+                                        <span class="fm-drag fm-drag--ghost" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                        <span class="material-symbols-outlined fm-row__icon type-folder" aria-hidden="true">folder</span>
+                                        <span class="fm-row__text"><span class="fm-row__title">Archive · 2019–2022</span><span class="fm-row__meta">Folder</span></span>
+                                        <span class="fm-row__acts">
+                                            <button type="button" class="fm-icon-btn" aria-label="Pin to top" aria-pressed="false"><span class="material-symbols-outlined">keep</span></button>
+                                            <button type="button" class="fm-icon-btn" aria-label="More actions"><span class="material-symbols-outlined">more_vert</span></button>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -331,6 +382,23 @@
             <summary>Design reference (not part of the page)</summary>
             <section class="proto-section" id="states" style="margin-top:var(--space-sm);">
                 <h2 style="font-size:14px;">Empty / one / many / error</h2>
+                <div class="proto-stage" style="margin-top:8px;margin-bottom:var(--space-md);">
+                    <span class="proto-stage__tag">Root · no pins (Pinned card hidden)</span>
+                    <header class="m-header"><div class="m-header__inner"><div class="m-header__lead"><div class="m-header__titles"><p class="m-header__title">Resources</p></div></div></div></header>
+                    <div class="fm-root-stack">
+                        <section class="fm-pin-card" hidden aria-hidden="true"><h3 class="fm-pin-card__head"><span class="material-symbols-outlined">keep</span> Pinned</h3></section>
+                        <div class="fm-browser-card">
+                            <div class="fm">
+                                <aside class="fm-tree"><div class="fm-tree__head">Folders</div><ul><li><button type="button" aria-current="true"><span class="material-symbols-outlined">home</span> All resources</button></li></ul></aside>
+                                <div class="fm-main">
+                                    <div class="fm-toolbar"><label class="fm-search"><span class="material-symbols-outlined">search</span><input type="search" placeholder="Search" /></label></div>
+                                    <div class="fm-list"><p class="fm-block-label">Folders</p><a class="fm-row" href="#"><span class="material-symbols-outlined fm-row__icon type-folder">folder</span><span class="fm-row__text"><span class="fm-row__title">Bible studies</span><span class="fm-row__meta">Folder</span></span></a></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="fm-empty" style="font-size:11px;padding:8px;">When nothing is pinned, the Pinned card is not rendered — browser card sits directly under the page header.</p>
+                </div>
                 <div class="proto-stage" style="margin-top:8px;margin-bottom:var(--space-md);">
                     <span class="proto-stage__tag">Empty folder</span>
                     <div class="fm-empty">No files in <strong>Psalms retreat</strong> yet.</div>
