@@ -83,7 +83,6 @@
         'trades',
         'cover',
         'notifications',
-        'sms_messages',
         'form_responses',
         'form_ledger',
         'answer_links',
