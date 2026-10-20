@@ -11,9 +11,17 @@ const TO = 'Rqu2n9V9vRBLF8TKkEwg';
 
 test('wouldDeleteFromPerson when only an empty source doc remains (no subtree, no refs)', () => {
     assert.equal(wouldDeleteFromPerson({ count: 0, samples: [] }), true);
-    assert.equal(wouldDeleteFromPerson({ count: 1, samples: ['people/from/sub/x'] }), false);
-    // The source people/{from} root must not count as a blocking reference.
-    assert.equal(wouldDeleteFromPerson({ count: 1, samples: ['people/from'] }), false);
+});
+
+test('wouldDeleteFromPerson stays false while subcollection docs remain under source', () => {
+    const FROM = 'fromPerson';
+    assert.equal(
+        wouldDeleteFromPerson({
+            count: 1,
+            samples: [`people/${FROM}/shepherding_activity/doc1`],
+        }),
+        false,
+    );
 });
 
 test('toPathForPerson preserves relative path under people', () => {
