@@ -57,3 +57,5 @@ gh workflow run "Prod ops script" --ref main \
 | `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`; `commit=true` to send one text to Jonathan Harris) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
 | `migrate-legacy-oos-prayer-carriers.js` | [MS-771 — OOS legacy prayer leaders → `carriedBy`](./ms-771-legacy-oos-audit.md) (optional `--from` / `--to`; `commit=true` to apply) |
+| `delete-legacy-oos-prayer-fields.js` | [MS-771 — delete legacy prayer top-level fields](./ms-771-legacy-oos-audit.md) (empty `args`; `commit=true` to apply) |
+| `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |

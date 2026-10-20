@@ -11,6 +11,8 @@ const ALLOWLIST_SORTED = [
     'textbelt-test-send.js',
     'reset-prayer-send-attempt.js',
   'migrate-legacy-oos-prayer-carriers.js',
+  'delete-legacy-oos-prayer-fields.js',
+  'merge-duplicate-person.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);
