@@ -108,7 +108,8 @@ gh workflow run "Prod ops script" --ref main \
 | Step | `script` | `args` | `commit` |
 | --- | --- | --- | --- |
 | Dry-run | `merge-duplicate-person.js` | `--from qBZMVskmS1CBJl8aCPcT --to Rqu2n9V9vRBLF8TKkEwg` | `false` |
-| Apply | `merge-duplicate-person.js` | `--from qBZMVskmS1CBJl8aCPcT --to Rqu2n9V9vRBLF8TKkEwg` | `true` |
+| Dry-run (duplicate attendance) | `merge-duplicate-person.js` | `--from qBZMVskmS1CBJl8aCPcT --to Rqu2n9V9vRBLF8TKkEwg --attendance-conflict keep-target` | `false` |
+| Apply | `merge-duplicate-person.js` | `--from qBZMVskmS1CBJl8aCPcT --to Rqu2n9V9vRBLF8TKkEwg --attendance-conflict keep-target` | `true` |
 
 Local (service account):
 

@@ -53,6 +53,23 @@ test('documentContainsPersonId finds nested carriedBy', () => {
     assert.equal(Merge.documentContainsPersonId(doc, 'nobody'), false);
 });
 
+test('attendance move becomes keep-target drop when flag set and target exists', () => {
+    const plan = Merge.planAttendanceDocMove(
+        'sunday_service_2026-10-18', FROM, TO, { present: true }, true,
+        { attendanceConflict: 'keep-target' },
+    );
+    assert.equal(plan.action, 'attendance_keep_target');
+    assert.equal(plan.dropPath, `event_occurrences/sunday_service_2026-10-18/attendance/${FROM}`);
+    assert.equal(plan.keepPath, `event_occurrences/sunday_service_2026-10-18/attendance/${TO}`);
+});
+
+test('attendance still conflicts when target exists and flag omitted', () => {
+    const plan = Merge.planAttendanceDocMove(
+        'sunday_service_2026-10-18', FROM, TO, { present: true }, true);
+    assert.equal(plan.action, 'conflict');
+    assert.equal(plan.reason, 'attendance_target_exists');
+});
+
 test('careListData key move conflicts when target row exists', () => {
     const doc = {
         careListData: {

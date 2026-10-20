@@ -482,19 +482,39 @@
         };
     }
 
-    function planAttendanceDocMove(occurrenceId, fromId, toId, data, targetExists) {
+    /**
+     * @param {object} [options]
+     * @param {'keep-target'} [options.attendanceConflict] when target attendance exists
+     */
+    function planAttendanceDocMove(occurrenceId, fromId, toId, data, targetExists, options) {
+        const attendanceConflict = options && options.attendanceConflict;
+        const keepPath = `event_occurrences/${occurrenceId}/attendance/${toId}`;
+        const dropPath = `event_occurrences/${occurrenceId}/attendance/${fromId}`;
         if (targetExists) {
+            if (attendanceConflict === 'keep-target') {
+                return {
+                    action: 'attendance_keep_target',
+                    collection: 'event_occurrences',
+                    occurrenceId,
+                    fromId,
+                    toId,
+                    keepPath,
+                    dropPath,
+                };
+            }
             return {
                 action: 'conflict',
                 collection: 'event_occurrences',
                 occurrenceId,
                 reason: 'attendance_target_exists',
+                keepPath,
+                dropPath,
             };
         }
         return {
             action: 'move',
-            fromPath: `event_occurrences/${occurrenceId}/attendance/${fromId}`,
-            toPath: `event_occurrences/${occurrenceId}/attendance/${toId}`,
+            fromPath: dropPath,
+            toPath: keepPath,
             data: data || {},
         };
     }
