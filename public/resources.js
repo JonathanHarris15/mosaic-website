@@ -18,6 +18,39 @@
 // menu opens, so near enough is enough.
 const MENU_HEIGHT = 200;
 
+// The folder tree is a narrow scroller, so its menu cannot live inside the
+// row the way the list's does — the tree would clip it. It is placed on the
+// window instead, beside the button that opened it.
+const TREE_MENU_WIDTH = 180;
+
+/**
+ * Where a tree menu sits so it stays on screen.
+ * Opens downward unless that would miss the bottom and upward fits.
+ * @param {{top: number, bottom: number, left: number, right: number}} rect
+ * @param {{height: number, width: number}} viewport
+ * @param {number} menuHeight
+ * @return {{openUp: boolean, style: {top: string, bottom: string, left: string, right: string}}}
+ */
+function placeFloatingMenu(rect, viewport, menuHeight) {
+    const height = menuHeight || MENU_HEIGHT;
+    const margin = 8;
+    const openUp = rect.bottom + height > viewport.height - margin
+        && rect.top - height > margin;
+    let left = rect.right - 28;
+    const maxLeft = viewport.width - TREE_MENU_WIDTH - margin;
+    if (left > maxLeft) left = maxLeft;
+    if (left < margin) left = margin;
+    return {
+        openUp: openUp,
+        style: {
+            top: openUp ? 'auto' : (rect.bottom + 4) + 'px',
+            bottom: openUp ? (viewport.height - rect.top + 4) + 'px' : 'auto',
+            left: left + 'px',
+            right: 'auto',
+        },
+    };
+}
+
 function resourcesPage() {
     return {
         loading: true,
@@ -36,6 +69,15 @@ function resourcesPage() {
         // One open row menu at a time, keyed the way the core keys a pin.
         menuKey: '',
         menuUp: false,
+        // The tree menu is positioned on the window (see placeFloatingMenu).
+        // The list menu stays in its row, so these stay empty for that one.
+        menuFixed: false,
+        menuStyle: null,
+
+        // Folder ids the tree is hiding the children of. Absent means open —
+        // the shelf starts with the whole tree drawn, and a disclosure
+        // control folds a branch when it gets in the way.
+        collapsed: {},
         renamingKey: '',
         renameText: '',
 
@@ -97,18 +139,50 @@ function resourcesPage() {
 
         // ── The folder tree ──────────────────────────────────────────────────
 
-        // Every folder, flattened with the depth it is drawn at, so the aside
-        // shows the whole shelf rather than one level of it.
+        // Every folder the tree is currently willing to draw, with the depth
+        // it is indented and whether it has children to disclose. A collapsed
+        // folder stays in the list; the folders inside it do not.
         get treeNodes() {
             const out = [];
             const walk = (parentId, depth) => {
                 FilingCore.childFolders(this.folders, parentId).forEach((folder) => {
-                    out.push({ id: folder.id, name: folder.name, depth: depth });
-                    walk(folder.id, depth + 1);
+                    const hasChildren = FilingCore.childFolders(this.folders, folder.id).length > 0;
+                    out.push({
+                        id: folder.id,
+                        depth: depth,
+                        hasChildren: hasChildren,
+                        folder: folder,
+                    });
+                    if (hasChildren && !this.collapsed[folder.id]) walk(folder.id, depth + 1);
                 });
             };
             walk(null, 0);
             return out;
+        },
+
+        isCollapsed(id) { return !!this.collapsed[id]; },
+
+        toggleCollapsed(id) {
+            const next = Object.assign({}, this.collapsed);
+            if (next[id]) delete next[id];
+            else next[id] = true;
+            this.collapsed = next;
+        },
+
+        // Opening a folder from the list or a search has to be able to show
+        // that folder in the tree, which means the branches above it cannot
+        // stay folded.
+        revealFolder(folderId) {
+            if (!folderId) return;
+            const crumbs = FilingCore.breadcrumbFor(this.folders, folderId);
+            const next = Object.assign({}, this.collapsed);
+            let changed = false;
+            crumbs.forEach((crumb) => {
+                if (crumb.id === folderId || !next[crumb.id]) return;
+                delete next[crumb.id];
+                changed = true;
+            });
+            if (changed) this.collapsed = next;
         },
 
         get breadcrumb() {
@@ -121,8 +195,9 @@ function resourcesPage() {
         },
 
         openFolder(folderId) {
+            this.revealFolder(folderId);
             this.currentFolderId = folderId || null;
-            this.menuKey = '';
+            this.closeMenu();
             this.search = '';
         },
 
@@ -240,10 +315,25 @@ function resourcesPage() {
         toggleMenu(item, event) {
             const key = this.keyOf(item);
             if (this.menuKey === key) {
-                this.menuKey = '';
+                this.closeMenu();
                 return;
             }
-            this.menuUp = this.opensUpward(event);
+            const button = event && event.currentTarget;
+            const inTree = button && typeof button.closest === 'function'
+                && button.closest('.fm-tree');
+            if (inTree && typeof button.getBoundingClientRect === 'function') {
+                const placed = placeFloatingMenu(
+                    button.getBoundingClientRect(),
+                    { height: globalThis.innerHeight, width: globalThis.innerWidth },
+                    MENU_HEIGHT);
+                this.menuUp = placed.openUp;
+                this.menuFixed = true;
+                this.menuStyle = placed.style;
+            } else {
+                this.menuUp = this.opensUpward(event);
+                this.menuFixed = false;
+                this.menuStyle = null;
+            }
             this.menuKey = key;
         },
 
@@ -260,7 +350,22 @@ function resourcesPage() {
                 && row.top - MENU_HEIGHT > box.top;
         },
 
-        closeMenu() { this.menuKey = ''; },
+        closeMenu() {
+            this.menuKey = '';
+            this.menuFixed = false;
+            this.menuStyle = null;
+        },
+
+        // Escape leaves a menu. Dialogs handle their own Escape; a closed
+        // menu makes this a no-op so the two do not fight.
+        onEscape() {
+            if (this.menuKey) this.closeMenu();
+        },
+
+        // Scrolling the tree would leave a fixed menu pointing at nothing.
+        onTreeScroll() {
+            if (this.menuFixed) this.closeMenu();
+        },
 
         menuOpen(item) { return this.menuKey === this.keyOf(item); },
 
@@ -377,12 +482,19 @@ function resourcesPage() {
 
         // ── Renaming, in place ───────────────────────────────────────────────
 
-        startRename(item) {
+        startRename(item, event) {
             this.closeMenu();
             this.renamingKey = this.keyOf(item);
             this.renameText = item.name || '';
+            const fromTree = !!(event && event.target && event.target.closest
+                && event.target.closest('.fm-tree'));
+            const key = this.renamingKey;
             this.$nextTick(() => {
-                const el = document.getElementById('rename-' + this.renamingKey.replace(':', '-'));
+                const scoped = fromTree
+                    ? '.fm-tree [data-rename="' + key + '"]'
+                    : '.fm-main [data-rename="' + key + '"], .fm-pin-card [data-rename="' + key + '"]';
+                const el = document.querySelector(scoped)
+                    || document.querySelector('[data-rename="' + key + '"]');
                 if (el) { el.focus(); el.select(); }
             });
         },
@@ -390,6 +502,14 @@ function resourcesPage() {
         renaming(item) { return this.renamingKey === this.keyOf(item); },
 
         cancelRename() { this.renamingKey = ''; this.renameText = ''; },
+
+        // The same folder can be mid-rename in the tree and in the list.
+        // Leaving one field for the other is not a commit.
+        finishRename(item, event) {
+            const next = event && event.relatedTarget;
+            if (next && next.classList && next.classList.contains('fm-rename')) return;
+            this.commitRename(item);
+        },
 
         async commitRename(item) {
             const name = this.renameText.trim();
@@ -618,5 +738,5 @@ function resourcesPage() {
 
 // Exposed for Node-based tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {resourcesPage, MENU_HEIGHT};
+    module.exports = {resourcesPage, MENU_HEIGHT, placeFloatingMenu, TREE_MENU_WIDTH};
 }
