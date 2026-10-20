@@ -27,9 +27,69 @@
 (function (global) {
     'use strict';
 
-    const Legacy = (typeof require !== 'undefined') ?
-        require('./legacy-oos-migrate-core.js') :
-        (global && global.LegacyOosMigrateCore);
+    const Liturgy = (typeof require !== 'undefined') ?
+        require('./liturgy-order-core.js') :
+        (global && global.LiturgyOrderCore);
+
+    const CANONICAL_PRAYER_SLOTS = Object.freeze([
+        { elementId: 'prayerOfPraise', prayerType: 'praise' },
+        { elementId: 'prayerOfConfession', prayerType: 'confession' },
+    ]);
+
+    function catalogFrom(catalog) {
+        return Liturgy ? Liturgy.catalogFrom(catalog) : { elements: [], orders: [] };
+    }
+
+    function carrierAt(service, elementId) {
+        const carried = (service && service.carriedBy) || {};
+        const ref = carried[elementId];
+        if (!ref || typeof ref !== 'object') return { id: null, name: '' };
+        return { id: ref.id || null, name: String(ref.name || '').trim() };
+    }
+
+    function prayerTypeForElement(el) {
+        if (!el || el.kind !== 'prayer') return null;
+        const id = String(el.id || '');
+        const name = String(el.name || '').toLowerCase();
+        if (id === 'prayerOfConfession' || name.includes('confession')) return 'confession';
+        if (id === 'prayerOfPraise' || name.includes('praise')) return 'praise';
+        return null;
+    }
+
+    /** Prayer leaders from `carriedBy` only (MS-771: no legacy top-level fields). */
+    function prayerCarriedByInvolvement(service, catalog) {
+        const doc = service || {};
+        const records = [];
+        const pushCarrier = (elementId, prayerType) => {
+            const carrier = carrierAt(doc, elementId);
+            if (!carrier.id) return;
+            records.push({
+                personId: carrier.id,
+                type: 'prayer',
+                metadata: { prayer_type: prayerType },
+            });
+        };
+        if (Liturgy) {
+            const cat = catalogFrom(catalog);
+            const order = Liturgy.orderFor(doc, cat);
+            Liturgy.elementsOf(order, cat).forEach((el) => {
+                if (!el || el.kind !== 'prayer' || !el.prayedByOther) return;
+                const prayerType = prayerTypeForElement(el);
+                if (!prayerType) return;
+                pushCarrier(el.id, prayerType);
+            });
+        }
+        CANONICAL_PRAYER_SLOTS.forEach((slot) => {
+            pushCarrier(slot.elementId, slot.prayerType);
+        });
+        const seen = new Set();
+        return records.filter((rec) => {
+            const key = rec.metadata.prayer_type + ':' + rec.personId;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
 
     // Field → Role slug. The id field is what makes somebody a Person the app can
     // credit; the name beside it may be a visiting speaker typed in by hand, who
@@ -76,9 +136,7 @@
             });
         });
 
-        if (Legacy && typeof Legacy.mergePrayerInvolvement === 'function') {
-            Legacy.mergePrayerInvolvement(doc, catalog).forEach((rec) => records.push(rec));
-        }
+        prayerCarriedByInvolvement(doc, catalog).forEach((rec) => records.push(rec));
 
         return records;
     }
@@ -175,6 +233,7 @@
     const ServiceInvolvementCore = {
         SERVING_FIELDS,
         SERVING_SLUGS,
+        prayerCarriedByInvolvement,
         servingInvolvement,
         involvementId,
         hasPassed,

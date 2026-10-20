@@ -45,9 +45,9 @@
  * Field → Role slug, in the SAVED shape `services/{date}` uses. Mirrors
  * public/service-involvement-core.js; a test holds the two lists together.
  *
- * `prayerPraiseId` and `prayerConfessionId` share the `prayer` slug — one Role,
- * two places in the service — so metadata tells them apart. Without it, the
- * Sunday one person leads both prayers writes one record instead of two.
+ * Prayer leaders use `carriedBy` on liturgy prayer elements (`prayer` slug,
+ * `metadata.prayer_type` praise vs confession). Legacy top-level prayer ids are
+ * not read at runtime (MS-771).
  *
  * `elements` and `other` are serving and are included, but they are NOT
  * liturgical Roles and are deliberately absent from RolesCore.LITURGICAL_SLUGS.
@@ -56,7 +56,7 @@
  * It drives lastPastoralPrayerDate for the prayer rotation, and fairness never
  * reads it, so its timing is left exactly as it is.
  */
-const Legacy = require("./shared/legacy-oos-migrate-core.js");
+const InvolvementCore = require("./shared/service-involvement-core.js");
 
 const SERVING_FIELDS = Object.freeze([
   {idField: "serviceLeaderId", slug: "service_leader"},
@@ -99,10 +99,8 @@ function servingInvolvement(service, catalog) {
     });
   });
 
-  if (Legacy && typeof Legacy.mergePrayerInvolvement === "function") {
-    Legacy.mergePrayerInvolvement(doc, catalog)
-        .forEach((rec) => records.push(rec));
-  }
+  InvolvementCore.prayerCarriedByInvolvement(doc, catalog)
+      .forEach((rec) => records.push(rec));
 
   return records;
 }

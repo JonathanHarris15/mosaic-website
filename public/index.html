@@ -905,7 +905,7 @@
                         if (typeof query.select === 'function') {
                             query = query.select(
                                 'serviceLeaderId', 'musicLeaderId', 'preacherId',
-                                'prayerPraiseId', 'prayerConfessionId', 'musicHelpers', 'date'
+                                'carriedBy', 'musicHelpers', 'date'
                             );
                             const snap = await query.get();
                             services = snap.docs.map(function (d) {

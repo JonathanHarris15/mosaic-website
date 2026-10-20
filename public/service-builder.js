@@ -1439,11 +1439,6 @@ function serviceForm() {
                     if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
                 });
                 this.service.carriedBy = carriedBy;
-                if (typeof LegacyOosMigrateCore !== 'undefined') {
-                    const hydrateDoc = Object.assign({}, data, { carriedBy: this.service.carriedBy });
-                    LegacyOosMigrateCore.hydrateCarriedByFromLegacy(hydrateDoc, this.liturgyCatalog);
-                    this.service.carriedBy = hydrateDoc.carriedBy;
-                }
 
                 // Every liturgy value on the document, whichever order it was
                 // filled under: a value under an element this order leaves out
@@ -2680,13 +2675,13 @@ function serviceForm() {
 
         // --- Involvement Helpers ---
         async _syncPrayerLeaderInvolvement(batch, originalService, nextService) {
-            if (typeof LegacyOosMigrateCore === 'undefined') return;
+            if (typeof ServiceInvolvementCore === 'undefined') return;
             const catalog = this.liturgyCatalog;
             const kinds = ['praise', 'confession'];
-            const oldList = LegacyOosMigrateCore.mergePrayerInvolvement(
-                flattenServiceForSave(originalService), catalog);
-            const newList = LegacyOosMigrateCore.mergePrayerInvolvement(
-                flattenServiceForSave(nextService), catalog);
+            const prayerRecords = (doc) => ServiceInvolvementCore.servingInvolvement(
+                flattenServiceForSave(doc), catalog).filter((r) => r.type === 'prayer');
+            const oldList = prayerRecords(originalService);
+            const newList = prayerRecords(nextService);
             for (const kind of kinds) {
                 const oldId = (oldList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;
                 const newId = (newList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;

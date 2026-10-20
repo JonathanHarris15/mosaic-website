@@ -21,7 +21,7 @@ nested under a scripture row while `prayerOfPraise` uses `carriedBy`).
 - Nested **Prayer Leader (Praise)** and **(Confession)** blocks under scripture rows.
 - In-memory `service.prayerPraise` / `service.prayerConfession` editor fields and save flatten keys.
 - Involvement sync for top-level prayer fields → `_syncPrayerLeaderInvolvement` from `carriedBy` (+ legacy read fallback until migrated).
-- **Read path:** `LegacyOosMigrateCore.hydrateCarriedByFromLegacy` after `carriedBy` load (does not write legacy fields).
+- **Read path (removed post-migration):** was `hydrateCarriedByFromLegacy` until prod migration completed; runtime no longer reads legacy fields.
 
 ### Web — Service Calendar (`public/service-calendar.js`, `.html`)
 
