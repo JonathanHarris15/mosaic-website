@@ -59,7 +59,7 @@ nested under a scripture row while `prayerOfPraise` uses `carriedBy`).
 | --- | --- |
 | `scripts/migrate-legacy-oos-prayer-carriers.js` | Copy legacy top-level prayer leader fields → `carriedBy` (no field deletion). |
 | `scripts/delete-legacy-oos-prayer-fields.js` | **Destructive** — `FieldValue.delete()` legacy top-level prayer fields after migration; aborts if `carriedBy` slot missing. |
-| `scripts/merge-duplicate-person.js` | **Destructive** — repoint all references from duplicate person → canonical person; move subcollections; delete source when clean. |
+| `scripts/merge-duplicate-person.js` | **Destructive** — repoint all references from duplicate person → canonical person; **listCollections()** walk moves every doc under `people/{from}` (nested subcollections included); delete source when clean. |
 
 ## Intentionally retained (not “liturgy-order legacy”)
 

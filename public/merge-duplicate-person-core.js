@@ -465,21 +465,51 @@
         });
     }
 
-    function planSubcollectionMove(fromId, toId, subcollection, docId, data, targetExists) {
+    function planSubcollectionMove(fromId, toId, subcollection, docId, data, targetExists, toName) {
+        const fromPath = `people/${fromId}/${subcollection}/${docId}`;
+        const toPath = `people/${toId}/${subcollection}/${docId}`;
+        return planPersonSubdocMove(fromPath, toPath, data, targetExists, fromId, toId, toName || '');
+    }
+
+    /**
+     * Move one document under people/{from}/… to the same relative path under people/{to}/….
+     * Repoints person-id fields inside the payload from `fromId` → `toId`.
+     *
+     * @param {string} fromPath
+     * @param {string} toPath
+     * @param {object} data
+     * @param {boolean} targetExists
+     * @param {string} fromId
+     * @param {string} toId
+     * @param {string} toName
+     */
+    function planPersonSubdocMove(fromPath, toPath, data, targetExists, fromId, toId, toName) {
         if (targetExists) {
             return {
                 action: 'conflict',
-                subcollection,
-                docId,
                 reason: 'target_doc_exists',
+                fromPath,
+                toPath,
             };
         }
+        const repointed = deepRepoint(data || {}, fromId, toId, toName, null);
         return {
             action: 'move',
-            fromPath: `people/${fromId}/${subcollection}/${docId}`,
-            toPath: `people/${toId}/${subcollection}/${docId}`,
-            data: data || {},
+            fromPath,
+            toPath,
+            data: repointed,
+            personSubtree: true,
         };
+    }
+
+    function pathDepth(firestorePath) {
+        return String(firestorePath || '').split('/').filter(Boolean).length;
+    }
+
+    /** Apply person-subtree moves deepest-first so nested subcollections stay addressable. */
+    function sortMovesByDepthDesc(moves) {
+        return (moves || []).slice().sort((a, b) =>
+            pathDepth(b.fromPath) - pathDepth(a.fromPath));
     }
 
     /**
@@ -531,7 +561,10 @@
         planDocumentRepoint,
         documentContainsPersonId,
         planSubcollectionMove,
+        planPersonSubdocMove,
         planAttendanceDocMove,
+        sortMovesByDepthDesc,
+        pathDepth,
         deepRepoint,
         applyCarriedBy,
         applyCareListDataKeys,
