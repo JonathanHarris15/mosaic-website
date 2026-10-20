@@ -198,22 +198,11 @@ test('deleting the bytes needs the same key as deleting the record', () => {
 // is true", and position in the file is not consulted. Moving the block
 // bought nothing, and the green test said otherwise.
 //
-// So this pins the true state instead: the catch-all is still there, it is
-// still `request.auth != null`, and that is why the block above it does not
-// yet bind. When the catch-all is finally closed, this test fails — which is
-// the right moment to delete it and assert the boundary for real.
-// docs/ops/ms-693-storage-rules-vs-live.md has the audit.
-test('the catch-all still overrides the resources block, and is named as doing so', () => {
-    assert.match(storageRules, /match \/\{allPaths=\*\*\} \{\s*\n\s*allow read, write: if request\.auth != null;/,
-        'the catch-all changed shape — if it is gone, the resources block now binds, ' +
-        'so replace this test with one that asserts the boundary instead of the hole');
-
+test('the catch-all is gone so the resources block binds', () => {
+    assert.doesNotMatch(storageRules, /match \/\{allPaths=\*\*\}/,
+        'a catch-all would OR away every narrower rule in this file');
     const block = storageBlock();
-    assert.match(block, /allow read: if isMemberAccount\(\);/,
-        'the rule this path should have, and will have the moment the catch-all goes');
-
-    assert.match(storageRules, /docs\/ops\/ms-693-storage-rules-vs-live\.md/,
-        'a reader of this file has to be able to find out why the block above does not bind');
+    assert.match(block, /allow read: if isMemberAccount\(\);/);
 });
 
 // ── The half of the boundary that is not a rule ──────────────────────────────
