@@ -16,16 +16,18 @@ const assert = require('node:assert/strict');
 global.ResourcesCore = require('../public/resources-core.js');
 global.FilingCore = require('../public/filing-core.js');
 
-const {resourcesPage, MENU_HEIGHT} = require('../public/resources.js');
+const {resourcesPage, MENU_HEIGHT, placeFloatingMenu, TREE_MENU_WIDTH} = require('../public/resources.js');
 
 /**
  * A ⋯ button inside a clipping box, at a given distance from each edge.
+ * The list menu looks for `.fm-list` / `.fm-pin-card`. A closest() that
+ * answers every selector would be read as the folder tree.
  * @param {{above: number, below: number}} room pixels of space each way
  * @return {object} something shaped like a click event
  */
 function clickAt({above, below}) {
     const button = {
-        closest: () => box,
+        closest: (sel) => String(sel).includes('fm-list') || String(sel).includes('fm-pin-card') ? box : null,
         getBoundingClientRect: () => ({top: above, bottom: 1000 - below}),
     };
     const box = {getBoundingClientRect: () => ({top: 0, bottom: 1000})};
@@ -67,6 +69,7 @@ describe('which way a row menu opens', () => {
         p.toggleMenu(item, clickAt({above: MENU_HEIGHT + 50, below: 10}));
         assert.equal(p.menuOpen(item), true);
         assert.equal(p.menuUp, true);
+        assert.equal(p.menuFixed, false, 'a list menu stays in the row');
 
         p.toggleMenu(item, clickAt({above: MENU_HEIGHT + 50, below: 10}));
         assert.equal(p.menuOpen(item), false);
@@ -100,4 +103,143 @@ describe('what the page shows before anything is loaded', () => {
         p.resources = [];
         return p;
     }
+});
+
+describe('the folder tree collapses', () => {
+    function shelf() {
+        const p = resourcesPage();
+        p.folders = [
+            {id: 'a', name: 'Alpha', parentId: null, isFolder: true},
+            {id: 'b', name: 'Beta', parentId: 'a', isFolder: true},
+            {id: 'c', name: 'Gamma', parentId: 'b', isFolder: true},
+            {id: 'd', name: 'Delta', parentId: null, isFolder: true},
+        ];
+        p.resources = [];
+        return p;
+    }
+
+    test('starts open, every folder in depth order', () => {
+        const nodes = shelf().treeNodes;
+        assert.deepEqual(nodes.map(n => n.id), ['a', 'b', 'c', 'd']);
+        assert.equal(nodes[0].hasChildren, true);
+        assert.equal(nodes[1].depth, 1);
+        assert.equal(nodes[2].depth, 2);
+        assert.equal(nodes[2].hasChildren, false);
+        assert.equal(nodes[3].hasChildren, false);
+    });
+
+    test('a tree row is the folder record, so rename and delete reach it', () => {
+        const p = shelf();
+        assert.equal(p.treeNodes[0].folder, p.folders[0]);
+    });
+
+    test('collapsing a folder hides its descendants and keeps its siblings', () => {
+        const p = shelf();
+        p.toggleCollapsed('a');
+        assert.equal(p.isCollapsed('a'), true);
+        assert.deepEqual(p.treeNodes.map(n => n.id), ['a', 'd']);
+        p.toggleCollapsed('a');
+        assert.equal(p.isCollapsed('a'), false);
+        assert.deepEqual(p.treeNodes.map(n => n.id), ['a', 'b', 'c', 'd']);
+    });
+
+    test('collapsing a middle folder hides only what is inside it', () => {
+        const p = shelf();
+        p.toggleCollapsed('b');
+        assert.deepEqual(p.treeNodes.map(n => n.id), ['a', 'b', 'd']);
+    });
+
+    test('folding a branch does not leave the folder you had open', () => {
+        const p = shelf();
+        p.openFolder('c');
+        p.toggleCollapsed('a');
+        assert.equal(p.currentFolderId, 'c');
+        assert.deepEqual(p.treeNodes.map(n => n.id), ['a', 'd']);
+    });
+
+    test('opening a nested folder clears the search and unfolds the path to it', () => {
+        const p = shelf();
+        p.search = 'romans';
+        p.toggleCollapsed('a');
+        p.toggleCollapsed('b');
+        p.openFolder('c');
+        assert.equal(p.search, '');
+        assert.equal(p.currentFolderId, 'c');
+        assert.equal(p.isCollapsed('a'), false);
+        assert.equal(p.isCollapsed('b'), false);
+        assert.deepEqual(p.treeNodes.map(n => n.id), ['a', 'b', 'c', 'd']);
+    });
+});
+
+describe('a menu opened from the folder tree', () => {
+    test('sits on the window beside the button, downward when there is room', () => {
+        const placed = placeFloatingMenu(
+            {top: 100, bottom: 132, left: 180, right: 212},
+            {height: 800, width: 1280},
+            MENU_HEIGHT);
+        assert.equal(placed.openUp, false);
+        assert.equal(placed.style.top, '136px');
+        assert.equal(placed.style.bottom, 'auto');
+        assert.equal(placed.style.left, '184px');
+    });
+
+    test('opens upward when downward would leave the window', () => {
+        const placed = placeFloatingMenu(
+            {top: 700, bottom: 732, left: 180, right: 212},
+            {height: 800, width: 1280},
+            MENU_HEIGHT);
+        assert.equal(placed.openUp, true);
+        assert.equal(placed.style.top, 'auto');
+        assert.equal(placed.style.bottom, '104px');
+    });
+
+    test('stays downward when the window is too short for either way', () => {
+        const placed = placeFloatingMenu(
+            {top: 20, bottom: 52, left: 10, right: 40},
+            {height: 100, width: 320},
+            MENU_HEIGHT);
+        assert.equal(placed.openUp, false);
+    });
+
+    test('keeps the menu on the window when the button is at the right edge', () => {
+        const placed = placeFloatingMenu(
+            {top: 100, bottom: 132, left: 1200, right: 1240},
+            {height: 800, width: 1280},
+            MENU_HEIGHT);
+        assert.equal(placed.style.left, (1280 - TREE_MENU_WIDTH - 8) + 'px');
+    });
+
+    test('the page records that placement, and scrolling the tree dismisses it', () => {
+        global.innerHeight = 800;
+        global.innerWidth = 1280;
+        const button = {
+            closest: (sel) => String(sel).includes('fm-tree') ? {} : null,
+            getBoundingClientRect: () => ({top: 100, bottom: 132, left: 180, right: 212}),
+        };
+        const p = resourcesPage();
+        const folder = {id: 'f1', isFolder: true, name: 'Alpha'};
+        p.toggleMenu(folder, {currentTarget: button, target: button});
+        assert.equal(p.menuFixed, true);
+        assert.equal(p.menuOpen(folder), true);
+        assert.equal(p.menuStyle.top, '136px');
+
+        p.onTreeScroll();
+        assert.equal(p.menuOpen(folder), false);
+        assert.equal(p.menuFixed, false);
+    });
+});
+
+describe('the shelf markup', () => {
+    const html = require('fs').readFileSync(
+        require('path').join(__dirname, '../public/resources.html'), 'utf8');
+
+    test('fills the window, and the tree can fold and carry the folder menu', () => {
+        assert.match(html, /m-page--tool fm-page/);
+        assert.match(html, /fm-tree__twist/);
+        assert.match(html, /toggleCollapsed\(node\.id\)/);
+        assert.match(html, /fm-tree__more/);
+        assert.match(html, /fm-menu--fixed/);
+        assert.match(html, /max-width:\s*none/);
+        assert.match(html, /menuFixed && menuOpen\(node\.folder\)/);
+    });
 });

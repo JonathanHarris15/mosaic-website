@@ -19,7 +19,8 @@
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 
-<body class="m-page" x-data="resourcesPage()" x-init="init()" x-cloak>
+<body class="m-page m-page--tool fm-page" x-data="resourcesPage()" x-init="init()" x-cloak
+      @keydown.escape.window="onEscape()">
 
     <!-- Reached from the dashboard tile, so the lead is a back arrow rather
          than the drawer's hamburger (dashboard-nav.js opts this page out). -->
@@ -130,8 +131,8 @@
                                     </button>
                                 </span>
                                 <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
-                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
-                                    <button type="button" @click="startRename(item)">Rename</button>
+                                     x-show="menuOpen(item) && !menuFixed" @click.outside="closeMenu()">
+                                    <button type="button" @click="startRename(item, $event)">Rename</button>
                                     <button type="button" @click="startMove(item)">Move to…</button>
                                     <button type="button" @click="togglePin(item)">Unpin</button>
                                     <button type="button" :disabled="!canNudge(item, -1)" @click="nudge(item, -1)">Move up</button>
@@ -145,24 +146,78 @@
 
                 <div class="fm-browser-card">
                     <div class="fm">
-                        <aside class="fm-tree" aria-label="Folders">
+                        <aside class="fm-tree" aria-label="Folders" @scroll="onTreeScroll()">
                             <div class="fm-tree__head">Folders</div>
                             <ul>
                                 <li>
-                                    <button type="button" :aria-current="atRoot ? 'true' : 'false'"
-                                            @click="openFolder(null)">
-                                        <span class="material-symbols-outlined">home</span> All resources
-                                    </button>
+                                    <div class="fm-tree__row">
+                                        <span class="fm-tree__twist" aria-hidden="true"></span>
+                                        <button type="button" class="fm-tree__open"
+                                                :aria-current="atRoot ? 'true' : 'false'"
+                                                @click="openFolder(null)">
+                                            <span class="material-symbols-outlined" aria-hidden="true">home</span>
+                                            <span class="fm-tree__name">All resources</span>
+                                        </button>
+                                    </div>
                                 </li>
                                 <template x-for="node in treeNodes" :key="node.id">
-                                    <li>
-                                        <button type="button"
-                                                :aria-current="currentFolderId === node.id ? 'true' : 'false'"
-                                                :style="'padding-left:' + (8 + node.depth * 14) + 'px'"
-                                                @click="openFolder(node.id)">
-                                            <span class="material-symbols-outlined">folder</span>
-                                            <span x-text="node.name"></span>
-                                        </button>
+                                    <li class="fm-tree__item">
+                                        <div class="fm-tree__row"
+                                             :style="'padding-left:' + (node.depth * 16) + 'px'">
+                                            <template x-if="node.hasChildren">
+                                                <button type="button" class="fm-tree__twist"
+                                                        :aria-expanded="isCollapsed(node.id) ? 'false' : 'true'"
+                                                        :aria-label="(isCollapsed(node.id) ? 'Expand ' : 'Collapse ') + node.folder.name"
+                                                        @click="toggleCollapsed(node.id)">
+                                                    <span class="material-symbols-outlined" aria-hidden="true"
+                                                          x-text="isCollapsed(node.id) ? 'chevron_right' : 'expand_more'"></span>
+                                                </button>
+                                            </template>
+                                            <template x-if="!node.hasChildren">
+                                                <span class="fm-tree__twist" aria-hidden="true"></span>
+                                            </template>
+                                            <template x-if="renaming(node.folder)">
+                                                <input type="text" class="m-input fm-rename fm-tree__rename"
+                                                       name="folder-name" autocomplete="off" maxlength="60"
+                                                       x-model="renameText"
+                                                       :data-rename="keyOf(node.folder)"
+                                                       :aria-label="'Rename ' + node.folder.name"
+                                                       @keydown.enter.prevent="commitRename(node.folder)"
+                                                       @keydown.escape.prevent="cancelRename()"
+                                                       @blur="finishRename(node.folder, $event)" />
+                                            </template>
+                                            <template x-if="!renaming(node.folder)">
+                                                <button type="button" class="fm-tree__open"
+                                                        :aria-current="currentFolderId === node.id ? 'true' : 'false'"
+                                                        @click="openFolder(node.id)">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">folder</span>
+                                                    <span class="fm-tree__name" x-text="node.folder.name"></span>
+                                                </button>
+                                            </template>
+                                            <button type="button" class="fm-icon-btn fm-tree__more"
+                                                    aria-label="More actions"
+                                                    :aria-expanded="menuOpen(node.folder) ? 'true' : 'false'"
+                                                    :aria-haspopup="canEdit ? 'menu' : false"
+                                                    x-show="canEdit"
+                                                    @click="toggleMenu(node.folder, $event)">
+                                                <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
+                                            </button>
+                                        </div>
+                                        <!-- x-show and :style cannot share an element: the style
+                                             binding clears the display:none x-show uses, so every
+                                             folder's menu would stack on the open one. -->
+                                        <div x-show="menuFixed && menuOpen(node.folder)">
+                                            <div class="fm-menu fm-menu--fixed"
+                                                 :class="menuUp ? 'fm-menu--up' : ''"
+                                                 :style="menuStyle"
+                                                 @click.outside="closeMenu()">
+                                                <button type="button" @click="startRename(node.folder, $event)">Rename</button>
+                                                <button type="button" @click="startMove(node.folder)">Move to…</button>
+                                                <button type="button" @click="togglePin(node.folder)"
+                                                        x-text="isPinned(node.folder) ? 'Unpin' : 'Pin to top'"></button>
+                                                <button type="button" class="fm-menu__danger" @click="startDelete(node.folder)">Delete</button>
+                                            </div>
+                                        </div>
                                     </li>
                                 </template>
                             </ul>
@@ -219,9 +274,10 @@
                                         <template x-if="renaming(item)">
                                             <input :id="'rename-folder-' + item.id" type="text" class="m-input fm-rename"
                                                    maxlength="60" x-model="renameText"
+                                                   :data-rename="keyOf(item)"
                                                    @keydown.enter.prevent="commitRename(item)"
                                                    @keydown.escape.prevent="cancelRename()"
-                                                   @blur="commitRename(item)" />
+                                                   @blur="finishRename(item, $event)" />
                                         </template>
                                         <template x-if="!renaming(item)">
                                             <button type="button" class="fm-row__text" @click="openItem(item)">
@@ -239,6 +295,7 @@
                                             </button>
                                             <button type="button" class="fm-icon-btn" aria-label="More actions"
                                                     :aria-expanded="menuOpen(item)"
+                                                    aria-haspopup="menu"
                                                     x-show="canEdit" @click="toggleMenu(item, $event)">
                                                 <span class="material-symbols-outlined">more_vert</span>
                                             </button>
@@ -248,8 +305,8 @@
                                             </button>
                                         </span>
                                         <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
-                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
-                                            <button type="button" @click="startRename(item)">Rename</button>
+                                     x-show="menuOpen(item) && !menuFixed" @click.outside="closeMenu()">
+                                            <button type="button" @click="startRename(item, $event)">Rename</button>
                                             <button type="button" @click="startMove(item)">Move to…</button>
                                             <button type="button" @click="togglePin(item)"
                                                     x-text="isPinned(item) ? 'Unpin' : 'Pin to top'"></button>
@@ -270,9 +327,10 @@
                                         <template x-if="renaming(item)">
                                             <input :id="'rename-resource-' + item.id" type="text" class="m-input fm-rename"
                                                    maxlength="120" x-model="renameText"
+                                                   :data-rename="keyOf(item)"
                                                    @keydown.enter.prevent="commitRename(item)"
                                                    @keydown.escape.prevent="cancelRename()"
-                                                   @blur="commitRename(item)" />
+                                                   @blur="finishRename(item, $event)" />
                                         </template>
                                         <template x-if="!renaming(item)">
                                             <button type="button" class="fm-row__text" @click="openItem(item)">
@@ -301,10 +359,10 @@
                                             </button>
                                         </span>
                                         <div class="fm-menu" :class="menuUp ? 'fm-menu--up' : ''"
-                                     x-show="menuOpen(item)" @click.outside="closeMenu()">
+                                     x-show="menuOpen(item) && !menuFixed" @click.outside="closeMenu()">
                                             <button type="button" @click="openItem(item)"
                                                     x-text="item.kind === 'link' ? 'Open link' : 'Download'"></button>
-                                            <button type="button" @click="startRename(item)">Rename</button>
+                                            <button type="button" @click="startRename(item, $event)">Rename</button>
                                             <button type="button" @click="startMove(item)">Move to…</button>
                                             <button type="button" @click="togglePin(item)"
                                                     x-text="isPinned(item) ? 'Unpin' : 'Pin to top'"></button>
@@ -390,12 +448,30 @@
            folder tree beside a file list, and the moment a second one does,
            these move to build/design-components.mjs. */
         .fm-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-        .fm-root-stack { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+
+        /* The shelf is the page. A reading column left a field of cream
+           around a short card; the drawer and the list want the window. */
+        .fm-page .m-page__body {
+            max-width: none;
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: var(--space-sm);
+            gap: var(--space-sm);
+        }
+        .fm-root-stack {
+            display: flex; flex-direction: column; gap: var(--space-sm);
+            min-width: 0; flex: 1 1 auto; min-height: 0;
+        }
         .fm-pin-card {
             border: 1px solid var(--outline-variant);
             border-radius: var(--radius-lg);
             background: var(--surface-container-lowest);
             overflow: hidden;
+            flex: 0 1 auto;
+            max-height: 32vh;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
         .fm-pin-card__head {
             display: flex; align-items: center; gap: 6px;
@@ -409,6 +485,7 @@
             border-bottom: 1px solid var(--outline-variant);
         }
         .fm-pin-card__head .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 1; }
+        .fm-pin-card__body { overflow: auto; min-height: 0; }
         .fm-pin-card__body .fm-row:last-child { border-bottom: none; }
         .fm-browser-card {
             border: 1px solid var(--outline-variant);
@@ -416,10 +493,11 @@
             background: var(--background);
             overflow: hidden;
             display: flex; flex-direction: column;
-            min-height: 240px;
+            flex: 1 1 auto;
+            min-height: 0;
         }
-        .fm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-        @media (min-width: 720px) { .fm { flex-direction: row; min-height: 320px; } }
+        .fm { display: flex; flex-direction: column; min-height: 0; flex: 1; height: 100%; }
+        @media (min-width: 720px) { .fm { flex-direction: row; } }
 
         .fm-ed-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .fm-ed-actions__wide { display: none; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
@@ -429,22 +507,60 @@
             .fm-ed-actions__narrow { display: none; }
         }
 
-        .fm-tree { border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+        .fm-tree {
+            border-bottom: 1px solid var(--outline-variant);
+            background: var(--surface-container-low);
+            overflow: auto;
+            max-height: 34vh;
+        }
         @media (min-width: 720px) {
-            .fm-tree { width: 200px; flex-shrink: 0; border-bottom: none; border-right: 1px solid var(--outline-variant); overflow: auto; }
+            .fm-tree {
+                width: 240px; flex-shrink: 0; max-height: none;
+                border-bottom: none; border-right: 1px solid var(--outline-variant);
+            }
         }
         .fm-tree__head { padding: 8px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-surface-variant); }
         .fm-tree ul { list-style: none; margin: 0; padding: 4px 6px 8px; }
-        .fm-tree button {
-            display: flex; align-items: center; gap: 6px; width: 100%;
-            min-height: 32px; padding: 6px 8px;
+        .fm-tree__item { position: relative; }
+        .fm-tree__row {
+            display: flex; align-items: center; gap: 0;
+            min-height: 32px; border-radius: var(--radius-md);
+        }
+        .fm-tree__row:hover { background: var(--surface-container); }
+        .fm-tree__row:has([aria-current="true"]) {
+            background: color-mix(in srgb, var(--primary) 12%, transparent);
+        }
+        .fm-tree__twist {
+            flex: 0 0 22px; width: 22px; height: 22px;
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0; border: none; border-radius: var(--radius-sm);
+            background: transparent; color: var(--on-surface-variant);
+        }
+        button.fm-tree__twist { cursor: pointer; }
+        button.fm-tree__twist:hover { background: var(--surface-container-high); }
+        .fm-tree__open {
+            flex: 1 1 auto; min-width: 0;
+            display: flex; align-items: center; gap: 6px;
+            min-height: 32px; padding: 4px 4px 4px 2px;
             border: none; border-radius: var(--radius-md);
             background: transparent; font: inherit; font-size: 12px;
             text-align: left; color: var(--on-surface); cursor: pointer;
         }
-        .fm-tree button:hover { background: var(--surface-container); }
-        .fm-tree button[aria-current="true"] { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; }
-        .fm-tree .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex: 0 0 auto; }
+        .fm-tree__open[aria-current="true"] { color: var(--primary); font-weight: 600; }
+        .fm-tree__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-tree__open .material-symbols-outlined,
+        .fm-tree__twist .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); flex: 0 0 auto; }
+        .fm-tree__open[aria-current="true"] .material-symbols-outlined { color: var(--primary); }
+        /* .m-input is width 100% and 48px tall, which in this 240px row
+           paints over the folder name. Take the leftover space instead. */
+        .fm-tree__rename {
+            flex: 1 1 auto; width: auto; min-width: 0;
+            height: 32px; padding: 0 8px; font-size: 12px; margin: 2px 4px;
+        }
+        .fm-tree__more { flex: 0 0 auto; }
+        .fm-tree__open:focus-visible,
+        .fm-tree__twist:focus-visible,
+        .fm-tree__more:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
 
         .fm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
         .fm-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--outline-variant); }
@@ -454,6 +570,7 @@
             border: 1px solid var(--outline-variant); background: var(--surface);
         }
         .fm-search input { border: none; background: transparent; font: inherit; font-size: 12px; width: 100%; outline: none; }
+        .fm-search:focus-within { outline: 2px solid var(--tertiary); outline-offset: 2px; }
         .fm-search .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
         .fm-where { font-size: 10px; color: var(--on-surface-variant); white-space: nowrap; }
 
@@ -491,6 +608,7 @@
             background: transparent; color: var(--on-surface-variant); cursor: pointer;
         }
         .fm-icon-btn:hover { background: var(--surface-container); }
+        .fm-icon-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
         .fm-icon-btn[disabled] { opacity: 0.4; cursor: default; }
         .fm-icon-btn--pin { color: var(--primary); }
         .fm-icon-btn--pin .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
@@ -519,12 +637,16 @@
             box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
         }
         .fm-menu--up { top: auto; bottom: 100%; }
+        /* The tree is a clip. Its menu is placed on the window so the
+           narrow drawer does not cut the actions off. */
+        .fm-menu--fixed { position: fixed; z-index: 45; right: auto; }
         .fm-menu button {
             border: none; background: none; font: inherit; font-size: 12px;
             text-align: left; padding: 8px 10px; border-radius: var(--radius-sm);
             color: var(--on-surface); cursor: pointer;
         }
         .fm-menu button:hover { background: var(--surface-container); }
+        .fm-menu button:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
         .fm-menu button[disabled] { opacity: 0.4; cursor: default; }
         .fm-menu__danger { color: var(--error); }
 
