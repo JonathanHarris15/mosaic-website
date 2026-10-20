@@ -163,17 +163,21 @@ async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan
     }
 }
 
+/**
+ * Subcollection docs still under people/{from}. The root people/{from} doc is
+ * excluded — it is what we delete once nothing else references the id.
+ */
 async function countPersonSubtreeRemaining(db, fromId) {
     const fromRef = db.collection('people').doc(fromId);
     const rows = await collectPersonSubtreeDocs(fromRef);
-    const samples = rows.map((r) => r.fromPath);
-    let count = rows.length;
-    const fromSnap = await fromRef.get();
-    if (fromSnap.exists) {
-        count += 1;
-        if (samples.length < 20) samples.push(`${PERSON_ROOT_PREFIX}${fromId}`);
-    }
-    return { count, samples };
+    return {
+        count: rows.length,
+        samples: rows.map((r) => r.fromPath),
+    };
+}
+
+function wouldDeleteFromPerson(remaining) {
+    return (remaining && remaining.count) === 0;
 }
 
 async function countRemainingReferences(db, fromId) {
@@ -389,7 +393,7 @@ async function main() {
     if (COMMIT) {
         await applyPlan(db, plan);
         const remaining = await countRemainingReferences(db, fromId);
-        if (remaining.count > 0) {
+        if (!wouldDeleteFromPerson(remaining)) {
             console.error(JSON.stringify({ remaining }, null, 2));
             throw new Error(
                 `Source person still has ${remaining.count} reference(s); not deleting people/${fromId}.`);
@@ -398,7 +402,7 @@ async function main() {
         plan.deleteFromPerson = true;
     } else {
         const remaining = await countRemainingReferences(db, fromId);
-        plan.deleteFromPerson = remaining.count <= 1;
+        plan.deleteFromPerson = wouldDeleteFromPerson(remaining);
     }
 
     console.log(JSON.stringify({
@@ -422,9 +426,11 @@ async function main() {
 module.exports = {
     scanTopLevel,
     countRemainingReferences,
+    countPersonSubtreeRemaining,
     collectPersonSubtreeDocs,
     planPersonSubtreeMoves,
     toPathForPerson,
+    wouldDeleteFromPerson,
 };
 
 if (require.main === module) {
