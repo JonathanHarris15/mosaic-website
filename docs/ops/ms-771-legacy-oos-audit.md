@@ -1,4 +1,4 @@
-# MS OOS legacy removal — audit (prayer leaders + role-slot fallbacks)
+# MS-771 — Legacy OOS prayer leaders audit
 
 Jonathan directive (Oct 2026): remove legacy Order-of-Service assignee paths that
 override liturgy-order `carriedBy` per-item leaders (e.g. **Prayer Leader (Praise)**
