@@ -26,8 +26,7 @@ function reportedSunday() {
         musicLeader: { name: 'Hannah', id: 'ml' },
         musicHelpers: [],
         preacher: { name: 'Daniel', id: 'pr' },
-        prayerPraise: { name: '', id: null },
-        prayerConfession: { name: '', id: null },
+        carriedBy: {},
         elements: { name: '', id: null },
         other: { name: '', id: null },
         isIrregular: false,
@@ -119,7 +118,7 @@ test('an unlinked hymn is unfinished on both surfaces, and theme does not change
     service.liturgy.hymnMid1 = hymn('', null);
     service.theme = 'A full theme';
     service.keyVerse = 'Psalm 23:1';
-    service.prayerPraise = { name: 'Ada', id: 'ada' };
+    service.carriedBy = { prayerOfPraise: { name: 'Ada', id: 'ada' } };
     const door = Home.readiness(flattenServiceForSave(service));
     assert.deepEqual(door.literals, ['Hymn of Praise']);
     assert.equal(door.set, 4);

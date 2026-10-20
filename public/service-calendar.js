@@ -222,8 +222,6 @@ function calendarPage() {
                 'serviceLeader': 'Service Leader',
                 'preacher': 'Preacher',
                 'musicLeader': 'Music Leader',
-                'prayerPraiseName': 'Prayer Leader (Praise)',
-                'prayerConfessionName': 'Prayer Leader (Confession)',
             };
             return names[field] || 'Person';
         },
@@ -260,15 +258,11 @@ function calendarPage() {
                     'serviceLeader': 'serviceLeaderId',
                     'musicLeader': 'musicLeaderId',
                     'preacher': 'preacherId',
-                    'prayerPraiseName': 'prayerPraiseId',
-                    'prayerConfessionName': 'prayerConfessionId',
                 };
                 const roleMap = {
                     'serviceLeader': 'service_leader',
                     'musicLeader': 'worship_leader',
                     'preacher': 'preacher',
-                    'prayerPraiseName': 'prayer',
-                    'prayerConfessionName': 'prayer',
                 };
 
                 const idField = idFieldMap[this.selectorField];
@@ -281,8 +275,6 @@ function calendarPage() {
                 const role = roleMap[this.selectorField];
 
                 let metadata = null;
-                if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
-                if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
 
                 if (oldId !== newId) {
                     if (oldId) {
@@ -1893,21 +1885,17 @@ function injectServiceData(serviceMap) {
             
             const praiseRow = document.createElement('div');
             praiseRow.className = 'flex gap-1 items-center';
-            praiseRow.innerHTML = `<span class="opacity-50">P:</span> <span class="praise-name-cell">${svc.prayerPraiseName || '—'}</span>`;
-            praiseRow.querySelector('.praise-name-cell').setAttribute('data-person-id', svc.prayerPraiseId || '');
-            
+            const carried = svc.carriedBy || {};
+            const praise = carried.prayerOfPraise || {};
+            const confession = carried.prayerOfConfession || {};
+            praiseRow.innerHTML = `<span class="opacity-50">P:</span> <span class="praise-name-cell">${praise.name || '—'}</span>`;
+            praiseRow.querySelector('.praise-name-cell').setAttribute('data-person-id', praise.id || '');
             const confRow = document.createElement('div');
             confRow.className = 'flex gap-1 items-center';
-            confRow.innerHTML = `<span class="opacity-50">C:</span> <span class="conf-name-cell">${svc.prayerConfessionName || '—'}</span>`;
-            confRow.querySelector('.conf-name-cell').setAttribute('data-person-id', svc.prayerConfessionId || '');
-            
+            confRow.innerHTML = `<span class="opacity-50">C:</span> <span class="conf-name-cell">${confession.name || '—'}</span>`;
+            confRow.querySelector('.conf-name-cell').setAttribute('data-person-id', confession.id || '');
             prayersCell.appendChild(praiseRow);
             prayersCell.appendChild(confRow);
-
-            if (canEdit) {
-                setupInlineEdit(praiseRow.querySelector('.praise-name-cell'), dateKey, 'prayerPraiseName');
-                setupInlineEdit(confRow.querySelector('.conf-name-cell'), dateKey, 'prayerConfessionName');
-            }
         }
       } catch (err) {
         console.error('Could not draw the service row for', el.dataset.serviceDate, err);
@@ -2215,8 +2203,6 @@ async function writeServiceField(dateKey, field, newVal) {
         'serviceLeader': 'serviceLeaderId',
         'musicLeader': 'musicLeaderId',
         'preacher': 'preacherId',
-        'prayerPraiseName': 'prayerPraiseId',
-        'prayerConfessionName': 'prayerConfessionId'
     };
 
     const updates = {
@@ -2254,7 +2240,7 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
 
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher'];
     const element = liturgyElementFor(field);
 
     el.onclick = (e) => {

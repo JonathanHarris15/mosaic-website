@@ -43,6 +43,11 @@
 (function (global) {
     'use strict';
 
+    const Legacy = (typeof require !== 'undefined' &&
+            typeof module !== 'undefined' && module.exports) ?
+        require('./legacy-oos-migrate-core.js') :
+        (global && global.LegacyOosMigrateCore);
+
     // ── Vocabulary ────────────────────────────────────────────────────────────
 
     // The recurrence patterns a church actually uses. Deliberately NOT a general
@@ -524,8 +529,6 @@
         { field: 'serviceLeaderId', roleSlug: 'service_leader' },
         { field: 'musicLeaderId', roleSlug: 'worship_leader' },
         { field: 'preacherId', roleSlug: 'preacher' },
-        { field: 'prayerPraiseId', roleSlug: 'prayer' },
-        { field: 'prayerConfessionId', roleSlug: 'prayer' },
         // Music helpers are a list of {name, id}, not a single field.
         { field: 'musicHelpers', roleSlug: 'worship_helper', list: true },
     ]);
@@ -549,6 +552,14 @@
                 held.push({ personId: personId, roleSlug: f.roleSlug });
             });
         });
+
+        if (Legacy && typeof Legacy.mergePrayerInvolvement === 'function') {
+            Legacy.mergePrayerInvolvement(doc, null).forEach((rec) => {
+                if (!rec || !rec.personId || seen.has(rec.personId)) return;
+                seen.add(rec.personId);
+                held.push({ personId: rec.personId, roleSlug: rec.type });
+            });
+        }
 
         return held;
     }

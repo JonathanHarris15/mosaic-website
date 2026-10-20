@@ -50,8 +50,6 @@
         ['preacher', 'Preacher'],
         ['serviceLeader', 'Service Leader'],
         ['musicLeader', 'Music Leader'],
-        ['prayerPraiseName', 'Prayer (Praise)'],
-        ['prayerConfessionName', 'Prayer (Confession)'],
         ['elementsName', 'Elements of the Service'],
         ['otherName', 'Other Involvement'],
     ]);

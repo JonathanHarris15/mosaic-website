@@ -346,18 +346,6 @@ test('a prayer that sends requests keeps one line per person and a list of days'
     assert.equal(Core.elementById(cleared, el.id).elderDigest, false);
 });
 
-test('older praise and confession leaders sit under the seed rows they belong with', () => {
-    const order = Core.standardCatalog().orders[0];
-    const homes = Core.legacyPrayerHomes(order);
-    assert.equal(homes.praiseId, 'callToWorship');
-    assert.equal(homes.confessionId, 'callToConfession');
-    assert.equal(homes.pastoralId, undefined);
-    const stripped = {
-        elements: order.elements.filter(function (el) { return el.id !== 'callToWorship'; }),
-    };
-    assert.equal(Core.legacyPrayerHomes(stripped).praiseId, null);
-});
-
 test('moving within an order reorders it and the source catalog is untouched', () => {
     const cat = Core.standardCatalog();
     const moved = Core.moveInOrder(cat, 'standard', 0, 2);

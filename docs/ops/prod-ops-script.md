@@ -56,3 +56,4 @@ gh workflow run "Prod ops script" --ref main \
 | `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |
 | `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`; `commit=true` to send one text to Jonathan Harris) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
+| `migrate-legacy-oos-prayer-carriers.js` | [OOS legacy prayer leaders → `carriedBy`](./ms-oos-legacy-removal-legacy-oos-audit.md) (optional `--from` / `--to`; `commit=true` to apply) |

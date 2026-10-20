@@ -63,14 +63,6 @@
     const NOTICE_REMINDER_GAP = 2;
     const PROSE_MAX = 1000;
 
-    // The older Sunday fields are not elements. They are drawn under the
-    // elements the seed already uses for those moments. A leader stays under
-    // its row when that element is renamed, because the id does not change.
-    // Praise and confession leaders still sit under the seed scripture rows
-    // they have always belonged with.
-    const LEGACY_PRAISE_ID = 'callToWorship';
-    const LEGACY_CONFESSION_ID = 'callToConfession';
-
     const STANDARD_ORDER_ID = 'standard';
 
     const COLLECTIONS = Object.freeze({
@@ -1057,18 +1049,6 @@
         return problems;
     }
 
-    // Where the older praise and confession leaders are drawn on a locked
-    // order. A missing id means that leader is not nested under a row.
-    function legacyPrayerHomes(order) {
-        const elements = (order && order.elements) || [];
-        const praise = elements.find(function (el) { return el.id === LEGACY_PRAISE_ID; });
-        const confession = elements.find(function (el) { return el.id === LEGACY_CONFESSION_ID; });
-        return {
-            praiseId: praise ? praise.id : null,
-            confessionId: confession ? confession.id : null,
-        };
-    }
-
     const LiturgyOrderCore = {
         KINDS: KINDS,
         KIND_LABELS: KIND_LABELS,
@@ -1077,8 +1057,6 @@
         DEFAULT_NOTICE_DAYS: DEFAULT_NOTICE_DAYS,
         DEFAULT_NOTICE_LIST: DEFAULT_NOTICE_LIST,
         NOTICE_DAYS_MAX: NOTICE_DAYS_MAX,
-        LEGACY_PRAISE_ID: LEGACY_PRAISE_ID,
-        LEGACY_CONFESSION_ID: LEGACY_CONFESSION_ID,
         PRIMITIVES: Object.freeze(['song', 'scripture', 'text', 'people']),
         PRIMITIVE_LABELS: Object.freeze({
             song: 'Hymn',
@@ -1134,7 +1112,6 @@
         removeFromOrder: removeFromOrder,
         moveInOrder: moveInOrder,
         validateCatalog: validateCatalog,
-        legacyPrayerHomes: legacyPrayerHomes,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

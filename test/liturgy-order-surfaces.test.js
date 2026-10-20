@@ -57,13 +57,13 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.doesNotMatch(html, /takeFromOrder\(/);
     assert.doesNotMatch(js, /LiturgyOrderStore\.save/);
     assert.doesNotMatch(js, /function indexInList/);
-    assert.match(html, /showsPraise\(item\)/);
-    assert.match(html, /showsConfession\(item\)/);
+    assert.doesNotMatch(html, /showsPraise\(item\)/);
+    assert.doesNotMatch(html, /showsConfession\(item\)/);
     assert.doesNotMatch(html, /showsPastoral\(item\)/);
     assert.doesNotMatch(html, /Male Being Prayed For/);
     assert.doesNotMatch(html, /Prayer Type/);
     assert.doesNotMatch(js, /showsPastoral/);
-    assert.match(html, /Prayer Leader \(Praise\)/);
+    assert.doesNotMatch(html, /Prayer Leader \(Praise\)/);
     assert.match(html, /item\.type === 'prayer'/);
     assert.match(html, /Who prays /);
     assert.match(html, /prayerScheduleLabel\(slot\.id\)/);
@@ -74,7 +74,7 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /item\.type === 'person'/);
     assert.match(js, /type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
-    assert.match(js, /legacyPrayerHomes/);
+    assert.match(js, /hydrateCarriedByFromLegacy/);
     assert.match(js, /el\.prayedByOther/);
     assert.match(js, /rowOpens\(item\)/);
     assert.match(html, /rowOpens\(item\)/);
@@ -83,8 +83,6 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /x-show="rowOpens\(item\) && !heldBy\(item\.key\)"/);
     const panel = html.indexOf("openKey === item.key || item.type === 'legacy'");
     assert.ok(panel !== -1, 'the row panel is the dropdown');
-    assert.ok(panel < html.indexOf('Prayer Leader (Confession)'), 'the confession leader is inside the dropdown');
-    assert.ok(panel < html.indexOf('Prayer Leader (Praise)'), 'the praise leader is inside the dropdown');
     assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
     const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
     const who = html.indexOf("'Who prays '");
