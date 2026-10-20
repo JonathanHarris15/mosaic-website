@@ -8,6 +8,8 @@
 const ALLOWLIST_SORTED = [
     'set-liturgy-order-flags.js',
     'migrate-hymn-sheets-prefix.js',
+    'textbelt-test-send.js',
+    'reset-prayer-send-attempt.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

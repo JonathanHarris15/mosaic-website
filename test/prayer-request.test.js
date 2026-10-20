@@ -580,6 +580,13 @@ test('prayerSmsIncludeAnswerLink is off unless includeAnswerLinkInSms is true', 
     assert.strictEqual(pr.prayerSmsIncludeAnswerLink({ includeAnswerLinkInSms: true }), true);
 });
 
+test('prayerSmsIncludeReplyWebhook is off unless includeReplyWebhookInSms is true', () => {
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook(null), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({}), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({ includeReplyWebhookInSms: false }), false);
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({ includeReplyWebhookInSms: true }), true);
+});
+
 test('preparePrayerSmsTextTemplates strips link wording when links are off', () => {
     const out = pr.preparePrayerSmsTextTemplates(pr.DEFAULT_PRAYER_MESSAGES, false);
     assert.ok(!out.initial.includes('{link}'));

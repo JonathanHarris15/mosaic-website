@@ -2346,6 +2346,7 @@ async function loadPrayerConfig(db) {
     push: pr.resolvePushWording(data),
     autoSendEnabled: !!data.autoSendEnabled,
     includeAnswerLinkInSms: pr.prayerSmsIncludeAnswerLink(data),
+    includeReplyWebhookInSms: pr.prayerSmsIncludeReplyWebhook(data),
   };
 }
 
@@ -2943,13 +2944,12 @@ async function dispatchPrayerAsk(db, args) {
   const intent = pr.prayerNotifyRequest(kind);
   if (!intent) return {success: false, error: "Nothing to send."};
 
-  let includeLinkInSms = false;
-  if (typeof args.includeAnswerLinkInSms === "boolean") {
-    includeLinkInSms = args.includeAnswerLinkInSms;
-  } else {
-    const cfg = await loadPrayerConfig(db);
-    includeLinkInSms = cfg.includeAnswerLinkInSms;
-  }
+  const cfg = await loadPrayerConfig(db);
+  const includeLinkInSms = typeof args.includeAnswerLinkInSms === "boolean" ?
+    args.includeAnswerLinkInSms : cfg.includeAnswerLinkInSms;
+  const includeReplyWebhook = typeof args.includeReplyWebhookInSms ===
+      "boolean" ?
+    args.includeReplyWebhookInSms : cfg.includeReplyWebhookInSms;
 
   const minted = await answerDoor.mintAnswerLink(db, {
     purpose: "prayer_request",
@@ -2968,7 +2968,7 @@ async function dispatchPrayerAsk(db, args) {
     previousChannel: args.previousChannel || null,
     url: includeLinkInSms ? minted.url : null,
     values: {name: pr.firstNameOf(personSnap.data().name)},
-    expectReply: true,
+    expectReply: includeReplyWebhook,
     message: pr.messageWithLink(args.message, includeLinkInSms),
   });
   if (!result.accepted) {

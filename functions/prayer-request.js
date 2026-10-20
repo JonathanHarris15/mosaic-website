@@ -35,6 +35,14 @@ const REMINDER_DAYS_OUT = 3;
 const PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD = "includeAnswerLinkInSms";
 
 /**
+ * Church setting on app_config/prayer_request_sms. Default false:
+ * pastoral-prayer SMS sends omit Textbelt replyWebhookUrl so unverified API
+ * keys can deliver (Textbelt treats reply webhooks as a URL feature). When
+ * true, inbound SMS replies route through smsInbound again.
+ */
+const PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD = "includeReplyWebhookInSms";
+
+/**
  * Canonical default Prayer Request message templates. {name} is replaced with
  * the subject's first name when sent. These are the server-side fallback when
  * app_config/prayer_request_sms has no (or a blank) value for a kind. KEEP IN
@@ -139,6 +147,17 @@ function resolveTemplates(config) {
 function prayerSmsIncludeAnswerLink(config) {
   const data = config || {};
   return data[PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD] === true;
+}
+
+/**
+ * Whether pastoral-prayer SMS should attach Textbelt replyWebhookUrl.
+ * Off unless the church sets includeReplyWebhookInSms on prayer_request_sms.
+ * @param {?Object} config app_config/prayer_request_sms, or null.
+ * @return {boolean}
+ */
+function prayerSmsIncludeReplyWebhook(config) {
+  const data = config || {};
+  return data[PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD] === true;
 }
 
 /**
@@ -880,9 +899,11 @@ if (typeof module !== "undefined" && module.exports) {
     pushConfigKey,
     firstNameOf,
     PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD,
+    PRAYER_SMS_INCLUDE_REPLY_WEBHOOK_FIELD,
     resolveTemplates,
     resolvePushWording,
     prayerSmsIncludeAnswerLink,
+    prayerSmsIncludeReplyWebhook,
     stripAnswerLinkFromPrayerText,
     renderPrayerRequestMessage,
     ensureAnswerLinkInTemplate,

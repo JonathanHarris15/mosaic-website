@@ -53,6 +53,8 @@ test('dispatchPrayerAsk mints an Answer link for scheduler and send-now', () => 
     assert.match(ask, /recordOutbound/);
     assert.match(ask, /messageWithLink\(args\.message, includeLinkInSms\)/);
     assert.match(ask, /includeLinkInSms \? minted\.url : null/);
+    assert.match(ask, /includeReplyWebhookInSms/);
+    assert.match(ask, /expectReply:\s*includeReplyWebhook/);
 });
 
 test('failed automatic sends stamp lastSendAttemptDate so the hour does not retry', () => {
