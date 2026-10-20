@@ -728,7 +728,10 @@ function serviceForm() {
         // Service calendar lists them in.
         get liturgyOrders() {
             const Core = liturgyCore();
-            return Core.toggledOrders(this.liturgyCatalog, this.liturgyCatalog.orders.map(o => o.id));
+            const visible = Core.visibleOrders(this.liturgyCatalog);
+            return Core.toggledOrders(
+                Object.assign({}, this.liturgyCatalog, { orders: visible }),
+                visible.map(o => o.id));
         },
         get selectedOrderId() {
             return liturgyCore().orderFor(this.service, this.liturgyCatalog).id;

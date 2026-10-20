@@ -45,6 +45,8 @@
         };
         const printableId = order && order.printableId ? String(order.printableId).trim() : '';
         if (printableId) doc.printableId = printableId;
+        if (order.ops === true) doc.ops = true;
+        if (order.hidden === true) doc.hidden = true;
         return doc;
     }
 

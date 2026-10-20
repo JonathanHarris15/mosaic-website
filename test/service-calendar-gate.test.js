@@ -25,6 +25,16 @@ test('the table gates editing on AccessCore.canFixSundayService', () => {
     assert.match(authBlock(), /if \(AccessCore\.canFixSundayService\(userData\)\) \{/);
 });
 
+test('Import, Inject, and Remove use canUseServiceCalendarWeekTools', () => {
+    assert.match(authBlock(), /AccessCore\.canUseServiceCalendarWeekTools\(userData\)/);
+    assert.match(authBlock(), /document\.body\.classList\.add\('can-week-shift'\)/);
+});
+
+test('week-shift toolbar buttons are hidden unless the body carries can-week-shift', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'service-calendar.html'), 'utf8');
+    assert.match(html, /body:not\(\.can-week-shift\) #import-docx-btn/);
+});
+
 test('no level-string list decides who edits the table', () => {
     assert.doesNotMatch(authBlock(), /\[\s*'editor'\s*,\s*'elder'/);
     assert.doesNotMatch(authBlock(), /\.includes\(permissionLevel\)/);
@@ -69,4 +79,19 @@ test('a custom level carrying services.builder.edit edits the table', () => {
 test('an unmigrated legacy editor still edits; signed out does not', () => {
     assert.strictEqual(can({ permissionLevel: 'editor' }), true);
     assert.strictEqual(can(null), false);
+});
+
+const weekTools = (u) => AccessCore.canUseServiceCalendarWeekTools(u);
+
+test('week-shift toolbar actions: member never, editor and elder yes', () => {
+    assert.strictEqual(weekTools(seeded('member')), false);
+    assert.strictEqual(weekTools(seeded('editor')), true);
+    assert.strictEqual(weekTools(seeded('elder')), true);
+    assert.strictEqual(weekTools(seeded('super_admin')), true);
+});
+
+test('a member custom level with only services.builder.edit does not get week-shift tools', () => {
+    const perms = Object.assign({}, seeded('member').permissions, { 'services.builder.edit': true });
+    assert.strictEqual(can({ accountLevelId: 'level_custom_music', permissionLevel: 'member', permissions: perms }), true);
+    assert.strictEqual(weekTools({ accountLevelId: 'level_custom_music', permissionLevel: 'member', permissions: perms }), false);
 });

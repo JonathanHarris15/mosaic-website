@@ -219,7 +219,8 @@ test('a legacy slot stored as a bare string still reads', () => {
 // ── The markup ────────────────────────────────────────────────────────────
 
 test('every order has a toggle over the table, and a way to manage them', () => {
-    assert.match(HTML, /id="table-orders"[\s\S]{0,600}x-for="o in liturgyOrders"[\s\S]{0,300}toggleTableOrder\(o\.id\)/);
+    assert.match(HTML, /id="table-orders-filter"/);
+    assert.match(HTML, /id="table-orders" class="m-toolbar[\s\S]{0,2000}x-for="o in liturgyOrders"[\s\S]{0,300}toggleTableOrder\(o\.id\)/);
     assert.match(HTML, /href="liturgy-orders\.html"/);
     assert.match(HTML, /<script src="liturgy-order-core\.js"><\/script>[\s\S]*<script src="service-calendar\.js"><\/script>/);
 });
