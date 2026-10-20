@@ -43,6 +43,11 @@ function calendarPage() {
         // are on is remembered on this device, like the view itself.
         liturgyOrders: [],
         tableOrderIds: [],
+        ordersFilterOpen: false,
+
+        get tableOrdersActiveCount() {
+            return this.tableOrderIds.length;
+        },
 
         isTableOrderOn(id) {
             return this.tableOrderIds.includes(id);
@@ -59,8 +64,10 @@ function calendarPage() {
 
         syncTableOrders() {
             const catalog = currentCatalog();
-            const all = catalog.orders.map(o => o.id);
-            this.liturgyOrders = LiturgyOrderCore.toggledOrders(catalog, all)
+            const visible = LiturgyOrderCore.visibleOrders(catalog);
+            const all = visible.map(o => o.id);
+            this.liturgyOrders = LiturgyOrderCore.toggledOrders(
+                Object.assign({}, catalog, { orders: visible }), all)
                 .map(o => ({ id: o.id, name: o.name }));
             this.tableOrderIds = currentTableOrderIds().slice();
         },
@@ -2699,6 +2706,9 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
 
 // --- AUTH PROTECTION ---
 auth.onAuthStateChanged(async (user) => {
+    if (!user && typeof window.MosaicEmulatorSignIn === 'function') {
+        try { await window.MosaicEmulatorSignIn(); return; } catch (e) { /* fall through */ }
+    }
     if (user) {
         try {
             const userData = await getUserData(user.uid);
@@ -2739,19 +2749,15 @@ auth.onAuthStateChanged(async (user) => {
                 // which would leave you looking newly arrived for half a
                 // minute after closing the tab.
                 window.addEventListener('beforeunload', () => PresenceStore.leave());
-                const importBtn = document.getElementById('import-docx-btn');
-                if (importBtn) {
-                    importBtn.classList.remove('hidden');
-                    if (window.initDocxImporter) {
+                if (AccessCore.canUseServiceCalendarWeekTools(userData)) {
+                    document.body.classList.add('can-week-shift');
+                    const importBtn = document.getElementById('import-docx-btn');
+                    if (importBtn && window.initDocxImporter) {
                         window.initDocxImporter(() => {
                             location.reload();
                         });
                     }
                 }
-                const injectBtn = document.getElementById('inject-service-btn');
-                if (injectBtn) injectBtn.classList.remove('hidden');
-                const removeBtn = document.getElementById('remove-service-btn');
-                if (removeBtn) removeBtn.classList.remove('hidden');
                 // Re-inject data to enable edit handlers
                 if (Object.keys(serviceDataMap).length > 0) {
                     injectServiceData(serviceDataMap);
@@ -2762,6 +2768,7 @@ auth.onAuthStateChanged(async (user) => {
         }
     } else {
         document.body.classList.remove('can-edit');
+        document.body.classList.remove('can-week-shift');
     }
 });
 

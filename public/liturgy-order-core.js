@@ -324,7 +324,19 @@
         };
         const printableId = printableIdOf(src);
         if (printableId) out.printableId = printableId;
+        if (src.ops === true) out.ops = true;
+        if (src.hidden === true) out.hidden = true;
         return out;
+    }
+
+    // Ops and test fixtures stay in Firestore but drop out of ordinary pickers
+    // and filters (MS-770). Either flag means the same thing on read.
+    function orderIsHidden(order) {
+        return !!(order && (order.ops === true || order.hidden === true));
+    }
+
+    function visibleOrders(catalog) {
+        return ((catalog && catalog.orders) || []).filter(function (o) { return !orderIsHidden(o); });
     }
 
     function poolFrom(orders, loose) {
@@ -653,7 +665,7 @@
 
     function readToggles(stored, catalog) {
         if (!Array.isArray(stored)) return defaultToggles();
-        const ids = new Set(((catalog && catalog.orders) || []).map(function (o) { return o.id; }));
+        const ids = new Set(visibleOrders(catalog).map(function (o) { return o.id; }));
         const kept = stored.filter(function (id) { return typeof id === 'string' && ids.has(id); });
         return kept.length || !stored.length ? kept : defaultToggles();
     }
@@ -1088,6 +1100,8 @@
         songIdsOf: songIdsOf,
         allSongIds: allSongIds,
         toggledOrders: toggledOrders,
+        orderIsHidden: orderIsHidden,
+        visibleOrders: visibleOrders,
         tableColumns: tableColumns,
         elementForColumn: elementForColumn,
         columnCarriesOrder: columnCarriesOrder,

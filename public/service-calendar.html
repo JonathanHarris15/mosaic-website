@@ -164,8 +164,34 @@
            Every order, a check each. The ones on are the table's liturgy
            columns. Managing the orders is an editor's job, so the link to it
            waits for the page to know who you are. */
-        .cal-orders { padding-bottom: var(--space-sm); }
+        .cal-orders {
+            padding-bottom: var(--space-xs);
+            min-height: 0;
+            border-bottom: none;
+        }
+        .cal-orders__filter-wrap { position: relative; }
+        .cal-orders__popover {
+            position: absolute;
+            left: 0;
+            top: calc(100% + 6px);
+            z-index: 30;
+            width: min(18rem, 92vw);
+            box-shadow: var(--shadow-md);
+        }
+        .cal-orders__popover .m-check {
+            min-height: 1.75rem;
+            font-size: 0.8125rem;
+        }
         body:not(.can-edit) .cal-orders__manage { display: none; }
+
+        /* Week-shift header tools stay off until services.week_shift is granted.
+           `hidden` alone loses to .m-btn { display: flex }, so the body class
+           is the gate (MS-770). */
+        body:not(.can-week-shift) #import-docx-btn,
+        body:not(.can-week-shift) #inject-service-btn,
+        body:not(.can-week-shift) #remove-service-btn {
+            display: none !important;
+        }
 
         /* A column this Sunday's order does not use. The value, when the
            Sunday still holds one, stays readable; the slot itself is quiet
@@ -283,7 +309,9 @@
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="emulator-connect.js"></script>
     <script src="auth.js"></script>
+    <script src="emulator-signin.js"></script>
 
     <script src="permission-catalog.js"></script>
     <script src="account-levels-core.js"></script>
@@ -731,17 +759,36 @@
                          What lines up is one column. A column only one order
                          uses is labelled with that order. -->
                     <div id="table-orders" class="m-toolbar cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
-                        <div class="m-toolbar__cluster">
-                            <span id="table-orders-label" class="m-label">Liturgy orders</span>
-                            <template x-for="o in liturgyOrders" :key="o.id">
-                                <label class="m-check">
-                                    <input type="checkbox" :value="o.id" :checked="isTableOrderOn(o.id)" @change="toggleTableOrder(o.id)" />
-                                    <span x-text="o.name"></span>
-                                </label>
-                            </template>
+                        <div class="cal-orders__filter-wrap m-toolbar__cluster">
+                            <span id="table-orders-label" class="sr-only">Liturgy orders shown as table columns</span>
+                            <button type="button" id="table-orders-filter"
+                                    @click="ordersFilterOpen = !ordersFilterOpen"
+                                    :aria-expanded="ordersFilterOpen"
+                                    aria-labelledby="table-orders-label"
+                                    class="m-btn m-btn--quiet m-btn--sm">
+                                <span class="material-symbols-outlined text-[17px]">tune</span>
+                                <span class="m-btn__label">Orders</span>
+                                <span class="m-badge m-badge--neutral" x-text="tableOrdersActiveCount"></span>
+                            </button>
+                            <div x-show="ordersFilterOpen" x-cloak
+                                 class="cal-orders__popover"
+                                 @click.outside="ordersFilterOpen = false"
+                                 @keydown.escape.window="ordersFilterOpen = false">
+                                <section class="m-card p-sm">
+                                    <div class="m-label">Liturgy orders</div>
+                                    <div class="mt-xs flex flex-col gap-0.5">
+                                        <template x-for="o in liturgyOrders" :key="o.id">
+                                            <label class="m-check">
+                                                <input type="checkbox" :value="o.id" :checked="isTableOrderOn(o.id)" @change="toggleTableOrder(o.id)" />
+                                                <span x-text="o.name"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </section>
+                            </div>
                         </div>
                         <a href="liturgy-orders.html" class="cal-orders__manage m-btn m-btn--quiet m-btn--sm">
-                            <span class="material-symbols-outlined">tune</span>
+                            <span class="material-symbols-outlined text-[17px]">settings</span>
                             <span class="m-btn__label">Manage orders</span>
                         </a>
                     </div>

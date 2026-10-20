@@ -251,6 +251,16 @@
         return writesWith(value, 'services.builder.edit');
     }
 
+    // MS-770: Import / Inject / Remove on the Services calendar. Elders carry
+    // services.week_shift; editors carry services.builder.edit. A member-shaped
+    // account may carry builder.edit for the table without getting schedule
+    // tools — the stored level string is what separates them.
+    function canUseServiceCalendarWeekTools(value) {
+        if (writesWith(value, 'services.week_shift')) return true;
+        if (!writesWith(value, 'services.builder.edit')) return false;
+        return storedPermissionLevel(accountOf(value)) !== 'member';
+    }
+
     // MS-720 (ADR 0081): who may change an Event's details.
     function canEditEvents(value) {
         return writesWith(value, 'calendar.events.edit');
@@ -312,6 +322,7 @@
         canViewDirectory,
         writesWith,
         canFixSundayService,
+        canUseServiceCalendarWeekTools,
         canEditEvents,
         readsAsMember,
         canEditResources,

@@ -32,6 +32,7 @@ test('no page routes a Sunday to the legacy generator', () => {
 test('the calendar\'s table mode toggles orders and links the management page', () => {
     const html = read('service-calendar.html');
     assert.match(html, /id="table-orders"/);
+    assert.match(html, /id="table-orders-filter"/);
     assert.match(html, /toggleTableOrder\(o\.id\)/);
     assert.match(html, /href="liturgy-orders\.html"/);
 });
