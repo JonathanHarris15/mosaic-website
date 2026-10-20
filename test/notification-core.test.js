@@ -140,6 +140,21 @@ test('a blank template falls back per field', () => {
     }), 'Default Ada.');
 });
 
+test('title and prose are filled from the caller and never invented', () => {
+    assert.strictEqual(nc.renderText({
+        template: '{title}\n{prose}\n{link}',
+        fallback: '',
+        firstName: 'Ada',
+        link: 'https://example.test/e',
+        fields: {title: 'Membership Matters', prose: 'Meets tonight.'},
+    }), 'Membership Matters\nMeets tonight.\nhttps://example.test/e');
+    assert.strictEqual(nc.renderText({
+        template: 'See {title}',
+        fallback: '',
+        firstName: 'Ada',
+    }), 'See ');
+});
+
 test('a link is substituted and never invented', () => {
     assert.strictEqual(nc.renderText({
         template: 'Open {link}', fallback: '', firstName: 'Ada',

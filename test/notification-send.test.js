@@ -76,6 +76,45 @@ test('a live token is a push carrying the URL, and no text follows', async () =>
     assert.strictEqual(calls.logs[0].personId, 'person-1');
 });
 
+test('an event tell pushes the announcement, and texts it when there is no token', async () => {
+    const eventTemplates = {
+        text: {tell: '{title}\n{prose}\n{link}'},
+        textFallback: {tell: '{title}'},
+        push: {tell: {title: '{title}', body: '{prose}'}},
+        pushFallback: {tell: {title: 'Event', body: '{prose}'}},
+    };
+    const request = {
+        personId: 'person-1',
+        purpose: 'event_announcement',
+        wording: 'tell',
+        url: 'https://example.test/event',
+        expectReply: false,
+        values: {
+            name: 'Ada',
+            title: 'Membership Matters',
+            prose: 'Meets tonight.',
+            link: 'https://example.test/event',
+        },
+    };
+    const pushed = harness({loadTemplates: async () => eventTemplates});
+    const pushResult = await tellPerson(pushed.deps, request);
+    assert.strictEqual(pushResult.channel, 'push');
+    assert.strictEqual(pushed.calls.push[0].title, 'Membership Matters');
+    assert.strictEqual(pushed.calls.push[0].body, 'Meets tonight.');
+    assert.strictEqual(pushed.calls.text.length, 0);
+
+    const texted = harness({
+        loadTemplates: async () => eventTemplates,
+        loadTokens: async () => [],
+        loadPerson: async () => ({uid: null, phone: '+15551212', firstName: 'Ada'}),
+    });
+    const textResult = await tellPerson(texted.deps, request);
+    assert.strictEqual(textResult.channel, 'text');
+    assert.match(texted.calls.text[0].body, /Membership Matters/);
+    assert.match(texted.calls.text[0].body, /Meets tonight/);
+    assert.strictEqual(texted.calls.text[0].expectReply, false);
+});
+
 test('no linked user is a text', async () => {
     const {deps, calls} = harness({
         loadPerson: async () => ({uid: null, phone: '+15551212', firstName: 'Jane'}),

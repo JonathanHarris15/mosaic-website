@@ -293,6 +293,16 @@ test('the offline registry is the same list with nothing invented in it', () => 
     assert.notEqual(core.NOTIFICATION_TYPES[0].name, 'scribbled on');
 });
 
+test('a kind with both channels is push first, then a text', () => {
+    const tell = core.NOTIFICATION_TYPES.find((t) => t.id === 'event_announcement');
+    assert.equal(tell.live, true);
+    assert.equal(core.reachRoute(tell), 'Push, then a text');
+    const ask = core.NOTIFICATION_TYPES.find((t) => t.id === 'prayer_ask_initial');
+    assert.equal(core.reachRoute(ask), 'Push, then a text');
+    const thankyou = core.NOTIFICATION_TYPES.find((t) => t.id === 'prayer_thankyou');
+    assert.equal(core.reachRoute(thankyou), 'Text');
+});
+
 /* ── the picture is the send path ──────────────────────────────────────── */
 
 test('the flow diagram is drawn from notification-core, not from a second copy', () => {

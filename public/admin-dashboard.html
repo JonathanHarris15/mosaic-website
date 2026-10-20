@@ -299,7 +299,7 @@
                     :class="tab === 'push' && 'm-tabs__tab--current'"
                     @click="selectTab('push')">
                 <span class="material-symbols-outlined text-[18px]">notifications_active</span>
-                Push notifications
+                Notifications
                 <span x-show="pushTrouble > 0" class="m-tabs__dot"
                       :title="pushTrouble + ' notification(s) did not land in the last 7 days'"></span>
             </button>
@@ -546,11 +546,11 @@
                     <div class="flex flex-col gap-xs min-w-0">
                         <div class="flex items-center gap-sm">
                             <span class="material-symbols-outlined text-[24px] text-primary" style='font-variation-settings: "FILL" 1;'>notifications_active</span>
-                            <h2 class="font-headline-md text-headline-md text-primary">Push notifications</h2>
+                            <h2 class="font-headline-md text-headline-md text-primary">Reaching a person</h2>
                         </div>
                         <p class="font-body-md text-sm text-on-surface-variant max-w-2xl">
-                            A Notification picks its own channel: a push when the person's account holds a live device token, a text when it does not, and nothing at all when they have neither.
-                            Nothing on this page sends to more than one person.
+                            Push, then a text. Mosaic tries a push first. A text goes out when that person has no live device token, or the token is dead. Someone with neither is not sent anything.
+                            A kind marked Text only stays a text. Nothing on this page sends to more than one person.
                         </p>
                     </div>
                     <button @click="loadPush()" :disabled="pushLoading"
@@ -614,7 +614,7 @@
             <section class="flex flex-col gap-md">
                 <div class="flex items-center gap-sm">
                     <span class="material-symbols-outlined text-[24px] text-primary">account_tree</span>
-                    <h2 class="font-headline-md text-headline-md text-primary">How pushes are handled</h2>
+                    <h2 class="font-headline-md text-headline-md text-primary">How a person is reached</h2>
                 </div>
                 <p class="font-body-md text-sm text-on-surface-variant max-w-3xl">
                     Every branch below is a branch the send path actually takes, and the numbers on it are read out of
@@ -707,12 +707,10 @@
                             <div class="flex items-start justify-between gap-sm flex-wrap">
                                 <div class="flex items-center gap-sm flex-wrap">
                                     <h3 class="font-headline-md text-base text-on-surface" x-text="type.name"></h3>
-                                    <template x-for="channel in type.channels" :key="channel">
-                                        <span class="inline-flex items-center gap-1 px-sm py-[2px] rounded-full bg-secondary-container text-on-secondary-container font-label-md text-xs">
-                                            <span class="material-symbols-outlined text-[13px]" x-text="channel === 'push' ? 'notifications' : 'sms'"></span>
-                                            <span x-text="channel === 'push' ? 'Push' : 'Text'"></span>
-                                        </span>
-                                    </template>
+                                    <span class="inline-flex items-center gap-1 px-sm py-[2px] rounded-full bg-secondary-container text-on-secondary-container font-label-md text-xs">
+                                        <span class="material-symbols-outlined text-[13px]" x-text="reachRoute(type) === 'Text' ? 'sms' : 'notifications'"></span>
+                                        <span x-text="reachRoute(type)"></span>
+                                    </span>
                                     <span x-show="!type.live"
                                           class="px-sm py-[2px] rounded-full bg-surface-container text-on-surface-variant font-label-md text-xs">Not wired yet</span>
                                     <span x-show="type.escalates"

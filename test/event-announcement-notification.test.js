@@ -24,6 +24,18 @@ test('fillTemplate substitutes announcement fields', () => {
     assert.match(text, /https:\/\/example\.test\/event/);
 });
 
+test('event tell wording merges into the prayer templates without replacing them', () => {
+    const merged = wording.mergeIntoSendTemplates({
+        text: {initial: 'Hi {name}'},
+        textFallback: {initial: 'Hello'},
+        push: {initial: {title: 'Sunday', body: '{name}'}},
+        pushFallback: {initial: {title: 'Prayer', body: '{name}'}},
+    }, wording.templatesForSendPath({}));
+    assert.equal(merged.text.initial, 'Hi {name}');
+    assert.match(merged.text.tell, /\{title\}/);
+    assert.equal(merged.push.tell.title, '{title}');
+});
+
 test('templatesForSendPath exposes the tell wording kind', () => {
     const tpl = wording.templatesForSendPath({});
     assert.ok(tpl.text.tell);

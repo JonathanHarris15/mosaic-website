@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const eventTell = require('../functions/event-tell.js');
 const Tell = require('../public/event-tell-core.js');
@@ -59,6 +61,17 @@ test('runEventTellTick does nothing outside the send window', async () => {
         loadTellParents: async () => [],
     });
     assert.equal(result.ran, false);
+});
+
+test('the hourly tell uses the real send path', () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, '../functions/index.js'), 'utf8');
+    const start = index.indexOf('exports.sendEventAnnouncementTells');
+    assert.ok(start !== -1);
+    const body = index.slice(start, start + 900);
+    assert.match(body, /notifierDeps\(db\)/);
+    assert.doesNotMatch(body, /notifierDeps = \{\}/);
+    assert.match(index, /templatesForSendPath/);
 });
 
 test('joinedAnnouncement refuses without told going-out', () => {

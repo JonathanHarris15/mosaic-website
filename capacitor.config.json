@@ -1,5 +1,10 @@
 {
   "appId": "com.mosaicmanagercstx.app",
   "appName": "Mosaic Manager",
-  "webDir": "public"
+  "webDir": "public",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["banner", "list", "sound"]
+    }
+  }
 }

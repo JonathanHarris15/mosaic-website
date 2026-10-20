@@ -50,7 +50,8 @@ test('the page has two tabs, and the old sections are still on the first one', (
 
 test('the push tab answers all four questions it was built to answer', () => {
     const tab = HTML.slice(HTML.indexOf("x-show=\"tab === 'push'\""));
-    assert.match(tab, /How pushes are handled/);
+    assert.match(tab, /How a person is reached/);
+    assert.match(tab, /Push, then a text/);
     assert.match(tab, /What Mosaic sends/);
     assert.match(tab, /Sent history/);
     assert.match(tab, /Devices &amp; tokens/);

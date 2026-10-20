@@ -27,6 +27,7 @@ const LiturgyOrders = require("./shared/liturgy-order-core");
 const answerDoor = require("./answer-link-door");
 const eventTell = require("./event-tell");
 const eventTellFs = require("./event-tell-firestore");
+const eventAnnWording = require("./event-announcement-notification");
 const notify = require("./notification-send");
 const notifyBridge = require("./notification-send-bridge");
 const ac = require("./assignment-conversion");
@@ -2341,6 +2342,7 @@ async function loadPrayerConfig(db) {
     push: pr.resolvePushWording(data),
     autoSendEnabled: !!data.autoSendEnabled,
     includeAnswerLinkInSms: pr.prayerSmsIncludeAnswerLink(data),
+    config: data,
   };
 }
 
@@ -2382,13 +2384,15 @@ function notifierDeps(db) {
     loadTemplates: async () => {
       const loaded = await loadPrayerConfig(db);
       const includeLink = loaded.includeAnswerLinkInSms;
-      return {
+      const prayer = {
         text: pr.preparePrayerSmsTextTemplates(loaded.templates, includeLink),
         textFallback: pr.preparePrayerSmsTextTemplates(
             pr.DEFAULT_PRAYER_MESSAGES, includeLink),
         push: loaded.push,
         pushFallback: pr.DEFAULT_PUSH_WORDING,
       };
+      return eventAnnWording.mergeIntoSendTemplates(
+          prayer, eventAnnWording.templatesForSendPath(loaded.config));
     },
     sendPush: async ({token, title, body, url}) => {
       const message = {token, notification: {title, body}};
@@ -3122,9 +3126,9 @@ async function subjectWording(db, serviceDate, personId) {
 }
 
 /**
- * Hourly sender for told event announcements (MS-623). Uses the MS-189
- * Notification path when notification-send.js is on the branch; otherwise
- * the tick runs but records no sends.
+ * Hourly sender for told event announcements (MS-623). Each person is
+ * told through the one send path: a push when they have the app, a text
+ * when they do not.
  */
 exports.sendEventAnnouncementTells = onSchedule(
     {
@@ -3137,10 +3141,8 @@ exports.sendEventAnnouncementTells = onSchedule(
       const db = admin.firestore();
       const tellPerson = notifyBridge.loadTellPerson();
       const deps = eventTellFs.buildDeps(db, tellPerson);
-      // When MS-189 lands, wire notifierDeps here and merge
-      // eventAnnWording.templatesForSendPath into loadTemplates.
       if (tellPerson) {
-        deps.notifierDeps = {};
+        deps.notifierDeps = notifierDeps(db);
       }
       const result = await eventTell.runEventTellTick(deps);
       if (result.ran && result.sent) {

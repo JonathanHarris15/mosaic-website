@@ -172,18 +172,26 @@ function nameOrNeutral(firstName) {
 }
 
 /**
- * Fill {name} and {link}. A missing link removes the placeholder; it does
- * not mint a URL. MS-247 passes the Answer link in when one exists.
+ * Fill {name}, {link}, and any extra slots the caller named in `fields`
+ * ({title}, {prose}). A missing value removes the placeholder. Nothing
+ * here mints a URL.
  * @param {string} template
- * @param {Object} values firstName and an optional link
+ * @param {Object} values firstName, an optional link, and optional fields
  * @return {string}
  */
 function fill(template, values) {
   const src = typeof template === "string" ? template : "";
-  const link = values && typeof values.link === "string" ? values.link : "";
-  return src
-      .split("{name}").join(nameOrNeutral(values && values.firstName))
+  const v = values || {};
+  const link = typeof v.link === "string" ? v.link : "";
+  let out = src
+      .split("{name}").join(nameOrNeutral(v.firstName))
       .split("{link}").join(link);
+  const fields = v.fields || {};
+  ["title", "prose"].forEach((key) => {
+    const raw = typeof fields[key] === "string" ? fields[key] : "";
+    out = out.split("{" + key + "}").join(raw);
+  });
+  return out;
 }
 
 /**
@@ -212,12 +220,14 @@ function renderLockScreen(args) {
       fallback: a.titleFallback,
       firstName: a.firstName,
       link: a.link,
+      fields: a.fields,
     }),
     body: renderText({
       template: a.body,
       fallback: a.bodyFallback,
       firstName: a.firstName,
       link: a.link,
+      fields: a.fields,
     }),
   };
 }

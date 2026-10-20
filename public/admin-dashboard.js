@@ -521,6 +521,10 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        reachRoute(type) {
+            return window.NotificationAdminCore.reachRoute(type);
+        },
+
         churchTime(iso) {
             const zone = this.pushOverview ? this.pushOverview.constants.timezone : '';
             return NotificationAdminCore.churchLocalLabel(iso, zone);

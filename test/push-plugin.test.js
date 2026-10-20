@@ -24,6 +24,16 @@ test("the Capacitor push plugin is a dependency and both native projects include
   assert.match(swift, /CapacitorPushNotifications/);
 });
 
+test("iOS hands Firebase the device token instead of dropping it", () => {
+  const delegate = fs.readFileSync(
+      path.join(root, "ios/App/App/AppDelegate.swift"), "utf8");
+  assert.match(delegate, /didRegisterForRemoteNotificationsWithDeviceToken/);
+  assert.match(delegate, /capacitorDidRegisterForRemoteNotifications/);
+  assert.match(delegate, /capacitorDidFailToRegisterForRemoteNotifications/);
+  assert.match(delegate, /Messaging\.messaging\(\)\.token/);
+  assert.match(delegate, /FirebaseApp\.configure\(\)/);
+});
+
 test("native push config files are gitignored rather than invented", () => {
   const ignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
   assert.match(ignore, /android\/app\/google-services\.json/);

@@ -52,6 +52,11 @@ function wordings(templates, request, person) {
   const kind = request.wording;
   const name = firstName(request, person);
   const url = destinationUrl(request);
+  const values = (request && request.values) || {};
+  const fields = {
+    title: typeof values.title === "string" ? values.title : "",
+    prose: typeof values.prose === "string" ? values.prose : "",
+  };
   const textTemplates = Object.assign({}, t.text || {});
   const custom = request && typeof request.message === "string" ?
     request.message.trim() : "";
@@ -71,6 +76,7 @@ function wordings(templates, request, person) {
     bodyFallback: pushDefault.body || "",
     firstName: name,
     link: url,
+    fields: fields,
   });
   return {
     text: nc.renderText({
@@ -78,6 +84,7 @@ function wordings(templates, request, person) {
       fallback: textFallbacks[kind] || "",
       firstName: name,
       link: url,
+      fields: fields,
     }),
     title: lock.title,
     body: lock.body,

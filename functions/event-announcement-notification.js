@@ -66,6 +66,26 @@ function templatesForSendPath(config) {
 }
 
 /**
+ * Fold one purpose's templates into the bundle the send path loads.
+ * Prayer keys and the event-tell key share one object; neither overwrites
+ * the other.
+ * @param {?Object} base
+ * @param {?Object} extra
+ * @return {Object}
+ */
+function mergeIntoSendTemplates(base, extra) {
+  const left = base || {};
+  const right = extra || {};
+  const join = (key) => Object.assign({}, left[key] || {}, right[key] || {});
+  return {
+    text: join("text"),
+    textFallback: join("textFallback"),
+    push: join("push"),
+    pushFallback: join("pushFallback"),
+  };
+}
+
+/**
  * Fill {name}, {title}, {prose}, and {link} for tests and pre-MS-189 renders.
  * @param {string} template
  * @param {Object} values
@@ -94,5 +114,6 @@ module.exports = {
   pushField,
   resolveEventAnnouncementWording,
   templatesForSendPath,
+  mergeIntoSendTemplates,
   fillTemplate,
 };

@@ -516,9 +516,9 @@
             killSwitch: 'Per announcement, on the Event.',
             window: 'church',
             wordingSource: 'Event announcement tells (this page)',
-            live: false,
-            note: 'Not wired to the send path yet (MS-623). The tick runs ' +
-                'and records nothing.',
+            live: true,
+            note: 'Push when the person has the app, a text when they do ' +
+                'not. The hourly job calls the one send path.',
         },
         {
             id: 'sms_test',
@@ -699,6 +699,23 @@
      * @param {Object} constants openHour, closeHour, timezone, deadCodes
      * @return {Object} window, deadCodes, and the ordered steps
      */
+    /**
+     * How this kind reaches someone. Two channels means the send path
+     * tries a push and texts only when push cannot. One channel is that
+     * channel alone.
+     * @param {Object} type a registry row
+     * @return {string}
+     */
+    function reachRoute(type) {
+        var channels = (type && type.channels) || [];
+        var push = channels.indexOf('push') !== -1;
+        var text = channels.indexOf('text') !== -1;
+        if (push && text) return 'Push, then a text';
+        if (push) return 'Push';
+        if (text) return 'Text';
+        return 'Nothing is sent';
+    }
+
     function buildPushFlow(constants) {
         var c = constants || {};
         var deadCodes = Array.isArray(c.deadCodes) ? c.deadCodes.slice() : [];
@@ -845,6 +862,7 @@
         summariseTypes: summariseTypes,
         offlineTypes: offlineTypes,
         windowLabel: windowLabel,
+        reachRoute: reachRoute,
         buildPushFlow: buildPushFlow,
     };
 

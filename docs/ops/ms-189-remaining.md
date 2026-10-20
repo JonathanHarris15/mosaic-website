@@ -72,5 +72,6 @@ does not run from an agent and does not delete `sms_messages`.
 
 ## Out of this feature
 
-MS-248, MS-249, and MS-623 are later callers of the same path. They are
-not wired.
+MS-248 and MS-249 are later callers of the same path. They are not wired.
+Event announcement tells (MS-623) call this path: a push when the person
+has the app, a text when they do not.
