@@ -513,7 +513,7 @@
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
-                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
                                     <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
@@ -562,7 +562,7 @@
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
-                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
                                     <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
@@ -592,7 +592,7 @@
                                     <template x-for="p in results" :key="p.id">
                                         <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                             <div class="flex items-center justify-between">
-                                                <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                                <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                                 <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
                                             </div>
                                             <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
@@ -624,7 +624,7 @@
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
-                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
                                     <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
@@ -991,7 +991,7 @@
                                                                         <template x-for="p in results" :key="p.id">
                                                                             <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                                                                 <div class="flex items-center justify-between">
-                                                                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                                                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                                                                     <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                                                                 </div>
                                                                                 <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
@@ -1017,81 +1017,13 @@
                                                         <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
                                                             <template x-for="p in results" :key="p.id">
                                                                 <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
-                                                                    <p class="font-label-md text-sm text-on-surface" x-text="p.name"></p>
+                                                                    <p class="font-label-md text-sm text-on-surface" x-text="optionLabel(p)"></p>
                                                                 </button>
                                                             </template>
                                                         </div>
                                                     </div>
                                                 </template>
 
-                                        <template x-if="showsPraise(item)">
-                                        <div class="mt-4 pt-4 border-t border-dashed border-outline-variant" x-cloak>
-                                            <div class="oos-nested__block" data-field-key="prayerPraise">
-                    <div class="field-label mb-1.5">Prayer Leader (Praise)</div>
-                    <div x-show="showPrayerPraise || service.prayerPraise.id">
-                        <div x-data="personPicker(service.prayerPraise, $data, null, 'prayerPraise')" @click.away="open = false" class="relative max-w-md">
-                            <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5">
-                                <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
-                                <div class="flex items-center gap-1">
-                                    <button x-show="query" @click="clear(); showPrayerPraise = false" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                        <span class="material-symbols-outlined text-[16px]">close</span>
-                                    </button>
-                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
-                                </div>
-                            </div>
-                            <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
-                                <template x-for="p in results" :key="p.id">
-                                    <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                        <div class="flex items-center justify-between">
-                                            <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                            <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
-                                        </div>
-                                        <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                    <button x-show="canEdit && !showPrayerPraise && !service.prayerPraise.id" @click="showPrayerPraise = true" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/50 hover:text-primary transition-colors flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[14px]">add</span> Add Prayer Leader
-                    </button>
-                </div>
-                                        </div>
-                                        </template>
-                                        <template x-if="showsConfession(item)">
-                                        <div class="mt-4 pt-4 border-t border-dashed border-outline-variant" x-cloak>
-                                            <div class="oos-nested__block" data-field-key="prayerConfession">
-                    <div class="field-label mb-1.5">Prayer Leader (Confession)</div>
-                    <div x-show="showPrayerConfession || service.prayerConfession.id">
-                        <div x-data="personPicker(service.prayerConfession, $data, null, 'prayerConfession')" @click.away="open = false" class="relative max-w-md">
-                            <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5">
-                                <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
-                                <div class="flex items-center gap-1">
-                                    <button x-show="query" @click="clear(); showPrayerConfession = false" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                        <span class="material-symbols-outlined text-[16px]">close</span>
-                                    </button>
-                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
-                                </div>
-                            </div>
-                            <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
-                                <template x-for="p in results" :key="p.id">
-                                    <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                        <div class="flex items-center justify-between">
-                                            <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                            <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
-                                        </div>
-                                        <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                    <button x-show="canEdit && !showPrayerConfession && !service.prayerConfession.id" @click="showPrayerConfession = true" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/50 hover:text-primary transition-colors flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[14px]">add</span> Add Prayer Leader
-                    </button>
-                </div>
-                                        </div>
-                                        </template>
                                         <template x-if="item.type === 'prayer' && (item.requests || item.prayedByOther)">
                                         <div class="mt-4 pt-4 border-t border-dashed border-outline-variant">
                                             <div x-show="item.requests" class="flex flex-col gap-2">
@@ -1146,7 +1078,7 @@
                                                         <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
                                                             <template x-for="p in results" :key="p.id">
                                                                 <button @click="select(p)" type="button" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
-                                                                    <p class="font-label-md text-sm" x-text="p.name"></p>
+                                                                    <p class="font-label-md text-sm" x-text="optionLabel(p)"></p>
                                                                 </button>
                                                             </template>
                                                         </div>
@@ -1174,7 +1106,7 @@
                                                             <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
                                                                 <template x-for="p in results" :key="p.id">
                                                                     <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                                                        <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                                                                     </button>
                                                                 </template>
                                                             </div>
@@ -1754,6 +1686,7 @@
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <script src="liturgy-order-core.js"></script>
+    <script src="legacy-oos-migrate-core.js"></script>
     <script src="liturgy-translate-core.js"></script>
     <script src="liturgy-translate.js"></script>
     <script src="liturgy-order-store.js"></script>
@@ -1783,6 +1716,7 @@
     <!-- roles-core BEFORE calendar-view: the browser branch of its require
          resolves at load time, so loading it after leaves Roles undefined. -->
     <script src="roles-core.js"></script>
+    <script src="people-picker-core.js"></script>
     <script src="calendar-view.js"></script>
     <script src="fairness-core.js"></script>
     <!-- family-core BEFORE calendar-event: it captures window.FamilyCore at the

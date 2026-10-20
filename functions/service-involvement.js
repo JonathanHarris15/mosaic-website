@@ -56,18 +56,18 @@
  * It drives lastPastoralPrayerDate for the prayer rotation, and fairness never
  * reads it, so its timing is left exactly as it is.
  */
+const Legacy = require("./shared/legacy-oos-migrate-core.js");
+
 const SERVING_FIELDS = Object.freeze([
   {idField: "serviceLeaderId", slug: "service_leader"},
   {idField: "musicLeaderId", slug: "worship_leader"},
   {idField: "preacherId", slug: "preacher"},
-  {idField: "prayerPraiseId", slug: "prayer",
-    metadata: {prayer_type: "praise"}},
-  {idField: "prayerConfessionId", slug: "prayer",
-    metadata: {prayer_type: "confession"}},
   {idField: "elementsId", slug: "elements"},
   {idField: "otherId", slug: "other"},
   {idField: "musicHelpers", slug: "worship_helper", list: true},
 ]);
+
+const SERVING_SLUGS = new Set([...SERVING_FIELDS.map((f) => f.slug), "prayer"]);
 
 /** The Service field the editor stamps when it defers writing. */
 const DEFERRED_FLAG = "involvementDeferred";
@@ -79,9 +79,10 @@ const isDateStr = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
  * id is a visiting speaker typed in by hand — there is no Person to credit, so
  * there is nothing to write.
  * @param {Object} service The stored `services/{date}` document.
+ * @param {?Object} catalog Liturgy catalog for carriedBy prayer leaders.
  * @return {Array<{personId: string, type: string, metadata: ?Object}>}
  */
-function servingInvolvement(service) {
+function servingInvolvement(service, catalog) {
   const doc = service || {};
   const records = [];
 
@@ -97,6 +98,11 @@ function servingInvolvement(service) {
       records.push(record);
     });
   });
+
+  if (Legacy && typeof Legacy.mergePrayerInvolvement === "function") {
+    Legacy.mergePrayerInvolvement(doc, catalog)
+        .forEach((rec) => records.push(rec));
+  }
 
   return records;
 }
@@ -140,6 +146,7 @@ function conversion(service, date, today) {
 
 module.exports = {
   SERVING_FIELDS,
+  SERVING_SLUGS,
   DEFERRED_FLAG,
   servingInvolvement,
   involvementId,

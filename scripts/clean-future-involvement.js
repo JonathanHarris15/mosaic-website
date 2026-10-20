@@ -46,7 +46,7 @@ let db;
 
 // Only the slugs a Service save writes. A servant Role's slug reaching this list
 // would delete a legitimate Assignment conversion.
-const SERVING_SLUGS = new Set(si.SERVING_FIELDS.map(f => f.slug));
+const SERVING_SLUGS = si.SERVING_SLUGS || new Set([...si.SERVING_FIELDS.map(f => f.slug), 'prayer']);
 
 /**
  * Is this record for a date still ahead, in a Role a Service save writes?

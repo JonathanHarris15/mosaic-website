@@ -33,8 +33,6 @@ function model(overrides = {}) {
         musicLeader: { id: null, name: '' },
         musicHelpers: [],
         preacher: { id: null, name: '' },
-        prayerPraise: { id: null, name: '' },
-        prayerConfession: { id: null, name: '' },
         elements: { id: null, name: '' },
         other: { id: null, name: '' },
         hasBaptism: false,

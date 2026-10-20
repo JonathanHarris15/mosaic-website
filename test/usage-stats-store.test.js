@@ -24,17 +24,6 @@ test('personStatFor reads serving roles from roleStats, keyed to the field', () 
     assert.strictEqual(UsageStats.personStatFor(person, 'musicLeader'), null);
 });
 
-test('personStatFor tells the two prayer slots apart', () => {
-    const person = {
-        roleStats: {
-            prayer_praise: { count: 2, lastUsed: '2026-02-01' },
-            prayer_confession: { count: 7, lastUsed: '2026-03-01' },
-        },
-    };
-    assert.strictEqual(UsageStats.personStatFor(person, 'prayerPraise').count, 2);
-    assert.strictEqual(UsageStats.personStatFor(person, 'prayerConfession').count, 7);
-});
-
 test('personStatFor reads prayerMale/prayerFemale from the separate pastoral prayer cache', () => {
     const person = {
         roleStats: { preacher: { count: 9, lastUsed: '2026-01-01' } },
@@ -55,7 +44,7 @@ test('isTrackedField tells "not a serving role" apart from "never filled it"', (
     // role at all, so it must read as untracked, not as "Never used".
     assert.strictEqual(UsageStats.isTrackedField('preacher'), true);
     assert.strictEqual(UsageStats.isTrackedField('prayerMale'), true);
-    assert.strictEqual(UsageStats.isTrackedField('prayerPraiseName'), true);
+    assert.strictEqual(UsageStats.isTrackedField('prayerPraiseName'), false);
     assert.strictEqual(UsageStats.isTrackedField('assignedWriter'), false);
     assert.strictEqual(UsageStats.isTrackedField(null), false);
     assert.strictEqual(UsageStats.isTrackedField(''), false);

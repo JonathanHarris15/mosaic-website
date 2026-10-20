@@ -25,8 +25,10 @@ function fullService() {
         musicLeader: 'Mia Chen', musicLeaderId: 'p-mia',
         musicHelpers: [{ name: 'Ade Bello', id: 'p-ade' }, { name: 'Ruth Vale', id: 'p-ruth' }],
         preacher: 'Jono Harris', preacherId: 'p-jono',
-        prayerPraiseName: 'Ana Diaz', prayerPraiseId: 'p-ana',
-        prayerConfessionName: 'Ben Cole', prayerConfessionId: 'p-ben',
+        carriedBy: {
+            prayerOfPraise: { id: 'p-ana', name: 'Ana Diaz' },
+            prayerOfConfession: { id: 'p-ben', name: 'Ben Cole' },
+        },
         elementsName: 'Cara Fox', elementsId: 'p-cara',
         otherName: 'Dev Rao', otherId: 'p-dev',
     };

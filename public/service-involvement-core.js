@@ -27,20 +27,18 @@
 (function (global) {
     'use strict';
 
+    const Legacy = (typeof require !== 'undefined') ?
+        require('./legacy-oos-migrate-core.js') :
+        (global && global.LegacyOosMigrateCore);
+
     // Field → Role slug. The id field is what makes somebody a Person the app can
     // credit; the name beside it may be a visiting speaker typed in by hand, who
     // is nobody to credit.
     //
-    // `prayerPraiseId` and `prayerConfessionId` both carry the `prayer` slug —
-    // one Role, two places in the service — so they are told apart by metadata.
-    // Anything keyed only by date + slug + person would collide on the Sunday one
-    // person does both.
     const SERVING_FIELDS = Object.freeze([
         { idField: 'serviceLeaderId', slug: 'service_leader' },
         { idField: 'musicLeaderId', slug: 'worship_leader' },
         { idField: 'preacherId', slug: 'preacher' },
-        { idField: 'prayerPraiseId', slug: 'prayer', metadata: { prayer_type: 'praise' } },
-        { idField: 'prayerConfessionId', slug: 'prayer', metadata: { prayer_type: 'confession' } },
         { idField: 'elementsId', slug: 'elements' },
         { idField: 'otherId', slug: 'other' },
         // Music helpers are a list of { name, id }, not a single field.
@@ -52,7 +50,7 @@
     // the printed liturgy, so they are not in `RolesCore.LITURGICAL_SLUGS` and
     // must not be tidied into it.
     const SERVING_SLUGS = Object.freeze(
-        [...new Set(SERVING_FIELDS.map(f => f.slug))]
+        [...new Set([...SERVING_FIELDS.map(f => f.slug), 'prayer'])]
     );
 
     const isDateStr = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -62,7 +60,7 @@
     // The full set of Involvement records a stored Service should produce, in
     // field order. A name with no id is not a Person and is skipped — the same
     // rule `EventsOccurrenceCore.liturgicalHolders` applies, for the same reason.
-    function servingInvolvement(service) {
+    function servingInvolvement(service, catalog) {
         const doc = service || {};
         const records = [];
 
@@ -77,6 +75,10 @@
                 records.push(record);
             });
         });
+
+        if (Legacy && typeof Legacy.mergePrayerInvolvement === 'function') {
+            Legacy.mergePrayerInvolvement(doc, catalog).forEach((rec) => records.push(rec));
+        }
 
         return records;
     }

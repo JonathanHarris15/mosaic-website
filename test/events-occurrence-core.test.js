@@ -631,8 +631,10 @@ test('the people holding liturgical Roles on a Sunday are read off the Service',
         preacherId: 'p2', preacher: 'Sam Hale',
         musicLeaderId: 'p3',
         musicHelpers: [{ id: 'p4' }, { id: 'p5' }],
-        prayerPraiseId: 'p7',
-        prayerConfessionId: 'p8',
+        carriedBy: {
+            prayerOfPraise: { id: 'p7', name: 'Praise' },
+            prayerOfConfession: { id: 'p8', name: 'Confession' },
+        },
     };
 
     const held = Core.liturgicalHolders(service);
@@ -654,7 +656,12 @@ test('an empty or half-filled Service holds nobody', () => {
 test('somebody down for two liturgical Roles is listed once', () => {
     // Both prayers, say. Blocking them twice would show them twice in the
     // picker, which reads as a bug rather than as emphasis.
-    const held = Core.liturgicalHolders({ prayerPraiseId: 'p1', prayerConfessionId: 'p1' });
+    const held = Core.liturgicalHolders({
+        carriedBy: {
+            prayerOfPraise: { id: 'p1', name: 'Same' },
+            prayerOfConfession: { id: 'p1', name: 'Same' },
+        },
+    });
     assert.deepStrictEqual(held.map(h => h.personId), ['p1']);
 });
 
@@ -664,6 +671,7 @@ test('every liturgical Role the model has is one the Service can be read for', (
     const Roles = require('../public/roles-core.js');
     const covered = new Set(Core.LITURGICAL_SERVICE_FIELDS.map(f => f.roleSlug));
     Roles.LITURGICAL_SLUGS.forEach(slug => {
+        if (slug === 'prayer') return;
         assert.ok(covered.has(slug), 'no Service field is read for the ' + slug + ' Role');
     });
 });

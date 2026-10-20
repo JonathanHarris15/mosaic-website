@@ -265,10 +265,6 @@ function flattenServiceForSave(service) {
             .map(h => ({ name: h.name || '', id: h.id || null })),
         preacher: ref(s.preacher).name,
         preacherId: ref(s.preacher).id,
-        prayerPraiseName: ref(s.prayerPraise).name,
-        prayerPraiseId: ref(s.prayerPraise).id,
-        prayerConfessionName: ref(s.prayerConfession).name,
-        prayerConfessionId: ref(s.prayerConfession).id,
         elementsName: ref(s.elements).name,
         elementsId: ref(s.elements).id,
         otherName: ref(s.other).name,
@@ -342,10 +338,6 @@ const PERSON_REF_PATHS = {
     musicLeaderId:        ['musicLeader', 'id'],
     preacher:             ['preacher', 'name'],
     preacherId:           ['preacher', 'id'],
-    prayerPraiseName:     ['prayerPraise', 'name'],
-    prayerPraiseId:       ['prayerPraise', 'id'],
-    prayerConfessionName: ['prayerConfession', 'name'],
-    prayerConfessionId:   ['prayerConfession', 'id'],
     elementsName:         ['elements', 'name'],
     elementsId:           ['elements', 'id'],
     otherName:            ['other', 'name'],
@@ -607,8 +599,6 @@ function serviceForm() {
         // The liturgy element whose station row is currently expanded (one at a
         // time). null = every row collapsed. Drives the inline picker + note editor.
         openKey: null,
-        showPrayerPraise: false,
-        showPrayerConfession: false,
         _quill: null,
         hymnRegistry: [],
         fuse: null,
@@ -632,8 +622,6 @@ function serviceForm() {
             musicLeader: { name: '', id: null },
             musicHelpers: [],
             preacher: { name: '', id: null },
-            prayerPraise: { name: '', id: null },
-            prayerConfession: { name: '', id: null },
             elements: { name: '', id: null },
             other: { name: '', id: null },
             isIrregular: false,
@@ -816,20 +804,6 @@ function serviceForm() {
 
         // The order is locked on this page. Its shape changes on the Liturgy
         // Orders page, and this Sunday only fills the values.
-        legacyHomes() {
-            const order = liturgyCore().orderFor(this.service, this.liturgyCatalog);
-            return liturgyCore().legacyPrayerHomes(order);
-        },
-        showsPraise(item) {
-            const homes = this.legacyHomes();
-            if (homes.praiseId) return item.key === homes.praiseId;
-            return !!item.legacy;
-        },
-        showsConfession(item) {
-            const homes = this.legacyHomes();
-            if (homes.confessionId) return item.key === homes.confessionId;
-            return !!item.legacy;
-        },
         kindLabel(kind) {
             const labels = liturgyCore().KIND_LABELS;
             return (labels && labels[kind]) || kind;
@@ -1452,19 +1426,11 @@ function serviceForm() {
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
                 
-                this.service.prayerPraise.name = data.prayerPraiseName || '';
-                this.service.prayerPraise.id = data.prayerPraiseId || null;
-                this.service.prayerConfession.name = data.prayerConfessionName || '';
-                this.service.prayerConfession.id = data.prayerConfessionId || null;
 
                 this.service.elements.name = data.elementsName || '';
                 this.service.elements.id = data.elementsId || null;
                 this.service.other.name = data.otherName || '';
                 this.service.other.id = data.otherId || null;
-
-                // Auto-show prayer pickers if they have data
-                if (this.service.prayerPraise.id) this.showPrayerPraise = true;
-                if (this.service.prayerConfession.id) this.showPrayerConfession = true;
 
                 this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
@@ -1473,6 +1439,11 @@ function serviceForm() {
                     if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
                 });
                 this.service.carriedBy = carriedBy;
+                if (typeof LegacyOosMigrateCore !== 'undefined') {
+                    const hydrateDoc = Object.assign({}, data, { carriedBy: this.service.carriedBy });
+                    LegacyOosMigrateCore.hydrateCarriedByFromLegacy(hydrateDoc, this.liturgyCatalog);
+                    this.service.carriedBy = hydrateDoc.carriedBy;
+                }
 
                 // Every liturgy value on the document, whichever order it was
                 // filled under: a value under an element this order leaves out
@@ -1784,8 +1755,6 @@ function serviceForm() {
                     { field: 'serviceLeader', role: 'service_leader' },
                     { field: 'musicLeader', role: 'worship_leader' },
                     { field: 'preacher', role: 'preacher' },
-                    { field: 'prayerPraise', role: 'prayer', metadata: { prayer_type: 'praise' } },
-                    { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } },
                     { field: 'elements', role: 'elements' },
                     { field: 'other', role: 'other' }
                 ];
@@ -1826,6 +1795,7 @@ function serviceForm() {
                     for (const personId of helperChanges.added) {
                         await this._addInvolvement(batch, personId, 'worship_helper');
                     }
+                    await this._syncPrayerLeaderInvolvement(batch, original, this.service);
                 } else {
                     // Nothing is owed yet — and anything already here is a record
                     // of something that has not happened, whether this save put it
@@ -1847,6 +1817,7 @@ function serviceForm() {
                     for (const personId of helperIds) {
                         await this._removeInvolvement(batch, personId, 'worship_helper');
                     }
+                    await this._syncPrayerLeaderInvolvement(batch, original, this.service);
                 }
 
                 // Baptism presence is read off this Sunday's Liturgy Order and its
@@ -2206,29 +2177,8 @@ function serviceForm() {
             return this.orderElements.map(el => this._buildItem(el, lit));
         },
 
-        // The locked order, plus one trailing row when an older praise or
-        // confession leader has no element to sit under. That row is not part
-        // of the order. (Pastoral prayer no longer uses this path — MS-734.)
         get displayRows() {
-            const rows = this.rows.slice();
-            const homes = this.legacyHomes();
-            if (homes.praiseId && homes.confessionId) return rows;
-            rows.push({
-                key: '__legacy_prayer__',
-                type: 'legacy',
-                legacy: true,
-                label: '',
-                removed: false,
-                requests: null,
-                prayedByOther: false,
-                hasRole: false,
-                noteOn: false,
-                value: '',
-                emptyLabel: '',
-                noted: false,
-                carrierName: '',
-            });
-            return rows;
+            return this.rows.slice();
         },
 
         // The order's song elements, for linking typed hymns and printing
@@ -2289,7 +2239,6 @@ function serviceForm() {
         rowOpens(item) {
             if (!item || item.removed || item.type === 'legacy') return false;
             if (item.noteOn || item.hasRole || item.requests || item.prayedByOther) return true;
-            if (this.showsPraise(item) || this.showsConfession(item)) return true;
             return item.type === 'hymn' || item.type === 'verse' || item.type === 'text'
                 || item.type === 'people' || item.type === 'person';
         },
@@ -2536,8 +2485,6 @@ function serviceForm() {
             this.service.musicLeader = { name: '', id: null };
             this.service.musicHelpers = [];
             this.service.preacher = { name: '', id: null };
-            this.service.prayerPraise = { name: '', id: null };
-            this.service.prayerConfession = { name: '', id: null };
             this.service.elements = { name: '', id: null };
             this.service.other = { name: '', id: null };
             this.service.hasBaptism = false;
@@ -2732,6 +2679,23 @@ function serviceForm() {
         },
 
         // --- Involvement Helpers ---
+        async _syncPrayerLeaderInvolvement(batch, originalService, nextService) {
+            if (typeof LegacyOosMigrateCore === 'undefined') return;
+            const catalog = this.liturgyCatalog;
+            const kinds = ['praise', 'confession'];
+            const oldList = LegacyOosMigrateCore.mergePrayerInvolvement(
+                flattenServiceForSave(originalService), catalog);
+            const newList = LegacyOosMigrateCore.mergePrayerInvolvement(
+                flattenServiceForSave(nextService), catalog);
+            for (const kind of kinds) {
+                const oldId = (oldList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;
+                const newId = (newList.find(r => r.metadata && r.metadata.prayer_type === kind) || {}).personId || null;
+                if (oldId === newId) continue;
+                if (oldId) await this._removeInvolvement(batch, oldId, 'prayer', { prayer_type: kind });
+                if (newId) await this._addInvolvement(batch, newId, 'prayer', { prayer_type: kind });
+            }
+        },
+
         async _addInvolvement(batch, personId, role, metadata = null) {
             const personRef = db.collection('people').doc(personId);
             const invRef = personRef.collection('involvement').doc();
@@ -2818,6 +2782,24 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
             const stat = this.field && UsageStats.personStatFor(candidate, this.field);
             return stat && stat.count ? `${stat.count}×` : '';
         },
+        optionLabel(person) {
+            if (!person || person.isNew) return (person && person.name) || '';
+            if (typeof PeoplePickerCore !== 'undefined') {
+                return PeoplePickerCore.optionLabel(person, this.results);
+            }
+            return person.name || '';
+        },
+        finalizePickerResults(found, registry) {
+            if (typeof PeoplePickerCore === 'undefined') return found;
+            let list = PeoplePickerCore.finalizePickerList(found, registry, {
+                keepIds: [this.personRef && this.personRef.id],
+            });
+            const suggestions = this.suggestions;
+            if (suggestions && suggestions.length) {
+                list = PeoplePickerCore.excludeIds(list, suggestions);
+            }
+            return list;
+        },
         get suggestions() {
             if (typeof this.suggestionsKey === 'string' && this.parent && this.parent.prayerSuggestions) {
                 return this.parent.prayerSuggestions[this.suggestionsKey] || [];
@@ -2884,7 +2866,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                     }
                 }
-                this.results = found;
+                this.results = this.finalizePickerResults(found, registry);
                 return;
             }
 
@@ -2913,7 +2895,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = found;
+                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
             } catch (error) {
                 console.error("Error searching people:", error);
             }

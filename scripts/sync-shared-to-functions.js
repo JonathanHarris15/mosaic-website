@@ -71,6 +71,7 @@ const MODULES = [
     // emits a Sunday in its order, and the Printables catalog reads a
     // Sunday's fields, rows and hymns off its elements.
     'liturgy-order-core.js',
+    'legacy-oos-migrate-core.js',
     // The translator between a filled order and any other order, including a
     // bulletin that is not an order yet. The callable and the pages share it.
     'liturgy-translate-core.js',
