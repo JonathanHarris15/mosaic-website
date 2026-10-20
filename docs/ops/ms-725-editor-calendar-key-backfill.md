@@ -31,11 +31,9 @@ a second dry-run is a no-op.
 
 ## Snapshots
 
-- Before: `docs/ops/ms-725-editor-calendar-key-before-2026-10-09T02-05-19-203Z.json`
-- After: `docs/ops/ms-725-editor-calendar-key-after-2026-10-09T02-05-19-203Z.json`
-
-The JSON names no person and no email. It carries the uid, the stored
-level, `accountLevelId`, and the one field.
+Before/after JSON snapshots lived under `docs/ops/` for revert. They
+were removed from git in MS-769 because they contained real account UIDs.
+Keep any copies offline if a revert is still needed.
 
 ## How to run (again)
 
@@ -60,12 +58,6 @@ and keep the calendar collections.
 
 ## Revert
 
-```bash
-node scripts/backfill-editor-calendar-key.js \
-    --project mosaic-hymn-database --i-mean-prod \
-    --revert docs/ops/ms-725-editor-calendar-key-before-2026-10-09T02-05-19-203Z.json \
-    --commit
-```
-
-That writes `permissions.calendar.events.edit` back to `false` on those
-three documents and nothing else.
+Use `--revert <path-to-snapshot.json>` with a local copy of the before
+snapshot if one was retained offline. That writes
+`permissions.calendar.events.edit` back to `false` on the listed uids.

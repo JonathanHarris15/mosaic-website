@@ -53,5 +53,4 @@ gh workflow run "Prod ops script" --ref main \
 | Script | Ops note |
 | --- | --- |
 | `set-liturgy-order-flags.js` | [MS-770 — Textbelt order flag](./ms-770-textbelt-order-flag.md) (`--list`, `--name-match`, `--id`, `--ops` / `--hidden`) |
-
-<!-- MS-769: row for hymn-sheet migration script when that lands. -->
+| `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |

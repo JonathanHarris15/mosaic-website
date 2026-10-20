@@ -24,11 +24,11 @@ test('country-map Storage path matches the write helper and is editor + image + 
     assert.match(block, /request\.resource\.size < 8 \* 1024 \* 1024/);
     assert.match(block, /contentType\.matches\('image\/\.\*'\)/);
     assert.match(block, /allow delete: if false;/);
-    assert.match(block, /allow read: if request\.auth != null;/);
+    assert.match(block, /allow read: if isSignedIn\(\);/);
 });
 
-test('country-map rule does not widen the catch-all or other Storage paths', () => {
-    assert.match(rules, /match \/\{\s*allPaths=\*\*\s*\} \{\s*\n\s*allow read, write: if request\.auth != null;/);
+test('country-map rule does not widen other Storage paths', () => {
+    assert.doesNotMatch(rules, /match \/\{\s*allPaths=\*\*\s*\}/);
     assert.doesNotMatch(countryMapBlock(), /allow read: if true/);
     assert.doesNotMatch(countryMapBlock(), /allow write: if request\.auth != null;/);
     assert.equal((rules.match(/match \/sunday_typed\//g) || []).length, 1);

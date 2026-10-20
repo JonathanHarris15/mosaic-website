@@ -20,7 +20,7 @@ on:
         required: true
         options:
           - set-liturgy-order-flags.js
-          # MS-769: add hymn-sheet migration script here (keep scripts/prod-ops-allowlist.js in sync)
+          - migrate-hymn-sheets-prefix.js
       args:
         description: Extra script flags (no shell; validated in Node)
         type: string

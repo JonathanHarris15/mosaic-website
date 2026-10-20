@@ -621,7 +621,8 @@ document.addEventListener('alpine:init', () => {
                     this.allTags = this.allTags.concat(fresh).sort();
                 }
 
-                const folder = storage.ref().child(this.form.hymn_name);
+                const folder = storage.ref().child(
+                    HymnSheetsCore.storageFolderFor(this.form.hymn_name));
                 const uploaded = [];
                 for (const version of this.form.versions) {
                     const pages = [];
