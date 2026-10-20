@@ -2125,7 +2125,7 @@ function openPersonCellEditor(el, dateKey, field, current) {
                             :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
                             class="w-full text-left px-4 py-2 transition-colors border-b last:border-0 flex flex-col">
                         <div class="flex items-center justify-between">
-                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : optionLabel(p)"></p>
                             <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                         </div>
                         <template x-if="!p.isNew && isPastoralPrayerField">
@@ -2581,6 +2581,24 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
             const stat = this.field && UsageStats.personStatFor(candidate, this.field);
             return stat && stat.count ? `${stat.count}×` : '';
         },
+        optionLabel(person) {
+            if (!person || person.isNew) return (person && person.name) || '';
+            if (typeof PeoplePickerCore !== 'undefined') {
+                return PeoplePickerCore.optionLabel(person, this.results);
+            }
+            return person.name || '';
+        },
+        finalizePickerResults(found, registry) {
+            if (typeof PeoplePickerCore === 'undefined') return found;
+            let list = PeoplePickerCore.finalizePickerList(found, registry, {
+                keepIds: [this.personRef && this.personRef.id],
+            });
+            const suggestions = this.suggestions;
+            if (suggestions && suggestions.length) {
+                list = PeoplePickerCore.excludeIds(list, suggestions);
+            }
+            return list;
+        },
         get suggestions() {
             let key = this.suggestionsKey;
             if (key === 'activeSuggestionsKey' && this.parent) {
@@ -2656,7 +2674,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                     }
                 }
-                this.results = found;
+                this.results = this.finalizePickerResults(found, registry);
                 return;
             }
 
@@ -2684,7 +2702,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = found;
+                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
             } catch (error) {
                 console.error("Error searching people:", error);
             }

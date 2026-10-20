@@ -2818,6 +2818,24 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
             const stat = this.field && UsageStats.personStatFor(candidate, this.field);
             return stat && stat.count ? `${stat.count}×` : '';
         },
+        optionLabel(person) {
+            if (!person || person.isNew) return (person && person.name) || '';
+            if (typeof PeoplePickerCore !== 'undefined') {
+                return PeoplePickerCore.optionLabel(person, this.results);
+            }
+            return person.name || '';
+        },
+        finalizePickerResults(found, registry) {
+            if (typeof PeoplePickerCore === 'undefined') return found;
+            let list = PeoplePickerCore.finalizePickerList(found, registry, {
+                keepIds: [this.personRef && this.personRef.id],
+            });
+            const suggestions = this.suggestions;
+            if (suggestions && suggestions.length) {
+                list = PeoplePickerCore.excludeIds(list, suggestions);
+            }
+            return list;
+        },
         get suggestions() {
             if (typeof this.suggestionsKey === 'string' && this.parent && this.parent.prayerSuggestions) {
                 return this.parent.prayerSuggestions[this.suggestionsKey] || [];
@@ -2884,7 +2902,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                     }
                 }
-                this.results = found;
+                this.results = this.finalizePickerResults(found, registry);
                 return;
             }
 
@@ -2913,7 +2931,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = found;
+                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
             } catch (error) {
                 console.error("Error searching people:", error);
             }
