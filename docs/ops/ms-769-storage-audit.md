@@ -23,11 +23,45 @@ Comparison run before shipping the catch-all removal. Method matches
 | `hymn-sheets/…` | *(catch-all)* | read public; `hymns.edit` write/delete |
 | `guide-assets/…` | *(catch-all)* | read public; `services.builder.edit` image write/delete |
 | `{allPaths=**}` | **any auth read/write** | **removed** |
-| Legacy root `{hymn}/{file}` | catch-all | **denied** after migration |
+| Legacy root `{hymn}/{file}` | catch-all | **denied** (no legacy Storage rule in this PR) |
 
 Anonymous sign-in is enabled on the project. `request.auth != null` on live
 rules treats anonymous the same as a member for every path the catch-all
 matched.
+
+## Hymn sheets: token URLs vs path reads (merge-order proof)
+
+**Question:** After CI deploys `storage.rules` on merge, do existing hymns break
+before `migrate-hymn-sheets-prefix.js` runs?
+
+**Stored shape:** Every page saved through `public/hymns.js` calls
+`getDownloadURL()` after `put` and stores that string on
+`hymns/{id}.versions[].pages[]` (string or `{url}`). Those URLs are always of
+the form `https://firebasestorage.googleapis.com/v0/b/…/o/{encodedPath}?alt=media&token=…`.
+
+**How production reads bytes (no authenticated Storage path fetch):**
+
+| Consumer | Mechanism | Rules evaluated? |
+| --- | --- | --- |
+| `public/hymns.html` / `hymns.js` | `<img :src="pageUrl">`, `fetch(url)` download | **No** — token in URL (ADR-0046) |
+| `public/service-builder.js` OOS PDF | `_getImageDataUrl(pageUrl)` → `fetch(url)` | **No** |
+| `functions/shared/printable-data-core.js` `sunday_hymns` catalog | Passes stored URL into printable bind / `<img src>` | **No** |
+| `public/guide-components.js` hymn stage | `<img src="…">` from catalog URL | **No** |
+| `public/printable-data-core.js` | Same as functions copy via `hymnSheetPages` | **No** |
+
+Nothing in the hymn sheet pipeline calls `storage.ref().child(rootPath).get()` or
+`getDownloadURL()` on read for existing pages. The only client Storage API uses
+on legacy paths are **delete** paths in `hymns.js` (`refFromURL(url).delete()`),
+which need `hymns.edit` on the encoded path — blocked on root after lockdown
+until migration rewrites URLs to `hymn-sheets/…` or an editor uploads anew.
+
+**Conclusion:** A temporary read-only legacy rule for root hymn folders is **not**
+required for viewing, printables, or PDF export during the post-merge migration
+window. **No** `// MS-769 legacy` block was added to `storage.rules`.
+
+**Follow-up:** If a prod audit finds hymn page URLs **without** `token=` (hand-edited
+or pre-token data), add a scoped legacy read rule or fix those rows before deleting
+root objects. Re-check with a Firestore sample after the dry-run log.
 
 ## Client and function Storage paths
 
@@ -53,11 +87,18 @@ matched.
   download tokens. Direct Storage fetch without a token is allowed on
   `hymn-sheets/` and `guide-assets/` to match Firestore `allow read: if true`.
 
-### Deploy prerequisite
+### Production sequence (decided)
 
-Run `migrate-hymn-sheets-prefix.js` with `--commit` **before** or immediately
-after rules deploy so no production hymn still points at a root path that is no
-longer readable under rules. See `docs/ops/ms-769-hymn-sheets-migration.md`.
+1. **Merge** this PR → CI deploys code + `storage.rules`.
+2. **Dry-run** `migrate-hymn-sheets-prefix.js` on `main` (prod-ops workflow).
+3. **Jonathan reviews** the dry-run log.
+4. **Commit run** the same workflow (`commit=true`).
+5. **Tiny follow-up PR:** none required for a legacy Storage rule (see above).
+   Optional follow-up only if dry-run shows tokenless URLs or after root blob cleanup.
+
+Editor **delete/replace** of legacy root blobs via the Hymns UI may fail between
+steps 1 and 4; viewing and print paths keep working on token URLs. See
+`docs/ops/ms-769-hymn-sheets-migration.md`.
 
 ## Emulator evidence
 
