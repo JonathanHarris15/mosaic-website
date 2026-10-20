@@ -19,6 +19,8 @@ const {loadProject} = require('./firebase-project.js');
 // Pre-notifications archive; not named in shared cores (see test/notification-migration.test.js).
 const LEGACY_PERSON_REF_COLLECTIONS = Object.freeze(['sms_messages']);
 
+const PERSON_ROOT_PREFIX = 'people/';
+
 function committing(argv) {
     return argv.includes('--commit');
 }
@@ -50,6 +52,53 @@ function logChange(collection, change) {
     console.log(JSON.stringify({ collection, change }));
 }
 
+function toPathForPerson(fromPath, fromId, toId) {
+    const prefix = `${PERSON_ROOT_PREFIX}${fromId}/`;
+    if (!fromPath.startsWith(prefix)) {
+        throw new Error(`Expected path under ${prefix}, got ${fromPath}`);
+    }
+    return `${PERSON_ROOT_PREFIX}${toId}/${fromPath.slice(prefix.length)}`;
+}
+
+/**
+ * Post-order walk of every document under a person via listCollections() (recursive).
+ * @param {FirebaseFirestore.DocumentReference} personRef
+ * @return {Promise<Array<{ fromPath: string, data: object }>>}
+ */
+async function collectPersonSubtreeDocs(personRef) {
+    const out = [];
+
+    async function walk(ref) {
+        const subcols = await ref.listCollections();
+        for (const col of subcols) {
+            const snap = await col.get();
+            for (const doc of snap.docs) {
+                await walk(doc.ref);
+                out.push({
+                    fromPath: doc.ref.path,
+                    data: doc.data() || {},
+                });
+            }
+        }
+    }
+
+    await walk(personRef);
+    return out;
+}
+
+async function planPersonSubtreeMoves(db, fromId, toId, toName, plan) {
+    const fromRef = db.collection('people').doc(fromId);
+    const rows = await collectPersonSubtreeDocs(fromRef);
+    for (const row of rows) {
+        const toPath = toPathForPerson(row.fromPath, fromId, toId);
+        const targetExists = (await db.doc(toPath).get()).exists;
+        const move = Merge.planPersonSubdocMove(
+            row.fromPath, toPath, row.data, targetExists, fromId, toId, toName);
+        if (move.action === 'conflict') plan.conflicts.push(move);
+        else plan.personMoves.push(move);
+    }
+}
+
 async function scanTopLevel(db, collection, fromId, toId, toName, plan) {
     const snap = await db.collection(collection).get();
     for (const doc of snap.docs) {
@@ -70,9 +119,13 @@ async function scanTopLevel(db, collection, fromId, toId, toName, plan) {
 
 async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan, scanOptions) {
     const snap = await db.collectionGroup(subcollection).get();
+    const fromPrefix = `${PERSON_ROOT_PREFIX}${fromId}/`;
     for (const doc of snap.docs) {
+        if (doc.ref.path.startsWith(fromPrefix)) {
+            continue;
+        }
         const data = doc.data() || {};
-        const path = doc.ref.path;
+        const docPath = doc.ref.path;
         const parentCollection = doc.ref.parent.parent ? doc.ref.parent.parent.id : null;
 
         if (subcollection === 'attendance' && doc.id === fromId) {
@@ -91,40 +144,47 @@ async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan
             plan.updates.push({
                 collection: 'roster',
                 docId: doc.id,
-                path,
+                path: docPath,
                 patch: Object.assign({}, data, { personId: toId }),
             });
             continue;
         }
 
-        const parentPath = doc.ref.parent.path;
-        if (parentPath === `people/${fromId}`) {
-            const sub = doc.ref.parent.id;
-            const targetRef = db.collection('people').doc(toId).collection(sub).doc(doc.id);
-            const targetSnap = await targetRef.get();
-            const move = Merge.planSubcollectionMove(
-                fromId, toId, sub, doc.id, data, targetSnap.exists);
-            if (move.action === 'conflict') plan.conflicts.push(move);
-            else plan.moves.push(move);
-            continue;
-        }
-
         const result = Merge.planDocumentRepoint(parentCollection || subcollection, doc.id, data, fromId, toId, toName);
-        result.conflicts.forEach((c) => plan.conflicts.push(Object.assign({ path }, c)));
+        result.conflicts.forEach((c) => plan.conflicts.push(Object.assign({ path: docPath }, c)));
         if (result.changed && result.patch) {
             plan.updates.push({
                 collection: parentCollection || subcollection,
                 docId: doc.id,
-                path,
+                path: docPath,
                 patch: result.patch,
             });
         }
     }
 }
 
+async function countPersonSubtreeRemaining(db, fromId) {
+    const fromRef = db.collection('people').doc(fromId);
+    const rows = await collectPersonSubtreeDocs(fromRef);
+    const samples = rows.map((r) => r.fromPath);
+    let count = rows.length;
+    const fromSnap = await fromRef.get();
+    if (fromSnap.exists) {
+        count += 1;
+        if (samples.length < 20) samples.push(`${PERSON_ROOT_PREFIX}${fromId}`);
+    }
+    return { count, samples };
+}
+
 async function countRemainingReferences(db, fromId) {
     let count = 0;
     const samples = [];
+
+    const subtree = await countPersonSubtreeRemaining(db, fromId);
+    count += subtree.count;
+    subtree.samples.forEach((p) => {
+        if (samples.length < 20) samples.push(p);
+    });
 
     const collections = Merge.TOP_LEVEL_COLLECTIONS.concat(LEGACY_PERSON_REF_COLLECTIONS);
     for (const collection of collections) {
@@ -139,14 +199,11 @@ async function countRemainingReferences(db, fromId) {
         }
     }
 
+    const fromPrefix = `${PERSON_ROOT_PREFIX}${fromId}/`;
     for (const sub of Merge.COLLECTION_GROUP_SUBCOLLECTIONS) {
         const snap = await db.collectionGroup(sub).get();
         for (const doc of snap.docs) {
-            if (doc.ref.path.startsWith(`people/${fromId}/`)) {
-                count += 1;
-                if (samples.length < 20) samples.push(doc.ref.path);
-                continue;
-            }
+            if (doc.ref.path.startsWith(fromPrefix)) continue;
             if (sub === 'attendance' && doc.id === fromId) {
                 count += 1;
                 if (samples.length < 20) samples.push(doc.ref.path);
@@ -158,12 +215,6 @@ async function countRemainingReferences(db, fromId) {
                 if (samples.length < 20) samples.push(doc.ref.path);
             }
         }
-    }
-
-    const fromSnap = await db.collection('people').doc(fromId).get();
-    if (fromSnap.exists) {
-        count += 1;
-        if (samples.length < 20) samples.push(`people/${fromId}`);
     }
 
     return { count, samples };
@@ -182,7 +233,10 @@ async function applyPlan(db, plan) {
         }
     };
 
-    for (const move of plan.moves) {
+    const personMoves = Merge.sortMovesByDepthDesc(plan.personMoves || []);
+    const otherMoves = Merge.sortMovesByDepthDesc(plan.moves || []);
+
+    for (const move of personMoves.concat(otherMoves)) {
         const fromRef = db.doc(move.fromPath);
         const toRef = db.doc(move.toPath);
         batch.set(toRef, move.data, { merge: true });
@@ -253,12 +307,15 @@ async function main() {
         toId,
         updates: [],
         moves: [],
+        personMoves: [],
         attendanceKeepTarget: [],
         conflicts: [],
         deleteFromPerson: false,
     };
 
     const scanOptions = attendanceConflict ? { attendanceConflict } : {};
+
+    await planPersonSubtreeMoves(db, fromId, toId, toName, plan);
 
     const collections = Merge.TOP_LEVEL_COLLECTIONS.concat(LEGACY_PERSON_REF_COLLECTIONS);
     for (const collection of collections) {
@@ -299,6 +356,14 @@ async function main() {
         const key = u.collection;
         byCollection[key] = (byCollection[key] || 0) + 1;
         logChange(key, { action: 'update', path: u.path });
+    });
+    plan.personMoves.forEach((m) => {
+        byCollection.people = (byCollection.people || 0) + 1;
+        logChange('people', {
+            action: 'move_subcollection',
+            fromPath: m.fromPath,
+            toPath: m.toPath,
+        });
     });
     plan.moves.forEach((m) => {
         const key = m.fromPath.split('/')[0];
@@ -344,6 +409,7 @@ async function main() {
         attendanceConflict: attendanceConflict || null,
         counts: {
             updates: plan.updates.length,
+            personMoves: plan.personMoves.length,
             moves: plan.moves.length,
             attendanceKeepTarget: plan.attendanceKeepTarget.length,
             conflicts: plan.conflicts.length,
@@ -353,7 +419,13 @@ async function main() {
     }, null, 2));
 }
 
-module.exports = {scanTopLevel, countRemainingReferences};
+module.exports = {
+    scanTopLevel,
+    countRemainingReferences,
+    collectPersonSubtreeDocs,
+    planPersonSubtreeMoves,
+    toPathForPerson,
+};
 
 if (require.main === module) {
     main().catch((err) => {

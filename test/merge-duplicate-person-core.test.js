@@ -70,6 +70,32 @@ test('attendance still conflicts when target exists and flag omitted', () => {
     assert.equal(plan.reason, 'attendance_target_exists');
 });
 
+test('planPersonSubdocMove repoints personId inside moved payload', () => {
+    const fromPath = `people/${FROM}/shepherding_activity/act1`;
+    const toPath = `people/${TO}/shepherding_activity/act1`;
+    const move = Merge.planPersonSubdocMove(
+        fromPath, toPath, { personId: FROM, note: 'x' }, false, FROM, TO, NAME);
+    assert.equal(move.action, 'move');
+    assert.equal(move.data.personId, TO);
+});
+
+test('planPersonSubdocMove aborts on target id collision', () => {
+    const move = Merge.planPersonSubdocMove(
+        `people/${FROM}/shepherding_activity/a`,
+        `people/${TO}/shepherding_activity/a`,
+        {}, true, FROM, TO, NAME);
+    assert.equal(move.action, 'conflict');
+    assert.equal(move.reason, 'target_doc_exists');
+});
+
+test('sortMovesByDepthDesc orders nested person paths before parents', () => {
+    const sorted = Merge.sortMovesByDepthDesc([
+        { fromPath: `people/${FROM}/notes/n1` },
+        { fromPath: `people/${FROM}/notes/n1/revisions/r1` },
+    ]);
+    assert.ok(Merge.pathDepth(sorted[0].fromPath) >= Merge.pathDepth(sorted[1].fromPath));
+});
+
 test('careListData key move conflicts when target row exists', () => {
     const doc = {
         careListData: {
