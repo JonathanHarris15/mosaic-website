@@ -7,6 +7,9 @@
  *   node scripts/merge-duplicate-person.js \
  *       --project mosaic-hymn-database --i-mean-prod \
  *       --from qBZMVskmS1CBJl8aCPcT --to Rqu2n9V9vRBLF8TKkEwg
+ *
+ * Optional: --attendance-conflict keep-target — when both people have an
+ * attendance doc on the same occurrence, keep the target's and delete the source's.
  */
 
 const path = require('path');
@@ -27,6 +30,20 @@ function willWrite(argv) {
 function arg(name) {
     const i = process.argv.indexOf(name);
     return i === -1 ? null : process.argv[i + 1];
+}
+
+function attendanceConflictMode(argv) {
+    const flag = '--attendance-conflict';
+    const i = argv.indexOf(flag);
+    if (i === -1) return null;
+    const value = argv[i + 1];
+    if (!value || value.startsWith('--')) {
+        throw new Error('Pass --attendance-conflict keep-target (or omit the flag).');
+    }
+    if (value !== 'keep-target') {
+        throw new Error(`Unknown --attendance-conflict value "${value}" (only keep-target is supported).`);
+    }
+    return value;
 }
 
 function logChange(collection, change) {
@@ -51,7 +68,7 @@ async function scanTopLevel(db, collection, fromId, toId, toName, plan) {
     }
 }
 
-async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan) {
+async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan, scanOptions) {
     const snap = await db.collectionGroup(subcollection).get();
     for (const doc of snap.docs) {
         const data = doc.data() || {};
@@ -63,8 +80,9 @@ async function scanCollectionGroup(db, subcollection, fromId, toId, toName, plan
             const targetRef = doc.ref.parent.doc(toId);
             const targetSnap = await targetRef.get();
             const move = Merge.planAttendanceDocMove(
-                occId, fromId, toId, data, targetSnap.exists);
+                occId, fromId, toId, data, targetSnap.exists, scanOptions);
             if (move.action === 'conflict') plan.conflicts.push(move);
+            else if (move.action === 'attendance_keep_target') plan.attendanceKeepTarget.push(move);
             else plan.moves.push(move);
             continue;
         }
@@ -180,6 +198,12 @@ async function applyPlan(db, plan) {
         if (batchCount >= batchSize) await flush();
     }
 
+    for (const row of plan.attendanceKeepTarget || []) {
+        batch.delete(db.doc(row.dropPath));
+        batchCount += 1;
+        if (batchCount >= batchSize) await flush();
+    }
+
     await flush();
 }
 
@@ -222,15 +246,19 @@ async function main() {
         throw new Error(`Target person ${toId} does not exist.`);
     }
     const toName = (toSnap.data() && toSnap.data().name) || '';
+    const attendanceConflict = attendanceConflictMode(argv);
 
     const plan = {
         fromId,
         toId,
         updates: [],
         moves: [],
+        attendanceKeepTarget: [],
         conflicts: [],
         deleteFromPerson: false,
     };
+
+    const scanOptions = attendanceConflict ? { attendanceConflict } : {};
 
     const collections = Merge.TOP_LEVEL_COLLECTIONS.concat(LEGACY_PERSON_REF_COLLECTIONS);
     for (const collection of collections) {
@@ -238,7 +266,7 @@ async function main() {
     }
 
     for (const sub of Merge.COLLECTION_GROUP_SUBCOLLECTIONS) {
-        await scanCollectionGroup(db, sub, fromId, toId, toName, plan);
+        await scanCollectionGroup(db, sub, fromId, toId, toName, plan, scanOptions);
     }
 
     const fromData = fromSnap.data() || {};
@@ -277,6 +305,15 @@ async function main() {
         byCollection[key] = (byCollection[key] || 0) + 1;
         logChange(key, m);
     });
+    plan.attendanceKeepTarget.forEach((row) => {
+        byCollection.event_occurrences = (byCollection.event_occurrences || 0) + 1;
+        logChange('event_occurrences', {
+            action: 'attendance_keep_target',
+            occurrenceId: row.occurrenceId,
+            keepPath: row.keepPath,
+            dropPath: row.dropPath,
+        });
+    });
     plan.conflicts.forEach((c) => logChange('conflicts', c));
 
     if (plan.conflicts.length) {
@@ -304,9 +341,11 @@ async function main() {
         projectId,
         fromId,
         toId,
+        attendanceConflict: attendanceConflict || null,
         counts: {
             updates: plan.updates.length,
             moves: plan.moves.length,
+            attendanceKeepTarget: plan.attendanceKeepTarget.length,
             conflicts: plan.conflicts.length,
             byCollection,
         },
