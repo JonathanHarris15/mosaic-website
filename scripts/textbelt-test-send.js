@@ -8,11 +8,16 @@
  *   node scripts/textbelt-test-send.js \
  *       --project mosaic-hymn-database --i-mean-prod --commit
  *
- * Requires TEXTBELT_KEY in the environment (GitHub Actions secret for prod ops).
+ * On --commit, reads TEXTBELT_KEY from the environment when set, otherwise
+ * Secret Manager in the target project (same secret id as Cloud Functions).
  */
 
 const admin = require('firebase-admin');
 const {interpretSend} = require('../functions/sms');
+const {
+    resolveTextbeltKey,
+    fetchTextbeltKeyFromSecretManager,
+} = require('./textbelt-key-lib');
 const {
     JONATHAN_HARRIS_NAME,
     DEFAULT_MESSAGE,
@@ -65,10 +70,22 @@ async function main() {
 
     if (!commit) return;
 
-    const key = process.env.TEXTBELT_KEY;
-    if (!key || !String(key).trim()) {
-        throw new Error('TEXTBELT_KEY is not set in the environment.');
+    let key;
+    let source;
+    try {
+        const resolved = await resolveTextbeltKey(
+            projectId,
+            process.env.TEXTBELT_KEY,
+            fetchTextbeltKeyFromSecretManager);
+        key = resolved.key;
+        source = resolved.source;
+    } catch (err) {
+        const detail = err && err.message ? err.message : String(err);
+        throw new Error(
+            'Could not load TEXTBELT_KEY from env or Secret Manager. ' +
+            detail);
     }
+    console.log(`textbelt key source: ${source}`);
 
     const resp = await fetch('https://textbelt.com/text', {
         method: 'POST',

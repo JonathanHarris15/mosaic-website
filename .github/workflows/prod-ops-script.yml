@@ -96,5 +96,4 @@ jobs:
           PROD_OPS_SCRIPT: ${{ github.event.inputs.script }}
           PROD_OPS_ARGS: ${{ github.event.inputs.args }}
           PROD_OPS_COMMIT: ${{ github.event.inputs.commit }}
-          TEXTBELT_KEY: ${{ secrets.TEXTBELT_KEY }}
         run: node scripts/prod-ops-run.js

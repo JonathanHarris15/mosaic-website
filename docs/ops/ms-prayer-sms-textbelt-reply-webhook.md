@@ -18,7 +18,10 @@ Unverified Textbelt keys reject sends when `replyWebhookUrl` is present, even if
    | `reset-prayer-send-attempt.js` | `--service-date 2026-10-25 --ids yOhdWHurhmFxn7KKfZTv,rtLaPcywYrcNcdQyt1xp` | `false` |
    | `reset-prayer-send-attempt.js` | same | `true` |
 
-`textbelt-test-send.js` needs the `TEXTBELT_KEY` GitHub Actions secret on the Prod ops workflow.
+`textbelt-test-send.js` with `commit=true` loads `TEXTBELT_KEY` from Secret Manager
+in `mosaic-hymn-database` (same secret as Cloud Functions), using the deploy
+service account from `GOOGLE_APPLICATION_CREDENTIALS`. Optional override:
+`TEXTBELT_KEY` in the environment.
 
 ```bash
 gh workflow run "Prod ops script" --ref main \
