@@ -22,7 +22,7 @@ test('plan copies legacy praise into carriedBy.prayerOfPraise when empty', () =>
     });
 });
 
-test('plan skips when carriedBy already has a leader', () => {
+test('plan skips when carriedBy already has a leader and reports slot detail', () => {
     const service = {
         prayerPraiseId: 'p-old',
         prayerPraiseName: 'Old Name',
@@ -31,27 +31,7 @@ test('plan skips when carriedBy already has a leader', () => {
     const plan = Legacy.planLegacyPrayerMigration(service, catalog);
     assert.equal(plan.wouldWrite, false);
     assert.equal(plan.counts.skipped, 1);
-});
-
-test('hydrate mirrors plan without requiring a write', () => {
-    const service = {
-        prayerConfessionId: 'p-colin',
-        prayerConfessionName: 'Colin Beers',
-        carriedBy: {},
-    };
-    Legacy.hydrateCarriedByFromLegacy(service, catalog);
-    assert.deepStrictEqual(service.carriedBy.prayerOfConfession, {
-        id: 'p-colin',
-        name: 'Colin Beers',
-    });
-});
-
-test('mergePrayerInvolvement dedupes carriedBy and legacy ids for the same prayer', () => {
-    const withCarrier = {
-        carriedBy: { prayerOfPraise: { id: 'p1', name: 'Ada' } },
-        prayerPraiseId: 'p1',
-    };
-    const merged = Legacy.mergePrayerInvolvement(withCarrier, catalog);
-    assert.equal(merged.length, 1);
-    assert.equal(merged[0].personId, 'p1');
+    assert.equal(plan.skippedSlots.length, 1);
+    assert.deepStrictEqual(plan.skippedSlots[0].legacy, { id: 'p-old', name: 'Old Name' });
+    assert.deepStrictEqual(plan.skippedSlots[0].existing, { id: 'p-new', name: 'New Name' });
 });

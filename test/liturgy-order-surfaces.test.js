@@ -74,7 +74,7 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.match(html, /item\.type === 'person'/);
     assert.match(js, /type === 'other'/);
     assert.match(js, /LiturgyOrderStore\.load\(db\)/);
-    assert.match(js, /hydrateCarriedByFromLegacy/);
+    assert.doesNotMatch(js, /hydrateCarriedByFromLegacy/);
     assert.match(js, /el\.prayedByOther/);
     assert.match(js, /rowOpens\(item\)/);
     assert.match(html, /rowOpens\(item\)/);

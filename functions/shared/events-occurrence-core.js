@@ -51,10 +51,10 @@
 (function (global) {
     'use strict';
 
-    const Legacy = (typeof require !== 'undefined' &&
+    const Involvement = (typeof require !== 'undefined' &&
             typeof module !== 'undefined' && module.exports) ?
-        require('./legacy-oos-migrate-core.js') :
-        (global && global.LegacyOosMigrateCore);
+        require('./service-involvement-core.js') :
+        (global && global.ServiceInvolvementCore);
 
     // ── Vocabulary ────────────────────────────────────────────────────────────
 
@@ -561,8 +561,8 @@
             });
         });
 
-        if (Legacy && typeof Legacy.mergePrayerInvolvement === 'function') {
-            Legacy.mergePrayerInvolvement(doc, null).forEach((rec) => {
+        if (Involvement && typeof Involvement.prayerCarriedByInvolvement === 'function') {
+            Involvement.prayerCarriedByInvolvement(doc, null).forEach((rec) => {
                 if (!rec || !rec.personId || seen.has(rec.personId)) return;
                 seen.add(rec.personId);
                 held.push({ personId: rec.personId, roleSlug: rec.type });

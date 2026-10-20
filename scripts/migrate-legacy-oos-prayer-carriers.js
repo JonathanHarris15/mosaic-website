@@ -97,6 +97,18 @@ async function main() {
         totals.skippedAlreadySet += plan.counts.skipped;
         totals.missingTarget += plan.counts.missingTarget;
 
+        if (!COMMIT && plan.skippedSlots && plan.skippedSlots.length) {
+            plan.skippedSlots.forEach((slot) => {
+                console.log(JSON.stringify({
+                    serviceId: doc.id,
+                    slot: slot.kind,
+                    targetId: slot.targetId,
+                    legacyPerson: slot.legacy,
+                    carriedByPerson: slot.existing,
+                }));
+            });
+        }
+
         if (!plan.wouldWrite) continue;
         totals.wouldUpdate += 1;
 

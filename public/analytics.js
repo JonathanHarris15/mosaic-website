@@ -224,8 +224,6 @@ export function analyticsPage() {
                 preacher: 'preacher',
                 musicLeader: 'worship_leader',
                 // Suffix name fields
-                prayerPraiseName: 'prayer',
-                prayerConfessionName: 'prayer',
                 elementsName: 'other',
                 otherName: 'other'
             };
@@ -257,6 +255,12 @@ export function analyticsPage() {
                         addInvolvement(data[baseField], type);
                     }
                 }
+            });
+
+            const carried = data.carriedBy && typeof data.carriedBy === 'object' ? data.carriedBy : {};
+            ['prayerOfPraise', 'prayerOfConfession'].forEach((key) => {
+                const ref = carried[key];
+                if (ref && ref.name) addInvolvement(ref.name, 'prayer');
             });
 
             // Music Helpers are stored as a list; each accrues a worship_helper involvement.

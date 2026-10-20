@@ -69,6 +69,14 @@ test('an empty field produces nothing', () => {
     assert.strictEqual(records[0].type, 'preacher');
 });
 
+test('legacy top-level prayer ids do not produce involvement without carriedBy', () => {
+    const records = Core.servingInvolvement({
+        prayerPraiseId: 'p-ana',
+        prayerConfessionId: 'p-ben',
+    });
+    assert.strictEqual(records.filter(r => r.type === 'prayer').length, 0);
+});
+
 // A visiting speaker typed in by hand has a name and no id. There is no Person
 // to credit, so there is nothing to write — the same rule liturgicalHolders uses.
 test('a name with no id is not a Person and produces nothing', () => {
