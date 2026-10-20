@@ -170,12 +170,14 @@
             border-bottom: none;
         }
         .cal-orders__filter-wrap { position: relative; }
+        /* Portaled to <body> with inline fixed coords (positionOrdersPopover) so
+           overflow-hidden table chrome and sticky thead stacking cannot clip it. */
         .cal-orders__popover {
-            position: absolute;
-            left: 0;
-            top: calc(100% + 6px);
-            z-index: 30;
-            width: min(18rem, 92vw);
+            position: fixed;
+            z-index: 90;
+            width: min(18rem, calc(100vw - 1rem));
+            max-height: min(24rem, calc(100vh - 1rem));
+            overflow-y: auto;
             box-shadow: var(--shadow-md);
         }
         .cal-orders__popover .m-check {
@@ -761,8 +763,8 @@
                     <div id="table-orders" class="m-toolbar cal-orders flex-shrink-0" role="group" aria-labelledby="table-orders-label">
                         <div class="cal-orders__filter-wrap m-toolbar__cluster">
                             <span id="table-orders-label" class="sr-only">Liturgy orders shown as table columns</span>
-                            <button type="button" id="table-orders-filter"
-                                    @click="ordersFilterOpen = !ordersFilterOpen"
+                            <button type="button" id="table-orders-filter" x-ref="ordersFilterBtn"
+                                    @click="toggleOrdersFilter()"
                                     :aria-expanded="ordersFilterOpen"
                                     aria-labelledby="table-orders-label"
                                     class="m-btn m-btn--quiet m-btn--sm">
@@ -770,9 +772,11 @@
                                 <span class="m-btn__label">Orders</span>
                                 <span class="m-badge m-badge--neutral" x-text="tableOrdersActiveCount"></span>
                             </button>
+                            <template x-teleport="body">
                             <div x-show="ordersFilterOpen" x-cloak
                                  class="cal-orders__popover"
-                                 @click.outside="ordersFilterOpen = false"
+                                 :style="ordersPopoverStyle"
+                                 @click.outside="closeOrdersFilter($event)"
                                  @keydown.escape.window="ordersFilterOpen = false">
                                 <section class="m-card p-sm">
                                     <div class="m-label">Liturgy orders</div>
@@ -786,6 +790,7 @@
                                     </div>
                                 </section>
                             </div>
+                            </template>
                         </div>
                         <a href="liturgy-orders.html" class="cal-orders__manage m-btn m-btn--quiet m-btn--sm">
                             <span class="material-symbols-outlined text-[17px]">settings</span>

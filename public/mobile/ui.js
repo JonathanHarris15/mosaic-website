@@ -26,7 +26,20 @@
   // Shell furniture: the safe-area maths and the scroll container are
   // the phone's own problem and have no desktop counterpart.
   function Screen(props) {
-    return html`<div style=${Object.assign({ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }, props.style || {})}>${props.children}</div>`;
+    return html`<div style=${Object.assign({ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)", position: "relative" }, props.style || {})}>${props.children}</div>`;
+  }
+
+  // Home (and any future screen) draws these behind the TopBar. Keep them in
+  // ui.js so every caller shares the same z-index contract as .m-screen-ambient.
+  function ScreenAmbientRings() {
+    return html`
+      <svg class="m-screen-ambient" aria-hidden="true" viewBox="0 0 390 700" preserveAspectRatio="xMidYMid slice">
+        <g class="home-ambient" transform="translate(360,20)" fill="none" stroke="var(--secondary)">
+          <circle r="90" stroke-width="1" opacity="0.16"></circle>
+          <circle r="140" stroke-width="1" opacity="0.12"></circle>
+          <circle r="190" stroke-width="1" opacity="0.08"></circle>
+        </g>
+      </svg>`;
   }
 
   function TopBar(props) {
@@ -38,7 +51,7 @@
            title beneath the island — the inset itself is never reduced.
            mobile-shell-header.js draws this same bar for the desktop pages the
            phone opens, and carries the same two numbers. -->
-      <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 4px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
+      <header class="m-mobile-topbar" style=${{ flexShrink: 0, position: "relative", zIndex: 2, paddingTop: "calc(env(safe-area-inset-top, 20px) + 4px)", background: "var(--background)", borderBottom: "1px solid var(--outline-variant)" }}>
         <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 46, padding: "0 8px 0 6px" }}>
           <button class="m-icon-btn m-icon-btn--lg" onClick=${onLeft} aria-label=${props.onBack ? "Back" : "Menu"}>
             ${Ic(props.onBack ? "chevron-left" : "menu", 24)}
@@ -181,7 +194,7 @@
   }
 
   M.ui = {
-    Screen: Screen, TopBar: TopBar, BarAction: BarAction, Body: Body,
+    Screen: Screen, ScreenAmbientRings: ScreenAmbientRings, TopBar: TopBar, BarAction: BarAction, Body: Body,
     Overline: Overline, SerifHead: SerifHead, Row: Row, CardList: CardList,
     Medallion: Medallion, SearchBar: SearchBar, FAB: FAB,
     Button: Button, Badge: Badge, Avatar: Avatar, Input: Input,

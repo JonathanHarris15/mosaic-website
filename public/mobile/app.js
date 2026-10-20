@@ -10,7 +10,7 @@
   var html = M.html, Ic = M.Ic;
   var useState = M.hooks.useState, useEffect = M.hooks.useEffect;
   var ui = M.ui, data = M.data;
-  var Screen = ui.Screen, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
+  var Screen = ui.Screen, ScreenAmbientRings = ui.ScreenAmbientRings, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
       Overline = ui.Overline, SerifHead = ui.SerifHead, Row = ui.Row, CardList = ui.CardList,
       Medallion = ui.Medallion, Button = ui.Button, Badge = ui.Badge, Avatar = ui.Avatar, Input = ui.Input;
 
@@ -328,14 +328,9 @@
     var tileBtn = { display: "flex", flexDirection: "column", gap: 10, height: 84, padding: 12, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", color: "var(--on-surface)" };
     var plate = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "var(--radius-sm)", background: "var(--primary)", color: "var(--on-primary)" };
     return html`
-      <${Screen} style=${{ position: "relative" }}>
-        <svg aria-hidden="true" viewBox="0 0 390 700" preserveAspectRatio="xMidYMid slice" style=${{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-          <g class="home-ambient" transform="translate(360,20)" fill="none" stroke="var(--secondary)">
-            <circle r="90" stroke-width="1" opacity="0.16"></circle>
-            <circle r="140" stroke-width="1" opacity="0.12"></circle>
-            <circle r="190" stroke-width="1" opacity="0.08"></circle>
-          </g>
-        </svg>
+      <${Screen}>
+        <${ScreenAmbientRings} />
+        <div class="m-screen-foreground">
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
         <${Body} style=${{ padding: "18px 16px 16px", position: "relative" }}>
           <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden", marginBottom: 16 }}>
@@ -378,6 +373,7 @@
               </a>
             </div>`}
         </${Body}>
+        </div>
       </${Screen}>`;
   }
 
