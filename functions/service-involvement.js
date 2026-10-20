@@ -79,6 +79,7 @@ const isDateStr = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
  * id is a visiting speaker typed in by hand — there is no Person to credit, so
  * there is nothing to write.
  * @param {Object} service The stored `services/{date}` document.
+ * @param {?Object} catalog Liturgy catalog for carriedBy prayer leaders.
  * @return {Array<{personId: string, type: string, metadata: ?Object}>}
  */
 function servingInvolvement(service, catalog) {
@@ -99,7 +100,8 @@ function servingInvolvement(service, catalog) {
   });
 
   if (Legacy && typeof Legacy.mergePrayerInvolvement === "function") {
-    Legacy.mergePrayerInvolvement(doc, catalog).forEach((rec) => records.push(rec));
+    Legacy.mergePrayerInvolvement(doc, catalog)
+        .forEach((rec) => records.push(rec));
   }
 
   return records;
