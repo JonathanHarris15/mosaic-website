@@ -1,0 +1,97 @@
+name: Prod ops script
+
+# Run one allowlisted `scripts/*.js` against mosaic-hymn-database with the
+# same service account as "Deploy Firebase (hosting + publicForm)".
+# Dry-run by default; set commit=true only after the log looks right.
+#
+#   gh workflow run "Prod ops script" --ref main \
+#     -f script=set-liturgy-order-flags.js \
+#     -f 'args=--id textbelt-url-test --ops' \
+#     -f commit=false
+#
+# Documented at docs/ops/prod-ops-script.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Allowlisted script under scripts/
+        type: choice
+        required: true
+        options:
+          - set-liturgy-order-flags.js
+          # MS-769: add hymn-sheet migration script here (keep scripts/prod-ops-allowlist.js in sync)
+      args:
+        description: Extra script flags (no shell; validated in Node)
+        type: string
+        default: ""
+      commit:
+        description: Append --commit (writes to prod)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-ops-script-mosaic-hymn-database
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run allowlisted prod script
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Refuse prod ops outside main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Prod ops scripts may only run from the main branch ref."
+            exit 1
+          fi
+
+      - name: Load Firebase service account
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE }}
+        run: |
+          set -euo pipefail
+          SA_JSON=""
+          USED=""
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT}" ]; then
+            SA_JSON="${FIREBASE_SERVICE_ACCOUNT}"
+            USED="FIREBASE_SERVICE_ACCOUNT"
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE}" ]; then
+            SA_JSON="${FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE}"
+            USED="FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE"
+          else
+            echo "::error::No Firebase service account secret. Add FIREBASE_SERVICE_ACCOUNT (preferred) or FIREBASE_SERVICE_ACCOUNT_MOSAIC_HYMN_DATABASE."
+            exit 1
+          fi
+          echo "Using GitHub Actions secret ${USED}"
+          umask 077
+          printf '%s' "${SA_JSON}" > "${RUNNER_TEMP}/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-sa.json" >> "${GITHUB_ENV}"
+
+      - name: Refuse a run whose config is not the church project
+        run: node scripts/check-firebase-deploy.js --project mosaic-hymn-database --i-mean-prod
+
+      - name: Run ops script
+        env:
+          PROD_OPS_SCRIPT: ${{ github.event.inputs.script }}
+          PROD_OPS_ARGS: ${{ github.event.inputs.args }}
+          PROD_OPS_COMMIT: ${{ github.event.inputs.commit }}
+        run: node scripts/prod-ops-run.js

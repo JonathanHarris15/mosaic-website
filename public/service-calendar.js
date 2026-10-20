@@ -44,6 +44,10 @@ function calendarPage() {
         liturgyOrders: [],
         tableOrderIds: [],
         ordersFilterOpen: false,
+        // Fixed coords for the portaled Orders popover — recomputed on open,
+        // scroll, and resize so sticky thead / overflow-hidden shells cannot
+        // clip it (MS-770).
+        ordersPopoverStyle: '',
 
         get tableOrdersActiveCount() {
             return this.tableOrderIds.length;
@@ -60,6 +64,37 @@ function calendarPage() {
             setTableOrderIds(ids);
             this.tableOrderIds = currentTableOrderIds().slice();
             if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
+        },
+
+        toggleOrdersFilter() {
+            this.ordersFilterOpen = !this.ordersFilterOpen;
+            if (!this.ordersFilterOpen) return;
+            this.$nextTick(() => this.positionOrdersPopover());
+        },
+
+        closeOrdersFilter(event) {
+            const btn = this.$refs.ordersFilterBtn;
+            if (btn && event && btn.contains(event.target)) return;
+            this.ordersFilterOpen = false;
+        },
+
+        positionOrdersPopover() {
+            const btn = this.$refs.ordersFilterBtn || document.getElementById('table-orders-filter');
+            if (!btn) return;
+            const rect = btn.getBoundingClientRect();
+            const margin = 8;
+            const width = Math.min(288, window.innerWidth - margin * 2);
+            let left = Math.min(rect.left, window.innerWidth - margin - width);
+            left = Math.max(margin, left);
+            const spaceBelow = window.innerHeight - rect.bottom - margin;
+            const spaceAbove = rect.top - margin;
+            const below = spaceBelow >= 120 || spaceBelow >= spaceAbove;
+            const maxHeight = Math.max(120, Math.min(384, below ? spaceBelow : spaceAbove));
+            const vertical = below
+                ? `top: ${rect.bottom + 6}px;`
+                : `bottom: ${window.innerHeight - rect.top + 6}px;`;
+            this.ordersPopoverStyle =
+                `left: ${left}px; width: ${width}px; max-height: ${maxHeight}px; ${vertical}`;
         },
 
         syncTableOrders() {
@@ -373,6 +408,21 @@ function calendarPage() {
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
+            this.$watch('ordersFilterOpen', open => {
+                if (!open) return;
+                this.$nextTick(() => this.positionOrdersPopover());
+            });
+            this._repositionOrdersPopover = (e) => {
+                if (!this.ordersFilterOpen) return;
+                const pop = document.querySelector('.cal-orders__popover');
+                if (pop && e && pop.contains(e.target)) return;
+                this.positionOrdersPopover();
+            };
+            this._closeOrdersOnResize = () => {
+                if (this.ordersFilterOpen) this.positionOrdersPopover();
+            };
+            window.addEventListener('scroll', this._repositionOrdersPopover, true);
+            window.addEventListener('resize', this._closeOrdersOnResize);
             this.loadLiturgyOrders();
             await this.loadPeopleRegistry();
         },
