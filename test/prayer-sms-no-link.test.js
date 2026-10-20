@@ -58,3 +58,38 @@ test('scheduler/send path: links on when church setting is true', async () => {
     const body = await prayerTextBody(true);
     assert.ok(body.includes(ANSWER_URL));
 });
+
+test('default prayer config does not ask Textbelt for a reply webhook', async () => {
+    const pr = require('../functions/prayer-request.js');
+    assert.strictEqual(pr.prayerSmsIncludeReplyWebhook({}), false);
+    const calls = [];
+    const deps = {
+        now: () => INSIDE,
+        loadPerson: async () => ({ uid: null, phone: '+15551212', firstName: 'Jane' }),
+        loadTokens: async () => [],
+        loadTemplates: async () => ({
+            text: pr.DEFAULT_PRAYER_MESSAGES,
+            textFallback: pr.DEFAULT_PRAYER_MESSAGES,
+            push: pr.DEFAULT_PUSH_WORDING,
+            pushFallback: pr.DEFAULT_PUSH_WORDING,
+        }),
+        sendText: async (msg) => {
+            calls.push(msg);
+            return { accepted: true, textId: 'tb-1' };
+        },
+        sendPush: async () => ({ accepted: false }),
+        deleteToken: async () => {},
+        writeLog: async () => {},
+    };
+    await tellPerson(deps, {
+        personId: 'person-1',
+        purpose: 'prayer_request',
+        wording: 'initial',
+        values: { name: 'Jane' },
+        url: null,
+        expectReply: pr.prayerSmsIncludeReplyWebhook({}),
+        message: pr.messageWithLink(pr.DEFAULT_PRAYER_MESSAGES.initial, false),
+    });
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].expectReply, false);
+});

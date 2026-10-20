@@ -54,3 +54,5 @@ gh workflow run "Prod ops script" --ref main \
 | --- | --- |
 | `set-liturgy-order-flags.js` | [MS-770 — Textbelt order flag](./ms-770-textbelt-order-flag.md) (`--list`, `--name-match`, `--id`, `--ops` / `--hidden`) |
 | `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |
+| `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`; `commit=true` to send one text to Jonathan Harris) |
+| `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
