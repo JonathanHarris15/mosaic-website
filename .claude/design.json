@@ -48,14 +48,12 @@
       "public/**/*.min.js",
       "public/mosaic.css",
       "public/mobile/tokens.css",
-      "public/mosaic-theme.js",
       "public/guide-seed.js",
       "public/relations-graph-core.js",
       "public/404.html"
     ],
     "why": {
       "public/mosaic.css": "compiled Tailwind output",
-      "public/mosaic-theme.js": "the legacy runtime token source — superseded by tailwind.config.js, and a second palette definition is its own problem, not a drift finding",
       "public/guide-seed.js": "printed Service Guide templates — a different medium with its own palette",
       "public/relations-graph-core.js": "the Relations Viewer group palette, documented in CONTEXT.md as deliberately raw",
       "public/404.html": "Firebase's stock error page",
