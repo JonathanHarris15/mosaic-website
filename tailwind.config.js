@@ -1,10 +1,9 @@
 /* ============================================================
    tailwind.config.js — compiled build of the Mosaic theme.
 
-   This is the CLI/PostCSS equivalent of the runtime config that
-   used to live in public/mosaic-theme.js (window.tailwind.config,
-   consumed by the Tailwind Play CDN). The theme.extend block below
-   is a verbatim port so compiled output matches the CDN output.
+   Single source of truth for design tokens. `npm run build:tokens`
+   emits CSS variables; `npm run build:css` compiles utilities into
+   public/mosaic.css. The theme.extend block below is what pages render.
 
    content globs include the .js files because 8 page scripts build
    markup with Tailwind classes in template strings; those classes

@@ -3874,15 +3874,8 @@ exports.publicForm = onCall(
         if (wantsPeople) {
           const peopleSnap = await db.collection("people")
               .orderBy("name", "asc").get();
-          const directory = peopleSnap.docs.map((doc) => {
-            const d = doc.data() || {};
-            return {
-              id: doc.id,
-              name: d.name || "Unnamed",
-              isMember: d.isMember === true || d.membershipStage === "member",
-              tagIds: d.tagIds || [],
-            };
-          });
+          const directory = peopleSnap.docs.map((doc) =>
+            FormsCore.directoryPerson(doc.id, doc.data() || {}));
           served.people = fp.pickerChoices(form, directory);
         }
         // Whether to draw the "add them to the directory" row. The page is
@@ -3925,14 +3918,11 @@ exports.publicForm = onCall(
           createdAt: now,
           updatedAt: now,
         });
-        // Shaped like a row of `served.people`, because that is the list the
-        // picker searches and the answer that follows must be an ordinary pick.
+        // Only an id and a name, the same shape `pickerChoices` sends. The
+        // answer that follows is an ordinary pick.
         return {
           ok: true,
-          person: {
-            id: ref.id, name: proposal.person.name,
-            isMember: false, tagIds: [],
-          },
+          person: {id: ref.id, name: proposal.person.name},
         };
       }
 
