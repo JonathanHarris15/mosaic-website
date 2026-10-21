@@ -2106,7 +2106,7 @@ function serviceForm() {
             const key = el.id;
             const type = this._ROW_TYPES[el.primitive];
             const removed = type === 'hymn' && this.isHymnRemoved(key);
-            let value = '', status = 'empty', emptyLabel = '';
+            let value, status, emptyLabel;
             if (type === 'hymn') {
                 const ref = lit[key] || {};
                 value = ref.name || '';
@@ -2844,7 +2844,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
 
             if (hasFuse) {
                 this.hadFuse = true;
-                let found = [];
+                let found;
                 if (!this.query || this.query.trim().length === 0) {
                     if (this.suggestionsKey) {
                         found = [];

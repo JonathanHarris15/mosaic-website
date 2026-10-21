@@ -164,7 +164,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var canReadEditor = !!(flags && flags.canReadEditor);
 
     // Load everything; fetch Tag-Hold history only if a view needs it (ADR-0011).
@@ -457,7 +456,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var canWriteEditor = !!(flags && flags.canWriteEditor);
 
     useEffect(function () {
@@ -977,7 +975,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     // Live (MS-490): everything on this screen is watched rather than read
     // once, the way the web profile is, so another elder's note, status or tag
     // shows up here without leaving and coming back. Leaving the screen stops

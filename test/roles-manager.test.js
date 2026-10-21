@@ -1,3 +1,4 @@
+/* global AccessCore */
 const { test } = require('node:test');
 const assert = require('node:assert');
 
@@ -98,7 +99,7 @@ function fakeDb(seed = {}, { deny = [], failWrites = false } = {}) {
 global.window = global;
 global.AccessCore = require('../public/access-core.js');
 const Roles = require('../public/roles-core.js');
-const EventsCore = require('../public/events-core.js');
+require('../public/events-core.js');
 require('../public/relationship-core.js');
 require('../public/roles-manager.js');
 
@@ -1319,7 +1320,7 @@ test('the page\'s own styles are all still inside the stylesheet', () => {
     // And nothing outside a comment may start with prose.
     const code = style.replace(/\/\*[\s\S]*?\*\//g, '');
     code.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
-        assert.ok(/[{}:;,]|^<style>$|^[.\w#\[@]/.test(line),
+        assert.ok(/[{}:;,]|^<style>$|^[.\w#[@]/.test(line),
             'this line is neither CSS nor a comment: ' + line);
     });
 });

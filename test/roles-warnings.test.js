@@ -59,8 +59,6 @@ function ask(roster, over) {
     }, over || {}));
 }
 
-const reasonsIn = warnings => warnings.map(w => w.reason).sort();
-
 // ── A clean roster ───────────────────────────────────────────────────────────
 
 test('a roster that breaks nothing comes back with no warnings', () => {

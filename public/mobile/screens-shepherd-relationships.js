@@ -79,8 +79,11 @@
   function RelationshipsTab(props) {
     var showToast = props.showToast;
     // Open/read stays canReadElder (parent Manage Tags already uses it). Write
-    // chrome below is canDecide — PA now decides too (MS-594).
+    // chrome below is canDecide — PA now decides too (MS-594). The binding is
+    // pinned by the relationships-tab source test; this screen's chrome reads
+    // canDecide.
     var flags = props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
+    // eslint-disable-next-line no-unused-vars
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
 

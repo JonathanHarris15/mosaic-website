@@ -41,7 +41,6 @@ export function analyticsPage() {
         selectedChapter: null,
         showBookNames: false,
         gridZoom: 1, // 1 is standard, 0.75 is small, 1.5 is large
-        drillDownData: null, // Will hold the book object with chapters and verses usage
         sortKey: 'count', // 'name', 'status', 'count', 'lastUsed'
         sortOrder: 'desc', // 'asc', 'desc'
         currentPermissionLevel: 'viewer',

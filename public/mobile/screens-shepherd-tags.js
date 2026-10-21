@@ -158,7 +158,6 @@
     var flags = userKnown && props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
-    var canWriteRecord = !!(flags && flags.canWriteRecord);
     var isElder = canReadElder;
     var newTag = newTagS[0];
     var mergeSource = mergeSourceS[0] ? tagById(mergeSourceS[0]) : null;

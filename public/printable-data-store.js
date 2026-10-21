@@ -247,7 +247,7 @@
         const wanted = [];
         (requests || []).forEach(req => {
             const today = req.today || Data.toDateStr(new Date());
-            let rows = [];
+            let rows;
             try {
                 rows = (Data.resolve(req.source, req.params, bundle, { today: today, level: 'editor' }).rows) || [];
             } catch (e) {

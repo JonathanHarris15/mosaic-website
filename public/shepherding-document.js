@@ -842,7 +842,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
 // ── PersonPanel TipTap node ───────────────────────────────────────────────────
 
 function createPersonPanelNode() {
-    const { Node, InputRule } = window._TipTap;
+    const { Node } = window._TipTap;
 
     return Node.create({
         name: 'personPanel',

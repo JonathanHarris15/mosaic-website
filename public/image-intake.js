@@ -190,7 +190,7 @@
             const convert = await loadHeicConverter();
             result = await convert({ blob: file, toType: 'image/jpeg', quality: 0.85 });
         } catch (e) {
-            throw new Error('Could not convert that HEIC image.');
+            throw new Error('Could not convert that HEIC image.', { cause: e });
         }
         const blob = Array.isArray(result) ? result[0] : result;
         if (!blob) throw new Error('Could not convert that HEIC image.');

@@ -253,7 +253,6 @@ test('placeholders inside nested templates are filled', () => {
     const fragments = [];
 
     const node = (html) => {
-        const found = [];
         // A stand-in for the DOM: only what mount() actually uses.
         const self = {
             innerHTML: html,
@@ -374,7 +373,7 @@ test('the tab strip is laid out for 390px', () => {
 });
 
 test('the shell back arrow leaves the Roles tab before it leaves the page', () => {
-    const form = load('service-builder.js', 'serviceForm')();
+    load('service-builder.js', 'serviceForm')();
     const handlers = [];
 
     // The page listens on `document`; the sandbox's stub records instead.

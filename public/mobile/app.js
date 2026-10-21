@@ -11,8 +11,7 @@
   var useState = M.hooks.useState, useEffect = M.hooks.useEffect;
   var ui = M.ui, data = M.data;
   var Screen = ui.Screen, ScreenAmbientRings = ui.ScreenAmbientRings, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
-      Overline = ui.Overline, SerifHead = ui.SerifHead, Row = ui.Row, CardList = ui.CardList,
-      Medallion = ui.Medallion, Button = ui.Button, Badge = ui.Badge, Avatar = ui.Avatar, Input = ui.Input;
+      Overline = ui.Overline, Button = ui.Button, Avatar = ui.Avatar, Input = ui.Input;
 
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.

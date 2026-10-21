@@ -32,7 +32,6 @@
     const Commitments = window.CommitmentsCore;
     const Trades = window.TradesStore;
     const TradeView = window.TradesView;
-    const TradeCore = window.TradeCore;
 
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];

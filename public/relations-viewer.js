@@ -1009,7 +1009,7 @@
     };
   };
   RelationsViewer.prototype.avatarStyle = function (n, size) {
-    var s = size || 38, bg, col, ring = '';
+    var s = size || 38, bg, col, ring;
     if (n.inactive) { bg = 'var(--inactive-surface)'; col = 'var(--on-inactive)'; ring = 'border:1.5px dashed var(--inactive-outline);'; }
     else if (n.elder) { bg = 'var(--primary)'; col = 'var(--cream)'; ring = 'border:2px solid var(--gold);'; }
     else { bg = 'var(--surface-container-lowest)'; col = 'var(--primary)'; ring = 'border:1.5px solid rgba(24,47,87,.32);'; }
@@ -1033,7 +1033,7 @@
       if (e.a !== n.id && e.b !== n.id) return;
       var otherId = e.a === n.id ? e.b : e.a, o = self.byId[otherId];
       if (!o) return;
-      var role = '';
+      var role;
       if (e.type === 'family') { role = e.rel === 'spouse' ? 'Spouse' : (e.a === n.id ? 'Child' : 'Parent'); }
       else if (e.type === 'elder') { role = e.a === n.id ? 'Shepherded by' : 'In care group'; }
       else { role = self.EDGE[e.type] ? self.EDGE[e.type].label : 'Relationship'; }
@@ -1131,14 +1131,14 @@
   };
 
   RelationsViewer.prototype.grabRefs = function () {
-    var q = {}, self = this;
+    var q = {};
     this.mount.querySelectorAll('[data-rv]').forEach(function (el) { q[el.getAttribute('data-rv')] = el; });
     this.refs = q;
     this.root = q.root; this.wrap = q.wrap; this.canvas = q.canvas; this.searchInput = q.search;
   };
 
   RelationsViewer.prototype.applyRailLayout = function () {
-    var rail = this.refs.rail, panel = this.refs.panel, railBtn = this.refs.railBtn, stats = this.refs.stats;
+    var rail = this.refs.rail, railBtn = this.refs.railBtn, stats = this.refs.stats;
     if (this.narrow) {
       rail.style.cssText = 'flex:0 0 288px;width:288px;background:var(--surface-container-lowest);border-right:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden;position:absolute;top:0;left:0;bottom:0;z-index:35;box-shadow:0 8px 30px rgba(14,28,54,.18);transform:translateX(' + (this.railOpen ? '0' : '-110%') + ');transition:transform .28s';
       railBtn.style.display = 'flex'; if (stats) stats.style.display = 'none';

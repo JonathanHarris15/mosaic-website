@@ -2,7 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const { h, Fragment } = require('preact');
-const { useState, useEffect } = require('preact/hooks');
 const render = require('preact-render-to-string');
 // htm is not an npm dependency — the app loads the same vendored UMD build the
 // browser does, so the test exercises exactly the build that ships.

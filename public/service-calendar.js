@@ -1639,7 +1639,6 @@ async function loadServiceData() {
 }
 
 function injectServiceData(serviceMap) {
-    const user = auth.currentUser;
     let canEdit = false;
     
     // We check role from local storage or global state if possible, 
@@ -2638,7 +2637,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
 
             if (hasFuse) {
                 this.hadFuse = true;
-                let found = [];
+                let found;
                 let key = this.suggestionsKey;
                 if (key === 'activeSuggestionsKey' && this.parent) {
                     key = this.parent.activeSuggestionsKey; 

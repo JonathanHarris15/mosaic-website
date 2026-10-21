@@ -23,16 +23,6 @@ function hymn(name) {
     return { id: null, name: name };
 }
 
-function serviceWith(orderElements, liturgy, extras) {
-    return Object.assign({
-        liturgyOrderId: 'from',
-        liturgy: liturgy,
-        notes: {},
-        carriedBy: {},
-        liturgyLeftovers: [],
-    }, extras || {}, { _orderElements: orderElements });
-}
-
 test('three hymns and a prayer fill two hymns and the prayer, and the extra hymn is left over', () => {
     const from = order('from', 'Order 1', [
         el('h1', 'Hymn', 'hymn'),

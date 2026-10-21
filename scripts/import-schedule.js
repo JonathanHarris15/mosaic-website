@@ -55,7 +55,6 @@ function normalizeName(name) {
         'Griffin': 'Griffin Garrison',
         'Tony Baker Jr': 'Tony Baker Jr.',
         'Tony Baker, Jr.': 'Tony Baker Jr.',
-        'Tony Baker Jr': 'Tony Baker Jr.',
         'Tony Baker Jr.': 'Tony Baker Jr.',
         'Tony Baker Jr/ Melanie': 'Tony Baker Jr.', // Special case for weird split format
         'Melanie': 'Melanie',
@@ -176,7 +175,7 @@ async function run() {
 
             // Handle splits (e.g. "Max/Melanie")
             // Special exception for Prayer "Stephen Pursley/Ian Riley"
-            let namesToProcess = [];
+            let namesToProcess;
             let isPrayerException = (role.type === 'prayer' && rawValue.includes('/'));
 
             if (isPrayerException) {
@@ -222,7 +221,7 @@ async function run() {
                 };
 
                 if (role.type === 'prayer') {
-                    let pType = 'praise';
+                    let pType;
                     if (isPrayerException) {
                         pType = (idx === 0) ? 'praise' : 'confession';
                     } else {

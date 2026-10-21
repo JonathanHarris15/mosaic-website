@@ -72,7 +72,6 @@ async function processHtml(name, src) {
   // fallback: page had fonts/theme but no tailwind script -> insert before </head>
   if (!insertedCss && (removedFonts || hadTheme)) {
     out = out.replace(/([ \t]*)<\/head>/i, `    ${CSS_LINKS}\n$1</head>`);
-    insertedCss = true;
   }
 
   // 4. text/tailwindcss blocks -> plain <style> (compile if needed)

@@ -104,7 +104,7 @@ async function printUsers(db, auth) {
         .filter((row) => isSuperAdminUser(row.data));
     console.log(`super-admin-shaped users: ${superAdmins.length}`);
     for (const row of superAdmins) {
-        let email = '(no auth record)';
+        let email;
         try {
             email = maskEmail((await auth.getUser(row.id)).email);
         } catch (e) {

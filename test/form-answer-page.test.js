@@ -162,9 +162,7 @@ test('a form that is not there says so plainly', async () => {
 // ── Answering ────────────────────────────────────────────────────────────────
 
 test('a missing required answer marks the question, and keeps what was typed', async () => {
-    let stage = 0;
     const { page, signIn } = loadPage((payload) => {
-        stage++;
         if (payload.op === 'fetch') return OPEN_FORM;
         return { ok: false, code: 'incomplete', message: 'One question still needs an answer.', missing: [{ id: 'q1', text: 'Your name' }] };
     }, { pathname: '/f/abc123def456ghi789' });
