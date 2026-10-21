@@ -30,6 +30,7 @@ on:
           - delete-legacy-person-picker-fields.js
           - access-diff.js
           - ms-776-backfill-account-levels.js
+          - migrate-booklet-text-to-occurrences.js
       args:
         description: Extra script flags (no shell; validated in Node)
         type: string

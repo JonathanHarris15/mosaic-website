@@ -1,4 +1,3 @@
-// @ts-nocheck
 // The Printable editor's data side (MS-396, MS-397): the drawer, the wires,
 // iterated elements and the real pages an overflowing list keeps.
 //
@@ -2092,15 +2091,52 @@
                 }));
             },
 
-            // What the chips say today: the typed text of that Sunday, read
-            // the way a wire would read it.
-            typedRowFor(date, service) {
+            // The occurrence that holds this Sunday's fill-ins. The date the
+            // page was opened uses that occurrence. Any other Sunday is the
+            // Sunday Service date.
+            /** @param {any} date @return {string} */
+            bookletOccurrenceId(date) {
+                const self = /** @type {any} */ (this);
+                if (self.occurrenceId && date === self.viewDate) return self.occurrenceId;
+                const Core = /** @type {any} */ (global).EventsOccurrenceCore;
+                if (Core && Core.occurrenceId && Core.SUNDAY_SERVICE_ID) {
+                    return Core.occurrenceId(Core.SUNDAY_SERVICE_ID, date) || '';
+                }
+                return date ? 'sunday_service_' + date : '';
+            },
+
+            /** @param {any} date */
+            async bookletBagFor(date) {
+                const self = /** @type {any} */ (this);
+                const byDate = ui.bundle && ui.bundle.bookletByDate;
+                if (byDate && Object.prototype.hasOwnProperty.call(byDate, date)) return byDate[date] || {};
+                if (date === self.viewDate && ui.bundle && ui.bundle.eventInputs) return ui.bundle.eventInputs;
+                const occId = self.bookletOccurrenceId(date);
+                const printableId = self.id;
+                if (!occId || !printableId || typeof db === 'undefined' || !db) return {};
                 try {
-                    const res = Data.resolve('sunday_typed', { when: { mode: 'date', date: date } }, { services: { [date]: service } }, {
-                        today: this.viewDate, level: this.permissionLevel,
-                    });
-                    return (service && res.rows && res.rows[0]) || {};
+                    const doc = await db.collection('event_occurrences').doc(occId).get();
+                    if (!doc || !doc.exists) return {};
+                    const inputs = (doc.data() || {}).printableInputs || {};
+                    const bag = inputs[printableId];
+                    return bag && typeof bag === 'object' ? bag : {};
                 } catch (e) {
+                    console.error(e);
+                    return {};
+                }
+            },
+
+            // What the chips say today: the fill-ins stored for that Sunday.
+            /** @param {any} date @param {any} bag */
+            typedRowFor(date, bag) {
+                const host = /** @type {any} */ (global);
+                const Typed = host.SundayTypedCore;
+                const Migrate = host.PrintableLegacyMigrate;
+                if (!Typed || !Migrate) return {};
+                try {
+                    return Typed.toRow(Typed.fromDraft(Migrate.draftFromBag(bag)), date);
+                } catch (e) {
+                    console.error(e);
                     return {};
                 }
             },
@@ -2335,118 +2371,21 @@
             },
 
             async loadTypedDraft() {
-                const Typed = global.SundayTypedCore;
-                if (!Typed) {
-                    this.data.typed.draft = emptyTypedDraft();
+                const host = /** @type {any} */ (global);
+                const self = /** @type {any} */ (this);
+                const Typed = host.SundayTypedCore;
+                const Migrate = host.PrintableLegacyMigrate;
+                if (!Typed || !Migrate) {
+                    self.data.typed.draft = emptyTypedDraft();
                     return;
                 }
-                const date = this.typedSundayDate();
-                let service = (ui.bundle && ui.bundle.services && ui.bundle.services[date]) || null;
-                if (!service && typeof db !== 'undefined' && db) {
-                    try {
-                        const doc = await db.collection('services').doc(date).get();
-                        if (doc && doc.exists) {
-                            service = doc.data();
-                            if (!ui.bundle) ui.bundle = { services: {} };
-                            ui.bundle.services = ui.bundle.services || {};
-                            ui.bundle.services[date] = service;
-                        }
-                    } catch (e) { service = null; }
-                }
-                if (date !== this.typedSundayDate()) return;
-                this.data.typed.date = date;
-                this.data.typed.draft = Typed.toDraft(Typed.fromService(service));
-                this.data.typed.row = this.typedRowFor(date, service);
-                this.data.typed.status = '';
-            },
-
-            addTypedAnnouncement() {
-                if (!this.data.typed.draft) return;
-                this.data.typed.draft.announcements.push({ title: '', content: '' });
-            },
-
-            removeTypedAnnouncement(i) {
-                if (!this.data.typed.draft) return;
-                this.data.typed.draft.announcements.splice(i, 1);
-                if (!this.data.typed.draft.announcements.length) {
-                    this.data.typed.draft.announcements.push({ title: '', content: '' });
-                }
-            },
-
-            async onTypedCountryImage(e) {
-                const file = e.target.files && e.target.files[0];
-                if (e.target) e.target.value = '';
-                if (!file || !this.data.typed.draft) return;
-                const Typed = global.SundayTypedCore;
-                if (!Typed) return;
-                const err = Typed.fileUploadError(file);
-                if (err) { this.data.typed.status = err; return; }
-                let upload = file;
-                const intake = global.ImageIntake;
-                if (Typed.fileNeedsPrepare(file)) {
-                    this.data.typed.status = (intake && intake.COMPRESSING_MESSAGE) || 'Compressing the image…';
-                    if (!intake) {
-                        this.data.typed.status = 'Could not read that image.';
-                        return;
-                    }
-                    try {
-                        upload = await intake.prepare(file, { maxBytes: Typed.MAX_UPLOAD_BYTES - 1 });
-                    } catch (prep) {
-                        this.data.typed.status = (prep && prep.message) || 'Could not read that image.';
-                        return;
-                    }
-                }
-                this.data.typed.status = 'Uploading country map…';
-                try {
-                    const date = this.typedSundayDate();
-                    const safe = (upload.name || 'map').replace(/[^\w.-]+/g, '_');
-                    const fileId = (global.PrintableCore && PrintableCore.newId
-                        ? PrintableCore.newId('map')
-                        : String(Date.now())) + '_' + safe;
-                    const path = Typed.countryMapStoragePath(date, fileId);
-                    if (!path || typeof firebase === 'undefined' || !firebase.storage) {
-                        this.data.typed.status = 'Country map upload is not available.';
-                        return;
-                    }
-                    const ref = firebase.storage().ref(path);
-                    await ref.put(upload, { contentType: upload.type || 'image/jpeg' });
-                    const url = await ref.getDownloadURL();
-                    this.data.typed.draft.prayerCountryImage = url;
-                    this.data.typed.status = 'Country map uploaded. Save to keep it on this Sunday.';
-                } catch (ex) {
-                    console.error(ex);
-                    this.data.typed.status = 'That country map did not upload.';
-                }
-            },
-
-            async saveTypedDraft() {
-                const Typed = global.SundayTypedCore;
-                if (!Typed || !this.data.typed.draft || !this.canEdit) return;
-                const date = this.typedSundayDate();
-                this.data.typed.saving = true;
-                this.data.typed.status = '';
-                try {
-                    Typed.assertCountryImageWritable(this.data.typed.draft.prayerCountryImage);
-                    const content = Typed.fromDraft(this.data.typed.draft);
-                    Typed.assertCountryImageWritable(content.pastoralPrayer.countryImage);
-                    await db.collection('services').doc(date).set({ typedContent: Typed.normalise(content) }, { merge: true });
-                    if (!ui.bundle) ui.bundle = { services: {} };
-                    ui.bundle.services = ui.bundle.services || {};
-                    const cur = ui.bundle.services[date] || {};
-                    ui.bundle.services[date] = Object.assign({}, cur, { typedContent: Typed.normalise(content) });
-                    this.data.typed.date = date;
-                    this.data.typed.row = this.typedRowFor(date, ui.bundle.services[date]);
-                    this.data.typed.status = 'Saved for ' + Data.formatDate(date, 'medium') + '. Bound pages will read it.';
-                    this.rebindData();
-                    this.renderAll();
-                } catch (e) {
-                    console.error(e);
-                    this.data.typed.status = (e && e.code === 'country-map-size' && e.message)
-                        ? e.message
-                        : 'Could not save. Check your connection and try again.';
-                } finally {
-                    this.data.typed.saving = false;
-                }
+                const date = self.typedSundayDate();
+                const bag = await self.bookletBagFor(date);
+                if (date !== self.typedSundayDate()) return;
+                self.data.typed.date = date;
+                self.data.typed.draft = Migrate.draftFromBag(bag);
+                self.data.typed.row = self.typedRowFor(date, bag);
+                self.data.typed.status = '';
             },
         };
     }
