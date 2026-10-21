@@ -101,17 +101,17 @@ service firebase.storage {
 
     function permissionLevelAccount() {
       let data = myUserData();
-      if (data == null) {
-        return '';
-      }
-      let stored = levelOf(data);
-      let fromId = ('accountLevelId' in data)
-        ? presetKeyFromAccountLevelId(data.accountLevelId)
-        : '';
-      let fromMap = ('permissions' in data)
-        ? rungFromPermissionMap(data.permissions)
-        : '';
-      return higherBuiltinRung(higherBuiltinRung(fromId, stored), fromMap);
+      let stored = data == null ? '' : levelOf(data);
+      let fromId = data == null ? ''
+        : (('accountLevelId' in data)
+            ? presetKeyFromAccountLevelId(data.accountLevelId)
+            : '');
+      let fromMap = data == null ? ''
+        : (('permissions' in data)
+            ? rungFromPermissionMap(data.permissions)
+            : '');
+      return data == null ? ''
+        : higherBuiltinRung(higherBuiltinRung(fromId, stored), fromMap);
     }
 
     // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`

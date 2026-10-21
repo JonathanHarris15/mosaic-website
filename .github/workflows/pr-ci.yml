@@ -59,3 +59,21 @@ jobs:
 
       - name: Lint functions
         run: npm run lint --prefix functions
+
+  rules-compile:
+    name: Compile security rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Compile firestore.rules and storage.rules
+        run: npm run check:rules
