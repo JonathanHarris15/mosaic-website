@@ -30,6 +30,13 @@ service firebase.storage {
     // arranged to spend exactly two — the asker's `users` document and the
     // occurrence — and never the same one twice.
     //
+    // Those reads are made by the Cloud Storage for Firebase service agent and
+    // succeed only while it holds roles/firebaserules.firestoreServiceAgent on
+    // the project. Without the role every one fails, and every rule built on
+    // one denies every caller. The --non-interactive deploy never grants it,
+    // so firebase-deploy.yml checks for it after shipping
+    // (scripts/check-storage-cross-service.js).
+    //
     // These restate `permissionLevel()`, `isSignedIn()` and `rankCanSee()` from
     // firestore.rules in a second engine that cannot import them. That
     // duplication is real and it is the price of the boundary being enforced

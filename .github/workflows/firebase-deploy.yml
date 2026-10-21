@@ -170,3 +170,15 @@ jobs:
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"
+
+      # ⚠ storage.rules reads Firestore (firestore.get / firestore.exists), and
+      # those reads work only while the Cloud Storage for Firebase service agent
+      # holds roles/firebaserules.firestoreServiceAgent on the project. The CLI
+      # grants that role only after a prompt, and --non-interactive skips the
+      # prompt AND the check (firebase-tools rulesDeploy.js). Without the role
+      # every such rule denies everyone — what broke fill-in uploads once the
+      # MS-769 catch-all stopped hiding it. After the deploy, not before, so a
+      # missing grant turns this job red without holding back hosting.
+      # Fix: docs/ops/ms-storage-fill-in-upload-diagnostic.md
+      - name: Check Storage rules can read Firestore
+        run: node scripts/check-storage-cross-service.js --project mosaic-hymn-database --i-mean-prod
