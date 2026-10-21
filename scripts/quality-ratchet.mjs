@@ -47,6 +47,20 @@ export function tscCount(output) {
     return matches ? matches.length : 0;
 }
 
+/**
+ * A clean tsc exits 0. Type errors exit non-zero and print `error TS` lines.
+ * A non-zero exit with none of those lines is a compiler failure, not a clean tree.
+ * @param {number | null} status
+ * @param {string} output
+ */
+export function tscOutcome(status, output) {
+    const count = tscCount(output);
+    if (status !== 0 && count === 0) {
+        throw new Error('tsc failed with no diagnostics');
+    }
+    return count;
+}
+
 /** @param {Array<{ errorCount?: number }>} report */
 export function eslintCount(report) {
     if (!Array.isArray(report)) {
@@ -60,18 +74,17 @@ function listLength(value) {
     return Array.isArray(value) ? value.length : 0;
 }
 
-/** @param {{ files?: unknown[], issues?: Array<Record<string, unknown>> }} report */
+/** @param {{ issues: Array<Record<string, unknown>> }} report */
 export function knipCounts(report) {
-    const listed = report && report.issues;
-    const issues = Array.isArray(listed) ? listed : [];
-    // issue fields are arrays of knip findings; the length is the count.
-    let files = issues.some((issue) => Array.isArray(issue.files))
-        ? 0
-        : listLength(report && report.files);
+    // Knip 6's JSON reporter puts findings on each issue. One shape.
+    if (!report || !Array.isArray(report.issues)) {
+        throw new Error('knip JSON has no issues array');
+    }
+    let files = 0;
     let exports = 0;
     let dependencies = 0;
     let unlisted = 0;
-    for (const issue of issues) {
+    for (const issue of report.issues) {
         files += listLength(issue.files);
         for (const key of EXPORT_KEYS) exports += listLength(issue[key]);
         for (const key of DEP_KEYS) dependencies += listLength(issue[key]);
@@ -121,6 +134,23 @@ export function compareCounts(actual, baseline, keys = KEYS) {
 }
 
 /**
+ * @param {Record<string, number>} actual
+ * @param {Record<string, number>} baseline
+ * @param {Record<string, number> | null} previous
+ * @param {string[]} [keys]
+ */
+export function gateDecision(actual, baseline, previous, keys = KEYS) {
+    const { raised, lowerable } = compareCounts(actual, baseline, keys);
+    const ceiling = previous ? compareCounts(baseline, previous, keys).raised : [];
+    return {
+        raised,
+        lowerable,
+        ceiling,
+        ok: raised.length === 0 && ceiling.length === 0,
+    };
+}
+
+/**
  * @param {string} cmd
  * @param {string[]} args
  */
@@ -145,7 +175,7 @@ export function measure(keys) {
     const actual = {};
     if (keys.includes('tsc')) {
         const result = run(bin('tsc'), ['-p', 'tsconfig.json', '--pretty', 'false', '--noEmit']);
-        actual.tsc = tscCount(`${result.stdout || ''}\n${result.stderr || ''}`);
+        actual.tsc = tscOutcome(result.status, `${result.stdout || ''}\n${result.stderr || ''}`);
     }
     if (keys.includes('eslint')) {
         const result = run(bin('eslint'), ['.', '-f', 'json']);
@@ -161,6 +191,25 @@ export function measure(keys) {
     return actual;
 }
 
+/**
+ * The ref is real and `quality-baseline.json` is not on it.
+ * Git prints "does not exist in '<ref>'" when the path is also absent from
+ * the worktree, and "exists on disk, but not in '<ref>'" when the worktree
+ * has the file (the pull request that adds it). A bad ref is a different
+ * error: `invalid object name`, which does not name this file.
+ * @param {number | null} status
+ * @param {string} stderr
+ * @returns {'ok' | 'absent' | 'error'}
+ */
+export function baselineRefStatus(status, stderr) {
+    if (status === 0) return 'ok';
+    const text = String(stderr || '');
+    const namesThisFile = text.includes('quality-baseline.json');
+    const missingFromRef = text.includes('does not exist in') || text.includes('but not in');
+    if (namesThisFile && missingFromRef) return 'absent';
+    return 'error';
+}
+
 /** @param {string} ref */
 function baselineOnRef(ref) {
     if (!ref) return null;
@@ -168,8 +217,16 @@ function baselineOnRef(ref) {
         cwd: ROOT,
         encoding: 'utf8',
     });
-    if (result.status !== 0) return null;
-    return readBaselineText(result.stdout);
+    const status = baselineRefStatus(result.status, result.stderr || '');
+    if (status === 'absent') {
+        console.error(`no quality-baseline.json on ${ref}`);
+        return null;
+    }
+    if (status === 'error') {
+        throw new Error(
+            `could not read quality-baseline.json from ${ref}\n${result.stderr || ''}`);
+    }
+    return readBaselineText(result.stdout || '');
 }
 
 /** @param {string} text */
@@ -178,7 +235,9 @@ function readBaselineText(text) {
     /** @type {Record<string, number>} */
     const counts = {};
     for (const key of KEYS) {
-        if (!Number.isInteger(raw[key])) return null;
+        if (!Number.isInteger(raw[key]) || raw[key] < 0) {
+            throw new Error(`base quality-baseline.json ${key} must be a non-negative integer`);
+        }
         counts[key] = raw[key];
     }
     return counts;
@@ -227,10 +286,8 @@ function main() {
     const { keys, update, baselineRef } = parseArgs(process.argv.slice(2));
     const { raw, counts } = readBaseline(BASELINE_PATH);
     const actual = measure(keys);
-    const { raised, lowerable } = compareCounts(actual, counts, keys);
-
     const previous = baselineOnRef(baselineRef);
-    const ceiling = previous ? compareCounts(counts, previous, keys).raised : [];
+    const { raised, lowerable, ceiling } = gateDecision(actual, counts, previous, keys);
 
     if (update) {
         if (raised.length || ceiling.length) {

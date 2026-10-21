@@ -70,6 +70,59 @@ test('--only knip is the four knip counts', async () => {
     ]);
 });
 
+test('knip counts the per-issue shape and refuses a report with no issues array', async () => {
+    const ratchet = await ratchetP;
+    assert.throws(
+        () => ratchet.knipCounts({ files: [{ name: 'public/dead.js' }] }),
+        /issues array/);
+});
+
+test('a baseline above the base ref fails even when the new count sits under it', async () => {
+    const ratchet = await ratchetP;
+    const previous = {
+        tsc: 10, eslint: 10, knipFiles: 1, knipExports: 1,
+        knipDependencies: 1, knipUnlisted: 1,
+    };
+    const baseline = Object.assign({}, previous, { tsc: 12 });
+    const actual = Object.assign({}, previous, { tsc: 11 });
+    const gate = ratchet.gateDecision(actual, baseline, previous);
+    assert.equal(gate.ok, false);
+    assert.equal(gate.raised.length, 0);
+    assert.equal(gate.ceiling.length, 1);
+    assert.equal(gate.ceiling[0].key, 'tsc');
+    const open = ratchet.gateDecision(previous, previous, null);
+    assert.equal(open.ok, true);
+});
+
+test('a missing baseline file is absent and a bad ref is an error', async () => {
+    const ratchet = await ratchetP;
+    assert.equal(ratchet.baselineRefStatus(0, ''), 'ok');
+    assert.equal(
+        ratchet.baselineRefStatus(128, "fatal: path 'quality-baseline.json' does not exist in 'origin/main'\n"),
+        'absent');
+    assert.equal(
+        ratchet.baselineRefStatus(128, "fatal: path 'quality-baseline.json' exists on disk, but not in 'origin/main'\n"),
+        'absent');
+    assert.equal(
+        ratchet.baselineRefStatus(128, "fatal: invalid object name 'origin/nope'.\n"),
+        'error');
+});
+
+test('tsc with no diagnostic on a failing status is an error', async () => {
+    const ratchet = await ratchetP;
+    assert.equal(ratchet.tscOutcome(2, 'public/a.js(1,1): error TS7006: Parameter'), 1);
+    assert.equal(ratchet.tscOutcome(0, ''), 0);
+    assert.throws(() => ratchet.tscOutcome(1, 'crash without a diagnostic'), /no diagnostics/);
+});
+
+test('the ceiling and the tsc failure stay wired into the gate', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'scripts', 'quality-ratchet.mjs'), 'utf8');
+    assert.match(src, /baselineOnRef\(baselineRef\)/);
+    assert.match(src, /gateDecision\(/);
+    assert.match(src, /tscOutcome\(/);
+    assert.match(src, /baselineRefStatus\(/);
+});
+
 test('the committed baseline is the ratchet shape', async () => {
     const ratchet = await ratchetP;
     const baseline = JSON.parse(fs.readFileSync(
@@ -92,6 +145,7 @@ test('PR CI keeps the existing jobs and requires the ratchet', () => {
     assert.match(wf, /quality-ratchet\.mjs --only tsc/);
     assert.match(wf, /quality-ratchet\.mjs --only eslint/);
     assert.match(wf, /--only knipFiles/);
+    assert.match(wf, /--baseline-ref origin\/\$\{\{ github\.base_ref \}\}/);
     assert.match(wf, /node-version: "22"/);
 });
 
