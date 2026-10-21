@@ -36,14 +36,82 @@ service firebase.storage {
     // where the bytes are; test/storage-event-attachment-rules.test.js reads
     // both files and fails when they drift apart.
 
+    function usersDocExists() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function myUserData() {
+      return usersDocExists()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    // Legacy name used throughout this file.
     function myUserDoc() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return myUserData();
     }
 
     // `permissionLevel` with the legacy `role` fallback, exactly as
     // firestore.rules reads it during the MS-119 migration.
     function levelOf(u) {
       return ('permissionLevel' in u) ? u.permissionLevel : u.role;
+    }
+
+    // Restates account-levels-core presetKeyFromAccountLevelId / canonical rung
+    // (MS-725). Storage cannot run normalizeAccount(); member-sync may leave
+    // permissionLevel at `member` while accountLevelId or the map still says
+    // super_admin — the client resolves that; these helpers must too.
+    function presetKeyFromAccountLevelId(id) {
+      return id == 'level_super_admin' ? 'super_admin'
+        : id == 'level_elder' ? 'elder'
+        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
+        : id == 'level_editor' ? 'editor'
+        : id == 'level_admin' ? 'admin'
+        : id == 'level_member' ? 'member'
+        : id == 'level_viewer' ? 'viewer'
+        : id == 'level_kiosk' ? 'kiosk'
+        : '';
+    }
+
+    function rungFromPermissionMap(perms) {
+      return perms['system.kiosk'] == true ? 'kiosk'
+        : perms['system.super_admin'] == true ? 'super_admin'
+        : perms['shep.count_as_elder'] == true ? 'elder'
+        : perms['visibility.lift_hidden_tags'] == true ? 'pastoral_assistant'
+        : perms['admin.dashboard.access'] == true ? 'admin'
+        : (perms['directory.edit_identity'] == true
+            || perms['services.builder.edit'] == true
+            || perms['printables.edit'] == true) ? 'editor'
+        : perms['directory.view'] == true ? 'member'
+        : '';
+    }
+
+    function higherBuiltinRung(a, b) {
+      return a == 'super_admin' || b == 'super_admin' ? 'super_admin'
+        : a == 'elder' || b == 'elder' ? 'elder'
+        : a == 'pastoral_assistant' || b == 'pastoral_assistant' ? 'pastoral_assistant'
+        : a == 'admin' || b == 'admin' ? 'admin'
+        : a == 'editor' || b == 'editor' ? 'editor'
+        : a == 'member' || b == 'member' ? 'member'
+        : a == 'kiosk' || b == 'kiosk' ? 'kiosk'
+        : a == 'viewer' || b == 'viewer' ? 'viewer'
+        : '';
+    }
+
+    function permissionLevelAccount() {
+      let data = myUserData();
+      if (data == null) {
+        return '';
+      }
+      let stored = levelOf(data);
+      let fromId = ('accountLevelId' in data)
+        ? presetKeyFromAccountLevelId(data.accountLevelId)
+        : '';
+      let fromMap = ('permissions' in data)
+        ? rungFromPermissionMap(data.permissions)
+        : '';
+      return higherBuiltinRung(higherBuiltinRung(fromId, stored), fromMap);
     }
 
     // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`
@@ -92,12 +160,12 @@ service firebase.storage {
 
     function canSee(occ) {
       return stampedVisibility(occ) == 'public'
-        || (isSignedIn() && rankOrParticipantSees(occ, myUserDoc()));
+        || (isSignedIn() && usersDocExists() && rankOrParticipantSees(occ, myUserData()));
     }
 
     function isEditorAccount() {
-      return isSignedIn() && (
-        levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+      return isSignedIn() && usersDocExists() && (
+        permissionLevelAccount() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
         || isPastoralAssistantAccount()
       );
     }
@@ -107,16 +175,17 @@ service firebase.storage {
     // firestore.rules has never said so, and this restates that one rather than
     // the tier list. Shepherding data is closed to admins on purpose.
     function isElderAccount() {
-      return isSignedIn() && levelOf(myUserDoc()) in ['elder', 'super_admin'];
+      return isSignedIn() && usersDocExists()
+        && permissionLevelAccount() in ['elder', 'super_admin'];
     }
 
     // Pastoral Assistant is the permission level, restated from AccessCore
     // (ADR-0076). The old flag still counts. Fail closed: neither is a grant
     // when the user doc is missing. Not an elder.
     function isPastoralAssistantAccount() {
-      return isSignedIn() && (
-        levelOf(myUserDoc()) == 'pastoral_assistant'
-        || myUserDoc().pastoralAssistant == true
+      return isSignedIn() && usersDocExists() && (
+        permissionLevelAccount() == 'pastoral_assistant'
+        || myUserData().pastoralAssistant == true
       );
     }
 
@@ -132,8 +201,8 @@ service firebase.storage {
     // Note what it is not: `request.auth != null`, which on this project is a
     // self-service account with no rung at all.
     function isMemberAccount() {
-      return isSignedIn() && (
-        levelOf(myUserDoc()) in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+      return isSignedIn() && usersDocExists() && (
+        permissionLevelAccount() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
         || isPastoralAssistantAccount()
       );
     }
@@ -144,12 +213,19 @@ service firebase.storage {
     // clauses as firestore.rules editsWith(), in the engine that cannot
     // import them.
     function usesPermissionMapAccount() {
-      return isSignedIn() && ('permissions' in myUserDoc());
+      let data = myUserData();
+      return data != null && ('permissions' in data);
+    }
+
+    function isSuperAdminAccount() {
+      return usesPermissionMapAccount()
+        && myUserData().permissions['system.super_admin'] == true;
     }
 
     function hasPermissionAccount(key) {
-      return usesPermissionMapAccount()
-        && myUserDoc().permissions[key] == true;
+      return isSuperAdminAccount()
+        || (usesPermissionMapAccount()
+            && myUserData().permissions[key] == true);
     }
 
     function editsWithAccount(key) {
