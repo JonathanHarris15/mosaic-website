@@ -1006,7 +1006,7 @@
             get queryResults() {
                 if (this.queryRepeatNode) {
                     const p = this.repeatPreview;
-                    return { count: p.count, names: p.names, warnings: [], loading: false, error: '' };
+                    return { count: p.count, names: p.names, indexes: p.indexes || [], warnings: [], loading: false, error: '' };
                 }
                 const pv = this.data.query.preview;
                 const src = this.querySource;
@@ -1329,6 +1329,7 @@
                 return {
                     count: rows.length,
                     names: rows.slice(0, 8).map(previewName),
+                    indexes: rows.slice(0, 8).map(row => (row && row.number != null && row.number !== '') ? row.number : null),
                 };
             },
 
@@ -1938,9 +1939,14 @@
                 return n > 0 ? n : '';
             },
 
-            // The name list is already the slice. Number it from the start
-            // row so row 2 still says 2 when the page begins there.
+            // The name list is already the slice. A row that carries its own
+            // index (every sheet of one hymn shares one) shows that. Otherwise
+            // number from the start row, so row 2 still says 2 when the page
+            // begins there.
             queryRowIndex(i) {
+                const listed = this.queryResults && this.queryResults.indexes;
+                const stamped = listed && listed[i];
+                if (stamped != null && stamped !== '' && Number.isFinite(Number(stamped))) return Number(stamped);
                 const slice = this.iterationSlice;
                 const start = slice && slice.from > 1 ? slice.from : 1;
                 return start + Number(i || 0);

@@ -206,12 +206,33 @@
     // Keep only rows in a 1-based inclusive range. `from` 0 or omitted starts
     // at row 1; `to` 0 or omitted runs through the end. Out of range clamps;
     // a backwards range is empty.
+    //
+    // Rows that share a `number` are one index (every sheet of one hymn).
+    // A list whose numbers are all different still slices by position, so a
+    // directory's from/to is unchanged.
     function sliceRows(rows, from, to) {
         if (!rows) return rows;
         const start = Math.max(1, Math.round(Number(from)) || 1);
         const end = Math.max(0, Math.round(Number(to)) || 0);
         if (end > 0 && end < start) return [];
-        return rows.slice(start - 1, end > 0 ? end : undefined);
+        const shared = {};
+        let shares = false;
+        rows.forEach(row => {
+            if (!row || typeof row !== 'object' || row.number == null || row.number === '') return;
+            const n = Number(row.number);
+            if (!Number.isFinite(n)) return;
+            const key = String(n);
+            if (shared[key]) shares = true;
+            shared[key] = true;
+        });
+        if (!shares) return rows.slice(start - 1, end > 0 ? end : undefined);
+        return rows.filter(row => {
+            const n = Number(row && row.number);
+            if (!Number.isFinite(n)) return false;
+            if (n < start) return false;
+            if (end > 0 && n > end) return false;
+            return true;
+        });
     }
 
     // The three things the toolbar adds. Sized so a fresh one is visible on

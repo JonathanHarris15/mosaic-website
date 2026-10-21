@@ -365,6 +365,25 @@ test('sliceRows takes a 1-based inclusive range; 0 to means through the end', ()
     assert.equal(Core.sliceRows(null, 1, 2), null);
 });
 
+test('rows that share an index stay together, and a list of distinct indexes still slices by position', () => {
+    const hymn = [
+        { name: 'Amazing Grace', number: 1, page: 1 },
+        { name: 'Amazing Grace', number: 1, page: 2 },
+        { name: 'Doxology', number: 2, page: 1 },
+        { name: 'Holy', number: 3, page: 1 },
+    ];
+    assert.deepEqual(Core.sliceRows(hymn, 1, 1).map(r => r.page), [1, 2], 'both sheets of hymn 1');
+    assert.deepEqual(Core.sliceRows(hymn, 2, 0).map(r => r.name), ['Doxology', 'Holy']);
+    assert.deepEqual(Core.sliceRows(hymn, 1, 2).map(r => r.number), [1, 1, 2]);
+    const people = [
+        { name: 'Ada', number: 1 },
+        { name: 'Bea', number: 2 },
+        { name: 'Cal', number: 3 },
+    ];
+    assert.deepEqual(Core.sliceRows(people, 1, 2).map(r => r.name), ['Ada', 'Bea']);
+    assert.deepEqual(Core.sliceRows(people, 2, 0).map(r => r.name), ['Bea', 'Cal']);
+});
+
 // ── The record ───────────────────────────────────────────────────────────────
 
 test('a printable rebuilds its pages through the model, so every page has margins and a stylesheet', () => {
