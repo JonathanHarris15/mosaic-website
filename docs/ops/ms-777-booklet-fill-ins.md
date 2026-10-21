@@ -32,6 +32,8 @@ Optional range, on the service document id: `-f 'args=--from 2024-01-01 --to 202
 
 The script copies a key only when that occurrence has never stored it. A key present as `''` was cleared and stays blank. A present value wins. Where both old stores have the field, the typed record wins a filled field and a blank typed field still takes the guide. It also rewrites stored `sunday_typed` wires to event fill-ins.
 
+A Sunday that has no occurrence document yet is created with visibility `public` when the series document has none, and `participantIds` taken from the roster already on that date (an empty roster writes `[]`). It does not invent a roster and it does not leave the date without `participantIds`.
+
 The log's `typedContentDeleted` and `guideFieldsDeleted` stay `0`.
 
 ## Do not delete the old fields in that run

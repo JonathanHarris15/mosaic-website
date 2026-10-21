@@ -50,9 +50,15 @@ test('a new occurrence is stamped from the series and does not invent a roster',
     assert.equal(body.visibility, 'public');
     assert.equal(body.rosterShared, true);
     assert.equal(body.printableInputs.guide.legacy_prayerCapital, 'Cairo');
-    assert.equal(body.participantIds, undefined);
+    assert.deepEqual(body.participantIds, []);
     assert.equal(body.typedContent, undefined);
     assert.equal(Copy.occurrenceId('2026-09-06'), 'sunday_service_2026-09-06');
+
+    const unstamped = Copy.newOccurrenceBody('2026-09-13', {}, {
+        guide: { legacy_prayerNation: 'Kenya' },
+    }, [{ personId: 'p-abe' }, { personId: 'p-abe' }]);
+    assert.equal(unstamped.visibility, 'public');
+    assert.deepEqual(unstamped.participantIds, ['p-abe']);
 });
 
 test('merging fill-ins keeps every other printable on the occurrence', () => {

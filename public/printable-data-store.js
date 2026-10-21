@@ -153,13 +153,24 @@
 
         await Promise.all(jobs);
 
-        // The view date's fill-ins are the same bag the announcement list reads.
+        // One bag for the view date. A missing event read is {} and must not
+        // replace booklet text loadBookletByDate already found. A bag with
+        // keys, including a cleared blank, is the occurrence the page opened.
         const box = /** @type {Record<string, any>} */ (bundle);
         const asked = /** @type {any} */ (n);
-        if (box.eventInputs && asked.eventInputs && asked.eventInputs.date) {
+        const viewDate = asked.eventInputs && asked.eventInputs.date;
+        if (viewDate) {
             const byDate = box.bookletByDate || {};
-            byDate[asked.eventInputs.date] = box.eventInputs;
-            box.bookletByDate = byDate;
+            const eventBag = box.eventInputs && typeof box.eventInputs === 'object' ? box.eventInputs : null;
+            const booked = Object.prototype.hasOwnProperty.call(byDate, viewDate) ? byDate[viewDate] : null;
+            const eventHas = !!(eventBag && Object.keys(eventBag).length);
+            const bookedHas = !!(booked && typeof booked === 'object' && Object.keys(booked).length);
+            if (eventHas) {
+                byDate[viewDate] = eventBag;
+                box.bookletByDate = byDate;
+            } else if (bookedHas) {
+                box.eventInputs = booked;
+            }
         }
 
         // Prayer requests after services are in: subjects come from the liturgy.

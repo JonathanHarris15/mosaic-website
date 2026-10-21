@@ -21,6 +21,7 @@
 
 const path = require('path');
 const Migrate = require('../public/printable-legacy-migrate-core.js');
+const Occurrence = require('../public/events-occurrence-core.js');
 const {loadProject, requireProject} = require('./firebase-project.js');
 
 const SUNDAY_SERIES = 'sunday_service';
@@ -117,17 +118,28 @@ function mergePrintableInputs(prevInputs, plans) {
 }
 
 /**
+ * The first write of a Sunday Service date. Visibility is public when the
+ * series document carries none (the series rule names that service rather
+ * than a field). participantIds come from the roster already on the date,
+ * so a parent created for booklet text does not hide people who are on it.
  * @param {any} date
  * @param {any} series
  * @param {any} plans
+ * @param {any} [assignments]
  * @return {Record<string, any>}
  */
-function newOccurrenceBody(date, series, plans) {
+function newOccurrenceBody(date, series, plans, assignments) {
+    const list = Array.isArray(assignments) ? assignments : [];
+    const visibility = (series && series.visibility) || 'public';
+    const occurrence = { assignments: list, visibility: visibility, seriesId: SUNDAY_SERIES };
     return {
         seriesId: SUNDAY_SERIES,
         date: date,
-        visibility: (series && series.visibility) || 'member',
-        rosterShared: !!(series && series.rosterShared),
+        visibility: visibility,
+        rosterShared: !!(series && series.rosterShared === true),
+        participantIds: Occurrence.participantIds(list),
+        needsAttention: Occurrence.needsAttention(occurrence),
+        outForCover: Occurrence.outForCover(occurrence),
         printableInputs: mergePrintableInputs({}, plans),
     };
 }
@@ -232,7 +244,9 @@ async function main() {
         totals.occurrencesUpdated += 1;
         if (!COMMIT) continue;
         if (!exists) {
-            batch.set(occRef, newOccurrenceBody(doc.id, series, plan.plans), {merge: true});
+            const rosterSnap = await occRef.collection('roster').get();
+            const assignments = rosterSnap.docs.map(/** @param {any} d */ (d) => d.data() || {});
+            batch.set(occRef, newOccurrenceBody(doc.id, series, plan.plans, assignments), {merge: true});
         } else {
             batch.set(occRef, {
                 printableInputs: mergePrintableInputs(prevInputs, plan.plans),

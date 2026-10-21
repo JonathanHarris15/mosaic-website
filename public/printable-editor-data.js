@@ -2121,6 +2121,7 @@
                     const bag = inputs[printableId];
                     return bag && typeof bag === 'object' ? bag : {};
                 } catch (e) {
+                    console.error(e);
                     return {};
                 }
             },
@@ -2135,6 +2136,7 @@
                 try {
                     return Typed.toRow(Typed.fromDraft(Migrate.draftFromBag(bag)), date);
                 } catch (e) {
+                    console.error(e);
                     return {};
                 }
             },
