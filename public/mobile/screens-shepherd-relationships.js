@@ -79,11 +79,8 @@
   function RelationshipsTab(props) {
     var showToast = props.showToast;
     // Open/read stays canReadElder (parent Manage Tags already uses it). Write
-    // chrome below is canDecide — PA now decides too (MS-594). The binding is
-    // pinned by the relationships-tab source test; this screen's chrome reads
-    // canDecide.
+    // chrome below is canDecide — PA now decides too (MS-594).
     var flags = props.user && window.AccessCore ? AccessCore.pageFlags(props.user) : null;
-    // eslint-disable-next-line no-unused-vars
     var canReadElder = !!(flags && flags.canReadElder);
     var canDecide = !!(flags && flags.canDecide);
 
@@ -115,6 +112,10 @@
       }).catch(function () { if (alive) { loadingS[1](false); showToast("Could not load relationships", "error"); } });
       return function () { alive = false; };
     }, []);
+
+    if (!canReadElder) {
+      return html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15 }}>Elder-only tools.</p></div>`;
+    }
 
     function personName(id) {
       for (var i = 0; i < people.length; i++) if (people[i].id === id) return people[i].name;

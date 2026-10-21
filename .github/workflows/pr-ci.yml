@@ -94,10 +94,15 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
       - name: Install root dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
 
       - name: Fetch the base branch ceiling
         run: git fetch origin ${{ github.base_ref }} --depth=1
@@ -136,10 +141,15 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
       - name: Install root dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
 
       - name: Fetch the base branch ceiling
         run: git fetch origin ${{ github.base_ref }} --depth=1

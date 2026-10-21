@@ -127,6 +127,7 @@ test('the ceiling exit, the bad ref, and the tsc failure are the path main runs'
 });
 
 test('a bad baseline ref fails the process before the tools run', () => {
+    const started = Date.now();
     const result = spawnSync(process.execPath, [
         path.join(ROOT, 'scripts', 'quality-ratchet.mjs'),
         '--only', 'tsc',
@@ -134,7 +135,29 @@ test('a bad baseline ref fails the process before the tools run', () => {
     ], { cwd: ROOT, encoding: 'utf8' });
     assert.notEqual(result.status, 0);
     assert.match(`${result.stderr}`, /could not read quality-baseline\.json/);
-    assert.doesNotMatch(`${result.stdout}`, /tsc /);
+    assert.ok(Date.now() - started < 1000, 'tsc ran before the ref was checked');
+});
+
+test('a baseline file above the base ref exits before the tools run', () => {
+    const previous = JSON.parse(fs.readFileSync(
+        path.join(ROOT, 'quality-baseline.json'), 'utf8'));
+    previous.tsc -= 1;
+    const started = Date.now();
+    const result = spawnSync(process.execPath, [
+        path.join(ROOT, 'scripts', 'quality-ratchet.mjs'),
+        '--only', 'tsc',
+        '--baseline-ref', 'origin/main',
+    ], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: Object.assign({}, process.env, {
+            QUALITY_BASELINE_PREVIOUS: JSON.stringify(previous),
+        }),
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stderr}`, /baseline file went up/);
+    assert.match(`${result.stderr}`, /tsc:/);
+    assert.ok(Date.now() - started < 1000, 'tsc ran before the ceiling check');
 });
 
 test('the committed baseline is the ratchet shape', async () => {
@@ -161,6 +184,10 @@ test('PR CI keeps the existing jobs and requires the ratchet', () => {
     assert.match(wf, /--only knipFiles/);
     assert.match(wf, /--baseline-ref origin\/\$\{\{ github\.base_ref \}\}/);
     assert.match(wf, /node-version: "22"/);
+    const typecheck = wf.slice(wf.indexOf('  typecheck:'), wf.indexOf('  lint-correctness:'));
+    const dead = wf.slice(wf.indexOf('  dead-code:'));
+    assert.match(typecheck, /npm ci --prefix functions/);
+    assert.match(dead, /npm ci --prefix functions/);
 });
 
 test('functions lint stays on eslintrc when the root flat config exists', () => {

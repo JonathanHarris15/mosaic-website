@@ -212,6 +212,10 @@ export function baselineRefStatus(status, stderr) {
 
 /** @param {string} ref */
 function baselineOnRef(ref) {
+    // Tests pass the previous ceiling as JSON. CI leaves this unset and uses the git ref.
+    if (process.env.QUALITY_BASELINE_PREVIOUS) {
+        return readBaselineText(process.env.QUALITY_BASELINE_PREVIOUS);
+    }
     if (!ref) return null;
     const result = spawnSync('git', ['show', `${ref}:quality-baseline.json`], {
         cwd: ROOT,
@@ -285,8 +289,13 @@ function report(title, rows) {
 function main() {
     const { keys, update, baselineRef } = parseArgs(process.argv.slice(2));
     const { raw, counts } = readBaseline(BASELINE_PATH);
-    // A bad ref fails here, before tsc, eslint, or knip run.
+    // A bad ref, or a baseline file above the base ref, fails here, before the tools run.
     const previous = baselineOnRef(baselineRef);
+    const filed = gateDecision(counts, counts, previous, keys);
+    if (filed.ceiling.length) {
+        report('baseline file went up', filed.ceiling);
+        process.exit(1);
+    }
     const actual = measure(keys);
     const decision = gateDecision(actual, counts, previous, keys);
 
