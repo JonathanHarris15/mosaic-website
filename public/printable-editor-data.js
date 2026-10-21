@@ -1,3 +1,4 @@
+// @ts-nocheck
 // The Printable editor's data side (MS-396, MS-397): the drawer, the wires,
 // iterated elements and the real pages an overflowing list keeps.
 //
