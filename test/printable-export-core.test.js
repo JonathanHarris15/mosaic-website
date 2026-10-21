@@ -43,6 +43,11 @@ test('odd-length sample Sunday content pads to ×4 after bind', () => {
             '2026-09-06': {
                 theme: 'Grace',
                 liturgy: { preparatoryHymn: { id: 'h1', name: 'Amazing Grace' } },
+                typedContent: {
+                    pastoralPrayer: { nation: 'Kenya' },
+                    mosaicKids: { lessonTitle: 'The Lost Sheep' },
+                    announcements: [{ title: 'Picnic', content: 'Park' }],
+                },
             },
         },
         hymns: {
@@ -50,9 +55,9 @@ test('odd-length sample Sunday content pads to ×4 after bind', () => {
         },
     };
     const hymns = Data.resolve('sunday_hymns', {}, bundle, { today: TODAY });
-    const typedRow = /** @type {Record<string, string>} */ ({ prayerNation: 'Kenya' });
+    const typed = Data.resolve('sunday_typed', {}, bundle, { today: TODAY });
     assert.equal(hymns.rows.length, 2, 'both sheet pages bind');
-    assert.equal(typedRow.prayerNation, 'Kenya');
+    assert.equal(typed.rows[0].prayerNation, 'Kenya');
 
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const page = Core.buildPage(t, { id: 'booklet', nodes: [
@@ -65,7 +70,7 @@ test('odd-length sample Sunday content pads to ×4 after bind', () => {
         rowsFor: (node) => node.repeat ? hymns.rows : null,
         valueFor: (bind, row) => {
             if (bind.scope === 'item') return row[bind.field] ? { ok: true, value: row[bind.field] } : { ok: false, why: 'blank' };
-            const v = typedRow[bind.field];
+            const v = typed.rows[0][bind.field];
             return v ? { ok: true, value: v } : { ok: false, why: 'empty' };
         },
     });

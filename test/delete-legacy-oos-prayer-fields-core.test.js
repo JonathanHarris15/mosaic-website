@@ -16,7 +16,7 @@ test('blocks deletion when legacy praise exists but carriedBy slot is empty', ()
     assert.equal(plan.wouldDelete, true);
     assert.equal(plan.blocked, true);
     assert.equal(plan.blockReasons.length, 1);
-    assert.equal(/** @type {any} */ (plan.blockReasons[0]).kind, 'praise');
+    assert.equal(plan.blockReasons[0].kind, 'praise');
 });
 
 test('plans field deletion when carriedBy has the migrated leader', () => {
