@@ -319,6 +319,39 @@ test('a page number element shows which sheet it is on', () => {
     assert.equal(Core.kindOf(pages[0].nodes[0]), 'page-number');
 });
 
+test('Start numbering from here leaves the sheets before it blank and counts up', () => {
+    const folio = (n, start) => ({
+        id: 'n' + n,
+        tag: 'p',
+        text: '',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 36, top: 36, startHere: start },
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3, 4].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 3)],
+        })),
+    });
+    const pages = Live.layoutPages(p, null, null);
+    assert.deepEqual(pages.map(e => e.nodes[0].text), ['', '', '1', '2']);
+    assert.equal(p.pages[0].nodes[0].text, '', 'the stored page is not restamped');
+    assert.equal(p.pages[2].nodes[0].text, '');
+    assert.equal(p.pages[2].nodes[0].pageNumber.startHere, true);
+
+    const again = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 2 || n === 3)],
+        })),
+    });
+    const both = Live.layoutPages(again, null, null);
+    assert.deepEqual(both.map(e => e.nodes[0].text), ['', '1', '2'], 'a later restart does not start over');
+});
+
 test('a list that spills numbers each physical sheet, not the stored page again', () => {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const p = Core.buildPrintable({

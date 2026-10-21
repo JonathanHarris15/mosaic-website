@@ -809,9 +809,11 @@ function printableEditor() {
         patchDrawn(node) {
             if (!ui.world || !node) return;
             const els = ui.world.querySelectorAll('[data-pid="' + node.id + '"], [data-pid^="' + node.id + '~"]');
-            const placed = PrintableCore.isPageNumber(node)
+            const numbering = PrintableCore.isPageNumber(node) ? this.sheetNumbering(node.id) : null;
+            const placed = numbering
                 ? PrintableCore.placePageNumber(node, {
-                    pageIndex: this.pageIndexOf(node.id),
+                    pageIndex: numbering.pageIndex,
+                    numberOrigin: numbering.numberOrigin,
                     widthPx: this.template && this.template.widthPx,
                     heightPx: this.template && this.template.heightPx,
                 })
@@ -1057,11 +1059,12 @@ function printableEditor() {
         renderAll() {
             if (!ui.world || !this.template) return;
             const entries = this.entries();
+            const numberOrigin = PrintableCore.numberOriginFromEntries(entries);
             ui.world.innerHTML = '';
             ui.pageEls = {};
             const t = this.template;
             entries.forEach((entry, i) => {
-                ui.world.appendChild(this.buildPageEl(entry, i));
+                ui.world.appendChild(this.buildPageEl(entry, i, numberOrigin));
             });
             // The "+" below the last page.
             const add = document.createElement('button');
@@ -1082,7 +1085,7 @@ function printableEditor() {
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
-        buildPageEl(entry, index) {
+        buildPageEl(entry, index, numberOrigin) {
             const t = this.template;
             const page = entry.page;
             const holder = document.createElement('div');
@@ -1110,6 +1113,7 @@ function printableEditor() {
                 editing: true,
                 scopeId: page.id,
                 pageIndex: entry.pageIndex == null ? index : entry.pageIndex,
+                numberOrigin: numberOrigin == null ? 0 : numberOrigin,
             });
             if (entry.generated) el.setAttribute('data-generated', '1');
             holder.appendChild(el);
@@ -1134,7 +1138,10 @@ function printableEditor() {
             const old = ui.pageEls[pageId];
             const hasLists = this.pages.some(p => { let found = false; PrintableCore.walk(p.nodes, n => { if (n.repeat) { found = true; return false; } }); return found; });
             if (i < 0 || !old || hasLists || (this.data && this.data.loaded)) { this.renderAll(); return; }
-            const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i);
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((page, idx) => ({
+                page: page, nodes: page.nodes, pageIndex: idx,
+            })));
+            const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i, numberOrigin);
             old.replaceWith(fresh);
             this.refreshOverlays();
             this.renderPagesStrip();
@@ -1261,6 +1268,25 @@ function printableEditor() {
             return i < 0 ? 0 : i;
         },
 
+        // Drawn-sheet index and where "1" starts, from one layout. A drag
+        // and a style patch both restamp the digit, so they have to agree
+        // with the canvas.
+        sheetNumbering(nodeId) {
+            const entries = this.entries();
+            const hit = entries.find(e => e.page && PrintableCore.findNode(e.page, nodeId));
+            let pageIndex = 0;
+            if (hit && hit.pageIndex != null) pageIndex = hit.pageIndex;
+            else {
+                const page = this.pageOfNode(nodeId);
+                const i = this.pages.findIndex(p => page && p.id === page.id);
+                pageIndex = i < 0 ? 0 : i;
+            }
+            return {
+                pageIndex: pageIndex,
+                numberOrigin: PrintableCore.numberOriginFromEntries(entries),
+            };
+        },
+
         setPageNumber(patch) {
             const page = this.currentPage;
             const node = this.selectedNode;
@@ -1270,7 +1296,9 @@ function printableEditor() {
             });
             this.replacePage(next);
             this.commit();
-            this.renderPage(next.id);
+            // Restarting changes the digit on every sheet, not just this one.
+            if (patch && Object.prototype.hasOwnProperty.call(patch, 'startHere')) this.renderAll();
+            else this.renderPage(next.id);
             this.readProps();
         },
 
@@ -1297,8 +1325,10 @@ function printableEditor() {
             });
             this.replacePage(next);
             const fresh = PrintableCore.findNode(next, nodeId);
+            const numbering = this.sheetNumbering(nodeId);
             const placed = PrintableCore.placePageNumber(fresh, {
-                pageIndex: this.pageIndexOf(nodeId),
+                pageIndex: numbering.pageIndex,
+                numberOrigin: numbering.numberOrigin,
                 widthPx: this.template && this.template.widthPx,
                 heightPx: this.template && this.template.heightPx,
             });
@@ -1636,6 +1666,9 @@ function printableEditor() {
             if (!ui.pagesStrip || !this.project || !this.template) return;
             const frag = document.createDocumentFragment();
             const t = this.template;
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((page, idx) => ({
+                page: page, nodes: page.nodes, pageIndex: idx,
+            })));
             const runs = [];
             let i = 0;
             while (i < this.pages.length) {
@@ -1724,7 +1757,7 @@ function printableEditor() {
                     inner.style.width = t.widthPx + 'px';
                     inner.style.height = t.heightPx + 'px';
                     try {
-                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id, pageIndex: p });
+                        const mini = PrintableDom.renderPage(page, t, { editing: false, scopeId: page.id, pageIndex: p, numberOrigin: numberOrigin });
                         mini.style.width = t.widthPx + 'px';
                         mini.style.height = t.heightPx + 'px';
                         inner.appendChild(mini);
@@ -2105,12 +2138,18 @@ function printableEditor() {
                 + ' .pe-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
             const pages = this.printPages ? this.printPages() : this.pages.map((p, i) => ({ page: p, pageIndex: i }));
+            const numberOrigin = PrintableCore.numberOriginFromEntries(pages.map((entry, i) => ({
+                page: entry.page,
+                nodes: (entry.page && entry.page.nodes) || [],
+                pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+            })));
             pages.forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pe-sheet';
                 sheet.appendChild(PrintableDom.renderPage(entry.page, t, {
                     values: entry.values || null,
                     pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                    numberOrigin: numberOrigin,
                 }));
                 layer.appendChild(sheet);
             });

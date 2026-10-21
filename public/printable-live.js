@@ -462,6 +462,13 @@
                 });
             }
         });
+        // "Start numbering from here" is a fact about the stack, not one
+        // sheet. Stamp the expanded trees only — `entry.page` is the stored
+        // printable, and writing its nodes would change the saved design.
+        const origin = Core.numberOriginFromEntries(out);
+        out.forEach(entry => {
+            if (entry && entry.nodes) Core.stampPageNumberNodes(entry.nodes, entry.pageIndex, origin);
+        });
         return out;
     }
 

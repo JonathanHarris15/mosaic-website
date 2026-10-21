@@ -700,3 +700,45 @@ test('a page number round-trips through the code view, and an old chip becomes o
     assert.equal(legacy.pageNumber.top, 12);
     assert.equal(legacy.bind, undefined);
 });
+
+test('Start numbering from here is off until asked, and sheets before it are blank', () => {
+    const fresh = Core.newPageNumber(96);
+    assert.equal(fresh.pageNumber.startHere, false);
+    assert.equal(Core.normalizePageNumber({ startHere: 'yes' }).startHere, false);
+    assert.equal(Core.pageNumberLabel(0, 0), '1');
+    assert.equal(Core.pageNumberLabel(2, 0), '3');
+    assert.equal(Core.pageNumberLabel(0, 2), '');
+    assert.equal(Core.pageNumberLabel(2, 2), '1');
+    assert.equal(Core.pageNumberLabel(3, 2), '2');
+
+    const n = Core.newPageNumber(96);
+    assert.equal(Core.placePageNumber(n, { pageIndex: 0, numberOrigin: 2 }).text, '');
+    assert.equal(Core.placePageNumber(n, { pageIndex: 2, numberOrigin: 2 }).text, '1');
+    assert.equal(Core.placePageNumber(n, { pageIndex: 1 }).text, '2', 'omitting the origin keeps 1, 2, 3');
+    assert.equal(n.pageNumber.startHere, false, 'drawing does not turn the restart on');
+
+    const marked = Core.buildNode({
+        tag: 'p',
+        name: 'Folio',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 1, top: 2, startHere: true },
+    });
+    const back = Core.htmlToNodes(Core.nodeToHtml(marked, 0));
+    assert.equal(back.ok, true);
+    assert.equal(back.nodes[0].pageNumber.startHere, true);
+    assert.equal(back.nodes[0].pageNumber.anchor, 'bottom-right');
+
+    const kept = Core.updateNode(
+        Core.buildPage(Core.buildTemplate({}), { nodes: [marked] }),
+        marked.id,
+        { pageNumber: { mirror: true } },
+    );
+    assert.equal(Core.findNode(kept, marked.id).pageNumber.startHere, true, 'a place change keeps the restart');
+    assert.equal(Core.findNode(kept, marked.id).pageNumber.mirror, true);
+
+    const pages = [0, 1, 2, 3].map(i => ({
+        pageIndex: i,
+        nodes: [{ id: 'n' + i, tag: 'p', pageNumber: { startHere: i === 2 || i === 3 } }],
+    }));
+    assert.equal(Core.numberOriginFromEntries(pages), 2, 'the earliest restart wins');
+    assert.equal(Core.numberOriginFromEntries([{ nodes: [{ tag: 'p', text: 'x' }] }]), 0);
+});

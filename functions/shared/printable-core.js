@@ -284,6 +284,10 @@
         const top = Math.round(Number(s.top));
         return {
             mirror: s.mirror === true,
+            // Off until asked. The first sheet in the laid-out stack that has
+            // this on shows 1; sheets before it are blank; later sheets count
+            // up. A copied flag on a later sheet does not start again.
+            startHere: s.startHere === true,
             anchor: anchor,
             inset: inset,
             left: Number.isFinite(left) ? left : 0,
@@ -419,11 +423,70 @@
             'white-space': 'nowrap',
             'user-select': 'none',
         });
+        const origin = Math.max(0, Math.round(Number(ctx && ctx.numberOrigin)) || 0);
         return Object.assign({}, node, {
-            text: String(pageIndex + 1),
+            text: pageNumberLabel(pageIndex, origin),
             style: style,
             pageNumber: spec,
             children: [],
+        });
+    }
+
+    // The digit on this sheet. `numberOrigin` 0 is today's 1, 2, 3.
+    // A sheet before the origin is blank, so a cover and a contents page
+    // can sit in front of page 1 without a second "1".
+    function pageNumberLabel(pageIndex, numberOrigin) {
+        const idx = Math.round(Number(pageIndex));
+        const origin = Math.round(Number(numberOrigin));
+        const i = Number.isFinite(idx) && idx > 0 ? idx : 0;
+        const o = Number.isFinite(origin) && origin > 0 ? origin : 0;
+        const n = i - o + 1;
+        return n < 1 ? '' : String(n);
+    }
+
+    function entryStartsHere(entry) {
+        if (!entry || typeof entry !== 'object') return false;
+        const lists = [];
+        if (Array.isArray(entry.nodes)) lists.push(entry.nodes);
+        const pageNodes = entry.page && entry.page.nodes;
+        if (Array.isArray(pageNodes) && pageNodes !== entry.nodes) lists.push(pageNodes);
+        let found = false;
+        lists.forEach(nodes => {
+            if (found) return;
+            walk(nodes, node => {
+                if (node && node.pageNumber && node.pageNumber.startHere === true) {
+                    found = true;
+                    return false;
+                }
+            });
+        });
+        return found;
+    }
+
+    // The drawn-sheet index of the earliest "Start numbering from here".
+    // 0 when none is set, which keeps 1, 2, 3. Later flags do not count:
+    // an overflow copy of the element would otherwise restart every sheet.
+    function numberOriginFromEntries(entries) {
+        const list = entries || [];
+        for (let i = 0; i < list.length; i++) {
+            const entry = list[i];
+            if (!entryStartsHere(entry)) continue;
+            let idx = i;
+            if (entry.pageIndex != null && entry.pageIndex !== '') {
+                const n = Math.round(Number(entry.pageIndex));
+                if (Number.isFinite(n) && n >= 0) idx = n;
+            }
+            return idx;
+        }
+        return 0;
+    }
+
+    function stampPageNumberNodes(nodes, pageIndex, numberOrigin) {
+        const label = pageNumberLabel(pageIndex, numberOrigin);
+        walk(nodes, node => {
+            if (!node || !node.pageNumber) return;
+            node.text = label;
+            node.children = [];
         });
     }
 
@@ -1391,6 +1454,9 @@
         isPageNumber,
         normalizePageNumber,
         placePageNumber,
+        pageNumberLabel,
+        numberOriginFromEntries,
+        stampPageNumberNodes,
         pageNumberMirrored,
         pageNumberHomeLeft,
         PAGE_NUMBER_ANCHORS,

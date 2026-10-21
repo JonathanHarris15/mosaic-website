@@ -260,7 +260,19 @@
         return opts;
     }
 
-    function restampPageNumberNodes(nodes, pageIndex) {
+    function coreApi() {
+        if (typeof require === 'function') {
+            try { return require('./printable-core.js'); } catch (e) { /* browser script */ }
+        }
+        return (typeof global !== 'undefined' && global.PrintableCore) || null;
+    }
+
+    function restampPageNumberNodes(nodes, pageIndex, numberOrigin) {
+        const Core = coreApi();
+        if (Core && typeof Core.stampPageNumberNodes === 'function') {
+            Core.stampPageNumberNodes(nodes, pageIndex, numberOrigin);
+            return;
+        }
         const n = Math.round(Number(pageIndex));
         const text = Number.isFinite(n) && n >= 0 ? String(n + 1) : '';
         (nodes || []).forEach(node => {
@@ -269,17 +281,25 @@
                 node.text = text;
                 node.children = [];
             }
-            if (node.children) restampPageNumberNodes(node.children, pageIndex);
+            if (node.children) restampPageNumberNodes(node.children, pageIndex, numberOrigin);
         });
     }
 
     function restampFolioPageNumbers(entries) {
-        (entries || []).forEach((entry, i) => {
+        const list = entries || [];
+        list.forEach((entry, i) => {
             if (!entry) return;
             entry.pageIndex = i;
-            restampPageNumberNodes(entry.nodes, i);
+        });
+        const Core = coreApi();
+        const origin = Core && typeof Core.numberOriginFromEntries === 'function'
+            ? Core.numberOriginFromEntries(list)
+            : 0;
+        list.forEach((entry, i) => {
+            if (!entry) return;
+            restampPageNumberNodes(entry.nodes, i, origin);
             if (entry.page && entry.page.nodes && entry.page.nodes !== entry.nodes) {
-                restampPageNumberNodes(entry.page.nodes, i);
+                restampPageNumberNodes(entry.page.nodes, i, origin);
             }
         });
         return entries;

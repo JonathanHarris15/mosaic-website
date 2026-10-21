@@ -244,6 +244,8 @@ The **Elements** tree shows only the selected page's elements. Page management d
 
 A page number is an element, added from the tools with **Number** (`.pe-tool`, icon `numbers`), the same way as a box, text, or an image. It is not a data chip and it is not in General live data. Omit it and the page prints with no number. The digit is which sheet this is, counting sheets that are drawn (1, 2, 3).
 
+**Start numbering from here** (a `.pe-check` in `.pe-pagenum`) is off until turned on. The first sheet with it on shows 1. Sheets before that one are blank. Later sheets count up from 1. A later copy can stay checked; only the earliest one counts. **Mirror on the facing page** still follows the physical sheet — every other sheet — not the restarted digit.
+
 It sits in `.pr-pagenums` (absolute, inset 0, above the page) as a `.pr-pagenum`. It does not take part in the flow, a repeat, a wrap, or a wire. Drag it to place it. The element panel (`.pe-pagenum`) offers **Mirror on the facing page** — off until turned on, so the place stays put; on, every other sheet that carries this number reflects it across the vertical middle. A 3×3 `.pe-place` snaps it to a corner, an edge, or the middle. **Inset** is how far a snap sits from the paper edge, in the page's pixels. **Use the page margin** sets that inset from the margin on the edge the snap uses. Dragging clears the snap.
 
 ## Printable editor — the data drawer (MS-730)
