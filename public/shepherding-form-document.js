@@ -79,19 +79,14 @@ function formDocumentPage() {
 
         // A Directory Person picker. Read straight from Firestore here, unlike
         // the public fill-in page: whoever has a Form Document open is a signed-in
-        // elder, so there is no closed door to go through and no scope to apply
-        // on a server that is not involved.
+        // elder, so there is no closed door to go through. The scope is the same
+        // decision the server applies on a fill-in (`FormsCore.personInScope`).
         personChoices(q) {
             const typed = String(this.personQueries[q.id] || '').trim().toLowerCase();
             if (!typed) return [];
-            const scope = (q.people && q.people.scope) || 'everyone';
-            const tagId = q.people && q.people.tagId;
             return this.directory.filter(p => {
                 if (!String(p.name || '').toLowerCase().includes(typed)) return false;
-                if (scope === 'member') return p.isMember === true;
-                if (scope === 'non_member') return p.isMember !== true;
-                if (scope === 'tag') return (p.tagIds || []).includes(tagId);
-                return true;
+                return FormsCore.personInScope(q, p);
             }).slice(0, 8);
         },
 
@@ -129,7 +124,11 @@ function formDocumentPage() {
             // Into the list this page searches, so the picker can find them
             // without a reload — and so the answer that follows is a pick from
             // the directory like any other.
-            const person = { id: ref.id, name: details.name, isMember: false, tagIds: [] };
+            const person = FormsCore.directoryPerson(ref.id, {
+                name: details.name,
+                tags: [],
+                membership: null,
+            });
             this.directory.push(person);
             return person;
         },
@@ -163,15 +162,8 @@ function formDocumentPage() {
             const wantsPeople = this.questions.some(q => q.type === 'person');
             if (!wantsPeople) return;
             db.collection('people').orderBy('name', 'asc').get().then(snap => {
-                this.directory = snap.docs.map(doc => {
-                    const d = doc.data() || {};
-                    return {
-                        id: doc.id,
-                        name: d.name || 'Unnamed',
-                        isMember: d.isMember === true || d.membershipStage === 'member',
-                        tagIds: d.tagIds || [],
-                    };
-                });
+                this.directory = snap.docs.map(doc =>
+                    FormsCore.directoryPerson(doc.id, doc.data() || {}));
             }).catch(() => { this.directory = []; });
         },
 
