@@ -13,6 +13,7 @@ const ALLOWLIST_SORTED = [
   'migrate-legacy-oos-prayer-carriers.js',
   'delete-legacy-oos-prayer-fields.js',
   'merge-duplicate-person.js',
+  'diagnose-storage-fill-in-upload.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

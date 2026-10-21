@@ -35,6 +35,16 @@
         return cap - 1;
     }
 
+    // Storage rules require request.resource.contentType to match image/.*.
+    // ImageIntake may return a Blob whose type is empty, or the browser may
+    // still label a photo application/octet-stream after prepare — passing that
+    // through on put() fails the rule as storage/unauthorized.
+    function storageImageContentType(upload) {
+        const raw = upload && upload.type ? String(upload.type).toLowerCase().split(';')[0].trim() : '';
+        if (raw && /^image\//.test(raw)) return raw;
+        return 'image/jpeg';
+    }
+
     async function uploadImage(file, path) {
         const acceptErr = fileAcceptError(file);
         if (acceptErr) return { url: '', error: acceptErr };
@@ -55,7 +65,7 @@
         }
         try {
             const ref = firebase.storage().ref(path);
-            await ref.put(upload, { contentType: upload.type || 'image/jpeg' });
+            await ref.put(upload, { contentType: storageImageContentType(upload) });
             const url = await ref.getDownloadURL();
             return { url: url, error: '' };
         } catch (e) {
@@ -64,7 +74,12 @@
         }
     }
 
-    const PrintableLinkStore = { uploadImage, fileAcceptError, uploadCapBytes };
+    const PrintableLinkStore = {
+        uploadImage,
+        fileAcceptError,
+        uploadCapBytes,
+        storageImageContentType,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableLinkStore;

@@ -25,3 +25,10 @@ test('needsWork path is exercised for large JPEGs (intake contract)', () => {
     const big = { type: 'image/jpeg', name: 'big.jpg', size: 20 * 1024 * 1024 };
     assert.equal(Intake.needsWork(big, Store.uploadCapBytes()), true);
 });
+
+test('storageImageContentType never sends a non-image type to Storage metadata', () => {
+    assert.equal(Store.storageImageContentType({ type: 'image/png' }), 'image/png');
+    assert.equal(Store.storageImageContentType({ type: '' }), 'image/jpeg');
+    assert.equal(Store.storageImageContentType({ type: 'application/octet-stream' }), 'image/jpeg');
+    assert.equal(Store.storageImageContentType(new Blob([], { type: '' })), 'image/jpeg');
+});
