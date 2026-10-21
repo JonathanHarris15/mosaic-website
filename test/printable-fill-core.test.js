@@ -218,6 +218,11 @@ test('the preview is where an editor fills blanks, and the link place does not l
     const folioFn = viewJs.slice(viewJs.indexOf('printFolio()'));
     assert.equal(printFn.includes('fillFor'), false);
     assert.equal(folioFn.includes('fillFor'), false);
+    const fillCss = viewHtml.slice(viewHtml.indexOf('textarea.pv-fill.pv-fill--text {'), viewHtml.indexOf('.pv-fill-extra .pv-fill'));
+    assert.match(fillCss, /white-space:\s*pre-wrap/, 'a filled blank wraps');
+    assert.match(fillCss, /overflow-wrap:\s*break-word/, 'a long word stays inside the blank');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*white-space:\s*nowrap/, 'an empty name stays one line');
+    assert.match(fillCss, /text-overflow:\s*ellipsis/, 'a long name clips with an ellipsis');
     [eventHtml, sundayHtml].forEach(html => {
         assert.equal(html.includes('For the linked printable'), false);
         assert.equal(html.includes('Save for this date'), false);
