@@ -9,6 +9,18 @@ const { spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..');
 const storageRules = fs.readFileSync(path.join(ROOT, 'storage.rules'), 'utf8');
 
+function javaMajorVersion() {
+    const r = spawnSync('java', ['-version'], { encoding: 'utf8' });
+    const out = `${r.stdout || ''}${r.stderr || ''}`;
+    const m = /version "(\d+)/.exec(out);
+    return m ? Number(m[1]) : 0;
+}
+
+const java21Ready = javaMajorVersion() >= 21;
+const emulatorSkip = java21Ready
+    ? false
+    : 'Java 21+ required for firebase emulators (see PR CI rules-compile job)';
+
 test('storage.rules does not use if statements inside functions', () => {
     const fnBlocks = storageRules.match(/function [^{]+\{[\s\S]*?\n    \}/g) || [];
     for (const block of fnBlocks) {
@@ -17,7 +29,7 @@ test('storage.rules does not use if statements inside functions', () => {
     }
 });
 
-test('check:rules compiles firestore.rules and storage.rules', () => {
+test('check:rules compiles firestore.rules and storage.rules', { skip: emulatorSkip }, () => {
     const r = spawnSync('npm', ['run', 'check:rules'], {
         cwd: ROOT,
         encoding: 'utf8',
