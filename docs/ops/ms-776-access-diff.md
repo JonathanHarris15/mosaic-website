@@ -104,6 +104,11 @@ permissions map for the thirteen ladder-only accounts. It must not overwrite
 the two pastoral-assistant maps with the member preset. Re-run this diff
 after that write. The cutover is safe only when blocking users is 0.
 
+Helm approved that additive backfill. The script is
+`ms-776-backfill-account-levels.js`
+(`docs/ops/ms-776-account-level-backfill.md`). The cutover stays on hold
+until a re-run of this diff shows blocking users is 0.
+
 Shipping the resolver change before that backfill would lock those thirteen
 people out. Hosting and Functions deploy on push to `main`. The data move is
 a separate workflow dispatch. The window between them is the outage.

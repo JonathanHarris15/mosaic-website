@@ -14,8 +14,9 @@ const ALLOWLIST_SORTED = [
   'delete-legacy-oos-prayer-fields.js',
   'merge-duplicate-person.js',
   'diagnose-storage-fill-in-upload.js',
-  'delete-legacy-person-picker-fields.js',
-  'access-diff.js',
+    'delete-legacy-person-picker-fields.js',
+    'access-diff.js',
+    'ms-776-backfill-account-levels.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);
