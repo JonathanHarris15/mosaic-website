@@ -20,6 +20,9 @@
 
 function printableEditor() {
     const global = window;
+    // Tests install PrintableCore on the real global. The editor's `window`
+    // argument is the page, which does not carry it.
+    const PrintableCore = /** @type {any} */ (/** @type {any} */ (globalThis).PrintableCore);
     // Things Alpine must NOT make reactive: DOM handles, the undo stack, the
     // CodeMirror instances (a proxied CodeMirror throws on click — see
     // service-guide-manager.js), and the drag state, which changes on every
@@ -140,7 +143,7 @@ function printableEditor() {
         get pages() { return this.project ? this.project.pages : []; },
         get currentPage() {
             if (!this.project) return null;
-            return this.pages.find(p => p.id === this.selection.pageId) || this.pages[0] || null;
+            return this.pages.find((/** @type {any} */ p) => p.id === this.selection.pageId) || this.pages[0] || null;
         },
         get selectedNode() {
             const page = this.currentPage;
@@ -445,7 +448,7 @@ function printableEditor() {
                 const pendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
                 if (!pendingWrites && !self.renaming && data.name) self.project.name = data.name;
                 self._live.remote(data, { pendingWrites });
-            }, { onError: (e) => console.warn('Printable is not following live changes:', e && e.message) });
+            }, { onError: (/** @type {any} */ e) => console.warn('Printable is not following live changes:', e && e.message) });
         },
         adoptPrintable(data) {
             if (!this.project) return;
@@ -615,6 +618,10 @@ function printableEditor() {
 
         // ── Elements ─────────────────────────────────────────────────────
 
+        /**
+         * @param {any} pageId
+         * @param {any} nodeId
+         */
         select(pageId, nodeId) {
             this.selection.pageId = pageId;
             this.selection.nodeId = nodeId;
@@ -1053,7 +1060,7 @@ function printableEditor() {
         // rows still do not fit). Without the data side loaded, stand-ins.
         entries() {
             if (this.computeLayout) return this.computeLayout();
-            return this.pages.map((page, i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
+            return this.pages.map((/** @type {any} */ page, /** @type {any} */ i) => ({ key: page.id, page: page, nodes: page.nodes, generated: false, originId: page.id, pageIndex: i }));
         },
 
         renderAll() {
@@ -1063,7 +1070,7 @@ function printableEditor() {
             ui.world.innerHTML = '';
             ui.pageEls = {};
             const t = this.template;
-            entries.forEach((entry, i) => {
+            entries.forEach((/** @type {any} */ entry, /** @type {any} */ i) => {
                 ui.world.appendChild(this.buildPageEl(entry, i, numberOrigin));
             });
             // The "+" below the last page.
@@ -1085,6 +1092,11 @@ function printableEditor() {
             if (this.refreshWires) this.$nextTick(() => this.refreshWires());
         },
 
+        /**
+         * @param {any} entry
+         * @param {number} index
+         * @param {number} numberOrigin
+         */
         buildPageEl(entry, index, numberOrigin) {
             const t = this.template;
             const page = entry.page;
@@ -1138,7 +1150,7 @@ function printableEditor() {
             const old = ui.pageEls[pageId];
             const hasLists = this.pages.some(p => { let found = false; PrintableCore.walk(p.nodes, n => { if (n.repeat) { found = true; return false; } }); return found; });
             if (i < 0 || !old || hasLists || (this.data && this.data.loaded)) { this.renderAll(); return; }
-            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((page, idx) => ({
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((/** @type {any} */ page, /** @type {any} */ idx) => ({
                 page: page, nodes: page.nodes, pageIndex: idx,
             })));
             const fresh = this.buildPageEl({ key: pageId, page: this.pages[i], nodes: this.pages[i].nodes, generated: false, originId: pageId, pageIndex: i }, i, numberOrigin);
@@ -1274,7 +1286,7 @@ function printableEditor() {
         sheetNumbering(nodeId) {
             const entries = this.entries();
             const hit = entries.find(e => e.page && PrintableCore.findNode(e.page, nodeId));
-            let pageIndex = 0;
+            let pageIndex;
             if (hit && hit.pageIndex != null) pageIndex = hit.pageIndex;
             else {
                 const page = this.pageOfNode(nodeId);
@@ -1666,7 +1678,7 @@ function printableEditor() {
             if (!ui.pagesStrip || !this.project || !this.template) return;
             const frag = document.createDocumentFragment();
             const t = this.template;
-            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((page, idx) => ({
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.pages.map((/** @type {any} */ page, /** @type {any} */ idx) => ({
                 page: page, nodes: page.nodes, pageIndex: idx,
             })));
             const runs = [];

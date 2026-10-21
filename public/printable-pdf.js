@@ -16,7 +16,8 @@
 // Browser-only. Nothing here reads Firestore — the caller lays the pages out
 // through PrintableLive and hands them in.
 
-(function (global) {
+/** @param {any} globals */
+(function (globals) {
     'use strict';
 
     const HTML2CANVAS = 'vendor/html2canvas-1.4.1.min.js';
@@ -37,8 +38,8 @@
     }
 
     async function ready() {
-        if (typeof global.html2canvas !== 'function') await loadScript(HTML2CANVAS);
-        if (!global.jspdf || !global.jspdf.jsPDF) await loadScript(JSPDF);
+        if (typeof globals.html2canvas !== 'function') await loadScript(HTML2CANVAS);
+        if (!globals.jspdf || !globals.jspdf.jsPDF) await loadScript(JSPDF);
     }
 
     // html2canvas paints a bitmap into the element box. It ignores
@@ -178,7 +179,7 @@
     }
 
     async function fittedImageUrl(img, px) {
-        const cs = global.getComputedStyle(img);
+        const cs = globals.getComputedStyle(img);
         const fit = cs.objectFit || 'fill';
         if (fit !== 'contain' && fit !== 'cover' && fit !== 'scale-down') return null;
         const box = img.getBoundingClientRect();
@@ -236,7 +237,7 @@
     }
 
     function paintPseudo(el, pseudo, px) {
-        const cs = global.getComputedStyle(el, pseudo);
+        const cs = globals.getComputedStyle(el, pseudo);
         const content = cs.content;
         if (!content || content === 'none' || content === 'normal') return;
         const w = parseFloat(cs.width);
@@ -262,13 +263,13 @@
         img.style.height = h + 'px';
         img.style.maxWidth = 'none';
         img.style.maxHeight = 'none';
-        if (global.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        if (globals.getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.classList.add(pseudo === '::before' ? 'pr-raster-nobefore' : 'pr-raster-noafter');
         el.insertBefore(img, el.firstChild);
     }
 
     async function prepareRaster(root, scale) {
-        if (!root || typeof root.querySelectorAll !== 'function' || !global.getComputedStyle) return;
+        if (!root || typeof root.querySelectorAll !== 'function' || !globals.getComputedStyle) return;
         ensureRasterStyle();
         const px = Math.max(2, Number(scale) || 1);
         const imgs = Array.from(root.querySelectorAll('img')).filter(img => !img.classList.contains('pr-raster-mark'));
@@ -318,20 +319,20 @@
     async function render(project, entries, opts) {
         const o = opts || {};
         await ready();
-        const Dom = global.PrintableDom;
+        const Dom = globals.PrintableDom;
         const t = project.template;
         // Sunday booklet path: pad to ×4. No imposition — printer saddle
         // mode folds this stack (MS-589 / MS-592). Other Printables stay
         // as laid out unless the caller forces padToMultipleOf4.
-        const Export = global.PrintableExportCore;
+        const Export = globals.PrintableExportCore;
         const pages = Export ? Export.exportEntries(entries || [], project, o) : (entries || []);
         const host = document.createElement('div');
         host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + t.widthPx + 'px;pointer-events:none;';
         document.body.appendChild(host);
         try {
             const orientation = t.widthIn > t.heightIn ? 'landscape' : 'portrait';
-            const doc = new global.jspdf.jsPDF({ unit: 'in', format: [t.widthIn, t.heightIn], orientation: orientation, compress: true });
-            const Core = global.PrintableCore;
+            const doc = new globals.jspdf.jsPDF({ unit: 'in', format: [t.widthIn, t.heightIn], orientation: orientation, compress: true });
+            const Core = globals.PrintableCore;
             const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
                 ? Core.numberOriginFromEntries(pages)
                 : 0;
@@ -346,7 +347,7 @@
                 host.appendChild(page);
                 await waitForImages(page);
                 await prepareRaster(page, o.scale || 1);
-                const canvas = await global.html2canvas(page, {
+                const canvas = await globals.html2canvas(page, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: t.widthPx, height: t.heightPx, windowWidth: t.widthPx, windowHeight: t.heightPx,
                 });
@@ -366,8 +367,8 @@
     async function renderFolio(project, entries, opts) {
         const o = opts || {};
         await ready();
-        const Dom = global.PrintableDom;
-        const Export = global.PrintableExportCore;
+        const Dom = globals.PrintableDom;
+        const Export = globals.PrintableExportCore;
         if (!Export || typeof Export.folioSpreads !== 'function' || typeof Export.folioSheet !== 'function') {
             throw new Error('folio export is not available');
         }
@@ -375,7 +376,7 @@
         const sheet = Export.folioSheet(t);
         const spreads = Export.folioSpreads(entries || []);
         if (!spreads.length) throw new Error('not laid out');
-        const Core = global.PrintableCore;
+        const Core = globals.PrintableCore;
         const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
             ? Core.numberOriginFromEntries(entries || [])
             : 0;
@@ -385,7 +386,7 @@
         host.style.cssText = 'position:absolute;left:-100000px;top:0;width:' + sheetWpx + 'px;pointer-events:none;';
         document.body.appendChild(host);
         try {
-            const doc = new global.jspdf.jsPDF({
+            const doc = new globals.jspdf.jsPDF({
                 unit: 'in',
                 format: [sheet.widthIn, sheet.heightIn],
                 orientation: 'landscape',
@@ -416,7 +417,7 @@
                 host.appendChild(sheetEl);
                 await waitForImages(sheetEl);
                 await prepareRaster(sheetEl, o.scale || 1);
-                const canvas = await global.html2canvas(sheetEl, {
+                const canvas = await globals.html2canvas(sheetEl, {
                     scale: o.scale || 1, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', logging: false,
                     width: sheetWpx, height: sheetHpx, windowWidth: sheetWpx, windowHeight: sheetHpx,
                 });
@@ -449,7 +450,7 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintablePdf;
     }
-    if (global) {
-        global.PrintablePdf = PrintablePdf;
+    if (globals) {
+        globals.PrintablePdf = PrintablePdf;
     }
-})(typeof window !== 'undefined' ? window : globalThis);
+})(/** @type {any} */ (typeof window !== 'undefined' ? window : globalThis));
