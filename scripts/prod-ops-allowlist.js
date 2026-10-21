@@ -15,6 +15,7 @@ const ALLOWLIST_SORTED = [
   'merge-duplicate-person.js',
   'diagnose-storage-fill-in-upload.js',
     'access-diff.js',
+    'ms-776-backfill-account-levels.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

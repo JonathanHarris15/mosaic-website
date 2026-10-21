@@ -61,3 +61,4 @@ gh workflow run "Prod ops script" --ref main \
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
 | `diagnose-storage-fill-in-upload.js` | [Storage fill-in upload diagnostic](./ms-storage-fill-in-upload-diagnostic.md) (empty `args`; read-only — never use `commit=true`) |
 | `access-diff.js` | [MS-776 — account access diff](./ms-776-access-diff.md) (empty `args`; read-only — `commit=true` is ignored) |
+| `ms-776-backfill-account-levels.js` | [MS-776 — additive account-level backfill](./ms-776-account-level-backfill.md) (empty `args`; dry-run, then `commit=true` to apply) |
