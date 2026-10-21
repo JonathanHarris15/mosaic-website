@@ -332,7 +332,7 @@ test('every catalog source is query, general live data, or off the drawer', () =
         assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, undefined, 'booklet text is not a catalog source');
+    assert.equal(homes.sunday_typed, '', 'legacy typed Sunday fields are not a drawer card');
     assert.equal(homes.insert_date, 'general');
     assert.equal(homes.insert_page_number, undefined);
     ['people', 'households', 'household_children', 'sunday', 'sunday_rows', 'sunday_hymns', 'sunday_announcements',

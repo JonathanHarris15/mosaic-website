@@ -48,7 +48,7 @@ test('buildPrintable migrates sunday_typed on load', () => {
     assert.equal(p.pages[0].nodes[0].bind.text.field, 'legacy_kidsLessonTitle');
 });
 
-test('an occurrence fill-in keeps a present value, including a blank', () => {
+test('typedContent seeds empty event fill-ins', () => {
     const Typed = require('../public/sunday-typed-core.js');
     const content = Typed.normalise({
         pastoralPrayer: { nation: 'Peru', continent: 'South America' },
@@ -58,20 +58,9 @@ test('an occurrence fill-in keeps a present value, including a blank', () => {
     const bag = Migrate.valuesFromTyped(content);
     assert.equal(bag.legacy_prayerNation, 'Peru');
     assert.equal(bag.legacy_kidsLessonTitle, 'Noah');
-    const kept = Migrate.planOccurrenceFill(
-        { legacy_prayerNation: 'Chile' },
-        { typedContent: content }
-    );
-    assert.equal(kept.bag.legacy_prayerNation, 'Chile');
-    assert.equal(kept.patch.legacy_prayerNation, undefined);
-    assert.equal(kept.bag.legacy_kidsLessonTitle, 'Noah');
-    const cleared = Migrate.planOccurrenceFill(
-        { legacy_prayerNation: '' },
-        { typedContent: content }
-    );
-    assert.equal(cleared.bag.legacy_prayerNation, '');
-    assert.equal(Object.prototype.hasOwnProperty.call(cleared.patch, 'legacy_prayerNation'), false);
-    assert.equal(cleared.bag.legacy_kidsLessonTitle, 'Noah');
+    const merged = Migrate.mergeEventWithTyped({ legacy_prayerNation: 'Chile' }, content);
+    assert.equal(merged.legacy_prayerNation, 'Chile', 'occurrence wins');
+    assert.equal(merged.legacy_kidsLessonTitle, 'Noah');
 });
 
 test('pastoral prayer requests resolve for elders with subject names and request text', () => {

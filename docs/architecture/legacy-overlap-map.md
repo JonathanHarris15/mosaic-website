@@ -62,22 +62,19 @@ Anything not in that table is **unverified** for current prod data.
 
 ### 3. Sunday booklet text lives in three stores
 
-**Status (MS-777):** the app reads and writes occurrence fill-ins only (`event_occurrences/{id}.printableInputs`, ids `legacy_*`). `sunday_typed` is not a catalog source. Prod still has `services.typedContent` and booklet keys inside `guide.values` / `guide.elements` until a later delete, and only after `migrate-booklet-text-to-occurrences.js` dry-runs with nothing left to copy. Do not re-file this as a code-path ticket. The old guide editor (section 4) may still write `guide`; print does not read it.
-
-**Risk:** high while those prod fields remain. An editor used to be able to type the same blank in the Order of Service, the old guide, or the event fill-in. The app no longer merges them. Until the copy script commits, a week that exists only on the old stores prints blank.
+**Risk:** high. An editor can type the same blank in the Order of Service, the old guide, or the event fill-in, and print merges them. Empty on the new store still prints the old store, so a cleared blank can come back.
 
 **Systems:** `services/{date}.typedContent` and `services/{date}.guide` (v2 `values`, or legacy `elements`) sit under the Printable fill-ins on `event_occurrences/{id}.printableInputs`, reached by wires that used to be `sunday_typed` and are rewritten to `event_field` ids prefixed `legacy_`.
 
 **Files:**
 
-- `public/sunday-typed-core.js` — `fromService` reads `typedContent` only and ignores the guide. The prod copy uses `contentFromLegacyStores`. Print calls neither.
-- `public/printable-live.js` — an `event_field` reads the occurrence bag. A blank stays blank.
-- `public/printable-legacy-migrate-core.js` — rewrites `bind.source === 'sunday_typed'` to `event_field` / `legacy_*` on load; `planOccurrenceFill` copies absent keys and does not delete the old fields.
-- `public/printable-data-core.js` — announcements and Mosaic Kids questions read `bookletByDate`.
-- `public/service-builder.js` — the announcements tab writes `legacy_announcements` on the Sunday occurrence for the order's printable.
+- `public/sunday-typed-core.js` — `fromService` prefers stored `typedContent`, then fills gaps from `guide.values` or legacy `guide.elements`.
+- `public/printable-live.js` — `legacyTypedFallback` fills an empty `event_field` from that Sunday's typed content.
+- `public/printable-legacy-migrate-core.js` — rewrites `bind.source === 'sunday_typed'` to `event_field` / `legacy_*` in memory; saving the Printable persists the new wire.
+- `public/printable-data-core.js` — still resolves `sunday_typed` (`noDrawer: true`) for unmigrated wires.
+- `public/service-builder.js` — still saves `typedContent`.
 - `public/printable-view.js`, `public/calendar-event.js` — event fill-ins persist on the occurrence.
-- `scripts/migrate-booklet-text-to-occurrences.js` — the prod copy. It does not delete the old fields.
-- Synced copies: `functions/shared/printable-legacy-migrate-core.js`, `functions/shared/printable-data-core.js`, `functions/shared/sunday-typed-core.js`.
+- Synced copies: `functions/shared/printable-legacy-migrate-core.js`, `functions/shared/printable-data-core.js`, `functions/shared/sunday-typed-core.js` when present.
 
 **Firestore:**
 
@@ -87,9 +84,9 @@ Anything not in that table is **unverified** for current prod data.
 | `event_occurrences/{id}` | `printableInputs.{printableId}` |
 | `printables/{id}` | binds: `sunday_typed` or `event_field` + `legacy_*` input ids |
 
-**Prod:** the copy script is allowlisted and has not been dispatched. Dry-run, then commit, after the change is on `main`. See [MS-777](../ops/ms-777-booklet-fill-ins.md).
+**Prod:** unverified. No prod-ops script rewrites `typedContent` into occurrence fill-ins.
 
-**Cleanup:** done in code. The leftover prod fields wait for a separate delete, after a dry run reports nothing left to copy. A behavior test prints a week that has only the old stores as blank, a week that has only occurrence fill-ins, and a week whose occurrence value is blank and stays blank.
+**Cleanup:** one write path, on the occurrence fill-ins. Keep the read-through until a prod pass has copied old weeks. Then delete `sunday_typed` resolution and `fromService`'s guide fallback. A behavior test prints a week that has only `typedContent`, a week that has only occurrence fill-ins, and a week where the occurrence value is blank and must stay blank.
 
 ### 4. The old service-guide editor still ships beside Printables
 

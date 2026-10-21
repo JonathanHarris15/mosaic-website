@@ -1099,27 +1099,17 @@ function serviceForm() {
             }
         },
 
-        // Typed lines belong to this Sunday's service-guide fill-in. Printed
-        // lines belong to whatever event wrote them — a class, a one-off, the
-        // Sunday Service — and this tab only shows the ones the handed-out
-        // guide would print.
+        // Typed lines belong to this Sunday. Printed lines belong to whatever
+        // event wrote them — a class, a one-off, the Sunday Service — and this
+        // tab only shows the ones the handed-out guide would print.
         async loadSundayAnnouncements() {
             if (!this.date || !window.SundayTypedCore || !window.PrintedAnnouncementGuide || !window.PrintedAnnouncementLines) return;
             this.announcementsLoading = true;
             this.announcementsError = '';
             try {
-                const printableId = (this.serviceGuideTarget() || {}).printableId;
-                const occId = this.sundayOccurrenceId;
-                let items = [];
-                if (printableId && occId) {
-                    const snap = await db.collection('event_occurrences').doc(occId).get();
-                    const data = snap.exists ? snap.data() : null;
-                    const bag = data && data.printableInputs && data.printableInputs[printableId];
-                    const text = bag && Object.prototype.hasOwnProperty.call(bag, 'legacy_announcements')
-                        ? bag.legacy_announcements
-                        : '';
-                    items = text ? window.SundayTypedCore.asAnnouncements(text) : [];
-                }
+                const snap = await db.collection('services').doc(this.date).get();
+                const service = snap.exists ? snap.data() : null;
+                const items = window.SundayTypedCore.fromService(service).announcements || [];
                 this.typedAnnouncements = items.map(item => ({
                     title: item.title || '',
                     content: item.content || '',
@@ -1149,31 +1139,16 @@ function serviceForm() {
 
         async saveSundayAnnouncements() {
             if (!this.canEdit || !this.date || !window.SundayTypedCore || this.announcementsSaving) return;
-            const printableId = (this.serviceGuideTarget() || {}).printableId;
-            const occId = this.sundayOccurrenceId;
-            if (!printableId || !occId) {
-                this.announcementsStatus = 'Link a service guide before saving announcements.';
-                return;
-            }
             this.announcementsSaving = true;
             this.announcementsStatus = '';
             try {
-                const Typed = window.SundayTypedCore;
-                const text = Typed.announcementsText(Typed.asAnnouncements(this.typedAnnouncements));
-                if (window.EventsStore && window.EventsStore.loadOccurrence) {
-                    const occ = await window.EventsStore.loadOccurrence(db, occId);
-                    if (occ && occ.stored === false && window.EventsStore.ensureOccurrenceDocument) {
-                        await window.EventsStore.ensureOccurrenceDocument(db, occ);
-                    }
-                }
-                const ref = db.collection('event_occurrences').doc(occId);
+                const ref = db.collection('services').doc(this.date);
                 const snap = await ref.get();
-                const prev = (snap && snap.exists && snap.data() && snap.data().printableInputs) || {};
-                const bag = Object.assign({}, prev[printableId] || {}, { legacy_announcements: text });
-                const next = Object.assign({}, prev);
-                next[printableId] = bag;
-                await ref.set({ printableInputs: next }, { merge: true });
-                this.typedAnnouncements = Typed.asAnnouncements(text).map(item => ({
+                const data = snap.exists ? snap.data() : {};
+                const stored = window.SundayTypedCore.normalise(data.typedContent);
+                stored.announcements = window.SundayTypedCore.asAnnouncements(this.typedAnnouncements);
+                await ref.set({ typedContent: stored }, { merge: true });
+                this.typedAnnouncements = stored.announcements.map(item => ({
                     title: item.title,
                     content: item.content,
                 }));
