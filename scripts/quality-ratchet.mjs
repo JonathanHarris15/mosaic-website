@@ -285,19 +285,20 @@ function report(title, rows) {
 function main() {
     const { keys, update, baselineRef } = parseArgs(process.argv.slice(2));
     const { raw, counts } = readBaseline(BASELINE_PATH);
-    const actual = measure(keys);
+    // A bad ref fails here, before tsc, eslint, or knip run.
     const previous = baselineOnRef(baselineRef);
-    const { raised, lowerable, ceiling } = gateDecision(actual, counts, previous, keys);
+    const actual = measure(keys);
+    const decision = gateDecision(actual, counts, previous, keys);
 
     if (update) {
-        if (raised.length || ceiling.length) {
-            report('refusing to raise', raised.concat(ceiling));
+        if (!decision.ok) {
+            report('refusing to raise', decision.raised.concat(decision.ceiling));
             process.exit(1);
         }
         /** @type {Record<string, any>} */
         const next = Object.assign({}, raw);
         let changed = false;
-        for (const row of lowerable) {
+        for (const row of decision.lowerable) {
             next[row.key] = row.actual;
             changed = true;
         }
@@ -311,13 +312,13 @@ function main() {
     }
 
     for (const key of keys) console.log(`${key} ${actual[key]} (baseline ${counts[key]})`);
-    if (lowerable.length) {
+    if (decision.lowerable.length) {
         console.log('These counts can be lowered. Edit quality-baseline.json:');
-        for (const row of lowerable) console.log(`  ${row.key}: ${row.baseline} -> ${row.actual}`);
+        for (const row of decision.lowerable) console.log(`  ${row.key}: ${row.baseline} -> ${row.actual}`);
     }
-    if (raised.length || ceiling.length) {
-        report('count went up', raised);
-        report('baseline file went up', ceiling);
+    if (!decision.ok) {
+        report('count went up', decision.raised);
+        report('baseline file went up', decision.ceiling);
         process.exit(1);
     }
 }

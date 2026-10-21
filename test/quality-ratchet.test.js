@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -115,12 +116,25 @@ test('tsc with no diagnostic on a failing status is an error', async () => {
     assert.throws(() => ratchet.tscOutcome(1, 'crash without a diagnostic'), /no diagnostics/);
 });
 
-test('the ceiling and the tsc failure stay wired into the gate', () => {
+test('the ceiling exit, the bad ref, and the tsc failure are the path main runs', () => {
     const src = fs.readFileSync(path.join(ROOT, 'scripts', 'quality-ratchet.mjs'), 'utf8');
-    assert.match(src, /baselineOnRef\(baselineRef\)/);
-    assert.match(src, /gateDecision\(/);
-    assert.match(src, /tscOutcome\(/);
-    assert.match(src, /baselineRefStatus\(/);
+    assert.match(src, /const previous = baselineOnRef\(baselineRef\)/);
+    assert.match(src, /const decision = gateDecision\(actual, counts, previous, keys\)/);
+    assert.match(src, /report\('baseline file went up', decision\.ceiling\);\n\s*process\.exit\(1\)/);
+    assert.match(src, /tscOutcome\(result\.status,/);
+    assert.match(src, /baselineRefStatus\(result\.status, result\.stderr/);
+    assert.match(src, /could not read quality-baseline\.json/);
+});
+
+test('a bad baseline ref fails the process before the tools run', () => {
+    const result = spawnSync(process.execPath, [
+        path.join(ROOT, 'scripts', 'quality-ratchet.mjs'),
+        '--only', 'tsc',
+        '--baseline-ref', 'origin/no-such-quality-ref',
+    ], { cwd: ROOT, encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stderr}`, /could not read quality-baseline\.json/);
+    assert.doesNotMatch(`${result.stdout}`, /tsc /);
 });
 
 test('the committed baseline is the ratchet shape', async () => {
