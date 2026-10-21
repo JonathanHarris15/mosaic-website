@@ -206,7 +206,8 @@ test('insert, update, move, duplicate and remove all return a new page and leave
     const before = JSON.stringify(page);
 
     const inserted = Core.insertNode(page, 'hdr', Core.buildNode({ tag: 'p', text: 'Sub' }));
-    assert.equal(Core.findNode(inserted, 'hdr').children.length, 2);
+    const insertedHdr = /** @type {any} */ (Core.findNode(inserted, 'hdr'));
+    assert.equal(insertedHdr.children.length, 2);
 
     const updated = Core.updateNode(inserted, 'ttl', { style: { color: 'navy', 'font-size': '' }, text: 'Directory' });
     const ttl = Core.findNode(updated, 'ttl');
@@ -216,7 +217,8 @@ test('insert, update, move, duplicate and remove all return a new page and leave
 
     const moved = Core.moveNode(updated, 'nm', 'hdr', 0);
     assert.equal(moved.ok, true);
-    assert.equal(Core.findNode(moved.page, 'hdr').children[0].id, 'nm');
+    const movedHdr = /** @type {any} */ (Core.findNode(moved.page, 'hdr'));
+    assert.equal(movedHdr.children[0].id, 'nm');
     assert.equal(Core.findNode(moved.page, 'card').children.length, 1);
 
     const dup = Core.duplicateNode(moved.page, 'card');
@@ -372,16 +374,16 @@ test('rows that share an index stay together, and a list of distinct indexes sti
         { name: 'Doxology', number: 2, page: 1 },
         { name: 'Holy', number: 3, page: 1 },
     ];
-    assert.deepEqual(Core.sliceRows(hymn, 1, 1).map(r => r.page), [1, 2], 'both sheets of hymn 1');
-    assert.deepEqual(Core.sliceRows(hymn, 2, 0).map(r => r.name), ['Doxology', 'Holy']);
-    assert.deepEqual(Core.sliceRows(hymn, 1, 2).map(r => r.number), [1, 1, 2]);
+    assert.deepEqual(Core.sliceRows(hymn, 1, 1).map((/** @type {any} */ r) => r.page), [1, 2], 'both sheets of hymn 1');
+    assert.deepEqual(Core.sliceRows(hymn, 2, 0).map((/** @type {any} */ r) => r.name), ['Doxology', 'Holy']);
+    assert.deepEqual(Core.sliceRows(hymn, 1, 2).map((/** @type {any} */ r) => r.number), [1, 1, 2]);
     const people = [
         { name: 'Ada', number: 1 },
         { name: 'Bea', number: 2 },
         { name: 'Cal', number: 3 },
     ];
-    assert.deepEqual(Core.sliceRows(people, 1, 2).map(r => r.name), ['Ada', 'Bea']);
-    assert.deepEqual(Core.sliceRows(people, 2, 0).map(r => r.name), ['Bea', 'Cal']);
+    assert.deepEqual(Core.sliceRows(people, 1, 2).map((/** @type {any} */ r) => r.name), ['Ada', 'Bea']);
+    assert.deepEqual(Core.sliceRows(people, 2, 0).map((/** @type {any} */ r) => r.name), ['Bea', 'Cal']);
 });
 
 // ── The record ───────────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ test('the resolver answers rows for a list and values for both kinds of binding'
     };
     const res = Live.resolver(project(), bundle, { today: '2026-09-03', level: 'editor' });
     const card = Core.findNode(project().pages[0], 'card');
-    assert.deepEqual(res.rowsFor(card).map(r => r.name), ['Anna Baker']);
+    assert.deepEqual(res.rowsFor(card).map((/** @type {any} */ r) => r.name), ['Anna Baker']);
     assert.deepEqual(res.valueFor({ scope: 'item', field: 'name' }, { name: 'Anna Baker' }), { ok: true, value: 'Anna Baker' });
     assert.deepEqual(res.valueFor({ scope: 'global', source: 'sunday', params: { when: { mode: 'next' } }, field: 'theme' }, null), { ok: true, value: 'Hope' });
     const miss = res.valueFor({ scope: 'global', source: 'sunday', params: { when: { mode: 'next' } }, field: 'preacher' }, null);
@@ -70,7 +70,7 @@ test('a Repeat\'s from/to keeps only that slice of the list (1-based; to 0 = thr
         ],
     });
     const res = Live.resolver(p, { people: people }, { today: '2026-09-03', level: 'editor' });
-    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[0], 'first')).map(r => r.name), ['Anna', 'Ben']);
+    assert.deepEqual(res.rowsFor(Core.findNode(p.pages[0], 'first')).map((/** @type {any} */ r) => r.name), ['Anna', 'Ben']);
     assert.deepEqual(res.rowsFor(Core.findNode(p.pages[1], 'last')).map(r => r.name), ['Cara', 'Dan']);
 });
 
@@ -141,6 +141,7 @@ test('with no resolver the stand-ins are drawn, once per list', () => {
     assert.equal(pages[0].nodes[1].children[0].children[0].text, 'Jane');
 });
 
+/** @param {number} n */
 function peopleBundle(n) {
     return {
         people: Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'Person ' + i, tags: ['Member'] })),
@@ -172,7 +173,7 @@ test('overflow continuation pages keep their own design and take the next rows o
     const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, next] });
     const res = Live.resolver(p, peopleBundle(5), { today: '2026-09-03', level: 'editor' });
     const pages = Live.layoutPages(p, res, true, {
-        fitsOn: (pageIndex, start, n) => n <= 2,
+        fitsOn: (/** @type {any} */ pageIndex, /** @type {any} */ start, /** @type {any} */ n) => n <= 2,
     });
     assert.equal(pages.length, 3);
     assert.equal(pages[0].page.id, 'pg1');
@@ -387,7 +388,7 @@ test('a list that spills numbers each physical sheet, not the stored page again'
 test('a hymn slot with nothing planned is left out, and the next sheet keeps the number', () => {
     const t = Core.buildTemplate({ paper: 'half_letter', dpi: 150 });
     const num = { scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number' };
-    const hymn = (id, slot, omit) => Core.buildPage(t, {
+    const hymn = (/** @type {any} */ id, /** @type {any} */ slot, /** @type {any} */ omit) => Core.buildPage(t, {
         id: id,
         nodes: [{
             id: id + '-card', tag: 'div',
@@ -503,7 +504,7 @@ test('a field filled on the event reads that occurrence, and a list reads its ro
 
 test('a multi-page hymn is one index: both sheets stay in its range, and the run moves as one', () => {
     const t = Core.buildTemplate({ paper: 'half_letter', dpi: 96 });
-    const hymnPage = (id, from, to) => Core.buildPage(t, {
+    const hymnPage = (/** @type {any} */ id, /** @type {any} */ from, /** @type {any} */ to) => Core.buildPage(t, {
         id: id,
         nodes: [{
             id: id + '-card', tag: 'div',
@@ -555,5 +556,5 @@ test('a multi-page hymn is one index: both sheets stay in its range, and the run
     const pages = laid.map(entry => entry.page);
     assert.equal(Core.canInsertAfter(pages, 0), false, 'nothing sits between the hymn\'s sheets');
     const moved = Core.movePageRun(pages, pages[0].id, 1);
-    assert.deepEqual(moved.map(pg => pg.id), [pages[2].id, pages[0].id, pages[1].id]);
+    assert.deepEqual(moved.map((/** @type {any} */ pg) => pg.id), [pages[2].id, pages[0].id, pages[1].id]);
 });

@@ -23,7 +23,8 @@
 // Pure: no DOM, no jsPDF. The print UI calls these on the layout
 // PrintableLive already produced.
 
-(function (global) {
+/** @param {any} host */
+(function (host) {
     'use strict';
 
     const MULTIPLE = 4;
@@ -47,6 +48,10 @@
         return count + blankPadCount(count);
     }
 
+    /**
+     * @param {any} entry
+     * @param {number} index
+     */
     function blankPageFrom(entry, index) {
         const proto = (entry && entry.page) || {};
         const id = (proto.id || 'pg') + '~pad' + index;
@@ -102,7 +107,7 @@
     function isSundayBookletPath(project) {
         if (!project || typeof project !== 'object') return false;
         if (project.bookletExport === true) return true;
-        if ((project.inputs || []).some(i => i && String(i.id || '').indexOf(LEGACY_FILL_PREFIX) === 0)) {
+        if ((project.inputs || []).some((/** @type {any} */ i) => i && String(i.id || '').indexOf(LEGACY_FILL_PREFIX) === 0)) {
             return true;
         }
         let found = false;
@@ -264,9 +269,14 @@
         if (typeof require === 'function') {
             try { return require('./printable-core.js'); } catch (e) { /* browser script */ }
         }
-        return (typeof global !== 'undefined' && global.PrintableCore) || null;
+        return (typeof host !== 'undefined' && host.PrintableCore) || null;
     }
 
+    /**
+     * @param {any} nodes
+     * @param {number} pageIndex
+     * @param {number} numberOrigin
+     */
     function restampPageNumberNodes(nodes, pageIndex, numberOrigin) {
         const Core = coreApi();
         if (Core && typeof Core.stampPageNumberNodes === 'function') {
@@ -433,7 +443,7 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableExportCore;
     }
-    if (global) {
-        global.PrintableExportCore = PrintableExportCore;
+    if (host) {
+        host.PrintableExportCore = PrintableExportCore;
     }
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+})(/** @type {any} */ (typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

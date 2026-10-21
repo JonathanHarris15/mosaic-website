@@ -78,6 +78,7 @@
     function passageRequests(project) {
         const Passage = global.ScripturePassage;
         if (!Passage) return [];
+        /** @type {any[]} */
         const out = [];
         const seen = {};
         function walk(nodes, parentRepeat) {
@@ -255,6 +256,7 @@
         // The source-level warnings — "nothing planned for that Sunday" — for
         // every source the project reads.
         function sourceWarnings() {
+            /** @type {any[]} */
             const out = [];
             usesOf(project).forEach(u => {
                 const r = resolved(u.source, u.params);

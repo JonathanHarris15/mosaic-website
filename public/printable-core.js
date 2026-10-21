@@ -46,6 +46,7 @@
     // a row never share a name. `taken` is the names already in the library.
     function copyName(name, taken) {
         const base = normaliseName(name).replace(/ copy( \d+)?$/, '');
+        /** @type {Record<string, boolean>} */
         const used = {};
         (taken || []).forEach(n => { used[String(n)] = true; });
         let candidate = base + ' copy';
@@ -135,6 +136,7 @@
 
     // What kind of thing an element is, read off its tag and its shape. A
     // box holds children; text holds a run of text; an image holds a src.
+    /** @param {any} node */
     function kindOf(node) {
         if (!node) return 'box';
         if (isPageNumber(node)) return 'page-number';
@@ -145,6 +147,7 @@
         return 'box';
     }
 
+    /** @param {any} node */
     function isPageNumber(node) {
         return !!(node && node.pageNumber);
     }
@@ -215,9 +218,10 @@
         const start = Math.max(1, Math.round(Number(from)) || 1);
         const end = Math.max(0, Math.round(Number(to)) || 0);
         if (end > 0 && end < start) return [];
+        /** @type {Record<string, boolean>} */
         const shared = {};
         let shares = false;
-        rows.forEach(row => {
+        rows.forEach((/** @type {any} */ row) => {
             if (!row || typeof row !== 'object' || row.number == null || row.number === '') return;
             const n = Number(row.number);
             if (!Number.isFinite(n)) return;
@@ -226,7 +230,7 @@
             shared[key] = true;
         });
         if (!shares) return rows.slice(start - 1, end > 0 ? end : undefined);
-        return rows.filter(row => {
+        return rows.filter((/** @type {any} */ row) => {
             const n = Number(row && row.number);
             if (!Number.isFinite(n)) return false;
             if (n < start) return false;
@@ -336,6 +340,10 @@
         if (typeof node.text !== 'string') node.text = '';
     }
 
+    /**
+     * @param {number} dpi
+     * @returns {any}
+     */
     function newPageNumber(dpi) {
         const u = unit(dpi);
         const inset = Math.round(u * 36);
@@ -353,6 +361,10 @@
         });
     }
 
+    /**
+     * @param {any} node
+     * @param {number} pageIndex
+     */
     function pageNumberMirrored(node, pageIndex) {
         if (!node || !node.pageNumber || node.pageNumber.mirror !== true) return false;
         const idx = Math.round(Number(pageIndex));
@@ -427,6 +439,10 @@
     // The digit on this sheet. `numberOrigin` 0 is today's 1, 2, 3.
     // A sheet before the origin is blank, so a cover and a contents page
     // can sit in front of page 1 without a second "1".
+    /**
+     * @param {number} pageIndex
+     * @param {number} numberOrigin
+     */
     function pageNumberLabel(pageIndex, numberOrigin) {
         const idx = Math.round(Number(pageIndex));
         const origin = Math.round(Number(numberOrigin));
@@ -436,6 +452,7 @@
         return n < 1 ? '' : String(n);
     }
 
+    /** @param {any} entry */
     function entryStartsHere(entry) {
         if (!entry || typeof entry !== 'object') return false;
         const lists = [];
@@ -458,6 +475,7 @@
     // The drawn-sheet index of the earliest "Start numbering from here".
     // 0 when none is set, which keeps 1, 2, 3. Later flags do not count:
     // an overflow copy of the element would otherwise restart every sheet.
+    /** @param {any} entries */
     function numberOriginFromEntries(entries) {
         const list = entries || [];
         for (let i = 0; i < list.length; i++) {
@@ -473,6 +491,11 @@
         return 0;
     }
 
+    /**
+     * @param {any} nodes
+     * @param {number} pageIndex
+     * @param {number} numberOrigin
+     */
     function stampPageNumberNodes(nodes, pageIndex, numberOrigin) {
         const label = pageNumberLabel(pageIndex, numberOrigin);
         walk(nodes, node => {

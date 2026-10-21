@@ -360,11 +360,11 @@ test('folio pad tool duplicates a page into a temporary stack until ×4 without 
         }],
     }));
     const restamped = Export.restampFolioPageNumbers(Export.cloneEntriesForFolio(restart));
-    assert.deepEqual(restamped.map(e => e.nodes[0].text), ['', '', '1', '2', '3']);
+    assert.deepEqual(restamped.map((/** @type {any} */ e) => e.nodes[0].text), ['', '', '1', '2', '3']);
     assert.equal(restart[0].nodes[0].text, '1', 'the source stack is not restamped');
     const shifted = Export.applyFolioPad(Export.cloneEntriesForFolio(restart), { kind: 'blank', afterIndex: -1 });
     assert.equal(shifted.ok, true);
-    assert.deepEqual(shifted.entries.slice(1).map(e => e.nodes[0].text), ['', '', '1', '2', '3'],
+    assert.deepEqual(shifted.entries.slice(1).map((/** @type {any} */ e) => e.nodes[0].text), ['', '', '1', '2', '3'],
         'a blank in front moves the restart with the sheet');
 
     r = Export.applyFolioPad(stack, { kind: 'duplicate', sourceIndex: 4, afterIndex: 5 });

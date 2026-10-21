@@ -156,7 +156,7 @@ const PEOPLE = () => ({
 
 test('the directory filters to members, leaves inactive people out, and sorts by last name', () => {
     const r = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
-    assert.deepEqual(r.rows.map(x => x.name), ['Anna Baker', 'Dan Baker'], 'Cara is inactive and Ben is a visitor');
+    assert.deepEqual(r.rows.map((/** @type {any} */ x) => x.name), ['Anna Baker', 'Dan Baker'], 'Cara is inactive and Ben is a visitor');
     assert.equal(r.warnings.length, 0);
 });
 

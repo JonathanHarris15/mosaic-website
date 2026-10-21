@@ -8,6 +8,7 @@
 
 function printableView() {
     const ui = { resolver: null, bundle: null };
+    const PrintableCore = /** @type {any} */ (/** @type {any} */ (globalThis).PrintableCore);
     return {
         id: '',
         viewDate: '',

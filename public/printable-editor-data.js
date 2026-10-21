@@ -155,6 +155,7 @@
 
     // What the query preview calls a row: a name, a slot, a date in words —
     // never an id like "2026-09-20".
+    /** @param {any} row */
     function previewName(row) {
         const r = row || {};
         return r.name || r.personName || r.label || r.date || r._id || 'A row';
