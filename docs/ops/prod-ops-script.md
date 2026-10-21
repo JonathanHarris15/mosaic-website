@@ -63,3 +63,4 @@ gh workflow run "Prod ops script" --ref main \
 | `delete-legacy-person-picker-fields.js` | [MS-775 — phantom person picker fields](./ms-775-person-picker-fields.md) (empty `args`; `commit=true` to delete) |
 | `access-diff.js` | [MS-776 — account access diff](./ms-776-access-diff.md) (empty `args`; read-only — `commit=true` is ignored) |
 | `ms-776-backfill-account-levels.js` | [MS-776 — additive account-level backfill](./ms-776-account-level-backfill.md) (empty `args`; dry-run, then `commit=true` to apply) |
+| `migrate-booklet-text-to-occurrences.js` | [MS-777 — booklet text onto occurrence fill-ins](./ms-777-booklet-fill-ins.md) (optional `--from` / `--to`; `commit=true` to apply; does not delete the old fields) |
