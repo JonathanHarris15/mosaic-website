@@ -419,7 +419,7 @@ Writers still store `role` as a copy of `permissionLevel` (`userWriteFromLevel` 
 
 ### 19. Booklet last names ignore remembered name parts
 
-**Risk:** low. Household titles on the kiosk use `nameParts` when they are present (`PersonName.rememberedLastName`). Printable person rows still take the last word of `people.name`. ADR 0074 says booklets that do that stay as they are until someone changes them. A name like "Jonathan Harris Jr." then titles the household "Harris" and the booklet "Jr." once parts exist.
+**Risk:** low. Household titles on the kiosk use `nameParts` when they are present (`PersonName.rememberedLastName`). Printable person rows still take the last word of `people.name`. ADR 0074 says booklets that do that stay as they are until someone changes them. A full name that ends in a suffix can title the household from the remembered last name and the booklet from the last word once parts exist.
 
 **Systems:** `people.name` (always) and optional `people.nameParts` (ADR 0069, ADR 0074). `partsToRemember` parses the full name when parts are absent. `lastNameOf` is for a draft row that still has `firstName` / `lastName` before save, not a second stored person field.
 
