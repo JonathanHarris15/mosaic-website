@@ -15,6 +15,7 @@ const ALLOWLIST_SORTED = [
   'merge-duplicate-person.js',
   'diagnose-storage-fill-in-upload.js',
   'delete-legacy-person-picker-fields.js',
+  'access-diff.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

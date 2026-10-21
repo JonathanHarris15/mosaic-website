@@ -238,7 +238,7 @@ if (spliced !== input) {
 
 /* ---- 4. The phone's stylesheet ------------------------------
    public/mobile/tokens.css was a hand-maintained copy of the palette,
-   mirroring mosaic-theme.js — which is itself the superseded source. A
+   mirroring an old runtime theme file that predated tailwind.config.js. A
    third definition of the brand, drifting quietly.
 
    The shell cannot simply load mosaic.css: that carries Tailwind's
