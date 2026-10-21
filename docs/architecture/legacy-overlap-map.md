@@ -447,6 +447,8 @@ Writers still store `role` as a copy of `permissionLevel` (`userWriteFromLevel` 
 
 ### 1. Person pickers read fields the directory does not store
 
+**Status (MS-775):** pickers read `membership` and `tags`. Member scope is `carriesMemberTag`. `scripts/delete-legacy-person-picker-fields.js` deletes leftover `isMember`, `membershipStage`, and `tagIds` on `people` when those values are already on the stored shape, and blocks when they are not. Dry-run, then commit, from `main` after the change ships.
+
 **Risk:** high. A form question scoped to members, non-members, or a tag filters a directory that is built from the wrong fields. Real people have `membership.stage` and `tags`. The picker looks at `isMember`, `membershipStage`, and `tagIds`, which ordinary writes do not set. Member scope then matches nobody. Non-member scope matches everybody. Tag scope matches nobody.
 
 This is separate from the MCP people list, which does map `membership.stage` onto a `membershipStage` argument in `functions/shepherding-read.js`.
