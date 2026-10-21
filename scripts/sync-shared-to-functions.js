@@ -130,8 +130,8 @@ const MODULES = [
     // guidance file for it.
     'shepherding-guidance.js',
     // MS-588. Per-Sunday booklet text (prayer-country facts, Mosaic Kids,
-    // announcements). printable-data-core.js reads it for the sunday_typed
-    // source, so the copy has to travel with the catalog.
+    // announcements). printable-data-core.js reads it to turn an occurrence
+    // fill-in into announcement rows and Mosaic Kids questions.
     'sunday-typed-core.js',
     // MS-622. Which printed event announcements belong on a Sunday. The
     // booklet resolver calls it, so the assistant and the page agree.

@@ -40,7 +40,7 @@ test('fromService reads typedContent on that Sunday only', () => {
     assert.ok(!rowA.announcements.includes('Choir'), 'Sunday B must not leak onto Sunday A');
 });
 
-test('a week with only the old guide still reads, and typedContent wins a field', () => {
+test('fromService reads the booklet record and ignores the week guide', () => {
     const v2 = {
         guide: {
             format: 'v2',
@@ -53,9 +53,10 @@ test('a week with only the old guide still reads, and typedContent wins a field'
         typedContent: { pastoralPrayer: { nation: 'Uganda' } },
     };
     const row = Typed.toRow(Typed.fromService(v2));
-    assert.equal(row.prayerNation, 'Uganda', 'the store wins the field that was typed');
-    assert.equal(row.prayerCapital, 'Nairobi', 'untouched fields still come from the guide');
-    assert.equal(row.kidsLessonTitle, 'The Lost Sheep');
+    assert.equal(row.prayerNation, 'Uganda');
+    assert.equal(row.prayerCapital, '');
+    assert.equal(row.kidsLessonTitle, '');
+    assert.equal(row.announcements, '');
 
     const legacy = {
         guide: {
@@ -67,9 +68,9 @@ test('a week with only the old guide still reads, and typedContent wins a field'
         },
     };
     const leg = Typed.toRow(Typed.fromService(legacy));
-    assert.equal(leg.prayerNation, 'Ghana');
-    assert.equal(leg.kidsLessonTitle, 'David');
-    assert.match(leg.announcements, /Meal/);
+    assert.equal(leg.prayerNation, '');
+    assert.equal(leg.kidsLessonTitle, '');
+    assert.equal(leg.announcements, '');
 });
 
 test('draft round-trips and empty page assets are not invented', () => {

@@ -214,13 +214,26 @@ function printableView() {
             return Data.resolveWhen(when || { mode: 'this' }, this.viewDate);
         },
 
+        bagFor(date) {
+            const byDate = ui.bundle && ui.bundle.bookletByDate;
+            if (byDate && Object.prototype.hasOwnProperty.call(byDate, date)) return byDate[date] || {};
+            if (date === this.viewDate) return this.eventBag || {};
+            return {};
+        },
+
+        occurrenceIdFor(date) {
+            if (this.occurrenceId && date === this.viewDate) return this.occurrenceId;
+            const Core = window.EventsOccurrenceCore;
+            if (Core && Core.occurrenceId && Core.SUNDAY_SERVICE_ID) {
+                return Core.occurrenceId(Core.SUNDAY_SERVICE_ID, date) || '';
+            }
+            return date ? 'sunday_service_' + date : '';
+        },
+
         sundayDraft(date) {
             if (!this.sundayDrafts[date]) {
-                const Typed = window.SundayTypedCore;
-                const service = ui.bundle && ui.bundle.services && ui.bundle.services[date];
-                this.sundayDrafts[date] = Typed
-                    ? Typed.toDraft(Typed.fromService(service))
-                    : {};
+                const Migrate = window.PrintableLegacyMigrate;
+                this.sundayDrafts[date] = Migrate ? Migrate.draftFromBag(this.bagFor(date)) : {};
             }
             return this.sundayDrafts[date];
         },
@@ -228,7 +241,8 @@ function printableView() {
         kidsLinesFor(date) {
             if (!this.kidsLines[date]) {
                 const Fill = window.PrintableFillCore;
-                this.kidsLines[date] = Fill.linesOf(this.sundayDraft(date).kidsQuestions);
+                const text = (this.bagFor(date) || {}).legacy_kidsQuestions || '';
+                this.kidsLines[date] = Fill.linesOf(text);
             }
             return this.kidsLines[date];
         },
@@ -277,17 +291,11 @@ function printableView() {
         },
 
         syncBundle() {
-            if (!ui.bundle) ui.bundle = { services: {} };
+            if (!ui.bundle) ui.bundle = {};
             ui.bundle.eventInputs = this.eventBag;
-            const Typed = window.SundayTypedCore;
-            if (!Typed) return;
-            Object.keys(this.sundayDrafts).forEach(date => {
-                const draft = Object.assign({}, this.sundayDrafts[date]);
-                if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
-                const content = Typed.normalise(Typed.fromDraft(draft));
-                ui.bundle.services = ui.bundle.services || {};
-                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
-            });
+            const date = this.viewDate;
+            if (!date) return;
+            ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: this.eventBag });
         },
 
         relayout() {
@@ -672,16 +680,37 @@ function printableView() {
 
         async persistSunday(date) {
             const Typed = window.SundayTypedCore;
-            if (!Typed || !date) return;
+            const Migrate = window.PrintableLegacyMigrate;
+            if (!Typed || !Migrate || !date || !this.id) return;
+            const occId = this.occurrenceIdFor(date);
+            if (!occId || (date === this.viewDate && !this.occurrenceId)) {
+                this.fillNote = 'Open this printable from its date to save.';
+                return;
+            }
             const draft = Object.assign({}, this.sundayDraft(date));
             if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
             try {
                 Typed.assertCountryImageWritable(draft.prayerCountryImage);
                 const content = Typed.normalise(Typed.fromDraft(draft));
-                await db.collection('services').doc(date).set({ typedContent: content }, { merge: true });
-                if (!ui.bundle) ui.bundle = { services: {} };
-                ui.bundle.services = ui.bundle.services || {};
-                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
+                const patch = Migrate.patchFromContent(content, this.bagFor(date));
+                const Store = window.EventsStore;
+                if (Store && Store.loadOccurrence) {
+                    const occ = await Store.loadOccurrence(db, occId);
+                    if (occ && occ.stored === false && Store.ensureOccurrenceDocument) {
+                        await Store.ensureOccurrenceDocument(db, occ);
+                    }
+                }
+                const ref = db.collection('event_occurrences').doc(occId);
+                const snap = await ref.get();
+                const prev = (snap && snap.exists && snap.data() && snap.data().printableInputs) || {};
+                const bag = Object.assign({}, prev[this.id] || {}, patch);
+                const next = Object.assign({}, prev);
+                next[this.id] = bag;
+                await ref.set({ printableInputs: next }, { merge: true });
+                if (date === this.viewDate) this.eventBag = Object.assign({}, this.eventBag, patch);
+                if (!ui.bundle) ui.bundle = {};
+                ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: bag });
+                if (date === this.viewDate) ui.bundle.eventInputs = this.eventBag;
                 this.fillNote = '';
             } catch (e) {
                 console.error(e);

@@ -665,18 +665,6 @@
             ],
         },
         {
-            // Resolve-only for unmigrated wires / typedContent read-through.
-            // Not offered in the drawer — use Fill-in library + query lists.
-            key: 'sunday_typed', region: 'Sunday', label: 'Sunday booklet text', shape: 'single', noDrawer: true, minLevel: 'viewer',
-            blurb: 'Legacy typed Sunday fields. Migrated printables use event fill-ins instead.',
-            params: [WHEN_PARAM],
-            fields: (typedCore() && typedCore().FIELDS) || [
-                { key: 'prayerNation', label: 'Prayer country', kind: 'text' },
-                { key: 'kidsLessonTitle', label: 'Mosaic Kids lesson', kind: 'text' },
-                { key: 'announcements', label: 'Announcements', kind: 'text' },
-            ],
-        },
-        {
             key: 'sunday_prayer_requests', region: 'Sunday', label: 'Pastoral prayer subjects', shape: 'list', minLevel: 'elder',
             blurb: 'Who is being prayed for that Sunday and what they asked the church to pray — the same subjects on the order of service. Elders and pastoral assistants only.',
             params: [WHEN_PARAM],
@@ -691,7 +679,7 @@
         },
         {
             key: 'sunday_announcements', region: 'Sunday', label: 'Announcements of a Sunday', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per announcement handed out that Sunday — typed announcements first, then printed Event announcements. The booklet text still joins them into one field.',
+            blurb: 'One row per announcement handed out that Sunday — the occurrence fill-in first, then printed Event announcements.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'date', label: 'Sunday', kind: 'date' },
@@ -790,8 +778,13 @@
         return SOURCES.find(s => s.key === key) || null;
     }
 
+    /** @param {any} field */
+    function specMinLevel(field) {
+        return field && field.minLevel;
+    }
+
     function visibleSpecs(list, level) {
-        return (list || []).filter(s => !s.minLevel || mayRead(level, s.minLevel));
+        return (list || []).filter(s => !specMinLevel(s) || mayRead(level, specMinLevel(s)));
     }
 
     // What one Permission Level may see: the sources at or below their rank,
@@ -802,7 +795,7 @@
         return SOURCES
             .filter(s => mayRead(level, s.minLevel))
             .map(s => Object.assign({}, s, {
-                fields: s.fields.filter(f => !f.minLevel || mayRead(level, f.minLevel)),
+                fields: s.fields.filter(f => !specMinLevel(f) || mayRead(level, specMinLevel(f))),
                 params: visibleSpecs(s.params, level),
                 filters: visibleSpecs(s.filters, level),
             }));
@@ -1403,43 +1396,46 @@
         return { rows: rows, warnings: warnings, date: date };
     }
 
-    function resolveSundayTyped(params, data, ctx) {
+    // Booklet text on the occurrence for this printable, keyed by Sunday.
+    // A missing date was not loaded. An empty bag was loaded and is empty.
+    const BOOKLET_ANNOUNCEMENTS = 'legacy_announcements';
+    const BOOKLET_KIDS_QUESTIONS = 'legacy_kidsQuestions';
+
+    function bookletBag(data, date) {
+        const byDate = data && data.bookletByDate;
+        if (!byDate || !Object.prototype.hasOwnProperty.call(byDate, date)) return null;
+        const bag = byDate[date];
+        return bag && typeof bag === 'object' ? bag : {};
+    }
+
+    function announcementsFromBag(bag) {
         const Typed = typedCore();
-        const p = Object.assign(defaultParams('sunday_typed'), params || {});
-        const date = resolveWhen(p.when, ctx.today);
-        const s = serviceAt(data, date);
-        const warnings = [];
-        if (!s) warnings.push('Nothing is planned yet for ' + formatDate(date) + '.');
-        const stored = Typed ? Typed.fromService(s) : {};
-        const Lines = linesCore();
-        const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
-        const lines = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
-        const content = lines.length
-            ? Object.assign({}, stored, { announcements: Lines.bookletAnnouncements(stored.announcements, lines) })
-            : stored;
-        const row = Typed ? Typed.toRow(content, date) : { _id: date, date: date };
-        row.date = formatDate(date);
-        if (s && Typed && Typed.isBlank(content)) {
-            warnings.push('No booklet text has been entered for ' + formatDate(date) + ' yet.');
-        }
-        return { rows: [row], warnings: warnings, date: date };
+        if (!bag || !Typed || !Object.prototype.hasOwnProperty.call(bag, BOOKLET_ANNOUNCEMENTS)) return [];
+        const text = bag[BOOKLET_ANNOUNCEMENTS];
+        if (text == null || String(text).trim() === '') return [];
+        return Typed.asAnnouncements(text);
+    }
+
+    function questionsFromBag(bag) {
+        const Typed = typedCore();
+        if (!bag || !Typed || !Object.prototype.hasOwnProperty.call(bag, BOOKLET_KIDS_QUESTIONS)) return [];
+        return Typed.asStringList(bag[BOOKLET_KIDS_QUESTIONS]);
     }
 
     // One row per announcement the handed-out guide would print that Sunday
-    // — typed first, then printed Event announcements. The booklet-text
-    // source still joins the same items into one field.
+    // — the occurrence fill-in first, then printed Event announcements.
     function resolveSundayAnnouncements(params, data, ctx) {
-        const Typed = typedCore();
         const Lines = linesCore();
         const p = Object.assign(defaultParams('sunday_announcements'), params || {});
         const date = resolveWhen(p.when, ctx.today);
         const service = serviceAt(data, date);
-        const typed = Typed ? Typed.fromService(service) : { announcements: [] };
+        const bag = bookletBag(data, date);
+        const typed = announcementsFromBag(bag);
         const events = (data.printedEventsBySunday && data.printedEventsBySunday[date]) || [];
         const printed = (Lines && events.length) ? Lines.linesForHandedOutGuide(date, events) : [];
         const announcements = Lines
-            ? Lines.bookletAnnouncements(typed.announcements, printed)
-            : (typed.announcements || []);
+            ? Lines.bookletAnnouncements(typed, printed)
+            : typed;
         const fitClass = announcementFitClass(announcements);
         const rows = announcements.map((item, i) => {
             const title = String((item && item.title) || '').trim();
@@ -1459,7 +1455,7 @@
         });
         const warnings = [];
         if (!rows.length) {
-            warnings.push(service
+            warnings.push(service || bag
                 ? 'No announcements have been entered for ' + formatDate(date, 'medium') + '.'
                 : 'Nothing is planned yet for ' + formatDate(date) + '.');
         }
@@ -1522,12 +1518,10 @@
     }
 
     function resolveSundayKidsQuestions(params, data, ctx) {
-        const Typed = typedCore();
         const p = Object.assign(defaultParams('sunday_kids_questions'), params || {});
         const date = resolveWhen(p.when, ctx.today);
-        const service = serviceAt(data, date);
-        const stored = Typed ? Typed.fromService(service) : { mosaicKids: { questions: [] } };
-        const questions = (stored.mosaicKids && stored.mosaicKids.questions) || [];
+        const bag = bookletBag(data, date);
+        const questions = questionsFromBag(bag);
         const rows = [];
         questions.forEach((question, i) => {
             const text = String(question || '').trim();
@@ -1536,7 +1530,7 @@
         });
         const warnings = [];
         if (!rows.length) {
-            warnings.push(service
+            warnings.push(bag
                 ? 'No Mosaic Kids questions for ' + formatDate(date) + '.'
                 : 'Nothing is planned yet for ' + formatDate(date) + '.');
         }
@@ -1778,7 +1772,6 @@
         sunday: resolveSunday,
         sunday_rows: resolveSundayRows,
         sunday_hymns: resolveSundayHymns,
-        sunday_typed: resolveSundayTyped,
         sunday_prayer_requests: resolveSundayPrayerRequests,
         sunday_announcements: resolveSundayAnnouncements,
         sunday_kids_questions: resolveSundayKidsQuestions,
@@ -1803,7 +1796,7 @@
         // A field above the viewer's level is not in their drawer, and it is
         // not in their rows either — a wire an editor made must not read it
         // out for a member on the view-only page.
-        const hidden = source.fields.filter(f => f.minLevel && !mayRead(c.level, f.minLevel)).map(f => f.key);
+        const hidden = source.fields.filter(f => specMinLevel(f) && !mayRead(c.level, specMinLevel(f))).map(f => f.key);
         if (hidden.length) {
             out.rows = out.rows.map(row => { const r = Object.assign({}, row); hidden.forEach(k => { delete r[k]; }); return r; });
         }
@@ -1821,9 +1814,12 @@
             case 'household_children': return { people: true, families: true, households: true };
             case 'sunday': case 'sunday_rows': return { services: [resolveWhen(p.when, t)], liturgy: true };
             case 'sunday_prayer_requests': return { services: [resolveWhen(p.when, t)], liturgy: true, prayerRequests: [resolveWhen(p.when, t)] };
-            case 'sunday_typed':
-            case 'sunday_announcements': return { services: [resolveWhen(p.when, t)], printedAnnouncements: [resolveWhen(p.when, t)] };
-            case 'sunday_kids_questions': return { services: [resolveWhen(p.when, t)] };
+            case 'sunday_announcements': return {
+                services: [resolveWhen(p.when, t)],
+                printedAnnouncements: [resolveWhen(p.when, t)],
+                bookletDates: [resolveWhen(p.when, t)],
+            };
+            case 'sunday_kids_questions': return { bookletDates: [resolveWhen(p.when, t)] };
             case 'sunday_hymns': return { services: [resolveWhen(p.when, t)], hymns: true, liturgy: true };
             case 'sundays': { const w = sundaysWindow(p.range, t); return { serviceRange: { from: w.from, to: w.to }, liturgy: true }; }
             case 'event_dates': {

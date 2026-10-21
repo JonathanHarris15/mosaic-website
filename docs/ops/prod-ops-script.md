@@ -60,3 +60,4 @@ gh workflow run "Prod ops script" --ref main \
 | `delete-legacy-oos-prayer-fields.js` | [MS-771 — delete legacy prayer top-level fields](./ms-771-legacy-oos-audit.md) (empty `args`; `commit=true` to apply) |
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
 | `diagnose-storage-fill-in-upload.js` | [Storage fill-in upload diagnostic](./ms-storage-fill-in-upload-diagnostic.md) (empty `args`; read-only — never use `commit=true`) |
+| `migrate-booklet-text-to-occurrences.js` | [MS-777 — booklet text onto occurrence fill-ins](./ms-777-booklet-fill-ins.md) (optional `--from` / `--to`; `commit=true` to apply; does not delete the old fields) |

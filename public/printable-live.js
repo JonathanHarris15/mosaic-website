@@ -24,10 +24,8 @@
     const Core = isNode ? require('./printable-core.js') : global.PrintableCore;
     const Data = isNode ? require('./printable-data-core.js') : global.PrintableDataCore;
     const Render = isNode ? require('./printable-render-core.js') : global.PrintableRenderCore;
-    const Migrate = isNode ? require('./printable-legacy-migrate-core.js') : global.PrintableLegacyMigrate;
     if (isNode) {
         require('./scripture-passage.js');
-        require('./sunday-typed-core.js');
     }
 
     function keyOf(source, params) {
@@ -38,24 +36,6 @@
     // still resolves catalog sources. Event fields need the module.
     function linkCore() {
         return (typeof global !== 'undefined' && global.PrintableLinkCore) || null;
-    }
-
-    // Migrated booklet fill: empty occurrence slot ← that Sunday's typedContent.
-    function legacyTypedFallback(fieldId, bundle, ctx) {
-        if (!Migrate || !Migrate.isLegacyFillId(fieldId)) return '';
-        const Typed = global.SundayTypedCore;
-        if (!Typed || !bundle || !bundle.services) return '';
-        const date = (ctx && ctx.viewDate) || (ctx && ctx.today) || '';
-        if (!date || !bundle.services[date]) {
-            // Fall back to this Sunday from the clock the resolver already has.
-            const whenDate = Data.resolveWhen({ mode: 'this' }, (ctx && ctx.today) || Data.toDateStr(new Date()));
-            const s = bundle.services[whenDate];
-            if (!s) return '';
-            const bag = Migrate.valuesFromTyped(Typed.fromService(s));
-            return bag[fieldId] || '';
-        }
-        const bag = Migrate.valuesFromTyped(Typed.fromService(bundle.services[date]));
-        return bag[fieldId] || '';
     }
 
     // Every source a project reads, as { source, params } pairs — one per
@@ -118,13 +98,28 @@
                 occurrenceId: (opts && opts.occurrenceId) || '',
             };
         }
+        if (needs.bookletDates && needs.bookletDates.length && project && project.id) {
+            needs.bookletInputs = {
+                printableId: project.id,
+                dates: needs.bookletDates.slice(),
+                date: clock,
+                occurrenceId: (opts && opts.occurrenceId) || '',
+            };
+        }
         return needs;
     }
 
     function mergeNeeds(a, b) {
         const DS = global.PrintableDataStore;
         if (DS && DS.mergeNeeds) return DS.mergeNeeds(a, b);
-        return Object.assign({}, a, b);
+        const out = Object.assign({}, a);
+        Object.keys(b || {}).forEach(k => {
+            const v = b[k];
+            if (k === 'services' || k === 'printedAnnouncements' || k === 'bookletDates') {
+                out[k] = Array.from(new Set((out[k] || []).concat(v || [])));
+            } else out[k] = v;
+        });
+        return out;
     }
 
     // Rows and values for one project against one bundle. Everything is
@@ -206,12 +201,7 @@
             if (bind.source === 'event_field') {
                 const input = eventInput(bind.field);
                 const name = input ? input.label : 'this field';
-                let v = eventBag()[bind.field];
-                // Migrated booklet fills: if the occurrence has nothing yet,
-                // read through that Sunday's typedContent so old weeks print.
-                if ((v == null || v === '') && legacyTypedFallback) {
-                    v = legacyTypedFallback(bind.field, bundle, c);
-                }
+                const v = eventBag()[bind.field];
                 if (v == null || v === '') {
                     return { ok: false, why: 'Nothing has been entered for ' + name + ' yet. Fill it in on the event.' };
                 }
