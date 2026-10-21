@@ -27,6 +27,7 @@ on:
           - delete-legacy-oos-prayer-fields.js
           - merge-duplicate-person.js
           - diagnose-storage-fill-in-upload.js
+          - access-diff.js
       args:
         description: Extra script flags (no shell; validated in Node)
         type: string
