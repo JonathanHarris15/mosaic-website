@@ -349,6 +349,24 @@ test('folio pad tool duplicates a page into a temporary stack until ×4 without 
     assert.equal(five.length, 5, 'source layout is unchanged');
     assert.equal(five[4].nodes[0].text, '5', 'source page number stays');
 
+    const restart = [0, 1, 2, 3, 4].map(i => ({
+        key: 'r' + i,
+        page: { id: 'r' + i, name: 'Sheet ' + (i + 1), nodes: [] },
+        nodes: [{
+            id: 'rn' + i,
+            tag: 'p',
+            text: String(i + 1),
+            pageNumber: { mirror: false, anchor: 'free', inset: 36, left: 40, top: 700, startHere: i === 2 },
+        }],
+    }));
+    const restamped = Export.restampFolioPageNumbers(Export.cloneEntriesForFolio(restart));
+    assert.deepEqual(restamped.map(e => e.nodes[0].text), ['', '', '1', '2', '3']);
+    assert.equal(restart[0].nodes[0].text, '1', 'the source stack is not restamped');
+    const shifted = Export.applyFolioPad(Export.cloneEntriesForFolio(restart), { kind: 'blank', afterIndex: -1 });
+    assert.equal(shifted.ok, true);
+    assert.deepEqual(shifted.entries.slice(1).map(e => e.nodes[0].text), ['', '', '1', '2', '3'],
+        'a blank in front moves the restart with the sheet');
+
     r = Export.applyFolioPad(stack, { kind: 'duplicate', sourceIndex: 4, afterIndex: 5 });
     assert.equal(r.ok, true);
     stack = r.entries;

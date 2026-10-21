@@ -181,6 +181,11 @@
                                     Mirror on the facing page
                                 </label>
                                 <p class="pe-hint">Off, it stays where you place it. On, every other page that carries this number shows it reflected across the middle of the page.</p>
+                                <label class="pe-check">
+                                    <input type="checkbox" :checked="selectedNode.pageNumber.startHere" @change="setPageNumber({ startHere: $event.target.checked })" />
+                                    Start numbering from here
+                                </label>
+                                <p class="pe-hint">The first sheet with this on shows 1. Sheets before it are blank. Later sheets count up. Only the earliest one counts.</p>
                                 <div class="pe-f"><span>Place</span></div>
                                 <div class="pe-place" role="group" aria-label="Place on the page">
                                     <template x-for="spot in pageNumberSpots" :key="spot.anchor">

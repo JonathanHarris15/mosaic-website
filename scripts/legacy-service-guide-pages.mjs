@@ -8,8 +8,8 @@
  * element on the page, not a data source.
  *
  * Hymn sheets are one sunday_hymns list split with from/to around pastoral
- * prayer and sermon notes (MS-743). Adjust to when a Sunday has more opening
- * sheet pages (a multi-page hymn before the prayer).
+ * prayer and sermon notes (MS-743). The range counts hymns, not sheets
+ * (MS-772): a multi-page hymn stays inside the range that holds its index.
  *
  * Run: node scripts/legacy-service-guide-pages.mjs
  * Prints JSON { inputs, pages } to stdout after validating with PrintableCore.

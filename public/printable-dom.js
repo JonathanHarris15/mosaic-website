@@ -234,6 +234,7 @@
         const content = pageNumbersAside(page.nodes, numbers);
         const placeOpts = {
             pageIndex: o.pageIndex == null ? 0 : o.pageIndex,
+            numberOrigin: o.numberOrigin == null ? 0 : o.numberOrigin,
             widthPx: (template && template.widthPx) || o.widthPx,
             heightPx: (template && template.heightPx) || o.heightPx,
         };
@@ -303,6 +304,7 @@
         // this file parses, and the view page loads this file first.
         if (typeof PrintableExportCore === 'undefined' || typeof PrintableExportCore.folioSpreads !== 'function') return [];
         const spreads = PrintableExportCore.folioSpreads(entries || []);
+        const numberOrigin = Core.numberOriginFromEntries(entries || []);
         layer.innerHTML = '';
         const style = document.createElement('style');
         style.textContent = PrintableExportCore.folioPrintCss(template, Core.printScale(template));
@@ -326,7 +328,11 @@
                 };
             }
             const idx = pageIndex == null ? (entry && entry.pageIndex) : pageIndex;
-            slot.appendChild(renderPage(page, template, { scopeId: page.id, pageIndex: idx == null ? 0 : idx }));
+            slot.appendChild(renderPage(page, template, {
+                scopeId: page.id,
+                pageIndex: idx == null ? 0 : idx,
+                numberOrigin: numberOrigin,
+            }));
             return slot;
         };
         spreads.forEach(spread => {
@@ -347,6 +353,7 @@
         const Ex = typeof PrintableExportCore !== 'undefined' ? PrintableExportCore : null;
         const t = opts.template;
         const entries = Array.isArray(opts.entries) ? opts.entries : [];
+        const numberOrigin = Core.numberOriginFromEntries(entries);
         const brushIndex = opts.brushIndex;
         const needCount = Number(opts.needCount) || 0;
         const thumbW = opts.thumbWidth || 132;
@@ -438,7 +445,12 @@
                 const page = entry && entry.page
                     ? Object.assign({}, entry.page, { nodes: entry.nodes || entry.page.nodes || [] })
                     : { id: 'folio-pad-' + i, nodes: [], margins: { top: 0, right: 0, bottom: 0, left: 0 }, style: { 'background-color': '#ffffff' } };
-                const mini = renderPage(page, t, { editing: false, scopeId: page.id || ('pad-' + i), pageIndex: entry && entry.pageIndex != null ? entry.pageIndex : i });
+                const mini = renderPage(page, t, {
+                    editing: false,
+                    scopeId: page.id || ('pad-' + i),
+                    pageIndex: entry && entry.pageIndex != null ? entry.pageIndex : i,
+                    numberOrigin: numberOrigin,
+                });
                 mini.style.width = (t.widthPx || 0) + 'px';
                 mini.style.height = (t.heightPx || 0) + 'px';
                 inner.appendChild(mini);

@@ -331,12 +331,17 @@
         try {
             const orientation = t.widthIn > t.heightIn ? 'landscape' : 'portrait';
             const doc = new global.jspdf.jsPDF({ unit: 'in', format: [t.widthIn, t.heightIn], orientation: orientation, compress: true });
+            const Core = global.PrintableCore;
+            const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
+                ? Core.numberOriginFromEntries(pages)
+                : 0;
             for (let i = 0; i < pages.length; i++) {
                 const entry = pages[i];
                 host.innerHTML = '';
                 const page = Dom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
                     scopeId: entry.page.id,
                     pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                    numberOrigin: numberOrigin,
                 });
                 host.appendChild(page);
                 await waitForImages(page);
@@ -370,6 +375,10 @@
         const sheet = Export.folioSheet(t);
         const spreads = Export.folioSpreads(entries || []);
         if (!spreads.length) throw new Error('not laid out');
+        const Core = global.PrintableCore;
+        const numberOrigin = Core && typeof Core.numberOriginFromEntries === 'function'
+            ? Core.numberOriginFromEntries(entries || [])
+            : 0;
         const sheetWpx = t.widthPx * 2;
         const sheetHpx = t.heightPx;
         const host = document.createElement('div');
@@ -400,6 +409,7 @@
                     leaf.appendChild(Dom.renderPage(page, t, {
                         scopeId: page.id,
                         pageIndex: idx == null ? 0 : idx,
+                        numberOrigin: numberOrigin,
                     }));
                     sheetEl.appendChild(leaf);
                 });

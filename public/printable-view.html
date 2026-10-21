@@ -572,14 +572,26 @@
             text-transform: inherit;
             color: inherit;
             white-space: pre-wrap;
-            overflow-wrap: normal;
+            overflow-wrap: break-word;
             word-break: normal;
             field-sizing: content;
             caret-color: currentColor;
         }
-        textarea.pv-fill.pv-fill--text::placeholder {
+        /* An empty blank is one line: a long name clips with an ellipsis.
+           A value leaves :placeholder-shown, so it wraps and the box grows. */
+        textarea.pv-fill.pv-fill--text:placeholder-shown,
+        input.pv-fill:placeholder-shown {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        textarea.pv-fill.pv-fill--text::placeholder,
+        input.pv-fill::placeholder {
             color: inherit;
             opacity: 0.5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .pv-fill-extra .pv-fill {
             min-width: 8em;

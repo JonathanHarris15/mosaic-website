@@ -263,6 +263,7 @@ test('a Sunday in the query builder walks Service then the liturgy order; fill-i
     assert.doesNotMatch(general, /insert_page_number/, 'the page number is not a data chip');
     assert.match(html, /addElement\('page-number'\)/, 'a page number is added like a box or text');
     assert.match(html, /Mirror on the facing page/);
+    assert.match(html, /Start numbering from here/);
     assert.match(html, /class="pe-place"/);
     assert.match(general, /onAssetChipDragStart/);
     assert.match(js, /sundayDrawerFields\(Data,[\s\S]*\{[\s\S]*liturgy/,

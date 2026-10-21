@@ -313,6 +313,7 @@ function printableView() {
                 const value = this.valueForSlot(slot);
                 return Object.assign({}, slot, { value: value == null ? '' : String(value) });
             }) : null;
+            const numberOrigin = PrintableCore.numberOriginFromEntries(this.entries);
             this.entries.forEach(entry => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-sheet';
@@ -322,6 +323,7 @@ function printableView() {
                     scopeId: entry.page.id,
                     fillFor: fillFor,
                     pageIndex: entry.pageIndex,
+                    numberOrigin: numberOrigin,
                 });
                 page.style.transform = 'scale(' + this.zoom + ')';
                 page.style.transformOrigin = '0 0';
@@ -948,12 +950,15 @@ function printableView() {
                 + ' .pv-print-sheet { width: ' + t.widthIn + 'in; height: ' + t.heightIn + 'in; overflow: hidden; page-break-after: always; break-after: page; position: relative; }'
                 + ' .pv-print-sheet > .pr-page { transform: scale(' + scale + '); transform-origin: 0 0; }';
             layer.appendChild(style);
-            this.printEntries().forEach((entry, i) => {
+            const printed = this.printEntries();
+            const numberOrigin = PrintableCore.numberOriginFromEntries(printed);
+            printed.forEach((entry, i) => {
                 const sheet = document.createElement('div');
                 sheet.className = 'pv-print-sheet';
                 sheet.appendChild(PrintableDom.renderPage(Object.assign({}, entry.page, { nodes: entry.nodes }), t, {
                     scopeId: entry.page.id,
                     pageIndex: entry.pageIndex == null ? i : entry.pageIndex,
+                    numberOrigin: numberOrigin,
                 }));
                 layer.appendChild(sheet);
             });

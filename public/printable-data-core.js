@@ -638,7 +638,7 @@
         },
         {
             key: 'sunday_hymns', region: 'Sunday', label: 'Hymns of a Sunday', shape: 'list', minLevel: 'viewer',
-            blurb: 'One row per sheet-music page, in service order. A hymn with three pages is three rows. Missing images stay blank — nothing is invented.',
+            blurb: 'One row per sheet-music page, in service order. Every page of a hymn shares that hymn\'s index, so a range keeps the hymn together. A hymn with three pages is three rows and one index. Missing images stay blank — nothing is invented.',
             params: [WHEN_PARAM],
             fields: [
                 { key: 'name', label: 'Hymn name', kind: 'text' },
@@ -1350,6 +1350,7 @@
         const removed = Array.isArray(s.removedHymns) ? s.removedHymns : [];
         const rows = [];
         const warnings = [];
+        let hymnIndex = 0;
         Liturgy.songIdsOf(Liturgy.orderFor(s, cat), cat).forEach(slot => {
             if (p.slot && slot !== p.slot) return;
             if (removed.indexOf(slot) !== -1) return;
@@ -1360,8 +1361,11 @@
             const name = (hymn && hymn.hymn_name) || h.name;
             if (!hymn) warnings.push('"' + h.name + '" is not in the hymn book, so it has no sheet music.');
             else if (!pages.length) warnings.push('"' + name + '" has no sheet-music pages.');
-            // One row per real page. A hymn with nothing to show still gets
-            // one blank row so the slot is not silently dropped.
+            // One row per real page, one index per hymn. A hymn with nothing
+            // to show still gets one blank row so the slot is not dropped.
+            // The index is the hymn's place, shared by every sheet, so a
+            // from/to range cannot take page two and leave page one behind.
+            hymnIndex += 1;
             const images = pages.length ? pages : [''];
             const credit = (hymn && hymn.attribution) || '';
             images.forEach((image, i) => {
@@ -1381,7 +1385,7 @@
                     sheetTitle: i === 0 ? name : '',
                     sheetCredit: last ? credit : '',
                     sheetFooter: last ? credit : (images.length > 1 ? '(next page)' : ''),
-                    number: rows.length + 1,
+                    number: hymnIndex,
                 });
             });
         });

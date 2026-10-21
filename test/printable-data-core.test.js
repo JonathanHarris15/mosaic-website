@@ -605,6 +605,8 @@ test('the hymns of a Sunday return every sheet-music page, in slot then page ord
     assert.deepEqual(r.rows.map(x => x.image), ['ag1.png', 'ag2.png', '']);
     assert.deepEqual(r.rows.map(x => x.page), [1, 2, 1]);
     assert.equal(r.rows[0].pageCount, 2);
+    assert.deepEqual(r.rows.map(x => x.number), [1, 1, 2], 'both sheets of a hymn share its index');
+    assert.equal(r.rows[2].number, 2, 'the next hymn is not pushed back by the extra sheet');
     assert.equal(r.rows[0].attribution, 'Newton');
     assert.equal(r.rows[0].sheetTitle, 'Amazing Grace');
     assert.equal(r.rows[1].sheetTitle, '');
@@ -625,7 +627,7 @@ test('the hymns of a Sunday can be kept to one hymn, so its pages can sit on a p
     assert.deepEqual(spec.options.map(o => o.value), [''].concat(Data.HYMN_SLOTS));
     const prep = Data.resolve('sunday_hymns', { slot: 'preparatoryHymn' }, SUNDAYS(), { today: TODAY });
     assert.deepEqual(prep.rows.map(x => x.image), ['ag1.png', 'ag2.png']);
-    assert.deepEqual(prep.rows.map(x => x.number), [1, 2]);
+    assert.deepEqual(prep.rows.map(x => x.number), [1, 1], 'a hymn kept to itself is still one index');
     assert.deepEqual(prep.warnings, [], 'another hymn\'s missing music is not this list\'s warning');
     const dropped = Data.resolve('sunday_hymns', { slot: 'hymnEnd2' }, SUNDAYS(), { today: TODAY });
     assert.equal(dropped.rows.length, 0, 'a hymn the Sunday has dropped has no pages');

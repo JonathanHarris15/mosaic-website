@@ -319,6 +319,39 @@ test('a page number element shows which sheet it is on', () => {
     assert.equal(Core.kindOf(pages[0].nodes[0]), 'page-number');
 });
 
+test('Start numbering from here leaves the sheets before it blank and counts up', () => {
+    const folio = (n, start) => ({
+        id: 'n' + n,
+        tag: 'p',
+        text: '',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36, left: 36, top: 36, startHere: start },
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3, 4].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 3)],
+        })),
+    });
+    const pages = Live.layoutPages(p, null, null);
+    assert.deepEqual(pages.map(e => e.nodes[0].text), ['', '', '1', '2']);
+    assert.equal(p.pages[0].nodes[0].text, '', 'the stored page is not restamped');
+    assert.equal(p.pages[2].nodes[0].text, '');
+    assert.equal(p.pages[2].nodes[0].pageNumber.startHere, true);
+
+    const again = Core.buildPrintable({
+        name: 'Guide',
+        template: { paper: 'letter', orientation: 'portrait', dpi: 96 },
+        pages: [1, 2, 3].map(n => ({
+            id: 'pg' + n,
+            nodes: [folio(n, n === 2 || n === 3)],
+        })),
+    });
+    const both = Live.layoutPages(again, null, null);
+    assert.deepEqual(both.map(e => e.nodes[0].text), ['', '1', '2'], 'a later restart does not start over');
+});
+
 test('a list that spills numbers each physical sheet, not the stored page again', () => {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const p = Core.buildPrintable({
@@ -466,4 +499,61 @@ test('a field filled on the event reads that occurrence, and a list reads its ro
     assert.equal(rows.length, 2);
     assert.equal(rows[1].name, 'Lin');
     assert.equal(res.sourceWarnings().length, 0);
+});
+
+test('a multi-page hymn is one index: both sheets stay in its range, and the run moves as one', () => {
+    const t = Core.buildTemplate({ paper: 'half_letter', dpi: 96 });
+    const hymnPage = (id, from, to) => Core.buildPage(t, {
+        id: id,
+        nodes: [{
+            id: id + '-card', tag: 'div',
+            repeat: {
+                source: 'sunday_hymns',
+                params: { when: { mode: 'this' } },
+                layout: { maxPerPage: 1 },
+                from: from, to: to,
+                overflow: 'new-page',
+                omitWhenEmpty: true,
+            },
+            children: [
+                { id: id + '-name', tag: 'p', text: '', bind: { text: { scope: 'item', field: 'name' } } },
+            ],
+        }],
+    });
+    const p = Core.buildPrintable({
+        name: 'Guide',
+        template: t,
+        pages: [hymnPage('before', 1, 1), hymnPage('after', 2, 0)],
+    });
+    const bundle = {
+        services: {
+            '2026-09-06': {
+                liturgy: {
+                    preparatoryHymn: { id: 'h1', name: 'Amazing Grace' },
+                    hymn1: { id: null, name: 'A Literal Hymn' },
+                },
+            },
+        },
+        hymns: {
+            h1: { hymn_name: 'Amazing Grace', versions: [{ pages: ['ag1.png', 'ag2.png'] }] },
+        },
+    };
+    const res = Live.resolver(p, bundle, { today: '2026-09-03', level: 'editor' });
+    const before = Core.findNode(p.pages[0], 'before-card');
+    const after = Core.findNode(p.pages[1], 'after-card');
+    assert.deepEqual(res.rowsFor(before).map(r => [r.name, r.number, r.page]), [
+        ['Amazing Grace', 1, 1],
+        ['Amazing Grace', 1, 2],
+    ]);
+    assert.deepEqual(res.rowsFor(after).map(r => r.name), ['A Literal Hymn']);
+    const laid = Live.layoutPages(p, res, true, { fitsOn: () => true });
+    assert.equal(laid.length, 3, 'two sheets for the first hymn, then the next hymn');
+    assert.equal(laid[0].originId, 'before');
+    assert.equal(laid[1].originId, 'before');
+    assert.equal(laid[1].continuation, 1);
+    assert.equal(laid[2].page.id, 'after');
+    const pages = laid.map(entry => entry.page);
+    assert.equal(Core.canInsertAfter(pages, 0), false, 'nothing sits between the hymn\'s sheets');
+    const moved = Core.movePageRun(pages, pages[0].id, 1);
+    assert.deepEqual(moved.map(pg => pg.id), [pages[2].id, pages[0].id, pages[1].id]);
 });
