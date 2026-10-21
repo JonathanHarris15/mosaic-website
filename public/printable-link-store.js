@@ -8,6 +8,8 @@
 (function (global) {
     'use strict';
 
+    const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
     function typedCore() {
         return global.SundayTypedCore || null;
     }
@@ -16,26 +18,40 @@
         return global.ImageIntake || null;
     }
 
+    // Same acceptance as printable-editor.js: HEIC, extension-only types, and
+    // application/octet-stream camera files are photos; a strict image/* MIME
+    // gate alone rejects them before ImageIntake can convert or compress.
+    function fileAcceptError(file) {
+        if (!file) return 'Choose an image.';
+        const intake = intakeLib();
+        if (intake && intake.isCompressiblePhoto(file)) return '';
+        if (file.type && /^image\//.test(file.type)) return '';
+        return 'Choose an image.';
+    }
+
+    function uploadCapBytes() {
+        const Typed = typedCore();
+        const cap = (Typed && Typed.MAX_UPLOAD_BYTES) || MAX_UPLOAD_BYTES;
+        return cap - 1;
+    }
+
     async function uploadImage(file, path) {
-        if (!file) return { url: '', error: 'Choose an image.' };
-        if (!file.type || String(file.type).indexOf('image/') !== 0) {
-            return { url: '', error: 'Choose an image.' };
-        }
-        if (file.size > 8 * 1024 * 1024) {
-            return { url: '', error: 'That image is too large to upload (max 8 MB).' };
-        }
+        const acceptErr = fileAcceptError(file);
+        if (acceptErr) return { url: '', error: acceptErr };
         if (!path || typeof firebase === 'undefined' || !firebase.storage) {
             return { url: '', error: 'Image upload is not available.' };
         }
+        const maxBytes = uploadCapBytes();
         let upload = file;
-        const Typed = typedCore();
         const intake = intakeLib();
-        if (Typed && Typed.fileNeedsPrepare && Typed.fileNeedsPrepare(file) && intake) {
+        if (intake && intake.needsWork(file, maxBytes)) {
             try {
-                upload = await intake.prepare(file, { maxBytes: (Typed.MAX_UPLOAD_BYTES || 8000000) - 1 });
+                upload = await intake.prepare(file, { maxBytes: maxBytes });
             } catch (e) {
                 return { url: '', error: (e && e.message) || 'Could not read that image.' };
             }
+        } else if (file.size > maxBytes) {
+            return { url: '', error: 'That image is too large to upload (max 8 MB).' };
         }
         try {
             const ref = firebase.storage().ref(path);
@@ -48,7 +64,7 @@
         }
     }
 
-    const PrintableLinkStore = { uploadImage };
+    const PrintableLinkStore = { uploadImage, fileAcceptError, uploadCapBytes };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableLinkStore;
