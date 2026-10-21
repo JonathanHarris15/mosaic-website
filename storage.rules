@@ -258,16 +258,16 @@ service firebase.storage {
       allow delete: if false;
     }
 
-    // Pictures placed on a Printable (MS-394): a logo, a cover photo. Like a
-    // Directory Photo (ADR-0029) and unlike an Event Attachment, the editor
-    // keeps the getDownloadURL() token URL on the element, so the picture is
-    // readable by anyone holding that URL — it is decoration on a page, and a
-    // Printable holds nothing a Person record does not. Written by an editor,
-    // as an image, under 8MB. No client deletes; a picture an element no
-    // longer points at is inert.
+    // Pictures placed on a Printable (MS-394): a logo, a cover photo, or a
+    // fill-in image typed on a linked date. Like a Directory Photo (ADR-0029)
+    // the client keeps getDownloadURL() on the element. Write restates who may
+    // fill in printables in the app (AccessCore.writesAsEditor / Firestore
+    // printables.edit and services.builder.edit) — not isEditorAccount() alone,
+    // which MS-769 left behind when the catch-all went away.
     match /printable_assets/{printableId}/{fileId} {
       allow read: if isSignedIn();
-      allow write: if isEditorAccount()
+      allow write: if (editsWithAccount('printables.edit')
+          || editsWithAccount('services.builder.edit'))
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;
@@ -275,12 +275,11 @@ service firebase.storage {
 
     // Country map on a Sunday's typed booklet text (MS-591). The Sunday
     // record keeps an https URL, not the bytes — Firestore cannot hold
-    // an unbounded data URL. Same door as printable_assets: an editor
-    // writes an image under 8MB; getDownloadURL() is the token the
-    // Printable binds. No client deletes. Nothing else is widened.
+    // an unbounded data URL. Write matches services/{date} (services.builder.edit).
     match /sunday_typed/{dateId}/country_map/{fileId} {
       allow read: if isSignedIn();
-      allow write: if isEditorAccount()
+      allow write: if (editsWithAccount('services.builder.edit')
+          || editsWithAccount('printables.edit'))
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;

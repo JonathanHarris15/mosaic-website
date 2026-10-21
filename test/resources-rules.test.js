@@ -205,6 +205,16 @@ test('the catch-all is gone so the resources block binds', () => {
     assert.match(block, /allow read: if isMemberAccount\(\);/);
 });
 
+test('printable_assets write uses permission keys, not isEditorAccount alone', () => {
+    const m = /match \/printable_assets\/\{printableId\}\/\{fileId\}\s*\{([\s\S]*?)\n    \}/
+        .exec(storageRules);
+    assert.ok(m, 'printable_assets Storage rule missing');
+    const block = m[1];
+    assert.match(block, /editsWithAccount\('printables\.edit'\)/);
+    assert.match(block, /editsWithAccount\('services\.builder\.edit'\)/);
+    assert.doesNotMatch(block, /allow write: if isEditorAccount\(\)/);
+});
+
 // ── The half of the boundary that is not a rule ──────────────────────────────
 
 const codeOnly = (file) => fs.readFileSync(path.join(root, 'public', file), 'utf8')
