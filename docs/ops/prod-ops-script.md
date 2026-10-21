@@ -59,3 +59,4 @@ gh workflow run "Prod ops script" --ref main \
 | `migrate-legacy-oos-prayer-carriers.js` | [MS-771 — OOS legacy prayer leaders → `carriedBy`](./ms-771-legacy-oos-audit.md) (optional `--from` / `--to`; `commit=true` to apply) |
 | `delete-legacy-oos-prayer-fields.js` | [MS-771 — delete legacy prayer top-level fields](./ms-771-legacy-oos-audit.md) (empty `args`; `commit=true` to apply) |
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
+| `diagnose-storage-fill-in-upload.js` | [Storage fill-in upload diagnostic](./ms-storage-fill-in-upload-diagnostic.md) (empty `args`; read-only — never use `commit=true`) |
