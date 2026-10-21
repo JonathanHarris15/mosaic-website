@@ -1,7 +1,8 @@
 name: PR CI
 
-# The two commands agents already run: `npm test` and `npm run lint --prefix functions`.
-# Runs on pull requests targeting `main` or `ghost-main` (design sandbox).
+# Unit tests, functions lint, security-rules compile, and the quality ratchet
+# (tsc, eslint, knip). The ratchet fails when a count in quality-baseline.json
+# goes up. Runs on pull requests targeting `main` or `ghost-main`.
 #
 # node-version must be the runtime the functions actually ship on, which is
 # functions/package.json `engines.node` (MS-683 moved both to 22). Testing on a
@@ -82,3 +83,66 @@ jobs:
 
       - name: Compile firestore.rules and storage.rules
         run: npm run check:rules
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Fetch the base branch ceiling
+        run: git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Typecheck
+        run: node scripts/quality-ratchet.mjs --only tsc --baseline-ref origin/${{ github.base_ref }}
+
+  lint-correctness:
+    name: Lint correctness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Fetch the base branch ceiling
+        run: git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Lint correctness
+        run: node scripts/quality-ratchet.mjs --only eslint --baseline-ref origin/${{ github.base_ref }}
+
+  dead-code:
+    name: Dead code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Fetch the base branch ceiling
+        run: git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Dead code
+        run: node scripts/quality-ratchet.mjs --only knipFiles --only knipExports --only knipDependencies --only knipUnlisted --baseline-ref origin/${{ github.base_ref }}

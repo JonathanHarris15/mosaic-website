@@ -1,0 +1,46 @@
+// strict + checkJs is the gate. The repo is JavaScript, so JSDoc is how a
+// new binding gets a type; an untyped parameter is TS7006 under noImplicitAny,
+// which is part of strict. That is why the tsc count in quality-baseline.json
+// is large, and why a new untyped parameter fails the ratchet.
+//
+// noUncheckedIndexedAccess and exactOptionalPropertyTypes are off. They are
+// stricter than strict, and on unannotated JS they flag every index and
+// optional property on top of the strict errors already counted.
+// noUnusedLocals and noUnusedParameters are off because eslint owns unused
+// bindings (npm run check:eslint). Counting them here too would make one
+// leftover name fail two gates.
+//
+// functions/shared is not an include root. tsc still checks a copy when a
+// function requires it. Fix the authored file in public/ and run
+// node scripts/sync-shared-to-functions.js. The copy moves with it.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowUmdGlobalAccess": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "maxNodeModuleJsDepth": 0
+  },
+  "include": [
+    "public/**/*.js",
+    "functions/**/*.js",
+    "scripts/**/*.js",
+    "scripts/**/*.mjs",
+    "test/**/*.js",
+    "quality/browser-globals.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "functions/node_modules",
+    "functions/shared",
+    "public/vendor",
+    "build"
+  ]
+}
