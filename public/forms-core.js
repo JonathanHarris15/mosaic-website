@@ -14,11 +14,15 @@
 //             chronological — hence the stable shuffle below.
 //   ADR-0032  A page editor saves itself and keeps its Save button.
 //
-// Deliberately self-contained, like every other *-core module here: requires
-// nothing, mutates nothing, returns new objects, and knows nothing about
-// Firestore. Loaded as a classic <script> (window.FormsCore) and exported for
-// Node — the Cloud Function gets its copy through scripts/sync-shared-to-
-// functions.js, because functions/ deploys as its own bundle.
+// Self-contained except for one call: a Directory Person picker's member
+// scope asks `ShepherdingCore.carriesMemberTag` (the directory's own member
+// test) the first time a picker is scoped. In the browser that object is the
+// script tag; under Node it is `./shepherding-core.js`. Everything else
+// requires nothing, mutates nothing, returns new objects, and knows nothing
+// about Firestore. Loaded as a classic <script> (window.FormsCore) and
+// exported for Node — the Cloud Function gets its copy through
+// scripts/sync-shared-to-functions.js, because functions/ deploys as its own
+// bundle.
 
 (function (global) {
     'use strict';
@@ -200,6 +204,63 @@
         // than in an invisible one.
         if (scope === 'tag' && !tagId) scope = DEFAULT_PERSON_SCOPE;
         return { scope: scope, tagId: scope === 'tag' ? tagId : null };
+    }
+
+    // Membership is asked of the projection, the same test the directory uses
+    // (ADR-0012, ADR-0026). Node caches the module, so a directory walk does
+    // not reload it.
+    /**
+     * @param {any} person
+     * @return {boolean}
+     */
+    function carriesMember(person) {
+        const core = (global && global.ShepherdingCore) || require('./shepherding-core.js');
+        return core.carriesMemberTag(person && person.membership) === true;
+    }
+
+    /**
+     * Does this person belong in this picker?
+     *
+     * A member is someone `carriesMemberTag` accepts (stage Member or Moving
+     * Membership, and not Inactive). A tag scope is the tags they carry.
+     * `isMember`, `membershipStage`, and `tagIds` are not fields on a Person
+     * and are not read here.
+     *
+     * @param {any} q A person question.
+     * @param {any} person `{membership, tags}` from the Person document.
+     * @return {boolean}
+     */
+    function personInScope(q, person) {
+        const scope = (q && q.people && q.people.scope) || 'everyone';
+        const tagId = q && q.people && q.people.tagId;
+        if (scope === 'member') return carriesMember(person);
+        if (scope === 'non_member') return !carriesMember(person);
+        if (scope === 'tag') {
+            const tags = person && Array.isArray(person.tags) ? person.tags : [];
+            return tags.indexOf(tagId) !== -1;
+        }
+        return true;
+    }
+
+    /**
+     * The directory row a picker scopes. Built only from the fields a Person
+     * document stores: `name`, `membership`, `tags`.
+     *
+     * @param {string} id
+     * @param {any} data The Person document.
+     */
+    function directoryPerson(id, data) {
+        const d = data || {};
+        const membership = d.membership && typeof d.membership === 'object' && !Array.isArray(d.membership)
+            ? d.membership
+            : null;
+        const tags = Array.isArray(d.tags) ? d.tags.slice() : [];
+        return {
+            id: id,
+            name: d.name || 'Unnamed',
+            membership: membership,
+            tags: tags,
+        };
     }
 
     // ⚠ WHICH TAGS MAY BE A SCOPE AT ALL.
@@ -1205,6 +1266,8 @@
         PERSON_SCOPES,
         DEFAULT_PERSON_SCOPE,
         buildPeopleScope,
+        personInScope,
+        directoryPerson,
         offerableTags,
         mayBePublic,
         MAX_UPLOAD_BYTES,

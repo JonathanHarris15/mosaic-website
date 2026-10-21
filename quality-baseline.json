@@ -1,9 +1,9 @@
 {
   "note": "Ratchet ceiling. CI fails when a count is above the number here. Lower a number by editing it down to the new count. Do not raise one.",
-  "tsc": 33393,
-  "eslint": 142,
+  "tsc": 33363,
+  "eslint": 140,
   "knipFiles": 0,
-  "knipExports": 406,
+  "knipExports": 405,
   "knipDependencies": 0,
   "knipUnlisted": 0
 }
