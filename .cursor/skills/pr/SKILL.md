@@ -172,3 +172,5 @@ The blast radius is the potential impact or scope of the changes introduced by t
 ## Mosaic overlay
 
 Use [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md): Jira `MS-*`, AC, test evidence, **Smoke test** (jev — [jev-smoke-test](../jev-smoke-test/SKILL.md)) for user-visible changes, risk, preview URL. Put irreversible escalations under **`## Open decisions`** at the top. Coordinating agent merges on green CI; do not instruct waiting for Jonathan to merge.
+
+Before that merge, a new subagent that did not write the commits runs [code-review](../code-review/SKILL.md) and posts a pull request comment. The first line is `Adversarial review: PASS` or `Adversarial review: FAIL`. The second line is the full head sha. Merge once CI is green and that PASS sha is the pull request head.

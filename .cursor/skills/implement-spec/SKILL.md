@@ -33,7 +33,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
-7. Once all tickets are complete, call the Skill tool with `code-review` on the integration branch. Fix all issues raised by the code review in a single **implementer subagent**.
+7. Once all tickets are complete, dispatch a **new subagent** that did not implement a ticket. It follows [`code-review`](../code-review/SKILL.md), including the adversarial review, and posts `Adversarial review: PASS` or `Adversarial review: FAIL` on the pull request with the head sha. An **implementer subagent** fixes a FAIL. Then another new subagent reviews the new head. The PASS sha matches the head you mark ready.
 
 8. If a draft PR exists, mark it ready for review. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 
@@ -41,4 +41,4 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 ## Mosaic overlay
 
-Read [MOSAIC-CONVENTIONS.md](../MOSAIC-CONVENTIONS.md). Jira via Atlassian MCP; merge on green CI; leave issues **`In Review`** (never `Done`); user-visible PRs need jev smoke test; no `firebase deploy` from the VM.
+Read [MOSAIC-CONVENTIONS.md](../MOSAIC-CONVENTIONS.md). Jira via Atlassian MCP; merge on green CI after `Adversarial review: PASS`; leave issues **`In Review`** (never `Done`); user-visible PRs need jev smoke test; no `firebase deploy` from the VM.
