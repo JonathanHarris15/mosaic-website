@@ -9,7 +9,7 @@ Engineering + productivity skills live in `.cursor/skills/` (upstream [mattpococ
 
 ## Workflow
 
-`grill-with-docs` → `to-spec` (or `plan-ticket` / `to-prd`) → `to-tickets` / `to-issues` → `implement` (+ `tdd` / `diagnosing-bugs`) → `pr` / `code-review` → **jev smoke test** on user-visible changes.
+`grill-with-docs` → `to-spec` (or `plan-ticket` / `to-prd`) → `to-tickets` / `to-issues` → `implement` (+ `tdd` / `diagnosing-bugs`) → `pr` / `code-review` → adversarial review (fresh subagent, `Adversarial review: PASS`, [code-review](../skills/code-review/SKILL.md)) → **jev smoke test** on user-visible changes. Merge on green CI after that PASS.
 
 UI: [ui-prototype-first](./ui-prototype-first.mdc). Deploy: never `firebase deploy` from the agent VM ([AGENTS.md](../../AGENTS.md)).
 
@@ -19,6 +19,6 @@ During grilling / spec / planning, **answer routine product/design questions you
 
 ## Jira
 
-Project `MS`, Atlassian MCP. Agents **never** transition tickets to **Done**; stop at **In Review**. Merge PRs on **green CI** (do not wait for Jonathan to merge).
+Project `MS`, Atlassian MCP. Agents **never** transition tickets to **Done**; stop at **In Review**. Merge PRs on **green CI** after the pull request comment `Adversarial review: PASS` for that head (do not wait for Jonathan to merge).
 
 Tracker detail: [docs/agents/issue-tracker.md](../../docs/agents/issue-tracker.md).

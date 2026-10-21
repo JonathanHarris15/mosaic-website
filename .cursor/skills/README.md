@@ -7,7 +7,7 @@ Upstream: [mattpocock/skills](https://github.com/mattpocock/skills) @ pin in [SO
 ## Target workflow
 
 ```
-grill-with-docs → to-spec (or plan-ticket → to-prd) → to-tickets / to-issues → implement (+ tdd / diagnosing-bugs) → pr / code-review → jev smoke test (user-visible)
+grill-with-docs → to-spec (or plan-ticket → to-prd) → to-tickets / to-issues → implement (+ tdd / diagnosing-bugs) → pr / code-review → adversarial review (fresh subagent, `Adversarial review: PASS`) → jev smoke test (user-visible) → merge on green CI
 ```
 
 Prototype-first UI: [ui-prototype-first](../rules/ui-prototype-first.mdc). Agent workflow rule: [mosaic-skills](../rules/mosaic-skills.mdc).
@@ -32,7 +32,7 @@ Prototype-first UI: [ui-prototype-first](../rules/ui-prototype-first.mdc). Agent
 | `domain-modeling` | CONTEXT.md + ADRs |
 | `prototype` | Throwaway logic/UI specimen (UI superseded by prototype-first rule) |
 | `research` | Factual unknowns |
-| `code-review` | Standards + Spec review (`review` = alias) |
+| `code-review` | Standards + Spec, plus the pre-merge adversarial review (`review` = alias) |
 | `pr` | PR body shape |
 | `retro` | Environment retrospective |
 | `wayfinder` | Map + frontier of tickets |
