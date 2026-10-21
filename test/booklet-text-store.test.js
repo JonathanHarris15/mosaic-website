@@ -170,3 +170,96 @@ test('MS-777: booklet pages do not write typed content or read it back as a fall
     const catalog = fs.readFileSync(path.join(root, 'public/printable-data-core.js'), 'utf8');
     assert.equal(catalog.includes("key: 'sunday_typed'"), false);
 });
+
+test('MS-777: the announcements tab reads and writes the Sunday occurrence', async () => {
+    const host = /** @type {any} */ (global);
+    const Occurrence = require('../public/events-occurrence-core.js');
+    const Typed = require('../public/sunday-typed-core.js');
+    const prevWindow = host.window;
+    host.window = Object.assign({}, prevWindow, {
+        SundayTypedCore: Typed,
+        EventsOccurrenceCore: Occurrence,
+        PrintedAnnouncementGuide: { eventsForSunday: async () => [] },
+        PrintedAnnouncementLines: { sourcesForSunday: () => [] },
+    });
+    /** @type {Record<string, any>} */
+    const docs = {};
+    host.db = {
+        collection() {
+            return {
+                doc(/** @type {any} */ id) {
+                    return {
+                        get: async () => ({
+                            exists: Object.prototype.hasOwnProperty.call(docs, id),
+                            data: () => docs[id],
+                        }),
+                        set: async (/** @type {any} */ data) => {
+                            docs[id] = Object.assign({}, docs[id] || {}, data);
+                        },
+                    };
+                },
+            };
+        },
+    };
+    try {
+        const { serviceForm } = require('../public/service-builder.js');
+        const page = /** @type {any} */ (serviceForm());
+        page.date = DATE;
+        page.canEdit = true;
+        page.serviceGuideTarget = () => ({ printableId: 'guide' });
+        const occId = page.sundayOccurrenceId;
+        docs[occId] = {
+            printableInputs: { guide: { legacy_announcements: 'Choir\nThursday night' } },
+        };
+        await page.loadSundayAnnouncements();
+        assert.equal(page.typedAnnouncements[0].title, 'Choir');
+        assert.equal(page.typedAnnouncements[0].content, 'Thursday night');
+
+        page.typedAnnouncements = [];
+        await page.saveSundayAnnouncements();
+        assert.equal(docs[occId].printableInputs.guide.legacy_announcements, '');
+        assert.equal(page.announcementsStatus, 'Saved.');
+    } finally {
+        delete host.db;
+        host.window = prevWindow;
+    }
+});
+
+test('MS-777: a failed fill-in read is reported', async () => {
+    const host = /** @type {any} */ (global);
+    const { PrintableEditorData } = require('../public/printable-editor-data.js');
+    const ed = /** @type {any} */ (PrintableEditorData({ bundle: {} }));
+    ed.id = 'guide';
+    ed.viewDate = DATE;
+    host.db = {
+        collection() {
+            return {
+                doc() {
+                    return { get: async () => { throw new Error('denied'); } };
+                },
+            };
+        },
+    };
+    /** @type {any[]} */
+    const seen = [];
+    const orig = console.error;
+    console.error = (/** @type {any} */ err) => { seen.push(err); };
+    const realMigrate = host.PrintableLegacyMigrate;
+    try {
+        const bag = await ed.bookletBagFor('2026-09-13');
+        assert.deepEqual(bag, {});
+        assert.equal(seen.length, 1);
+        assert.match(String(seen[0] && seen[0].message), /denied/);
+
+        host.PrintableLegacyMigrate = {
+            draftFromBag() { throw new Error('bad bag'); },
+        };
+        const row = ed.typedRowFor(DATE, { legacy_prayerNation: 'Kenya' });
+        assert.deepEqual(row, {});
+        assert.equal(seen.length, 2);
+    } finally {
+        console.error = orig;
+        delete host.db;
+        host.PrintableLegacyMigrate = realMigrate;
+    }
+});
