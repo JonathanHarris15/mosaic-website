@@ -29,6 +29,7 @@ const USERS = {
     admin: 'uid-admin',
     anon: 'uid-anon',
     fillMap: 'uid-fill-map',
+    superStoredMember: 'uid-super-stored-member',
 };
 
 function tinyPng() {
@@ -52,6 +53,12 @@ async function seedUsers(env) {
                 'printables.edit': true,
                 'services.builder.edit': true,
             },
+        });
+        await db.collection('users').doc(USERS.superStoredMember).set({
+            ...base,
+            permissionLevel: 'member',
+            accountLevelId: 'level_super_admin',
+            permissions: {'system.super_admin': true},
         });
         await db.collection('event_occurrences').doc('occ-member').set({
             visibility: 'member',
@@ -220,6 +227,8 @@ test('printable_assets: signed-in read; permission-map fill-in may write', {skip
     await readDenied(nobody().storage(), printable);
     await writeOk(signed(USERS.editor).storage(), 'printable_assets/p1/f2.png', tinyPng());
     await writeOk(signed(USERS.fillMap).storage(), 'printable_assets/sEKK4xDbteFhCLNWlfMz/img.png', tinyPng());
+    await writeOk(signed(USERS.superStoredMember).storage(),
+        'printable_assets/sEKK4xDbteFhCLNWlfMz/imgmr851_sing.png', tinyPng());
     await writeDenied(signed(USERS.member).storage(), 'printable_assets/p1/f3.png', tinyPng());
 });
 

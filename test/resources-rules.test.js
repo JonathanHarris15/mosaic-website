@@ -152,8 +152,8 @@ test('reading a resource file asks for the member rung', () => {
 });
 
 test('storage isMemberAccount restates firestore isMember, rung for rung', () => {
-    const inStorage = /levelOf\(myUserDoc\(\)\) in \[([^\]]*)\]/.exec(storageFn('isMemberAccount'));
-    assert.ok(inStorage, 'isMemberAccount() no longer reads a rung list');
+    const inStorage = /permissionLevelAccount\(\) in \[([^\]]*)\]/.exec(storageFn('isMemberAccount'));
+    assert.ok(inStorage, 'isMemberAccount() no longer reads the member rung list');
     const inFirestore = /function isMember\(\) \{[\s\S]*?permissionLevel\(\) in \[([^\]]*)\]/
         .exec(firestoreRules);
     assert.equal(
