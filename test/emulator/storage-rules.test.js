@@ -28,6 +28,7 @@ const USERS = {
     elder: 'uid-elder',
     admin: 'uid-admin',
     anon: 'uid-anon',
+    fillMap: 'uid-fill-map',
 };
 
 function tinyPng() {
@@ -44,6 +45,14 @@ async function seedUsers(env) {
         await db.collection('users').doc(USERS.editor).set({...base, permissionLevel: 'editor'});
         await db.collection('users').doc(USERS.elder).set({...base, permissionLevel: 'elder'});
         await db.collection('users').doc(USERS.admin).set({...base, permissionLevel: 'admin'});
+        await db.collection('users').doc(USERS.fillMap).set({
+            ...base,
+            permissionLevel: 'member',
+            permissions: {
+                'printables.edit': true,
+                'services.builder.edit': true,
+            },
+        });
         await db.collection('event_occurrences').doc('occ-member').set({
             visibility: 'member',
             participantIds: [],
@@ -202,7 +211,7 @@ test('unknown prefix is denied', {skip: skipReason}, async () => {
     await writeDenied(signed(USERS.admin).storage(), path, Buffer.from('nope'));
 });
 
-test('printable_assets: signed-in read; signed-out denied', {skip: skipReason}, async () => {
+test('printable_assets: signed-in read; permission-map fill-in may write', {skip: skipReason}, async () => {
     const printable = 'printable_assets/p1/f1.png';
     await testEnv.withSecurityRulesDisabled(async (c) => {
         await putBytes(c.storage(), printable, tinyPng());
@@ -210,7 +219,14 @@ test('printable_assets: signed-in read; signed-out denied', {skip: skipReason}, 
     await readOk(signed(USERS.member).storage(), printable);
     await readDenied(nobody().storage(), printable);
     await writeOk(signed(USERS.editor).storage(), 'printable_assets/p1/f2.png', tinyPng());
+    await writeOk(signed(USERS.fillMap).storage(), 'printable_assets/sEKK4xDbteFhCLNWlfMz/img.png', tinyPng());
     await writeDenied(signed(USERS.member).storage(), 'printable_assets/p1/f3.png', tinyPng());
+});
+
+test('sunday_typed country_map: services.builder.edit on permission map may write', {skip: skipReason}, async () => {
+    const path = 'sunday_typed/2026-10-26/country_map/map1.png';
+    await writeOk(signed(USERS.fillMap).storage(), path, tinyPng());
+    await writeDenied(signed(USERS.member).storage(), 'sunday_typed/2026-10-26/country_map/denied.png', tinyPng());
 });
 
 test('role matrix spot-check: admin is not elder on form_uploads_elder', {skip: skipReason}, async () => {
