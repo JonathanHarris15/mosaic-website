@@ -225,6 +225,129 @@ test('MS-777: the announcements tab reads and writes the Sunday occurrence', asy
     }
 });
 
+test('MS-777: the prod copy fills a printable that reads booklet text and skips one that does not', () => {
+    assert.equal(Migrate.readsBookletText(bookletProject()), true);
+
+    const announcements = {
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{ id: 'ann', tag: 'p', repeat: { source: 'sunday_announcements', params: {} } }],
+        }],
+    };
+    assert.equal(Migrate.readsBookletText(announcements), true);
+
+    const questions = {
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{ id: 'q', tag: 'p', repeat: { source: 'sunday_kids_questions', params: {} } }],
+        }],
+    };
+    assert.equal(Migrate.readsBookletText(questions), true);
+
+    const orderOfService = {
+        inputs: [{ id: 'sermon_title', label: 'Sermon', kind: 'text' }],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'title',
+                tag: 'p',
+                bind: { text: { scope: 'global', source: 'event_field', field: 'sermon_title', params: {} } },
+            }],
+        }],
+    };
+    assert.equal(Migrate.readsBookletText(orderOfService), false);
+});
+
+test('MS-777: a Mosaic Kids save writes the occurrence and leaves a newer announcement', async () => {
+    const vm = require('node:vm');
+    const Typed = require('../public/sunday-typed-core.js');
+    const Fill = require('../public/printable-fill-core.js');
+    const Occurrence = require('../public/events-occurrence-core.js');
+    const occId = 'sunday_service_' + DATE;
+    /** @type {Record<string, any>} */
+    const docs = {};
+    docs[occId] = {
+        printableInputs: {
+            guide: {
+                legacy_announcements: 'Choir',
+                legacy_prayerNation: 'Kenya',
+                legacy_kidsQuestions: 'Who is the shepherd?',
+            },
+        },
+    };
+    const db = {
+        collection() {
+            return {
+                doc(/** @type {any} */ id) {
+                    return {
+                        get: async () => ({
+                            exists: Object.prototype.hasOwnProperty.call(docs, id),
+                            data: () => docs[id],
+                        }),
+                        set: async (/** @type {any} */ data) => {
+                            docs[id] = Object.assign({}, docs[id] || {}, data);
+                        },
+                    };
+                },
+            };
+        },
+    };
+    const sandbox = /** @type {any} */ ({
+        console,
+        db,
+        document: { querySelectorAll() { return []; } },
+        AccessCore: { writesAsEditor() { return true; } },
+        window: {
+            SundayTypedCore: Typed,
+            PrintableLegacyMigrate: Migrate,
+            PrintableFillCore: Fill,
+            EventsOccurrenceCore: Occurrence,
+        },
+    });
+    vm.createContext(sandbox);
+    vm.runInContext(
+        fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8'),
+        sandbox,
+        { filename: 'printable-view.js' }
+    );
+    const view = /** @type {any} */ (sandbox.printableView());
+    view.id = 'guide';
+    view.viewDate = DATE;
+    view.occurrenceId = occId;
+    view.captureFills({
+        eventInputs: {
+            legacy_announcements: 'Choir',
+            legacy_prayerNation: 'Kenya',
+            legacy_kidsQuestions: 'Who is the shepherd?',
+        },
+    });
+    const cached = /** @type {any} */ (view.sundayDraft(DATE));
+    assert.equal(cached.prayerNation, 'Kenya');
+    assert.equal(cached.announcements[0].title, 'Choir');
+
+    view.eventBag.legacy_announcements = 'Picnic';
+    view.eventBag.legacy_prayerNation = 'Chile';
+    await view.persistEvent();
+
+    const slotId = 'kids:this:1';
+    view.fillById[slotId] = {
+        id: slotId,
+        store: 'kids',
+        rowIndex: 1,
+        when: { mode: 'this' },
+    };
+    view.recount = () => {};
+    view.onFillInput(slotId, 'What did he leave?', null);
+    await view.onFillCommit(slotId);
+
+    const bag = docs[occId].printableInputs.guide;
+    assert.equal(bag.legacy_kidsQuestions, 'Who is the shepherd?\nWhat did he leave?');
+    assert.equal(bag.legacy_announcements, 'Picnic');
+    assert.equal(bag.legacy_prayerNation, 'Chile');
+});
+
 test('MS-777: a failed fill-in read is reported', async () => {
     const host = /** @type {any} */ (global);
     const { PrintableEditorData } = require('../public/printable-editor-data.js');
