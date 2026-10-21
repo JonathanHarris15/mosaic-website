@@ -132,6 +132,25 @@ test('MS-777: the copy fills a missing occurrence key from typed content, then t
     assert.equal(filledWins.bag.legacy_prayerNation, 'Chile');
 });
 
+test('MS-777: a save writes a blank only for a key the occurrence already has, and the draft reads that bag', () => {
+    const patch = /** @type {any} */ (Migrate.patchFromContent({
+        pastoralPrayer: { nation: '', capital: 'Cairo' },
+        announcements: [],
+    }, { legacy_prayerNation: 'Kenya' }));
+    assert.equal(patch.legacy_prayerNation, '');
+    assert.equal(patch.legacy_prayerCapital, 'Cairo');
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, 'legacy_prayerContinent'), false);
+
+    const draft = /** @type {any} */ (Migrate.draftFromBag({
+        legacy_prayerNation: 'Kenya',
+        legacy_announcements: 'Choir\nThursday night',
+    }));
+    assert.equal(draft.prayerNation, 'Kenya');
+    assert.equal(draft.prayerCapital, '');
+    assert.equal(draft.announcements[0].title, 'Choir');
+    assert.equal(draft.announcements[0].content, 'Thursday night');
+});
+
 test('MS-777: booklet pages do not write typed content or read it back as a fallback', () => {
     const root = path.join(__dirname, '..');
     const files = [

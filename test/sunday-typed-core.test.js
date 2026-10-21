@@ -136,13 +136,15 @@ test('oversized country-map data URLs and uploads are refused before write', () 
     assert.match(Typed.countryImageWriteError('http://example.com/map.png'), /https/);
 });
 
-test('the editor uploads the country map to Storage and guards the write', () => {
+test('the printable view uploads the country map to Storage and guards the write', () => {
     const fs = require('node:fs');
     const path = require('node:path');
-    const src = fs.readFileSync(path.join(__dirname, '../public/printable-editor-data.js'), 'utf8');
-    assert.match(src, /countryMapStoragePath/);
-    assert.match(src, /getDownloadURL/);
-    assert.match(src, /assertCountryImageWritable/);
-    assert.doesNotMatch(src, /readAsDataURL/,
-        'file upload must not write a data URL onto typedContent');
+    const view = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
+    const store = fs.readFileSync(path.join(__dirname, '../public/printable-link-store.js'), 'utf8');
+    assert.match(view, /countryMapStoragePath/);
+    assert.match(view, /assertCountryImageWritable/);
+    assert.match(store, /getDownloadURL/);
+    assert.doesNotMatch(view, /readAsDataURL/,
+        'file upload must not write a data URL into the Sunday record');
+    assert.doesNotMatch(store, /readAsDataURL/);
 });
