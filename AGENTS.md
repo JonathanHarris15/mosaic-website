@@ -117,6 +117,6 @@ Any PR that changes user-visible surfaces **must** run fastbrowse/Jev smoke test
 
 ### PRs
 
-Use `.github/PULL_REQUEST_TEMPLATE.md`. Fill **Jira (`MS-*`)**, **AC**, **test evidence**, **Smoke test**, **risk**, **preview URL** (or `n/a`), then tick **Ready for Maintain**. Maintain is the Cursor review pass; do not tick it on an empty template.
+Use `.github/PULL_REQUEST_TEMPLATE.md`. Fill **Jira (`MS-*`)**, **AC**, **test evidence**, **Smoke test**, **risk**, **No legacy** (`.cursor/rules/no-legacy.mdc`), **preview URL** (or `n/a`), then tick **Ready for Maintain**. Maintain is the Cursor review pass; do not tick it on an empty template.
 
 Preview, when the PR changes a hosted surface, is a Firebase Hosting preview channel on `mosaic-hymn-database`. Infra-only PRs: `n/a`.

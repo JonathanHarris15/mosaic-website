@@ -1,0 +1,20 @@
+---
+description: A change that replaces a system deletes the old paths, migrates prod data through the Prod ops script, and leaves one data shape.
+alwaysApply: true
+---
+
+# No legacy
+
+A change that replaces a system finishes the replacement. A system is a data shape or a code path that does a job. The replacement is one change: the new path is the only path, and the stored records have one shape.
+
+In that same change:
+
+1. **Delete the old code paths.** Remove the old readers, writers, and names. The new path is the one that runs.
+2. **Migrate prod data through the workflow_dispatch `Prod ops script`.** Add an allowlisted `scripts/*.js` (basename in `scripts/prod-ops-allowlist.js` and in `.github/workflows/prod-ops-script.yml` `inputs.script.options`). The workflow runs only from `main`, dry-run by default. Dispatch it with `commit=false`, read the log, then dispatch the same script with `commit=true`. Agents do not write prod from the VM and do not run this workflow from a PR branch.
+3. **Remove read and write fallbacks.** The new code does not read the old shape, write the old shape, or accept either shape.
+
+**One shape.** A record has a single shape when the change lands. Two shapes for the same fact — a reader that understands both, a writer that still emits the old one, a field kept so an old client works — means the old system is still in the product.
+
+The script ships in the replacement change. Because the workflow runs only on `main`, the dry run and the commit happen as soon as that change is on `main`, before the replacement is treated as done. Name the deploy-versus-migration window in the PR risk section: Hosting and Functions deploy on push to `main`, and the data move is a separate dispatch.
+
+How to add a script: `docs/ops/prod-ops-script.md`.
