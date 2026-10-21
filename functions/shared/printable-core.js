@@ -1172,7 +1172,7 @@
             if (s[i] !== '=') { attrs[name] = ''; continue; }
             i++;
             while (i < s.length && /\s/.test(s[i])) i++;
-            let value = '';
+            let value;
             if (s[i] === '"' || s[i] === "'") {
                 const q = s[i];
                 const end = s.indexOf(q, i + 1);

@@ -175,7 +175,7 @@ test('planTagMerge repoints carriers and their Tag Changes onto the survivor', (
 test('planTagMerge lets the survivor inherit the earlier (longer) hold', () => {
     // A held since 500, B since 100; after merging B into A the hold is since 100.
     const people = [{ id: 'p1', tags: ['A', 'B'], activity: [added('A', 500), added('B', 100)] }];
-    const plan = Core.planTagMerge({ people, mergedTagIds: ['B'], survivorTagId: 'A' });
+    Core.planTagMerge({ people, mergedTagIds: ['B'], survivorTagId: 'A' });
 
     // Apply the plan's rewrites to reconstruct the post-merge activity feed.
     const merged = people[0].activity.map(e =>

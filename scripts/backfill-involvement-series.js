@@ -18,7 +18,6 @@
  */
 
 const admin = require('firebase-admin');
-const path = require('path');
 const EventsCore = require('../public/events-core.js');
 
 const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';

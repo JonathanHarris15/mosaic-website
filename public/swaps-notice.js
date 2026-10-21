@@ -68,7 +68,6 @@
     // undefined, so loadMine threw, the catch below swallowed it, and the line
     // never showed. Ask for the binding first; window.db stays as a fallback.
     function firestoreDb() {
-        // eslint-disable-next-line no-undef
         if (typeof db !== 'undefined' && db) return db;
         return window.db || null;
     }

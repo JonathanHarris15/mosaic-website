@@ -164,7 +164,7 @@
     // Rebuilding the svg from scratch would cancel this, so syncWirePaths
     // keeps the path node while the line is still showing.
     function drawWireIn(path) {
-        let len = 0;
+        let len;
         try { len = path.getTotalLength(); } catch (e) { return; }
         if (!len) return;
         path.style.strokeDasharray = String(len);

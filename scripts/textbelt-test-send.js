@@ -83,7 +83,7 @@ async function main() {
         const detail = err && err.message ? err.message : String(err);
         throw new Error(
             'Could not load TEXTBELT_KEY from env or Secret Manager. ' +
-            detail);
+            detail, { cause: err });
     }
     console.log(`textbelt key source: ${source}`);
 

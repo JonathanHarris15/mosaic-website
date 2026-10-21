@@ -358,7 +358,7 @@
             return { ok: false, why: 'That spot sits inside an overflow run. Insert before or after the run.', entries: list };
         }
         const stamp = Date.now().toString(36) + Math.floor(Math.random() * 1000);
-        let leaf = null;
+        let leaf;
         if (act.kind === 'blank') {
             leaf = blankFolioPadEntry(list[0] || null, stamp);
         } else if (act.kind === 'duplicate') {

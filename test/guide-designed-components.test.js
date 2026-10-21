@@ -1,7 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const Engine = require('../public/guide-engine.js');
 const Components = require('../public/guide-components.js');
 
 // The designed booklet (Claude Design import) decomposes the Order of Service

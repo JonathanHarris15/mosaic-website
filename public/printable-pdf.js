@@ -274,7 +274,7 @@
         const imgs = Array.from(root.querySelectorAll('img')).filter(img => !img.classList.contains('pr-raster-mark'));
         await Promise.all(imgs.map(async img => {
             if (!img.naturalWidth || !img.naturalHeight) return;
-            let url = null;
+            let url;
             try { url = await fittedImageUrl(img, px); } catch (e) { return; }
             if (!url) return;
             img.src = url;

@@ -50,7 +50,7 @@ var HymnRegistry = (function () {
     // hymn picker that cannot offer hymns is a dead screen.
     async function load(deps) {
         var d = deps || {};
-        var hymns = [];
+        var hymns;
 
         try {
             var result = await d.getHymnIndex();

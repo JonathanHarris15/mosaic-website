@@ -34,7 +34,6 @@
     }
 
     function normalize(presentation) {
-        const d = defaultPresentation();
         const p = presentation || {};
         return {
             style: p.style === 'plain' ? 'plain' : 'styled',

@@ -28,8 +28,6 @@
  *   node scripts/import-members.js --commit   # apply
  */
 
-const Core = require('../public/shepherding-core.js');
-
 // ── Pure helpers (unit-tested) ───────────────────────────────────────────────
 
 // Minimal CSV parse for this well-formed export (no quoted commas in the data).

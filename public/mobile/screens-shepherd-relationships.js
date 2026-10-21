@@ -113,6 +113,10 @@
       return function () { alive = false; };
     }, []);
 
+    if (!canReadElder) {
+      return html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15 }}>Elder-only tools.</p></div>`;
+    }
+
     function personName(id) {
       for (var i = 0; i < people.length; i++) if (people[i].id === id) return people[i].name;
       return "(unknown)";

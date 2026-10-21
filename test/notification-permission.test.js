@@ -46,7 +46,7 @@ test('three dismissals, fourteen days apart, end the explainer', () => {
         lastDismissedAt: recorded.lastDismissedAt,
         now: start + DAY,
     }), false);
-    recorded = perm.recordDismissal(storage, start + 14 * DAY);
+    perm.recordDismissal(storage, start + 14 * DAY);
     recorded = perm.recordDismissal(storage, start + 28 * DAY);
     assert.equal(recorded.dismissals, 3);
     assert.equal(perm.shouldShowExplainer({

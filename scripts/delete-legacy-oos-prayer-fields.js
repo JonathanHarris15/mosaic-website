@@ -13,7 +13,6 @@
  */
 
 const path = require('path');
-const Legacy = require('../public/legacy-oos-migrate-core.js');
 const DeleteCore = require('../public/delete-legacy-oos-prayer-fields-core.js');
 const Liturgy = require('../public/liturgy-order-core.js');
 const {loadProject} = require('./firebase-project.js');

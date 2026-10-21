@@ -4,7 +4,6 @@
 
 const admin = require('firebase-admin');
 const path = require('path');
-const fs = require('fs');
 
 const SERVICE_ACCOUNT_FILE = 'mosaic-hymn-database-firebase-adminsdk-fbsvc-8d55863f5a.json';
 const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';

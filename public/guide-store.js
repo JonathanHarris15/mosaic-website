@@ -449,7 +449,7 @@
     async function saveAsset(db, file, meta) {
         meta = meta || {};
         const id = db.collection(COLLECTIONS.assets).doc().id;
-        const safeName = String(file.name || 'asset').replace(/[^\w.\-]+/g, '_');
+        const safeName = String(file.name || 'asset').replace(/[^\w.-]+/g, '_');
         const storagePath = `guide-assets/${id}/${safeName}`;
         const ref = firebase.storage().ref().child(storagePath);
         const snap = await ref.put(file);

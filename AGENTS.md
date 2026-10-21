@@ -46,10 +46,12 @@ These are the real scripts. Use them; do not invent aliases.
 
 ```bash
 npm test                          # root: node --test  (unit suite in test/)
-npm run lint --prefix functions   # functions/: eslint .
+npm run lint --prefix functions   # functions/: Google eslint, flat config off
 ```
 
-PR CI (`.github/workflows/pr-ci.yml`) runs exactly those two after `npm ci` on both trees, on Node **22** (the `functions.engines` version, since MS-683). That is the runtime the functions actually deploy on, and `test/functions-node-runtime.test.js` fails if `engines.node`, any workflow's `node-version`, or a `runtime` key in `firebase.json` drift apart. It also fails 90 days before the runtime's Firebase decommission date — Node 20's was 2026-10-30 and nothing blocked on it, which is why that test exists (`docs/ops/ms-683-node-22-runtime.md`).
+PR CI (`.github/workflows/pr-ci.yml`) runs those two, plus `npm run check:rules`, plus the quality ratchet (`npm run check:types`, `npm run check:eslint`, `npm run check:knip`) after `npm ci` on both trees, on Node **22** (the `functions.engines` version, since MS-683). That is the runtime the functions actually deploy on, and `test/functions-node-runtime.test.js` fails if `engines.node`, any workflow's `node-version`, or a `runtime` key in `firebase.json` drift apart. It also fails 90 days before the runtime's Firebase decommission date — Node 20's was 2026-10-30 and nothing blocked on it, which is why that test exists (`docs/ops/ms-683-node-22-runtime.md`).
+
+The quality ratchet (`quality-baseline.json`, `scripts/quality-ratchet.mjs`) fails when a tsc, eslint, or knip count goes up. Lower a number in that file to the new count. Do not raise one. `tsc` is `strict` with `checkJs` (see the comment in `tsconfig.json`).
 
 `npm test` is the default unit gate. It does **not** start emulators. Tests under `test/emulator/` skip unless `FIRESTORE_EMULATOR_HOST` is set (they `require('firebase-admin')` at load; that module comes from the root `npm ci`).
 
@@ -64,6 +66,10 @@ CI exists so every PR runs the same two commands. Do **not** mass-reformat funct
 | `npm test` | `node --test` — unit tests in `test/` |
 | `npm run test:emulator` | `node scripts/run-emulator-tests.mjs` — needs Java + Firebase emulators; not PR CI |
 | `npm run check:design` | token + component build `--check`, then drift/component checks `--strict` |
+| `npm run check:types` | `tsc --strict --checkJs`, ratchet against `quality-baseline.json` |
+| `npm run check:eslint` | correctness eslint for `public/`, `scripts/`, `test/` (not `functions/`) |
+| `npm run check:knip` | knip dead files, exports, and dependencies, same ratchet |
+| `npm run check:quality` | all three ratchet checks |
 | `npm run build:css` | Tailwind → `public/mosaic.css` |
 | `npm run watch:css` | same, `--watch` (long-running; use a terminal, never `install`) |
 | `npm run build:tokens` | `node scripts/build-design-tokens.mjs` |
@@ -81,13 +87,13 @@ CI exists so every PR runs the same two commands. Do **not** mass-reformat funct
 
 | Script | What it actually runs |
 | --- | --- |
-| `npm run lint --prefix functions` | `eslint .` (Google config; ignores `functions/shared/**`) |
+| `npm run lint --prefix functions` | `ESLINT_USE_FLAT_CONFIG=false eslint .` (Google config; ignores `functions/shared/**`) |
 | `npm run serve --prefix functions` | `firebase emulators:start --only functions` |
 | `npm start --prefix functions` | functions shell (interactive — not for Cloud) |
 | `npm run deploy --prefix functions` | **do not run** from an agent |
 | `npm run logs --prefix functions` | live function logs — needs Firebase auth |
 
-Root has no `lint` script. Lint lives only under `functions/`.
+Root `npm run check:eslint` is the correctness lint for pages, scripts, and tests. `functions/` keeps its own `npm run lint` (Google style). The functions script turns flat config off so ESLint 8 does not pick up the root `eslint.config.mjs`.
 
 ### Local emulators (optional, not install)
 

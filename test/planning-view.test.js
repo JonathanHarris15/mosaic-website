@@ -270,7 +270,7 @@ test('leaving the Planning view puts the drawer away', () => {
 
 test('the drawer is never remembered across a page load', () => {
     // A glance at the dates is not a state to leave a page in.
-    const sb = load();
+    load();
     assert.ok(/railOpen: false/.test(SRC), 'railOpen should start closed');
     assert.ok(!/calendarRailOpen/.test(SRC), 'and must not be persisted');
 });

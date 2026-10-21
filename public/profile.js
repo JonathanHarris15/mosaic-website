@@ -120,7 +120,7 @@ async function initMyInfo(personId) {
     const form = document.getElementById('my-info-form');
     if (!panel || !form) return;
     let sexWasUnset = true;
-    let loaded = null;
+    let loaded;
     try {
         // ⚠ FOUR READS, AND ONLY ONE OF THEM FEEDS ANOTHER. This page used to
         // fetch your Person, then the directory, then your outstanding requests,

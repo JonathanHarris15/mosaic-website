@@ -16,7 +16,6 @@ const skipReason = HOST ? false :
 
 const ROOT = path.join(__dirname, '..', '..');
 const PROJECT_ID = 'demo-mosaic-ms20';
-const BUCKET = `${PROJECT_ID}.appspot.com`;
 const AccountLevelsCore = require(path.join(ROOT, 'public', 'account-levels-core.js'));
 const CrossService = require(path.join(ROOT, 'scripts', 'storage-cross-service.js'));
 

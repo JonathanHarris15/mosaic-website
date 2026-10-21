@@ -15,7 +15,7 @@
    ============================================================ */
 (function () {
   "use strict";
-  var html = M.html, Ic = M.Ic, Icon = M.Icon;
+  var html = M.html, Ic = M.Ic;
 
   /** Join class names, dropping the falsey ones. */
   function cx() {

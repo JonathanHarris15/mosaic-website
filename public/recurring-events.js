@@ -1405,7 +1405,7 @@
                 const name = (def && def.name) || slug;
 
                 this.saving = true;
-                let usage = [];
+                let usage;
                 try {
                     usage = await this.seriesRoleUsage(slug);
                 } catch (e) {
