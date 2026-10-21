@@ -22,7 +22,7 @@
   var _docEditor = null;
   // Loaded doc kept outside component state (the editor reads it once at mount).
   var _docLoaded = {};
-  var _currentDocId = null, _user = null, _nav = null;
+  var _currentDocId = null, _currentDocTitle = "", _user = null, _nav = null;
   var _mentionPeople = [], _mentionNotes = [], _mentionDocs = [], _mentionFolders = [];
   var _peopleList = [], _docTypeById = {}, _allTagsList = [];
   var NOTE_TYPES_ALL = ["Elder Check-in", "Elder Interview", "Elder Meeting", "Life Update", "Prayer Request", "Other", "Create New Note Type"];
