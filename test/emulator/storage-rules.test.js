@@ -17,6 +17,8 @@ const skipReason = HOST ? false :
 const ROOT = path.join(__dirname, '..', '..');
 const PROJECT_ID = 'demo-mosaic-ms20';
 const BUCKET = `${PROJECT_ID}.appspot.com`;
+const AccountLevelsCore = require(path.join(ROOT, 'public', 'account-levels-core.js'));
+const CrossService = require(path.join(ROOT, 'scripts', 'storage-cross-service.js'));
 
 let testEnv;
 let assertFails;
@@ -30,6 +32,9 @@ const USERS = {
     anon: 'uid-anon',
     fillMap: 'uid-fill-map',
     superStoredMember: 'uid-super-stored-member',
+    superRoleOnly: 'uid-super-role-only',
+    superBothFields: 'uid-super-both-fields',
+    freshEditor: 'uid-fresh-editor',
 };
 
 function tinyPng() {
@@ -59,6 +64,27 @@ async function seedUsers(env) {
             permissionLevel: 'member',
             accountLevelId: 'level_super_admin',
             permissions: {'system.super_admin': true},
+        });
+        // The super-admin docs as they are in prod: `role` alone, or `role`
+        // and `permissionLevel` — no accountLevelId, no permissions map, and
+        // no pastoralAssistant field for a rule to trip over.
+        await db.collection('users').doc(USERS.superRoleOnly).set({
+            email: 'role-only@example.test',
+            role: 'super_admin',
+        });
+        await db.collection('users').doc(USERS.superBothFields).set({
+            email: 'both-fields@example.test',
+            permissionLevel: 'super_admin',
+            role: 'super_admin',
+        });
+        // A sign-up (login.html) that Admin → Accounts then made an editor.
+        await db.collection('users').doc(USERS.freshEditor).set({
+            email: 'fresh-editor@example.test',
+            ...AccountLevelsCore.userWriteFromLevel('level_editor', {presetKey: 'editor'}),
+        });
+        await db.collection('event_occurrences').doc('occ-public').set({
+            visibility: 'public',
+            participantIds: [],
         });
         await db.collection('event_occurrences').doc('occ-member').set({
             visibility: 'member',
@@ -230,6 +256,30 @@ test('printable_assets: signed-in read; permission-map fill-in may write', {skip
     await writeOk(signed(USERS.superStoredMember).storage(),
         'printable_assets/sEKK4xDbteFhCLNWlfMz/imgmr851_sing.png', tinyPng());
     await writeDenied(signed(USERS.member).storage(), 'printable_assets/p1/f3.png', tinyPng());
+});
+
+test('printable_assets: prod super-admin doc shapes and a fresh editor may write a fill-in image', {skip: skipReason}, async () => {
+    const dir = 'printable_assets/sEKK4xDbteFhCLNWlfMz/';
+    await writeOk(signed(USERS.superRoleOnly).storage(), dir + 'img1yn81_sing-02.png', tinyPng());
+    await writeOk(signed(USERS.superBothFields).storage(), dir + 'img1yn82_sing-02.png', tinyPng());
+    await writeOk(signed(USERS.freshEditor).storage(), dir + 'img1yn83_sing-02.png', tinyPng());
+    await writeDenied(nobody().storage(), dir + 'img1yn84_sing-02.png', tinyPng());
+    await writeDenied(anon().storage(), dir + 'img1yn85_sing-02.png', tinyPng());
+});
+
+// The exact reads scripts/storage-cross-service.js sends to production, asked
+// of the emulator, where the Storage → Firestore read always works. Signed
+// out, for objects that do not exist: a public occurrence lets the read
+// through (object-not-found), a missing one does not (unauthorized). In prod
+// a public occurrence answering `unauthorized` means firestore.get failed.
+test('cross-service probe: signed-out read under a public occurrence reaches the object', {skip: skipReason}, async () => {
+    const storage = nobody().storage();
+    const read = (objectPath) => storage.ref(objectPath).getMetadata().then(() => 'ok', (e) => e.code);
+    const probe = CrossService.probePaths('occ-public');
+    assert.equal(await read(probe.allowed), 'storage/object-not-found');
+    assert.equal(await read(probe.denied), 'storage/unauthorized');
+    assert.equal(await read(probe.crossService), 'storage/object-not-found');
+    assert.equal(await read(CrossService.probePaths('occ-missing').crossService), 'storage/unauthorized');
 });
 
 test('sunday_typed country_map: services.builder.edit on permission map may write', {skip: skipReason}, async () => {
