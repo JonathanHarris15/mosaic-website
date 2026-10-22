@@ -582,10 +582,10 @@
         return PROJECTED_TAG_ID_SET.has(tagId);
     }
 
-    // Does a Person's Linked User make them an elder? Source of truth for the
-    // Elder Tag projection: the linked User's role is exactly 'elder'. Super
-    // Admins are NOT elders (a distinct office). A Person with no Linked User,
-    // or a non-elder role, is not an elder.
+    // Does a Person's Linked User count as an elder? Source of truth for the
+    // Elder Tag projection: accessRank is elder (shep.count_as_elder on the
+    // resolved map). Super Admins are NOT elders. Pastoral Assistants are not.
+    // Stored permissionLevel / role grant nothing.
     function isElderUser(userData) {
         const Levels = (typeof AccountLevelsCore !== 'undefined') ? AccountLevelsCore
             : (typeof require === 'function' ? require('./account-levels-core.js') : null);
@@ -595,7 +595,7 @@
 
     // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add
     // it iff they are an elder. Idempotent and order-preserving, exactly like
-    // applyMembershipTags — the linked User's role is the source of truth, never
+    // applyMembershipTags — the linked User's access is the source of truth, never
     // the tags. The pure heart of the MS-92 Elder-Tag projection.
     function applyElderTag(currentTags, isElder) {
         const out = (currentTags || []).filter(function (t) { return t !== ELDER_TAG_ID; });
