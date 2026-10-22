@@ -279,7 +279,7 @@ test('MS-730: the query builder offers every source a level may read, single and
     const inHouse = Data.querySourcesFor('member', 'households').map(s => s.key);
     assert.equal(inHouse[0], 'household_children', 'inside a household card its children come first');
     assert.equal(Data.sourceByKey('households').row, 'household', 'one row of households is called a household');
-    assert.equal(Data.sourceByKey('sunday_typed').noDrawer, true, 'legacy typed Sunday fields stay out of the drawer');
+    assert.equal(Data.sourceByKey('sunday_typed'), null, 'booklet text is an occurrence fill-in, not a catalog source');
     assert.equal(Data.drawerPartOf('sunday_typed'), '', 'pamphlet blanks are fill-ins on the event, not a catalog card');
     const role = Data.querySpecsFor('role_holder', 'editor');
     assert.ok(role.find(s => s.key === 'seriesId').required && role.find(s => s.key === 'roleSlug').required,
@@ -294,7 +294,7 @@ test('MS-730: every catalog source is query, general, or off the drawer', () => 
         assert.ok(['query', 'general', ''].includes(part), s.key + ' has a drawer part (or none)');
         homes[s.key] = part;
     });
-    assert.equal(homes.sunday_typed, '');
+    assert.equal(homes.sunday_typed, undefined);
     assert.equal(homes.insert_date, 'general');
     assert.equal(Data.sourceByKey('insert_page_number'), null, 'a page number is an element, not a source');
     Data.SOURCES.filter(s => !s.noDrawer && !s.scalar && !s.blank).forEach(s => {
@@ -680,37 +680,39 @@ test('a hymn with empty or missing page assets skips them and does not invent im
     assert.deepEqual(Data.hymnSheetPages(null), []);
 });
 
-test('Sunday booklet text resolves from typedContent and does not leak across Sundays', () => {
+test('Sunday booklet text is not a catalog source, and one Sunday does not leak onto the next', () => {
+    const gone = Data.resolve('sunday_typed', { when: { mode: 'this' } }, { services: {} }, { today: TODAY });
+    assert.equal(gone.rows.length, 0);
+    assert.match(gone.warnings[0], /not something the drawer knows/);
+
     const data = SUNDAYS();
-    data.services['2026-09-06'].typedContent = {
-        pastoralPrayer: { nation: 'Kenya', capital: 'Nairobi' },
-        mosaicKids: { lessonTitle: 'The Lost Sheep', lessonVerse: 'Luke 15' },
-        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
+    data.bookletByDate = {
+        '2026-09-06': {
+            legacy_announcements: 'Picnic\nBring a plate',
+            legacy_kidsQuestions: 'Who is the shepherd?',
+        },
+        '2026-09-13': {
+            legacy_announcements: 'Choir practice\nThursday',
+            legacy_kidsQuestions: 'Where did he go?',
+        },
     };
-    data.services['2026-09-13'].typedContent = {
-        pastoralPrayer: { nation: 'Japan' },
-        mosaicKids: { lessonTitle: 'Jonah' },
-        announcements: [{ title: 'Choir practice', content: 'Thursday' }],
-    };
-    const a = Data.resolve('sunday_typed', { when: { mode: 'this' } }, data, { today: TODAY });
-    const b = Data.resolve('sunday_typed', { when: { mode: 'next' } }, data, { today: TODAY });
-    assert.equal(a.rows[0].prayerNation, 'Kenya');
-    assert.equal(a.rows[0].kidsLessonTitle, 'The Lost Sheep');
-    assert.match(a.rows[0].announcements, /Picnic/);
-    assert.equal(b.rows[0].prayerNation, 'Japan');
-    assert.equal(b.rows[0].kidsLessonTitle, 'Jonah');
-    assert.ok(!String(b.rows[0].announcements).includes('Picnic'));
-    assert.ok(!String(a.rows[0].announcements).includes('Choir'));
-    assert.ok(!String(b.rows[0].prayerNation).includes('Kenya'));
+    const a = Data.resolve('sunday_announcements', { when: { mode: 'this' } }, data, { today: TODAY });
+    const b = Data.resolve('sunday_announcements', { when: { mode: 'next' } }, data, { today: TODAY });
+    assert.equal(a.rows[0].title, 'Picnic');
+    assert.equal(b.rows[0].title, 'Choir practice');
+    assert.ok(!b.rows.some(row => row.title === 'Picnic'));
+    const kidsA = Data.resolve('sunday_kids_questions', { when: { mode: 'this' } }, data, { today: TODAY });
+    const kidsB = Data.resolve('sunday_kids_questions', { when: { mode: 'next' } }, data, { today: TODAY });
+    assert.deepEqual(kidsA.rows.map(row => row.text), ['Who is the shepherd?']);
+    assert.deepEqual(kidsB.rows.map(row => row.text), ['Where did he go?']);
 });
 
 test('printed event announcements follow the typed ones and are not written onto the Sunday', () => {
     const data = SUNDAYS();
     const date = '2026-09-06';
-    data.services[date].typedContent = {
-        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
-    };
-    const before = JSON.parse(JSON.stringify(data.services[date].typedContent));
+    data.bookletByDate = {};
+    data.bookletByDate[date] = { legacy_announcements: 'Picnic\nBring a plate' };
+    const before = JSON.parse(JSON.stringify(data.bookletByDate[date]));
     data.printedEventsBySunday = {};
     data.printedEventsBySunday[date] = [
         {
@@ -768,30 +770,24 @@ test('printed event announcements follow the typed ones and are not written onto
             }],
         },
     ];
-    const resolved = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
-    const text = resolved.rows[0].announcements;
-    assert.match(text, /^Picnic\nBring a plate/);
-    assert.match(text, /Lunch\nAfter church/);
-    assert.match(text, /Work day\nBring gloves\nand a hat/);
-    assert.ok(text.indexOf('Lunch') < text.indexOf('Work day'));
-    assert.equal(resolved.rows[0].announcementCount, 3);
-    assert.ok(!text.includes('Members only'));
-    assert.ok(!text.includes('Session'));
-    assert.ok(!text.includes('Choir'));
-    assert.deepEqual(data.services[date].typedContent, before);
+    const resolved = Data.resolve('sunday_announcements', {}, data, { today: TODAY, level: 'editor' });
+    assert.deepEqual(resolved.rows.map(row => row.title), ['Picnic', 'Lunch', 'Work day']);
+    assert.equal(resolved.rows[0].content, 'Bring a plate');
+    assert.equal(resolved.rows[1].content, 'After church');
+    assert.equal(resolved.rows[2].content, 'Bring gloves\nand a hat');
+    assert.ok(!resolved.rows.some(row => row.title === 'Members only' || row.title === 'Session' || row.title === 'Choir'));
+    assert.deepEqual(data.bookletByDate[date], before);
 
     data.printedEventsBySunday[date][0].announcements[0].title = 'Work morning';
-    const edited = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
-    assert.match(edited.rows[0].announcements, /Work morning/);
-    assert.ok(!edited.rows[0].announcements.includes('Work day'));
-    assert.deepEqual(data.services[date].typedContent, before);
+    const edited = Data.resolve('sunday_announcements', {}, data, { today: TODAY, level: 'editor' });
+    assert.equal(edited.rows[2].title, 'Work morning');
+    assert.ok(!edited.rows.some(row => row.title === 'Work day'));
+    assert.deepEqual(data.bookletByDate[date], before);
 
     data.printedEventsBySunday[date][0].announcements = [];
-    const removed = Data.resolve('sunday_typed', {}, data, { today: TODAY, level: 'editor' });
-    assert.ok(!removed.rows[0].announcements.includes('Work morning'));
-    assert.match(removed.rows[0].announcements, /Picnic/);
-    assert.match(removed.rows[0].announcements, /Lunch/);
-    assert.deepEqual(data.services[date].typedContent, before);
+    const removed = Data.resolve('sunday_announcements', {}, data, { today: TODAY, level: 'editor' });
+    assert.deepEqual(removed.rows.map(row => row.title), ['Picnic', 'Lunch']);
+    assert.deepEqual(data.bookletByDate[date], before);
 });
 
 test('announcements of a Sunday are an iterable list — typed first, then printed event lines', () => {
@@ -802,9 +798,7 @@ test('announcements of a Sunday are an iterable list — typed first, then print
     assert.ok(Data.listSourcesFor('viewer').some(x => x.key === 'sunday_announcements'));
     const data = SUNDAYS();
     const date = '2026-09-06';
-    data.services[date].typedContent = {
-        announcements: [{ title: 'Picnic', content: 'Bring a plate' }],
-    };
+    data.bookletByDate = { [date]: { legacy_announcements: 'Picnic\nBring a plate' } };
     data.printedEventsBySunday = {};
     data.printedEventsBySunday[date] = [{
         id: 'hall',
@@ -829,6 +823,7 @@ test('announcements of a Sunday are an iterable list — typed first, then print
     assert.deepEqual(Data.needsFor('sunday_announcements', {}, TODAY), {
         services: [date],
         printedAnnouncements: [date],
+        bookletDates: [date],
     });
     const empty = Data.resolve('sunday_announcements', {}, { services: {} }, { today: TODAY });
     assert.equal(empty.rows.length, 0);
@@ -837,49 +832,46 @@ test('announcements of a Sunday are an iterable list — typed first, then print
 
 test('Mosaic Kids questions are one row each, in the order they were typed', () => {
     const data = SUNDAYS();
-    data.services['2026-09-06'].typedContent = {
-        mosaicKids: { questions: ['Who is the shepherd?', '', 'What did he leave?'] },
+    data.bookletByDate = {
+        '2026-09-06': { legacy_kidsQuestions: 'Who is the shepherd?\n\nWhat did he leave?' },
     };
     const r = Data.resolve('sunday_kids_questions', {}, data, { today: TODAY });
     assert.deepEqual(r.rows.map(x => x.text), ['Who is the shepherd?', 'What did he leave?']);
     assert.deepEqual(r.rows.map(x => x.number), [1, 2]);
-    assert.deepEqual(Data.needsFor('sunday_kids_questions', {}, TODAY), { services: ['2026-09-06'] });
+    assert.deepEqual(Data.needsFor('sunday_kids_questions', {}, TODAY), { bookletDates: ['2026-09-06'] });
 });
 
 test('a long announcement week prints smaller, and markup is not part of the line', () => {
     const data = SUNDAYS();
     const long = 'word '.repeat(400);
-    data.services['2026-09-06'].typedContent = {
-        announcements: [
-            { title: 'One', content: long },
-            { title: 'Two', content: 'Meet at <b>noon</b>.<br>Bring a chair.' },
-        ],
+    data.bookletByDate = {
+        '2026-09-06': {
+            legacy_announcements: 'One\n' + long + '\n\nTwo\nMeet at <b>noon</b>.<br>Bring a chair.',
+        },
     };
     const r = Data.resolve('sunday_announcements', {}, data, { today: TODAY });
     assert.equal(r.rows[1].plain, 'Meet at noon.\nBring a chair.');
     assert.ok(r.rows[0].fitClass !== 'm-ann m-fit-100', 'a week that overflows nine lines steps down');
 });
 
-test('a Printable bound to Sunday booklet text reads the typed fields', () => {
+test('a Printable bound to Sunday booklet text reads the occurrence fill-ins', () => {
     const Render = require('../public/printable-render-core.js');
     const Core = require('../public/printable-core.js');
-    const data = SUNDAYS();
-    data.services['2026-09-06'].typedContent = {
-        pastoralPrayer: { nation: 'Kenya' },
-        mosaicKids: { lessonTitle: 'The Lost Sheep' },
-        announcements: [{ title: 'Picnic', content: 'Park' }],
+    const bag = {
+        legacy_prayerNation: 'Kenya',
+        legacy_kidsLessonTitle: 'The Lost Sheep',
+        legacy_announcements: 'Picnic\nPark',
     };
-    const resolved = Data.resolve('sunday_typed', {}, data, { today: TODAY });
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const page = Core.buildPage(t, { id: 'pg', nodes: [
-        { id: 'nation', tag: 'p', text: 'Country', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'prayerNation' } } },
-        { id: 'kids', tag: 'p', text: 'Lesson', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'kidsLessonTitle' } } },
-        { id: 'ann', tag: 'p', text: 'News', bind: { text: { scope: 'global', source: 'sunday_typed', field: 'announcements' } } },
+        { id: 'nation', tag: 'p', text: 'Country', bind: { text: { scope: 'global', source: 'event_field', field: 'legacy_prayerNation' } } },
+        { id: 'kids', tag: 'p', text: 'Lesson', bind: { text: { scope: 'global', source: 'event_field', field: 'legacy_kidsLessonTitle' } } },
+        { id: 'ann', tag: 'p', text: 'News', bind: { text: { scope: 'global', source: 'event_field', field: 'legacy_announcements' } } },
     ] });
     const r = Render.expandPage(page, {
         rowsFor: () => null,
         valueFor: (bind) => {
-            const v = resolved.rows[0][bind.field];
+            const v = bag[bind.field];
             return v ? { ok: true, value: v } : { ok: false, why: 'empty' };
         },
     });
@@ -1167,8 +1159,9 @@ test('a dated source asks the store for a window, not the whole collection', () 
     assert.deepEqual(n.occurrenceRange, { from: '2026-09-03', to: '2026-09-10' });
     assert.equal(n.series, true);
     assert.deepEqual(Data.needsFor('sunday', {}, TODAY).services, ['2026-09-06']);
-    assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY).services, ['2026-09-06']);
-    assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY).printedAnnouncements, ['2026-09-06']);
+    assert.deepEqual(Data.needsFor('sunday_announcements', {}, TODAY).bookletDates, ['2026-09-06']);
+    assert.deepEqual(Data.needsFor('sunday_kids_questions', {}, TODAY).bookletDates, ['2026-09-06']);
+    assert.deepEqual(Data.needsFor('sunday_typed', {}, TODAY), {});
     assert.equal(Data.needsFor('people', {}, TODAY).people, true);
 });
 

@@ -99,3 +99,103 @@ test('event inputs come off the named occurrence', async () => {
     }, { level: 'editor' });
     assert.equal(bundle.eventInputs.home, 'Lions');
 });
+
+test('the occurrence opened with the page wins, and a blank there stays blank', async () => {
+    const date = '2026-09-06';
+    /** @type {Record<string, any>} */
+    const docs = {
+        ['opened_' + date]: {
+            printableInputs: { guide: { legacy_announcements: 'From the page' } },
+        },
+        ['blank_' + date]: { printableInputs: { other: { note: 'nope' } } },
+        ['sunday_service_' + date]: {
+            printableInputs: { guide: { legacy_announcements: 'From the series' } },
+        },
+    };
+    const db = {
+        collection(/** @type {any} */ name) {
+            return {
+                doc(/** @type {any} */ id) {
+                    return {
+                        get: async () => {
+                            const data = name === 'event_occurrences' ? docs[id] : null;
+                            return { exists: !!data, data: () => data || null };
+                        },
+                    };
+                },
+                where() {
+                    return {
+                        get: async () => ({
+                            docs: [{ id: 'sunday_service', data: () => ({ printables: ['guide'] }) }],
+                        }),
+                    };
+                },
+            };
+        },
+    };
+    const opened = /** @type {any} */ (await Store.fetch(db, {
+        bookletInputs: {
+            printableId: 'guide',
+            dates: [date],
+            date: date,
+            occurrenceId: 'opened_' + date,
+        },
+    }, { level: 'editor' }));
+    assert.equal(opened.bookletByDate[date].legacy_announcements, 'From the page');
+
+    const blank = /** @type {any} */ (await Store.fetch(db, {
+        bookletInputs: {
+            printableId: 'guide',
+            dates: [date],
+            date: date,
+            occurrenceId: 'blank_' + date,
+        },
+    }, { level: 'editor' }));
+    assert.deepEqual(blank.bookletByDate[date], {});
+});
+
+test('a missing event bag does not wipe Sunday booklet text already loaded', async () => {
+    const date = '2026-09-06';
+    const sundayId = 'sunday_service_' + date;
+    /** @type {Record<string, any>} */
+    const docs = {
+        [sundayId]: {
+            printableInputs: {
+                guide: { legacy_announcements: 'Choir\nThursday night' },
+            },
+        },
+    };
+    const db = {
+        collection(/** @type {any} */ name) {
+            return {
+                doc(/** @type {any} */ id) {
+                    return {
+                        get: async () => {
+                            const data = docs[id];
+                            return { exists: !!data, data: () => data || null };
+                        },
+                    };
+                },
+                where() {
+                    return {
+                        get: async () => ({
+                            docs: name === 'events'
+                                ? [{ id: 'sunday_service', data: () => ({ printables: ['guide'] }) }]
+                                : [],
+                        }),
+                    };
+                },
+            };
+        },
+    };
+    const bundle = /** @type {any} */ (await Store.fetch(db, {
+        eventInputs: { printableId: 'guide', date: date, occurrenceId: 'missing_' + date },
+        bookletInputs: { printableId: 'guide', dates: [date], date: date, occurrenceId: 'missing_' + date },
+    }, { level: 'editor' }));
+    assert.equal(bundle.bookletByDate[date].legacy_announcements, 'Choir\nThursday night');
+    assert.equal(bundle.eventInputs.legacy_announcements, 'Choir\nThursday night');
+    const announced = /** @type {any} */ (require('../public/printable-data-core.js').resolve(
+        'sunday_announcements', {}, bundle, { today: '2026-09-03' }
+    ));
+    assert.equal(announced.rows[0].title, 'Choir');
+});

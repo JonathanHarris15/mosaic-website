@@ -30,7 +30,7 @@
         const out = Object.assign({}, a);
         Object.keys(b || {}).forEach(k => {
             const v = b[k];
-            if (k === 'services' || k === 'printedAnnouncements') {
+            if (k === 'services' || k === 'printedAnnouncements' || k === 'bookletDates') {
                 out[k] = Array.from(new Set((out[k] || []).concat(v)));
             }
             else if (k === 'serviceRange' || k === 'occurrenceRange') {
@@ -67,6 +67,7 @@
             people: [], families: [], services: {}, hymns: {},
             series: [], occurrences: [], roles: [], forms: [], responses: [],
             printedEventsBySunday: {}, liturgy: null, prayerRequests: {},
+            bookletByDate: {},
         };
         const jobs = [];
 
@@ -144,25 +145,35 @@
         if (n.eventInputs && n.eventInputs.printableId) {
             jobs.push(loadEventInputs(db, n.eventInputs, v).then(bag => { bundle.eventInputs = bag; }));
         }
+        if (n.bookletInputs && n.bookletInputs.printableId) {
+            jobs.push(loadBookletByDate(db, n.bookletInputs).then(byDate => { bundle.bookletByDate = byDate; }));
+        }
 
         await Promise.all(jobs);
+
+        // One bag for the view date. A missing event read is {} and must not
+        // replace booklet text loadBookletByDate already found. A bag with
+        // keys, including a cleared blank, is the occurrence the page opened.
+        const box = /** @type {Record<string, any>} */ (bundle);
+        const asked = /** @type {any} */ (n);
+        const viewDate = asked.eventInputs && asked.eventInputs.date;
+        if (viewDate) {
+            const byDate = box.bookletByDate || {};
+            const eventBag = box.eventInputs && typeof box.eventInputs === 'object' ? box.eventInputs : null;
+            const booked = Object.prototype.hasOwnProperty.call(byDate, viewDate) ? byDate[viewDate] : null;
+            const eventHas = !!(eventBag && Object.keys(eventBag).length);
+            const bookedHas = !!(booked && typeof booked === 'object' && Object.keys(booked).length);
+            if (eventHas) {
+                byDate[viewDate] = eventBag;
+                box.bookletByDate = byDate;
+            } else if (bookedHas) {
+                box.eventInputs = booked;
+            }
+        }
 
         // Prayer requests after services are in: subjects come from the liturgy.
         if (n.prayerRequests && n.prayerRequests.length && readsPrayerRequests(v)) {
             await loadPrayerRequests(db, bundle, n.prayerRequests);
-        }
-
-        // Migrated booklet fills: empty occurrence slots ← typedContent.
-        if (bundle.eventInputs && n.eventInputs && n.eventInputs.date) {
-            const Migrate = global.PrintableLegacyMigrate;
-            const Typed = global.SundayTypedCore;
-            const svc = bundle.services && bundle.services[n.eventInputs.date];
-            if (Migrate && Typed && svc) {
-                bundle.eventInputs = Migrate.mergeEventWithTyped(
-                    bundle.eventInputs,
-                    Typed.fromService(svc)
-                );
-            }
         }
 
         if (n.passages && n.passages.length) await fetchPassages(bundle, n.passages);
@@ -234,6 +245,60 @@
         if (!hit.id) return {};
         const doc = await safely(db.collection('event_occurrences').doc(hit.id).get(), null);
         return (doc && doc.exists) ? fromDoc(doc.data()) : {};
+    }
+
+    /** @param {any} seriesId @param {any} date @return {string} */
+    function occurrenceDocId(seriesId, date) {
+        const Core = /** @type {any} */ (global).EventsOccurrenceCore;
+        if (Core && Core.occurrenceId) return Core.occurrenceId(seriesId, date) || '';
+        if (!seriesId || !date) return '';
+        return seriesId + '_' + date;
+    }
+
+    // Fill-ins for this printable on each Sunday the page asks about.
+    // The occurrence opened with the page wins for its own date. Other
+    // dates come from a series that links the printable, Sunday Service first.
+    /** @param {any} db @param {any} spec @return {Promise<Record<string, any>>} */
+    async function loadBookletByDate(db, spec) {
+        const printableId = spec && spec.printableId;
+        const dates = (spec && spec.dates) || [];
+        /** @type {Record<string, any>} */
+        const out = {};
+        if (!printableId || !dates.length) return out;
+        const seriesSnap = await safely(
+            db.collection('events').where('printables', 'array-contains', printableId).get(),
+            null
+        );
+        /** @type {string[]} */
+        const seriesIds = [];
+        if (seriesSnap) seriesSnap.docs.forEach(/** @param {any} d */ d => seriesIds.push(d.id));
+        seriesIds.sort((a, b) => {
+            if (a === 'sunday_service') return -1;
+            if (b === 'sunday_service') return 1;
+            return a < b ? -1 : a > b ? 1 : 0;
+        });
+        await Promise.all(dates.map(/** @param {any} date */ async date => {
+            if (spec.occurrenceId && spec.date === date) {
+                const opened = await safely(db.collection('event_occurrences').doc(spec.occurrenceId).get(), null);
+                if (opened && opened.exists) {
+                    const bag = ((opened.data() || {}).printableInputs || {})[printableId];
+                    out[date] = bag && typeof bag === 'object' ? bag : {};
+                    return;
+                }
+            }
+            for (let i = 0; i < seriesIds.length; i++) {
+                const id = occurrenceDocId(seriesIds[i], date);
+                if (!id) continue;
+                const doc = await safely(db.collection('event_occurrences').doc(id).get(), null);
+                if (!doc || !doc.exists) continue;
+                const bag = ((doc.data() || {}).printableInputs || {})[printableId];
+                if (bag && typeof bag === 'object') {
+                    out[date] = bag;
+                    return;
+                }
+            }
+        }));
+        return out;
     }
 
     // Verses for passage wires, after the Sundays they cite are in the

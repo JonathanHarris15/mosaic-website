@@ -3,6 +3,7 @@ const assert = require('node:assert');
 require('../public/sunday-typed-core.js');
 require('../public/printable-link-core.js');
 const Migrate = require('../public/printable-legacy-migrate-core.js');
+const Copy = require('../scripts/migrate-booklet-text-to-occurrences.js');
 const Core = require('../public/printable-core.js');
 const Data = require('../public/printable-data-core.js');
 const Liturgy = require('../public/liturgy-order-core.js');
@@ -48,7 +49,7 @@ test('buildPrintable migrates sunday_typed on load', () => {
     assert.equal(p.pages[0].nodes[0].bind.text.field, 'legacy_kidsLessonTitle');
 });
 
-test('typedContent seeds empty event fill-ins', () => {
+test('an occurrence fill-in keeps a present value, including a blank', () => {
     const Typed = require('../public/sunday-typed-core.js');
     const content = Typed.normalise({
         pastoralPrayer: { nation: 'Peru', continent: 'South America' },
@@ -58,9 +59,17 @@ test('typedContent seeds empty event fill-ins', () => {
     const bag = Migrate.valuesFromTyped(content);
     assert.equal(bag.legacy_prayerNation, 'Peru');
     assert.equal(bag.legacy_kidsLessonTitle, 'Noah');
-    const merged = Migrate.mergeEventWithTyped({ legacy_prayerNation: 'Chile' }, content);
-    assert.equal(merged.legacy_prayerNation, 'Chile', 'occurrence wins');
-    assert.equal(merged.legacy_kidsLessonTitle, 'Noah');
+    const service = { typedContent: content };
+    const kept = Copy.planServiceCopies(service, {
+        guide: { legacy_prayerNation: 'Chile' },
+    });
+    assert.equal(kept.plans.guide.legacy_prayerNation, undefined);
+    assert.equal(kept.plans.guide.legacy_kidsLessonTitle, 'Noah');
+    const cleared = Copy.planServiceCopies(service, {
+        guide: { legacy_prayerNation: '' },
+    });
+    assert.equal(Object.prototype.hasOwnProperty.call(cleared.plans.guide, 'legacy_prayerNation'), false);
+    assert.equal(cleared.plans.guide.legacy_kidsLessonTitle, 'Noah');
 });
 
 test('pastoral prayer requests resolve for elders with subject names and request text', () => {
