@@ -259,17 +259,17 @@ test('an Involvement is copied only when the survivor lacks that date, role, and
     assert.equal(merged.personUpdate.totalInvolvements, 3);
 });
 
-test('a serve with no series stored matches the Sunday Service', () => {
+test('a serve with no series stored does not dedupe against Sunday', () => {
     const retiredServes = [serve('r1', '2024-01-07', 'piano')];
     const keptServes = [serve('k1', '2024-01-07', 'piano', 'sunday_service')];
     const merged = plan(person({ id: 'old' }), person({ id: 'keep' }), {
         retiredInvolvement: retiredServes,
         keptInvolvement: keptServes,
     });
-    assert.deepStrictEqual(merged.copyInvolvement, []);
+    assert.equal(merged.copyInvolvement.length, 1);
     assert.deepStrictEqual(merged.deleteInvolvement, ['r1']);
-    assert.equal(merged.serveCount, 1);
-    assert.equal(Events.seriesIdOf(retiredServes[0]), 'sunday_service');
+    assert.equal(merged.serveCount, 2);
+    assert.equal(Events.seriesIdOf(retiredServes[0]), '');
 });
 
 test('a serve on another series is not the Sunday already on the survivor', () => {

@@ -47,8 +47,6 @@ const DOORS = [
   ["event_occurrences/announcement_going_out", "calendar.events.edit",
     (u, t) => `event_occurrences/${OCC}/announcement_going_out/g-${t}`],
   ["services", "services.builder.edit", (u, t) => `services/2099-01-${t}`],
-  ["liturgy_elements", "services.builder.edit",
-    (u, t) => `liturgy_elements/l-${t}`],
   ["liturgy_orders", "services.builder.edit",
     (u, t) => `liturgy_orders/l-${t}`],
   ["presence (own uid)", "services.builder.edit", (u) => `presence/${u}`],

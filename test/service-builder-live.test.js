@@ -212,6 +212,7 @@ function loadPage(overrides) {
     sandbox.db = {};
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
     sandbox.DateUtils = require('../public/date-utils.js');
+    sandbox.ServiceDottedKeysCore = require('../public/service-dotted-keys-core.js');
     sandbox.GuideStore = require('../public/guide-store.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.MosaicIdentity = require('../public/mosaic-identity.js');
@@ -387,11 +388,17 @@ test("another editor's switch lands on this page, and a row that left closes", (
         PresenceStore: { release() {} },
         LiturgyTranslateCore: require('../public/liturgy-translate-core.js'),
     });
+    const shortIds = ['hymn1', 'sermon', 'hymnEnd1'];
+    const byId = new Map(Orders.STANDARD_ELEMENTS.map((el) => [el.id, el]));
     page.liturgyCatalog = Orders.catalogFrom({
-        elements: Orders.STANDARD_ELEMENTS,
         orders: [
             Orders.STANDARD_ORDER,
-            { id: 'short', name: 'Short', elementIds: ['hymn1', 'sermon', 'hymnEnd1'] },
+            {
+                id: 'short',
+                name: 'Short',
+                elementIds: shortIds,
+                elements: shortIds.map((id) => byId.get(id)),
+            },
         ],
     });
     page.originalService = serviceSnapshot(page.service);

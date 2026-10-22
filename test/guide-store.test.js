@@ -13,24 +13,24 @@ function seedSnapshot() {
     return Store.buildSnapshot(seed.guideTemplate, Store.indexById(seed.pageTemplates), Store.indexById(seed.stylePresets));
 }
 
-// ── normalizeServiceData folds legacy dotted keys ─────────────────────────────
+// ── normalizeServiceData (read path: nested fields only, MS-781) ─────────────
 
-test('normalizeServiceData folds dotted keys, nested value wins', () => {
+test('normalizeServiceData copies nested fields and drops dotted top-level keys', () => {
     const out = Store.normalizeServiceData({ theme: 'T', 'liturgy.sermon': 'Rom 8', liturgy: { callToWorship: 'Ps 100' } });
     assert.strictEqual(out.theme, 'T');
     assert.strictEqual(out.liturgy.callToWorship, 'Ps 100');
-    assert.strictEqual(out.liturgy.sermon, 'Rom 8');
+    assert.strictEqual(out.liturgy.sermon, undefined);
 });
 
 test('normalizeServiceData does not mutate its input (stays pure)', () => {
     const raw = { liturgy: { callToWorship: 'Ps 100' }, 'liturgy.sermon': 'Rom 8' };
     const out = Store.normalizeServiceData(raw);
-    assert.strictEqual(out.liturgy.sermon, 'Rom 8');
+    assert.strictEqual(out.liturgy.sermon, undefined);
     assert.ok(!('sermon' in raw.liturgy), 'input liturgy was not mutated');
     assert.notStrictEqual(out.liturgy, raw.liturgy, 'output nested object is a copy');
 });
 
-test('normalizeServiceData: a present-but-empty nested value wins over a dotted key', () => {
+test('normalizeServiceData keeps an intentionally empty nested value', () => {
     assert.strictEqual(Store.normalizeServiceData({ liturgy: { sermon: '' }, 'liturgy.sermon': 'FromDotted' }).liturgy.sermon, '');
     assert.strictEqual(Store.normalizeServiceData({ liturgy: { flag: false }, 'liturgy.flag': true }).liturgy.flag, false);
 });

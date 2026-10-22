@@ -26,13 +26,9 @@ function willWrite(argv) {
 }
 
 async function loadCatalog(db) {
-    const [els, ords] = await Promise.all([
-        db.collection(Liturgy.COLLECTIONS.elements).get(),
-        db.collection(Liturgy.COLLECTIONS.orders).get(),
-    ]);
-    const elements = els.docs.map((d) => Object.assign({}, d.data(), {id: d.id}));
+    const ords = await db.collection(Liturgy.COLLECTIONS.orders).get();
     const orders = ords.docs.map((d) => Object.assign({}, d.data(), {id: d.id}));
-    return Liturgy.catalogFrom({elements, orders});
+    return Liturgy.catalogFrom({orders});
 }
 
 async function main() {

@@ -17,6 +17,9 @@ const ALLOWLIST_SORTED = [
     'delete-legacy-person-picker-fields.js',
     'access-diff.js',
     'ms-776-backfill-account-levels.js',
+    'migrate-inline-liturgy-elements.js',
+    'migrate-service-dotted-keys.js',
+    'backfill-involvement-series.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

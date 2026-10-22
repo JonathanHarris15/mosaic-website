@@ -63,3 +63,6 @@ gh workflow run "Prod ops script" --ref main \
 | `delete-legacy-person-picker-fields.js` | [MS-775 — phantom person picker fields](./ms-775-person-picker-fields.md) (empty `args`; `commit=true` to delete) |
 | `access-diff.js` | [MS-776 — account access diff](./ms-776-access-diff.md) (empty `args`; read-only — `commit=true` is ignored) |
 | `ms-776-backfill-account-levels.js` | [MS-776 — additive account-level backfill](./ms-776-account-level-backfill.md) (empty `args`; dry-run, then `commit=true` to apply) |
+| `migrate-inline-liturgy-elements.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (run first; dry-run, then `commit=true`) |
+| `migrate-service-dotted-keys.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (second; dry-run, then `commit=true`) |
+| `backfill-involvement-series.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (third; dry-run, then `commit=true`) |

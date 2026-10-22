@@ -10,12 +10,9 @@ const Store = require('../public/liturgy-order-store.js');
 test('planSave writes the draft and deletes only the records the draft dropped', () => {
     const made = Core.addElement(Core.standardCatalog(), { name: 'Offertory', primitive: 'text' });
     const plan = Store.planSave(made.catalog, {
-        elementIds: ['preparatoryHymn', 'retired'],
         orderIds: ['standard', 'oldOrder'],
     });
 
-    assert.deepEqual(plan.setElements, []);
-    assert.deepEqual(plan.deleteElements, ['preparatoryHymn', 'retired']);
     assert.deepEqual(plan.deleteOrders, ['oldOrder']);
     assert.ok(!plan.setOrders.some(function (order) { return order.id === 'oldOrder'; }));
     assert.equal(plan.services, undefined);
@@ -38,7 +35,7 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
     });
     const scripture = Core.placeKind(marked, 'standard', 'scripture', 1);
     const titled = Core.updateElement(scripture.catalog, scripture.element.id, { name: 'The Epistle' });
-    const plan = Store.planSave(titled, { elementIds: [], orderIds: ['standard'] });
+    const plan = Store.planSave(titled, { orderIds: ['standard'] });
     const standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
     const storedPrayer = standard.elements.find(function (el) { return el.id === prayer.element.id; });
     assert.equal(storedPrayer.prayedByOther, true);
@@ -60,7 +57,7 @@ test('a prayer records that someone else prays it, and a scripture keeps its tit
 
 test('planSave writes printableId on an order when set, and omits it when cleared', () => {
     let cat = Core.setOrderPrintable(Core.standardCatalog(), 'standard', 'sunday-guide');
-    let plan = Store.planSave(cat, { elementIds: [], orderIds: ['standard'] });
+    let plan = Store.planSave(cat, { orderIds: ['standard'] });
     let standard = plan.setOrders.find(function (order) { return order.id === 'standard'; });
     assert.equal(standard.printableId, 'sunday-guide');
 

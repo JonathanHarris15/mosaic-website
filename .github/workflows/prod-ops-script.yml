@@ -30,6 +30,9 @@ on:
           - delete-legacy-person-picker-fields.js
           - access-diff.js
           - ms-776-backfill-account-levels.js
+          - migrate-inline-liturgy-elements.js
+          - migrate-service-dotted-keys.js
+          - backfill-involvement-series.js
       args:
         description: Extra script flags (no shell; validated in Node)
         type: string

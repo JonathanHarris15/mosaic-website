@@ -21,6 +21,7 @@
     const Engine = (typeof require !== 'undefined') ? require('./guide-engine.js') : global.GuideEngine;
     const Seed = (typeof require !== 'undefined') ? require('./guide-seed.js') : global.GuideSeed;
     const HymnVersions = (typeof require !== 'undefined') ? require('./hymn-versions.js') : global.HymnVersions;
+    const Dotted = (typeof require !== 'undefined') ? require('./service-dotted-keys-core.js') : global.ServiceDottedKeysCore;
 
     const COLLECTIONS = {
         stylePresets: 'style_presets',
@@ -38,38 +39,7 @@
         return out;
     }
 
-    // Fold legacy dotted-key fields (e.g. 'liturgy.sermon') back into nested
-    // objects — older saves with set({merge}) stored some paths as top-level keys
-    // containing a dot. A nested value wins over a dotted-key value for the same
-    // leaf. Ported from the old service-guide.js so the new resolver reads the
-    // same Service shape; pure and exported for tests.
-    function normalizeServiceData(raw) {
-        const data = {};
-        for (const [key, val] of Object.entries(raw || {})) {
-            // Copy plain object values, not their reference, so the dotted-key
-            // loop below writes only into store-owned objects and never mutates
-            // the caller's input (keeps this pure).
-            if (!key.includes('.')) {
-                data[key] = (val && typeof val === 'object' && !Array.isArray(val)) ? Object.assign({}, val) : val;
-            }
-        }
-        for (const [key, val] of Object.entries(raw || {})) {
-            if (key.includes('.')) {
-                const parts = key.split('.');
-                let obj = data;
-                for (let i = 0; i < parts.length - 1; i++) {
-                    if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                    obj = obj[parts[i]];
-                }
-                const leaf = parts[parts.length - 1];
-                // Presence check, not truthiness: an existing nested value wins
-                // even when it is intentionally empty/false/0 (the dotted key is
-                // only a legacy fallback).
-                if (!(leaf in obj)) obj[leaf] = val;
-            }
-        }
-        return data;
-    }
+    const normalizeServiceData = Dotted.readServiceDoc;
 
     // The Baptism Candidate display string (ports baptismNames): array of Person
     // refs post-migration, possibly a legacy free-text string.

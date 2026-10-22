@@ -98,14 +98,21 @@ suite('reading Sundays and looking things up', () => {
     test('a Sunday that names a saved Liturgy Order reads in that order', async () => {
         // ADR-0080. The congregation's elements and orders are read from
         // their own collections; the Sunday holds only the pointer.
-        await db.collection('liturgy_elements').doc('callToWorship')
-            .set({name: 'Call to Worship', primitive: 'scripture', hasRole: false, hasNote: true});
-        await db.collection('liturgy_elements').doc('offertory')
-            .set({name: 'Offertory', primitive: 'song', hasRole: false, hasNote: true});
         await db.collection('liturgy_orders').doc('standard')
-            .set({name: 'Standard', elementIds: ['callToWorship']});
+            .set({
+                name: 'Standard',
+                elementIds: ['callToWorship'],
+                elements: [{id: 'callToWorship', kind: 'scripture', name: 'Call to Worship', hasNote: true}],
+            });
         await db.collection('liturgy_orders').doc('giving')
-            .set({name: 'Giving Sunday', elementIds: ['offertory', 'callToWorship']});
+            .set({
+                name: 'Giving Sunday',
+                elementIds: ['offertory', 'callToWorship'],
+                elements: [
+                    {id: 'offertory', kind: 'hymn', name: 'Offertory', hasNote: true},
+                    {id: 'callToWorship', kind: 'scripture', name: 'Call to Worship', hasNote: true},
+                ],
+            });
         await db.collection('services').doc('2026-08-24').set({
             liturgyOrderId: 'giving',
             liturgy: {callToWorship: 'Psalm 96', offertory: {id: 'h-2', name: 'A Giving Song'}},

@@ -79,6 +79,7 @@ const MODULES = [
     'liturgy-save-core.js',
     'mcp-guidance-core.js',
     'service-note-core.js',
+    'service-dotted-keys-core.js',
     'service-read-core.js',
     'mosaic-identity.js',
     'service-authorship.js',
