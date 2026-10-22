@@ -104,6 +104,7 @@ function contentFromLegacyStores(service) {
  * @return {{ patch: Record<string, any>, bag: Record<string, any>, wouldWrite: boolean }}
  */
 function planOccurrenceFill(existingBag, service) {
+    /** @type {Record<string, any>} */
     const incoming = Migrate.valuesFromTyped(contentFromLegacyStores(service));
     /** @type {Record<string, any>} */
     const base = existingBag && typeof existingBag === 'object' ? Object.assign({}, existingBag) : {};
@@ -133,10 +134,13 @@ function walkNodes(nodes, fn) {
  * @return {boolean}
  */
 function readsBookletText(project) {
+    /** @type {any[]} */
     const inputs = (project && project.inputs) || [];
     if (inputs.some((input) => input && Migrate.isLegacyFillId(input.id))) return true;
     let found = false;
-    ((project && project.pages) || []).forEach((page) => {
+    /** @type {any[]} */
+    const pages = (project && project.pages) || [];
+    pages.forEach((page) => {
         walkNodes(page && page.nodes, (node) => {
             if (!node || found) return;
             const repeat = node.repeat && node.repeat.source;
