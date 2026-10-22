@@ -70,6 +70,9 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     assert.doesNotMatch(js, /showsPastoral/);
     assert.doesNotMatch(html, /Prayer Leader \(Praise\)/);
     assert.match(html, /item\.type === 'prayer'/);
+    assert.match(html, /pastoralPrayerPicker\(slot/);
+    assert.doesNotMatch(html, /setPrayerPerson\(item\.key/,
+        'pastoral-prayer subjects are chosen through the person picker, not a <select>');
     assert.match(html, /Who prays /);
     assert.match(html, /prayerScheduleLabel\(slot\.id\)/);
     assert.match(js, /prayerScheduleLabel\(/);
