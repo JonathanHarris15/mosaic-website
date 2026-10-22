@@ -93,8 +93,5 @@ function documentSize(pathSegments, fields) {
 module.exports = {
     LIMIT_BYTES,
     WRITE_CEILING_BYTES,
-    stringSize,
-    documentNameSize,
     documentSize,
-    valueSize,
 };

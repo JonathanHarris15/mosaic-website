@@ -153,7 +153,6 @@ function readsBookletText(project) {
                 const bind = node.bind[prop];
                 if (!bind) return;
                 if (bind.source === 'event_field' && Migrate.isLegacyFillId(bind.field)) found = true;
-                if (bind.source === 'sunday_typed' && Migrate.FILL_KEYS.indexOf(bind.field) !== -1) found = true;
             });
         });
     });
@@ -247,6 +246,19 @@ function decodeDataUrl(value) {
     } catch (e) {
         return null;
     }
+}
+
+/**
+ * Upload one offloaded country map and set its download token.
+ * @param {{ save: Function, setMetadata: Function }} file
+ * @param {{ buffer: Buffer, contentType: string, token: string }} upload
+ * @return {Promise<void>}
+ */
+async function saveOffloadedImage(file, upload) {
+    await file.save(upload.buffer, {contentType: upload.contentType});
+    await file.setMetadata({
+        metadata: {firebaseStorageDownloadTokens: upload.token},
+    });
 }
 
 /** @param {string} bucket @param {string} objectPath @param {string} token @return {string} */
@@ -495,6 +507,44 @@ function newOccurrenceBody(date, series, plans, assignments) {
     };
 }
 
+/** @return {Record<string, any>} */
+function emptySizeReport() {
+    return {
+        limitBytes: Size.LIMIT_BYTES,
+        ceilingBytes: Size.WRITE_CEILING_BYTES,
+        maxResultBytes: 0,
+        maxResultOccurrenceId: null,
+        maxBeforeOffloadBytes: 0,
+        maxBeforeOffloadOccurrenceId: null,
+        largestBeforeOffload: [],
+        occurrencesSkipped: 0,
+        imagesOffloaded: 0,
+        inlineImageBytes: 0,
+        storageObjects: 0,
+        skipped: [],
+    };
+}
+
+/**
+ * Fold one prepared write into the dry-run size report. The maximum
+ * resulting size is the larger result, not the zero the report starts at.
+ * @param {Record<string, any>} report
+ * @param {{ occurrenceId: string, beforeOffloadBytes: number, resultBytes: number, largestBefore: any[] }} prep
+ * @return {Record<string, any>}
+ */
+function notePreparedSize(report, prep) {
+    if (prep.beforeOffloadBytes > report.maxBeforeOffloadBytes) {
+        report.maxBeforeOffloadBytes = prep.beforeOffloadBytes;
+        report.maxBeforeOffloadOccurrenceId = prep.occurrenceId;
+        report.largestBeforeOffload = prep.largestBefore;
+    }
+    if (prep.resultBytes > report.maxResultBytes) {
+        report.maxResultBytes = prep.resultBytes;
+        report.maxResultOccurrenceId = prep.occurrenceId;
+    }
+    return report;
+}
+
 /** @param {any} batch @param {number} count */
 async function commitBatch(batch, count) {
     if (count > 0) await batch.commit();
@@ -564,36 +614,7 @@ async function main() {
     const services = await db.collection('services').get();
     const bucketName = project.storageBucket || (projectId + '.firebasestorage.app');
     const bucket = COMMIT ? admin.storage().bucket() : null;
-    /**
-     * @type {{
-     *   limitBytes: number,
-     *   ceilingBytes: number,
-     *   maxResultBytes: number,
-     *   maxResultOccurrenceId: string|null,
-     *   maxBeforeOffloadBytes: number,
-     *   maxBeforeOffloadOccurrenceId: string|null,
-     *   largestBeforeOffload: Array<{ path: string, bytes: number, dataUrl: boolean }>,
-     *   occurrencesSkipped: number,
-     *   imagesOffloaded: number,
-     *   inlineImageBytes: number,
-     *   storageObjects: number,
-     *   skipped: Array<Record<string, any>>,
-     * }}
-     */
-    const sizeReport = {
-        limitBytes: Size.LIMIT_BYTES,
-        ceilingBytes: Size.WRITE_CEILING_BYTES,
-        maxResultBytes: 0,
-        maxResultOccurrenceId: null,
-        maxBeforeOffloadBytes: 0,
-        maxBeforeOffloadOccurrenceId: null,
-        largestBeforeOffload: [],
-        occurrencesSkipped: 0,
-        imagesOffloaded: 0,
-        inlineImageBytes: 0,
-        storageObjects: 0,
-        skipped: [],
-    };
+    const sizeReport = emptySizeReport();
     for (const doc of services.docs) {
         if (!inDateRange(doc.id, from, to)) continue;
         totals.servicesScanned += 1;
@@ -627,15 +648,7 @@ async function main() {
             series,
             assignments,
         });
-        if (prep.beforeOffloadBytes > sizeReport.maxBeforeOffloadBytes) {
-            sizeReport.maxBeforeOffloadBytes = prep.beforeOffloadBytes;
-            sizeReport.maxBeforeOffloadOccurrenceId = occId;
-            sizeReport.largestBeforeOffload = prep.largestBefore;
-        }
-        if (prep.resultBytes > sizeReport.maxResultBytes) {
-            sizeReport.maxResultBytes = prep.resultBytes;
-            sizeReport.maxResultOccurrenceId = occId;
-        }
+        notePreparedSize(sizeReport, prep);
         if (writeOutcome(prep) === 'skip') {
             totals.fieldsSkipped += plan.fieldsCopied;
             sizeReport.occurrencesSkipped += 1;
@@ -651,11 +664,7 @@ async function main() {
         if (COMMIT) {
             if (bucket && prep.uploads.length) {
                 for (const upload of prep.uploads) {
-                    const file = bucket.file(upload.path);
-                    await file.save(upload.buffer, {contentType: upload.contentType});
-                    await file.setMetadata({
-                        metadata: {firebaseStorageDownloadTokens: upload.token},
-                    });
+                    await saveOffloadedImage(bucket.file(upload.path), upload);
                 }
             }
             if ((await commitOccurrence(occRef, prep)) === 'skipped') {
@@ -696,15 +705,16 @@ module.exports = {
     readsBookletText,
     mergePrintableInputs,
     newOccurrenceBody,
-    offloadDataUrls,
     prepareOccurrenceWrite,
     printableMigration,
     rosterAssignments,
     commitOccurrence,
+    saveOffloadedImage,
+    emptySizeReport,
+    notePreparedSize,
     writeMode,
     writeOutcome,
     isSizeError,
-    SUNDAY_SERIES,
     DATA_URL_MIN_BYTES,
     WRITE_CEILING_BYTES: Size.WRITE_CEILING_BYTES,
     LIMIT_BYTES: Size.LIMIT_BYTES,

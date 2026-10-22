@@ -103,7 +103,7 @@ test('only a printable that reads booklet text is selected', () => {
             nodes: [{ id: 'q', tag: 'p', repeat: { source: 'sunday_kids_questions', params: {} } }],
         }],
     }), true);
-    assert.equal(Copy.readsBookletText({
+    const storedImage = Copy.printableMigration({
         inputs: [],
         pages: [{
             id: 'pg',
@@ -113,7 +113,12 @@ test('only a printable that reads booklet text is selected', () => {
                 bind: { src: { scope: 'global', source: 'sunday_typed', field: 'prayerCountryImage', params: {} } },
             }],
         }],
-    }), true);
+    });
+    assert.equal(storedImage.readsBooklet, true);
+    assert.ok(storedImage.patch);
+    const storedSrc = storedImage.patch.pages[0].nodes[0].bind.src;
+    assert.equal(storedSrc.source, 'event_field');
+    assert.equal(storedSrc.field, 'legacy_prayerCountryImage');
     assert.equal(Copy.readsBookletText({
         inputs: [],
         pages: [{
@@ -155,10 +160,11 @@ test('the date window is service ids, and the script never deletes', () => {
     assert.equal(src.includes('guideFieldsDeleted: 0'), true);
     assert.equal(src.includes('batch.set(occRef'), false);
     assert.equal(src.includes('await occRef.set'), true);
-    assert.equal(src.includes('maxResultBytes'), true);
     assert.equal(src.includes('Migrate.contentFromLegacyStores'), false);
     assert.equal(src.includes('Migrate.planOccurrenceFill'), false);
     assert.equal(src.includes('Migrate.readsBookletText'), false);
+    assert.equal(src.includes('await saveOffloadedImage'), true);
+    assert.equal(src.includes('notePreparedSize(sizeReport, prep)'), true);
 });
 
 test('a stored sunday_typed wire is what a commit would save', () => {
@@ -370,4 +376,54 @@ test('a document that is still over the ceiling is skipped, and a size error is 
         details: "Document 'event_occurrences/sunday_service_2026-09-06' cannot be written because its size (1,293,448 bytes) exceeds the maximum allowed size of 1,048,576 bytes.",
     }), true);
     assert.equal(Copy.isSizeError(new Error('permission denied')), false);
+});
+
+test('a dry run reports the larger resulting document, not the zero it starts from', () => {
+    const report = Copy.emptySizeReport();
+    assert.equal(report.maxResultBytes, 0);
+    Copy.notePreparedSize(report, {
+        occurrenceId: 'sunday_service_2026-09-06',
+        beforeOffloadBytes: 900,
+        resultBytes: 400,
+        largestBefore: [{ path: 'printableInputs.guide.legacy_prayerNation', bytes: 6, dataUrl: false }],
+    });
+    Copy.notePreparedSize(report, {
+        occurrenceId: 'sunday_service_2026-09-13',
+        beforeOffloadBytes: 100,
+        resultBytes: 700,
+        largestBefore: [],
+    });
+    assert.equal(report.maxResultBytes, 700);
+    assert.equal(report.maxResultOccurrenceId, 'sunday_service_2026-09-13');
+    assert.equal(report.maxBeforeOffloadBytes, 900);
+    assert.equal(report.maxBeforeOffloadOccurrenceId, 'sunday_service_2026-09-06');
+    assert.equal(report.largestBeforeOffload[0].path, 'printableInputs.guide.legacy_prayerNation');
+});
+
+test('a country map is uploaded with its download token', async () => {
+    const image = 'data:image/png;base64,' + 'B'.repeat(3000);
+    const prep = Copy.prepareOccurrenceWrite({ printableInputs: {} }, {
+        guide: { legacy_prayerCountryImage: image },
+    }, {
+        occurrenceId: 'sunday_service_2026-09-06',
+        date: '2026-09-06',
+        bucket: 'mosaic-hymn-database.firebasestorage.app',
+    });
+    assert.equal(prep.uploads.length, 1);
+    const upload = prep.uploads[0];
+    /** @type {any[]} */
+    const calls = [];
+    await Copy.saveOffloadedImage({
+        async save(/** @type {any} */ buffer, /** @type {any} */ options) {
+            calls.push({ op: 'save', buffer, options });
+        },
+        async setMetadata(/** @type {any} */ metadata) {
+            calls.push({ op: 'metadata', metadata });
+        },
+    }, upload);
+    assert.equal(calls[0].op, 'save');
+    assert.equal(calls[0].options.contentType, upload.contentType);
+    assert.equal(calls[0].buffer.equals(upload.buffer), true);
+    assert.equal(calls[1].metadata.metadata.firebaseStorageDownloadTokens, upload.token);
+    assert.equal(prep.body.printableInputs.guide.legacy_prayerCountryImage.includes(upload.token), true);
 });
