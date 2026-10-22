@@ -67,7 +67,15 @@ test('isPastoralAssistant is the pastoral_assistant rank, and the boolean is not
     // No user document: accessRank() is '' so the helper is false.
     const rank = fnBody(firestore, 'accessRank');
     assert.match(rank, /!userDocExists\(\) \? ''/);
-    assert.match(rank, /keyOn\('visibility\.lift_hidden_tags'\) \? 'pastoral_assistant'/);
+    const fromMap = fnBody(firestore, 'rankFromMap');
+    assert.match(fromMap, /mapGrants\(perms, 'system\.super_admin'\) \? 'super_admin'/);
+    assert.match(fromMap, /mapGrants\(perms, 'system\.kiosk'\) \? 'kiosk'/);
+    assert.match(fromMap, /mapGrants\(perms, 'visibility\.lift_hidden_tags'\) \? 'pastoral_assistant'/);
+    assert.ok(
+        fromMap.indexOf('system.super_admin') < fromMap.indexOf('system.kiosk')
+            && fromMap.indexOf('system.kiosk') < fromMap.indexOf('visibility.lift_hidden_tags'),
+        'super admin is decided before kiosk, and kiosk before pastoral assistant'
+    );
 });
 
 test('readsAsElder, writesTheRecord and canDecide are the key or the rank; isElder is the count key', () => {
@@ -76,9 +84,14 @@ test('readsAsElder, writesTheRecord and canDecide are the key or the rank; isEld
     const decide = fnBody(firestore, 'canDecide');
     const isElder = fnBody(firestore, 'isElder');
     const counts = fnBody(firestore, 'countsAsElder');
-    assert.match(reads, /keyOn\('visibility\.lift_hidden_tags'\) \|\| isPastoralAssistant\(\)/);
-    assert.match(writes, /keyOn\('shep\.notes\.write'\) \|\| isPastoralAssistant\(\)/);
-    assert.match(decide, /keyOn\('shep\.tags\.manage'\) \|\| isPastoralAssistant\(\)/);
+    assert.match(reads, /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\) \|\| isPastoralAssistant\(\)/);
+    assert.match(reads, /accountLevelId == 'level_elder'/);
+    assert.match(reads, /accountLevelId == 'level_pastoral_assistant'/);
+    assert.doesNotMatch(reads, /keyOn\(/);
+    assert.match(writes, /mapGrants\(data\.permissions, 'shep\.notes\.write'\) \|\| isPastoralAssistant\(\)/);
+    assert.doesNotMatch(writes, /keyOn\(/);
+    assert.match(decide, /mapGrants\(data\.permissions, 'shep\.tags\.manage'\) \|\| isPastoralAssistant\(\)/);
+    assert.doesNotMatch(decide, /keyOn\(/);
     assert.doesNotMatch(reads, /usesPermissionMap|pastoralAssistant == true|isElder\(\)/);
     assert.match(isElder, /return keyOn\('shep\.count_as_elder'\);/);
     assert.match(counts, /return keyOn\('shep\.count_as_elder'\);/);
@@ -89,10 +102,10 @@ test('readsAsElder, writesTheRecord and canDecide are the key or the rank; isEld
 test('readsAsEditor is the edit keys, the rank, or isEditor', () => {
     const reads = fnBody(firestore, 'readsAsEditor');
     const isEditor = fnBody(firestore, 'isEditor');
-    assert.match(reads, /keyOn\('directory\.edit_identity'\)/);
-    assert.match(reads, /keyOn\('printables\.edit'\)/);
     assert.match(reads, /isPastoralAssistant\(\)/);
     assert.match(reads, /isEditor\(\)/);
+    assert.match(isEditor, /mapHas\('directory\.edit_identity'\)/);
+    assert.match(isEditor, /mapHas\('printables\.edit'\)/);
     assert.doesNotMatch(reads, /usesPermissionMap|pastoralAssistant == true/);
     assert.match(isEditor,
         /accessRank\(\) in \['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
@@ -277,10 +290,10 @@ test('a user cannot write pastoralAssistant on their own user doc', () => {
 
 test('rankCanSee admits a Pastoral Assistant to the editor and elder rungs', () => {
     const body = fnBody(firestore, 'rankCanSee');
-    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| keyOn\('visibility\.rung\.member'\)\)/);
-    assert.match(body, /visibility == 'participant' && \(readsAsEditor\(\) \|\| keyOn\('visibility\.rung\.participant'\)\)/);
-    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| keyOn\('visibility\.rung\.editor'\)\)/);
-    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| keyOn\('visibility\.rung\.elder'\)\)/);
+    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| mapHas\('visibility\.rung\.member'\)\)/);
+    assert.match(body, /visibility == 'participant' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.participant'\)\)/);
+    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.editor'\)\)/);
+    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| mapHas\('visibility\.rung\.elder'\)\)/);
 });
 
 test('storage restates the same helpers and admits a Pastoral Assistant on elder and editor reads', () => {
@@ -293,11 +306,13 @@ test('storage restates the same helpers and admits a Pastoral Assistant on elder
     assert.match(fnBody(storage, 'isElderAccount'), /return keyOnAccount\('shep\.count_as_elder'\);/);
     assert.doesNotMatch(fnBody(storage, 'isElderAccount'), /'elder', 'super_admin'/);
     assert.match(fnBody(storage, 'readsAsElderAccount'),
-        /keyOnAccount\('visibility\.lift_hidden_tags'\) \|\| isPastoralAssistantAccount\(\)/);
+        /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\) \|\| isPastoralAssistantAccount\(\)/);
+    assert.doesNotMatch(fnBody(storage, 'readsAsElderAccount'), /keyOnAccount\(/);
     assert.match(fnBody(storage, 'readsAsEditorAccount'), /isPastoralAssistantAccount\(\)/);
     assert.match(fnBody(storage, 'readsAsEditorAccount'), /isEditorAccount\(\)/);
     assert.match(fnBody(storage, 'canDecideAccount'),
-        /keyOnAccount\('shep\.tags\.manage'\) \|\| isPastoralAssistantAccount\(\)/);
+        /mapGrants\(data\.permissions, 'shep\.tags\.manage'\) \|\| isPastoralAssistantAccount\(\)/);
+    assert.doesNotMatch(fnBody(storage, 'canDecideAccount'), /keyOnAccount\(/);
 
     const elderReads = storageCode.split('\n').filter(line =>
         /^\s*allow /.test(line) && /\bread\b/.test(line) &&
@@ -312,10 +327,10 @@ test('storage restates the same helpers and admits a Pastoral Assistant on elder
     assert.deepEqual(editorReads, [], 'storage editor reads missing Pastoral Assistant:\n' + editorReads.join('\n'));
 
     const see = fnBody(storage, 'rankOrParticipantSees');
-    assert.match(see, /keyOnAccount\('visibility\.rung\.member'\)/);
-    assert.match(see, /keyOnAccount\('visibility\.rung\.participant'\)/);
-    assert.match(see, /keyOnAccount\('visibility\.rung\.editor'\)/);
-    assert.match(see, /keyOnAccount\('visibility\.rung\.elder'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.member'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.participant'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.editor'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.elder'\)/);
     assert.match(see, /readsAsElderAccount\(\)/);
     assert.doesNotMatch(see, /pastoralAssistant == true/);
 });

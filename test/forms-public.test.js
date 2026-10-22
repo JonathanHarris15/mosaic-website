@@ -129,8 +129,12 @@ test('the ladder here matches the rank labels firestore.rules uses', () => {
     assert.strictEqual(fp.rankSatisfies('elder', 'pastoral_assistant'), true);
     assert.match(rules,
         /function isPastoralAssistant\(\) \{\s*return accessRank\(\) == 'pastoral_assistant';\s*\}/);
-    assert.match(rules,
-        /function readsAsElder\(\) \{\s*return keyOn\('visibility\.lift_hidden_tags'\) \|\| isPastoralAssistant\(\);\s*\}/);
+    const readsAsElder = rules.match(/function readsAsElder\(\)\s*\{([\s\S]*?)\n {4}\}/);
+    assert.ok(readsAsElder, 'readsAsElder() missing');
+    assert.match(readsAsElder[1], /isPastoralAssistant\(\)/);
+    assert.match(readsAsElder[1], /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\)/);
+    assert.match(readsAsElder[1], /accountLevelId == 'level_pastoral_assistant'/);
+    assert.doesNotMatch(readsAsElder[1], /keyOn\(/);
 });
 
 test('a public form is open to a stranger; a members one is not', () => {

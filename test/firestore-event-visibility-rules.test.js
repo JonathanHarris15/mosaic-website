@@ -73,9 +73,9 @@ test('each rung is gated on the rank that owns it', () => {
     assert.match(body, /visibility == 'public'/, 'public needs no rank at all');
     // Rank, or the matching visibility.rung.* key. A saved map can open one
     // rung without carrying the whole rank.
-    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| keyOn\('visibility\.rung\.member'\)\)/);
-    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| keyOn\('visibility\.rung\.editor'\)\)/);
-    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| keyOn\('visibility\.rung\.elder'\)\)/);
+    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| mapHas\('visibility\.rung\.member'\)\)/);
+    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.editor'\)\)/);
+    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| mapHas\('visibility\.rung\.elder'\)\)/);
 });
 
 test('a member cannot reach participant Events by rank alone', () => {
@@ -89,7 +89,7 @@ test('a member cannot reach participant Events by rank alone', () => {
 
 test('an editor and above sees participant Events without holding a Role', () => {
     assert.match(fnBody('rankCanSee'),
-        /visibility == 'participant' && \(readsAsEditor\(\) \|\| keyOn\('visibility\.rung\.participant'\)\)/);
+        /visibility == 'participant' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.participant'\)\)/);
 });
 
 // ── Failing closed ────────────────────────────────────────────────────────────
@@ -197,8 +197,8 @@ test('the member floor excludes a viewer', () => {
     const body = fnBody('isMember');
     assert.match(body,
         /accessRank\(\) in \['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
-    assert.match(body, /keyOn\('directory\.view'\)/);
-    assert.match(body, /keyOn\('visibility\.rung\.member'\)/);
+    assert.match(body, /mapHas\('directory\.view'\)/);
+    assert.match(body, /mapHas\('visibility\.rung\.member'\)/);
     assert.match(body, /isEditor\(\)/);
     assert.doesNotMatch(body, /'viewer'/, 'a viewer is signed in but sees only public things');
     assert.doesNotMatch(body, /'kiosk'/);

@@ -18,12 +18,13 @@ test('a saved permissions map is the whole answer', () => {
     // map (that grants nothing and does not fall through). No permissions
     // field → accountLevelId via presetGrants. role and permissionLevel are
     // not read. system.super_admin true opens every key.
-    const keyOn = rules.match(/function keyOn\(key\) \{\s*return ([\s\S]*?)\n {4}\}/);
+    const keyOn = rules.match(/function keyOn\(key\) \{\s*([\s\S]*?)\n {4}\}/);
     assert.ok(keyOn, 'keyOn() missing');
-    assert.match(keyOn[1], /'permissions' in signedInUserData\(\)/);
-    assert.match(keyOn[1], /\? mapGrants\(signedInUserData\(\)\.permissions, key\)/);
-    assert.match(keyOn[1], /'accountLevelId' in signedInUserData\(\)/);
-    assert.match(keyOn[1], /presetGrants\(signedInUserData\(\)\.accountLevelId, key\)/);
+    assert.match(keyOn[1], /let data = userData\(\)/);
+    assert.match(keyOn[1], /'permissions' in data/);
+    assert.match(keyOn[1], /\? mapGrants\(data\.permissions, key\)/);
+    assert.match(keyOn[1], /'accountLevelId' in data/);
+    assert.match(keyOn[1], /presetGrants\(data\.accountLevelId, key\)/);
     assert.doesNotMatch(keyOn[1], /permissionLevel|\brole\b|pastoralAssistant/);
 
     const mapGrants = rules.match(/function mapGrants\(perms, key\) \{\s*return ([\s\S]*?)\n {4}\}/);
@@ -41,6 +42,6 @@ test('a saved permissions map is the whole answer', () => {
 test('rules read denormalized permissions when present', () => {
     assert.match(rules, /function hasPermission\(key\)/);
     assert.match(rules, /function hasPermission\(key\) \{\s*return keyOn\(key\);\s*\}/);
-    assert.match(rules, /keyOn\('visibility\.lift_hidden_tags'\)/);
+    assert.match(rules, /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\)/);
     assert.match(rules, /keyOn\('shep\.count_as_elder'\)/);
 });

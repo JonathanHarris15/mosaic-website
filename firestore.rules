@@ -170,42 +170,80 @@ service cloud.firestore {
         : false;
     }
 
+    // The Rules compiler inlines every call into every allow. keyOn() inlines
+    // presetGrants, which is the whole builtin matrix. accessRank / isEditor /
+    // rankCanSee called that often enough that `projects/...:test` — the
+    // compile step deploy runs before it uploads — sat until the service's
+    // deadline and came back HTTP 503. Nothing was released. The matrix stays
+    // in keyOn(), which editsWith / isElder / hasPermission call once. The
+    // helpers below answer the same questions from one user doc: a saved map
+    // is the whole answer, otherwise the builtin accountLevelId. role,
+    // permissionLevel, and pastoralAssistant grant nothing. Super admin is
+    // still decided before kiosk, because the super admin preset also sets
+    // system.kiosk.
+
+    function userData() {
+      return userDocExists() ? signedInUserData() : null;
+    }
+
+    function mapHas(key) {
+      let data = userData();
+      return data != null && ('permissions' in data) && mapGrants(data.permissions, key);
+    }
+
+    function rankFromMap(perms) {
+      return mapGrants(perms, 'system.super_admin') ? 'super_admin'
+        : mapGrants(perms, 'system.kiosk') ? 'kiosk'
+        : mapGrants(perms, 'shep.count_as_elder') ? 'elder'
+        : mapGrants(perms, 'visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : mapGrants(perms, 'admin.dashboard.access') ? 'admin'
+        : (mapGrants(perms, 'directory.edit_identity')
+            || mapGrants(perms, 'services.builder.edit')
+            || mapGrants(perms, 'printables.edit')) ? 'editor'
+        : mapGrants(perms, 'directory.view') ? 'member'
+        : 'viewer';
+    }
+
+    function rankFromLevelId(id) {
+      return id == 'level_super_admin' ? 'super_admin'
+        : id == 'level_kiosk' ? 'kiosk'
+        : id == 'level_elder' ? 'elder'
+        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
+        : id == 'level_admin' ? 'admin'
+        : id == 'level_editor' ? 'editor'
+        : id == 'level_member' ? 'member'
+        : 'viewer';
+    }
+
     function keyOn(key) {
-      return userDocExists() && (
-        ('permissions' in signedInUserData())
-          ? mapGrants(signedInUserData().permissions, key)
-          : (('accountLevelId' in signedInUserData())
-              && presetGrants(signedInUserData().accountLevelId, key))
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? mapGrants(data.permissions, key)
+          : (('accountLevelId' in data) && presetGrants(data.accountLevelId, key))
       );
     }
 
     function accessRank() {
+      let data = userData();
       return !userDocExists() ? ''
-        : keyOn('system.super_admin') ? 'super_admin'
-        : keyOn('system.kiosk') ? 'kiosk'
-        : keyOn('shep.count_as_elder') ? 'elder'
-        : keyOn('visibility.lift_hidden_tags') ? 'pastoral_assistant'
-        : keyOn('admin.dashboard.access') ? 'admin'
-        : (keyOn('directory.edit_identity')
-            || keyOn('services.builder.edit')
-            || keyOn('printables.edit')) ? 'editor'
-        : keyOn('directory.view') ? 'member'
-        : 'viewer';
+        : !('permissions' in data) ? rankFromLevelId(('accountLevelId' in data) ? data.accountLevelId : '')
+        : (data.permissions is map) ? rankFromMap(data.permissions) : 'viewer';
     }
 
     function isAdmin() {
       return accessRank() == 'admin'
         || accessRank() == 'super_admin'
-        || keyOn('admin.dashboard.access');
+        || mapHas('admin.dashboard.access');
     }
 
     function isEditor() {
       return accessRank() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || keyOn('directory.edit_identity')
-        || keyOn('printables.edit')
-        || keyOn('services.builder.edit')
-        || keyOn('roles.manager.edit')
-        || keyOn('hymns.edit');
+        || mapHas('directory.edit_identity')
+        || mapHas('printables.edit')
+        || mapHas('services.builder.edit')
+        || mapHas('roles.manager.edit')
+        || mapHas('hymns.edit');
     }
 
     function editsWith(key) {
@@ -218,8 +256,8 @@ service cloud.firestore {
 
     function isMember() {
       return accessRank() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || keyOn('directory.view')
-        || keyOn('visibility.rung.member')
+        || mapHas('directory.view')
+        || mapHas('visibility.rung.member')
         || isEditor();
     }
 
@@ -240,23 +278,50 @@ service cloud.firestore {
       return keyOn(key);
     }
 
+    // Presets that hold visibility.lift_hidden_tags are super admin, elder, and
+    // pastoral assistant. A saved map does not get those for free: only the
+    // lift key, or a rank of pastoral assistant (which itself required the key).
     function readsAsElder() {
-      return keyOn('visibility.lift_hidden_tags') || isPastoralAssistant();
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'visibility.lift_hidden_tags') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function readsAsEditor() {
-      return keyOn('directory.edit_identity')
-        || keyOn('printables.edit')
-        || isPastoralAssistant()
-        || isEditor();
+      return isEditor() || isPastoralAssistant();
     }
 
+    // shep.notes.write on a preset is the same three levels as the lift key.
+    // A map can hold the key without that rank, and a pastoral assistant rank
+    // can hold the rank without the key. Both still write.
     function writesTheRecord() {
-      return keyOn('shep.notes.write') || isPastoralAssistant();
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.notes.write') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function canDecide() {
-      return keyOn('shep.tags.manage') || isPastoralAssistant();
+      let data = userData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.tags.manage') || isPastoralAssistant())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function countsAsElder() {
@@ -437,10 +502,10 @@ service cloud.firestore {
     // Role on them.
     function rankCanSee(visibility) {
       return visibility == 'public'
-        || (visibility == 'member' && (isMember() || keyOn('visibility.rung.member')))
-        || (visibility == 'participant' && (readsAsEditor() || keyOn('visibility.rung.participant')))
-        || (visibility == 'editor' && (readsAsEditor() || keyOn('visibility.rung.editor')))
-        || (visibility == 'elder' && (readsAsElder() || keyOn('visibility.rung.elder')));
+        || (visibility == 'member' && (isMember() || mapHas('visibility.rung.member')))
+        || (visibility == 'participant' && (readsAsEditor() || mapHas('visibility.rung.participant')))
+        || (visibility == 'editor' && (readsAsEditor() || mapHas('visibility.rung.editor')))
+        || (visibility == 'elder' && (readsAsElder() || mapHas('visibility.rung.elder')));
     }
 
     // The one rung rank cannot answer, checked against the occurrence's own
