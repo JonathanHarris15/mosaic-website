@@ -7,6 +7,16 @@
  *       --project mosaic-hymn-database --i-mean-prod
  *   node scripts/delete-legacy-membership-status.js \
  *       --project mosaic-hymn-database --i-mean-prod --commit
+ *
+ * When status disagrees with stage, the run aborts unless you list person ids
+ * where stage is authoritative (drops status only, stage unchanged):
+ *
+ *   node scripts/delete-legacy-membership-status.js \
+ *       --project mosaic-hymn-database --i-mean-prod \
+ *       --stage-wins=LD935cnEwFydTJ05S13W,nZlY899LavYsA4SrOFvd
+ *
+ * Prod ops workflow `args` input (via PROD_OPS_ARGS / splitOpsArgs):
+ *   --stage-wins=LD935cnEwFydTJ05S13W,nZlY899LavYsA4SrOFvd
  */
 
 const path = require('path');
@@ -27,6 +37,46 @@ function committing(argv) {
  */
 function willWrite(argv) {
     return committing(argv) && argv.includes('--i-mean-prod');
+}
+
+const STAGE_WINS_PREFIX = '--stage-wins=';
+
+/**
+ * @param {string[]} argv
+ * @return {Set<string>}
+ */
+function parseStageWinsFromArgv(argv) {
+    const arg = argv.find((a) => a.startsWith(STAGE_WINS_PREFIX));
+    if (!arg) return new Set();
+    const raw = arg.slice(STAGE_WINS_PREFIX.length).trim();
+    if (!raw) return new Set();
+    return new Set(raw.split(',').map((id) => id.trim()).filter(Boolean));
+}
+
+/**
+ * @param {string[]} blockReasons
+ * @return {boolean}
+ */
+function isStatusStageConflictOnly(blockReasons) {
+    return blockReasons.length > 0 &&
+        blockReasons.every((reason) => reason.startsWith('status-stage-conflict:'));
+}
+
+/**
+ * @param {string} personId
+ * @param {{setInactive: boolean, deleteStatus: boolean, blocked: boolean, blockReasons: string[]}} plan
+ * @param {Set<string>} stageWinsIds
+ * @return {{setInactive: boolean, deleteStatus: boolean, blocked: boolean, blockReasons: string[]}}
+ */
+function applyStageWinsIfListed(personId, plan, stageWinsIds) {
+    if (!plan.blocked || !stageWinsIds.has(personId)) return plan;
+    if (!isStatusStageConflictOnly(plan.blockReasons)) return plan;
+    return {
+        setInactive: plan.setInactive,
+        deleteStatus: true,
+        blocked: false,
+        blockReasons: [],
+    };
 }
 
 async function main() {
@@ -58,11 +108,15 @@ async function main() {
     };
     const blocked = [];
     const planned = [];
+    const stageWinsIds = parseStageWinsFromArgv(argv);
 
     const snap = await db.collection('people').get();
     for (const doc of snap.docs) {
         totals.peopleScanned += 1;
-        const plan = Plan.planMembershipStatusRemoval(doc.data() || {});
+        const plan = applyStageWinsIfListed(
+            doc.id,
+            Plan.planMembershipStatusRemoval(doc.data() || {}),
+            stageWinsIds);
         if (plan.blocked) {
             totals.blockedPeople += 1;
             totals.peopleWithStatus += 1;
@@ -120,4 +174,9 @@ if (require.main === module) {
     });
 }
 
-module.exports = {main};
+module.exports = {
+    main,
+    parseStageWinsFromArgv,
+    applyStageWinsIfListed,
+    isStatusStageConflictOnly,
+};
