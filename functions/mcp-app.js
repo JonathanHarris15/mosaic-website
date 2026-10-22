@@ -140,25 +140,7 @@ async function buildApp(
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceUrl),
   }), async (req, res) => {
     const info = req.auth || {};
-    const extra = info.extra || {};
-    /**
-     * @type {{
-     *   uid: *,
-     *   permissionLevel: *,
-     *   pastoralAssistant: boolean,
-     *   accountLevelId: *,
-     *   permissions?: *
-     * }}
-     */
-    const auth = {
-      uid: extra.uid,
-      permissionLevel: extra.permissionLevel,
-      pastoralAssistant: extra.pastoralAssistant === true,
-      accountLevelId: extra.accountLevelId || null,
-    };
-    // A present non-map is a saved map of no keys. Leaving the key off would
-    // fall through to accountLevelId.
-    if (extra.permissionsPresent) auth.permissions = extra.permissions;
+    const auth = callerFromExtra(info.extra || {});
     await mcpServer.handleMcpRequest(req, res, {
       db,
       auth,
@@ -223,4 +205,25 @@ function errorPage(message) {
 <h1>Could not connect</h1><p>${safe}</p></div></body></html>`;
 }
 
-module.exports = {buildApp, errorPage};
+/**
+ * The account the MCP tools see. A present permissions field is copied
+ * even when it is not a map (`null`, `false`, `""`), so accountLevelId
+ * cannot answer instead.
+ * @param {object} extra token extra from verifyAccessToken
+ * @return {object} the caller
+ */
+function callerFromExtra(extra) {
+  const info = /** @type {Record<string, *>} */ (extra || {});
+  const auth = {
+    uid: info.uid,
+    permissionLevel: info.permissionLevel,
+    pastoralAssistant: info.pastoralAssistant === true,
+    accountLevelId: info.accountLevelId || null,
+  };
+  if (info.permissionsPresent === true) {
+    return Object.assign({}, auth, {permissions: info.permissions});
+  }
+  return auth;
+}
+
+module.exports = {buildApp, errorPage, callerFromExtra};
