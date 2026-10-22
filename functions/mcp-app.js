@@ -141,14 +141,27 @@ async function buildApp(
   }), async (req, res) => {
     const info = req.auth || {};
     const extra = info.extra || {};
+    /**
+     * @type {{
+     *   uid: *,
+     *   permissionLevel: *,
+     *   pastoralAssistant: boolean,
+     *   accountLevelId: *,
+     *   permissions?: *
+     * }}
+     */
+    const auth = {
+      uid: extra.uid,
+      permissionLevel: extra.permissionLevel,
+      pastoralAssistant: extra.pastoralAssistant === true,
+      accountLevelId: extra.accountLevelId || null,
+    };
+    // A present non-map is a saved map of no keys. Leaving the key off would
+    // fall through to accountLevelId.
+    if (extra.permissionsPresent) auth.permissions = extra.permissions;
     await mcpServer.handleMcpRequest(req, res, {
       db,
-      auth: Object.assign({
-        uid: extra.uid,
-        permissionLevel: extra.permissionLevel,
-        pastoralAssistant: extra.pastoralAssistant === true,
-        accountLevelId: extra.accountLevelId || null,
-      }, extra.permissions ? {permissions: extra.permissions} : {}),
+      auth,
       geminiKey,
       fieldValues,
       bucket,

@@ -133,8 +133,7 @@
       var user = cred.user;
       return db.collection("users").doc(user.uid).set({
         email: user.email,
-        permissionLevel: "viewer",
-        role: "viewer",
+        accountLevelId: "level_viewer",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       }).then(function () { return cred; });
     });

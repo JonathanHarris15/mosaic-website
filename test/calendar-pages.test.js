@@ -4043,15 +4043,73 @@ test('Auto-assign is refused to anyone below editor', () => {
         assert.equal(page.isEditor, false, rank + ' should not be able to draft a roster');
         assert.equal(page.refused, true);
     });
-    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+    ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].forEach(rank => {
         page.rank = rank;
+        page.account = null;
         assert.equal(page.isEditor, true, rank + ' should be able to draft a roster');
         assert.equal(page.refused, false);
     });
+    page.rank = 'viewer';
+    page.account = { permissionLevel: 'editor', role: 'editor', pastoralAssistant: true };
+    assert.equal(page.isEditor, false, 'a stored ladder does not open auto-assign');
 
     page.rank = null;
     assert.equal(page.signedOut, true);
     assert.equal(page.refused, false, 'signed out and refused are different sentences');
+});
+
+test('a cached ladder string is not the door on auto-assign, cover, or commitments', async () => {
+    const Levels = require('../public/account-levels-core.js');
+    /** @param {string} uid */
+    function signedIn(uid) {
+        return {
+            /** @param {(user: object) => void} cb */
+            onAuthStateChanged(cb) { cb({ uid }); },
+        };
+    }
+    const pages = [
+        ['auto-assign.js', 'autoAssignPage'],
+        ['cover.js', 'coverPage'],
+        ['commitments.js', 'commitmentsPage'],
+    ];
+    for (const [file, name] of pages) {
+        let fetched = false;
+        const page = loadComponent(file, name, {
+            MosaicLocalCache: {
+                readIdentity() { return { permissionLevel: 'editor', role: 'editor' }; },
+                writeIdentity() {},
+            },
+            auth: signedIn('u1'),
+            getUserData: async () => {
+                fetched = true;
+                return { permissionLevel: 'editor', role: 'editor' };
+            },
+        });
+        const rank = await page.resolveRank();
+        assert.equal(fetched, true, file + ' trusted the cached ladder');
+        assert.equal(rank, 'viewer', file);
+    }
+
+    const editor = Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS.editor);
+    let fetched = false;
+    const page = loadComponent('auto-assign.js', 'autoAssignPage', {
+        MosaicLocalCache: {
+            readIdentity() {
+                return {
+                    permissionLevel: 'member',
+                    accountLevelId: editor.accountLevelId,
+                    permissions: editor.permissions,
+                };
+            },
+            writeIdentity() {},
+        },
+        auth: signedIn('u1'),
+        getUserData: async () => { fetched = true; return {}; },
+    });
+    const rank = await page.resolveRank();
+    assert.equal(fetched, false, 'a cached account was ignored');
+    assert.equal(rank, 'editor');
+    assert.equal(page.isEditor, true);
 });
 
 test('the three choices about existing people default to keeping them', () => {

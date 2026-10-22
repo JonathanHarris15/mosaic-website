@@ -186,6 +186,15 @@ class FirebaseClientsStore {
 }
 
 /**
+ * @typedef {object} McpAccount
+ * @property {?string} permissionLevel
+ * @property {boolean} pastoralAssistant
+ * @property {?string} accountLevelId
+ * @property {?string} personId
+ * @property {*} [permissions]
+ */
+
+/**
  * The OAuth server, backed by Firebase Auth for identity and Firestore for
  * everything that has to outlive one Cloud Functions instance.
  */
@@ -313,24 +322,15 @@ class FirebaseOAuthProvider {
   }
 
   /**
-   * The caller's account, read fresh — Permission Level plus the Pastoral
-   * Assistant grant (MS-426), plus the saved permission map (MS-693).
+   * The caller's account, read fresh (ADR 0084).
    *
-   * ⚠ `savedPermissions` IS THE RAW MAP OR NULL, AND THAT DISTINCTION IS THE
-   * WHOLE POINT (ADR-0082). Once an admin has saved a map on the account, the
-   * key is the whole answer and the level names stop counting; an account
-   * that has never been through Admin → Accounts has no map, and keeps them.
-   * `firestore.rules` reads exactly this field, and a gate over here that
-   * read anything else would answer a different question from the rule.
-   *
-   * It is deliberately NOT called `permissions`: AccessCore's older
-   * editor gates read that name and would start answering by key for tools
-   * whose gate has always been the level ladder. Only the gates written
-   * against `writesWith` look at this.
+   * A saved `permissions` field is copied even when it is not a map. Dropping
+   * it would let `accountLevelId` answer, and a present non-map is a saved
+   * map of no keys. `permissionLevel` on the result is the rank derived from
+   * that answer, not the stored ladder.
    *
    * @param {string} uid the Firebase uid
-   * @return {Promise<{permissionLevel: ?string, pastoralAssistant: boolean,
-   *   savedPermissions: ?object}>} the account
+   * @return {Promise<McpAccount>} the account
    */
   async accountOf(uid) {
     const snap = await this.db.collection("users").doc(uid).get();
@@ -339,19 +339,20 @@ class FirebaseOAuthProvider {
         permissionLevel: null,
         pastoralAssistant: false,
         accountLevelId: null,
+        personId: null,
       };
     }
     const data = snap.data() || {};
     const rank = AccountLevels.accessRank(data);
+    /** @type {McpAccount} */
     const account = {
       accountLevelId: data.accountLevelId || null,
       permissionLevel: rank,
       pastoralAssistant: rank === "pastoral_assistant",
       personId: data.personId || null,
     };
-    const saved = data.permissions;
-    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-      account.permissions = saved;
+    if (Object.prototype.hasOwnProperty.call(data, "permissions")) {
+      account.permissions = data.permissions;
     }
     return account;
   }
@@ -553,6 +554,8 @@ class FirebaseOAuthProvider {
       throw new InvalidTokenError("This account no longer has editor access.");
     }
 
+    const permissionsPresent = Object.prototype.hasOwnProperty.call(
+        account, "permissions");
     return {
       token,
       clientId: data.clientId,
@@ -566,7 +569,8 @@ class FirebaseOAuthProvider {
         permissionLevel: account.permissionLevel,
         pastoralAssistant: account.pastoralAssistant,
         accountLevelId: account.accountLevelId || null,
-        permissions: account.permissions || null,
+        permissions: permissionsPresent ? account.permissions : null,
+        permissionsPresent,
       },
     };
   }

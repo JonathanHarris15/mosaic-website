@@ -286,9 +286,8 @@ exports.createUser = onCall({
       password: password,
     });
 
-    // 3. Store the user's permission level in Firestore. Write both
-    // permissionLevel and the legacy role during the MS-119 migration (MS-127
-    // drops the old role field afterwards).
+    // 3. Store the account level and its permissions map. role and
+    // permissionLevel are not written.
     //
     // The password is NOT stored here (MS-241). It went to Firebase Auth in
     // step 2, which hashes it; a readable second copy existed only so an admin
@@ -2195,7 +2194,8 @@ exports.syncElderRoleToTag = onDocumentWritten(
  * Permission Level of a Person's Linked User, denormalized onto
  * `people.accountRank` so the Trade picker can judge Event visibility
  * without reading other `users` docs (own-only). Matches server
- * `rankOf`: permissionLevel, then the legacy `role` fallback.
+ * `rankOf`: the rank derived from the saved permissions map, or from a
+ * builtin accountLevelId when no map is saved.
  *
  * Trigger: `users/{uid}` write — link, unlink, permission change, or
  * delete. Reconciles from the Person's live `userId`. Exact sync:
