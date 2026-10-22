@@ -75,10 +75,15 @@ test('the audit script lists rows and does not write', () => {
         'utf8');
     assert.match(src, /--list/);
     assert.match(src, /describePrayerTextRow/);
-    assert.match(src, /explainPrayerTextRows/);
+    assert.match(src, /explainPrayerTextRows\(listed, requests\)/);
     assert.match(src, /prayer_requests/);
     assert.match(src, /namesForPeople/);
     assert.match(src, /data\.name/);
+    assert.match(src, /missing: !snap\.exists/);
+    assert.match(src, /sentDays: Array\.isArray\(data\.sentDays\)/);
+    assert.match(src, /initialSentDate: data\.initialSentDate/);
+    assert.match(src, /reminderSent: !!data\.reminderSent/);
+    assert.match(src, /reminderSentDate: data\.reminderSentDate/);
     assert.match(src, /--commit ignored/);
     assert.doesNotMatch(src, /\.(set|update|delete|add|create)\s*\(/);
 });
@@ -165,7 +170,9 @@ test('four rows are two sends logged twice, not a resend or an Oct 20 replay', (
     assert.deepEqual(explained.acceptedSends[0].logCopies, ['send-path', 'recordOutbound']);
     assert.deepEqual(explained.acceptedSends[0].createdDays, ['2026-10-22']);
     assert.equal(explained.checks.samePersonTextedTwice.happened, false);
+    assert.match(explained.checks.samePersonTextedTwice.detail, /one textId/);
     assert.equal(explained.checks.resendTickResent.happened, false);
+    assert.match(explained.checks.resendTickResent.detail, /same church day/);
     assert.equal(explained.checks.oct20SendLoggedAgain.happened, false);
     assert.match(explained.checks.oct20SendLoggedAgain.detail, /still-unsent Oct 20 slot/);
     assert.equal(explained.checks.manualSendNow.happened, false);
@@ -193,8 +200,11 @@ test('a second textId the same day is a resend, and a shared Oct 20 textId was l
         reminderSent: true, reminderSentDate: '2026-10-22',
     }]);
     assert.equal(explained.checks.samePersonTextedTwice.happened, true);
+    assert.match(explained.checks.samePersonTextedTwice.detail, /tb-old/);
     assert.equal(explained.checks.resendTickResent.happened, true);
+    assert.match(explained.checks.resendTickResent.detail, /tb-new/);
     assert.equal(explained.checks.oct20SendLoggedAgain.happened, true);
+    assert.match(explained.checks.oct20SendLoggedAgain.detail, /tb-old/);
     assert.equal(explained.checks.manualSendNow.happened, true);
     assert.match(explained.checks.manualSendNow.detail, /same day/);
 });
@@ -306,6 +316,8 @@ test('a later reminder that did not append a notice day is Send Now', () => {
     }]);
     assert.equal(afterScheduler.checks.manualSendNow.happened, true);
     assert.match(afterScheduler.checks.manualSendNow.detail, /Send Now does not/);
+    assert.equal(afterScheduler.checks.oct20SendLoggedAgain.happened, false);
+    assert.doesNotMatch(afterScheduler.checks.oct20SendLoggedAgain.detail, /again later/);
     const bothManual = audit.explainPrayerTextRows(listed, [{
         personId: 'levi', serviceDate: '2026-10-25', missing: false,
         sentDays: [], initialSentDate: '2026-10-20',
@@ -324,6 +336,21 @@ test('a later reminder that did not append a notice day is Send Now', () => {
     }]);
     assert.equal(unstamped.checks.manualSendNow.happened, false);
     assert.match(unstamped.checks.manualSendNow.detail, /do not show a Send Now/);
+});
+
+test('a send created on Oct 20 is not a later copy of that slot', () => {
+    const explained = audit.explainPrayerTextRows([
+        listedSend({
+            id: 'on-day', personId: 'levi', textId: 'tb-oct20',
+            wording: 'initial', createdAt: '2026-10-20T15:00:00.000Z',
+        }),
+    ], [{
+        personId: 'levi', serviceDate: '2026-10-25', missing: false,
+        sentDays: [5], initialSentDate: '2026-10-20', reminderSent: false,
+    }]);
+    assert.equal(explained.checks.oct20SendLoggedAgain.happened, false);
+    assert.doesNotMatch(explained.checks.oct20SendLoggedAgain.detail, /still-unsent/);
+    assert.match(explained.checks.oct20SendLoggedAgain.detail, /2026-10-20/);
 });
 
 test('an Oct 20 slot is not filled by another person or another service', () => {
@@ -357,4 +384,41 @@ test('an Oct 20 slot is not filled by another person or another service', () => 
         sentDays: [5], initialSentDate: '2026-10-22', reminderSent: false,
     }]);
     assert.doesNotMatch(otherService.checks.oct20SendLoggedAgain.detail, /still-unsent/);
+});
+
+test('a row with no person id and a row with no created day are not extra sends', () => {
+    const nameless = audit.explainPrayerTextRows([
+        listedSend({
+            id: 'a', personId: null, textId: 'tb-a',
+            wording: 'initial', createdAt: '2026-10-22T14:00:00.000Z',
+        }),
+        listedSend({
+            id: 'b', personId: null, textId: 'tb-b',
+            wording: 'initial', createdAt: '2026-10-22T14:00:00.000Z',
+        }),
+    ], []);
+    assert.equal(nameless.checks.samePersonTextedTwice.happened, false);
+    assert.equal(nameless.checks.resendTickResent.happened, false);
+    const undated = audit.explainPrayerTextRows([
+        listedSend({
+            id: 'bad', personId: 'levi', textId: 'tb-1',
+            wording: 'initial', createdAt: 'not-a-date',
+        }),
+    ], []);
+    assert.deepEqual(undated.acceptedSends[0].createdDays, []);
+    const none = audit.explainPrayerTextRows([], []);
+    assert.match(none.checks.oct20SendLoggedAgain.detail, /no accepted send/);
+    assert.equal(none.checks.manualSendNow.happened, null);
+    const noTextId = audit.explainPrayerTextRows([
+        listedSend({
+            id: 'old', personId: 'levi', textId: null,
+            wording: 'initial', createdAt: '2026-10-20T15:00:00.000Z',
+        }),
+        listedSend({
+            id: 'new', personId: 'levi', textId: null,
+            wording: 'initial', createdAt: '2026-10-22T15:00:00.000Z',
+        }),
+        null,
+    ], []);
+    assert.equal(noTextId.checks.oct20SendLoggedAgain.happened, false);
 });

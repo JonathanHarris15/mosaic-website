@@ -315,7 +315,6 @@ function oct20TextIdsLoggedAgain(listed) {
     (listed || []).forEach((row) => {
         if (!row || !row.textId) return;
         const day = churchDayFromChicago(row.createdAtChicago);
-        if (!day) return;
         if (!daysByText.has(row.textId)) daysByText.set(row.textId, new Set());
         daysByText.get(row.textId).add(day);
     });
