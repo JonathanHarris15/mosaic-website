@@ -413,6 +413,55 @@ function writeOutcome(prep, err) {
     return 'write';
 }
 
+/**
+ * Rewrite a stored printable and say whether it reads booklet text.
+ * The patch is what a commit writes. Discarding migrateProject would
+ * leave the sunday_typed wire in that patch.
+ * @param {any} raw
+ * @return {{ changed: boolean, record: any, readsBooklet: boolean, patch: { pages: any[], inputs: any[] }|null }}
+ */
+function printableMigration(raw) {
+    const out = Migrate.migrateProject(raw);
+    const record = out.project || raw;
+    const changed = !!out.changed;
+    return {
+        changed: changed,
+        record: record,
+        readsBooklet: readsBookletText(record),
+        patch: changed ? { pages: record.pages || [], inputs: record.inputs || [] } : null,
+    };
+}
+
+/**
+ * A new occurrence takes its roster from the subcollection. An existing
+ * document, and a dry run, do not.
+ * @param {any} occRef
+ * @param {boolean} exists
+ * @param {boolean} commit
+ * @return {Promise<any[]>}
+ */
+async function rosterAssignments(occRef, exists, commit) {
+    if (!commit || exists) return [];
+    const rosterSnap = await occRef.collection('roster').get();
+    return rosterSnap.docs.map(/** @param {any} d */ (d) => d.data() || {});
+}
+
+/**
+ * Write one occurrence. A server size rejection is a skip. Anything else throws.
+ * @param {any} occRef
+ * @param {any} prep
+ * @return {Promise<'wrote'|'skipped'>}
+ */
+async function commitOccurrence(occRef, prep) {
+    try {
+        await occRef.set(prep.body, { merge: true });
+        return 'wrote';
+    } catch (err) {
+        if (writeOutcome(prep, err) === 'throw') throw err;
+        return 'skipped';
+    }
+}
+
 /** @param {any} err @return {boolean} */
 function isSizeError(err) {
     const message = err && (err.details || err.message) ? String(err.details || err.message) : '';
@@ -490,15 +539,12 @@ async function main() {
     for (const doc of printables.docs) {
         totals.printablesScanned += 1;
         const raw = Object.assign({id: doc.id}, doc.data() || {});
-        const out = Migrate.migrateProject(raw);
-        const record = out.project || raw;
-        if (out.changed) {
+        const migrated = printableMigration(raw);
+        const record = migrated.record;
+        if (migrated.changed && migrated.patch) {
             totals.printablesRewritten += 1;
             if (COMMIT) {
-                batch.set(doc.ref, {
-                    pages: record.pages || [],
-                    inputs: record.inputs || [],
-                }, {merge: true});
+                batch.set(doc.ref, migrated.patch, {merge: true});
                 batchCount += 1;
                 if (batchCount >= BATCH_LIMIT) {
                     await batch.commit();
@@ -573,11 +619,7 @@ async function main() {
         totals.blanksLeft += plan.blanksLeft;
         if (!plan.wouldWrite) continue;
 
-        let assignments = [];
-        if (COMMIT && !exists) {
-            const rosterSnap = await occRef.collection('roster').get();
-            assignments = rosterSnap.docs.map(/** @param {any} d */ (d) => d.data() || {});
-        }
+        const assignments = await rosterAssignments(occRef, exists, COMMIT);
         const prep = prepareOccurrenceWrite(existing, plan.plans, {
             occurrenceId: occId,
             date: doc.id,
@@ -616,10 +658,7 @@ async function main() {
                     });
                 }
             }
-            try {
-                await occRef.set(prep.body, {merge: true});
-            } catch (err) {
-                if (writeOutcome(prep, err) === 'throw') throw err;
+            if ((await commitOccurrence(occRef, prep)) === 'skipped') {
                 totals.fieldsSkipped += plan.fieldsCopied;
                 sizeReport.occurrencesSkipped += 1;
                 sizeReport.skipped.push({
@@ -659,6 +698,9 @@ module.exports = {
     newOccurrenceBody,
     offloadDataUrls,
     prepareOccurrenceWrite,
+    printableMigration,
+    rosterAssignments,
+    commitOccurrence,
     writeMode,
     writeOutcome,
     isSizeError,

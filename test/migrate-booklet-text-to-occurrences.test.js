@@ -159,14 +159,93 @@ test('the date window is service ids, and the script never deletes', () => {
     assert.equal(src.includes('Migrate.contentFromLegacyStores'), false);
     assert.equal(src.includes('Migrate.planOccurrenceFill'), false);
     assert.equal(src.includes('Migrate.readsBookletText'), false);
-    assert.equal(src.includes('Migrate.migrateProject'), true);
-    assert.equal(src.includes("collection('roster')"), true);
-    assert.equal(src.includes('writeOutcome(prep)'), true);
-    assert.equal(src.includes('writeOutcome(prep, err)'), true);
     const store = fs.readFileSync(path.join(__dirname, '../public/printable-data-store.js'), 'utf8');
     const live = fs.readFileSync(path.join(__dirname, '../public/printable-live.js'), 'utf8');
     assert.equal(store.includes('mergeEventWithTyped'), true);
     assert.equal(live.includes('function legacyTypedFallback'), true);
+});
+
+test('a stored sunday_typed wire is what a commit would save', () => {
+    const migrated = Copy.printableMigration({
+        id: 'guide',
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'nation',
+                bind: { text: { scope: 'global', source: 'sunday_typed', field: 'prayerNation', params: {} } },
+            }],
+        }],
+    });
+    assert.equal(migrated.changed, true);
+    assert.equal(migrated.readsBooklet, true);
+    assert.ok(migrated.patch);
+    assert.equal(migrated.patch.pages[0].nodes[0].bind.text.source, 'event_field');
+    assert.equal(migrated.patch.pages[0].nodes[0].bind.text.field, 'legacy_prayerNation');
+    const order = Copy.printableMigration({
+        id: 'order',
+        inputs: [{ id: 'sermon_title', label: 'Sermon', kind: 'text' }],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'title',
+                bind: { text: { scope: 'global', source: 'event_field', field: 'sermon_title', params: {} } },
+            }],
+        }],
+    });
+    assert.equal(order.changed, false);
+    assert.equal(order.patch, null);
+    assert.equal(order.readsBooklet, false);
+});
+
+test('a new occurrence reads the roster snapshot, and a size rejection skips the write', async () => {
+    let collectionName = '';
+    const ref = {
+        collection(/** @type {string} */ name) {
+            collectionName = name;
+            return {
+                get: async () => ({
+                    docs: [
+                        { data: () => ({ personId: 'p-abe' }) },
+                        { data: () => ({ personId: 'p-abe' }) },
+                    ],
+                }),
+            };
+        },
+    };
+    const created = await Copy.rosterAssignments(ref, false, true);
+    assert.equal(collectionName, 'roster');
+    const body = Copy.newOccurrenceBody('2026-09-06', {}, {
+        guide: { legacy_prayerNation: 'Kenya' },
+    }, created);
+    assert.deepEqual(body.participantIds, ['p-abe']);
+    assert.deepEqual(await Copy.rosterAssignments(ref, true, true), []);
+    assert.deepEqual(await Copy.rosterAssignments(ref, false, false), []);
+
+    const sizeRef = {
+        async set() {
+            const err = /** @type {any} */ (new Error('size'));
+            err.details = 'exceeds the maximum allowed size';
+            throw err;
+        },
+    };
+    assert.equal(await Copy.commitOccurrence(sizeRef, {
+        overLimit: false,
+        body: { printableInputs: {} },
+    }), 'skipped');
+    const denied = { async set() { throw new Error('permission denied'); } };
+    await assert.rejects(
+        () => Copy.commitOccurrence(denied, { overLimit: false, body: {} }),
+        /permission denied/
+    );
+    /** @type {any} */
+    let saved = null;
+    const ok = { async set(/** @type {any} */ body) { saved = body; } };
+    assert.equal(await Copy.commitOccurrence(ok, {
+        overLimit: false,
+        body: { printableInputs: { guide: { legacy_prayerNation: 'Kenya' } } },
+    }), 'wrote');
+    assert.equal(saved.printableInputs.guide.legacy_prayerNation, 'Kenya');
 });
 
 test('a data URL under 2048 bytes stays inline', () => {
