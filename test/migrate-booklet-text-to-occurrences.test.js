@@ -115,8 +115,10 @@ test('only a printable that reads booklet text is selected', () => {
         }],
     });
     assert.equal(storedImage.readsBooklet, true);
-    assert.equal(storedImage.patch.pages[0].nodes[0].bind.src.source, 'event_field');
-    assert.equal(storedImage.patch.pages[0].nodes[0].bind.src.field, 'legacy_prayerCountryImage');
+    assert.ok(storedImage.patch);
+    const storedSrc = storedImage.patch.pages[0].nodes[0].bind.src;
+    assert.equal(storedSrc.source, 'event_field');
+    assert.equal(storedSrc.field, 'legacy_prayerCountryImage');
     assert.equal(Copy.readsBookletText({
         inputs: [],
         pages: [{

@@ -614,22 +614,6 @@ async function main() {
     const services = await db.collection('services').get();
     const bucketName = project.storageBucket || (projectId + '.firebasestorage.app');
     const bucket = COMMIT ? admin.storage().bucket() : null;
-    /**
-     * @type {{
-     *   limitBytes: number,
-     *   ceilingBytes: number,
-     *   maxResultBytes: number,
-     *   maxResultOccurrenceId: string|null,
-     *   maxBeforeOffloadBytes: number,
-     *   maxBeforeOffloadOccurrenceId: string|null,
-     *   largestBeforeOffload: Array<{ path: string, bytes: number, dataUrl: boolean }>,
-     *   occurrencesSkipped: number,
-     *   imagesOffloaded: number,
-     *   inlineImageBytes: number,
-     *   storageObjects: number,
-     *   skipped: Array<Record<string, any>>,
-     * }}
-     */
     const sizeReport = emptySizeReport();
     for (const doc of services.docs) {
         if (!inDateRange(doc.id, from, to)) continue;
