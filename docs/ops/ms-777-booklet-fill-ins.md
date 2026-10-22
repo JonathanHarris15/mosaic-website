@@ -10,16 +10,11 @@ Fill-in ids are `legacy_*` (`legacy_prayerNation`, `legacy_announcements`, `lega
 
 ## Order
 
-Do not merge this reader change until the copy script is already on `main` and `commit=true` has succeeded. Hosting deploys with this merge. A week that still exists only in the old stores prints blank. That is the outage of 21 October 2026.
+The copy is already on `main` (#318) and has been committed: `occurrencesUpdated` 23, `fieldsCopied` 694, `size.occurrencesSkipped` 0, `size.maxResultBytes` 5683. A confirming dry run shows `fieldsCopied` 0.
 
-1. Merge the migration pull request.
-2. Dry-run `migrate-booklet-text-to-occurrences.js` on `main`. Read `size.maxResultBytes`, `size.ceilingBytes`, and `size.occurrencesSkipped`.
-3. Dispatch `commit=true` only when `size.occurrencesSkipped` is 0 and `size.maxResultBytes` is under `size.ceilingBytes`.
-4. Merge this change only after that commit has succeeded.
+This change is the reader. Hosting deploys with this merge. The copy has already run, so a week that lived only in the old stores is on the occurrence.
 
-## After the copy is on `main`
-
-Run the copy from `main`, not from a pull request. This pull request does not add the script.
+Run any further copy from `main`, not from a pull request. This pull request does not add the script.
 
 ```bash
 gh workflow run "Prod ops script" --ref main \
