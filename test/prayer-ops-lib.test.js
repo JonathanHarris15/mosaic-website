@@ -163,6 +163,8 @@ test('four rows are two sends logged twice, not a resend or an Oct 20 replay', (
     ]);
     assert.equal(explained.acceptedSends.length, 2);
     assert.equal(explained.acceptedSends[0].copies, 2);
+    assert.deepEqual(explained.acceptedSends[0].logCopies, ['send-path', 'recordOutbound']);
+    assert.deepEqual(explained.acceptedSends[0].createdDays, ['2026-10-22']);
     assert.equal(explained.checks.samePersonTextedTwice.happened, false);
     assert.equal(explained.checks.resendTickResent.happened, false);
     assert.equal(explained.checks.oct20SendLoggedAgain.happened, false);
@@ -217,4 +219,53 @@ test('an initial with empty sentDays is Send Now, and a missing doc is not', () 
     assert.equal(missing.checks.oct20SendLoggedAgain.happened, false);
     assert.doesNotMatch(missing.checks.oct20SendLoggedAgain.detail, /still-unsent/);
     assert.equal(audit.dateMinusDays('2026-10-25', 5), '2026-10-20');
+});
+
+test('two text ids on different days are not an hourly resend', () => {
+    const listed = [
+        listedSend({
+            id: 'd1', personId: 'levi', textId: 'tb-mon',
+            wording: 'initial', createdAt: '2026-10-21T15:00:00.000Z',
+        }),
+        listedSend({
+            id: 'd2', personId: 'levi', textId: 'tb-tue',
+            wording: 'reminder', createdAt: '2026-10-22T15:00:00.000Z',
+        }),
+    ];
+    const explained = audit.explainPrayerTextRows(listed, [{
+        personId: 'levi', serviceDate: '2026-10-25', missing: false,
+        sentDays: [5, 3], initialSentDate: '2026-10-21',
+        reminderSent: true, reminderSentDate: '2026-10-22',
+    }]);
+    assert.equal(explained.checks.samePersonTextedTwice.happened, true);
+    assert.equal(explained.checks.resendTickResent.happened, false);
+});
+
+test('thank-you rows and rows without a text id are not sends', () => {
+    const listed = [
+        listedSend({
+            id: 'ask', personId: 'levi', textId: 'tb-1',
+            wording: 'initial', createdAt: '2026-10-22T14:00:00.000Z',
+        }),
+        audit.describePrayerTextRow({
+            id: 'thanks', personId: 'levi', purpose: 'prayer_request_thankyou',
+            accepted: true, textId: 'tb-thanks', to: '+15551110000',
+            createdAt: '2026-10-22T18:00:00.000Z', serviceDate: '2026-10-25',
+        }, {levi: 'Levi Example'}),
+        listedSend({
+            id: 'failed', personId: 'levi', textId: null, accepted: false,
+            wording: 'initial', createdAt: '2026-10-22T13:00:00.000Z',
+        }),
+        listedSend({
+            id: 'notext', personId: 'other', textId: '',
+            wording: 'initial', createdAt: '2026-10-22T14:30:00.000Z',
+        }),
+    ];
+    const explained = audit.explainPrayerTextRows(listed, [{
+        personId: 'levi', serviceDate: '2026-10-25', missing: false,
+        sentDays: [5], initialSentDate: '2026-10-22', reminderSent: false,
+    }]);
+    assert.deepEqual(explained.acceptedSends.map((send) => send.textId), ['tb-1']);
+    assert.equal(explained.checks.samePersonTextedTwice.happened, false);
+    assert.equal(explained.checks.resendTickResent.happened, false);
 });

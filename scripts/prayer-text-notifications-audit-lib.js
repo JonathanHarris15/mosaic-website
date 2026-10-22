@@ -375,9 +375,7 @@ function oct20SlotSentLater(requests, sends) {
                 personId: req.personId,
                 serviceDate: req.serviceDate,
                 noticeDay: Number(day),
-                scheduledOn: OCT20_SCHEDULED,
                 loggedOn: loggedOn,
-                initialSentDate: req.initialSentDate || null,
             });
         });
     });
