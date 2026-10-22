@@ -230,6 +230,20 @@ test('MS-777: the announcements tab reads and writes the Sunday occurrence', asy
     }
 });
 
+test('MS-777: a page that lists announcements asks for that occurrence bag', () => {
+    const project = bookletProject();
+    project.pages[0].nodes.push({
+        id: 'ann',
+        tag: 'p',
+        repeat: { source: 'sunday_announcements', params: {} },
+    });
+    const needs = Live.collectNeeds(project, TODAY, { occurrenceId: 'opened_' + DATE });
+    assert.equal(needs.bookletInputs.printableId, 'guide');
+    assert.deepEqual(needs.bookletInputs.dates, [DATE]);
+    assert.equal(needs.bookletInputs.date, TODAY);
+    assert.equal(needs.bookletInputs.occurrenceId, 'opened_' + DATE);
+});
+
 test('MS-777: the prod copy fills a printable that reads booklet text and skips one that does not', () => {
     assert.equal(Copy.readsBookletText(bookletProject()), true);
 

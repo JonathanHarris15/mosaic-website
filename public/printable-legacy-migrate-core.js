@@ -227,7 +227,6 @@
         inputDefsNeeded,
         migrateProject,
         valuesFromTyped,
-        bagFromContent,
         patchFromContent,
         draftFromBag,
     };
