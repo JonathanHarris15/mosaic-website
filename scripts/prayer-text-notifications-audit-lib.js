@@ -67,10 +67,9 @@ function coerceDate(value) {
         return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
     }
     if (typeof value === 'object' && typeof value.seconds === 'number') {
-        const nanos = typeof value.nanoseconds === 'number' ? value.nanoseconds : 0;
-        return new Date(value.seconds * 1000 + Math.floor(nanos / 1e6));
+        return new Date(value.seconds * 1000);
     }
-    if (typeof value === 'string' || typeof value === 'number') {
+    if (typeof value === 'string') {
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? null : date;
     }
@@ -78,7 +77,7 @@ function coerceDate(value) {
 }
 
 /**
- * @param {*} value Firestore Timestamp, Date, or epoch seconds
+ * @param {*} value Firestore Timestamp, Date, or ISO string
  * @return {?string} YYYY-MM-DD HH:mm:ss in America/Chicago
  */
 function formatCreatedAtChicago(value) {

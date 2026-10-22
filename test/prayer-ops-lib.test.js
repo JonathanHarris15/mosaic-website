@@ -69,6 +69,34 @@ test('prayer text list uses winter Chicago time', () => {
     assert.equal(row.textId, null);
 });
 
+test('a blank phone and a bad timestamp stay blank', () => {
+    const blank = audit.describePrayerTextRow({
+        id: 'blank',
+        createdAt: new Date('2026-10-22T15:30:45.000Z'),
+        purpose: 'prayer_request',
+        to: '',
+    }, {});
+    assert.equal(blank.phoneLast4, '');
+    const invalid = audit.describePrayerTextRow({
+        id: 'bad', createdAt: new Date(NaN), purpose: 'prayer_request',
+    }, {});
+    assert.equal(invalid.createdAtChicago, null);
+    const stamped = audit.describePrayerTextRow({
+        id: 'ts',
+        createdAt: {toDate: () => new Date('2026-10-22T15:30:45.000Z')},
+        purpose: 'prayer_request',
+    }, {});
+    assert.equal(stamped.createdAtChicago, '2026-10-22 10:30:45 CDT');
+    const badToDate = audit.describePrayerTextRow({
+        id: 'badts', createdAt: {toDate: () => 'nope'}, purpose: 'prayer_request',
+    }, {});
+    assert.equal(badToDate.createdAtChicago, null);
+    const unknown = audit.describePrayerTextRow({
+        id: 'unk', createdAt: {not: 'a timestamp'}, purpose: 'prayer_request',
+    }, {});
+    assert.equal(unknown.createdAtChicago, null);
+});
+
 test('the audit script lists rows and does not write', () => {
     const src = fs.readFileSync(
         path.join(__dirname, '../scripts/prayer-text-notifications-audit.js'),
@@ -76,6 +104,9 @@ test('the audit script lists rows and does not write', () => {
     assert.match(src, /--list/);
     assert.match(src, /describePrayerTextRow/);
     assert.match(src, /explainPrayerTextRows\(listed, requests\)/);
+    assert.match(src, /const requests = await loadPrayerRequestStates\(db, prayerRows\)/);
+    assert.match(src, /namesForPeople\(db, prayerRows\.map\(\(row\) => row\.personId\)\)/);
+    assert.match(src, /describePrayerTextRow\(row, names\)/);
     assert.match(src, /prayer_requests/);
     assert.match(src, /namesForPeople/);
     assert.match(src, /data\.name/);
@@ -253,6 +284,25 @@ test('two text ids on different days are not an hourly resend', () => {
     assert.match(explained.checks.manualSendNow.detail, /hourly tick/);
 });
 
+test('a later request doc can be the Send Now', () => {
+    const listed = [listedSend({
+        id: 'only', personId: 'levi', textId: 'tb-1',
+        wording: 'initial', createdAt: '2026-10-22T14:00:00.000Z',
+    })];
+    const explained = audit.explainPrayerTextRows(listed, [
+        {
+            personId: 'other', serviceDate: '2026-10-25', missing: false,
+            sentDays: [5], initialSentDate: '2026-10-22', reminderSent: false,
+        },
+        {
+            personId: 'levi', serviceDate: '2026-10-25', missing: false,
+            sentDays: [], initialSentDate: '2026-10-22', reminderSent: false,
+        },
+    ]);
+    assert.equal(explained.checks.manualSendNow.happened, true);
+    assert.match(explained.checks.manualSendNow.detail, /levi/);
+});
+
 test('thank-you rows and rows without a text id are not sends', () => {
     const listed = [
         listedSend({
@@ -271,6 +321,10 @@ test('thank-you rows and rows without a text id are not sends', () => {
         listedSend({
             id: 'notext', personId: 'other', textId: '',
             wording: 'initial', createdAt: '2026-10-22T14:30:00.000Z',
+        }),
+        listedSend({
+            id: 'rejected', personId: 'other', textId: 'tb-rej', accepted: false,
+            wording: 'initial', createdAt: '2026-10-22T14:40:00.000Z',
         }),
     ];
     const explained = audit.explainPrayerTextRows(listed, [{
