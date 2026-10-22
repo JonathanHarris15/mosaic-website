@@ -95,6 +95,21 @@ test('a blank phone and a bad timestamp stay blank', () => {
         id: 'unk', createdAt: {not: 'a timestamp'}, purpose: 'prayer_request',
     }, {});
     assert.equal(unknown.createdAtChicago, null);
+    const missingCreated = audit.describePrayerTextRow({
+        id: 'nil', createdAt: null, purpose: 'prayer_request',
+    }, {});
+    assert.equal(missingCreated.createdAtChicago, null);
+    const afternoon = audit.describePrayerTextRow({
+        id: 'pm',
+        createdAt: new Date('2026-10-22T20:30:45.000Z'),
+        purpose: 'prayer_request',
+        to: '555-123-4567.',
+        body: 'See HTTPS://Secret.Example/token',
+    }, {});
+    assert.equal(afternoon.createdAtChicago, '2026-10-22 15:30:45 CDT');
+    assert.equal(afternoon.phoneLast4, '***4567');
+    assert.equal(afternoon.bodyHasUrl, true);
+    assert.equal(JSON.stringify(afternoon).includes('Secret.Example'), false);
 });
 
 test('the audit script lists rows and does not write', () => {
@@ -115,6 +130,11 @@ test('the audit script lists rows and does not write', () => {
     assert.match(src, /initialSentDate: data\.initialSentDate/);
     assert.match(src, /reminderSent: !!data\.reminderSent/);
     assert.match(src, /reminderSentDate: data\.reminderSentDate/);
+    assert.match(src, /if \(!list\) return/);
+    assert.match(src, /rows\.filter\(isPrayerTextRow\)/);
+    assert.match(src, /listed\.forEach\(\(row\) => console\.log\(JSON\.stringify\(row\)\)\)/);
+    assert.match(src, /console\.log\(JSON\.stringify\(prayerTextListSummary\(listed\)\)\)/);
+    assert.match(src, /console\.log\(JSON\.stringify\(explainPrayerTextRows\(listed, requests\), null, 2\)\)/);
     assert.match(src, /--commit ignored/);
     assert.doesNotMatch(src, /\.(set|update|delete|add|create)\s*\(/);
 });
@@ -232,8 +252,10 @@ test('a second textId the same day is a resend, and a shared Oct 20 textId was l
     }]);
     assert.equal(explained.checks.samePersonTextedTwice.happened, true);
     assert.match(explained.checks.samePersonTextedTwice.detail, /tb-old/);
+    assert.match(explained.checks.samePersonTextedTwice.detail, /Levi Example/);
     assert.equal(explained.checks.resendTickResent.happened, true);
     assert.match(explained.checks.resendTickResent.detail, /tb-new/);
+    assert.match(explained.checks.resendTickResent.detail, /Levi Example/);
     assert.equal(explained.checks.oct20SendLoggedAgain.happened, true);
     assert.match(explained.checks.oct20SendLoggedAgain.detail, /tb-old/);
     assert.equal(explained.checks.manualSendNow.happened, true);
@@ -260,6 +282,8 @@ test('an initial with empty sentDays is Send Now, and a missing doc is not', () 
     assert.equal(missing.checks.oct20SendLoggedAgain.happened, false);
     assert.doesNotMatch(missing.checks.oct20SendLoggedAgain.detail, /still-unsent/);
     assert.equal(audit.dateMinusDays('2026-10-25', 5), '2026-10-20');
+    assert.equal(audit.dateMinusDays('2026-10-02', 5), '2026-09-27');
+    assert.equal(audit.dateMinusDays('2026-01-01', 1), '2025-12-31');
 });
 
 test('two text ids on different days are not an hourly resend', () => {
@@ -405,6 +429,18 @@ test('a send created on Oct 20 is not a later copy of that slot', () => {
     assert.equal(explained.checks.oct20SendLoggedAgain.happened, false);
     assert.doesNotMatch(explained.checks.oct20SendLoggedAgain.detail, /still-unsent/);
     assert.match(explained.checks.oct20SendLoggedAgain.detail, /2026-10-20/);
+    const earlier = audit.explainPrayerTextRows([
+        listedSend({
+            id: 'before', personId: 'levi', textId: 'tb-early',
+            wording: 'initial', createdAt: '2026-10-19T15:00:00.000Z',
+        }),
+        listedSend({
+            id: 'on-day-2', personId: 'levi', textId: 'tb-early',
+            kind: null, createdAt: '2026-10-20T15:00:00.000Z',
+        }),
+    ], []);
+    assert.equal(earlier.checks.oct20SendLoggedAgain.happened, false);
+    assert.doesNotMatch(earlier.checks.oct20SendLoggedAgain.detail, /again later/);
 });
 
 test('an Oct 20 slot is not filled by another person or another service', () => {
