@@ -70,10 +70,7 @@ function formsPage() {
         // query unless it can see every row it could return is allowed. The
         // rules are still what decides; this only shapes what is asked for.
         get isElder() {
-            return FormsCore.mayShutToElders({
-                permissionLevel: this.currentPermissionLevel,
-                pastoralAssistant: this.pastoralAssistant,
-            });
+            return FormsCore.mayShutToElders(this.account || this.currentPermissionLevel);
         },
 
         get today() {

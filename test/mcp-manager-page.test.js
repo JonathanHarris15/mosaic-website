@@ -139,7 +139,7 @@ function manifest() {
 function page(level) {
     const m = mcpManager();
     m.capabilities = manifest();
-    Object.assign(m, AccessCore.pageFlags({permissionLevel: level || 'editor'}));
+    Object.assign(m, AccessCore.pageFlags(level || 'editor'));
     m.permissionLevel = m.currentPermissionLevel;
     return m;
 }

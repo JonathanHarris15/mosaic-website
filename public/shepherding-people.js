@@ -108,7 +108,7 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                this.currentPermissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                 Object.assign(this, AccessCore.pageFlags(userData));
                 // Adding a Person is an identity write (people create). The page
                 // asks the permission key the surface stands on (MS-721).

@@ -60,7 +60,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 function isKioskAccount(data) {
     const Core = (typeof window !== 'undefined' && window.KioskCore) || (typeof KioskCore !== 'undefined' ? KioskCore : null);
     if (Core) return Core.isKioskAccount(data);
-    return !!(data && (data.permissionLevel || data.role) === 'kiosk');
+    const Levels = typeof AccountLevelsCore !== 'undefined' ? AccountLevelsCore : null;
+    return !!(Levels && Levels.accessRank(data) === 'kiosk');
 }
 
 function landingPageFor(data) {
@@ -283,35 +284,34 @@ function forgetUserDoc() {
 // Only the two fields any page branches on. A change to a display name is not
 // worth interrupting somebody for; a change to their rank or their Person is.
 function identityMoved(before, after) {
-    const rank = d => (d && (d.permissionLevel || d.role)) || null;
+    const Levels = typeof AccountLevelsCore !== 'undefined' ? AccountLevelsCore : null;
+    const rank = d => (Levels && Levels.accessRank(d)) || null;
     const levelId = d => (d && d.accountLevelId) || null;
     const person = d => (d && d.personId) || null;
+    const doors = d => {
+        if (!Levels) return '';
+        const map = Levels.accessMap(d);
+        return Object.keys(map).filter(k => map[k] === true).sort().join('\n');
+    };
     return rank(before) !== rank(after)
         || levelId(before) !== levelId(after)
-        || person(before) !== person(after);
+        || person(before) !== person(after)
+        || doors(before) !== doors(after);
 }
 
-// Pages read permissionLevel off this object. A Pastoral Assistant whose
-// stored string is still "member" (the assignment wrote the level id, or
-// member-sync put the string back) would otherwise be shown and gated as a
-// Member. Resolve once, here, so every page sees the rung the assignment
-// actually granted.
-//
-// ⚠ BOTH FIELDS THIS REWRITES ARE FIELDS firestore.rules READS, and a write
-// gate that mirrors a rule needs what the rule sees, not what the page shows
-// (MS-725, ADR 0082). `permissions` becomes the EFFECTIVE map; the rules read
-// the saved one. `permissionLevel` becomes the canonical rung; the rules read
-// the stored string. So the stored pair is carried alongside, untouched.
+// The session object carries the derived rank and the map the rules read.
+// Stored role, permissionLevel, and pastoralAssistant on the document are
+// left in Firestore and are not consulted. permissionLevel on this object
+// is the derived rank label, so a page that still prints it shows the
+// account level's rank.
 function withResolvedLevel(data) {
     const Levels = typeof AccountLevelsCore !== 'undefined' ? AccountLevelsCore : null;
-    if (!data || !Levels || typeof Levels.normalizeAccount !== 'function'
-        || typeof Levels.storedMarkers !== 'function') return data;
-    const account = Levels.normalizeAccount(data);
-    const permissions = Levels.effectivePermissions(data);
-    return Object.assign({}, data, Levels.storedMarkers(data), {
-        permissionLevel: account.permissionLevel,
-        role: account.permissionLevel,
-        permissions: permissions,
+    if (!data || !Levels || typeof Levels.accessRank !== 'function') return data;
+    const rank = Levels.accessRank(data);
+    return Object.assign({}, data, {
+        permissionLevel: rank,
+        permissions: Levels.accessMap(data),
+        pastoralAssistant: rank === 'pastoral_assistant',
     });
 }
 

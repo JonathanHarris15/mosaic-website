@@ -38,7 +38,6 @@
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
-    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'];
 
     // Four, eight and twelve occurrences — a month, half a term, a term. Named
     // in OCCURRENCES rather than weeks, because a fortnightly Event's twelve is
@@ -54,6 +53,7 @@
             // ── Who is looking ───────────────────────────────────────────────
             rank: null,
             personId: null,
+            account: /** @type {object|null} */ (null),
             loading: true,
             error: '',
 
@@ -293,14 +293,23 @@
                         if (!user) { this.personId = null; return resolve(null); }
                         const Cache = window.MosaicLocalCache;
                         const known = Cache && Cache.readIdentity(user.uid);
-                        if (known && known.permissionLevel) {
+                        if (known && (known.permissions || known.accountLevelId)) {
                             this.personId = known.personId || null;
-                            return resolve(known.permissionLevel);
+                            const hasMap = known.permissions
+                                && typeof known.permissions === 'object'
+                                && !Array.isArray(known.permissions);
+                            this.account = hasMap
+                                ? { accountLevelId: known.accountLevelId || null, permissions: known.permissions }
+                                : { accountLevelId: known.accountLevelId || null };
+                            const Access = window.AccessCore;
+                            return resolve(Access ? Access.permissionLevelOf(this.account) : 'viewer');
                         }
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            resolve((data && (data.permissionLevel || data.role)) || 'viewer');
+                            const flags = window.AccessCore ? AccessCore.pageFlags(data) : null;
+                            this.account = flags ? flags.account : null;
+                            resolve(flags ? flags.currentPermissionLevel : 'viewer');
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');
@@ -324,7 +333,11 @@
 
             // ── Who is looking ───────────────────────────────────────────────
 
-            get isEditor() { return EDITOR_RANKS.indexOf(this.rank) !== -1; },
+            get isEditor() {
+                const Access = window.AccessCore;
+                if (!Access) return false;
+                return Access.writesAsEditor(this.account || this.rank);
+            },
             get signedOut() { return !this.loading && !this.rank; },
             get refused() { return !this.loading && !!this.rank && !this.isEditor; },
 

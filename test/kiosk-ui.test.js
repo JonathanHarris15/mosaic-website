@@ -6,6 +6,13 @@ const vm = require('node:vm');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = f => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 test('the account panel offers kiosk as a built-in account level', () => {
     const levels = require('../public/account-levels-core.js');
@@ -162,17 +169,24 @@ test('a kiosk header has no User Page', () => {
         },
     };
     sandbox.window = sandbox;
+    sandbox.AccountLevelsCore = Levels;
     sandbox.window.addEventListener = () => {};
     vm.createContext(sandbox);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'firebase-config.js'), 'utf8'), sandbox);
     vm.runInContext(AUTH, sandbox);
     store.mosaicUserDoc = JSON.stringify({
         uid: 'kiosk-1',
-        data: { permissionLevel: 'kiosk' },
+        data: account('kiosk'),
     });
     observers.forEach(fn => fn({ uid: 'kiosk-1', isAnonymous: false }));
     assert.doesNotMatch(container.innerHTML, /User Page/);
     assert.match(container.innerHTML, /Log Out/);
+    store.mosaicUserDoc = JSON.stringify({
+        uid: 'kiosk-1',
+        data: { permissionLevel: 'kiosk' },
+    });
+    observers.forEach(fn => fn({ uid: 'kiosk-1', isAnonymous: false }));
+    assert.match(container.innerHTML, /User Page/);
 });
 
 // ── MS-321: the second household through the door ──────────────────────────
@@ -220,7 +234,7 @@ test('the same household typed twice is named rather than quietly duplicated', (
 
 test('marking present returns the kiosk to the bare search screen', () => {
     const js = read('kiosk.js');
-    const submit = js.match(/async submitPresent\(\)[\s\S]*?\n        \},/);
+    const submit = js.match(/async submitPresent\(\)[\s\S]*?\n {8}\},/);
     assert.ok(submit, 'no submitPresent');
     assert.match(submit[0], /this\.toSearch\(\);/);
     // The print is started before the screen resets, never after.

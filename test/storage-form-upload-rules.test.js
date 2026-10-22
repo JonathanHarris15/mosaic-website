@@ -28,7 +28,7 @@ const rules = fs.readFileSync(path.join(ROOT, 'storage.rules'), 'utf8').replace(
 const firestoreRules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');
 
 const uploadBlock = () => {
-    const m = rules.match(/match \/form_uploads\/\{formId\}\/\{responseId\}\/\{fileName\} \{([\s\S]*?)\n    \}/);
+    const m = rules.match(/match \/form_uploads\/\{formId\}\/\{responseId\}\/\{fileName\} \{([\s\S]*?)\n {4}\}/);
     assert.ok(m, 'there is no rule for the form upload path at all');
     return m[1].split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
 };
@@ -64,8 +64,12 @@ test('the read rule matches the Firestore rule it restates', () => {
     // somebody tightens one and forgets the other.
     assert.match(firestoreRules, /match \/form_responses\/\{responseId\} \{\s*\n\s*allow read: if readsAsEditor\(\)/,
         'the Firestore rule on form_responses has changed shape');
-    assert.match(rules, /function isEditorAccount\(\)[\s\S]*?'editor', 'admin', 'elder', 'super_admin'/,
-        'isEditorAccount no longer lists the same ranks as isEditor');
+    const storageList = /function isEditorAccount\(\)[\s\S]*?accessRankAccount\(\) in \[([^\]]+)\]/.exec(rules);
+    const firestoreList = /function isEditor\(\)[\s\S]*?accessRank\(\) in \[([^\]]+)\]/.exec(firestoreRules);
+    assert.ok(storageList, 'isEditorAccount() no longer lists accessRank');
+    assert.ok(firestoreList, 'isEditor() no longer lists accessRank');
+    assert.equal(storageList[1], firestoreList[1]);
+    assert.match(storageList[1], /'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'/);
 });
 
 // ── The one call that would undo all of the above ────────────────────────────
@@ -109,7 +113,7 @@ test('the upload is written with its download token emptied', () => {
     // Storage mints a token on upload unless told otherwise. Leaving it there
     // would mean the link exists whether or not anybody asks for it.
     const index = fs.readFileSync(path.join(ROOT, 'functions', 'index.js'), 'utf8');
-    const block = index.match(/const storedFiles = \{\};[\s\S]*?\n      \}/);
+    const block = index.match(/const storedFiles = \{\};[\s\S]*?\n {6}\}/);
     assert.ok(block, 'the upload write has gone missing from publicForm');
     assert.match(block[0], /firebaseStorageDownloadTokens: ""/,
         'the upload keeps the token Storage mints, so a link exists for it');
@@ -142,12 +146,17 @@ test('an elder-only upload lives on its own path, behind an elder-only rule', ()
 });
 
 test('isElderAccount restates isElder, not the tier list', () => {
-    // The tier list reads editor → elder → admin, which suggests an admin sees
-    // everything an elder does. isElder() has never said so, and shepherding
-    // data is closed to admins on purpose.
-    assert.match(rules, /function isElderAccount\(\)[\s\S]*?'elder', 'super_admin'/,
-        'isElderAccount no longer lists the same ranks as isElder');
-    assert.match(firestoreRules, /function isElder\(\)[\s\S]*?'elder', 'super_admin'/);
+    // The old tier list read editor → elder → admin, which suggested an admin
+    // sees everything an elder does. Shepherding stays closed to admins:
+    // both helpers are the count-as-elder key and nothing else.
+    const storageElder = /function isElderAccount\(\)\s*\{([\s\S]*?)\n {4}\}/.exec(rules);
+    const firestoreElder = /function isElder\(\)\s*\{([\s\S]*?)\n {4}\}/.exec(firestoreRules);
+    assert.ok(storageElder, 'isElderAccount() missing');
+    assert.ok(firestoreElder, 'isElder() missing');
+    assert.match(storageElder[1], /return keyOnAccount\('shep\.count_as_elder'\);/);
+    assert.match(firestoreElder[1], /return keyOn\('shep\.count_as_elder'\);/);
+    assert.doesNotMatch(storageElder[1], /'elder', 'super_admin'|permissionLevel/);
+    assert.doesNotMatch(firestoreElder[1], /'elder', 'super_admin'|permissionLevel/);
 });
 
 test('the prefix is chosen in one place, so a file cannot land behind the wrong door', () => {

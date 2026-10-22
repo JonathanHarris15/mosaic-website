@@ -400,12 +400,12 @@ function storageDoors(user) {
  */
 function resolveSession(user) {
     const doc = asRecord(user);
-    const account = Levels.normalizeAccount(doc);
     const permissions = Levels.effectivePermissions(doc);
-    return Object.assign({}, doc, Levels.storedMarkers(doc), {
-        permissionLevel: account.permissionLevel,
-        role: account.permissionLevel,
+    const rank = Levels.canonicalPermissionLevel(doc);
+    return Object.assign({}, doc, {
+        permissionLevel: rank,
         permissions: permissions,
+        pastoralAssistant: rank === 'pastoral_assistant',
     });
 }
 

@@ -52,7 +52,7 @@ function printableView() {
         folioPadBaseCount: 0,
 
         get template() { return this.project ? this.project.template : null; },
-        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.account || this.permissionLevel); },
         get canFill() { return this.canEdit; },
         // Linked from an event's Printables / Files row: Folio and Print can
         // file the flat snapshot on that occurrence instead of printing.
@@ -123,7 +123,8 @@ function printableView() {
                     this.uid = user.uid || '';
                     const userData = await getUserData(user.uid);
                     this.currentUserData = userData || null;
-                    this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                    this.account = userData || null;
+                    this.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                     if (!this.id) { this.problem = 'No printable was named.'; return; }
                     let record = null;
                     try {

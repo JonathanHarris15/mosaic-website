@@ -76,8 +76,10 @@ test('a custom level carrying services.builder.edit edits the table', () => {
     assert.strictEqual(can({ accountLevelId: 'level_custom_music', permissionLevel: 'member', permissions: perms }), true);
 });
 
-test('an unmigrated legacy editor still edits; signed out does not', () => {
-    assert.strictEqual(can({ permissionLevel: 'editor' }), true);
+test('an unmigrated permissionLevel does not edit; a builtin editor account does', () => {
+    assert.strictEqual(can({ permissionLevel: 'editor' }), false);
+    assert.strictEqual(can(seeded('editor')), true);
+    assert.strictEqual(can('editor'), true);
     assert.strictEqual(can(null), false);
 });
 

@@ -22,6 +22,13 @@ const path = require('node:path');
 // entries.
 
 const Destinations = require('../public/mobile/destinations.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const directory = () => {
     const d = Destinations.DESTINATIONS.find(x => x.key === 'directory');
@@ -39,17 +46,20 @@ test('a viewer is not offered it either — the same gate the web uses', () => {
     // collection (ADR-0031 puts the floor at an account, so the Directory
     // Request flow works), but the SCREEN is member-and-above on the web and
     // must not be lower here.
+    assert.equal(Destinations.canSee(directory(), account('viewer')), false);
+    assert.equal(Destinations.canSee(directory(), 'viewer'), false);
     assert.equal(Destinations.canSee(directory(), { permissionLevel: 'viewer' }), false);
 });
 
 test('a member and above still get it', () => {
     for (const permissionLevel of ['member', 'editor', 'elder', 'admin', 'super_admin']) {
-        assert.equal(Destinations.canSee(directory(), { permissionLevel }), true, permissionLevel);
+        assert.equal(Destinations.canSee(directory(), account(permissionLevel)), true, permissionLevel);
+        assert.equal(Destinations.canSee(directory(), permissionLevel), true, permissionLevel);
     }
 });
 
-test('a member-level Pastoral Assistant is offered Shepherd, Directory, Forms and Roles Manager, not Admin', () => {
-    const pa = { permissionLevel: 'member', pastoralAssistant: true };
+test('a Pastoral Assistant is offered Shepherd, Directory, Forms and Roles Manager, not Admin', () => {
+    const pa = account('pastoral_assistant');
     const dest = (key) => {
         const d = Destinations.DESTINATIONS.find(x => x.key === key);
         assert.ok(d, key + ' destination is gone');
@@ -60,6 +70,12 @@ test('a member-level Pastoral Assistant is offered Shepherd, Directory, Forms an
     assert.equal(Destinations.canSee(dest('forms'), pa), true);
     assert.equal(Destinations.canSee(dest('roles-manager'), pa), true);
     assert.equal(Destinations.canSee(dest('admin'), pa), false);
+    assert.equal(Destinations.canSee(dest('shepherd'), 'pastoral_assistant'), true);
+    const flag = { permissionLevel: 'member', pastoralAssistant: true };
+    assert.equal(Destinations.canSee(dest('shepherd'), flag), false);
+    assert.equal(Destinations.canSee(dest('forms'), flag), false);
+    assert.equal(Destinations.canSee(dest('roles-manager'), flag), false);
+    assert.equal(Destinations.canSee(dest('admin'), flag), false);
 });
 
 test('the Home tile carries the same gate as the drawer entry', () => {

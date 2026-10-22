@@ -1184,7 +1184,7 @@ function serviceForm() {
                 if (user) {
                     try {
                         const userData = await getUserData(user.uid);
-                        const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                        const permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                         this.currentPermissionLevel = permissionLevel;
                         Object.assign(this, AccessCore.pageFlags(userData));
                         this.canEdit = this.canWriteEditor;

@@ -5,6 +5,13 @@ const path = require('node:path');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const DashboardNav = require('../public/dashboard-nav.js');
 const Drawer = require('../public/desktop-drawer.js');
@@ -51,13 +58,12 @@ test('the header lead helper builds a hamburger on drawer destinations', () => {
 // a back arrow would be the drawer offering a way in that the page then
 // disowns on arrival.
 test('a tile that opted out of the drawer is on the dashboard and not in it', () => {
-    const AccessCore = require('../public/access-core.js');
-    const account = AccessCore.accountOf({ permissionLevel: 'editor' });
+    const editor = account('editor');
     const optedOut = DashboardNav.GATED_TILES.filter((t) => t.drawer === false);
     assert.ok(optedOut.length, 'nothing opts out any more — drop this test with the flag');
 
-    const onDashboard = DashboardNav.orderedTiles(account, null).map((t) => t.href);
-    const inDrawer = DashboardNav.drawerTiles(account, null).map((t) => t.href);
+    const onDashboard = DashboardNav.orderedTiles(editor, null).map((t) => t.href);
+    const inDrawer = DashboardNav.drawerTiles(editor, null).map((t) => t.href);
     for (const tile of optedOut) {
         assert.ok(onDashboard.includes(tile.href), tile.href + ' left the dashboard');
         assert.ok(!inDrawer.includes(tile.href), tile.href + ' is still in the drawer');
@@ -67,9 +73,8 @@ test('a tile that opted out of the drawer is on the dashboard and not in it', ()
 });
 
 test('registry tiles become drawer entries on a non-dashboard page', () => {
-    const AccessCore = require('../public/access-core.js');
-    const account = AccessCore.accountOf({ permissionLevel: 'editor', pastoralAssistant: false });
-    const tiles = DashboardNav.orderedTiles(account, null);
+    const editor = account('editor');
+    const tiles = DashboardNav.orderedTiles(editor, null);
     const entries = Drawer.entriesFor(tiles);
     assert.ok(entries.some((e) => e.href === 'calendar.html'));
     assert.strictEqual(entries[0].href, 'index.html');
@@ -114,7 +119,7 @@ test('desktop-header-lead does not read window.auth or window.db (MS-698)', () =
 
 test('resolveWho names a signed-in reader even without MosaicDestinations (MS-698)', () => {
     const who = DesktopHeaderLead.resolveWho(
-        { permissionLevel: 'super_admin', pastoralAssistant: false },
+        account('super_admin'),
         'Jonathan',
         true,
     );
@@ -126,7 +131,7 @@ test('resolveWho names a signed-in reader even without MosaicDestinations (MS-69
 
 test('a signed-in viewer still has a who (MS-698)', () => {
     const who = DesktopHeaderLead.resolveWho(
-        { permissionLevel: 'viewer', pastoralAssistant: false },
+        account('viewer'),
         'Sam',
         true,
     );
@@ -137,7 +142,7 @@ test('a signed-in viewer still has a who (MS-698)', () => {
 
 test('resolveWho is empty when nobody is signed in (MS-698)', () => {
     assert.equal(DesktopHeaderLead.resolveWho(
-        { permissionLevel: 'super_admin' }, 'Jonathan', false), null);
+        account('super_admin'), 'Jonathan', false), null);
     assert.equal(DesktopHeaderLead.resolveWho(null, 'Friend', false), null);
 });
 

@@ -77,13 +77,13 @@
     // Level plus the Pastoral Assistant badge, from the access core so the
     // web list and both phone drawers cannot invent a second name for it.
     function accountLabel(account) {
-        const level = account && typeof account === 'object'
-            ? (account.permissionLevel || account.role)
-            : account;
-        const role = roleLabel(level);
         const Access = (typeof window === 'undefined' && typeof require === 'function')
             ? require('../access-core.js')
             : (global.AccessCore);
+        const level = account && typeof account === 'object'
+            ? (Access ? Access.permissionLevelOf(account) : 'viewer')
+            : account;
+        const role = roleLabel(level);
         const badge = Access ? Access.badgeLabel(account) : '';
         return badge ? role + ' · ' + badge : role;
     }
@@ -152,7 +152,6 @@
         if (isAdminOnlyGate(item.permissionLevels)) {
             return Access.accessesAdminDashboard(user);
         }
-        if (item.permissionLevels.indexOf(user.permissionLevel) >= 0) return true;
         if (item.permissionLevels.indexOf('elder') !== -1 && Access.readsAsElder(user)) return true;
         if (item.permissionLevels.indexOf('editor') !== -1 && Access.readsAsEditor(user)) return true;
         if (item.permissionLevels.indexOf('member') !== -1 && Access.canViewDirectory(user)) return true;

@@ -69,8 +69,8 @@ async function initProfile() {
         // Fetch user permission level from Firestore
         try {
             const userData = await getUserData(user.uid);
-            const permissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
-            const pastoralAssistant = !!(userData && userData.pastoralAssistant === true);
+            const permissionLevel = (window.AccessCore && AccessCore.permissionLevelOf(userData)) || 'viewer';
+            const pastoralAssistant = !!(window.AccessCore && AccessCore.isPastoralAssistant(userData));
 
             // Update permission level displays
             const roleLabels = {

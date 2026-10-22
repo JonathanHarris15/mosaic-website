@@ -8,6 +8,11 @@ const {
     assertWritesAsEditor,
     assertIsAdmin,
 } = require('../functions/access-assert.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 
 // MS-594 — sendPrayerRequestNow (and any other canDecide callable) must
 // admit a Pastoral Assistant the same way AccessCore does. Counted-as-elder
@@ -43,21 +48,33 @@ async function denied(account) {
 }
 
 test('a Pastoral Assistant may send a prayer request', async () => {
-    await decide({permissionLevel: 'member', pastoralAssistant: true});
+    await decide(account('pastoral_assistant'));
+    await decide({accountLevelId: 'level_pastoral_assistant'});
+    await decide('pastoral_assistant');
 });
 
 test('an elder and a super admin may send a prayer request', async () => {
-    await decide({permissionLevel: 'elder'});
-    await decide({permissionLevel: 'super_admin'});
+    await decide(account('elder'));
+    await decide(account('super_admin'));
+    await decide('elder');
 });
 
 test('a plain member is refused', async () => {
+    await denied(account('member'));
     await denied({permissionLevel: 'member'});
     await denied({permissionLevel: 'member', pastoralAssistant: false});
 });
 
+test('a ladder flag is not a Pastoral Assistant', async () => {
+    await denied({permissionLevel: 'member', pastoralAssistant: true});
+    await denied({permissionLevel: 'pastoral_assistant'});
+    await denied({role: 'elder'});
+});
+
 test('an editor without the grant is refused', async () => {
+    await denied(account('editor'));
     await denied({permissionLevel: 'editor'});
+    await denied('editor');
 });
 
 test('a missing account is unauthenticated', async () => {
@@ -68,17 +85,29 @@ test('a missing account is unauthenticated', async () => {
 });
 
 test('reachability is a directory-editor write, and a Pastoral Assistant has it', async () => {
-    const editor = fakeDb({'uid-1': {permissionLevel: 'editor'}});
-    await assertWritesAsEditor(editor, {uid: 'uid-1'});
+    await assertWritesAsEditor(fakeDb({'uid-1': account('editor')}), {uid: 'uid-1'});
+    await assertWritesAsEditor(fakeDb({'uid-1': 'editor'}), {uid: 'uid-1'});
     await assertWritesAsEditor(
-        fakeDb({'uid-1': {permissionLevel: 'pastoral_assistant'}}),
+        fakeDb({'uid-1': account('pastoral_assistant')}),
         {uid: 'uid-1'});
     await assertWritesAsEditor(
-        fakeDb({'uid-1': {permissionLevel: 'member', pastoralAssistant: true}}),
+        fakeDb({'uid-1': {accountLevelId: 'level_pastoral_assistant'}}),
         {uid: 'uid-1'});
     await assert.rejects(
         () => assertWritesAsEditor(
-            fakeDb({'uid-1': {permissionLevel: 'member'}}),
+            fakeDb({'uid-1': {permissionLevel: 'editor'}}),
+            {uid: 'uid-1'}),
+        (err) => err && err.code === 'permission-denied'
+    );
+    await assert.rejects(
+        () => assertWritesAsEditor(
+            fakeDb({'uid-1': {permissionLevel: 'member', pastoralAssistant: true}}),
+            {uid: 'uid-1'}),
+        (err) => err && err.code === 'permission-denied'
+    );
+    await assert.rejects(
+        () => assertWritesAsEditor(
+            fakeDb({'uid-1': account('member')}),
             {uid: 'uid-1'}),
         (err) => err && err.code === 'permission-denied'
     );
@@ -113,24 +142,37 @@ test('sendPrayerRequestNow asks assertCanDecide, not counted-as-elder', () => {
 // MS-682 — the Push notifications tab reaches other people's Device tokens,
 // which the rules keep from every client. The callables are the only door.
 
-test('an admin and a super admin run the dashboard; nobody else does', async () => {
-    await assertIsAdmin(fakeDb({'uid-1': {permissionLevel: 'admin'}}), {uid: 'uid-1'});
-    await assertIsAdmin(fakeDb({'uid-1': {permissionLevel: 'super_admin'}}), {uid: 'uid-1'});
-    // The legacy `role` field, still written beside permissionLevel (MS-119).
-    await assertIsAdmin(fakeDb({'uid-1': {role: 'admin'}}), {uid: 'uid-1'});
+test('an admin and a super admin run the dashboard; a ladder field does not', async () => {
+    await assertIsAdmin(fakeDb({'uid-1': account('admin')}), {uid: 'uid-1'});
+    await assertIsAdmin(fakeDb({'uid-1': account('super_admin')}), {uid: 'uid-1'});
+    await assertIsAdmin(fakeDb({'uid-1': 'admin'}), {uid: 'uid-1'});
+    await assertIsAdmin(fakeDb({'uid-1': 'super_admin'}), {uid: 'uid-1'});
+    await assert.rejects(
+        () => assertIsAdmin(fakeDb({'uid-1': {permissionLevel: 'admin'}}), {uid: 'uid-1'}),
+        (err) => err && err.code === 'permission-denied'
+    );
+    await assert.rejects(
+        () => assertIsAdmin(fakeDb({'uid-1': {role: 'admin'}}), {uid: 'uid-1'}),
+        (err) => err && err.code === 'permission-denied'
+    );
 });
 
 test('an elder, an editor and a Pastoral Assistant are not admins', async () => {
-    const refused = async (account) => {
+    const refused = async (who) => {
         await assert.rejects(
-            () => assertIsAdmin(fakeDb({'uid-1': account}), {uid: 'uid-1'}),
+            () => assertIsAdmin(fakeDb({'uid-1': who}), {uid: 'uid-1'}),
             (err) => err && err.code === 'permission-denied'
         );
     };
+    await refused(account('elder'));
+    await refused(account('editor'));
+    await refused(account('pastoral_assistant'));
+    await refused(account('viewer'));
     await refused({permissionLevel: 'elder'});
     await refused({permissionLevel: 'editor'});
     await refused({permissionLevel: 'member', pastoralAssistant: true});
-    await refused({permissionLevel: 'viewer'});
+    await refused({permissionLevel: 'admin'});
+    await refused({role: 'super_admin'});
     await refused({});
 });
 
@@ -249,9 +291,18 @@ test('a permissions map without services.builder.edit is refused even if a stale
     );
 });
 
-test('a legacy editor with no permissions map still may; a member may not', async () => {
-    await editsServices({permissionLevel: 'editor'});
+test('a builtin accountLevelId with no permissions field may edit a Sunday; a ladder field may not', async () => {
+    await editsServices({accountLevelId: 'level_editor'});
+    await editsServices(account('editor'));
+    await editsServices('editor');
+    await assert.rejects(() => editsServices({permissionLevel: 'editor'}),
+        (err) => err && err.code === 'permission-denied');
     await assert.rejects(() => editsServices({permissionLevel: 'member'}),
+        (err) => err && err.code === 'permission-denied');
+    await assert.rejects(() => editsServices({role: 'elder'}),
+        (err) => err && err.code === 'permission-denied');
+    await assert.rejects(
+        () => editsServices({accountLevelId: 'level_editor', permissions: null}),
         (err) => err && err.code === 'permission-denied');
 });
 

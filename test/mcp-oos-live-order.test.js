@@ -15,6 +15,11 @@ const assert = require('node:assert');
 const path = require('node:path');
 
 const FUNCTIONS = path.join(__dirname, '..', 'functions');
+const Levels = require(path.join(__dirname, '..', 'public', 'account-levels-core.js'));
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 
 const TS = '<<server-timestamp>>';
 const DEL = '<<delete>>';
@@ -157,7 +162,7 @@ async function connect(db) {
     const {buildServer} = require(path.join(FUNCTIONS, 'mcp-server.js'));
     const server = await buildServer({
         db,
-        auth: {uid: 'uid-1', permissionLevel: 'editor'},
+        auth: Object.assign({uid: 'uid-1'}, account('editor')),
         geminiKey: () => 'fake-key',
         fieldValues: FIELD_VALUES,
         siteUrl: 'https://mosaic-hymn-mcp.web.app',

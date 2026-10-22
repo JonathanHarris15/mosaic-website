@@ -283,7 +283,7 @@ window.RolesManager = () => ({
                 name: doc.data().name || doc.id,
                 hiddenFromOthers: doc.data().hiddenFromOthers === true,
             }));
-            this.shepherdingTags = RolesCore.visibleTags(all, this.currentPermissionLevel)
+            this.shepherdingTags = RolesCore.visibleTags(all, this.account || this.currentPermissionLevel)
                 .map(tag => ({ id: tag.id, name: tag.name }));
             const visible = this.shepherdingTags.map(tag => tag.id);
             this.hiddenTagIds = all.map(tag => tag.id).filter(id => visible.indexOf(id) === -1);

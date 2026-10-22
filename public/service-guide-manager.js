@@ -100,7 +100,7 @@ function guideManager() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                self.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                self.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                 self.account = userData || null;
                 if (!self.canEdit) { window.location.href = 'service-calendar.html'; return; }
                 self.palette = self.catalog.palette();

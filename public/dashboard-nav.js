@@ -36,10 +36,8 @@
             label: 'Membership Directory', desc: 'Who is in the congregation, and how to reach them.',
             insertAfter: 'hymn-directory',
             visible: function (account) {
-                const level = account.permissionLevel;
                 const Access = accessCore();
-                return ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(level)
-                    || (Access && Access.readsAsElder(account));
+                return !!(Access && Access.readsAsMember(account));
             },
         },
         {
@@ -100,7 +98,8 @@
             symbol: 'admin_panel_settings',
             label: 'Admin Dashboard', desc: 'SMS and the system tools behind the app.',
             visible: function (account) {
-                return ['admin', 'super_admin'].includes(account.permissionLevel);
+                const Access = accessCore();
+                return !!(Access && Access.accessesAdminDashboard(account));
             },
         },
     ]);
@@ -155,10 +154,7 @@
         if (Access && Access.accountOf) {
             return Access.accountOf(user);
         }
-        return {
-            permissionLevel: user.permissionLevel || user.role || 'viewer',
-            pastoralAssistant: user.pastoralAssistant === true,
-        };
+        return { permissionLevel: 'viewer', pastoralAssistant: false };
     }
 
     /** Tiles this account may see, in the dashboard's default arrangement. */

@@ -42,7 +42,9 @@ test('the phone offers a way back into a locked-out account', () => {
 test('a new phone account starts as a viewer, and its password is never stored', () => {
     const signUp = (DATA.match(/function signUp\([\s\S]*?\n  \}\n/) || [])[0];
     assert.ok(signUp, 'data.signUp has gone missing');
-    assert.match(signUp, /permissionLevel: "viewer"/, 'a self-made phone account starts above viewer');
+    assert.match(signUp, /accountLevelId: "level_viewer"/, 'a self-made phone account starts above viewer');
+    assert.doesNotMatch(signUp, /permissionLevel:/, 'a self-made phone account writes the old ladder');
+    assert.doesNotMatch(signUp, /role:/, 'a self-made phone account writes the old ladder');
     // MS-241: Firebase Auth holds the hashed copy and that is the only one.
     // A readable second copy here is a list of the congregation's passwords.
     assert.doesNotMatch(signUp, /password:/, 'the phone writes the password into the user document');

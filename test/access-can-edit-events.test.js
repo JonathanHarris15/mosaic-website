@@ -3,17 +3,12 @@ const assert = require('node:assert/strict');
 const Access = require('../public/access-core.js');
 const Levels = require('../public/account-levels-core.js');
 
-// MS-725 (ADR 0082): canEditEvents mirrors firestore.rules
-// editsWith('calendar.events.edit') clause for clause —
+// MS-725 / MS-776: canEditEvents is the calendar.events.edit key. A rank-label
+// string is that builtin preset. A stored permissionLevel, role, or
+// pastoralAssistant flag grants nothing.
 //
-//     hasPermission(key) || (!usesPermissionMap() && isEditor())
-//
-// so a saved permission map is the whole answer, and only an account that has
-// never been through Admin → Accounts falls back to the editor level names.
-//
-// Helm option A: the Editor preset now carries calendar.events.edit, so a
-// newly saved Editor map admits the calendar doors. Accounts saved before
-// that change still have the old map until the backfill runs.
+// Helm option A: the Editor preset carries calendar.events.edit, so a builtin
+// Editor account and the string 'editor' admit the calendar doors.
 
 const saved = (preset) => Levels.userWriteFromLevel(
     Levels.accountLevelIdForPreset(preset));
@@ -47,13 +42,15 @@ test('revoking the key revokes, even when the stored level says editor', () => {
     assert.equal(Access.canEditEvents(revoked), false);
 });
 
-test('legacy accounts without a saved map: the editor level names', () => {
+test('a rank label and a builtin editor account edit; a stored level name does not', () => {
     assert.equal(Access.canEditEvents('editor'), true);
+    assert.equal(Access.canEditEvents(saved('editor')), true);
     assert.equal(Access.canEditEvents('pastoral_assistant'), true);
+    assert.equal(Access.canEditEvents(saved('pastoral_assistant')), true);
     assert.equal(Access.canEditEvents('member'), false);
     assert.equal(Access.canEditEvents(null), false);
-    assert.equal(Access.canEditEvents({ permissionLevel: 'editor' }), true);
-    assert.equal(Access.canEditEvents({ role: 'admin' }), true);
+    assert.equal(Access.canEditEvents({ permissionLevel: 'editor' }), false);
+    assert.equal(Access.canEditEvents({ role: 'admin' }), false);
     assert.equal(
-        Access.canEditEvents({ permissionLevel: 'member', pastoralAssistant: true }), true);
+        Access.canEditEvents({ permissionLevel: 'member', pastoralAssistant: true }), false);
 });

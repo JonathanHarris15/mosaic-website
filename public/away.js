@@ -138,13 +138,13 @@
                         if (!user) { this.personId = null; return resolve(null); }
                         const Cache = window.MosaicLocalCache;
                         const known = Cache && Cache.readIdentity(user.uid);
-                        if (known && known.permissionLevel) {
+                        if (known && (known.permissions || known.accountLevelId)) {
                             this.personId = known.personId || null;
                             this.account = {
-                                permissionLevel: known.permissionLevel,
-                                pastoralAssistant: known.pastoralAssistant === true,
+                                accountLevelId: known.accountLevelId || null,
+                                permissions: known.permissions || null,
                             };
-                            return resolve(known.permissionLevel);
+                            return resolve(AccessCore.permissionLevelOf(this.account));
                         }
                         try {
                             const data = await getUserData(user.uid);
@@ -154,7 +154,8 @@
                             if (Cache) Cache.writeIdentity(user.uid, {
                                 personId: this.personId,
                                 permissionLevel: flags.currentPermissionLevel,
-                                pastoralAssistant: flags.pastoralAssistant,
+                                accountLevelId: flags.account.accountLevelId,
+                                permissions: flags.account.permissions,
                             });
                             resolve(flags.currentPermissionLevel);
                         } catch (e) {

@@ -33,18 +33,19 @@ const KEYS = {
     resource_folders: 'resources.edit',
 };
 
-// MS-725 (ADR 0082): a saved map is the whole answer. The level names are
-// still there, but only behind `!usesPermissionMap()` — put them back as a
-// plain OR and unticking a key in Admin → Accounts stops meaning anything.
-test('editsWith is keys-only once a map has been saved', () => {
+// MS-776: the map-versus-preset decision lives in keyOn(). editsWith is that
+// key and nothing else — no level-name OR, and no usesPermissionMap() guard.
+test('editsWith is the permission key and nothing else', () => {
     assert.match(rules,
-        /function editsWith\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isEditor\(\)\);\s*\}/);
+        /function editsWith\(key\) \{\s*return keyOn\(key\);\s*\}/);
+    assert.doesNotMatch(rules, /function usesPermissionMap\(/);
 });
 
 // MS-727: app_config's leftover ladder is isAdmin(), not isEditor().
-test('editsAsAdmin is keys-only once a map has been saved', () => {
+// MS-776: editsAsAdmin is the same keyOn() door, not an admin-rank OR.
+test('editsAsAdmin is the permission key and nothing else', () => {
     assert.match(rules,
-        /function editsAsAdmin\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isAdmin\(\)\);\s*\}/);
+        /function editsAsAdmin\(key\) \{\s*return keyOn\(key\);\s*\}/);
 });
 
 test('app_config writes with the admin dashboard key', () => {

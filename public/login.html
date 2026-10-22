@@ -17,6 +17,9 @@
     <script src="account-recovery-core.js"></script>
     <script src="sign-in-return-core.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="permission-catalog.js"></script>
+    <script src="account-levels-core.js"></script>
+    <script src="access-core.js"></script>
     <script src="auth.js"></script>
 
     <script src="dashboard-nav.js"></script>
@@ -212,8 +215,7 @@
                             // congregation's passwords, and people reuse them.
                             await db.collection('users').doc(user.uid).set({
                                 email: user.email,
-                                permissionLevel: 'viewer',
-                                role: 'viewer',
+                                accountLevelId: 'level_viewer',
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
                             });
                         }

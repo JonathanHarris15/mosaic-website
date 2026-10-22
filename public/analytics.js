@@ -91,10 +91,7 @@ export function analyticsPage() {
         },
 
         get isAdmin() {
-            return AccessCore.readsAsElder({
-                permissionLevel: this.currentPermissionLevel,
-                pastoralAssistant: this.pastoralAssistant,
-            });
+            return AccessCore.readsAsElder(this.account || this.currentPermissionLevel);
         },
 
         get isEditor() {
