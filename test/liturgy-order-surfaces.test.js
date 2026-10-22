@@ -23,10 +23,15 @@ test('the Order of Service header selects this Sunday\'s Liturgy Order', () => {
     assert.match(html, /href="'liturgy-orders\.html\?date=/, 'the manage control opens the management page');
 });
 
-test('no page routes a Sunday to the legacy generator', () => {
-    ['service-builder.html', 'service-builder.js', 'service-calendar.html', 'service-calendar.js',
-        'service-guide-editor.html', 'service-guide-editor.js', 'guide-store.js', 'mobile/app.js']
-        .forEach((f) => assert.doesNotMatch(read(f), /service-guide\.html/, f));
+test('no shipped page routes a Sunday to the retired guide editor or generator', () => {
+    ['service-builder.html', 'service-builder.js', 'service-calendar.html', 'service-calendar.js', 'mobile/app.js', 'mobile/screens-content.js']
+        .forEach((f) => {
+            assert.doesNotMatch(read(f), /service-guide-editor\.html/, f);
+            assert.doesNotMatch(read(f), /service-guide\.html/, f);
+            assert.doesNotMatch(read(f), /guide-store\.js/, f);
+        });
+    assert.throws(() => read('service-guide-editor.html'), (err) => err && err.code === 'ENOENT');
+    assert.throws(() => read('service-guide.html'), (err) => err && err.code === 'ENOENT');
 });
 
 test('the calendar\'s table mode toggles orders and links the management page', () => {

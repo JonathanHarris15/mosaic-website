@@ -646,10 +646,10 @@
                 </div>
 
                 <!-- ── Printables linked to this event (MS-400) ───────────
-                     The service guide on a Sunday, the directory on a members'
-                     meeting: a Printable the series carries, opened live from
-                     here, viewed by members when an editor allows it, and
-                     filed below as a PDF snapshot of how it stood on the day. -->
+                     Handouts the series carries (directories, bulletins, etc.).
+                     The Sunday Service Guide is linked on the Liturgy Order,
+                     not here. Open live from this page, member-visible when
+                     allowed, filed below as a PDF snapshot of the day. -->
                 <section class="mb-sm" x-show="printables.length || canLinkPrintables">
                     <div class="flex items-center justify-between gap-sm mb-2">
                         <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">Printables</h3>
@@ -661,7 +661,7 @@
                     </div>
                     <p x-show="printableError" class="text-[12.5px] text-error mb-2" x-text="printableError"></p>
                     <p x-show="!printables.length && canLinkPrintables" class="text-[12.5px] text-on-surface-variant">
-                        Nothing linked yet. A linked printable opens from every date of this event and can be filed here as a PDF.
+                        Nothing linked yet. Handouts for this event open from every date and can be filed here as a PDF. The Sunday Service Guide is linked on the Liturgy Order, not on the event.
                     </p>
                     <p x-show="printables.length && hasSundayBookletPrintable" class="text-[12.5px] text-on-surface-variant mt-2 cal-printable-booklet">
                         Sunday booklet PDFs are flat and padded to a multiple of 4. On the church copier, use Booklet / Saddle Stitch — Mosaic does not reorder pages.
@@ -742,7 +742,7 @@
                 <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md"
                      role="dialog" aria-modal="true">
                     <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
-                    <p class="font-body-md text-on-surface-variant">It will open from every date of this event. Members can open it once you switch that on.</p>
+                    <p class="font-body-md text-on-surface-variant">A handout for every date of this event — not the Sunday Service Guide (link that on the Liturgy Order). Members can open it once you switch that on.</p>
                     <div class="m-loading" x-show="libraryLoading"><span class="m-spinner"></span></div>
                     <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkable.length">Every laid-out printable in the library is already linked, or there are none yet.</p>
                     <div class="flex flex-col gap-xs max-h-72 overflow-y-auto" x-show="!libraryLoading">
