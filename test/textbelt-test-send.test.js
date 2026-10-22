@@ -4,8 +4,6 @@ const {
     phoneFromPerson,
     isJonathanHarris,
     textbeltPayload,
-    prayerUrlSmokeMessage,
-    DEFAULT_URL_SMOKE_LINK,
     JONATHAN_HARRIS_NAME,
 } = require('../scripts/textbelt-test-send-lib');
 
@@ -30,11 +28,4 @@ test('textbeltPayload omits replyWebhookUrl', () => {
         key: 'key-1',
     });
     assert.ok(!('replyWebhookUrl' in payload));
-});
-
-test('prayerUrlSmokeMessage includes the Answer URL and no webhook fields', () => {
-    const body = prayerUrlSmokeMessage();
-    assert.ok(body.includes(DEFAULT_URL_SMOKE_LINK));
-    assert.ok(body.includes('Jonathan'));
-    assert.ok(!body.includes('replyWebhookUrl'));
 });

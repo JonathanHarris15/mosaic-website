@@ -54,7 +54,10 @@ gh workflow run "Prod ops script" --ref main \
 | --- | --- |
 | `set-liturgy-order-flags.js` | [MS-770 — Textbelt order flag](./ms-770-textbelt-order-flag.md) (`--list`, `--name-match`, `--id`, `--ops` / `--hidden`) |
 | `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |
-| `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`, or `--with-url` for link whitelist smoke; `commit=true` sends one text to Jonathan Harris only) |
+| `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args` or `--with-url`; `commit=true` sends one text to Jonathan Harris only) |
+| `textbelt-key-check.js` | Key prefix + whitelist match + Textbelt quota (`--with-url` = Jonathan dry-run with link) |
+| `prayer-request-send-preview.js` | Dry-run pastoral-prayer SMS recipients and bodies (optional `--service-date`) |
+| `prayer-text-notifications-audit.js` | Read-only prayer text failures in `notifications` since `--since` (default `2026-10-13`) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
 | `migrate-legacy-oos-prayer-carriers.js` | [MS-771 — OOS legacy prayer leaders → `carriedBy`](./ms-771-legacy-oos-audit.md) (optional `--from` / `--to`; `commit=true` to apply) |
 | `delete-legacy-oos-prayer-fields.js` | [MS-771 — delete legacy prayer top-level fields](./ms-771-legacy-oos-audit.md) (empty `args`; `commit=true` to apply) |

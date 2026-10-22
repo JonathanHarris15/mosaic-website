@@ -22,6 +22,9 @@ on:
           - set-liturgy-order-flags.js
           - migrate-hymn-sheets-prefix.js
           - textbelt-test-send.js
+          - textbelt-key-check.js
+          - prayer-request-send-preview.js
+          - prayer-text-notifications-audit.js
           - reset-prayer-send-attempt.js
           - migrate-legacy-oos-prayer-carriers.js
           - delete-legacy-oos-prayer-fields.js

@@ -29,8 +29,8 @@ const REMINDER_DAYS_OUT = 3;
  * When true, the send path **adds** the minted Answer URL **alongside** the
  * same reply instructions in the template — it does not replace texting back.
  * Inbound reply (`prayerRequestSource: reply`) and Answer form (`form`) must
- * stay equivalent on the request doc, note, digest, and thank-you; dedupe if
- * both arrive is MS-768 follow-up, not this flag's semantics.
+ * stay equivalent on the request doc, note, digest, and thank-you; the
+ * first channel wins and the second is deduped in prayer-request-writes.js.
  */
 const PRAYER_SMS_INCLUDE_ANSWER_LINK_FIELD = "includeAnswerLinkInSms";
 

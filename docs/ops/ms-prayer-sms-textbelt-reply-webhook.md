@@ -11,13 +11,6 @@ Unverified Textbelt keys reject sends when `replyWebhookUrl` is present, even if
    | `textbelt-test-send.js` | *(empty)* | `false` |
    | `textbelt-test-send.js` | *(empty)* | `true` |
 
-   **URL whitelist smoke** (one pastoral-prayer-style SMS with an `https://` link, still no `replyWebhookUrl`):
-
-   | `script` | `args` | `commit` |
-   | --- | --- | --- |
-   | `textbelt-test-send.js` | `--with-url` | `false` |
-   | `textbelt-test-send.js` | `--with-url` | `true` |
-
 2. **Retry failed prayer sends** for 2026-10-25:
 
    | `script` | `args` | `commit` |

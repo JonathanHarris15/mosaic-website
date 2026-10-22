@@ -3,9 +3,8 @@
  * and page (form) path share the note decision so a second note is never
  * minted. No network — the caller sends any thank-you.
  *
- * MS-768: when SMS carries both reply and Answer link, these two entry points
- * should converge on one shared fill helper (same `prayer_requests` shape,
- * `prayerRequestSource` distinguishes reply vs form, one thank-you/digest).
+ * MS-768: reply and Answer-link form share one request doc; the first channel
+ * wins and the second is deduped (see saveFormAnswer when source is reply).
  */
 
 const pr = require("./prayer-request");
@@ -151,6 +150,14 @@ async function saveFormAnswer(db, args) {
   const reqRef = requestRef(db, personId, serviceDate);
   const req = loaded.req || {};
   const hadRequestBefore = !!(req.prayerRequest || "").trim();
+
+  if (hadRequestBefore && req.prayerRequestSource === "reply") {
+    return {
+      ok: true,
+      view: loaded.view,
+      noteId: req.noteId || null,
+    };
+  }
 
   let noteText = null;
   if (req.noteId) {
