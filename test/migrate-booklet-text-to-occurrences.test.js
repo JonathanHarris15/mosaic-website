@@ -159,6 +159,39 @@ test('the date window is service ids, and the script never deletes', () => {
     assert.equal(src.includes('Migrate.contentFromLegacyStores'), false);
     assert.equal(src.includes('Migrate.planOccurrenceFill'), false);
     assert.equal(src.includes('Migrate.readsBookletText'), false);
+    assert.equal(src.includes('Migrate.migrateProject'), true);
+    assert.equal(src.includes("collection('roster')"), true);
+    assert.equal(src.includes('writeOutcome(prep)'), true);
+    assert.equal(src.includes('writeOutcome(prep, err)'), true);
+});
+
+test('a data URL under 2048 bytes stays inline', () => {
+    const image = 'data:image/png;base64,' + 'A'.repeat(80);
+    assert.ok(Buffer.byteLength(image, 'utf8') < Copy.DATA_URL_MIN_BYTES);
+    const prep = Copy.prepareOccurrenceWrite({
+        printableInputs: {},
+    }, {
+        guide: { legacy_prayerCountryImage: image },
+    }, {
+        occurrenceId: 'sunday_service_2026-09-06',
+        date: '2026-09-06',
+        bucket: 'mosaic-hymn-database.firebasestorage.app',
+    });
+    assert.equal(prep.uploads.length, 0);
+    assert.equal(prep.imagesOffloaded, 0);
+    assert.equal(prep.body.printableInputs.guide.legacy_prayerCountryImage, image);
+});
+
+test('--commit without --i-mean-prod throws, and a size rejection is a skip', () => {
+    assert.throws(() => Copy.writeMode(['--commit']), /--commit also needs --i-mean-prod/);
+    assert.equal(Copy.writeMode(['--commit', '--i-mean-prod']).commit, true);
+    assert.equal(Copy.writeMode(['--i-mean-prod']).commit, false);
+    assert.equal(Copy.writeOutcome({ overLimit: true }), 'skip');
+    assert.equal(Copy.writeOutcome({ overLimit: false }), 'write');
+    assert.equal(Copy.writeOutcome({ overLimit: false }, {
+        details: 'exceeds the maximum allowed size',
+    }), 'skip');
+    assert.equal(Copy.writeOutcome({ overLimit: false }, new Error('permission denied')), 'throw');
 });
 
 test('a country-map data URL is stored once, as a URL, under the size ceiling', () => {
