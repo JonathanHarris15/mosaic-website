@@ -236,12 +236,52 @@ test('a new occurrence reads the roster snapshot, and a size rejection skips the
     );
     /** @type {any} */
     let saved = null;
-    const ok = { async set(/** @type {any} */ body) { saved = body; } };
+    const ok = {
+        async set(/** @type {any} */ body, /** @type {any} */ options) {
+            assert.equal(options.merge, true);
+            saved = body;
+        },
+    };
     assert.equal(await Copy.commitOccurrence(ok, {
         overLimit: false,
         body: { printableInputs: { guide: { legacy_prayerNation: 'Kenya' } } },
     }), 'wrote');
     assert.equal(saved.printableInputs.guide.legacy_prayerNation, 'Kenya');
+});
+
+test('an existing occurrence is updated with fill-ins only', () => {
+    const prep = Copy.prepareOccurrenceWrite({
+        seriesId: 'sunday_service',
+        notes: 'keep off the write',
+        printableInputs: { other: { note: 'Keep me' } },
+    }, {
+        guide: { legacy_prayerNation: 'Kenya' },
+    }, {
+        occurrenceId: 'sunday_service_2026-09-06',
+        date: '2026-09-06',
+        bucket: 'mosaic-hymn-database.firebasestorage.app',
+        assignments: [{ personId: 'p-abe' }],
+    });
+    assert.deepEqual(Object.keys(prep.body), ['printableInputs']);
+    assert.equal(prep.body.notes, undefined);
+    assert.equal(prep.body.printableInputs.guide.legacy_prayerNation, 'Kenya');
+    assert.equal(prep.body.printableInputs.other.note, 'Keep me');
+});
+
+test('a missing occurrence is a full document stamped from the roster', () => {
+    const prep = Copy.prepareOccurrenceWrite(null, {
+        guide: { legacy_prayerNation: 'Kenya' },
+    }, {
+        occurrenceId: 'sunday_service_2026-09-06',
+        date: '2026-09-06',
+        bucket: 'mosaic-hymn-database.firebasestorage.app',
+        series: { visibility: 'public' },
+        assignments: [{ personId: 'p-abe' }, { personId: 'p-abe' }],
+    });
+    assert.equal(prep.body.seriesId, 'sunday_service');
+    assert.equal(prep.body.date, '2026-09-06');
+    assert.deepEqual(prep.body.participantIds, ['p-abe']);
+    assert.equal(prep.body.printableInputs.guide.legacy_prayerNation, 'Kenya');
 });
 
 test('a data URL under 2048 bytes stays inline', () => {
