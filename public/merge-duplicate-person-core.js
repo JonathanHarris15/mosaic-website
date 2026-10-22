@@ -70,7 +70,6 @@
         'services',
         'users',
         'families',
-        'households',
         'relationships',
         'relationship_groups',
         'shepherding_tasks',

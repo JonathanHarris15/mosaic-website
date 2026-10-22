@@ -8,6 +8,8 @@
 const ALLOWLIST_SORTED = [
     'access-diff.js',
     'backfill-occurrence-visibility.js',
+    'delete-legacy-households.js',
+    'delete-legacy-membership-status.js',
     'delete-legacy-person-picker-fields.js',
     'delete-shepherding-reminders.js',
     'diagnose-storage-fill-in-upload.js',
@@ -16,6 +18,7 @@ const ALLOWLIST_SORTED = [
     'migrate-meeting-mentions.js',
     'migrate-reminders-to-tasks.js',
     'ms-776-backfill-account-levels.js',
+    'normalise-care-list-documents.js',
     'prayer-request-send-preview.js',
     'prayer-text-notifications-audit.js',
     'reset-prayer-send-attempt.js',

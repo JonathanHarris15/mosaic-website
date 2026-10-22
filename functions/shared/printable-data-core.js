@@ -929,7 +929,7 @@
 
     function isInactive(person) {
         const m = (person && person.membership) || {};
-        return !!m.inactive || m.status === 'inactive';
+        return !!m.inactive;
     }
 
     function isMember(person) {

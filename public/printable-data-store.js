@@ -64,7 +64,7 @@
         const v = viewer || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'].includes(v.level);
         const bundle = {
-            people: [], families: [], households: [], services: {}, hymns: {},
+            people: [], families: [], services: {}, hymns: {},
             series: [], occurrences: [], roles: [], forms: [], responses: [],
             printedEventsBySunday: {}, liturgy: null, prayerRequests: {},
         };
@@ -75,8 +75,6 @@
 
         if (n.people) jobs.push(safely(db.collection('people').get().then(docsOf), []).then(r => { bundle.people = r; }));
         if (n.families) jobs.push(safely(db.collection('families').get().then(docsOf), []).then(r => { bundle.families = r; }));
-        if (n.households) jobs.push(safely(db.collection('households').get().then(docsOf), []).then(r => { bundle.households = r; }));
-
         const serviceDates = (n.services || []).slice();
         jobs.push((async () => {
             const gets = serviceDates.map(async date => {

@@ -727,7 +727,6 @@ document.addEventListener('alpine:init', () => {
             this.saveStatus = 'saving';
             const saving = CareListCore.saveEdits(db, firebase.firestore, this.docId, Object.assign({}, edits, {
                 byName: this.myName || this.currentUserName,
-                oldShape: session.oldShape(),
             })).then(() => {
                 session.markNormalised();
                 this.saveStatus = session.hasUnsaved() ? 'unsaved' : 'saved';

@@ -52,25 +52,11 @@ test('a kiosk can read every event occurrence, ignoring the visibility ladder', 
     assert.match(block, /allow read: if isKiosk\(\)/);
 });
 
-test('a kiosk may create a Person and a Household, and cannot delete either', () => {
+test('a kiosk may create a Person and cannot delete one', () => {
     const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n {6}match/);
     assert.match(person, /allow create: if isKiosk\(\)/);
     assert.doesNotMatch(person, /allow delete: if isKiosk\(\)/);
-    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n {4}\}/);
-    assert.match(households, /allow create: if isKiosk\(\)/);
-    assert.match(households, /allow delete: if isEditor\(\)/);
-    assert.doesNotMatch(households, /allow delete: if isKiosk\(\)/);
-});
-
-test('a kiosk may add to a Household but never rename or empty one', () => {
-    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n {4}\}/);
-    const update = households.match(/allow update: if([\s\S]*?);/);
-    assert.ok(update, 'no update rule on households');
-    assert.match(update[1], /isKiosk\(\)/);
-    // The name may not move and nobody may be dropped — that is the whole
-    // difference between a greeter growing a household and editing one.
-    assert.match(update[1], /request\.resource\.data\.name == resource\.data\.name/);
-    assert.match(update[1], /memberIds\.hasAll\(resource\.data\.memberIds\)/);
+    assert.doesNotMatch(rules, /match \/households\/\{householdId\}/, 'legacy households collection is gone (MS-785)');
 });
 
 // MS-709 (ADR-0075): the kiosk's Households are the `families` records, and
