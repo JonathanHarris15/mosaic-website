@@ -2,8 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
-
 const PastoralPrayerCore = require('../public/pastoral-prayer-core.js');
 const { pastoralPrayerPicker, personPicker, serviceForm } = require('../public/service-builder.js');
 
