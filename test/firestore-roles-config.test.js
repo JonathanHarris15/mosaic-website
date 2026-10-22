@@ -116,7 +116,7 @@ test('the permission tiers are accessRank and the key helpers', () => {
     assert.ok(isAdmin, 'isAdmin() missing');
     assert.match(isAdmin[1], /accessRank\(\) == 'admin'/);
     assert.match(isAdmin[1], /accessRank\(\) == 'super_admin'/);
-    assert.match(isAdmin[1], /keyOn\('admin\.dashboard\.access'\)/);
+    assert.match(isAdmin[1], /mapHas\('admin\.dashboard\.access'\)/);
 
     const isEditor = rules.match(/function isEditor\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
     assert.ok(isEditor, 'isEditor() missing');
@@ -124,15 +124,15 @@ test('the permission tiers are accessRank and the key helpers', () => {
         /accessRank\(\) in \['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
     ['directory.edit_identity', 'printables.edit', 'services.builder.edit',
         'roles.manager.edit', 'hymns.edit'].forEach(key => {
-        assert.match(isEditor[1], new RegExp("keyOn\\('" + key + "'\\)"));
+        assert.match(isEditor[1], new RegExp("mapHas\\('" + key + "'\\)"));
     });
 
     const isMember = rules.match(/function isMember\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
     assert.ok(isMember, 'isMember() missing');
     assert.match(isMember[1],
         /accessRank\(\) in \['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
-    assert.match(isMember[1], /keyOn\('directory\.view'\)/);
-    assert.match(isMember[1], /keyOn\('visibility\.rung\.member'\)/);
+    assert.match(isMember[1], /mapHas\('directory\.view'\)/);
+    assert.match(isMember[1], /mapHas\('visibility\.rung\.member'\)/);
     assert.match(isMember[1], /isEditor\(\)/);
 
     const isElder = rules.match(/function isElder\(\) \{\s*return ([\s\S]*?)\n {4}\}/);

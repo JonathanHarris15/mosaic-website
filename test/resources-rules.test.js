@@ -171,8 +171,8 @@ test('storage isMemberAccount restates firestore isMember, rung for rung', () =>
         inStorage[1].match(/'[a-z_]+'/g).join(','),
         inFirestore[1].match(/'[a-z_]+'/g).join(','),
         'one of the two files learned about a rung and the other did not');
-    assert.match(storageFn('isMemberAccount'), /keyOnAccount\('directory\.view'\)/);
-    assert.match(storageFn('isMemberAccount'), /keyOnAccount\('visibility\.rung\.member'\)/);
+    assert.match(storageFn('isMemberAccount'), /mapHas\('directory\.view'\)/);
+    assert.match(storageFn('isMemberAccount'), /mapHas\('visibility\.rung\.member'\)/);
     assert.match(storageFn('isMemberAccount'), /isEditorAccount\(\)/);
 });
 

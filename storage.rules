@@ -202,19 +202,47 @@ service firebase.storage {
       );
     }
 
+    // Same split as firestore.rules. Inlining keyOnAccount() here inlines
+    // presetGrants (the whole builtin matrix) into every allow, and the Rules
+    // API compile then dies with HTTP 503 before deploy can upload. The matrix
+    // stays on keyOnAccount(), which editsWithAccount and isElderAccount call
+    // once. Map wins when the field is present; otherwise the builtin
+    // accountLevelId. role, permissionLevel, and pastoralAssistant grant nothing.
+
+    function mapHas(key) {
+      let data = myUserData();
+      return data != null && ('permissions' in data) && mapGrants(data.permissions, key);
+    }
+
+    function rankFromMap(perms) {
+      return mapGrants(perms, 'system.super_admin') ? 'super_admin'
+        : mapGrants(perms, 'system.kiosk') ? 'kiosk'
+        : mapGrants(perms, 'shep.count_as_elder') ? 'elder'
+        : mapGrants(perms, 'visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : mapGrants(perms, 'admin.dashboard.access') ? 'admin'
+        : (mapGrants(perms, 'directory.edit_identity')
+            || mapGrants(perms, 'services.builder.edit')
+            || mapGrants(perms, 'printables.edit')) ? 'editor'
+        : mapGrants(perms, 'directory.view') ? 'member'
+        : 'viewer';
+    }
+
+    function rankFromLevelId(id) {
+      return id == 'level_super_admin' ? 'super_admin'
+        : id == 'level_kiosk' ? 'kiosk'
+        : id == 'level_elder' ? 'elder'
+        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
+        : id == 'level_admin' ? 'admin'
+        : id == 'level_editor' ? 'editor'
+        : id == 'level_member' ? 'member'
+        : 'viewer';
+    }
+
     function accessRankAccount() {
       let data = myUserData();
       return data == null ? ''
-        : keyOnAccount('system.super_admin') ? 'super_admin'
-        : keyOnAccount('system.kiosk') ? 'kiosk'
-        : keyOnAccount('shep.count_as_elder') ? 'elder'
-        : keyOnAccount('visibility.lift_hidden_tags') ? 'pastoral_assistant'
-        : keyOnAccount('admin.dashboard.access') ? 'admin'
-        : (keyOnAccount('directory.edit_identity')
-            || keyOnAccount('services.builder.edit')
-            || keyOnAccount('printables.edit')) ? 'editor'
-        : keyOnAccount('directory.view') ? 'member'
-        : 'viewer';
+        : !('permissions' in data) ? rankFromLevelId(('accountLevelId' in data) ? data.accountLevelId : '')
+        : (data.permissions is map) ? rankFromMap(data.permissions) : 'viewer';
     }
 
     // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`
@@ -239,13 +267,13 @@ service firebase.storage {
     // is decided against the occurrence's own list of Person ids.
     function rankOrParticipantSees(occ, u) {
       return (stampedVisibility(occ) == 'member'
-              && (isMemberAccount() || keyOnAccount('visibility.rung.member')))
+              && (isMemberAccount() || mapHas('visibility.rung.member')))
         || (stampedVisibility(occ) == 'participant'
-              && (readsAsEditorAccount() || keyOnAccount('visibility.rung.participant')))
+              && (readsAsEditorAccount() || mapHas('visibility.rung.participant')))
         || (stampedVisibility(occ) == 'editor'
-              && (readsAsEditorAccount() || keyOnAccount('visibility.rung.editor')))
+              && (readsAsEditorAccount() || mapHas('visibility.rung.editor')))
         || (stampedVisibility(occ) == 'elder'
-              && (readsAsElderAccount() || keyOnAccount('visibility.rung.elder')))
+              && (readsAsElderAccount() || mapHas('visibility.rung.elder')))
         || (stampedVisibility(occ) == 'participant'
               && ('personId' in u) && ('participantIds' in occ)
               && u.personId in occ.participantIds);
@@ -266,11 +294,11 @@ service firebase.storage {
 
     function isEditorAccount() {
       return accessRankAccount() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || keyOnAccount('directory.edit_identity')
-        || keyOnAccount('printables.edit')
-        || keyOnAccount('services.builder.edit')
-        || keyOnAccount('roles.manager.edit')
-        || keyOnAccount('hymns.edit');
+        || mapHas('directory.edit_identity')
+        || mapHas('printables.edit')
+        || mapHas('services.builder.edit')
+        || mapHas('roles.manager.edit')
+        || mapHas('hymns.edit');
     }
 
     // ⚠ AN ADMIN IS NOT AN ELDER. count_as_elder is the elder office.
@@ -285,21 +313,26 @@ service firebase.storage {
     }
 
     function readsAsElderAccount() {
-      return keyOnAccount('visibility.lift_hidden_tags') || isPastoralAssistantAccount();
+      let data = myUserData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'visibility.lift_hidden_tags') || isPastoralAssistantAccount())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     function readsAsEditorAccount() {
-      return keyOnAccount('directory.edit_identity')
-        || keyOnAccount('printables.edit')
-        || isPastoralAssistantAccount()
-        || isEditorAccount();
+      return isEditorAccount() || isPastoralAssistantAccount();
     }
 
     // The floor of the member rung, restating firestore.rules isMember().
     function isMemberAccount() {
       return accessRankAccount() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || keyOnAccount('directory.view')
-        || keyOnAccount('visibility.rung.member')
+        || mapHas('directory.view')
+        || mapHas('visibility.rung.member')
         || isEditorAccount();
     }
 
@@ -312,7 +345,15 @@ service firebase.storage {
     }
 
     function canDecideAccount() {
-      return keyOnAccount('shep.tags.manage') || isPastoralAssistantAccount();
+      let data = myUserData();
+      return data != null && (
+        ('permissions' in data)
+          ? (mapGrants(data.permissions, 'shep.tags.manage') || isPastoralAssistantAccount())
+          : (('accountLevelId' in data) && (
+              data.accountLevelId == 'level_super_admin'
+              || data.accountLevelId == 'level_elder'
+              || data.accountLevelId == 'level_pastoral_assistant'))
+      );
     }
 
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
