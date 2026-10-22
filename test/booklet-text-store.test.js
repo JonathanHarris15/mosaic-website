@@ -7,6 +7,7 @@ const Live = require('../public/printable-live.js');
 const Core = require('../public/printable-core.js');
 const Data = require('../public/printable-data-core.js');
 const Migrate = require('../public/printable-legacy-migrate-core.js');
+const Copy = require('../scripts/migrate-booklet-text-to-occurrences.js');
 require('../public/printable-link-core.js');
 
 const DATE = '2026-09-06';
@@ -109,27 +110,31 @@ test('MS-777: announcements and kids questions read the occurrence, not typed co
 });
 
 test('MS-777: the copy fills a missing occurrence key from typed content, then the guide, and leaves a blank', () => {
-    const onlyTyped = /** @type {any} */ (Migrate.planOccurrenceFill(null, {
+    const onlyTyped = Copy.planServiceCopies({
         typedContent: { pastoralPrayer: { nation: 'Kenya' } },
-    }));
-    assert.equal(onlyTyped.patch.legacy_prayerNation, 'Kenya');
+    }, { guide: {} });
+    assert.equal(onlyTyped.plans.guide.legacy_prayerNation, 'Kenya');
     assert.equal(onlyTyped.wouldWrite, true);
     assert.equal(onlyTyped.deletes, undefined);
 
-    const onlyGuide = Migrate.planOccurrenceFill({}, {
+    const onlyGuide = Copy.planServiceCopies({
         guide: { format: 'v2', values: { pp_capital: 'Cairo', kids_lesson_title: 'Noah' } },
+    }, { guide: {} });
+    assert.equal(onlyGuide.plans.guide.legacy_prayerCapital, 'Cairo');
+    assert.equal(onlyGuide.plans.guide.legacy_kidsLessonTitle, 'Noah');
+
+    const blankWins = Copy.planServiceCopies(oldSunday(), {
+        guide: { legacy_prayerNation: '' },
     });
-    assert.equal(onlyGuide.patch.legacy_prayerCapital, 'Cairo');
-    assert.equal(onlyGuide.patch.legacy_kidsLessonTitle, 'Noah');
+    assert.equal(Object.prototype.hasOwnProperty.call(blankWins.plans.guide, 'legacy_prayerNation'), false);
+    assert.equal(blankWins.plans.guide.legacy_prayerCapital, 'Cairo');
+    assert.equal(blankWins.plans.guide.legacy_prayerContinent, 'Africa');
 
-    const blankWins = Migrate.planOccurrenceFill({ legacy_prayerNation: '' }, oldSunday());
-    assert.equal(Object.prototype.hasOwnProperty.call(blankWins.patch, 'legacy_prayerNation'), false);
-    assert.equal(blankWins.patch.legacy_prayerCapital, 'Cairo');
-    assert.equal(blankWins.patch.legacy_prayerContinent, 'Africa');
-
-    const filledWins = Migrate.planOccurrenceFill({ legacy_prayerNation: 'Chile' }, oldSunday());
-    assert.equal(Object.prototype.hasOwnProperty.call(filledWins.patch, 'legacy_prayerNation'), false);
-    assert.equal(filledWins.bag.legacy_prayerNation, 'Chile');
+    const filledWins = Copy.planServiceCopies(oldSunday(), {
+        guide: { legacy_prayerNation: 'Chile' },
+    });
+    assert.equal(Object.prototype.hasOwnProperty.call(filledWins.plans.guide, 'legacy_prayerNation'), false);
+    assert.equal(filledWins.wouldWrite, true);
 });
 
 test('MS-777: a save writes a blank only for a key the occurrence already has, and the draft reads that bag', () => {
@@ -226,7 +231,7 @@ test('MS-777: the announcements tab reads and writes the Sunday occurrence', asy
 });
 
 test('MS-777: the prod copy fills a printable that reads booklet text and skips one that does not', () => {
-    assert.equal(Migrate.readsBookletText(bookletProject()), true);
+    assert.equal(Copy.readsBookletText(bookletProject()), true);
 
     const announcements = {
         inputs: [],
@@ -235,7 +240,7 @@ test('MS-777: the prod copy fills a printable that reads booklet text and skips 
             nodes: [{ id: 'ann', tag: 'p', repeat: { source: 'sunday_announcements', params: {} } }],
         }],
     };
-    assert.equal(Migrate.readsBookletText(announcements), true);
+    assert.equal(Copy.readsBookletText(announcements), true);
 
     const questions = {
         inputs: [],
@@ -244,7 +249,7 @@ test('MS-777: the prod copy fills a printable that reads booklet text and skips 
             nodes: [{ id: 'q', tag: 'p', repeat: { source: 'sunday_kids_questions', params: {} } }],
         }],
     };
-    assert.equal(Migrate.readsBookletText(questions), true);
+    assert.equal(Copy.readsBookletText(questions), true);
 
     const orderOfService = {
         inputs: [{ id: 'sermon_title', label: 'Sermon', kind: 'text' }],
@@ -257,7 +262,7 @@ test('MS-777: the prod copy fills a printable that reads booklet text and skips 
             }],
         }],
     };
-    assert.equal(Migrate.readsBookletText(orderOfService), false);
+    assert.equal(Copy.readsBookletText(orderOfService), false);
 });
 
 test('MS-777: a Mosaic Kids save writes the occurrence and leaves a newer announcement', async () => {

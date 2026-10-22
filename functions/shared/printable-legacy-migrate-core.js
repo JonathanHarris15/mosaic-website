@@ -190,48 +190,6 @@
         return bagFromContent(contentOrRow, false);
     }
 
-    // The prod copy reads both old stores. The stored record wins a field
-    // that has text; a blank there still takes the guide, because that is
-    // what a week used to print. Runtime resolution does not call this.
-    /** @param {any} service */
-    function contentFromLegacyStores(service) {
-        const Typed = typedCore();
-        const s = service && typeof service === 'object' ? service : {};
-        if (!Typed) return {};
-        const stored = Typed.normalise(s.typedContent);
-        const guide = s.guide || {};
-        const values = guide.values && typeof guide.values === 'object' ? guide.values : null;
-        const elements = Array.isArray(guide.elements) ? guide.elements : [];
-        const hasGuide = guide.format === 'v2' || values || elements.length > 0;
-        if (!hasGuide) return stored;
-        const fallback = (guide.format === 'v2' || values)
-            ? Typed.fromGuideValues(values)
-            : Typed.fromLegacyGuide(guide);
-        return Typed.mergePreferFilled(stored, fallback);
-    }
-
-    // Copy into keys the occurrence has never stored. A key that is present
-    // and blank was cleared and stays blank. Nothing here deletes the old
-    // service fields.
-    /**
-     * @param {any} existingBag
-     * @param {any} service
-     * @return {{ patch: Record<string, any>, bag: Record<string, any>, wouldWrite: boolean }}
-     */
-    function planOccurrenceFill(existingBag, service) {
-        const incoming = valuesFromTyped(contentFromLegacyStores(service));
-        /** @type {Record<string, any>} */
-        const base = existingBag && typeof existingBag === 'object' ? Object.assign({}, existingBag) : {};
-        /** @type {Record<string, any>} */
-        const patch = {};
-        Object.keys(incoming).forEach(id => {
-            if (Object.prototype.hasOwnProperty.call(base, id)) return;
-            patch[id] = incoming[id];
-            base[id] = incoming[id];
-        });
-        return { patch: patch, bag: base, wouldWrite: Object.keys(patch).length > 0 };
-    }
-
     // An editor save writes a blank only when that key is already on the
     // occurrence, so a clear sticks and a field nobody has opened yet can
     // still be copied.
@@ -268,28 +226,6 @@
         return Typed.toDraft(Typed.fromDraft(row));
     }
 
-    /** @param {any} project @return {boolean} */
-    function readsBookletText(project) {
-        const inputs = (project && project.inputs) || [];
-        if (inputs.some(input => input && isLegacyFillId(input.id))) return true;
-        let found = false;
-        (project && project.pages || []).forEach(page => {
-            walkNodes(page && page.nodes, node => {
-                if (!node || found) return;
-                const repeat = node.repeat && node.repeat.source;
-                if (repeat === 'sunday_announcements' || repeat === 'sunday_kids_questions') found = true;
-                if (!node.bind) return;
-                ['text', 'src'].forEach(prop => {
-                    const bind = node.bind[prop];
-                    if (!bind) return;
-                    if (bind.source === 'event_field' && isLegacyFillId(bind.field)) found = true;
-                    if (bind.source === 'sunday_typed' && FILL_KEYS.indexOf(bind.field) !== -1) found = true;
-                });
-            });
-        });
-        return found;
-    }
-
     const PrintableLegacyMigrate = {
         PREFIX,
         FILL_KEYS,
@@ -300,11 +236,8 @@
         migrateProject,
         valuesFromTyped,
         bagFromContent,
-        contentFromLegacyStores,
-        planOccurrenceFill,
         patchFromContent,
         draftFromBag,
-        readsBookletText,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

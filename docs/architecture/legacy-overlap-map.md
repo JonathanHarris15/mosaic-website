@@ -70,9 +70,9 @@ Anything not in that table is **unverified** for current prod data.
 
 **Files:**
 
-- `public/sunday-typed-core.js` — `fromService` reads `typedContent` only and ignores the guide. The prod copy uses `contentFromLegacyStores`. Print calls neither.
+- `public/sunday-typed-core.js` — `fromService` reads `typedContent` only and ignores the guide. Print does not call it. The prod copy reads both old stores inside `scripts/migrate-booklet-text-to-occurrences.js`.
 - `public/printable-live.js` — an `event_field` reads the occurrence bag. A blank stays blank.
-- `public/printable-legacy-migrate-core.js` — rewrites `bind.source === 'sunday_typed'` to `event_field` / `legacy_*` on load; `planOccurrenceFill` copies absent keys and does not delete the old fields.
+- `public/printable-legacy-migrate-core.js` — rewrites `bind.source === 'sunday_typed'` to `event_field` / `legacy_*` on load. The prod copy, not this module, copies absent keys and does not delete the old fields.
 - `public/printable-data-core.js` — announcements and Mosaic Kids questions read `bookletByDate`.
 - `public/service-builder.js` — the announcements tab writes `legacy_announcements` on the Sunday occurrence for the order's printable.
 - `public/printable-view.js`, `public/calendar-event.js` — event fill-ins persist on the occurrence.
