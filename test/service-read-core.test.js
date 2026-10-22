@@ -7,16 +7,25 @@ const Liturgy = require('../public/liturgy-order-core.js');
 // The MCP read of one Sunday (MS-262), in the Sunday's Liturgy Order
 // (ADR-0080). Fixtures are fictional.
 
-const WITH_ORDERS = {
-    elements: Liturgy.STANDARD_ELEMENTS.concat([
+const WITH_ORDERS = (() => {
+    const extra = [
         { id: 'lordsSupper', name: "Lord's Supper", primitive: 'text', hasRole: true, hasNote: true },
         { id: 'offertory', name: 'Offertory', primitive: 'song', hasRole: false, hasNote: false },
-    ]),
-    orders: [
-        Liturgy.STANDARD_ORDER,
-        { id: 'communion', name: 'Communion', elementIds: ['callToWorship', 'lordsSupper', 'offertory', 'benediction'] },
-    ],
-};
+    ];
+    const communionIds = ['callToWorship', 'lordsSupper', 'offertory', 'benediction'];
+    const byId = new Map(Liturgy.STANDARD_ELEMENTS.concat(extra).map((el) => [el.id, el]));
+    return {
+        orders: [
+            Liturgy.STANDARD_ORDER,
+            {
+                id: 'communion',
+                name: 'Communion',
+                elementIds: communionIds,
+                elements: communionIds.map((id) => byId.get(id)),
+            },
+        ],
+    };
+})();
 
 const fields = (s) => s.liturgy.map((r) => r.field);
 
@@ -58,11 +67,13 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
         assert.deepStrictEqual(fields(s), Liturgy.STANDARD_ORDER.elementIds.slice());
     });
 
-    test('⚠ a legacy dotted key is still folded in', () => {
-        const s = Read.readableService('2031-03-23', { 'liturgy.sermon': 'Romans 8:28', 'liturgy': { sermon: '' } });
+    test('dotted top-level keys are ignored on read (migrate-service-dotted-keys)', () => {
+        const s = Read.readableService('2031-03-23', {
+            'liturgy.sermon': 'Romans 8:28',
+            liturgy: { sermon: 'From nested' },
+        });
         const sermon = s.liturgy.find((r) => r.field === 'sermon');
-        assert.strictEqual(sermon.filled, true);
-        assert.strictEqual(sermon.value, 'Romans 8:28');
+        assert.strictEqual(sermon.value, 'From nested');
     });
 
     test('the people prayed for read beside the order, never as rows', () => {

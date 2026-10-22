@@ -199,6 +199,18 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+test('printable households ignore a legacy households collection in the bundle (MS-785)', () => {
+    const data = Object.assign(PEOPLE(), {
+        families: [],
+        households: [{ id: 'hh-ghost', name: 'Ghost Group', memberIds: ['d', 'a'] }],
+    });
+    const fromFamilies = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' });
+    const withoutLegacy = Object.assign({}, data);
+    delete withoutLegacy.households;
+    const baseline = Data.resolve('households', { membership: 'everyone' }, withoutLegacy, { today: TODAY, level: 'member' });
+    assert.deepStrictEqual(fromFamilies.rows, baseline.rows);
+});
+
 test('a married child is listed in their own household, not their parents\' (MS-704)', () => {
     const data = {
         people: [
@@ -422,7 +434,7 @@ const SUNDAYS = () => ({
             },
         },
         // The ADR-0034 trap: a dotted key written by an old save.
-        '2026-09-13': { theme: 'Hope', 'liturgy.sermon': 'John 3', 'liturgy.hymn1': { id: 'h2', name: 'Doxology' } },
+        '2026-09-13': { theme: 'Hope', liturgy: { sermon: 'John 3', hymn1: { id: 'h2', name: 'Doxology' } } },
     },
     hymns: {
         h1: { hymn_name: 'Amazing Grace', attribution: 'Newton', versions: [{ pages: ['ag1.png', 'ag2.png'] }] },
@@ -453,7 +465,7 @@ test('a Sunday nobody has planned is an answer with a warning, not an error', ()
     assert.match(r.warnings[0], /Nothing is planned yet for Sunday 27 December 2026/);
 });
 
-test('dotted liturgy keys on an old record are folded back before reading', () => {
+test('nested liturgy on a Sunday resolves for the next-Sunday query', () => {
     const r = Data.resolve('sunday', { when: { mode: 'next' } }, SUNDAYS(), { today: TODAY });
     assert.equal(r.rows[0].sermon, 'John 3');
     assert.equal(r.rows[0].hymn1, 'Doxology');
@@ -477,15 +489,22 @@ test('order of service rows walk the Sunday\'s order; empty slots optional; remo
 const WITH_ORDERS = () => {
     const data = SUNDAYS();
     const seed = Liturgy.standardCatalog();
+    const extra = [
+        { id: 'lordsSupper', name: 'Lord\'s Supper', kind: 'other', hasNote: false },
+        { id: 'communionPrayer', name: 'Communion Prayer', kind: 'prayer', hasNote: false,
+            prayedByOther: true, message: 'Let us pray', response: '' },
+        { id: 'offertory', name: 'Offertory', kind: 'hymn', hasNote: true },
+    ];
+    const communionIds = ['offertory', 'hymn1', 'lordsSupper', 'communionPrayer', 'baptism', 'sermon'];
+    const byId = new Map(seed.elements.concat(extra).map((el) => [el.id, el]));
     data.liturgy = Liturgy.catalogFrom({
-        elements: seed.elements.concat([
-            { id: 'lordsSupper', name: 'Lord\'s Supper', kind: 'other', hasNote: false },
-            { id: 'communionPrayer', name: 'Communion Prayer', kind: 'prayer', hasNote: false,
-                prayedByOther: true, message: 'Let us pray', response: '' },
-            { id: 'offertory', name: 'Offertory', kind: 'hymn', hasNote: true },
-        ]),
         orders: seed.orders.concat([
-            { id: 'communion', name: 'Communion', elementIds: ['offertory', 'hymn1', 'lordsSupper', 'communionPrayer', 'baptism', 'sermon'] },
+            {
+                id: 'communion',
+                name: 'Communion',
+                elementIds: communionIds,
+                elements: communionIds.map((id) => byId.get(id)),
+            },
         ]),
     });
     const s = data.services['2026-09-06'];

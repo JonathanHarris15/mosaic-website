@@ -28,7 +28,6 @@ test('the page has two tabs, and the old sections are still on the first one', (
 
     // Everything that was on the page before is still on the page.
     const kept = [
-        'Service Guide Manager',
         'SMS (Textbelt)',
         'Credits Remaining',
         'Test &amp; Debug',

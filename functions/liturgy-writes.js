@@ -66,7 +66,7 @@ async function sundayInOrder(db, dateKey) {
     loadLiturgyCatalog(db),
   ]);
   const raw = snap.exists ? snap.data() : null;
-  const doc = raw ? ReadCore.normalizeServiceDoc(raw) : null;
+  const doc = raw ? ReadCore.readServiceDoc(raw) : null;
   const order = Liturgy.orderFor(doc, catalog);
   return {
     exists: !!raw,

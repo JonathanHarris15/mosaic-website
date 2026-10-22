@@ -47,6 +47,9 @@
     const HymnVersions = (typeof require !== 'undefined')
         ? require('./hymn-versions.js')
         : global.HymnVersions;
+    const Dotted = (typeof require !== 'undefined')
+        ? require('./service-dotted-keys-core.js')
+        : global.ServiceDottedKeysCore;
 
     // The congregation's Liturgy Elements and Orders (ADR-0080). A Sunday's
     // order of service is the elements of its order, so its fields, its rows
@@ -914,7 +917,7 @@
 
     function isInactive(person) {
         const m = (person && person.membership) || {};
-        return !!m.inactive || m.status === 'inactive';
+        return !!m.inactive;
     }
 
     function isMember(person) {
@@ -1100,24 +1103,7 @@
 
     // ── Sundays ──────────────────────────────────────────────────────────────
 
-    // Folds legacy dotted field names ('liturgy.sermon') back into nested
-    // values — the ADR-0034 trap. A nested value wins over a dotted one.
-    function normaliseService(raw) {
-        const data = {};
-        Object.keys(raw || {}).forEach(k => { if (k.indexOf('.') < 0) data[k] = raw[k]; });
-        Object.keys(raw || {}).forEach(k => {
-            if (k.indexOf('.') < 0) return;
-            const parts = k.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = raw[k];
-        });
-        return data;
-    }
+    const normaliseService = Dotted.readServiceDoc;
 
     function slotText(value) {
         if (value == null) return '';

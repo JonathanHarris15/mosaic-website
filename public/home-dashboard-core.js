@@ -84,28 +84,10 @@
         return formatDate(d);
     }
 
-    // Older saves wrote 'liturgy.sermon' as a literal field name. Fold those
-    // into the nested liturgy the rest of the page reads. Same pass index.html
-    // used to run inline.
-    function normalizeService(raw) {
-        const src = raw || {};
-        const out = {};
-        Object.keys(src).forEach(function (key) {
-            if (key.indexOf('.') === -1) out[key] = src[key];
-        });
-        Object.keys(src).forEach(function (key) {
-            if (key.indexOf('.') === -1) return;
-            const parts = key.split('.');
-            let obj = out;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = src[key];
-        });
-        return out;
-    }
+    const Dotted = (typeof require !== 'undefined')
+        ? require('./service-dotted-keys-core.js')
+        : global.ServiceDottedKeysCore;
+    const normalizeService = Dotted.readServiceDoc;
 
     function filledText(value) {
         return !!(value && String(value).trim());

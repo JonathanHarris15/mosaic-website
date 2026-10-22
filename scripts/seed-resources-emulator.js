@@ -166,10 +166,8 @@ async function seedAccount(auth, db, spec) {
     await db.collection('users').doc(spec.uid).set({
         email: spec.email,
         name: spec.name,
-        permissionLevel: spec.level,
         accountLevelId: Levels.accountLevelIdForPreset(spec.level),
         permissions: Levels.buildPresetPermissions(spec.level),
-        pastoralAssistant: false,
     });
 }
 

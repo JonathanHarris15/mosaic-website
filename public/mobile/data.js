@@ -421,11 +421,8 @@
   // against the order it follows. An empty collection reads as Standard.
   function loadLiturgyCatalog() {
     var Core = window.LiturgyOrderCore;
-    return Promise.all([
-      get(db.collection(Core.COLLECTIONS.elements)),
-      get(db.collection(Core.COLLECTIONS.orders)),
-    ]).then(function (snaps) {
-      return Core.catalogFrom({ elements: mapDocs(snaps[0]), orders: mapDocs(snaps[1]) });
+    return get(db.collection(Core.COLLECTIONS.orders)).then(function (snap) {
+      return Core.catalogFrom({ orders: mapDocs(snap) });
     });
   }
   function getLiturgyCatalog() { return remembered("liturgyCatalog", loadLiturgyCatalog); }

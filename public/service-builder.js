@@ -57,30 +57,14 @@ function liturgyCore() {
 }
 
 // Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by older
-// saves that used set() with merge, which stored them as top-level field names
-// containing a dot rather than as nested paths. Returns a new object with such
-// keys folded into nested objects. An already-nested value wins over a
-// dotted-key value for the same leaf (the dotted key is the legacy fallback).
+function dottedKeysCore() {
+    if (typeof window !== 'undefined' && window.ServiceDottedKeysCore) return window.ServiceDottedKeysCore;
+    if (typeof require !== 'undefined') return require('./service-dotted-keys-core.js');
+    throw new Error('ServiceDottedKeysCore is not loaded');
+}
+
 function normalizeDottedKeys(raw) {
-    const data = {};
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (!key.includes('.')) data[key] = val;
-    }
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (key.includes('.')) {
-            const parts = key.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                    obj[parts[i]] = {};
-                }
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = val;
-        }
-    }
-    return data;
+    return dottedKeysCore().readServiceDoc(raw);
 }
 
 // The liturgy slots, note keys, and element carriers a save descends into one
@@ -941,12 +925,13 @@ function serviceForm() {
             return (item && item.requestsWho) || 'either';
         },
         prayerChoices(who, currentId) {
-            const NEVER = '0000-00-00';
-            const last = (m) => (m && m.lastPastoralPrayerDate) || NEVER;
+            const sortKey = (m) => (window.PastoralPrayerCore
+                ? PastoralPrayerCore.rotationSortKey(m && m.lastPastoralPrayerDate)
+                : '');
             const list = (this.prayerMembers || [])
                 .filter(m => who !== 'male' && who !== 'female' || m.sex === who)
                 .slice()
-                .sort((a, b) => String(last(a)).localeCompare(String(last(b))));
+                .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
             if (currentId && !list.some(m => m.id === currentId)) {
                 const found = (this.prayerMembers || []).find(m => m.id === currentId);
                 if (found) list.unshift(found);

@@ -72,13 +72,13 @@ const MODULES = [
     // Sunday's fields, rows and hymns off its elements.
     'liturgy-order-core.js',
     'service-involvement-core.js',
-    'legacy-oos-migrate-core.js',
     // The translator between a filled order and any other order, including a
     // bulletin that is not an order yet. The callable and the pages share it.
     'liturgy-translate-core.js',
     'liturgy-save-core.js',
     'mcp-guidance-core.js',
     'service-note-core.js',
+    'service-dotted-keys-core.js',
     'service-read-core.js',
     'mosaic-identity.js',
     'service-authorship.js',

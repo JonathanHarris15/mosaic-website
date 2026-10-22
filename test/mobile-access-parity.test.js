@@ -15,7 +15,7 @@ function account(preset, extra) {
 }
 
 const adminDest = () => {
-    const d = Destinations.DESTINATIONS.find((x) => x.key === 'admin');
+    const d = Destinations.DESTINATIONS.find((x) => x.key === 'admin-dashboard');
     assert.ok(d, 'admin destination missing');
     return d;
 };
