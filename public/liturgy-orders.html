@@ -131,7 +131,7 @@
                 <!-- Service Guide Printable for this Liturgy Order (MS-762). -->
                 <div class="lo-guide" aria-label="Service Guide printable">
                     <span class="m-label">Service Guide</span>
-                    <p class="lo-hint">The Printable the Service Guide button opens for Sundays that follow this order. Saves with the rest of the draft.</p>
+                    <p class="lo-hint">The Printable the Service Guide button opens for Sundays that follow this order. Handouts linked on a calendar event series are separate — link those on the event, not here. Saves with the rest of the draft.</p>
                     <p x-show="printableError" class="text-[12.5px] text-error mb-2" x-text="printableError"></p>
                     <div class="lo-guide__row" x-show="linkedPrintable">
                         <span class="lo-guide__name" x-text="linkedPrintable && linkedPrintable.name"></span>
@@ -153,7 +153,7 @@
                     <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[10vh] p-md"
                          role="dialog" aria-modal="true" aria-label="Link a printable">
                         <h2 class="font-headline-md text-headline-md text-primary">Link a printable</h2>
-                        <p class="font-body-md text-on-surface-variant mb-sm">Sundays on this Liturgy Order open this Printable's fill-in view from the Service Guide button.</p>
+                        <p class="font-body-md text-on-surface-variant mb-sm">Sundays on this Liturgy Order open this Printable's fill-in view from the Service Guide button. This is not the same as linking a printable on an event series for other handouts.</p>
                         <p class="font-body-md text-on-surface-variant" x-show="libraryLoading">Loading the library…</p>
                         <p class="font-body-md text-on-surface-variant" x-show="!libraryLoading && !linkablePrintables.length">No laid-out printables are available to link.</p>
                         <div class="m-card-list" x-show="!libraryLoading && linkablePrintables.length">

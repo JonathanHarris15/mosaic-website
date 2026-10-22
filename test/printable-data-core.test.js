@@ -199,6 +199,18 @@ test('households group a family and seat a lone person on their own', () => {
     assert.equal(r.rows.find(x => x.name === 'The Baker household').members, 'Dan Baker, Anna Baker');
 });
 
+test('printable households ignore a legacy households collection in the bundle (MS-785)', () => {
+    const data = Object.assign(PEOPLE(), {
+        families: [],
+        households: [{ id: 'hh-ghost', name: 'Ghost Group', memberIds: ['d', 'a'] }],
+    });
+    const fromFamilies = Data.resolve('households', { membership: 'everyone' }, data, { today: TODAY, level: 'member' });
+    const withoutLegacy = Object.assign({}, data);
+    delete withoutLegacy.households;
+    const baseline = Data.resolve('households', { membership: 'everyone' }, withoutLegacy, { today: TODAY, level: 'member' });
+    assert.deepStrictEqual(fromFamilies.rows, baseline.rows);
+});
+
 test('a married child is listed in their own household, not their parents\' (MS-704)', () => {
     const data = {
         people: [

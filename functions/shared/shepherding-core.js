@@ -215,11 +215,8 @@
         const out = [];
         (careListDocs || []).forEach(doc => {
             const stored = doc && doc.careListData && doc.careListData[personId];
-            if (!stored) return;
-            // A list from before columns kept one bare body per person: it
-            // reads as the one Notes column (care-list-core.js says the same).
-            const oldShaped = stored.type === 'doc';
-            const cells = oldShaped ? { col_default: stored } : stored;
+            if (!stored || stored.type === 'doc') return;
+            const cells = stored;
             const columns = (doc.careListColumns && doc.careListColumns.length)
                 ? doc.careListColumns : [{ id: 'col_default', name: 'Notes' }];
             Object.keys(cells).forEach(colId => {
@@ -585,10 +582,10 @@
         return PROJECTED_TAG_ID_SET.has(tagId);
     }
 
-    // Does a Person's Linked User make them an elder? Source of truth for the
-    // Elder Tag projection: the linked User's role is exactly 'elder'. Super
-    // Admins are NOT elders (a distinct office). A Person with no Linked User,
-    // or a non-elder role, is not an elder.
+    // Does a Person's Linked User count as an elder? Source of truth for the
+    // Elder Tag projection: accessRank is elder (shep.count_as_elder on the
+    // resolved map). Super Admins are NOT elders. Pastoral Assistants are not.
+    // Stored permissionLevel / role grant nothing.
     function isElderUser(userData) {
         const Levels = (typeof AccountLevelsCore !== 'undefined') ? AccountLevelsCore
             : (typeof require === 'function' ? require('./account-levels-core.js') : null);
@@ -598,7 +595,7 @@
 
     // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add
     // it iff they are an elder. Idempotent and order-preserving, exactly like
-    // applyMembershipTags — the linked User's role is the source of truth, never
+    // applyMembershipTags — the linked User's access is the source of truth, never
     // the tags. The pure heart of the MS-92 Elder-Tag projection.
     function applyElderTag(currentTags, isElder) {
         const out = (currentTags || []).filter(function (t) { return t !== ELDER_TAG_ID; });
@@ -686,13 +683,11 @@
         return update;
     }
 
-    // Is a Person off the Track / Inactive? The new source of truth is
-    // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
-    // is honoured too so un-migrated records still read correctly. The single
-    // predicate behind every "active people" filter.
+    // Is a Person off the Track / Inactive? membership.inactive (ADR-0012) is
+    // the single predicate behind every "active people" filter.
     function isInactiveMembership(membership) {
         if (!membership) return false;
-        return !!membership.inactive || membership.status === 'inactive';
+        return !!membership.inactive;
     }
 
     // The Membership Directory visibility rule (ADR-0012). The directory splits

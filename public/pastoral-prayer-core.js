@@ -100,6 +100,12 @@
         return date ? `Last: ${date}` : 'Never prayed for';
     }
 
+    // Lexicographic sort key for prayer rotation lists. Missing and legacy
+    // sentinel dates sort together as "never prayed for".
+    function rotationSortKey(value) {
+        return normalizeDate(value) || LEGACY_NEVER;
+    }
+
     // Subjects on a Sunday. Prefer `subjectIds` (requesting-prayer slots).
     // The older prayerMaleId / prayerFemaleId shape is still read so the
     // repair script can rebuild history from Sundays that never had order slots.
@@ -323,6 +329,7 @@
         latestDate,
         nextLastPrayerDate,
         lastPrayedLabel,
+        rotationSortKey,
         decidePastoralPrayerSave,
         pastoralSubjectIds,
         subjectsFromStoredService,
