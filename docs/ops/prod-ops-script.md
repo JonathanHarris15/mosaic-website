@@ -56,10 +56,13 @@ gh workflow run "Prod ops script" --ref main \
 | `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |
 | `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`; `commit=true` to send one text to Jonathan Harris) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
-| `migrate-legacy-oos-prayer-carriers.js` | [MS-771 — OOS legacy prayer leaders → `carriedBy`](./ms-771-legacy-oos-audit.md) (optional `--from` / `--to`; `commit=true` to apply) |
-| `delete-legacy-oos-prayer-fields.js` | [MS-771 — delete legacy prayer top-level fields](./ms-771-legacy-oos-audit.md) (empty `args`; `commit=true` to apply) |
+| `backfill-occurrence-visibility.js` | [MS-783 — stamp occurrence visibility](./ms-783-occurrence-visibility-backfill.md) (empty `args`; `commit=true` to apply) |
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
+| `sync-pastoral-prayer-dates.js` | [MS-790 — rebuild `lastPastoralPrayerDate` from history](./ms-790-pastoral-prayer-dates-sync.md) (empty `args`; `commit=true` to apply) |
 | `diagnose-storage-fill-in-upload.js` | [Storage fill-in upload diagnostic](./ms-storage-fill-in-upload-diagnostic.md) (empty `args`; read-only — never use `commit=true`) |
 | `delete-legacy-person-picker-fields.js` | [MS-775 — phantom person picker fields](./ms-775-person-picker-fields.md) (empty `args`; `commit=true` to delete) |
 | `access-diff.js` | [MS-776 — account access diff](./ms-776-access-diff.md) (empty `args`; read-only — `commit=true` is ignored) |
 | `ms-776-backfill-account-levels.js` | [MS-776 — additive account-level backfill](./ms-776-account-level-backfill.md) (empty `args`; dry-run, then `commit=true` to apply) |
+| `migrate-reminders-to-tasks.js` | [MS-791 — reminders → tasks](./ms-791-shepherding-reminders.md) (dry-run, then `commit=true`) |
+| `delete-shepherding-reminders.js` | [MS-791 — delete migrated reminders](./ms-791-shepherding-reminders.md) (after migrate; dry-run, then `commit=true`) |
+| `migrate-meeting-mentions.js` | [MS-792 — meeting mention JSON](./ms-792-meeting-mentions.md) (dry-run, then `commit=true`) |

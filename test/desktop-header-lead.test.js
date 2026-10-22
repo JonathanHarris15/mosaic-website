@@ -63,7 +63,7 @@ test('registry tiles become drawer entries on a non-dashboard page', () => {
 
 test('classifyPage marks hymn detail parent as back not drawer', () => {
     assert.equal(DashboardNav.classifyPage('hymns.html').mode, 'drawer');
-    assert.equal(DashboardNav.classifyPage('service-guide-editor.html').mode, 'back');
+    assert.equal(DashboardNav.classifyPage('service-builder.html').mode, 'back');
 });
 
 test('desktop nav boot is wired on calendar but not on the dashboard', () => {

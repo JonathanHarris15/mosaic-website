@@ -8,8 +8,8 @@
  * next touched. Without this pass existing Linked Users stay unprojected
  * (fail-closed on non-public Trades once the picker ships).
  *
- * Rank matches server `rankOf`: permissionLevel, then the legacy `role`
- * fallback. The same pure helper the trigger uses
+ * Rank matches server `rankOf`: accountLevelId and the permissions map via
+ * accessRank. The same pure helper the trigger uses
  * (`account-rank-sync.planPersonProjection`).
  *
  * Usage:
