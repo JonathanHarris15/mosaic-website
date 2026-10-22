@@ -247,17 +247,14 @@ test('PrintablePdf.fileName uses a typed title and always ends in .pdf', () => {
     assert.equal(Pdf.fileName({ name: 'Directory' }, '2026-10-13', '  bad/name:here  '), 'bad name here.pdf');
 });
 
-test('folioSpreads matches the service guide imposition table', () => {
-    const Engine = require('../public/guide-engine.js');
+test('folioSpreads uses the saddle-stitch imposition table', () => {
     const pages = Array.from({ length: 16 }, (_, i) => ({
         key: 'p' + i,
         page: { id: 'p' + i, nodes: [{ id: 't' + i, tag: 'p', text: String(i) }] },
         nodes: [{ id: 't' + i, tag: 'p', text: String(i) }],
     }));
     const spreads = Export.folioSpreads(pages);
-    const guide = Engine.imposeSpreads(pages);
     assert.equal(spreads.length, 8);
-    assert.deepEqual(spreads.map(s => [s.leftIdx, s.rightIdx]), guide.map(s => [s.leftIdx, s.rightIdx]));
     assert.deepEqual(spreads.map(s => [s.leftIdx, s.rightIdx]), [
         [15, 0], [1, 14], [13, 2], [3, 12], [11, 4], [5, 10], [9, 6], [7, 8],
     ]);
