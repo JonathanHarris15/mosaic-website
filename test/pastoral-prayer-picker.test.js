@@ -40,7 +40,7 @@ function loadPickerHelpers() {
     };
 }
 
-const { pastoralPrayerPicker, personPicker } = loadPickerHelpers();
+const { pastoralPrayerPicker } = loadPickerHelpers();
 
 function pageWithMembers(members) {
     const page = serviceForm();
