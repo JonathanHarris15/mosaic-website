@@ -941,12 +941,13 @@ function serviceForm() {
             return (item && item.requestsWho) || 'either';
         },
         prayerChoices(who, currentId) {
-            const NEVER = '0000-00-00';
-            const last = (m) => (m && m.lastPastoralPrayerDate) || NEVER;
+            const sortKey = (m) => (window.PastoralPrayerCore
+                ? PastoralPrayerCore.rotationSortKey(m && m.lastPastoralPrayerDate)
+                : '');
             const list = (this.prayerMembers || [])
                 .filter(m => who !== 'male' && who !== 'female' || m.sex === who)
                 .slice()
-                .sort((a, b) => String(last(a)).localeCompare(String(last(b))));
+                .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
             if (currentId && !list.some(m => m.id === currentId)) {
                 const found = (this.prayerMembers || []).find(m => m.id === currentId);
                 if (found) list.unshift(found);

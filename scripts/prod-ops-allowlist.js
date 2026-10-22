@@ -6,20 +6,20 @@
 
 /** @type {readonly string[]} */
 const ALLOWLIST_SORTED = [
-    'set-liturgy-order-flags.js',
+    'access-diff.js',
+    'backfill-occurrence-visibility.js',
+    'delete-legacy-person-picker-fields.js',
+    'diagnose-storage-fill-in-upload.js',
+    'merge-duplicate-person.js',
     'migrate-hymn-sheets-prefix.js',
-    'textbelt-test-send.js',
-    'textbelt-key-check.js',
+    'ms-776-backfill-account-levels.js',
     'prayer-request-send-preview.js',
     'prayer-text-notifications-audit.js',
     'reset-prayer-send-attempt.js',
-  'migrate-legacy-oos-prayer-carriers.js',
-  'delete-legacy-oos-prayer-fields.js',
-  'merge-duplicate-person.js',
-  'diagnose-storage-fill-in-upload.js',
-    'delete-legacy-person-picker-fields.js',
-    'access-diff.js',
-    'ms-776-backfill-account-levels.js',
+    'set-liturgy-order-flags.js',
+    'sync-pastoral-prayer-dates.js',
+    'textbelt-key-check.js',
+    'textbelt-test-send.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

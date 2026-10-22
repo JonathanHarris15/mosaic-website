@@ -9,8 +9,6 @@
         'preacherId',
         'elementsId',
         'otherId',
-        'prayerPraiseId',
-        'prayerConfessionId',
         'prayerMaleId',
         'prayerFemaleId',
     ]);
