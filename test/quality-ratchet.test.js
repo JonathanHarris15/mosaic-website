@@ -78,7 +78,7 @@ test('knip counts the per-issue shape and refuses a report with no issues array'
         /issues array/);
 });
 
-test('a baseline above the base ref fails even when the new count sits under it', async () => {
+test('a speculative baseline raise above measured actual fails the ceiling', async () => {
     const ratchet = await ratchetP;
     const previous = {
         tsc: 10, eslint: 10, knipFiles: 1, knipExports: 1,
@@ -93,6 +93,18 @@ test('a baseline above the base ref fails even when the new count sits under it'
     assert.equal(gate.ceiling[0].key, 'tsc');
     const open = ratchet.gateDecision(previous, previous, null);
     assert.equal(open.ok, true);
+});
+
+test('a baseline raise up to measured actual passes the ceiling', async () => {
+    const ratchet = await ratchetP;
+    const previous = {
+        tsc: 10, eslint: 10, knipFiles: 1, knipExports: 1,
+        knipDependencies: 1, knipUnlisted: 1,
+    };
+    const actual = Object.assign({}, previous, { tsc: 12 });
+    const baseline = Object.assign({}, previous, { tsc: 12 });
+    const gate = ratchet.gateDecision(actual, baseline, previous);
+    assert.equal(gate.ok, true);
 });
 
 test('a missing baseline file is absent and a bad ref is an error', async () => {
@@ -119,6 +131,7 @@ test('tsc with no diagnostic on a failing status is an error', async () => {
 test('the ceiling exit, the bad ref, and the tsc failure are the path main runs', () => {
     const src = fs.readFileSync(path.join(ROOT, 'scripts', 'quality-ratchet.mjs'), 'utf8');
     assert.match(src, /const previous = baselineOnRef\(baselineRef\)/);
+    assert.match(src, /const actual = measure\(keys\)/);
     assert.match(src, /const decision = gateDecision\(actual, counts, previous, keys\)/);
     assert.match(src, /report\('baseline file went up', decision\.ceiling\);\n\s*process\.exit\(1\)/);
     assert.match(src, /tscOutcome\(result\.status,/);
@@ -138,11 +151,13 @@ test('a bad baseline ref fails the process before the tools run', () => {
     assert.ok(Date.now() - started < 1000, 'tsc ran before the ref was checked');
 });
 
-test('a baseline file above the base ref exits before the tools run', () => {
+test('a baseline file above measured actual fails after tsc runs', () => {
     const previous = JSON.parse(fs.readFileSync(
         path.join(ROOT, 'quality-baseline.json'), 'utf8'));
-    previous.tsc -= 1;
-    const started = Date.now();
+    const bumped = Object.assign({}, previous, {tsc: previous.tsc + 500});
+    const baselinePath = path.join(ROOT, 'quality-baseline.json');
+    const saved = fs.readFileSync(baselinePath, 'utf8');
+    fs.writeFileSync(baselinePath, JSON.stringify(bumped, null, 2) + '\n');
     const result = spawnSync(process.execPath, [
         path.join(ROOT, 'scripts', 'quality-ratchet.mjs'),
         '--only', 'tsc',
@@ -154,10 +169,10 @@ test('a baseline file above the base ref exits before the tools run', () => {
             QUALITY_BASELINE_PREVIOUS: JSON.stringify(previous),
         }),
     });
+    fs.writeFileSync(baselinePath, saved);
     assert.notEqual(result.status, 0);
     assert.match(`${result.stderr}`, /baseline file went up/);
     assert.match(`${result.stderr}`, /tsc:/);
-    assert.ok(Date.now() - started < 1000, 'tsc ran before the ceiling check');
 });
 
 test('the committed baseline is the ratchet shape', async () => {
