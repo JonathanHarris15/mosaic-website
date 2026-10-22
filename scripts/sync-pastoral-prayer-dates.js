@@ -18,7 +18,12 @@
  * for people with no history left and normalizes '0000-00-00' to null — the two
  * cases that quietly hold a member out of the rotation.
  *
- * Usage: node scripts/sync-pastoral-prayer-dates.js [--dry-run]
+ * Dry-run by default. Prod requires --project mosaic-hymn-database --i-mean-prod.
+ *
+ *   node scripts/sync-pastoral-prayer-dates.js \
+ *       --project mosaic-hymn-database --i-mean-prod
+ *   node scripts/sync-pastoral-prayer-dates.js \
+ *       --project mosaic-hymn-database --i-mean-prod --commit
  */
 
 const admin = require('firebase-admin');
@@ -53,9 +58,30 @@ const db = admin.firestore();
 const { normalizeDate, latestDate, HISTORY_COLLECTION } =
     require('../public/pastoral-prayer-core.js');
 
-const APPLY = !process.argv.includes('--dry-run');
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function committing(argv) {
+    return argv.includes('--commit');
+}
+
+/**
+ * @param {string[]} argv
+ * @return {boolean}
+ */
+function willWrite(argv) {
+    return committing(argv) && argv.includes('--i-mean-prod');
+}
 
 async function run() {
+    const argv = process.argv;
+    require('./firebase-project').requireProject(argv);
+    const APPLY = willWrite(argv);
+    if (committing(argv) && !APPLY) {
+        throw new Error('--commit against the church project also needs --i-mean-prod.');
+    }
+
     console.log(`Rebuilding lastPastoralPrayerDate from history${APPLY ? '' : ' (dry run)'}...`);
 
     // 1. Every history date, per person.
