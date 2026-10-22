@@ -1,5 +1,6 @@
 /**
  * Send one Textbelt SMS to Jonathan Harris's phone only — no replyWebhookUrl.
+ * Pass --with-url for a pastoral-prayer-style body that includes an https link.
  *
  * Dry-run prints target and body. Commit sends and prints the full Textbelt JSON.
  *
@@ -21,6 +22,7 @@ const {
 const {
     JONATHAN_HARRIS_NAME,
     DEFAULT_MESSAGE,
+    prayerUrlSmokeMessage,
     phoneFromPerson,
     isJonathanHarris,
     textbeltPayload,
@@ -56,14 +58,16 @@ async function resolveJonathanPerson(db) {
 
 async function main() {
     const commit = process.argv.includes('--commit');
+    const withUrl = process.argv.includes('--with-url');
     const projectId = require('./firebase-project').requireProject(process.argv);
     const db = initAdmin(projectId);
 
     const {id, data} = await resolveJonathanPerson(db);
     const to = phoneFromPerson(data);
-    const body = DEFAULT_MESSAGE;
+    const body = withUrl ? prayerUrlSmokeMessage() : DEFAULT_MESSAGE;
 
     console.log(`${commit ? 'SEND' : 'DRY RUN'} — people/${id} (${JONATHAN_HARRIS_NAME})`);
+    console.log(`mode: ${withUrl ? 'prayer SMS with Answer URL' : 'plain smoke (no URL)'}`);
     console.log(`to: ${to}`);
     console.log(`body: ${body}`);
     console.log('replyWebhookUrl: (omitted)');

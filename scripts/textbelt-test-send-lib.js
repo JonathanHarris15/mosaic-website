@@ -10,6 +10,28 @@ const JONATHAN_HARRIS_NAME = 'Jonathan Harris';
 const DEFAULT_MESSAGE =
     'Mosaic Church Textbelt smoke test (no reply webhook).';
 
+/** Placeholder Answer URL — exercises Textbelt URL sending only. */
+const DEFAULT_URL_SMOKE_LINK =
+    'https://mosaic-hymn-database.web.app/a/textbelt-url-smoke';
+
+const pr = require('../functions/prayer-request');
+
+/**
+ * One pastoral-prayer-style initial SMS with an https link (no webhook).
+ * @param {string} [answerUrl]
+ * @return {string}
+ */
+function prayerUrlSmokeMessage(answerUrl) {
+    const link = String(answerUrl || DEFAULT_URL_SMOKE_LINK).trim();
+    return pr.renderPrayerRequestMessage(
+        'initial',
+        'Jonathan',
+        pr.DEFAULT_PRAYER_MESSAGES,
+        link,
+        true,
+    );
+}
+
 /**
  * @param {object} person Firestore people doc data
  * @return {string} E.164 phone
@@ -46,6 +68,8 @@ function textbeltPayload(to, body, key) {
 module.exports = {
     JONATHAN_HARRIS_NAME,
     DEFAULT_MESSAGE,
+    DEFAULT_URL_SMOKE_LINK,
+    prayerUrlSmokeMessage,
     phoneFromPerson,
     isJonathanHarris,
     textbeltPayload,
