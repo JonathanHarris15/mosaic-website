@@ -1,15 +1,46 @@
+// @ts-nocheck
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+
 const PastoralPrayerCore = require('../public/pastoral-prayer-core.js');
-const { pastoralPrayerPicker, personPicker, serviceForm } = require('../public/service-builder.js');
+const { serviceForm } = require('../public/service-builder.js');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(PUBLIC, 'service-builder.html'), 'utf8');
 
 global.window = global;
 global.PastoralPrayerCore = PastoralPrayerCore;
+
+function loadPickerHelpers() {
+    const sandbox = {
+        console: { log() {}, warn() {}, error() {} },
+        setTimeout() { return 0; }, clearTimeout() {}, setInterval() {}, clearInterval() {},
+        Promise, Date, Object, Array, Math, String, Number, JSON, Set, Map, RegExp,
+        encodeURIComponent, URLSearchParams, Boolean, Error,
+        module: { exports: {} },
+        PastoralPrayerCore,
+        UsageStats: require('../public/usage-stats-store.js'),
+        PeoplePickerCore: require('../public/people-picker-core.js'),
+    };
+    sandbox.window = sandbox;
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(PUBLIC, 'service-builder.js'), 'utf8'), sandbox, {
+        filename: 'service-builder-picker.js',
+    });
+    vm.runInContext(fs.readFileSync(path.join(PUBLIC, 'pastoral-prayer-subject-picker.js'), 'utf8'), sandbox, {
+        filename: 'pastoral-prayer-subject-picker.js',
+    });
+    return {
+        pastoralPrayerPicker: sandbox.pastoralPrayerPicker,
+        personPicker: sandbox.personPicker,
+    };
+}
+
+const { pastoralPrayerPicker, personPicker } = loadPickerHelpers();
 
 function pageWithMembers(members) {
     const page = serviceForm();
@@ -20,6 +51,8 @@ function pageWithMembers(members) {
 test('pastoral prayer subjects use the shared person picker, not a native select', () => {
     assert.doesNotMatch(html, /setPrayerPerson\(item\.key/,
         'the subject slots must not be a <select>');
+    assert.ok(html.indexOf('src="service-builder.js"') < html.indexOf('src="pastoral-prayer-subject-picker.js"'),
+        'the pastoral wrapper loads after personPicker is defined');
     assert.match(html, /pastoralPrayerPicker\(slot/,
         'the subject slots mount pastoralPrayerPicker');
     assert.match(html, /prayerLastLabel\(p\)/,
@@ -78,12 +111,14 @@ test('pastoralPrayerPicker opens on the rotation list when the query is empty', 
 
 test('a pastoral subject picker does not offer "add as new person"', async () => {
     const page = pageWithMembers([]);
-    const picker = personPicker({ id: null, name: '' }, page, null, 'prayerMale', 'male');
-    picker.parent = Object.assign(page, {
+    const slot = { id: null, name: '' };
+    const picker = pastoralPrayerPicker(slot, page, { requestsWho: 'male' }, 0);
+    Object.assign(picker, {
         peopleFuse: { search(q) { return [{ item: { id: 'x', name: q, sex: 'male' } }]; } },
         peopleRegistry: [{ id: 'x', name: 'Nobody Here', sex: 'male' }],
         prayerMembers: [],
     });
+    picker.parent = page;
     picker.query = 'Nobody Here';
     await picker.search();
     assert.ok(!picker.results.some(p => p.isNew), 'pastoral slots only name existing members');
