@@ -152,13 +152,13 @@ test('an old irregular Sunday is not scored until it is given an order', () => {
     assert.equal(Home.glance(Object.assign({}, svc, { liturgyOrderId: 'standard', theme: 'Shown' })).theme, 'Shown');
 });
 
-test('dotted liturgy keys fold into the nested liturgy', () => {
+test('dotted top-level keys are dropped on read', () => {
     const svc = Home.normalizeService({
         preacher: 'Daniel',
         'liturgy.sermon': 'Psalm 23',
         liturgy: { callToWorship: 'Come' },
     });
-    assert.equal(svc.liturgy.sermon, 'Psalm 23');
+    assert.equal(svc.liturgy.sermon, undefined);
     assert.equal(svc.liturgy.callToWorship, 'Come');
     assert.equal(svc.preacher, 'Daniel');
 });

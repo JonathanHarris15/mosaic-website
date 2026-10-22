@@ -255,6 +255,7 @@ function loadPage() {
     sandbox.db = {};
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
     sandbox.DateUtils = require('../public/date-utils.js');
+    sandbox.ServiceDottedKeysCore = require('../public/service-dotted-keys-core.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.MosaicIdentity = require('../public/mosaic-identity.js');
     sandbox.ServiceAuthorship = Authorship;

@@ -17,7 +17,6 @@ const KEYS = {
     events: 'calendar.events.edit',
     event_occurrences: 'calendar.events.edit',
     services: 'services.builder.edit',
-    liturgy_elements: 'services.builder.edit',
     liturgy_orders: 'services.builder.edit',
     presence: 'services.builder.edit',
     style_presets: 'services.builder.edit',
@@ -115,5 +114,5 @@ test('the editor-ladder write doors are all still there', () => {
     const used = [...rules.matchAll(/editsWith\('([^']+)'\)/g)].map(m => m[1]);
     // MS-722/725's 19, plus MS-727's four guide collections and people
     // create, plus MS-693's two Resources collections.
-    assert.equal(used.length, 26);
+    assert.equal(used.length, 25);
 });

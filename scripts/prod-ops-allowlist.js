@@ -7,6 +7,7 @@
 /** @type {readonly string[]} */
 const ALLOWLIST_SORTED = [
     'access-diff.js',
+    'backfill-involvement-series.js',
     'backfill-occurrence-visibility.js',
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
@@ -15,8 +16,10 @@ const ALLOWLIST_SORTED = [
     'diagnose-storage-fill-in-upload.js',
     'merge-duplicate-person.js',
     'migrate-hymn-sheets-prefix.js',
+    'migrate-inline-liturgy-elements.js',
     'migrate-meeting-mentions.js',
     'migrate-reminders-to-tasks.js',
+    'migrate-service-dotted-keys.js',
     'ms-776-backfill-account-levels.js',
     'normalise-care-list-documents.js',
     'prayer-request-send-preview.js',

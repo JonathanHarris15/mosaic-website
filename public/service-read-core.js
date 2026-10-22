@@ -10,22 +10,14 @@
 // scripts/sync-shared-to-functions.js) for the MCP server's oos_get_service
 // tool (MS-262) without dragging in Firestore or the DOM.
 //
-// ⚠ THE DOTTED-KEY NORMALISATION IS NOT COSMETIC. Older saves used
-// set(merge) with paths like 'liturgy.sermon', which Firestore stored as a
-// top-level field NAME containing a dot rather than as a nested value. A
-// reader that does not fold those back in will report an empty slot on an
-// older Sunday that plainly has one filled — and, being a read, will do it
-// silently and confidently. See ADR-0034 and the comment above
-// writeLiturgyField() in service-calendar.js.
-//
-// ⚠ KNOWN DUPLICATION. The same fold already exists twice in the browser —
-// `normalizeDottedKeys` in service-builder.js and `normalizeServiceDoc` in
-// service-calendar.js — and this is a third copy rather than a replacement,
-// because the two browser files are loaded as plain scripts and pointing
-// them here means touching the pages that load them. Worth consolidating;
-// deliberately not done in the same change that introduced the read tool.
+// Dotted-key normalisation lives in service-dotted-keys-core.js (MS-781).
 (function (global) {
     'use strict';
+
+    const Dotted = (typeof require !== 'undefined' &&
+            typeof module !== 'undefined' && module.exports) ?
+        require('./service-dotted-keys-core.js') :
+        (global && global.ServiceDottedKeysCore);
 
     // The note helpers. Loaded the same way the other shared modules are:
     // a global in the browser, a require under Node and in functions/.
@@ -54,29 +46,7 @@
         ['otherName', 'Other Involvement'],
     ]);
 
-    // Folds legacy dotted field names back into nested values. An already
-    // nested value wins over a dotted one for the same leaf — the dotted key
-    // is the older fallback, not the newer truth.
-    function normalizeServiceDoc(raw) {
-        const data = {};
-        for (const [key, val] of Object.entries(raw || {})) {
-            if (!key.includes('.')) data[key] = val;
-        }
-        for (const [key, val] of Object.entries(raw || {})) {
-            if (!key.includes('.')) continue;
-            const parts = key.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                    obj[parts[i]] = {};
-                }
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = val;
-        }
-        return data;
-    }
+    const readServiceDoc = Dotted.readServiceDoc;
 
     // Is this slot empty? Blank all the way down — a song is {id, name}, a
     // scripture or text is a string, a people element is a list.
@@ -122,7 +92,7 @@
         if (!raw) {
             return {date: dateKey, exists: false, liturgy: [], people: {}};
         }
-        const doc = normalizeServiceDoc(raw);
+        const doc = readServiceDoc(raw);
         const liturgy = doc.liturgy || {};
         const decidedBy = doc.decidedBy || {};
         const catalog = Liturgy.catalogFrom(liturgyCatalog);
@@ -222,7 +192,7 @@
 
     const ServiceReadCore = {
         PEOPLE_FIELDS,
-        normalizeServiceDoc,
+        readServiceDoc,
         readableService,
         isBlank,
         slotValue,
