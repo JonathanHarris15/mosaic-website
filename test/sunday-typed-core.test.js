@@ -40,7 +40,7 @@ test('fromService reads typedContent on that Sunday only', () => {
     assert.ok(!rowA.announcements.includes('Choir'), 'Sunday B must not leak onto Sunday A');
 });
 
-test('fromService reads the booklet record and ignores the week guide', () => {
+test('a week with only the old guide still reads, and typedContent wins a field', () => {
     const v2 = {
         guide: {
             format: 'v2',
@@ -53,10 +53,9 @@ test('fromService reads the booklet record and ignores the week guide', () => {
         typedContent: { pastoralPrayer: { nation: 'Uganda' } },
     };
     const row = Typed.toRow(Typed.fromService(v2));
-    assert.equal(row.prayerNation, 'Uganda');
-    assert.equal(row.prayerCapital, '');
-    assert.equal(row.kidsLessonTitle, '');
-    assert.equal(row.announcements, '');
+    assert.equal(row.prayerNation, 'Uganda', 'the store wins the field that was typed');
+    assert.equal(row.prayerCapital, 'Nairobi', 'untouched fields still come from the guide');
+    assert.equal(row.kidsLessonTitle, 'The Lost Sheep');
 
     const legacy = {
         guide: {
@@ -68,9 +67,9 @@ test('fromService reads the booklet record and ignores the week guide', () => {
         },
     };
     const leg = Typed.toRow(Typed.fromService(legacy));
-    assert.equal(leg.prayerNation, '');
-    assert.equal(leg.kidsLessonTitle, '');
-    assert.equal(leg.announcements, '');
+    assert.equal(leg.prayerNation, 'Ghana');
+    assert.equal(leg.kidsLessonTitle, 'David');
+    assert.match(leg.announcements, /Meal/);
 });
 
 test('draft round-trips and empty page assets are not invented', () => {
@@ -136,15 +135,13 @@ test('oversized country-map data URLs and uploads are refused before write', () 
     assert.match(Typed.countryImageWriteError('http://example.com/map.png'), /https/);
 });
 
-test('the printable view uploads the country map to Storage and guards the write', () => {
+test('the editor uploads the country map to Storage and guards the write', () => {
     const fs = require('node:fs');
     const path = require('node:path');
-    const view = fs.readFileSync(path.join(__dirname, '../public/printable-view.js'), 'utf8');
-    const store = fs.readFileSync(path.join(__dirname, '../public/printable-link-store.js'), 'utf8');
-    assert.match(view, /countryMapStoragePath/);
-    assert.match(view, /assertCountryImageWritable/);
-    assert.match(store, /getDownloadURL/);
-    assert.doesNotMatch(view, /readAsDataURL/,
-        'file upload must not write a data URL into the Sunday record');
-    assert.doesNotMatch(store, /readAsDataURL/);
+    const src = fs.readFileSync(path.join(__dirname, '../public/printable-editor-data.js'), 'utf8');
+    assert.match(src, /countryMapStoragePath/);
+    assert.match(src, /getDownloadURL/);
+    assert.match(src, /assertCountryImageWritable/);
+    assert.doesNotMatch(src, /readAsDataURL/,
+        'file upload must not write a data URL onto typedContent');
 });

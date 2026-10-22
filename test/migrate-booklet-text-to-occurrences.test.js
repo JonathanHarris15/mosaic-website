@@ -73,6 +73,75 @@ test('merging fill-ins keeps every other printable on the occurrence', () => {
     assert.equal(next.other.note, 'Keep me');
 });
 
+test('a legacy guide element still fills a field the typed record left blank', () => {
+    const planned = Copy.planServiceCopies({
+        typedContent: { pastoralPrayer: { nation: 'Uganda' } },
+        guide: {
+            elements: [{ type: 'pastoral_prayer', nation: 'Egypt', capital: 'Cairo' }],
+        },
+    }, { bulletin: {} });
+    assert.equal(planned.plans.bulletin.legacy_prayerNation, 'Uganda');
+    assert.equal(planned.plans.bulletin.legacy_prayerCapital, 'Cairo');
+});
+
+test('only a printable that reads booklet text is selected', () => {
+    assert.equal(Copy.readsBookletText({
+        inputs: [{ id: 'legacy_prayerNation', label: 'Nation', kind: 'text' }],
+        pages: [],
+    }), true);
+    assert.equal(Copy.readsBookletText({
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{ id: 'ann', tag: 'p', repeat: { source: 'sunday_announcements', params: {} } }],
+        }],
+    }), true);
+    assert.equal(Copy.readsBookletText({
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{ id: 'q', tag: 'p', repeat: { source: 'sunday_kids_questions', params: {} } }],
+        }],
+    }), true);
+    assert.equal(Copy.readsBookletText({
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'img',
+                tag: 'img',
+                bind: { src: { scope: 'global', source: 'sunday_typed', field: 'prayerCountryImage', params: {} } },
+            }],
+        }],
+    }), true);
+    assert.equal(Copy.readsBookletText({
+        inputs: [],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'nested',
+                tag: 'div',
+                children: [{
+                    id: 'nation',
+                    tag: 'p',
+                    bind: { text: { scope: 'global', source: 'event_field', field: 'legacy_prayerNation', params: {} } },
+                }],
+            }],
+        }],
+    }), true);
+    assert.equal(Copy.readsBookletText({
+        inputs: [{ id: 'sermon_title', label: 'Sermon', kind: 'text' }],
+        pages: [{
+            id: 'pg',
+            nodes: [{
+                id: 'title',
+                tag: 'p',
+                bind: { text: { scope: 'global', source: 'event_field', field: 'sermon_title', params: {} } },
+            }],
+        }],
+    }), false);
+});
+
 test('the date window is service ids, and the script never deletes', () => {
     assert.equal(Copy.inDateRange('2026-09-06', '2026-09-01', '2026-09-30'), true);
     assert.equal(Copy.inDateRange('2026-08-30', '2026-09-01', null), false);
@@ -87,6 +156,13 @@ test('the date window is service ids, and the script never deletes', () => {
     assert.equal(src.includes('batch.set(occRef'), false);
     assert.equal(src.includes('await occRef.set'), true);
     assert.equal(src.includes('maxResultBytes'), true);
+    assert.equal(src.includes('Migrate.contentFromLegacyStores'), false);
+    assert.equal(src.includes('Migrate.planOccurrenceFill'), false);
+    assert.equal(src.includes('Migrate.readsBookletText'), false);
+    const store = fs.readFileSync(path.join(__dirname, '../public/printable-data-store.js'), 'utf8');
+    const live = fs.readFileSync(path.join(__dirname, '../public/printable-live.js'), 'utf8');
+    assert.equal(store.includes('mergeEventWithTyped'), true);
+    assert.equal(live.includes('function legacyTypedFallback'), true);
 });
 
 test('a country-map data URL is stored once, as a URL, under the size ceiling', () => {

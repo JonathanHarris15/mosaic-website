@@ -1,26 +1,25 @@
-# MS-777 — Sunday booklet text onto occurrence fill-ins
+# MS-777 — copy Sunday booklet text onto occurrence fill-ins
 
-Booklet text (prayer-country facts, Mosaic Kids, announcements) is stored on the Sunday Service occurrence:
+This note is the data copy only. Merging it does not change what print reads or writes. Print still uses `services/{date}.typedContent` and the week's guide until the reader change lands.
+
+The script copies booklet text (prayer-country facts, Mosaic Kids, announcements) onto the Sunday Service occurrence:
 
 `event_occurrences/sunday_service_{YYYY-MM-DD}.printableInputs[printableId]`
 
 Fill-in ids are `legacy_*` (`legacy_prayerNation`, `legacy_announcements`, `legacy_kidsQuestions`, and the rest of the migrated blanks).
 
-The app does not read or write `services/{date}.typedContent` or the week's guide for this text. The old guide editor can still write a guide. Print does not read it.
+## Order
 
-## When print should cut over
+Prod ops runs from `main` only. The copy has to be on `main`, and `commit=true` has to succeed, before the reader change merges. Merging the reader first makes a week that exists only in the old stores print blank. That is the outage of 21 October 2026.
 
-Print in this change reads the occurrence only. Hosting deploys on the merge, and the data move is a later dispatch, so a week that exists only in the old stores prints blank until `commit=true` succeeds. That is the outage of 21 October 2026.
-
-Do not merge until a dry run on `main` shows `size.maxResultBytes` under `size.ceilingBytes` and `size.occurrencesSkipped` is 0, and someone will dispatch `commit=true` in that same sitting.
-
-A temporary reader — occurrence key when it is present, including a blank, otherwise the old stores — would keep print working across that window. Remove it in a follow-up once a dry run reports `fieldsCopied: 0`. This change does not add that reader. A reader that understands both shapes leaves the old system in the product.
+1. Merge this change.
+2. Dry-run the script on `main`. Read `size.maxResultBytes`, `size.ceilingBytes`, and `size.occurrencesSkipped`.
+3. Dispatch `commit=true` only when `size.occurrencesSkipped` is 0 and `size.maxResultBytes` is under `size.ceilingBytes`.
+4. Merge the reader change only after that commit has succeeded.
 
 ## After this change is on `main`
 
-Hosting deploys with the push. The data move is a separate dispatch. Until the commit below has run, a week that only has the old stores prints blank.
-
-Dry-run first. Read the log. Then commit. Both run from `main`, not from a pull request.
+Print is unchanged. Run the copy from `main`, not from a pull request.
 
 ```bash
 gh workflow run "Prod ops script" --ref main \
@@ -52,4 +51,4 @@ Every write is one occurrence, after a size check. The ceiling is 64 KiB under t
 
 ## Do not delete the old fields in that run
 
-Leave `services.typedContent` and booklet keys inside `guide.values` / `guide.elements` in place. A later script may delete them, and only after a dry run of this copy shows nothing left to copy (`fieldsCopied: 0`). That delete is not this script and not this change.
+Leave `services.typedContent` and booklet keys inside `guide.values` / `guide.elements` in place. Print still reads them. A later script may delete them, and only after the reader change is in production and a dry run of this copy shows nothing left to copy (`fieldsCopied: 0`). That delete is not this script and not this change.

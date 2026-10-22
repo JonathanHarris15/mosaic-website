@@ -14,6 +14,10 @@
  * that would still exceed the ceiling is listed in size.skipped and is not
  * written; the run continues with the next Sunday.
  *
+ * The copy helpers live in this file. Print still reads the old stores
+ * until a later change. This script does not call SundayTyped.fromService,
+ * because that reader stops consulting the guide in that later change.
+ *
  * Dry-run by default. Prod requires --project mosaic-hymn-database --i-mean-prod.
  *
  *   node scripts/migrate-booklet-text-to-occurrences.js \
@@ -27,6 +31,7 @@
 const crypto = require('crypto');
 const path = require('path');
 const Migrate = require('../public/printable-legacy-migrate-core.js');
+const Typed = require('../public/sunday-typed-core.js');
 const Occurrence = require('../public/events-occurrence-core.js');
 const Size = require('./firestore-doc-size.js');
 const {loadProject, requireProject} = require('./firebase-project.js');
@@ -72,12 +77,89 @@ function occurrenceId(date) {
 }
 
 /**
+ * Both old stores. The stored record wins a field that has text; a blank
+ * there still takes the guide, which is what a week used to print.
+ * @param {any} service
+ * @return {any}
+ */
+function contentFromLegacyStores(service) {
+    const s = service && typeof service === 'object' ? service : {};
+    const stored = Typed.normalise(s.typedContent);
+    const guide = s.guide || {};
+    const values = guide.values && typeof guide.values === 'object' ? guide.values : null;
+    const elements = Array.isArray(guide.elements) ? guide.elements : [];
+    const hasGuide = guide.format === 'v2' || !!values || elements.length > 0;
+    if (!hasGuide) return stored;
+    const fallback = (guide.format === 'v2' || values)
+        ? Typed.fromGuideValues(values)
+        : Typed.fromLegacyGuide(guide);
+    return Typed.mergePreferFilled(stored, fallback);
+}
+
+/**
+ * Copy into keys the occurrence has never stored. A present key, including
+ * '', stays as it is. Nothing here deletes the old service fields.
+ * @param {any} existingBag
+ * @param {any} service
+ * @return {{ patch: Record<string, any>, bag: Record<string, any>, wouldWrite: boolean }}
+ */
+function planOccurrenceFill(existingBag, service) {
+    const incoming = Migrate.valuesFromTyped(contentFromLegacyStores(service));
+    /** @type {Record<string, any>} */
+    const base = existingBag && typeof existingBag === 'object' ? Object.assign({}, existingBag) : {};
+    /** @type {Record<string, any>} */
+    const patch = {};
+    Object.keys(incoming).forEach((id) => {
+        if (Object.prototype.hasOwnProperty.call(base, id)) return;
+        patch[id] = incoming[id];
+        base[id] = incoming[id];
+    });
+    return { patch: patch, bag: base, wouldWrite: Object.keys(patch).length > 0 };
+}
+
+/** @param {any[]|undefined} nodes @param {(node: any) => void} fn */
+function walkNodes(nodes, fn) {
+    (nodes || []).forEach((node) => {
+        if (!node) return;
+        fn(node);
+        walkNodes(node.children, fn);
+    });
+}
+
+/**
+ * A printable that shows booklet text: a legacy fill-in, a joined
+ * announcements or kids-questions repeat, or a wire to those fields.
+ * @param {any} project
+ * @return {boolean}
+ */
+function readsBookletText(project) {
+    const inputs = (project && project.inputs) || [];
+    if (inputs.some((input) => input && Migrate.isLegacyFillId(input.id))) return true;
+    let found = false;
+    ((project && project.pages) || []).forEach((page) => {
+        walkNodes(page && page.nodes, (node) => {
+            if (!node || found) return;
+            const repeat = node.repeat && node.repeat.source;
+            if (repeat === 'sunday_announcements' || repeat === 'sunday_kids_questions') found = true;
+            if (!node.bind) return;
+            ['text', 'src'].forEach((prop) => {
+                const bind = node.bind[prop];
+                if (!bind) return;
+                if (bind.source === 'event_field' && Migrate.isLegacyFillId(bind.field)) found = true;
+                if (bind.source === 'sunday_typed' && Migrate.FILL_KEYS.indexOf(bind.field) !== -1) found = true;
+            });
+        });
+    });
+    return found;
+}
+
+/**
  * @param {any} service
  * @param {any} bagsByPrintable
  * @return {{ plans: Record<string, any>, wouldWrite: boolean, fieldsCopied: number, blanksLeft: number, hasBookletText: boolean }}
  */
 function planServiceCopies(service, bagsByPrintable) {
-    const incoming = Migrate.valuesFromTyped(Migrate.contentFromLegacyStores(service));
+    const incoming = Migrate.valuesFromTyped(contentFromLegacyStores(service));
     /** @type {Record<string, any>} */
     const bags = bagsByPrintable && typeof bagsByPrintable === 'object' ? bagsByPrintable : {};
     /** @type {Record<string, any>} */
@@ -93,7 +175,7 @@ function planServiceCopies(service, bagsByPrintable) {
                 blanksLeft += 1;
             }
         });
-        const plan = Migrate.planOccurrenceFill(existing, service);
+        const plan = planOccurrenceFill(existing, service);
         if (!plan.wouldWrite) return;
         plans[printableId] = plan.patch;
         fieldsCopied += Object.keys(plan.patch).length;
@@ -408,7 +490,7 @@ async function main() {
                 }
             }
         }
-        if (Migrate.readsBookletText(record)) bookletIds.push(doc.id);
+        if (readsBookletText(record)) bookletIds.push(doc.id);
     }
     if (COMMIT) await commitBatch(batch, batchCount);
     totals.bookletPrintables = bookletIds.length;
@@ -555,6 +637,7 @@ module.exports = {
     inDateRange,
     occurrenceId,
     planServiceCopies,
+    readsBookletText,
     mergePrintableInputs,
     newOccurrenceBody,
     offloadDataUrls,

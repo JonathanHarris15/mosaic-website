@@ -215,26 +215,13 @@ function printableView() {
             return Data.resolveWhen(when || { mode: 'this' }, this.viewDate);
         },
 
-        bagFor(date) {
-            const byDate = ui.bundle && ui.bundle.bookletByDate;
-            if (byDate && Object.prototype.hasOwnProperty.call(byDate, date)) return byDate[date] || {};
-            if (date === this.viewDate) return this.eventBag || {};
-            return {};
-        },
-
-        occurrenceIdFor(date) {
-            if (this.occurrenceId && date === this.viewDate) return this.occurrenceId;
-            const Core = window.EventsOccurrenceCore;
-            if (Core && Core.occurrenceId && Core.SUNDAY_SERVICE_ID) {
-                return Core.occurrenceId(Core.SUNDAY_SERVICE_ID, date) || '';
-            }
-            return date ? 'sunday_service_' + date : '';
-        },
-
         sundayDraft(date) {
             if (!this.sundayDrafts[date]) {
-                const Migrate = window.PrintableLegacyMigrate;
-                this.sundayDrafts[date] = Migrate ? Migrate.draftFromBag(this.bagFor(date)) : {};
+                const Typed = window.SundayTypedCore;
+                const service = ui.bundle && ui.bundle.services && ui.bundle.services[date];
+                this.sundayDrafts[date] = Typed
+                    ? Typed.toDraft(Typed.fromService(service))
+                    : {};
             }
             return this.sundayDrafts[date];
         },
@@ -242,8 +229,7 @@ function printableView() {
         kidsLinesFor(date) {
             if (!this.kidsLines[date]) {
                 const Fill = window.PrintableFillCore;
-                const text = (this.bagFor(date) || {}).legacy_kidsQuestions || '';
-                this.kidsLines[date] = Fill.linesOf(text);
+                this.kidsLines[date] = Fill.linesOf(this.sundayDraft(date).kidsQuestions);
             }
             return this.kidsLines[date];
         },
@@ -292,11 +278,17 @@ function printableView() {
         },
 
         syncBundle() {
-            if (!ui.bundle) ui.bundle = {};
+            if (!ui.bundle) ui.bundle = { services: {} };
             ui.bundle.eventInputs = this.eventBag;
-            const date = this.viewDate;
-            if (!date) return;
-            ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: this.eventBag });
+            const Typed = window.SundayTypedCore;
+            if (!Typed) return;
+            Object.keys(this.sundayDrafts).forEach(date => {
+                const draft = Object.assign({}, this.sundayDrafts[date]);
+                if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
+                const content = Typed.normalise(Typed.fromDraft(draft));
+                ui.bundle.services = ui.bundle.services || {};
+                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
+            });
         },
 
         relayout() {
@@ -598,7 +590,7 @@ function printableView() {
             const value = String(this.valueForSlot(slot) == null ? '' : this.valueForSlot(slot));
             if (this.fillCommitted[id] === value) return;
             this.fillCommitted[id] = value;
-            return this.persistSlot(slot);
+            this.persistSlot(slot);
         },
 
         async onFillFile(id, file, input) {
@@ -647,11 +639,8 @@ function printableView() {
 
         async persistSlot(slot) {
             if (slot.store === 'event' || slot.store === 'event-row') return this.persistEvent();
-            if (slot.store === 'sunday') {
-                return this.persistSunday(this.sundayDate(slot.when), [slot.field]);
-            }
-            if (slot.store === 'kids') {
-                return this.persistSunday(this.sundayDate(slot.when), ['kidsQuestions']);
+            if (slot.store === 'sunday' || slot.store === 'kids') {
+                return this.persistSunday(this.sundayDate(slot.when));
             }
         },
 
@@ -682,67 +671,18 @@ function printableView() {
             }
         },
 
-        // The cached draft still holds every booklet key from the first time it
-        // was read. A kids save must not put those older words back over a later
-        // edit, so only the fields this edit changed are written.
-        /**
-         * @param {string} date
-         * @param {string[]} fields
-         */
-        async persistSunday(date, fields) {
+        async persistSunday(date) {
             const Typed = window.SundayTypedCore;
-            const Migrate = window.PrintableLegacyMigrate;
-            if (!Typed || !Migrate || !date || !this.id) return;
-            const occId = this.occurrenceIdFor(date);
-            if (!occId || (date === this.viewDate && !this.occurrenceId)) {
-                this.fillNote = 'Open this printable from its date to save.';
-                return;
-            }
-            /** @type {string[]} */
-            const keys = [];
-            const named = fields || [];
-            for (let i = 0; i < named.length; i++) {
-                if (named[i]) keys.push(named[i]);
-            }
-            if (!keys.length) return;
-            const full = this.sundayDraft(date);
-            /** @type {Record<string, any>} */
-            const draft = {};
-            for (let i = 0; i < keys.length; i++) {
-                const field = keys[i];
-                draft[field] = (field === 'kidsQuestions' && this.kidsLines[date])
-                    ? this.kidsLines[date].join('\n')
-                    : full[field];
-            }
+            if (!Typed || !date) return;
+            const draft = Object.assign({}, this.sundayDraft(date));
+            if (this.kidsLines[date]) draft.kidsQuestions = this.kidsLines[date].join('\n');
             try {
                 Typed.assertCountryImageWritable(draft.prayerCountryImage);
                 const content = Typed.normalise(Typed.fromDraft(draft));
-                const Store = window.EventsStore;
-                if (Store && Store.loadOccurrence) {
-                    const occ = await Store.loadOccurrence(db, occId);
-                    if (occ && occ.stored === false && Store.ensureOccurrenceDocument) {
-                        await Store.ensureOccurrenceDocument(db, occ);
-                    }
-                }
-                const ref = db.collection('event_occurrences').doc(occId);
-                const snap = await ref.get();
-                const prev = (snap && snap.exists && snap.data() && snap.data().printableInputs) || {};
-                const stored = prev[this.id] || {};
-                const wide = Migrate.patchFromContent(content, stored);
-                /** @type {Record<string, any>} */
-                const patch = {};
-                for (let i = 0; i < keys.length; i++) {
-                    const id = Migrate.fillId(keys[i]);
-                    if (Object.prototype.hasOwnProperty.call(wide, id)) patch[id] = wide[id];
-                }
-                const bag = Object.assign({}, stored, patch);
-                const next = Object.assign({}, prev);
-                next[this.id] = bag;
-                await ref.set({ printableInputs: next }, { merge: true });
-                if (date === this.viewDate) this.eventBag = Object.assign({}, this.eventBag, patch);
-                if (!ui.bundle) ui.bundle = {};
-                ui.bundle.bookletByDate = Object.assign({}, ui.bundle.bookletByDate, { [date]: bag });
-                if (date === this.viewDate) ui.bundle.eventInputs = this.eventBag;
+                await db.collection('services').doc(date).set({ typedContent: content }, { merge: true });
+                if (!ui.bundle) ui.bundle = { services: {} };
+                ui.bundle.services = ui.bundle.services || {};
+                ui.bundle.services[date] = Object.assign({}, ui.bundle.services[date], { typedContent: content });
                 this.fillNote = '';
             } catch (e) {
                 console.error(e);
@@ -771,7 +711,7 @@ function printableView() {
                 this.pendingFocus = { id: 'kids:' + Fill.whenKey(spec.when) + ':' + rowIndex };
                 const draft = this.sundayDraft(date);
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
-                await this.persistSunday(date, ['kidsQuestions']);
+                await this.persistSunday(date);
             }
             this.relayout();
         },
@@ -790,7 +730,7 @@ function printableView() {
                 this.kidsLines[date] = Fill.removeKidsLine(this.kidsLinesFor(date), rowIndex);
                 const draft = this.sundayDraft(date);
                 draft.kidsQuestions = this.kidsLines[date].join('\n');
-                await this.persistSunday(date, ['kidsQuestions']);
+                await this.persistSunday(date);
             }
             this.pendingFocus = null;
             this.relayout();
