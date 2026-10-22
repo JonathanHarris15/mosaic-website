@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#E8DDCD" />
+    <title>MS-696 — Service Analytics on Shepherd (prototype)</title>
+
+    <link rel="stylesheet" href="../../../public/fonts.css" />
+    <link rel="stylesheet" href="../../../public/mosaic.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&amp;family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=Libre+Franklin:ital,wght@0,100..900;1,100..900&amp;display=swap" />
+
+    <style>
+        @font-face { font-family: 'Proto EB Garamond'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/SlGUmQSNjdsmc35JDF1K5GR1SDk.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Libre Franklin'; font-style: normal; font-weight: 300 700; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/jizDREVItHgc8qDIbSTKq4XkRiUf2zc.woff2) format('woff2'); }
+        @font-face { font-family: 'Proto Cinzel'; font-style: normal; font-weight: 400 800; font-display: swap;
+            src: url(https://raw.githubusercontent.com/JonathanHarris15/mosaic-website/main/public/fonts/files/8vIJ7ww63mVu7gt79mT7.woff2) format('woff2'); }
+        html:root {
+            --font-serif: 'Proto EB Garamond', 'EB Garamond', Georgia, serif;
+            --font-sans: 'Proto Libre Franklin', 'Libre Franklin', system-ui, sans-serif;
+            --font-display: 'Proto Cinzel', 'Cinzel', Georgia, serif;
+        }
+
+        .proto-body { margin: 0; background: var(--surface-container-highest); color: var(--on-background); font-family: var(--font-sans); }
+        .proto-bar { padding: var(--space-sm) var(--space-md); background: var(--primary); color: var(--on-primary); }
+        .proto-bar h1 { margin: 0; font-family: var(--font-serif); font-size: 28px; font-weight: 500; text-wrap: balance; }
+        .proto-bar p { margin: 6px 0 0; max-width: 72ch; font-size: 14px; line-height: 1.5; color: var(--primary-fixed-dim); text-wrap: pretty; }
+        .proto-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--space-sm); }
+        .proto-jump a {
+            padding: 6px 12px; border: 1px solid var(--primary-fixed-dim); border-radius: var(--radius-full);
+            color: var(--on-primary); font-size: 13px; font-weight: 600; text-decoration: none;
+        }
+        .proto-jump a:focus-visible { outline: 2px solid var(--primary-fixed); outline-offset: 2px; }
+        .proto-main { max-width: 1280px; margin: 0 auto; padding: var(--space-md) var(--space-sm) var(--space-xl); }
+        .proto-section { margin-top: var(--space-lg); scroll-margin-top: 12px; }
+        .proto-section > h2 {
+            margin: 0 0 var(--space-xs); font-family: var(--font-serif); font-size: 26px; color: var(--primary); text-wrap: balance;
+        }
+        .proto-note { max-width: 68ch; margin: 0 0 var(--space-sm); font-size: 15px; line-height: 1.55; color: var(--on-surface-variant); text-wrap: pretty; }
+        .proto-stage {
+            background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .proto-stage__cap {
+            padding: 8px var(--space-sm); background: var(--surface-container-low);
+            border-bottom: 1px solid var(--outline-variant);
+            font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+        .proto-ask { margin: var(--space-sm) 0 0; padding-left: 1.2rem; max-width: 72ch; color: var(--on-surface-variant); }
+        .proto-ask li { margin-bottom: 6px; line-height: 1.5; }
+
+        /* Shepherd desk (mirrors shepherding-dashboard.html) */
+        .shep-sheet .m-page__body { padding: var(--space-sm) var(--space-md) var(--space-lg); gap: var(--space-sm); display: flex; flex-direction: column; }
+        .shep-band {
+            display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); align-items: stretch;
+        }
+        @media (min-width: 700px) { .shep-band { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1100px) { .shep-band { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        @media (min-width: 1100px) { .shep-band--five { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        .shep-band > .m-nav-card, .shep-band > a.m-nav-card {
+            flex-direction: row; align-items: flex-start; justify-content: flex-start; text-align: left;
+            gap: var(--space-sm); height: 100%; padding: var(--space-md); border-left: 3px solid var(--primary);
+            text-decoration: none; color: inherit;
+        }
+        .shep-band .m-medallion { width: 40px; height: 40px; margin-bottom: 0; }
+        .shep-band .m-medallion .material-symbols-outlined { font-size: 20px; }
+        .shep-band .m-nav-card__title {
+            font-family: var(--font-display); font-size: 18px; line-height: 1.2; letter-spacing: 0.02em;
+            color: var(--primary); text-wrap: balance;
+        }
+        .shep-band .m-nav-card__desc { text-wrap: pretty; margin: 0; font-size: 14px; color: var(--on-surface-variant); }
+
+        .shep-ledger__head {
+            display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm);
+        }
+        .shep-ledger .m-section__title {
+            font-family: var(--font-display); font-size: 26px; letter-spacing: 0.02em; color: var(--primary); margin: 0;
+        }
+        .shep-ledger__sheet { padding: 0; overflow: hidden; }
+        .shep-rows { list-style: none; margin: 0; padding: 0; }
+        .shep-row {
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: var(--space-sm) var(--space-md); align-items: center;
+            padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--outline-variant);
+        }
+        .shep-row:first-child { border-top: 0; }
+        .shep-row__title { font-family: var(--font-serif); font-size: 17px; color: var(--on-surface); }
+        .shep-row__due { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--on-surface-variant); }
+
+        /* B — Insights strip */
+        .shep-insights {
+            display: flex; align-items: center; gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-lg);
+            text-decoration: none; color: inherit;
+        }
+        .shep-insights:hover { border-color: var(--primary); }
+        .shep-insights:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+        .shep-insights__icon {
+            width: 36px; height: 36px; flex: 0 0 auto;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: var(--radius); background: var(--primary-container); color: var(--on-primary-container);
+        }
+        .shep-insights__icon .material-symbols-outlined { font-size: 20px; }
+        .shep-insights__body { min-width: 0; flex: 1; }
+        .shep-insights__kicker {
+            margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        .shep-insights__title { margin: 2px 0 0; font-family: var(--font-display); font-size: 16px; color: var(--primary); }
+        .shep-insights__desc { margin: 2px 0 0; font-size: 13px; line-height: 1.4; color: var(--on-surface-variant); text-wrap: pretty; }
+        .shep-insights__go { flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--primary); }
+
+        /* C — Care & service row */
+        .shep-group-label {
+            margin: var(--space-xs) 0 0;
+            font-family: var(--font-display); font-size: 14px; font-weight: 600; letter-spacing: 0.03em;
+            color: var(--on-surface-variant);
+        }
+        .shep-band--secondary { margin-top: var(--space-xs); }
+        @media (min-width: 1100px) {
+            .shep-band--secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 75%; }
+        }
+        .shep-band--secondary .m-nav-card { opacity: 0.95; border-left-color: var(--outline); }
+        .shep-band--secondary .m-nav-card__title { font-size: 16px; }
+
+        .proto-states { display: grid; gap: var(--space-md); }
+        @media (min-width: 900px) { .proto-states { grid-template-columns: 1fr 1fr; } }
+        .proto-state {
+            background: var(--background); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            padding: var(--space-sm); min-width: 0;
+        }
+        .proto-state h3 { margin: 0 0 var(--space-sm); font-size: 13px; font-weight: 700; color: var(--on-surface-variant); }
+
+        /* Home after stub */
+        .home-mini { padding: var(--space-md); background: var(--background); }
+        .home-mini__kicker { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .home-grid {
+            display: grid; gap: var(--space-sm); grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        @media (min-width: 900px) { .home-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .home-grid .m-nav-card { min-height: 120px; text-decoration: none; color: inherit; }
+        .home-missing {
+            margin: var(--space-sm) 0 0; padding: var(--space-sm);
+            border: 1px dashed var(--outline); border-radius: var(--radius);
+            font-size: 13px; line-height: 1.45; color: var(--on-surface-variant); background: var(--surface-container-low);
+        }
+        .role-tag {
+            display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: var(--radius-full);
+            font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+            background: var(--tertiary-container); color: var(--on-tertiary-container);
+        }
+        .role-tag--viewer { background: var(--surface-container-high); color: var(--on-surface-variant); }
+    </style>
+</head>
+<body class="proto-body">
+    <header class="proto-bar">
+        <h1>MS-696 · Service Analytics entry moves to Shepherd</h1>
+        <p>
+            Today, <strong>Service Analytics</strong> is injected on the home dashboard for editors (<code>readsAsEditor</code>).
+            Target: the same link lives on <strong>Shepherd Dashboard</strong> instead; home loses the tile. Analytics page unchanged.
+            Fictional congregation only. Pick A, B, or C.
+        </p>
+        <nav class="proto-jump" aria-label="Jump to section">
+            <a href="#variant-a">A · Fifth card</a>
+            <a href="#variant-b">B · Insights strip</a>
+            <a href="#variant-c">C · Care &amp; service row</a>
+            <a href="#states">Empty / many</a>
+            <a href="#home-after">Home (after)</a>
+        </nav>
+    </header>
+
+    <main class="proto-main">
+        <p class="proto-note">
+            Dense desktop scale inside each stage (max 1280px). Resize to <strong>390px</strong> to check phone wrapping.
+            Real destination: <code>analytics.html</code> — label <strong>Service Analytics</strong>, icon <code>monitoring</code>,
+            desc: who has served, how often, and when they last did.
+        </p>
+
+        <!-- Variant A -->
+        <section class="proto-section" id="variant-a">
+            <h2>A · Fifth equal tile in the shep-band</h2>
+            <p class="proto-note">
+                Same row as Documents, People, Tasks, Relations — a fifth <code>m-nav-card</code> for editors.
+                At 1280px the band goes 5-up; below 1100px it falls back to 2-up like today.
+            </p>
+            <div class="proto-stage" role="img" aria-label="Variant A shepherd dashboard, editor view">
+                <p class="proto-stage__cap">Editor · Shepherd Dashboard · Variant A</p>
+                <div class="shep-sheet m-page">
+                    <header class="m-header">
+                        <div class="m-header__inner">
+                            <div class="m-header__lead">
+                                <span class="m-back"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></span>
+                                <div class="m-header__titles"><h1 class="m-header__title">Shepherd Dashboard</h1></div>
+                            </div>
+                            <div class="m-header__rule"></div>
+                        </div>
+                    </header>
+                    <div class="m-page__body">
+                        <div class="shep-band shep-band--five">
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Documents</h2><p class="m-nav-card__desc">Notes and the minutes of a meeting.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">The congregation, one person at a time.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">checklist</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Tasks</h2><p class="m-nav-card__desc">What is due, and what is done.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">hub</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Relations</h2><p class="m-nav-card__desc">The graph, the types, and the families.</p></span></a>
+                            <a href="analytics.html" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">monitoring</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Service Analytics</h2><p class="m-nav-card__desc">Who has served, how often, and when they last did.</p></span></a>
+                        </div>
+                        <section class="m-section shep-ledger">
+                            <div class="shep-ledger__head"><h2 class="m-section__title">To do</h2><span class="m-btn m-btn--quiet m-btn--sm">All tasks</span></div>
+                            <div class="m-card shep-ledger__sheet">
+                                <ul class="shep-rows">
+                                    <li class="shep-row"><span class="shep-row__title">Confirm usher schedule for Lent</span><span class="shep-row__due">Fri</span></li>
+                                </ul>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Pros: one gesture, same vocabulary as the other four places; obvious for elders who live on this desk.</li>
+                <li>Cons: five equal tiles at 1280px is tight; band rhythm changes from the sacred four.</li>
+            </ul>
+        </section>
+
+        <!-- Variant B -->
+        <section class="proto-section" id="variant-b">
+            <h2>B · Compact Insights strip below the band</h2>
+            <p class="proto-note">
+                Primary four stay 4-up. A single horizontal subcard — not a fifth tile — links into analytics with a quieter label (<strong>Insights</strong>).
+            </p>
+            <div class="proto-stage" role="img" aria-label="Variant B shepherd dashboard with insights strip">
+                <p class="proto-stage__cap">Editor · Shepherd Dashboard · Variant B</p>
+                <div class="shep-sheet m-page">
+                    <header class="m-header">
+                        <div class="m-header__inner">
+                            <div class="m-header__lead">
+                                <span class="m-back"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></span>
+                                <div class="m-header__titles"><h1 class="m-header__title">Shepherd Dashboard</h1></div>
+                            </div>
+                            <div class="m-header__rule"></div>
+                        </div>
+                    </header>
+                    <div class="m-page__body">
+                        <div class="shep-band">
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Documents</h2><p class="m-nav-card__desc">Notes and the minutes of a meeting.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">The congregation, one person at a time.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">checklist</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Tasks</h2><p class="m-nav-card__desc">What is due, and what is done.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">hub</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Relations</h2><p class="m-nav-card__desc">The graph, the types, and the families.</p></span></a>
+                        </div>
+                        <a href="analytics.html" class="shep-insights">
+                            <span class="shep-insights__icon" aria-hidden="true"><span class="material-symbols-outlined">monitoring</span></span>
+                            <span class="shep-insights__body">
+                                <p class="shep-insights__kicker">Insights</p>
+                                <p class="shep-insights__title">Service Analytics</p>
+                                <p class="shep-insights__desc">Serving history for Riverbend Chapel — coverage gaps and last dates.</p>
+                            </span>
+                            <span class="shep-insights__go">Open<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;vertical-align:-3px">chevron_right</span></span>
+                        </a>
+                        <section class="m-section shep-ledger">
+                            <div class="shep-ledger__head"><h2 class="m-section__title">To do</h2></div>
+                            <div class="m-card shep-ledger__sheet">
+                                <div class="m-empty"><span class="material-symbols-outlined" aria-hidden="true">checklist</span><p>Nothing is waiting on you.</p></div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Pros: preserves four-up band; analytics reads as reporting, not a sixth “place.”</li>
+                <li>Cons: easier to miss; “Insights” may need a tooltip or stronger affordance on first visit.</li>
+            </ul>
+        </section>
+
+        <!-- Variant C -->
+        <section class="proto-section" id="variant-c">
+            <h2>C · Care &amp; service — secondary row</h2>
+            <p class="proto-note">
+                Primary row stays four equal cards. A labelled second row holds analytics (room for future care/service tools) at lower visual weight.
+            </p>
+            <div class="proto-stage" role="img" aria-label="Variant C shepherd dashboard with secondary row">
+                <p class="proto-stage__cap">Editor · Shepherd Dashboard · Variant C</p>
+                <div class="shep-sheet m-page">
+                    <header class="m-header">
+                        <div class="m-header__inner">
+                            <div class="m-header__lead">
+                                <span class="m-back"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></span>
+                                <div class="m-header__titles"><h1 class="m-header__title">Shepherd Dashboard</h1></div>
+                            </div>
+                            <div class="m-header__rule"></div>
+                        </div>
+                    </header>
+                    <div class="m-page__body">
+                        <div class="shep-band">
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Documents</h2><p class="m-nav-card__desc">Notes and the minutes of a meeting.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">The congregation, one person at a time.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">checklist</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Tasks</h2><p class="m-nav-card__desc">What is due, and what is done.</p></span></a>
+                            <a href="#" class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">hub</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Relations</h2><p class="m-nav-card__desc">The graph, the types, and the families.</p></span></a>
+                        </div>
+                        <p class="shep-group-label">Care &amp; service</p>
+                        <div class="shep-band shep-band--secondary">
+                            <a href="analytics.html" class="m-nav-card">
+                                <span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">monitoring</span></span>
+                                <span class="m-nav-card__body">
+                                    <h2 class="m-nav-card__title">Service Analytics</h2>
+                                    <p class="m-nav-card__desc">Who has served, how often, and when they last did.</p>
+                                </span>
+                            </a>
+                        </div>
+                        <section class="m-section shep-ledger">
+                            <div class="shep-ledger__head"><h2 class="m-section__title">To do</h2></div>
+                            <div class="m-card shep-ledger__sheet">
+                                <ul class="shep-rows">
+                                    <li class="shep-row"><span class="shep-row__title">Review communion prep checklist</span><span class="shep-row__due">Sun</span></li>
+                                    <li class="shep-row"><span class="shep-row__title">Tag new visitor follow-ups</span><span class="shep-row__due">Wed</span></li>
+                                </ul>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <ul class="proto-ask">
+                <li>Pros: clear hierarchy; secondary row can absorb more editor tools later without crowding the four.</li>
+                <li>Cons: two-row layout adds vertical length before the To do ledger.</li>
+            </ul>
+        </section>
+
+        <!-- States -->
+        <section class="proto-section" id="states">
+            <h2>Empty · many (access gate)</h2>
+            <p class="proto-note">
+                <strong>Empty (viewer):</strong> band is only the four shepherd places — no analytics entry (same as today’s shepherd page).
+                <strong>Many (editor):</strong> analytics entry appears per chosen variant (shown here with variant A’s fifth card).
+            </p>
+            <div class="proto-states">
+                <div class="proto-state">
+                    <h3>Empty · viewer <span class="role-tag role-tag--viewer">Member</span></h3>
+                    <div class="shep-band">
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Documents</h2><p class="m-nav-card__desc">Notes and minutes.</p></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2><p class="m-nav-card__desc">One person at a time.</p></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">checklist</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Tasks</h2><p class="m-nav-card__desc">Due and done.</p></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">hub</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Relations</h2><p class="m-nav-card__desc">Graph and families.</p></span></span>
+                    </div>
+                    <p class="proto-note" style="margin-top:12px;margin-bottom:0;font-size:13px;">No Service Analytics tile — gate matches <code>readsAsEditor</code>.</p>
+                </div>
+                <div class="proto-state">
+                    <h3>Many · editor <span class="role-tag">Editor</span></h3>
+                    <div class="shep-band shep-band--five">
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">folder_open</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Documents</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">group</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">People</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">checklist</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Tasks</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">hub</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Relations</h2></span></span>
+                        <span class="m-nav-card" style="border-left-color: var(--tertiary);"><span class="m-medallion" aria-hidden="true"><span class="material-symbols-outlined">monitoring</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Service Analytics</h2><p class="m-nav-card__desc">Added for editors only.</p></span></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Home after -->
+        <section class="proto-section" id="home-after">
+            <h2>Home dashboard (after) — stub</h2>
+            <p class="proto-note">
+                Gated tiles still inject for editors (Forms, Roles, MCP, …) but <strong>Service Analytics</strong> is removed from <code>dashboard-nav.js</code> home list.
+                Static markup never had it; this shows the visible grid without the monitoring tile.
+            </p>
+            <div class="proto-stage">
+                <p class="proto-stage__cap">Editor · Home · no Service Analytics card</p>
+                <div class="home-mini">
+                    <p class="home-mini__kicker">Your pages</p>
+                    <div class="home-grid">
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">menu_book</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Hymns</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">event</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Calendar</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">church</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Services</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">groups</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Membership Directory</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">ballot</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Forms</h2></span></span>
+                        <span class="m-nav-card"><span class="m-medallion"><span class="material-symbols-outlined">volunteer_activism</span></span><span class="m-nav-card__body"><h2 class="m-nav-card__title">Roles Manager</h2></span></span>
+                    </div>
+                    <p class="home-missing" role="note">
+                        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px;vertical-align:-4px;color:var(--on-surface-variant)">info</span>
+                        <strong>Service Analytics</strong> no longer appears here — open it from Shepherd Dashboard instead.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="proto-section">
+            <h2>Pick one</h2>
+            <ul class="proto-ask">
+                <li><strong>A</strong> if analytics is as important as Documents and should share the band equally.</li>
+                <li><strong>B</strong> if the four places stay sacred and analytics is ancillary reporting.</li>
+                <li><strong>C</strong> if you want a growing “care &amp; service” shelf without touching the primary four.</li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>
