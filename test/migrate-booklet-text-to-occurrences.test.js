@@ -348,7 +348,13 @@ test('a country-map data URL is stored once, as a URL, under the size ceiling', 
         prep.body.printableInputs.guide.legacy_prayerCountryImage,
         prep.body.printableInputs.bulletin.legacy_prayerCountryImage
     );
-    assert.equal(prep.body.printableInputs.guide.legacy_prayerCountryImage.startsWith('data:'), false);
+    const storedUrl = prep.body.printableInputs.guide.legacy_prayerCountryImage;
+    assert.equal(storedUrl.startsWith('data:'), false);
+    assert.match(prep.uploads[0].path, /^sunday_typed\/2026-09-06\/country_map\/booklet_[0-9a-f]{16}\./);
+    assert.match(storedUrl, /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/mosaic-hymn-database\.firebasestorage\.app\/o\//);
+    assert.equal(storedUrl.includes(encodeURIComponent(prep.uploads[0].path)), true);
+    assert.match(storedUrl, /[?&]alt=media(?:&|$)/);
+    assert.match(storedUrl, new RegExp('[?&]token=' + prep.uploads[0].token + '(?:&|$)'));
     assert.equal(prep.body.printableInputs.other.note, 'Keep me');
     const imageField = prep.largestBefore.find(field => field.dataUrl);
     assert.ok(imageField);
