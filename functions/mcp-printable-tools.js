@@ -33,6 +33,7 @@
 
 const {z} = require("zod");
 
+const Access = require("./shared/access-core.js");
 const Actor = require("./mcp-actor.js");
 const Firestore = require("./mcp-firestore.js");
 const {jsonResult, refuse} = require("./mcp-result.js");
@@ -94,7 +95,7 @@ function editorTool(server, deps, name, spec, run) {
       // leaving a page nobody can be traced to (CONTEXT.md, Author).
       const actor = readOnly ?
         null : await Actor.requireActor(deps.db, deps.auth.uid);
-      const level = account.permissionLevel || account.role || null;
+      const level = Access.permissionLevelOf(account);
       return jsonResult(await run(args || {}, actor, level));
     } catch (e) {
       return refuse(e && e.message ? e.message : "That did not work.");

@@ -264,10 +264,7 @@ async function buildServer(
   // guidance can name people and say how to handle them. Four places read
   // guidance: the resource list, the resource itself, and the two tools. A
   // rank threaded into three of them is a lock with a door left open.
-  const forCaller = {
-    level: auth && auth.permissionLevel,
-    pastoralAssistant: auth && auth.pastoralAssistant,
-  };
+  const forCaller = auth || {};
 
   server.registerTool("oos_get_hymn_history", {
     title: "Hymn history",

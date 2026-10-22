@@ -48,7 +48,7 @@ function guideEditor() {
                     return;
                 }
                 
-                self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
+                self.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                 self.personId = userData.personId || null;
 
                 const urlParams = new URLSearchParams(window.location.search);

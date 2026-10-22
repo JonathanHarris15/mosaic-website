@@ -605,8 +605,6 @@
     // That is also why every form and every answer carries it explicitly, false
     // included: a query that has to say `elderOnly == false` cannot match a
     // document where the field is simply absent.
-    const ELDER_RANKS = ['elder', 'super_admin'];
-
     function access() {
         if (typeof AccessCore !== 'undefined') return AccessCore;
         if (typeof require === 'function') return require('./access-core.js');
@@ -617,12 +615,8 @@
         const Access = access();
         // Shutting a form to elders is an elder's permission. A Pastoral
         // Assistant holds that permission and is still not counted as an elder.
-        if (Access) return Access.canDecide(rank);
-        const level = rank && typeof rank === 'object'
-            ? (rank.permissionLevel || rank.role || '')
-            : rank;
-        return ELDER_RANKS.indexOf(String(level || '')) !== -1
-            || level === 'pastoral_assistant';
+        if (!Access) return false;
+        return Access.canDecide(rank);
     }
 
     function isElderOnly(form) {

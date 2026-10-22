@@ -2765,7 +2765,7 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         try {
             const userData = await getUserData(user.uid);
-            const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+            const permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
             window.currentPermissionLevel = permissionLevel;
             // Needed before the first edit, so an element decided here records
             // who decided it (MS-246).

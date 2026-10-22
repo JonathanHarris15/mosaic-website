@@ -59,48 +59,80 @@ test('the rules name the AccessCore helpers', () => {
     });
 });
 
-test('isPastoralAssistant is the role or the old flag, and fails closed without a user doc', () => {
+test('isPastoralAssistant is the pastoral_assistant rank, and the boolean is not a grant', () => {
     const body = fnBody(firestore, 'isPastoralAssistant');
-    assert.match(body, /exists\(\/databases\/\$\(database\)\/documents\/users\/\$\(request\.auth\.uid\)\)/);
-    assert.match(body, /pastoralAssistant == true/);
-    assert.match(body, /permissionLevel\(\) == 'pastoral_assistant'/);
+    assert.match(body, /return accessRank\(\) == 'pastoral_assistant';/);
+    assert.doesNotMatch(body, /pastoralAssistant == true/);
+    assert.doesNotMatch(body, /permissionLevel\(\)/);
+    // No user document: accessRank() is '' so the helper is false.
+    const rank = fnBody(firestore, 'accessRank');
+    assert.match(rank, /!userDocExists\(\) \? ''/);
+    const fromMap = fnBody(firestore, 'rankFromMap');
+    assert.match(fromMap, /mapGrants\(perms, 'system\.super_admin'\) \? 'super_admin'/);
+    assert.match(fromMap, /mapGrants\(perms, 'system\.kiosk'\) \? 'kiosk'/);
+    assert.match(fromMap, /mapGrants\(perms, 'visibility\.lift_hidden_tags'\) \? 'pastoral_assistant'/);
+    assert.ok(
+        fromMap.indexOf('system.super_admin') < fromMap.indexOf('system.kiosk')
+            && fromMap.indexOf('system.kiosk') < fromMap.indexOf('visibility.lift_hidden_tags'),
+        'super admin is decided before kiosk, and kiosk before pastoral assistant'
+    );
 });
 
-test('readsAsElder, writesTheRecord and canDecide are isElder or the grant; isAnElder is not widened', () => {
+test('readsAsElder, writesTheRecord and canDecide are the key or the rank; isElder is the count key', () => {
     const reads = fnBody(firestore, 'readsAsElder');
     const writes = fnBody(firestore, 'writesTheRecord');
     const decide = fnBody(firestore, 'canDecide');
     const isElder = fnBody(firestore, 'isElder');
-    assert.match(reads, /isPastoralAssistant\(\)/);
-    assert.match(writes, /isPastoralAssistant\(\)/);
-    assert.match(decide, /isPastoralAssistant\(\)/);
-    assert.doesNotMatch(reads, /!usesPermissionMap\(\) && \(isElder\(\) \|\| isPastoralAssistant\(\)\)/);
-    assert.match(isElder, /permissionLevel\(\) in \['elder', 'super_admin'\]/);
-    assert.doesNotMatch(isElder, /isPastoralAssistant/);
+    const counts = fnBody(firestore, 'countsAsElder');
+    assert.match(reads, /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\) \|\| isPastoralAssistant\(\)/);
+    assert.match(reads, /accountLevelId == 'level_elder'/);
+    assert.match(reads, /accountLevelId == 'level_pastoral_assistant'/);
+    assert.doesNotMatch(reads, /keyOn\(/);
+    assert.match(writes, /mapGrants\(data\.permissions, 'shep\.notes\.write'\) \|\| isPastoralAssistant\(\)/);
+    assert.doesNotMatch(writes, /keyOn\(/);
+    assert.match(decide, /mapGrants\(data\.permissions, 'shep\.tags\.manage'\) \|\| isPastoralAssistant\(\)/);
+    assert.doesNotMatch(decide, /keyOn\(/);
+    assert.doesNotMatch(reads, /usesPermissionMap|pastoralAssistant == true|isElder\(\)/);
+    assert.match(isElder, /return keyOn\('shep\.count_as_elder'\);/);
+    assert.match(counts, /return keyOn\('shep\.count_as_elder'\);/);
+    assert.doesNotMatch(isElder, /isPastoralAssistant|'elder', 'super_admin'/);
+    assert.doesNotMatch(counts, /isPastoralAssistant|'elder', 'super_admin'/);
 });
 
-test('readsAsEditor is isEditor or the role; isEditor includes pastoral_assistant and the old flag', () => {
+test('readsAsEditor is the edit keys, the rank, or isEditor', () => {
     const reads = fnBody(firestore, 'readsAsEditor');
     const isEditor = fnBody(firestore, 'isEditor');
     assert.match(reads, /isPastoralAssistant\(\)/);
-    assert.match(reads, /!usesPermissionMap\(\) && isEditor\(\)/);
-    assert.match(isEditor, /'pastoral_assistant'/);
-    assert.match(isEditor, /isPastoralAssistant\(\)/);
+    assert.match(reads, /isEditor\(\)/);
+    assert.match(isEditor, /mapHas\('directory\.edit_identity'\)/);
+    assert.match(isEditor, /mapHas\('printables\.edit'\)/);
+    assert.doesNotMatch(reads, /usesPermissionMap|pastoralAssistant == true/);
+    assert.match(isEditor,
+        /accessRank\(\) in \['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
+    assert.doesNotMatch(isEditor, /isPastoralAssistant\(\)|pastoralAssistant == true|usesPermissionMap/);
 });
 
-test('the helper composition matches AccessCore for a member Pastoral Assistant', () => {
-    const memberPa = { permissionLevel: 'member', pastoralAssistant: true };
-    assert.equal(Access.readsAsElder(memberPa), true);
-    assert.equal(Access.readsAsEditor(memberPa), true);
-    assert.equal(Access.writesTheRecord(memberPa), true);
-    assert.equal(Access.canDecide(memberPa), true);
-    assert.equal(Access.isAnElder(memberPa), false);
-    assert.equal(Access.writesAsEditor(memberPa), true);
-    assert.match(fnBody(firestore, 'readsAsElder'), /isPastoralAssistant\(\)/);
-    assert.match(fnBody(firestore, 'writesTheRecord'), /isPastoralAssistant\(\)/);
-    assert.match(fnBody(firestore, 'canDecide'), /isPastoralAssistant\(\)/);
-    assert.doesNotMatch(fnBody(firestore, 'isElder'), /pastoralAssistant/);
-    assert.match(fnBody(firestore, 'isEditor'), /isPastoralAssistant\(\)/);
+test('a pastoralAssistant boolean grants nothing; the preset and the rank do', () => {
+    const flag = { permissionLevel: 'member', pastoralAssistant: true };
+    assert.equal(Access.isPastoralAssistant(flag), false);
+    assert.equal(Access.readsAsElder(flag), false);
+    assert.equal(Access.readsAsEditor(flag), false);
+    assert.equal(Access.writesTheRecord(flag), false);
+    assert.equal(Access.canDecide(flag), false);
+    assert.equal(Access.isAnElder(flag), false);
+    assert.equal(Access.writesAsEditor(flag), false);
+
+    const preset = { accountLevelId: 'level_pastoral_assistant' };
+    assert.equal(Access.isPastoralAssistant(preset), true);
+    assert.equal(Access.readsAsElder(preset), true);
+    assert.equal(Access.readsAsEditor(preset), true);
+    assert.equal(Access.writesTheRecord(preset), true);
+    assert.equal(Access.canDecide(preset), true);
+    assert.equal(Access.isAnElder(preset), false);
+    assert.equal(Access.writesAsEditor(preset), true);
+    assert.equal(Access.isPastoralAssistant('pastoral_assistant'), true);
+    assert.equal(Access.readsAsElder('pastoral_assistant'), true);
+    assert.equal(Access.isAnElder('pastoral_assistant'), false);
 });
 
 test('every elder-gated read names readsAsElder, so a forgotten collection fails', () => {
@@ -159,7 +191,7 @@ test('a Pastoral Assistant may write the record collections and nothing else eld
 
     const notes = blockFor(
         firestore,
-        /match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n    \}/,
+        /match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n {4}\}/,
         'shepherding_notes'
     );
     assert.match(notes, /allow read: if readsAsElder\(\)/);
@@ -169,7 +201,7 @@ test('a Pastoral Assistant may write the record collections and nothing else eld
     // Assistant who writes a note must be able to update that one field.
     const person = blockFor(
         firestore,
-        /match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/,
+        /match \/people\/\{personId\}\s*\{([\s\S]*?)\n {6}match/,
         'people'
     );
     assert.match(person, /allow update: if canDecide\(\)/);
@@ -183,7 +215,7 @@ test('a Pastoral Assistant may write the record collections and nothing else eld
 test('the Pastoral Record admits a Pastoral Assistant to create, update and delete', () => {
     const block = blockFor(
         firestore,
-        /match \/people\/\{personId\}\/shepherding_activity\/\{activityId\}\s*\{([\s\S]*?)\n    \}/,
+        /match \/people\/\{personId\}\/shepherding_activity\/\{activityId\}\s*\{([\s\S]*?)\n {4}\}/,
         'shepherding_activity'
     );
     assert.match(block, /allow read: if readsAsElder\(\)/);
@@ -193,12 +225,12 @@ test('the Pastoral Record admits a Pastoral Assistant to create, update and dele
 
 test('tag vocabulary, views, relationships and prayer requests admit a Pastoral Assistant write', () => {
     const granted = {
-        shepherding_tags: /match \/shepherding_tags\/\{tagId\}\s*\{([\s\S]*?)\n    \}/,
-        shepherding_views: /match \/shepherding_views\/\{viewId\}\s*\{([\s\S]*?)\n    \}/,
-        relationships: /match \/relationships\/\{edgeId\}\s*\{([\s\S]*?)\n    \}/,
-        relationship_types: /match \/relationship_types\/\{typeId\}\s*\{([\s\S]*?)\n    \}/,
-        relationship_groups: /match \/relationship_groups\/\{groupId\}\s*\{([\s\S]*?)\n    \}/,
-        prayer_requests: /match \/prayer_requests\/\{requestId\}\s*\{([\s\S]*?)\n      \}/,
+        shepherding_tags: /match \/shepherding_tags\/\{tagId\}\s*\{([\s\S]*?)\n {4}\}/,
+        shepherding_views: /match \/shepherding_views\/\{viewId\}\s*\{([\s\S]*?)\n {4}\}/,
+        relationships: /match \/relationships\/\{edgeId\}\s*\{([\s\S]*?)\n {4}\}/,
+        relationship_types: /match \/relationship_types\/\{typeId\}\s*\{([\s\S]*?)\n {4}\}/,
+        relationship_groups: /match \/relationship_groups\/\{groupId\}\s*\{([\s\S]*?)\n {4}\}/,
+        prayer_requests: /match \/prayer_requests\/\{requestId\}\s*\{([\s\S]*?)\n {6}\}/,
     };
     Object.keys(granted).forEach(name => {
         const block = blockFor(firestore, granted[name], name);
@@ -210,14 +242,17 @@ test('tag vocabulary, views, relationships and prayer requests admit a Pastoral 
 test('people_tags writes admit a Pastoral Assistant via canDecide', () => {
     const block = blockFor(
         firestore,
-        /match \/people_tags\/\{tagId\}\s*\{([\s\S]*?)\n    \}/,
+        /match \/people_tags\/\{tagId\}\s*\{([\s\S]*?)\n {4}\}/,
         'people_tags'
     );
     assert.match(block, /allow create, update, delete: if isEditor\(\) \|\| canDecide\(\)/);
 });
 
 test('isElder stays counted-as-elder only — no Pastoral Assistant in the helper', () => {
-    assert.doesNotMatch(fnBody(firestore, 'isElder'), /isPastoralAssistant|pastoralAssistant/);
+    const body = fnBody(firestore, 'isElder');
+    assert.match(body, /return keyOn\('shep\.count_as_elder'\);/);
+    assert.doesNotMatch(body, /isPastoralAssistant|pastoralAssistant/);
+    assert.match(fnBody(firestore, 'countsAsElder'), /return keyOn\('shep\.count_as_elder'\);/);
 });
 
 test('every isEditor write still names isEditor, not the grant', () => {
@@ -232,29 +267,33 @@ test('every isEditor write still names isEditor, not the grant', () => {
 });
 
 test('form_ledger is still sealed', () => {
-    const block = blockFor(firestore, /match \/form_ledger\/\{entryId\}\s*\{([\s\S]*?)\n    \}/, 'form_ledger');
+    const block = blockFor(firestore, /match \/form_ledger\/\{entryId\}\s*\{([\s\S]*?)\n {4}\}/, 'form_ledger');
     assert.match(block, /allow read, write: if false/);
 });
 
 test('a user cannot write pastoralAssistant on their own user doc', () => {
-    const users = blockFor(firestore, /match \/users\/\{userId\}\s*\{([\s\S]*?)\n    \}/, 'users');
+    const users = blockFor(firestore, /match \/users\/\{userId\}\s*\{([\s\S]*?)\n {4}\}/, 'users');
     assert.match(users, /affectedKeys\(\)\.hasOnly\(\['dashboardCardOrder'\]\)/);
     assert.doesNotMatch(
         users,
         /hasOnly\(\[[^\]]*pastoralAssistant/,
         'self-update must not list pastoralAssistant as a writable key'
     );
+    assert.match(users, /request\.resource\.data\.accountLevelId == 'level_viewer'/);
+    assert.match(users, /!\('permissions' in request\.resource\.data\)/);
     assert.match(
         users,
-        /pastoralAssistant != true|!request\.resource\.data\.pastoralAssistant/,
+        /request\.resource\.data\.pastoralAssistant != true/,
         'self-create must refuse pastoralAssistant: true'
     );
 });
 
 test('rankCanSee admits a Pastoral Assistant to the editor and elder rungs', () => {
     const body = fnBody(firestore, 'rankCanSee');
-    assert.match(body, /readsAsEditor\(\) && visibility in \[[^\]]*'editor'/);
-    assert.match(body, /readsAsElder\(\) && visibility == 'elder'/);
+    assert.match(body, /visibility == 'member' && \(isMember\(\) \|\| mapHas\('visibility\.rung\.member'\)\)/);
+    assert.match(body, /visibility == 'participant' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.participant'\)\)/);
+    assert.match(body, /visibility == 'editor' && \(readsAsEditor\(\) \|\| mapHas\('visibility\.rung\.editor'\)\)/);
+    assert.match(body, /visibility == 'elder' && \(readsAsElder\(\) \|\| mapHas\('visibility\.rung\.elder'\)\)/);
 });
 
 test('storage restates the same helpers and admits a Pastoral Assistant on elder and editor reads', () => {
@@ -262,10 +301,18 @@ test('storage restates the same helpers and admits a Pastoral Assistant on elder
         assert.match(storage, new RegExp('function ' + name + '\\(\\)'), name);
     });
     const pa = fnBody(storage, 'isPastoralAssistantAccount');
-    assert.match(pa, /pastoralAssistant == true/);
-    assert.match(fnBody(storage, 'readsAsElderAccount'), /isElderAccount\(\) \|\| isPastoralAssistantAccount\(\)/);
-    assert.match(fnBody(storage, 'readsAsEditorAccount'), /isEditorAccount\(\) \|\| isPastoralAssistantAccount\(\)/);
-    assert.match(fnBody(storage, 'canDecideAccount'), /isElderAccount\(\) \|\| isPastoralAssistantAccount\(\)/);
+    assert.match(pa, /accessRankAccount\(\) == 'pastoral_assistant'/);
+    assert.doesNotMatch(pa, /pastoralAssistant == true/);
+    assert.match(fnBody(storage, 'isElderAccount'), /return keyOnAccount\('shep\.count_as_elder'\);/);
+    assert.doesNotMatch(fnBody(storage, 'isElderAccount'), /'elder', 'super_admin'/);
+    assert.match(fnBody(storage, 'readsAsElderAccount'),
+        /mapGrants\(data\.permissions, 'visibility\.lift_hidden_tags'\) \|\| isPastoralAssistantAccount\(\)/);
+    assert.doesNotMatch(fnBody(storage, 'readsAsElderAccount'), /keyOnAccount\(/);
+    assert.match(fnBody(storage, 'readsAsEditorAccount'), /isPastoralAssistantAccount\(\)/);
+    assert.match(fnBody(storage, 'readsAsEditorAccount'), /isEditorAccount\(\)/);
+    assert.match(fnBody(storage, 'canDecideAccount'),
+        /mapGrants\(data\.permissions, 'shep\.tags\.manage'\) \|\| isPastoralAssistantAccount\(\)/);
+    assert.doesNotMatch(fnBody(storage, 'canDecideAccount'), /keyOnAccount\(/);
 
     const elderReads = storageCode.split('\n').filter(line =>
         /^\s*allow /.test(line) && /\bread\b/.test(line) &&
@@ -279,7 +326,13 @@ test('storage restates the same helpers and admits a Pastoral Assistant on elder
     );
     assert.deepEqual(editorReads, [], 'storage editor reads missing Pastoral Assistant:\n' + editorReads.join('\n'));
 
-    assert.match(fnBody(storage, 'rankOrParticipantSees'), /pastoralAssistant == true/);
+    const see = fnBody(storage, 'rankOrParticipantSees');
+    assert.match(see, /mapHas\('visibility\.rung\.member'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.participant'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.editor'\)/);
+    assert.match(see, /mapHas\('visibility\.rung\.elder'\)/);
+    assert.match(see, /readsAsElderAccount\(\)/);
+    assert.doesNotMatch(see, /pastoralAssistant == true/);
 });
 
 test('every elder-read path listed in the ticket is present and admits a Pastoral Assistant', () => {

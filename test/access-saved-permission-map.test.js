@@ -8,71 +8,132 @@ const Access = require('../public/access-core.js');
 const Levels = require('../public/account-levels-core.js');
 const Catalog = require('../public/permission-catalog.js');
 
-// MS-725 (ADR 0082). firestore.rules can only read the stored users/{uid}
-// document, and a UI gate that mirrors a rule has to get the same answer.
-// Two things get in the way, both deliberate:
-//
-//   * normalizeAccount() synthesises a permission map from the preset for a
-//     legacy account, so "has a permissions object" is not "an admin saved a
-//     permission map".
-//   * auth.js withResolvedLevel() rewrites BOTH fields the rules read:
-//     `permissions` becomes the effective map, `permissionLevel` becomes the
-//     canonical rung, before any page sees them.
-//
-// So the stored pair is carried forward, and these are the tests that the
-// carrying works and that the gate reads it.
+// MS-776. A saved `permissions` map is the whole answer. A false key stays
+// false and does not fall through to a builtin accountLevelId. An object
+// with no permissions field and a builtin accountLevelId uses that preset.
+// A permissions field that is present but not a map grants nothing.
+// permissionLevel, role, and pastoralAssistant grant nothing.
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8');
 
-// The rule, restated. Kept here rather than imported so a change to the gate
-// has to be made twice on purpose.
-const EDITOR_LEVELS = ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'];
-function rulesWouldAdmit(storedDoc, key) {
-    const level = ('permissionLevel' in storedDoc)
-        ? storedDoc.permissionLevel : storedDoc.role;
-    const pa = level === 'pastoral_assistant' || storedDoc.pastoralAssistant === true;
-    const map = storedDoc.permissions;
-    if (map && typeof map === 'object') return map[key] === true;
-    return EDITOR_LEVELS.includes(level) || pa;
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
 }
 
-test('a raw document with a permissions map has a saved map', () => {
-    const doc = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset('editor'));
-    assert.ok(Levels.savedPermissionMap(doc));
-    assert.equal(Levels.savedPermissionMap(doc)['services.builder.edit'], true);
+// The rule, restated beside Access.writesWith. A change to the gate has to
+// be made twice on purpose. role, permissionLevel, and pastoralAssistant
+// are not read.
+function rulesWouldAdmit(storedDoc, key) {
+    if (typeof storedDoc === 'string') {
+        const preset = Levels.BUILTIN_LEVEL_IDS[storedDoc]
+            ? storedDoc
+            : Levels.presetKeyFromAccountLevelId(storedDoc);
+        if (!preset) return false;
+        const map = Levels.buildPresetPermissions(preset);
+        return map['system.super_admin'] === true || map[key] === true;
+    }
+    if (!storedDoc || typeof storedDoc !== 'object') return false;
+    if (Object.prototype.hasOwnProperty.call(storedDoc, 'permissions')) {
+        const raw = storedDoc.permissions;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+        if (raw['system.super_admin'] === true) return true;
+        return raw[key] === true;
+    }
+    const preset = Levels.presetKeyFromAccountLevelId(storedDoc.accountLevelId);
+    if (!preset) return false;
+    const map = Levels.buildPresetPermissions(preset);
+    return map['system.super_admin'] === true || map[key] === true;
+}
+
+test('the removed ladder readers are not on the account-levels core', () => {
+    for (const name of [
+        'savedPermissionMap',
+        'storedPermissionLevel',
+        'migrateLegacyUser',
+        'storedMarkers',
+        'presetKeyFromPermissionLevel',
+    ]) {
+        assert.equal(Levels[name], undefined, name);
+    }
 });
 
-test('a legacy document has none, however editor-ish its level string', () => {
-    assert.equal(Levels.savedPermissionMap({ permissionLevel: 'editor' }), null);
-    assert.equal(Levels.savedPermissionMap({ role: 'super_admin' }), null);
-    assert.equal(Levels.savedPermissionMap('editor'), null);
-    assert.equal(Levels.savedPermissionMap(null), null);
-});
+test('a saved permissions map is the whole answer, and a false key stays false', () => {
+    const editor = account('editor');
+    assert.equal(editor.permissions['services.builder.edit'], true);
+    assert.equal(Access.canFixSundayService(editor), true);
 
-test('savedPermissions, once carried, outranks a synthesised permissions map', () => {
-    const resolved = {
+    const revoked = {
+        accountLevelId: 'level_editor',
         permissionLevel: 'editor',
-        permissions: Levels.buildPresetPermissions('editor'),
-        savedPermissions: null,
+        role: 'editor',
+        permissions: Object.assign({}, editor.permissions, {
+            'services.builder.edit': false,
+        }),
     };
-    assert.equal(Levels.savedPermissionMap(resolved), null,
-        'a legacy account resolved by auth.js must not look saved');
+    assert.equal(Levels.accessMap(revoked)['services.builder.edit'], false);
+    assert.equal(Access.canFixSundayService(revoked), false);
+    assert.equal(Access.canEditEvents(revoked), true);
+    assert.equal(Levels.accessRank(revoked), 'editor');
 
-    const saved = { permissions: { a: true }, savedPermissions: { b: true } };
-    assert.deepEqual(Levels.savedPermissionMap(saved), { b: true });
+    const partial = {
+        accountLevelId: 'level_editor',
+        permissions: {'services.builder.edit': false, 'core.sign_in': true},
+    };
+    assert.equal(Access.canFixSundayService(partial), false);
+    assert.equal(Levels.accessRank(partial), 'viewer');
 });
 
-test('storedPermissionLevel reads the stored string, not the canonical rung', () => {
-    assert.equal(Levels.storedPermissionLevel({ permissionLevel: 'member' }), 'member');
-    assert.equal(Levels.storedPermissionLevel({ role: 'editor' }), 'editor');
-    // accountLevelId pushes canonicalPermissionLevel up; the rules cannot see it.
-    assert.equal(Levels.canonicalPermissionLevel(
-        { permissionLevel: 'member', accountLevelId: 'level_editor' }), 'editor');
-    assert.equal(Levels.storedPermissionLevel(
-        { permissionLevel: 'member', accountLevelId: 'level_editor' }), 'member');
-    assert.equal(Levels.storedPermissionLevel(
-        { permissionLevel: 'elder', storedLevel: 'member' }), 'member');
+test('no permissions field and a builtin accountLevelId uses the preset', () => {
+    const doc = {
+        accountLevelId: 'level_editor',
+        permissionLevel: 'member',
+        role: 'viewer',
+        pastoralAssistant: true,
+    };
+    assert.equal(Levels.accessRank(doc), 'editor');
+    assert.equal(Access.canFixSundayService(doc), true);
+    assert.equal(Access.canEditEvents(doc), true);
+    assert.equal(Access.isPastoralAssistant(doc), false);
+    assert.equal(Levels.accessRank({accountLevelId: 'level_pastoral_assistant'}), 'pastoral_assistant');
+    assert.equal(Access.canDecide({accountLevelId: 'level_pastoral_assistant'}), true);
+    assert.equal(Access.isAnElder({accountLevelId: 'level_pastoral_assistant'}), false);
+});
+
+test('permissions present but not a map grants no keys and ignores accountLevelId', () => {
+    for (const permissions of [null, [], 'editor']) {
+        const doc = {
+            accountLevelId: 'level_editor',
+            permissionLevel: 'super_admin',
+            role: 'elder',
+            permissions,
+        };
+        assert.equal(Access.canFixSundayService(doc), false, String(permissions));
+        assert.equal(Access.writesAsEditor(doc), false, String(permissions));
+        assert.equal(Levels.accessRank(doc), 'viewer', String(permissions));
+        assert.equal(Levels.accessMap(doc)['services.builder.edit'], false, String(permissions));
+    }
+});
+
+test('permissionLevel and role grant nothing', () => {
+    const ladder = {permissionLevel: 'editor', role: 'super_admin', pastoralAssistant: true};
+    assert.equal(Levels.accessRank(ladder), 'viewer');
+    assert.equal(Access.canFixSundayService(ladder), false);
+    assert.equal(Access.writesAsEditor(ladder), false);
+    assert.equal(Access.canDecide(ladder), false);
+    assert.equal(Access.readsAsElder(ladder), false);
+    assert.equal(Access.isPastoralAssistant(ladder), false);
+    assert.equal(Access.canFixSundayService({role: 'elder'}), false);
+    assert.equal(Access.canFixSundayService(null), false);
+});
+
+test('a rank label and a builtin id are that preset', () => {
+    assert.equal(Levels.accessRank('editor'), 'editor');
+    assert.equal(Levels.accessRank('level_editor'), 'editor');
+    assert.equal(Access.canFixSundayService('editor'), true);
+    assert.equal(Access.canFixSundayService('level_pastoral_assistant'), true);
+    assert.equal(Access.isAnElder('pastoral_assistant'), false);
+    assert.equal(Access.canDecide('pastoral_assistant'), true);
 });
 
 const DOOR_KEYS = [
@@ -88,23 +149,34 @@ test('every door key is a real MS-695 permission key', () => {
 test('writesWith agrees with the rule on every account shape and every key', () => {
     const docs = [];
     for (const preset of Levels.BUILTIN_PRESET_KEYS) {
-        docs.push(['saved ' + preset,
-            Levels.userWriteFromLevel(Levels.accountLevelIdForPreset(preset))]);
+        docs.push(['saved ' + preset, account(preset)]);
+        docs.push(['id only ' + preset, {
+            accountLevelId: Levels.accountLevelIdForPreset(preset),
+            permissionLevel: 'viewer',
+            role: 'member',
+            pastoralAssistant: true,
+        }]);
+        docs.push(['rank string ' + preset, preset]);
+        docs.push(['level id string ' + preset, Levels.accountLevelIdForPreset(preset)]);
     }
-    for (const level of ['editor', 'admin', 'elder', 'super_admin',
-        'pastoral_assistant', 'member', 'viewer', 'kiosk']) {
-        docs.push(['legacy ' + level, { permissionLevel: level, role: level }]);
-    }
-    docs.push(['legacy member with the old PA flag',
-        { permissionLevel: 'member', pastoralAssistant: true }]);
-    docs.push(['legacy role-only editor', { role: 'editor' }]);
+    docs.push(['ladder editor', {permissionLevel: 'editor', role: 'editor'}]);
+    docs.push(['ladder role-only editor', {role: 'editor'}]);
+    docs.push(['flag', {permissionLevel: 'member', pastoralAssistant: true}]);
+    docs.push(['null map', {accountLevelId: 'level_editor', permissions: null}]);
+    docs.push(['array map', {accountLevelId: 'level_super_admin', permissions: []}]);
     for (const key of DOOR_KEYS) {
-        docs.push([`custom member + ${key}, stored level editor`, Object.assign(
+        docs.push(['custom member + ' + key, Object.assign(
             Levels.userWriteFromLevel('level_custom_x', {
                 custom: true, presetKey: 'member',
                 permissions: Object.assign({},
-                    Levels.buildPresetPermissions('member'), { [key]: true }),
-            }), { permissionLevel: 'editor', role: 'editor' })]);
+                    Levels.buildPresetPermissions('member'), {[key]: true}),
+            }), {permissionLevel: 'editor', role: 'editor'})]);
+        const turnedOff = Object.assign({}, account('editor').permissions, {[key]: false});
+        docs.push(['editor map with ' + key + ' false', {
+            accountLevelId: 'level_editor',
+            permissionLevel: 'editor',
+            permissions: turnedOff,
+        }]);
     }
 
     for (const [label, doc] of docs) {
@@ -115,34 +187,20 @@ test('writesWith agrees with the rule on every account shape and every key', () 
     }
 });
 
-test('a saved map revokes: an editor-named account with the key off is refused', () => {
-    const revoked = Object.assign(
-        Levels.userWriteFromLevel('level_custom_x', {
-            custom: true, presetKey: 'member',
-            permissions: Object.assign({}, Levels.buildPresetPermissions('member'), {
-                'services.builder.edit': false,
-            }),
-        }), { permissionLevel: 'editor', role: 'editor' });
-    assert.equal(revoked.permissionLevel, 'editor');
-    assert.equal(Access.canFixSundayService(revoked), false);
-});
-
-test('a legacy editor with no saved map still may', () => {
-    assert.equal(Access.canFixSundayService({ permissionLevel: 'editor' }), true);
-    assert.equal(Access.canFixSundayService({ role: 'elder' }), true);
-    assert.equal(Access.canFixSundayService({ permissionLevel: 'member' }), false);
-    assert.equal(Access.canFixSundayService(null), false);
-});
-
 test('pageFlags().account can be handed back to a gate', () => {
-    const legacy = { permissionLevel: 'editor' };
-    assert.equal(Access.canEditEvents(Access.pageFlags(legacy).account), true);
+    const ladder = {permissionLevel: 'editor'};
+    assert.equal(Access.canEditEvents(Access.pageFlags(ladder).account), false);
+    assert.equal(Access.pageFlags(ladder).currentPermissionLevel, 'viewer');
 
-    const savedEditor = Levels.userWriteFromLevel(
-        Levels.accountLevelIdForPreset('editor'));
+    assert.equal(Access.canEditEvents(Access.pageFlags('editor').account), true);
+
+    const savedEditor = account('editor');
     assert.equal(Access.canEditEvents(Access.pageFlags(savedEditor).account),
         Access.canEditEvents(savedEditor));
     assert.equal(Access.canFixSundayService(Access.pageFlags(savedEditor).account), true);
+
+    const idOnly = {accountLevelId: 'level_editor'};
+    assert.equal(Access.canFixSundayService(Access.pageFlags(idOnly).account), true);
 });
 
 function resolveLikeAPage(storedDoc) {
@@ -179,25 +237,48 @@ function resolveLikeAPage(storedDoc) {
     return { resolved: sandbox.withResolvedLevel(storedDoc), Access: sandbox.AccessCore };
 }
 
-test('a legacy editor keeps the Sunday gate after auth.js resolves them', () => {
-    const stored = { permissionLevel: 'editor', role: 'editor' };
+test('a ladder field stays a viewer after auth.js resolves it', () => {
+    const stored = {permissionLevel: 'editor', role: 'editor'};
     const { resolved, Access: A } = resolveLikeAPage(stored);
-
-    assert.ok(resolved.permissions, 'the effective map is handed to the page');
-    assert.equal(resolved.savedPermissions, null, 'and the document had none');
-    assert.equal(resolved.storedLevel, 'editor');
-
+    assert.equal(resolved.permissionLevel, 'viewer');
+    assert.equal(resolved.pastoralAssistant, false);
+    assert.equal(resolved.savedPermissions, undefined);
+    assert.equal(A.canFixSundayService(resolved), false);
+    assert.equal(A.canEditEvents(resolved), false);
     assert.equal(A.canFixSundayService(resolved), rulesWouldAdmit(stored, 'services.builder.edit'));
-    assert.equal(A.canEditEvents(resolved), rulesWouldAdmit(stored, 'calendar.events.edit'));
+});
+
+test('a pastoralAssistant flag does not resolve to Pastoral Assistant', () => {
+    const stored = {permissionLevel: 'member', pastoralAssistant: true};
+    const { resolved, Access: A } = resolveLikeAPage(stored);
+    assert.equal(resolved.permissionLevel, 'viewer');
+    assert.equal(resolved.pastoralAssistant, false);
+    assert.equal(A.canDecide(resolved), false);
+    assert.equal(A.readsAsElder(resolved), false);
+});
+
+test('a builtin id with no permissions field resolves to that preset', () => {
+    const stored = {
+        accountLevelId: 'level_editor',
+        permissionLevel: 'member',
+        role: 'viewer',
+        pastoralAssistant: true,
+    };
+    const { resolved, Access: A } = resolveLikeAPage(stored);
+    assert.equal(resolved.permissionLevel, 'editor');
+    assert.equal(resolved.pastoralAssistant, false);
+    assert.equal(resolved.permissions['services.builder.edit'], true);
+    assert.equal(A.canFixSundayService(resolved), true);
     assert.equal(A.canEditEvents(resolved), true);
 });
 
 test('a saved account is resolved to the same answer the rules give', () => {
     for (const preset of ['editor', 'elder', 'member', 'viewer', 'pastoral_assistant']) {
-        const stored = Levels.userWriteFromLevel(
-            Levels.accountLevelIdForPreset(preset));
+        const stored = account(preset);
         const { resolved, Access: A } = resolveLikeAPage(stored);
-        assert.ok(resolved.savedPermissions, preset + ': the saved map is carried');
+        assert.equal(resolved.permissionLevel, preset);
+        assert.equal(resolved.savedPermissions, undefined, preset);
+        assert.ok(resolved.permissions, preset);
         for (const key of DOOR_KEYS) {
             assert.equal(A.writesWith(resolved, key), rulesWouldAdmit(stored, key),
                 `${preset} / ${key}`);
@@ -206,26 +287,35 @@ test('a saved account is resolved to the same answer the rules give', () => {
 });
 
 test('a revoked key is still revoked after resolution', () => {
-    const stored = Object.assign(
-        Levels.userWriteFromLevel('level_custom_x', {
-            custom: true, presetKey: 'member',
-            permissions: Object.assign({}, Levels.buildPresetPermissions('member'), {
-                'services.builder.edit': false,
-                'printables.edit': true,
-            }),
-        }), { permissionLevel: 'editor', role: 'editor' });
+    const stored = Object.assign(account('editor'), {
+        permissionLevel: 'editor',
+        role: 'editor',
+        permissions: Object.assign({}, account('editor').permissions, {
+            'services.builder.edit': false,
+            'printables.edit': true,
+        }),
+    });
     const { resolved, Access: A } = resolveLikeAPage(stored);
-    assert.equal(resolved.permissionLevel, 'editor', 'the page still shows the rung');
+    assert.equal(resolved.permissionLevel, 'editor');
     assert.equal(A.canFixSundayService(resolved), false);
     assert.equal(A.writesWith(resolved, 'printables.edit'), true);
 });
 
-test('the phone profile carries the stored pair to its gate', () => {
+test('permissions that are not a map stay empty after resolution', () => {
+    const stored = {accountLevelId: 'level_super_admin', permissions: null, permissionLevel: 'super_admin'};
+    const { resolved, Access: A } = resolveLikeAPage(stored);
+    assert.equal(resolved.permissionLevel, 'viewer');
+    assert.equal(A.canFixSundayService(resolved), false);
+    assert.equal(A.accessesAdminDashboard(resolved), false);
+});
+
+test('the phone profile carries the account map to its gate', () => {
     const src = read(path.join('mobile', 'data.js'));
     const profile = src.slice(src.indexOf('function loadProfile'),
         src.indexOf('function onUser'));
-    assert.match(profile, /savedPermissions: account\.savedPermissions \|\| null/);
-    assert.match(profile, /storedLevel: account\.storedLevel \|\| null/);
+    assert.match(profile, /permissions: account\.permissions \|\| null/);
+    assert.doesNotMatch(profile, /savedPermissions/);
+    assert.doesNotMatch(profile, /storedLevel/);
 
     const app = read(path.join('mobile', 'app.js'));
     assert.match(app, /AccessCore\.canFixSundayService\(user\)/,

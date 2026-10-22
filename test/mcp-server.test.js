@@ -18,6 +18,15 @@ const path = require('node:path');
 const Module = require('node:module');
 
 const FUNCTIONS = path.join(__dirname, '..', 'functions');
+const Levels = require(path.join(__dirname, '..', 'public', 'account-levels-core.js'));
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    const base = id
+        ? Levels.userWriteFromLevel(id)
+        : {accountLevelId: null, permissions: {}};
+    return Object.assign({uid: 'uid-1'}, base, extra || {});
+}
 
 // The stubs each tool should end up calling.
 const calls = [];
@@ -189,11 +198,7 @@ async function connectAs(permissionLevel, extras) {
 
     const auth = typeof permissionLevel === 'object'
         ? Object.assign({uid: 'uid-1'}, permissionLevel)
-        : {
-            uid: 'uid-1',
-            permissionLevel,
-            pastoralAssistant: !!(extras && extras.pastoralAssistant),
-        };
+        : account(permissionLevel, extras);
 
     const {buildServer} = require(path.join(FUNCTIONS, 'mcp-server.js'));
     const server = await buildServer({
@@ -440,8 +445,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant can read a profile, write a note, create a document and a task', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         for (const [name, args] of [
             ['shep_get_profile', {personId: 'p1'}],
             ['shep_write_note', {personId: 'p1', type: 'Elder Meeting', markdown: 'x'}],
@@ -454,8 +458,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant is admitted on shepherding decision writes', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         const cases = [
             ['shep_set_status', {personId: 'p1', urgency: 'urgent', importance: 'important'}],
             ['shep_add_tags', {personId: 'p1', tagIds: ['t1']}],
@@ -471,8 +474,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant may create a calendar event and is not told to become an elder', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         const result = await client.callTool({
             name: 'cal_create_event',
             arguments: {name: 'Meeting', visibility: 'elder', date: '2026-09-20'},
@@ -482,8 +484,7 @@ describe('the Order of Service MCP server', () => {
     });
 
     test('a Pastoral Assistant is not refused Order of Service and Printable writes for rank', async () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
-        const {client} = await connectAs(pa);
+        const {client} = await connectAs('pastoral_assistant');
         for (const name of [
             'oos_update_liturgy', 'oos_update_note', 'oos_update_guidance',
             'oos_score_theme', 'printable_create',
@@ -1175,7 +1176,7 @@ describe('what the MCP Manager is told', () => {
 
     const deps = (siteUrl) => ({
         db: DB,
-        auth: {uid: 'uid-1', permissionLevel: 'editor'},
+        auth: account('editor'),
         geminiKey: () => 'fake-key',
         fieldValues: FIELD_VALUES,
         siteUrl,

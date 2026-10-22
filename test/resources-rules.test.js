@@ -32,7 +32,7 @@ const firestoreBlock = (name) => {
 };
 
 const storageBlock = () => {
-    const m = /match \/resources\/\{resourceId\}\/\{fileName\}\s*\{([\s\S]*?)\n    \}/
+    const m = /match \/resources\/\{resourceId\}\/\{fileName\}\s*\{([\s\S]*?)\n {4}\}/
         .exec(storageRules);
     assert.ok(m, 'the Resources Storage rule has moved or been renamed');
     return m[1];
@@ -100,8 +100,11 @@ test('AccessCore.canEditResources is the mirror of the write door', () => {
     const savedMember = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset('member'));
     assert.equal(Access.canEditResources(savedMember), false);
 
-    // A legacy account with no saved map keeps the level names.
-    assert.equal(Access.canEditResources({ permissionLevel: 'editor' }), true);
+    // The editor preset and the rank label open the key. A stored
+    // permissionLevel string is not read.
+    assert.equal(Access.canEditResources('editor'), true);
+    assert.equal(Access.canEditResources({ accountLevelId: 'level_editor' }), true);
+    assert.equal(Access.canEditResources({ permissionLevel: 'editor' }), false);
     assert.equal(Access.canEditResources({ permissionLevel: 'member' }), false);
     assert.equal(Access.canEditResources(null), false);
 
@@ -121,21 +124,28 @@ test('AccessCore.readsAsMember is the mirror of isMember()', () => {
     const Access = require('../public/access-core.js');
     // The rung names in firestore.rules isMember(), read out of the file so
     // the mirror cannot drift from the thing it mirrors.
-    const m = /function isMember\(\) \{[\s\S]*?permissionLevel\(\) in \[([^\]]*)\]/
+    const m = /function isMember\(\) \{[\s\S]*?accessRank\(\) in \[([^\]]*)\]/
         .exec(firestoreRules);
-    assert.ok(m, 'firestore.rules no longer defines isMember() that way');
+    assert.ok(m, 'firestore.rules no longer defines isMember() from accessRank()');
     const levels = m[1].match(/'[a-z_]+'/g).map(s => s.slice(1, -1));
     assert.deepEqual(Access.MEMBER_READ_LEVELS.slice(), levels);
 
+    const Levels = require('../public/account-levels-core.js');
     for (const level of levels) {
-        assert.equal(Access.readsAsMember({ permissionLevel: level }), true, level);
+        assert.equal(Access.readsAsMember(level), true, level);
+        assert.equal(Access.readsAsMember({ permissionLevel: level }), false,
+            'permissionLevel ' + level + ' is not a grant');
+        assert.equal(Access.readsAsMember({ accountLevelId: Levels.accountLevelIdForPreset(level) }), true, level);
     }
+    assert.equal(Access.readsAsMember('viewer'), false);
+    assert.equal(Access.readsAsMember('kiosk'), false);
     assert.equal(Access.readsAsMember({ permissionLevel: 'viewer' }), false);
     assert.equal(Access.readsAsMember({ permissionLevel: 'kiosk' }), false);
     assert.equal(Access.readsAsMember(null), false);
-    // The leftover flag still counts, the way the rule's isPastoralAssistant() does.
-    assert.equal(Access.readsAsMember({ permissionLevel: 'viewer', pastoralAssistant: true }), true);
-    // The STORED level, not the rung auth.js resolved — the rules see only the former.
+    // The boolean is not a grant. The directory and member-rung keys are.
+    assert.equal(Access.readsAsMember({ permissionLevel: 'viewer', pastoralAssistant: true }), false);
+    assert.equal(Access.readsAsMember({ permissions: { 'directory.view': true } }), true);
+    assert.equal(Access.readsAsMember({ permissions: { 'visibility.rung.member': true } }), true);
     assert.equal(Access.readsAsMember({ permissionLevel: 'member', storedLevel: 'viewer' }), false);
 });
 
@@ -152,22 +162,27 @@ test('reading a resource file asks for the member rung', () => {
 });
 
 test('storage isMemberAccount restates firestore isMember, rung for rung', () => {
-    const inStorage = /permissionLevelAccount\(\) in \[([^\]]*)\]/.exec(storageFn('isMemberAccount'));
+    const inStorage = /accessRankAccount\(\) in \[([^\]]*)\]/.exec(storageFn('isMemberAccount'));
     assert.ok(inStorage, 'isMemberAccount() no longer reads the member rung list');
-    const inFirestore = /function isMember\(\) \{[\s\S]*?permissionLevel\(\) in \[([^\]]*)\]/
+    const inFirestore = /function isMember\(\) \{[\s\S]*?accessRank\(\) in \[([^\]]*)\]/
         .exec(firestoreRules);
+    assert.ok(inFirestore, 'isMember() no longer reads the member rung list');
     assert.equal(
         inStorage[1].match(/'[a-z_]+'/g).join(','),
         inFirestore[1].match(/'[a-z_]+'/g).join(','),
         'one of the two files learned about a rung and the other did not');
+    assert.match(storageFn('isMemberAccount'), /mapHas\('directory\.view'\)/);
+    assert.match(storageFn('isMemberAccount'), /mapHas\('visibility\.rung\.member'\)/);
+    assert.match(storageFn('isMemberAccount'), /isEditorAccount\(\)/);
 });
 
 test('storage editsWithAccount restates firestore editsWith, clause for clause', () => {
-    assert.match(storageFn('editsWithAccount'),
-        /hasPermissionAccount\(key\)\s*\|\| \(!usesPermissionMapAccount\(\) && isEditorAccount\(\)\)/,
-        'drop the !usesPermissionMapAccount() guard and a saved map stops revoking here');
+    assert.match(storageFn('editsWithAccount'), /return keyOnAccount\(key\);/);
+    assert.doesNotMatch(storageFn('editsWithAccount'), /usesPermissionMap|isEditorAccount/);
     assert.match(firestoreRules,
-        /function editsWith\(key\) \{\s*return hasPermission\(key\)\s*\|\| \(!usesPermissionMap\(\) && isEditor\(\)\);\s*\}/);
+        /function editsWith\(key\) \{\s*return keyOn\(key\);\s*\}/);
+    assert.match(firestoreRules,
+        /function editsAsAdmin\(key\) \{\s*return keyOn\(key\);\s*\}/);
 });
 
 test('uploading needs the resources.edit key and stays under the cap', () => {
@@ -206,7 +221,7 @@ test('the catch-all is gone so the resources block binds', () => {
 });
 
 test('printable_assets write uses permission keys, not isEditorAccount alone', () => {
-    const m = /match \/printable_assets\/\{printableId\}\/\{fileId\}\s*\{([\s\S]*?)\n    \}/
+    const m = /match \/printable_assets\/\{printableId\}\/\{fileId\}\s*\{([\s\S]*?)\n {4}\}/
         .exec(storageRules);
     assert.ok(m, 'printable_assets Storage rule missing');
     const block = m[1];

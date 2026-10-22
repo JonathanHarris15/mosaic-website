@@ -21,6 +21,11 @@ const {describe, test} = require('node:test');
 const assert = require('node:assert');
 
 const Actor = require('../functions/mcp-actor.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 
 // A Firestore stand-in that knows about `users` and `people` and nothing else.
 // Anything the module asks for that was not seeded reads back as absent, which
@@ -76,7 +81,7 @@ describe('the rank an assistant must hold', () => {
     });
 
     test('a Pastoral Assistant may read and write the record, and is not an elder', () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const pa = account('pastoral_assistant');
         assert.strictEqual(Actor.readsAsElder(pa), true);
         assert.strictEqual(Actor.writesTheRecord(pa), true);
         assert.strictEqual(Actor.isElder(pa), false);
@@ -98,7 +103,7 @@ describe('the rank an assistant must hold', () => {
     });
 
     test('a Pastoral Assistant refused an unclassified write hears it is about the role', () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const pa = account('pastoral_assistant');
         const message = Actor.refusalFor(pa, 'shep_unclassified_future');
         assert.match(message, /Pastoral Assistant/);
         assert.match(message, /elder's decision/);
@@ -115,7 +120,7 @@ describe('the rank an assistant must hold', () => {
     });
 
     test('an editor may edit directory details and may not write a note', () => {
-        const editor = {permissionLevel: 'editor'};
+        const editor = account('editor');
         assert.strictEqual(Actor.mayEditDirectory(editor), true);
         assert.strictEqual(Actor.directoryFieldSet(editor), 'editor');
         assert.strictEqual(Actor.mayUseTool(editor, 'shep_update_person'), true);
@@ -125,18 +130,20 @@ describe('the rank an assistant must hold', () => {
     });
 
     test('a Pastoral Assistant edits the directory with an editor\'s field set', () => {
-        const pa = {permissionLevel: 'member', pastoralAssistant: true};
+        const pa = account('pastoral_assistant');
         assert.strictEqual(Actor.mayEditDirectory(pa), true);
         assert.strictEqual(Actor.directoryFieldSet(pa), 'editor');
         assert.strictEqual(Actor.mayUseTool(pa, 'shep_update_person'), true);
-        const role = {permissionLevel: 'pastoral_assistant'};
-        assert.strictEqual(Actor.directoryFieldSet(role), 'editor');
-        assert.strictEqual(Actor.isElder(role), false);
+        assert.strictEqual(Actor.directoryFieldSet('pastoral_assistant'), 'editor');
+        assert.strictEqual(Actor.isElder('pastoral_assistant'), false);
+        assert.strictEqual(Actor.isElder(pa), false);
+        assert.strictEqual(
+            Actor.directoryFieldSet({permissionLevel: 'pastoral_assistant'}),
+            null);
     });
 
     test('a member is told directory details are an editor\'s write', () => {
-        const message = Actor.refusalFor(
-            {permissionLevel: 'member'}, 'shep_update_person');
+        const message = Actor.refusalFor(account('member'), 'shep_update_person');
         assert.match(message, /editor/);
         assert.match(message, /Pastoral Assistant/);
         assert.match(message, /"member"/);
@@ -219,9 +226,14 @@ describe('locked guidance', () => {
     const gs = require('../functions/guidance-store.js');
 
     test('a Pastoral Assistant may read locked guidance', () => {
-        assert.strictEqual(gs.readsLocked({level: 'member', pastoralAssistant: true}), true);
-        assert.strictEqual(gs.readsLocked({level: 'member'}), false);
-        assert.strictEqual(gs.readsLocked({level: 'elder'}), true);
-        assert.strictEqual(gs.readsLocked({level: 'editor'}), false);
+        assert.strictEqual(gs.readsLocked(account('pastoral_assistant')), true);
+        assert.strictEqual(gs.readsLocked('pastoral_assistant'), true);
+        assert.strictEqual(gs.readsLocked('elder'), true);
+        assert.strictEqual(gs.readsLocked('editor'), false);
+        assert.strictEqual(gs.readsLocked('member'), false);
+        assert.strictEqual(gs.readsLocked({level: 'elder'}), false);
+        assert.strictEqual(gs.readsLocked({
+            permissionLevel: 'member', pastoralAssistant: true,
+        }), false);
     });
 });

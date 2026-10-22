@@ -29,6 +29,7 @@
  * them a place in it.
  */
 
+const AccountLevels = require("./shared/account-levels-core.js");
 const tradeCore = require("./shared/trade-core.js");
 const coverCore = require("./shared/cover-core.js");
 const occurrences = require("./shared/events-occurrence-core.js");
@@ -152,7 +153,7 @@ async function rankOf(db, personId) {
       .where("personId", "==", personId).limit(1).get();
   if (snap.empty) return null;
   const user = snap.docs[0].data();
-  return user.permissionLevel || user.role || null;
+  return AccountLevels.accessRank(user);
 }
 
 /**

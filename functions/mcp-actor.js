@@ -331,7 +331,7 @@ function editorRefusalFor(value) {
  * that rule clause for clause (ADR-0082): once a map has been saved on the
  * account the key is the whole answer, and a level name does not override it.
  *
- * It needs `savedPermissions` on the account to answer correctly, which
+ * It needs `permissions` on the account to answer correctly, which
  * mcp-auth.js reads fresh on every call.
  *
  * @param {string|object} account the caller's account

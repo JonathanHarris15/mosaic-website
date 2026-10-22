@@ -138,7 +138,7 @@ function printableEditor() {
 
         // ── Derived ──────────────────────────────────────────────────────
 
-        get canEdit() { return AccessCore.writesAsEditor(this.permissionLevel); },
+        get canEdit() { return AccessCore.writesAsEditor(this.account || this.permissionLevel); },
         get template() { return this.project ? this.project.template : null; },
         get pages() { return this.project ? this.project.pages : []; },
         get currentPage() {
@@ -181,7 +181,8 @@ function printableEditor() {
                 try {
                     const userData = await getUserData(user.uid);
                     this.currentUserData = userData || null;
-                    this.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                    this.account = userData || null;
+                    this.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
                     if (!this.canEdit) { window.location.href = 'index.html'; return; }
                     this.currentUser = user;
                     if (!this.id) { this.problem = 'No printable was named. Open one from the library.'; return; }

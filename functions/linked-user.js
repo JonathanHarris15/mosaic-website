@@ -14,19 +14,18 @@
 // something a person asks for; unlinking is something an editor does to a
 // record. Sharing a file would imply a queue that does not exist.
 
-// Editors, elders, admins and super admins may unlink. The same set that
-// resolves Directory Requests and that the directory calls `canEdit` — anyone
-// trusted to connect an account is trusted to disconnect it, and refusing the
-// second while allowing the first would leave a mistake standing.
-const UNLINK_LEVELS = ["editor", "elder", "admin", "super_admin"];
+const Access = require("./shared/access-core.js");
+
+// Editors, and anyone the editor door admits (including a Pastoral
+// Assistant), may unlink. The same door that resolves Directory Requests.
 
 /**
- * May this permission level break a link?
- * @param {?string} permissionLevel The caller's permission level.
- * @return {boolean} True for editor, elder, admin and super_admin.
+ * May this account break a link?
+ * @param {?Object} account The caller's user document.
+ * @return {boolean} True when they write as an editor.
  */
-function canUnlink(permissionLevel) {
-  return UNLINK_LEVELS.includes(permissionLevel);
+function canUnlink(account) {
+  return Access.writesAsEditor(account);
 }
 
 /**
@@ -62,7 +61,6 @@ function planUnlink(person) {
 }
 
 module.exports = {
-  UNLINK_LEVELS,
   canUnlink,
   planUnlink,
 };

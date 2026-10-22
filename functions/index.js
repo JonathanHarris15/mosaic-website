@@ -92,6 +92,8 @@ const {
   assertEditsServices: assertEditsServicesCore,
   assertIsAdmin: assertIsAdminCore,
 } = require("./access-assert");
+const Access = require("./shared/access-core.js");
+const AccountLevels = require("./shared/account-levels-core.js");
 // The Admin Dashboard's Push notifications tab (MS-682). Reads the Device
 // tokens the rules keep from every client and the notifications log, and
 // hands back shapes that carry no whole token. Pure but for the deps built
@@ -253,32 +255,29 @@ exports.createUser = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can create new users.");
   }
 
-  const {email, password, role, permissionLevel, accountLevelId} = request.data;
-  // Accept either during the MS-119 migration.
-  const level = permissionLevel || role;
+  const {email, password, accountLevelId} = request.data;
 
-  if (!email || !password || !level) {
+  if (!email || !password || !accountLevelId) {
     throw new Error(
-        "Missing required fields: email, password, or permission level.");
+        "Missing required fields: email, password, or account level.");
   }
 
-  const AccountLevels = require("./shared/account-levels-core.js");
-  const presetKey = AccountLevels.presetKeyFromPermissionLevel(level);
-  const resolvedLevelId = accountLevelId ||
-      AccountLevels.accountLevelIdForPreset(presetKey);
-  // Builtin ids win over a stale presetKey. `level_pastoral_assistant`
-  // stores permissionLevel `pastoral_assistant` and the elder-equivalent map,
-  // not the raw id and not the Member preset.
-  const write = AccountLevels.userWriteFromLevel(resolvedLevelId, {
-    presetKey: AccountLevels.presetKeyFromAccountLevelId(resolvedLevelId) ||
-        presetKey,
+  const levelSnap = await db.collection("account_levels")
+      .doc(accountLevelId).get();
+  const knownBuiltin = AccountLevels.presetKeyFromAccountLevelId(
+      accountLevelId);
+  if (!levelSnap.exists && !knownBuiltin) {
+    throw new Error("Unknown account level.");
+  }
+  const levelData = levelSnap.exists ? levelSnap.data() : {
+    presetKey: knownBuiltin,
     custom: false,
-  });
+  };
+  const write = AccountLevels.userWriteFromLevel(accountLevelId, levelData);
 
   try {
     // 2. Create the user in Firebase Auth
@@ -287,9 +286,8 @@ exports.createUser = onCall({
       password: password,
     });
 
-    // 3. Store the user's permission level in Firestore. Write both
-    // permissionLevel and the legacy role during the MS-119 migration (MS-127
-    // drops the old role field afterwards).
+    // 3. Store the account level and its permissions map. role and
+    // permissionLevel are not written.
     //
     // The password is NOT stored here (MS-241). It went to Firebase Auth in
     // step 2, which hashes it; a readable second copy existed only so an admin
@@ -298,11 +296,8 @@ exports.createUser = onCall({
     // anything.
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
-      permissionLevel: write.permissionLevel,
-      role: write.role,
       accountLevelId: write.accountLevelId,
       permissions: write.permissions,
-      pastoralAssistant: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -366,8 +361,7 @@ exports.deleteUser = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can delete users.");
   }
 
@@ -411,13 +405,17 @@ exports.deleteOwnAccount = onCall({
   const uid = request.auth.uid;
   const db = admin.firestore();
   const userDoc = await db.collection("users").doc(uid).get();
-  const permissionLevel = userDoc.exists ?
-    (userDoc.data().permissionLevel || userDoc.data().role) : null;
+  const self = userDoc.exists ? userDoc.data() : null;
 
-  if (["admin", "super_admin"].includes(permissionLevel)) {
-    const admins = await db.collection("users")
-        .where("permissionLevel", "in", ["admin", "super_admin"]).get();
-    if (admins.size <= 1) {
+  if (self && Access.accessesAdminDashboard(self)) {
+    // Admin-ness is the map (or a builtin account level), not a stored
+    // permissionLevel string, so it cannot be asked as one query.
+    const users = await db.collection("users").get();
+    let admins = 0;
+    users.forEach((doc) => {
+      if (Access.accessesAdminDashboard(doc.data())) admins += 1;
+    });
+    if (admins <= 1) {
       throw new HttpsError(
           "failed-precondition",
           "You are the only administrator. Make someone else an " +
@@ -451,8 +449,7 @@ exports.updateUserPasswordAdmin = onCall({
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
   if (!callerDoc.exists ||
-      !["admin", "super_admin"].includes(
-          callerDoc.data().permissionLevel || callerDoc.data().role)) {
+      !Access.accessesAdminDashboard(callerDoc.data())) {
     throw new Error("Only admins can update user passwords.");
   }
 
@@ -540,10 +537,9 @@ exports.resolveDirectoryRequest = onCall({
   const db = admin.firestore();
   const callerUid = request.auth.uid;
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  const callerLevel = callerDoc.exists ?
-    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  const caller = callerDoc.exists ? callerDoc.data() : {};
 
-  if (!dr.canResolve(callerLevel)) {
+  if (!dr.canResolve(caller)) {
     throw new HttpsError(
         "permission-denied",
         "Only editors, elders and admins can resolve directory requests.");
@@ -884,10 +880,9 @@ exports.unlinkDirectoryPerson = onCall({
   const db = admin.firestore();
   const callerUid = request.auth.uid;
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  const callerLevel = callerDoc.exists ?
-    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  const caller = callerDoc.exists ? callerDoc.data() : {};
 
-  if (!lu.canUnlink(callerLevel)) {
+  if (!lu.canUnlink(caller)) {
     throw new HttpsError(
         "permission-denied",
         "Only editors, elders and admins can disconnect an account.");
@@ -970,7 +965,7 @@ exports.takeAssignment = onCall(
 
       const result = await aw.take(db, {
         personId: user.personId || null,
-        rank: user.permissionLevel || user.role || null,
+        rank: AccountLevels.accessRank(user),
         occurrenceId: occurrenceId,
         roleSlug: roleSlug,
         slotId: slotId || null,
@@ -1498,9 +1493,8 @@ exports.scoreTheme = onCall(
       const db = admin.firestore();
       const callerSnap =
         await db.collection("users").doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied",
             "Editors only — scoring a theme calls a paid API.");
       }
@@ -1613,9 +1607,8 @@ exports.translateLiturgy = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied",
             "Editors only — translating an order can call a paid API.");
       }
@@ -1719,9 +1712,8 @@ exports.mcpCapabilities = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied", "Editors only.");
       }
 
@@ -1733,7 +1725,7 @@ exports.mcpCapabilities = onCall(
         siteUrl: MCP_ISSUER_URL.value(),
         // The manifest is the same whoever asks; this caller is only used
         // to decide which tools would be offered, and an editor sees all.
-        auth: {uid: request.auth.uid, permissionLevel: level},
+        auth: Object.assign({uid: request.auth.uid}, caller),
         geminiKey: () => "",
         fieldValues: {
           serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
@@ -1761,9 +1753,8 @@ exports.restoreGuidanceVersion = onCall(
       const db = admin.firestore();
       const callerSnap = await db.collection("users")
           .doc(request.auth.uid).get();
-      const level = callerSnap.exists &&
-          (callerSnap.data().permissionLevel || callerSnap.data().role);
-      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+      const caller = callerSnap.exists ? callerSnap.data() : {};
+      if (!Access.readsAsEditor(caller)) {
         throw new HttpsError("permission-denied", "Editors only.");
       }
 
@@ -1998,7 +1989,7 @@ exports.syncPermissionLevelToMembershipStage = onDocumentWritten(
 
       const personId = after.personId;
       if (!personId) return; // Not linked to a person.
-      const level = after.permissionLevel || after.role;
+      const level = AccountLevels.accessRank(after);
       if (!isMemberOrHigher(level)) return; // Viewer/unknown: skip the read.
 
       const db = admin.firestore();
@@ -2070,16 +2061,16 @@ exports.syncMemberTagToRole = onDocumentWritten(
         const snap = await tx.get(userRef);
         if (!snap.exists) return null;
         const data = snap.data();
-        const permissionLevel = data.permissionLevel || data.role || "viewer";
         // Already member+ — never demote, and skip write to avoid a loop.
-        // accountLevelId and the permissions map count, so a Pastoral
-        // Assistant whose permissionLevel string is stale is not "promoted".
-        if (!shouldPromoteToMember(permissionLevel, data)) return null;
-        tx.update(userRef, {
-          permissionLevel: MEMBER_PERMISSION_LEVEL,
-          role: MEMBER_PERMISSION_LEVEL,
-        });
-        return permissionLevel;
+        // The account level and the permissions map are the rank, so a
+        // Pastoral Assistant is not "promoted" to member.
+        if (!shouldPromoteToMember(data)) return null;
+        const write = AccountLevels.userWriteFromLevel(
+            AccountLevels.accountLevelIdForPreset("member"),
+            {presetKey: "member", custom: false},
+        );
+        tx.update(userRef, write);
+        return AccountLevels.accessRank(data);
       });
       if (!promotedFrom) return;
       log(`Promoted user ${userId} from '${promotedFrom}' to ` +
@@ -2142,7 +2133,7 @@ async function reconcileElderTag(db, personId) {
   if (person.userId) {
     const userSnap = await db.collection("users").doc(person.userId).get();
     elder = userSnap.exists && isElderPermissionLevel(
-        userSnap.data().permissionLevel || userSnap.data().role);
+        AccountLevels.accessRank(userSnap.data()));
   }
 
   const has = hasElderTag(tags);
@@ -2203,7 +2194,8 @@ exports.syncElderRoleToTag = onDocumentWritten(
  * Permission Level of a Person's Linked User, denormalized onto
  * `people.accountRank` so the Trade picker can judge Event visibility
  * without reading other `users` docs (own-only). Matches server
- * `rankOf`: permissionLevel, then the legacy `role` fallback.
+ * `rankOf`: the rank derived from the saved permissions map, or from a
+ * builtin accountLevelId when no map is saved.
  *
  * Trigger: `users/{uid}` write — link, unlink, permission change, or
  * delete. Reconciles from the Person's live `userId`. Exact sync:
@@ -3706,12 +3698,6 @@ exports.answerLink = onCall(
  * Every judgement is in forms-public.js and forms-core.js, both pure and tested
  * without an emulator. This reads, asks, and writes.
  */
-// The two ladders, restated because the rules language cannot export anything
-// — the same trade forms-public.js already accepts. ⚠ An admin is NOT an
-// elder: isElder() in firestore.rules has never said so.
-const EDITOR_RANKS = ["editor", "admin", "elder", "super_admin"];
-const ELDER_RANKS = ["elder", "super_admin"];
-
 // Deleting a Form Template, and the answers it gathered (MS-406).
 //
 // ⚠ WHY THIS IS NOT A BATCH IN THE BROWSER. It was, and it could not work:
@@ -3738,10 +3724,7 @@ exports.deleteFormTemplate = onCall(
 
       const userSnap = await db.collection("users").doc(request.auth.uid).get();
       const user = userSnap.exists ? userSnap.data() : {};
-      const rank = user.permissionLevel || user.role || null;
-      const pastoralAssistant = rank === "pastoral_assistant" ||
-          user.pastoralAssistant === true;
-      if (!EDITOR_RANKS.includes(rank) && !pastoralAssistant) {
+      if (!Access.readsAsEditor(user)) {
         return {ok: false, message: "Only an editor can delete a form."};
       }
 
@@ -3755,8 +3738,7 @@ exports.deleteFormTemplate = onCall(
       // A form shut to elders is deleted by an elder and nobody else (MS-404).
       // The rules say so for the record; this door has to say so too, because
       // it writes past them.
-      if (FormsCore.isElderOnly(form) && !ELDER_RANKS.includes(rank) &&
-          !pastoralAssistant) {
+      if (FormsCore.isElderOnly(form) && !Access.readsAsElder(user)) {
         return {ok: false, message: "There is no form here."};
       }
 
@@ -3843,11 +3825,7 @@ exports.publicForm = onCall(
         const userSnap = await db.collection("users")
             .doc(request.auth.uid).get();
         const user = userSnap.exists ? userSnap.data() : {};
-        rank = user.permissionLevel || user.role || null;
-        if (user.pastoralAssistant === true &&
-            !["elder", "super_admin", "pastoral_assistant"].includes(rank)) {
-          rank = "pastoral_assistant";
-        }
+        rank = AccountLevels.accessRank(user);
         personId = user.personId || null;
       }
       const caller = {signedIn: !!request.auth, rank: rank};

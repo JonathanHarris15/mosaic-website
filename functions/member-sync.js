@@ -34,15 +34,11 @@ const MEMBER_PERMISSION_LEVEL = "member";
 
 /**
  * True when a permission level is "member" or any higher privilege.
- * @param {?string} permissionLevel The level to test.
+ * @param {?string} rank The derived rank label to test.
  * @return {boolean} True for member and above.
  */
-function isMemberOrHigher(permissionLevel) {
-  // `level_pastoral_assistant` is the account-level id, not a rung. Resolving
-  // it keeps member-sync from treating a Pastoral Assistant as below member
-  // and writing permissionLevel back to "member".
-  const resolved = AccountLevels.presetKeyFromPermissionLevel(permissionLevel);
-  return MEMBER_OR_HIGHER.includes(resolved);
+function isMemberOrHigher(rank) {
+  return MEMBER_OR_HIGHER.includes(rank);
 }
 
 /**
@@ -155,19 +151,14 @@ function buildMemberAdvanceRecord(previous, permissionLevel) {
  * and it additionally still catches records the Track migration has not
  * reached, which carry a hand-applied Member tag and no stage.
  *
- * @param {?string} currentPermissionLevel The linked user's level.
- * @param {?Object} user The whole user document, when the caller has it.
- *   accountLevelId and a denormalized permissions map count: a Pastoral
- *   Assistant whose permissionLevel string was overwritten must not be
- *   "promoted" to member.
+ * @param {?Object} user The linked user's document. Rank comes from the
+ *   account level and the permissions map. A Pastoral Assistant is already
+ *   above member and is not promoted.
  * @return {boolean} True when the user should be promoted to member.
  */
-function shouldPromoteToMember(currentPermissionLevel, user) {
-  if (user && typeof user === "object") {
-    const resolved = AccountLevels.canonicalPermissionLevel(user);
-    if (isMemberOrHigher(resolved)) return false;
-  }
-  return !isMemberOrHigher(currentPermissionLevel);
+function shouldPromoteToMember(user) {
+  if (!user || typeof user !== "object") return false;
+  return !isMemberOrHigher(AccountLevels.accessRank(user));
 }
 
 module.exports = {

@@ -6,6 +6,13 @@ const path = require('node:path');
 const Access = require('../public/access-core.js');
 const Destinations = require('../public/mobile/destinations.js');
 const Catalog = require('../public/permission-catalog.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const adminDest = () => {
     const d = Destinations.DESTINATIONS.find((x) => x.key === 'admin');
@@ -26,9 +33,12 @@ test('custom account level with admin.dashboard.access opens Admin', () => {
     assert.equal(Destinations.canSee(adminDest(), user), true);
 });
 
-test('legacy admin string still opens Admin without permissions object', () => {
-    assert.equal(Destinations.canSee(adminDest(), { permissionLevel: 'admin' }), true);
-    assert.equal(Destinations.canSee(adminDest(), { permissionLevel: 'viewer' }), false);
+test('a rank label and a builtin admin account open Admin; a stored level name does not', () => {
+    assert.equal(Destinations.canSee(adminDest(), 'admin'), true);
+    assert.equal(Destinations.canSee(adminDest(), account('admin')), true);
+    assert.equal(Destinations.canSee(adminDest(), { permissionLevel: 'admin' }), false);
+    assert.equal(Destinations.canSee(adminDest(), account('viewer')), false);
+    assert.equal(Destinations.canSee(adminDest(), 'viewer'), false);
 });
 
 test('directory.view permission grants Membership Directory without member level string', () => {

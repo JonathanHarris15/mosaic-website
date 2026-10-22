@@ -23,6 +23,13 @@ const path = require('node:path');
 // the other side of it.)
 
 const PUBLIC = path.join(__dirname, '..', 'public');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 // Enough of a Firestore to get through a load, and a record of everything it
 // was asked for — which is the assertion, not the data.
@@ -57,7 +64,7 @@ async function open(permissionLevel) {
 
     const reads = [];
     global.db = fakeDb(reads);
-    global.getUserData = async () => ({ permissionLevel });
+    global.getUserData = async () => account(permissionLevel);
     // Both ship as plain <script>s on the page, so they are globals here too.
     global.ServiceInvolvementCore = require('../public/service-involvement-core.js');
     global.PastoralPrayerCore = { HISTORY_COLLECTION: 'pastoral_prayer_history' };
@@ -259,7 +266,7 @@ test('involvements for future dates and today are not counted in analytics', asy
     };
 
     global.db = mockDb;
-    global.getUserData = async () => ({ permissionLevel: 'editor' });
+    global.getUserData = async () => account('editor');
     let callback = null;
     global.auth = { onAuthStateChanged(fn) { callback = fn; } };
 

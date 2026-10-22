@@ -1,14 +1,47 @@
-# MS-776 — Account access diff (cutover not shipped)
+# MS-776 — Account access diff
 
-Read-only audit of `mosaic-hymn-database` on 2026-10-21. Eighteen `users`
-documents. The script compares what each live resolver opens today with the
-single resolver that reads only `accountLevelId` and `permissions`.
+The cutover ships in this change. Every access check reads `accountLevelId`
+and the saved `permissions` map. `role`, `permissionLevel`, and
+`pastoralAssistant` grant nothing. The stored fields are left in place; this
+change does not delete them and does not migrate them.
 
-**Ship the cutover: no.** Thirteen accounts would lose a door a resolver
-opens today. This change adds the audit and stops. Firestore rules, Storage
-rules, the client, and `rankOf` are unchanged.
+The audit below is the 2026-10-21 measurement, taken before the backfill.
+Thirteen ladder-only accounts would have lost doors. The backfill
+(`scripts/ms-776-backfill-account-levels.js`, #304) is already committed in
+prod. After that write the diff showed 0 blocking users. `hJMTobnK` and
+`JhiP8bSR` keep pastoral-assistant access through `level_pastoral_assistant`
+and their saved map (gains, not losses).
 
-## Canonical resolver (measured, not shipped)
+`scripts/access-diff-core.js` keeps `firestoreDoors`, `storageDoors`,
+`rankOfDoors`, and `formRankDoors` as a frozen picture of the pre-cutover
+resolvers. They do not import the rules. `clientDoors` calls live Access.
+On prod, backfilled accounts still carry the ladder strings, so the frozen
+columns and the canonical resolver agree. A ladder-only account is a
+blocking rules loss. A new write that omits the ladder strings can show
+gains against the frozen columns; that is not a loss.
+
+## Post-deploy check
+
+The workflow runs only from `main`. Do not dispatch it from a pull-request
+branch. Do not pass `commit=true`. Empty args.
+
+```bash
+gh workflow run "Prod ops script" --ref main \
+  -f script=access-diff.js \
+  -f commit=false
+```
+
+Expected: blocking users 0, and the report says to ship the cutover. Hosting
+and Functions deploy on push to `main`. There is no data migration in this
+change, so there is no deploy-versus-migration window for a second write.
+
+## Audit (2026-10-21, before the backfill)
+
+Read-only audit of `mosaic-hymn-database`. Eighteen `users` documents. At
+that moment the cutover was not shipped, and thirteen accounts would have
+lost a door.
+
+## Canonical resolver
 
 A saved `permissions` object is the whole answer. `system.super_admin: true`
 means every catalog key. Otherwise a builtin `accountLevelId` contributes
@@ -16,12 +49,15 @@ that preset. Otherwise no doors (a viewer). `role`, `permissionLevel`, and
 `pastoralAssistant` grant nothing. A super admin is checked before kiosk,
 because the full map also sets `system.kiosk`.
 
-Current resolvers still read the ladder string (`permissionLevel`, else
-`role`) and, in rules and `publicForm`, the `pastoralAssistant` flag. The
-diff treats a loss on Firestore, Storage, `rankOf`, or `publicForm` as
-blocking. A client key loss is blocking only when the paired Firestore door
-is open today. `core.sign_in`, `visibility.rung.public`, and `hymns.view`
-are never blocking: the rules already refuse them as account doors.
+The frozen diff columns still pretend the old resolvers are live: they read
+the ladder string (`permissionLevel`, else `role`) and, for the rules and
+`publicForm` columns, the `pastoralAssistant` flag. That is how a re-run
+can still see a ladder-only loss after this cutover. The live client does
+not. A loss on Firestore, Storage, `rankOf`, or `publicForm` is blocking. A
+client key loss is blocking only when the paired Firestore door is open on
+that frozen column. `core.sign_in`, `visibility.rung.public`, and
+`hymns.view` are never blocking: the rules already refuse them as account
+doors.
 
 ## Result
 
@@ -94,24 +130,13 @@ That widening is a product choice (ADR 0082: a saved map is the whole
 answer) against the stored member string. It is not a reason this audit
 stopped. The losses are.
 
-## Open decision
+## Decision
 
-Do not guess a backfill in this change, and do not write one here.
-
-A later prod-ops backfill would copy the live ladder (`permissionLevel` when
-present, otherwise `role`) onto a builtin `accountLevelId` plus that preset's
-permissions map for the thirteen ladder-only accounts. It must not overwrite
-the two pastoral-assistant maps with the member preset. Re-run this diff
-after that write. The cutover is safe only when blocking users is 0.
-
-Helm approved that additive backfill. The script is
-`ms-776-backfill-account-levels.js`
-(`docs/ops/ms-776-account-level-backfill.md`). The cutover stays on hold
-until a re-run of this diff shows blocking users is 0.
-
-Shipping the resolver change before that backfill would lock those thirteen
-people out. Hosting and Functions deploy on push to `main`. The data move is
-a separate workflow dispatch. The window between them is the outage.
+Helm approved the additive backfill
+(`docs/ops/ms-776-account-level-backfill.md`). It is committed. Jonathan
+kept pastoral-assistant access: `hJMTobnK` and `JhiP8bSR` take the doors of
+`level_pastoral_assistant`. The cutover is this change. Re-run the diff
+after it deploys. Blocking users must stay 0.
 
 ## How to re-run
 

@@ -590,7 +590,10 @@
     // Admins are NOT elders (a distinct office). A Person with no Linked User,
     // or a non-elder role, is not an elder.
     function isElderUser(userData) {
-        return !!userData && (userData.permissionLevel || userData.role) === 'elder';
+        const Levels = (typeof AccountLevelsCore !== 'undefined') ? AccountLevelsCore
+            : (typeof require === 'function' ? require('./account-levels-core.js') : null);
+        if (!Levels || !userData || typeof userData !== 'object') return false;
+        return Levels.accessRank(userData) === 'elder';
     }
 
     // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add

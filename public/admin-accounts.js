@@ -50,11 +50,6 @@ function initAdminAccountsTab() {
                 const email = document.getElementById('new-user-email').value;
                 const password = document.getElementById('new-user-password').value;
                 const accountLevelId = document.getElementById('new-user-role').value;
-                const level = (typeof accountLevelsForSelect === 'function'
-                    ? accountLevelsForSelect().find(l => l.id === accountLevelId) : null);
-                const permissionLevel = level && level.presetKey
-                    ? level.presetKey
-                    : accountLevelId;
 
                 createUserStatus.textContent = 'Provisioning account...';
                 createUserStatus.className = 'mt-xs text-xs font-body-md text-primary animate-pulse';
@@ -64,8 +59,6 @@ function initAdminAccountsTab() {
                     await createUserFunc({
                         email,
                         password,
-                        role: permissionLevel,
-                        permissionLevel,
                         accountLevelId,
                     });
 
@@ -120,13 +113,13 @@ async function loadUsersList() {
             const data = doc.data();
             const accountLevelId = typeof resolveAccountLevelIdForUser === 'function'
                 ? resolveAccountLevelIdForUser(data)
-                : (data.accountLevelId || data.permissionLevel || data.role || 'viewer');
+                : (data.accountLevelId || (window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer'));
             const levels = typeof accountLevelsForSelect === 'function' ? accountLevelsForSelect() : [];
             const levelMatch = levels.find(l => l.id === accountLevelId);
             const roleLabel = levelMatch
                 ? (levelMatch.name || levelMatch.presetKey)
-                : (data.permissionLevel || data.role || 'viewer');
-            const shownLevel = data.permissionLevel || data.role || 'viewer';
+                : ((window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer'));
+            const shownLevel = (window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer');
             const isSelf = doc.id === adminCurrentUserUid;
 
             const linkedPerson = data.personId ? peopleCache.find(p => p.id === data.personId) : null;
@@ -207,12 +200,6 @@ async function updateUserAccountLevel(uid, accountLevelId) {
                 presetKey: AccountLevelsCore.presetKeyFromAccountLevelId(accountLevelId),
             });
             await db.collection('users').doc(uid).update(write);
-        } else {
-            await db.collection('users').doc(uid).update({
-                permissionLevel: accountLevelId,
-                role: accountLevelId,
-                pastoralAssistant: false,
-            });
         }
         await countUsersPerLevel?.();
         renderLevelsList?.();
