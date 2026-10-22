@@ -7,9 +7,9 @@
 // ceiling can drop. --update writes those lower numbers and refuses to
 // write a higher one.
 //
-// Against a base ref (origin/main in CI), raising a baseline number above the
-// base ref is allowed only up to measured actual (so a mis-set ceiling can be
-// corrected). Raising the filed ceiling above measured actual still fails.
+// Against a base ref (origin/main in CI), a baseline number that went up
+// fails even when the new count sits under the raised ceiling. The file
+// only moves down.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -134,32 +134,6 @@ export function compareCounts(actual, baseline, keys = KEYS) {
 }
 
 /**
- * Baseline file rose above the base ref. Allowed only when the new filed
- * ceiling is still at or above measured actual (not a speculative raise).
- *
- * @param {Record<string, number>} baseline
- * @param {Record<string, number>} previous
- * @param {Record<string, number>} actual
- * @param {string[]} [keys]
- */
-export function baselineFileCeilingViolations(baseline, previous, actual, keys = KEYS) {
-    const violations = [];
-    for (const key of keys) {
-        const filed = baseline[key];
-        const cap = previous[key];
-        const measured = actual[key];
-        if (!Number.isInteger(filed) || !Number.isInteger(cap) || !Number.isInteger(measured)) {
-            violations.push({ key, actual: filed, baseline: cap });
-            continue;
-        }
-        if (filed > cap && filed > measured) {
-            violations.push({ key, actual: filed, baseline: cap });
-        }
-    }
-    return violations;
-}
-
-/**
  * @param {Record<string, number>} actual
  * @param {Record<string, number>} baseline
  * @param {Record<string, number> | null} previous
@@ -167,7 +141,7 @@ export function baselineFileCeilingViolations(baseline, previous, actual, keys =
  */
 export function gateDecision(actual, baseline, previous, keys = KEYS) {
     const { raised, lowerable } = compareCounts(actual, baseline, keys);
-    const ceiling = previous ? baselineFileCeilingViolations(baseline, previous, actual, keys) : [];
+    const ceiling = previous ? compareCounts(baseline, previous, keys).raised : [];
     return {
         raised,
         lowerable,
@@ -317,6 +291,11 @@ function main() {
     const { raw, counts } = readBaseline(BASELINE_PATH);
     // A bad ref, or a baseline file above the base ref, fails here, before the tools run.
     const previous = baselineOnRef(baselineRef);
+    const filed = gateDecision(counts, counts, previous, keys);
+    if (filed.ceiling.length) {
+        report('baseline file went up', filed.ceiling);
+        process.exit(1);
+    }
     const actual = measure(keys);
     const decision = gateDecision(actual, counts, previous, keys);
 
