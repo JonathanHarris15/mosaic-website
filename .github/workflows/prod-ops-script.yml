@@ -35,9 +35,12 @@ on:
           - migrate-service-dotted-keys.js
           - ms-776-backfill-account-levels.js
           - normalise-care-list-documents.js
+          - prayer-request-send-preview.js
+          - prayer-text-notifications-audit.js
           - reset-prayer-send-attempt.js
           - set-liturgy-order-flags.js
           - sync-pastoral-prayer-dates.js
+          - textbelt-key-check.js
           - textbelt-test-send.js
       args:
         description: Extra script flags (no shell; validated in Node)
