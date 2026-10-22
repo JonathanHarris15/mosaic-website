@@ -25,12 +25,12 @@
     // lexicographically — valid because the format sorts chronologically.
     function topPrayerCandidates(members, sex, todayStr, limit) {
         const n = (limit == null) ? 3 : limit;
-        const NEVER = '0000-00-00';
         const lastPrayed = m => Core.normalizeDate(m.lastPastoralPrayerDate);
+        const sortKey = m => Core.rotationSortKey(m.lastPastoralPrayerDate);
         return (members || [])
             .filter(m => m.sex === sex)
             .filter(m => !lastPrayed(m) || lastPrayed(m) < todayStr)
-            .sort((a, b) => (lastPrayed(a) || NEVER).localeCompare(lastPrayed(b) || NEVER))
+            .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
             .slice(0, n);
     }
 
