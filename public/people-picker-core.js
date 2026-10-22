@@ -68,7 +68,7 @@
 
     function disambiguationDetail(person) {
         const membership = (person && person.membership) || {};
-        if (membership.inactive === true || membership.status === 'inactive') return 'inactive';
+        if (membership.inactive === true) return 'inactive';
         if (person && person.inactive === true) return 'inactive';
         const tags = (person && person.tags) || [];
         if (tags.indexOf('Inactive') !== -1) return 'inactive';

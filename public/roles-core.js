@@ -369,7 +369,7 @@
     // replaced, so eligibility is right before every record is migrated.
     function isInactive(person) {
         const m = (person && person.membership) || {};
-        return m.inactive === true || m.status === 'inactive';
+        return m.inactive === true;
     }
 
     // Somebody the church does not put on a rota: a small child, somebody very
