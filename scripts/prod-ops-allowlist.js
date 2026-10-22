@@ -15,6 +15,7 @@ const ALLOWLIST_SORTED = [
     'delete-shepherding-reminders.js',
     'diagnose-storage-fill-in-upload.js',
     'merge-duplicate-person.js',
+    'migrate-booklet-text-to-occurrences.js',
     'migrate-hymn-sheets-prefix.js',
     'migrate-inline-liturgy-elements.js',
     'migrate-meeting-mentions.js',

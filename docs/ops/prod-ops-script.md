@@ -66,6 +66,7 @@ gh workflow run "Prod ops script" --ref main \
 | `delete-legacy-person-picker-fields.js` | [MS-775 — phantom person picker fields](./ms-775-person-picker-fields.md) (empty `args`; `commit=true` to delete) |
 | `access-diff.js` | [MS-776 — account access diff](./ms-776-access-diff.md) (empty `args`; read-only — `commit=true` is ignored) |
 | `ms-776-backfill-account-levels.js` | [MS-776 — additive account-level backfill](./ms-776-account-level-backfill.md) (empty `args`; dry-run, then `commit=true` to apply) |
+| `migrate-booklet-text-to-occurrences.js` | [MS-777 — booklet text onto occurrence fill-ins](./ms-777-booklet-fill-ins.md) (optional `--from` / `--to`; `commit=true` to apply; does not delete the old fields) |
 | `migrate-inline-liturgy-elements.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (run first; dry-run, then `commit=true`) |
 | `migrate-service-dotted-keys.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (second; dry-run, then `commit=true`) |
 | `backfill-involvement-series.js` | [MS-780–782 — legacy Services cleanup](./ms-780-782-legacy-services-cleanup.md) (third; dry-run, then `commit=true`) |
