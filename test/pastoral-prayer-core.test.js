@@ -21,6 +21,21 @@ test('a non-date never becomes a doc ID', () => {
     assert.strictEqual(Core.historyDocId(undefined), null);
 });
 
+test('rotation sort key treats missing and sentinel as the same never bucket', () => {
+    assert.strictEqual(Core.rotationSortKey(null), Core.LEGACY_NEVER);
+    assert.strictEqual(Core.rotationSortKey('0000-00-00'), Core.LEGACY_NEVER);
+    assert.strictEqual(Core.rotationSortKey('2026-01-04'), '2026-01-04');
+    const members = [
+        { id: 'a', lastPastoralPrayerDate: '0000-00-00' },
+        { id: 'b', lastPastoralPrayerDate: null },
+        { id: 'c', lastPastoralPrayerDate: '2026-03-01' },
+    ];
+    const sorted = members.slice().sort((a, b) =>
+        Core.rotationSortKey(a.lastPastoralPrayerDate)
+            .localeCompare(Core.rotationSortKey(b.lastPastoralPrayerDate)));
+    assert.deepStrictEqual(sorted.map(m => m.id), ['a', 'b', 'c']);
+});
+
 test('never prayed for is null, whichever sentinel is stored', () => {
     assert.strictEqual(Core.normalizeDate(null), null);
     assert.strictEqual(Core.normalizeDate(undefined), null);

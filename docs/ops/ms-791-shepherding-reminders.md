@@ -4,6 +4,8 @@ Follow-up reminders were replaced by `shepherding_tasks` (MS-79). The app no lon
 
 ## Prod ops (main only)
 
+`ms-776-backfill-account-levels.js` is already committed in prod; only run the steps below for MS-791.
+
 1. **Migrate** (dry-run, then commit):
 
    ```bash
