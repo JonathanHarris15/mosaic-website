@@ -66,6 +66,11 @@ test('an elder_document of docType care-list links to the care-list page', () =>
     assert.ok(!html.includes('shepherding-document.html'));
 });
 
+test('a legacy meeting mention links like elder_document', () => {
+    const m = { type: 'mention', attrs: { id: JSON.stringify({ kind: 'meeting', id: 'd9' }), label: 'Minutes' } };
+    assert.match(renderTiptapJson(doc(para(m))), /shepherding-document\.html\?id=d9/);
+});
+
 test('an unparseable or unknown mention renders a dimmed span, not a link', () => {
     const bad = { type: 'mention', attrs: { id: 'not json', label: 'X' } };
     assert.strictEqual(renderTiptapJson(doc(para(bad))), '<p><span class="mention-chip" style="opacity:.5">@X</span></p>');

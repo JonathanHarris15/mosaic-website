@@ -69,6 +69,18 @@ test('isElderUser is true only for the elder account level', () => {
     assert.strictEqual(Core.isElderUser(undefined), false);
 });
 
+test('a custom level with count_as_elder projects the Elder Tag', () => {
+    const custom = {
+        accountLevelId: 'level_custom_elder',
+        permissions: Object.assign({}, Levels.buildPresetPermissions('editor'), {
+            'shep.count_as_elder': true,
+            'shep.elder_assignment.be_assignee': true,
+        }),
+    };
+    assert.strictEqual(Core.isElderUser(custom), true);
+    assert.deepStrictEqual(Core.applyElderTag(['Member'], true), ['Member', 'Elder']);
+});
+
 test('a Pastoral Assistant does not project the Elder Tag', () => {
     const flag = {permissionLevel: 'member', pastoralAssistant: true};
     assert.strictEqual(Core.isElderUser(flag), false);

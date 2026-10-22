@@ -1067,13 +1067,6 @@ service cloud.firestore {
       allow write: if canDecide();
     }
 
-    // Superseded by shepherding_tasks (MS-79). Left readable so the migration
-    // can be checked before anything is thrown away.
-    match /shepherding_reminders/{reminderId} {
-      allow read: if readsAsElder();
-      allow write: if canDecide();
-    }
-
     // A Task, and the standing commitment behind a repeating one — one
     // collection, because a series IS a Task that happens more than once.
     // Elder-gated, like everything else on the Shepherd Dashboard: pastoral

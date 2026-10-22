@@ -8,7 +8,7 @@
  * until their user doc is next touched. This reconciles every Person once.
  *
  * For each Person it computes the correct elder-ness from their Linked User
- * (people.userId → users.role === 'elder'; super_admin is NOT an elder) and
+ * (ShepherdingCore.isElderUser on the full users doc; super_admin is NOT an elder) and
  * re-projects the Elder Tag with the same pure helper the app uses
  * (ShepherdingCore.applyElderTag). It also seeds the `people_tags/Elder` doc so
  * the tag shows in the Tags Manager. Idempotent: applyElderTag strips-then-
@@ -62,16 +62,15 @@ if (require.main === module) {
     }
 
     async function backfillPeople() {
-        // Build a uid → role map once, so we don't read users per Person.
         const usersSnap = await db.collection('users').get();
-        const roleByUid = {};
-        usersSnap.docs.forEach(d => { roleByUid[d.id] = (d.data() || {}).role; });
+        const userByUid = {};
+        usersSnap.docs.forEach(d => { userByUid[d.id] = d.data() || {}; });
 
         const snap = await db.collection('people').get();
         let changed = 0, unchanged = 0;
         for (const doc of snap.docs) {
             const data = doc.data();
-            const isElder = !!data.userId && Core.isElderUser({ role: roleByUid[data.userId] });
+            const isElder = !!data.userId && Core.isElderUser(userByUid[data.userId]);
             const currentTags = data.tags || [];
             const nextTags = Core.applyElderTag(currentTags, isElder);
             if (sameTagSet(currentTags, nextTags)) { unchanged++; continue; }
