@@ -17,6 +17,9 @@ const ALLOWLIST_SORTED = [
     'delete-legacy-person-picker-fields.js',
     'access-diff.js',
     'ms-776-backfill-account-levels.js',
+    'migrate-reminders-to-tasks.js',
+    'delete-shepherding-reminders.js',
+    'migrate-meeting-mentions.js',
 ];
 
 const ALLOWLIST = new Set(ALLOWLIST_SORTED);

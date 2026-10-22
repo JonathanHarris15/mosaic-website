@@ -96,10 +96,7 @@ function userDoc(presetKey) {
     return {
         accountLevelId: Levels.accountLevelIdForPreset(presetKey),
         permissions,
-        permissionLevel: presetKey,
-        role: presetKey,
         name: presetKey === 'editor' ? 'Editor MS716' : 'Viewer MS716',
-        pastoralAssistant: false,
     };
 }
 

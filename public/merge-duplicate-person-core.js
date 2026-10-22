@@ -77,7 +77,6 @@
         'relationship_groups',
         'shepherding_tasks',
         'shepherding_task_occurrences',
-        'shepherding_reminders',
         'elder_documents',
         'directory_requests',
         'trades',
