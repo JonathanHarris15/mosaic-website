@@ -19,18 +19,30 @@ on:
         type: choice
         required: true
         options:
-          - set-liturgy-order-flags.js
-          - migrate-hymn-sheets-prefix.js
-          - textbelt-test-send.js
-          - reset-prayer-send-attempt.js
-          - migrate-legacy-oos-prayer-carriers.js
-          - delete-legacy-oos-prayer-fields.js
-          - merge-duplicate-person.js
-          - diagnose-storage-fill-in-upload.js
-          - delete-legacy-person-picker-fields.js
           - access-diff.js
-          - ms-776-backfill-account-levels.js
+          - backfill-involvement-series.js
+          - backfill-occurrence-visibility.js
+          - delete-legacy-households.js
+          - delete-legacy-membership-status.js
+          - delete-legacy-person-picker-fields.js
+          - delete-shepherding-reminders.js
+          - diagnose-storage-fill-in-upload.js
+          - merge-duplicate-person.js
           - migrate-booklet-text-to-occurrences.js
+          - migrate-hymn-sheets-prefix.js
+          - migrate-inline-liturgy-elements.js
+          - migrate-meeting-mentions.js
+          - migrate-reminders-to-tasks.js
+          - migrate-service-dotted-keys.js
+          - ms-776-backfill-account-levels.js
+          - normalise-care-list-documents.js
+          - prayer-request-send-preview.js
+          - prayer-text-notifications-audit.js
+          - reset-prayer-send-attempt.js
+          - set-liturgy-order-flags.js
+          - sync-pastoral-prayer-dates.js
+          - textbelt-key-check.js
+          - textbelt-test-send.js
       args:
         description: Extra script flags (no shell; validated in Node)
         type: string

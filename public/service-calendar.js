@@ -1529,32 +1529,14 @@ function renderTable(grouped) {
  * Fetch all service documents from Firestore and inject summary info
  * (theme, service leader, preacher) into the matching calendar cards.
  */
-// Older saves used set() with merge and dotted key names like 'liturgy.sermon',
-// which Firestore stores as a literal field name containing a dot rather than
-// as a nested path. Normalize those back into their proper nested structure so
-// the display code (which reads svc.liturgy.sermon) finds the value.
+function dottedKeysCore() {
+    if (typeof window !== 'undefined' && window.ServiceDottedKeysCore) return window.ServiceDottedKeysCore;
+    if (typeof require !== 'undefined') return require('./service-dotted-keys-core.js');
+    throw new Error('ServiceDottedKeysCore is not loaded');
+}
+
 function normalizeServiceDoc(raw) {
-    const data = {};
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (!key.includes('.')) {
-            data[key] = val;
-        }
-    }
-    for (const [key, val] of Object.entries(raw || {})) {
-        if (key.includes('.')) {
-            const parts = key.split('.');
-            let obj = data;
-            for (let i = 0; i < parts.length - 1; i++) {
-                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                    obj[parts[i]] = {};
-                }
-                obj = obj[parts[i]];
-            }
-            const leaf = parts[parts.length - 1];
-            if (!obj[leaf]) obj[leaf] = val;
-        }
-    }
-    return data;
+    return dottedKeysCore().readServiceDoc(raw);
 }
 
 // Is this cell's editor open?

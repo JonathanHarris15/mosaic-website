@@ -58,7 +58,6 @@
     const STANDARD_ORDER_ID = 'standard';
 
     const COLLECTIONS = Object.freeze({
-        elements: 'liturgy_elements',
         orders: 'liturgy_orders',
     });
 
@@ -289,7 +288,7 @@
         });
     }
 
-    function normaliseOrder(raw, fallbackId, looseById) {
+    function normaliseOrder(raw, fallbackId) {
         const src = raw || {};
         const id = cleanName(src.id != null ? src.id : fallbackId);
         if (!id) return null;
@@ -302,11 +301,6 @@
         };
         if (Array.isArray(src.elements)) {
             src.elements.forEach(function (rawEl) { push(normaliseElement(rawEl)); });
-        } else {
-            (Array.isArray(src.elementIds) ? src.elementIds : []).forEach(function (value) {
-                const elId = cleanName(value);
-                push(elId && looseById ? looseById.get(elId) : null);
-            });
         }
         const out = {
             id: id,
@@ -349,41 +343,27 @@
         return { elements: order.elements.map(copyElement), orders: [order] };
     }
 
-    // What the pages read. An order carries its elements. An older document
-    // that stored elements apart from the order is joined back on read.
+    // What the pages read. Each order carries its elements on the document.
     // Empty reads as the Standard seed. Standard is always present.
     function catalogFrom(input) {
         const src = input || {};
-        const rawElements = Array.isArray(src.elements) ? src.elements : [];
         const rawOrders = Array.isArray(src.orders) ? src.orders : [];
-        if (!rawElements.length && !rawOrders.length) return standardCatalog();
-
-        const loose = [];
-        const looseById = new Map();
-        rawElements.forEach(function (raw) {
-            const el = normaliseElement(raw);
-            if (!el || looseById.has(el.id)) return;
-            looseById.set(el.id, el);
-            loose.push(el);
-        });
+        if (!rawOrders.length) return standardCatalog();
 
         const orders = [];
         const seenOrder = new Set();
         rawOrders.forEach(function (raw) {
-            const order = normaliseOrder(raw, null, looseById);
+            const order = normaliseOrder(raw, null);
             if (!order || seenOrder.has(order.id)) return;
             seenOrder.add(order.id);
             orders.push(order);
         });
 
-        if (!orders.length) {
-            const seed = copyOrder(STANDARD_ORDER);
-            return { elements: loose.length ? loose.map(copyElement) : seed.elements.map(copyElement), orders: [seed] };
-        }
+        if (!orders.length) return standardCatalog();
         if (!orders.some(function (o) { return o.id === STANDARD_ORDER_ID; })) {
             orders.unshift(copyOrder(STANDARD_ORDER));
         }
-        return { elements: poolFrom(orders, loose), orders: orders };
+        return { elements: poolFrom(orders, []), orders: orders };
     }
 
     function elementById(catalog, id) {

@@ -65,17 +65,17 @@ test('a Pastoral Assistant is offered Shepherd, Directory, Forms and Roles Manag
         assert.ok(d, key + ' destination is gone');
         return d;
     };
-    assert.equal(Destinations.canSee(dest('shepherd'), pa), true);
+    assert.equal(Destinations.canSee(dest('shepherding'), pa), true);
     assert.equal(Destinations.canSee(dest('directory'), pa), true);
     assert.equal(Destinations.canSee(dest('forms'), pa), true);
     assert.equal(Destinations.canSee(dest('roles-manager'), pa), true);
-    assert.equal(Destinations.canSee(dest('admin'), pa), false);
-    assert.equal(Destinations.canSee(dest('shepherd'), 'pastoral_assistant'), true);
+    assert.equal(Destinations.canSee(dest('admin-dashboard'), pa), false);
+    assert.equal(Destinations.canSee(dest('shepherding'), 'pastoral_assistant'), true);
     const flag = { permissionLevel: 'member', pastoralAssistant: true };
-    assert.equal(Destinations.canSee(dest('shepherd'), flag), false);
+    assert.equal(Destinations.canSee(dest('shepherding'), flag), false);
     assert.equal(Destinations.canSee(dest('forms'), flag), false);
     assert.equal(Destinations.canSee(dest('roles-manager'), flag), false);
-    assert.equal(Destinations.canSee(dest('admin'), flag), false);
+    assert.equal(Destinations.canSee(dest('admin-dashboard'), flag), false);
 });
 
 test('the Home tile carries the same gate as the drawer entry', () => {

@@ -2562,10 +2562,10 @@ test('the phone offers the Calendar, and it is not the Services screen', () => {
     const D = require('../public/mobile/destinations.js');
     const appJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
 
-    const calendar = D.DESTINATIONS.find(d => d.key === 'events');
+    const calendar = D.DESTINATIONS.find(d => d.key === 'calendar');
     assert.ok(calendar && calendar.label === 'Calendar' && calendar.route === 'events',
         'the phone drawer has no Calendar');
-    const services = D.DESTINATIONS.find(d => d.key === 'calendar');
+    const services = D.DESTINATIONS.find(d => d.key === 'service-calendar');
     assert.ok(services && services.label === 'Services' && services.route === 'calendar',
         'the Services entry moved or was renamed — check nothing navigates by it');
 

@@ -53,25 +53,6 @@ test('the header lead helper builds a hamburger on drawer destinations', () => {
     assert.match(src, /aria-label/);
 });
 
-// MS-693: the drawer lists the standing destinations, and a tile may opt out
-// of being one. Drawing it in the drawer while classifyPage() hands its page
-// a back arrow would be the drawer offering a way in that the page then
-// disowns on arrival.
-test('a tile that opted out of the drawer is on the dashboard and not in it', () => {
-    const editor = account('editor');
-    const optedOut = DashboardNav.GATED_TILES.filter((t) => t.drawer === false);
-    assert.ok(optedOut.length, 'nothing opts out any more — drop this test with the flag');
-
-    const onDashboard = DashboardNav.orderedTiles(editor, null).map((t) => t.href);
-    const inDrawer = DashboardNav.drawerTiles(editor, null).map((t) => t.href);
-    for (const tile of optedOut) {
-        assert.ok(onDashboard.includes(tile.href), tile.href + ' left the dashboard');
-        assert.ok(!inDrawer.includes(tile.href), tile.href + ' is still in the drawer');
-        assert.ok(!DashboardNav.isDrawerDestination(tile.href), tile.href);
-        assert.equal(DashboardNav.classifyPage(tile.href).mode, 'back');
-    }
-});
-
 test('registry tiles become drawer entries on a non-dashboard page', () => {
     const editor = account('editor');
     const tiles = DashboardNav.orderedTiles(editor, null);
@@ -82,7 +63,7 @@ test('registry tiles become drawer entries on a non-dashboard page', () => {
 
 test('classifyPage marks hymn detail parent as back not drawer', () => {
     assert.equal(DashboardNav.classifyPage('hymns.html').mode, 'drawer');
-    assert.equal(DashboardNav.classifyPage('service-guide-editor.html').mode, 'back');
+    assert.equal(DashboardNav.classifyPage('service-builder.html').mode, 'back');
 });
 
 test('desktop nav boot is wired on calendar but not on the dashboard', () => {

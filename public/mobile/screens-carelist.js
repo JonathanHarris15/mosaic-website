@@ -298,7 +298,7 @@
         return Promise.resolve();
       }
       saveStatusS[1]("saving");
-      var saving = data.saveCareListEdits(docId, Object.assign({}, edits, { oldShape: session.oldShape() }), userRef.current)
+      var saving = data.saveCareListEdits(docId, edits, userRef.current)
         .then(function () { session.markNormalised(); saveStatusS[1](session.hasUnsaved() ? "unsaved" : "saved"); },
           function () { session.saveFailed(edits); saveStatusS[1]("unsaved"); showToast("Error saving care list", "error"); })
         .then(function () { if (savingRef.current === saving) savingRef.current = null; });

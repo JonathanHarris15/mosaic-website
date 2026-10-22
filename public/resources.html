@@ -12,8 +12,9 @@
     <script src="permission-catalog.js"></script>
     <script src="account-levels-core.js"></script>
     <script src="access-core.js"></script>
+    <script src="dashboard-nav.js"></script>
     <script src="mobile/destinations.js"></script>
-    <script>window.MOBILE_HEADER = { title: 'Resources', menu: false, back: 'index.html', route: 'home' };</script>
+    <script>window.MOBILE_HEADER = { title: 'Resources', menu: true, route: 'resources' };</script>
     <script src="person-photo-core.js"></script>
     <script src="mobile-shell-header.js"></script>
     <style>[x-cloak] { display: none !important; }</style>
@@ -22,15 +23,9 @@
 <body class="m-page m-page--tool fm-page" x-data="resourcesPage()" x-init="init()" x-cloak
       @keydown.escape.window="onEscape()">
 
-    <!-- Reached from the dashboard tile, so the lead is a back arrow rather
-         than the drawer's hamburger (dashboard-nav.js opts this page out). -->
     <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
-                <a class="m-back" :href="homeHref">
-                    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-                    <span class="m-back__label">Home</span>
-                </a>
                 <div class="m-header__titles"><h1 class="m-header__title">Resources</h1></div>
             </div>
             <div class="m-header__actions fm-ed-actions" x-show="canEdit">

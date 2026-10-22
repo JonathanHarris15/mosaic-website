@@ -82,12 +82,14 @@ test('the drawer holds no permission rule of its own', () => {
     }
 });
 
-test('the dashboard builds the drawer from the grid it just drew', () => {
+test('the dashboard builds the drawer from the shared registry, not the grid DOM', () => {
     const index = read('index.html');
     const call = index.match(/DesktopDrawer\.mount\(\{[\s\S]{0,400}?\}\);/);
     assert.ok(call, 'index.html no longer mounts the drawer');
-    assert.match(call[0], /grid: document\.getElementById\('nav-cards-grid'\)/,
-        'the drawer is built from something other than the dashboard tile grid');
+    assert.match(call[0], /DashboardNav\.drawerTiles/,
+        'the home drawer must use the same list as every other page');
+    assert.doesNotMatch(call[0], /grid: document\.getElementById\('nav-cards-grid'\)/,
+        'reading the grid duplicates dashboard tiles the registry already filters');
     assert.match(read('index.html'), /dashboard-nav\.js/,
         'the dashboard shares the tile registry with other pages');
 

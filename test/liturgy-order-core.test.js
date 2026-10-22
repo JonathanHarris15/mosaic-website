@@ -6,6 +6,17 @@ const assert = require('node:assert');
 
 const Core = require('../public/liturgy-order-core.js');
 
+/** Test helper: embed pool elements onto orders (post MS-780 shape). */
+function catalogFixture(spec) {
+    const pool = spec.elements || [];
+    const byId = new Map(pool.map((el) => [el.id, el]));
+    const orders = (spec.orders || []).map((order) => {
+        const elements = (order.elements || (order.elementIds || []).map((id) => byId.get(id))).filter(Boolean);
+        return Object.assign({}, order, { elements });
+    });
+    return Core.catalogFrom({ orders });
+}
+
 const STANDARD_IDS = [
     'preparatoryHymn', 'callToWorship', 'hymn1', 'hymn2', 'callToConfession',
     'assuranceOfPardon', 'hymnMid1', 'hymnMid2', 'scriptureReading', 'sermon',
@@ -44,23 +55,30 @@ test('the Standard seed names, primitives, and flags', () => {
 });
 
 test('an empty collection reads as the seed, and Standard is always there', () => {
-    const empty = Core.catalogFrom({ elements: [], orders: [] });
+    const empty = Core.catalogFrom({ orders: [] });
     assert.deepEqual(empty.orders.map(o => o.id), ['standard']);
     assert.deepEqual(empty.elements.map(el => el.id), STANDARD_IDS);
 
     const saved = Core.catalogFrom({
-        elements: [{ id: 'offertory', name: 'Offertory', primitive: 'text' }],
-        orders: [{ id: 'evening', name: 'Evening', elementIds: ['offertory', 'offertory'] }],
+        orders: [{
+            id: 'evening',
+            name: 'Evening',
+            elements: [{ id: 'offertory', name: 'Offertory', primitive: 'text' }],
+        }],
     });
     assert.deepEqual(saved.orders.map(o => o.id), ['standard', 'evening']);
     assert.deepEqual(saved.orders[1].elementIds, ['offertory']);
 });
 
 test('a stored element with an unknown primitive is dropped, not guessed', () => {
-    const cat = Core.catalogFrom({
-        elements: [{ id: 'a', name: 'A', primitive: 'song' }, { id: 'b', name: 'B', primitive: 'video' }],
+    const cat = catalogFixture({
+        elements: [
+            { id: 'a', name: 'A', primitive: 'song' },
+            { id: 'b', name: 'B', primitive: 'video' },
+        ],
+        orders: [{ id: 'custom', name: 'Custom', elementIds: ['a', 'b'] }],
     });
-    assert.deepEqual(cat.elements.map(el => el.id), ['a']);
+    assert.deepEqual(Core.orderById(cat, 'custom').elements.map((el) => el.id), ['a']);
 });
 
 test('a Sunday with no order, or a deleted one, follows Standard', () => {
@@ -111,7 +129,7 @@ test('table columns: the other orders follow by name, and a new element sits whe
 });
 
 test('a hymn lines up with a hymn, so the baptism is the only new column', () => {
-    const cat = Core.catalogFrom({
+    const cat = catalogFixture({
         elements: [
             { id: 'hA', name: 'Hymn', kind: 'hymn' },
             { id: 'hB', name: 'Hymn', kind: 'hymn' },
@@ -153,7 +171,7 @@ test('a hymn lines up with a hymn, so the baptism is the only new column', () =>
 });
 
 test('orders with nothing in common keep every column, each labelled with its order', () => {
-    const cat = Core.catalogFrom({
+    const cat = catalogFixture({
         elements: [
             { id: 'hA', name: 'Hymn', kind: 'hymn' },
             { id: 'pA', name: 'Prayer', kind: 'prayer' },
@@ -175,7 +193,7 @@ test('orders with nothing in common keep every column, each labelled with its or
 });
 
 test('the same baptism name is one column, and a meal does not take the supper', () => {
-    const shared = Core.catalogFrom({
+    const shared = catalogFixture({
         elements: [
             { id: 'baptism', name: 'Baptism', kind: 'person' },
             { id: 'b2', name: 'Baptism', kind: 'person' },
@@ -190,7 +208,7 @@ test('the same baptism name is one column, and a meal does not take the supper',
     assert.deepEqual(one[0].orderIds, ['evening', 'morning']);
     assert.equal(one[0].orderName, '');
 
-    const apart = Core.catalogFrom({
+    const apart = catalogFixture({
         elements: [
             { id: 'baptism', name: 'Baptism', kind: 'person' },
             { id: 'ded', name: 'Dedication', kind: 'person' },
@@ -208,7 +226,7 @@ test('the same baptism name is one column, and a meal does not take the supper',
 });
 
 test('the same element stays one column when two orders place it on opposite sides', () => {
-    const cat = Core.catalogFrom({
+    const cat = catalogFixture({
         elements: [
             { id: 'hymnEnd1', name: 'Closing Hymn', kind: 'hymn' },
             { id: 'announcements', name: 'Announcements', kind: 'other' },
@@ -455,6 +473,20 @@ test('serviceGuideTarget enables the fill-in href when the order has a known Pri
     });
     assert.equal(hidden.enabled, false);
     assert.equal(hidden.href, null);
+});
+
+test('serviceGuideTarget ignores event-series printables — only the Liturgy Order link counts (MS-779)', () => {
+    const cat = Core.setOrderPrintable(Core.standardCatalog(), 'standard', '');
+    const printables = { 'series-handout': { memberVisible: true } };
+    const target = Core.serviceGuideTarget({ liturgyOrderId: 'standard' }, cat, {
+        date: '2026-10-18',
+        printables,
+        viewerCanEdit: true,
+        // A series-only id is not consulted; this field is absent from the API on purpose.
+        seriesPrintables: ['series-handout'],
+    });
+    assert.equal(target.enabled, false);
+    assert.equal(target.printableId, null);
 });
 
 test('serviceGuideTarget disables when no Printable is linked or the id is unknown', () => {

@@ -217,14 +217,13 @@
     // Fairness is counted per series (ADR-0016 §5), so a serving assignment
     // records which series it belonged to alongside its date and Role.
     //
-    // Every record written before this existed is a Sunday Service, so a record
-    // with no series READS as one. That fallback is what makes the app correct
-    // before the backfill has run — without it, every historic serve would
-    // vanish from fairness the moment the field was introduced and the whole
-    // congregation would look like they had never served.
+    // Every Involvement record carries `seriesId` (backfilled in prod via
+    // scripts/backfill-involvement-series.js). A missing field does not match
+    // a series query or an in-memory slice.
 
     function seriesIdOf(involvement) {
-        return (involvement && involvement.seriesId) || SUNDAY_SERVICE_ID;
+        const id = involvement && involvement.seriesId;
+        return typeof id === 'string' && id.trim() ? id.trim() : '';
     }
 
     // One series' slice of a serve history. Order is preserved; nothing is

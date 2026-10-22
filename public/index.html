@@ -407,6 +407,7 @@
     <script src="commitments-core.js"></script>
     <script src="liturgy-order-core.js"></script>
     <script src="liturgy-order-store.js"></script>
+    <script src="service-dotted-keys-core.js"></script>
     <script src="home-dashboard-core.js"></script>
     <script src="trades-store.js"></script>
     <script src="trades-view.js"></script>
@@ -1011,6 +1012,9 @@
             // Who the drawer says you are. Stays null when nobody is signed in:
             // the drawer still lists the pages a visitor may open.
             let who = null;
+            let account = (typeof DashboardNav !== 'undefined')
+                ? DashboardNav.accountOf(null)
+                : { permissionLevel: 'viewer', pastoralAssistant: false };
             if (user) {
                 let userData = null;
                 try {
@@ -1025,7 +1029,7 @@
                     console.error("Error fetching user data:", e);
                 }
                 const grid = document.getElementById('nav-cards-grid');
-                const account = (typeof AccessCore !== 'undefined')
+                account = (typeof AccessCore !== 'undefined')
                     ? AccessCore.accountOf(userData)
                     : { permissionLevel: 'viewer', pastoralAssistant: false };
 
@@ -1049,14 +1053,13 @@
             }
             refreshPlaceCount();
 
-            // The drawer, built from the tiles the grid is now showing (MS-691),
-            // and after the saved arrangement has been applied so it opens in
-            // the reader's own order. Nothing here decides who may see what: the
-            // gates above already did, and this mirrors their answer.
-            if (typeof DesktopDrawer !== 'undefined') {
+            // The same drawer list every other page builds from dashboard-nav.js
+            // (MS-697), after the saved card order is applied so it opens in
+            // the reader's own order.
+            if (typeof DesktopDrawer !== 'undefined' && typeof DashboardNav !== 'undefined') {
                 DesktopDrawer.mount({
                     toggle: document.getElementById('drawer-toggle'),
-                    grid: document.getElementById('nav-cards-grid'),
+                    entries: DashboardNav.drawerTiles(account, savedCardOrder),
                     who,
                     currentHref: 'index.html',
                     behind: [document.querySelector('main'), document.querySelector('.m-header')],

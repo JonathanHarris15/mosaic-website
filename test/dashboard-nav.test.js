@@ -47,6 +47,7 @@ test('saved order is applied and unknown keys append at the end', () => {
 test('drawer destinations are exactly the registry hrefs plus home', () => {
     assert.ok(DashboardNav.isDrawerDestination('hymns.html'));
     assert.ok(DashboardNav.isDrawerDestination('index.html'));
+    assert.ok(DashboardNav.isDrawerDestination('resources.html'));
     assert.ok(!DashboardNav.isDrawerDestination('commitments.html'));
     assert.ok(!DashboardNav.isDrawerDestination('calendar-event.html'));
 });
