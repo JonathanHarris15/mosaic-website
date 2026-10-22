@@ -9,6 +9,13 @@ const path = require('node:path');
 // Screen entry stays canReadElder (a PA still opens Shepherd).
 
 const Access = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const SRC = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'mobile', 'screens-shepherd.js'),
@@ -24,8 +31,15 @@ const RELS = fs.readFileSync(
 );
 
 test('a Pastoral Assistant has canDecide, so phone decision chrome is visible', () => {
-    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    const flags = Access.pageFlags(account('pastoral_assistant'));
     assert.equal(flags.canDecide, true);
+    assert.equal(flags.canReadElder, true);
+    assert.equal(flags.canWriteRecord, true);
+    assert.equal(flags.canWriteEditor, true);
+    assert.equal(Access.isAnElder(account('pastoral_assistant')), false);
+    const flag = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(flag.canDecide, false);
+    assert.equal(flag.canReadElder, false);
     assert.match(SRC, /var canDecide = !!\(flags && flags.canDecide\)/);
     assert.match(TAGS, /var canDecide = !!\(flags && flags.canDecide\)/);
     assert.match(RELS, /var canDecide = !!\(flags && flags.canDecide\)/);

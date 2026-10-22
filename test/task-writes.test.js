@@ -4,6 +4,13 @@ const assert = require('node:assert');
 const F = require('../functions/mcp-firestore.js');
 const Writes = require('../functions/task-writes.js');
 const TasksCore = require('../functions/shared/tasks-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 // The Task writes (MS-79, sub-task MS-418) — the rules the page and the
 // assistant both come through, against a stub Firestore.
@@ -473,7 +480,10 @@ test('the Task callable admits a Pastoral Assistant and refuses a plain member',
     assert.match(block[0], /Actor\.writesTheRecord\(user\)/);
     assert.doesNotMatch(block[0], /Actor\.isElder\(user/);
     const Actor = require('../functions/mcp-actor.js');
-    assert.strictEqual(Actor.writesTheRecord({permissionLevel: 'member', pastoralAssistant: true}), true);
+    assert.strictEqual(Actor.writesTheRecord(account('pastoral_assistant')), true);
+    assert.strictEqual(Actor.writesTheRecord('pastoral_assistant'), true);
+    assert.strictEqual(Actor.writesTheRecord({permissionLevel: 'member', pastoralAssistant: true}), false);
+    assert.strictEqual(Actor.writesTheRecord(account('member')), false);
     assert.strictEqual(Actor.writesTheRecord({permissionLevel: 'member'}), false);
 });
 

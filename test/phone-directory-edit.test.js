@@ -11,9 +11,16 @@ const path = require('node:path');
 // screen source are the prior art in mobile-directory-gate.test.js.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 global.RolesCore = require('../public/roles-core.js');
 const Shepherding = require('../public/shepherding-core.js');
 const Edit = require('../public/phone-directory-edit.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 const root = path.join(__dirname, '..');
 function read(rel) {
@@ -22,24 +29,27 @@ function read(rel) {
 
 test('an editor, admin, elder, or super admin is offered Edit Mode', () => {
     for (const permissionLevel of ['editor', 'admin', 'elder', 'super_admin']) {
-        assert.equal(Edit.mayOfferEditMode({ permissionLevel }), true, permissionLevel);
+        assert.equal(Edit.mayOfferEditMode(permissionLevel), true, permissionLevel);
+        assert.equal(Edit.mayOfferEditMode(account(permissionLevel)), true, permissionLevel);
+        assert.equal(Edit.mayOfferEditMode({ permissionLevel }), false, permissionLevel);
     }
 });
 
 test('a member is not offered Edit Mode', () => {
+    assert.equal(Edit.mayOfferEditMode('member'), false);
+    assert.equal(Edit.mayOfferEditMode(account('member')), false);
+    assert.equal(Edit.mayOfferEditMode(account('viewer')), false);
     assert.equal(Edit.mayOfferEditMode({ permissionLevel: 'member' }), false);
-    assert.equal(Edit.mayOfferEditMode({ permissionLevel: 'viewer' }), false);
     assert.equal(Edit.mayOfferEditMode(null), false);
 });
 
-test('a Pastoral Assistant is offered Edit Mode, as a role and on the old flag', () => {
-    assert.equal(
-        Edit.mayOfferEditMode({ permissionLevel: 'pastoral_assistant' }),
-        true,
-    );
+test('a Pastoral Assistant is offered Edit Mode; a stored flag is not', () => {
+    assert.equal(Edit.mayOfferEditMode('pastoral_assistant'), true);
+    assert.equal(Edit.mayOfferEditMode(account('pastoral_assistant')), true);
+    assert.equal(Edit.mayOfferEditMode({ permissionLevel: 'pastoral_assistant' }), false);
     assert.equal(
         Edit.mayOfferEditMode({ permissionLevel: 'member', pastoralAssistant: true }),
-        true,
+        false,
     );
 });
 

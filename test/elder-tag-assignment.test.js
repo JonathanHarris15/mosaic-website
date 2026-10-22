@@ -2,6 +2,13 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Core = require('../public/shepherding-core.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
 
 // The Elder Tag (a Projected Tag) and Elder Assignment (ADR-0013, MS-91). The
 // pure pieces — the generalised immutable-tag check, the elder-tag projection,
@@ -46,26 +53,30 @@ test('PROJECTED_TAG_IDS is exactly the Membership Tags plus the Elder Tag', () =
 });
 
 // ── isElderUser — the projection's source of truth ──────────────────────────
-// Elder-ness projects from the linked User's role being exactly 'elder'. A Super
-// Admin is a distinct office and is NOT an elder.
+// Elder-ness projects from the linked User's account level being the elder
+// preset. A stored role or permissionLevel grants nothing. A Super Admin is
+// a distinct office and is NOT an elder.
 
-test('isElderUser is true only for the elder role', () => {
-    assert.strictEqual(Core.isElderUser({ role: 'elder' }), true);
-    assert.strictEqual(Core.isElderUser({ role: 'super_admin' }), false);
-    assert.strictEqual(Core.isElderUser({ role: 'admin' }), false);
-    assert.strictEqual(Core.isElderUser({ role: 'editor' }), false);
-    assert.strictEqual(Core.isElderUser({ role: 'viewer' }), false);
+test('isElderUser is true only for the elder account level', () => {
+    assert.strictEqual(Core.isElderUser(account('elder')), true);
+    assert.strictEqual(Core.isElderUser(account('super_admin')), false);
+    assert.strictEqual(Core.isElderUser(account('admin')), false);
+    assert.strictEqual(Core.isElderUser(account('editor')), false);
+    assert.strictEqual(Core.isElderUser(account('viewer')), false);
+    assert.strictEqual(Core.isElderUser({ role: 'elder' }), false);
+    assert.strictEqual(Core.isElderUser({ permissionLevel: 'elder' }), false);
     assert.strictEqual(Core.isElderUser(null), false);
     assert.strictEqual(Core.isElderUser(undefined), false);
 });
 
 test('a Pastoral Assistant does not project the Elder Tag', () => {
-    const pa = {permissionLevel: 'member', pastoralAssistant: true};
+    const flag = {permissionLevel: 'member', pastoralAssistant: true};
+    assert.strictEqual(Core.isElderUser(flag), false);
+    assert.deepStrictEqual(Core.applyElderTag(['Member'], Core.isElderUser(flag)), ['Member']);
+    const pa = account('pastoral_assistant');
     assert.strictEqual(Core.isElderUser(pa), false);
-    assert.deepStrictEqual(Core.applyElderTag(['Member'], Core.isElderUser(pa)), ['Member']);
-    const role = {permissionLevel: 'pastoral_assistant'};
-    assert.strictEqual(Core.isElderUser(role), false);
-    assert.deepStrictEqual(Core.applyElderTag(['Member', 'Elder'], Core.isElderUser(role)), ['Member']);
+    assert.deepStrictEqual(Core.applyElderTag(['Member', 'Elder'], Core.isElderUser(pa)), ['Member']);
+    assert.strictEqual(Core.isElderUser({permissionLevel: 'pastoral_assistant'}), false);
 });
 
 // ── applyElderTag — the pure projection ─────────────────────────────────────

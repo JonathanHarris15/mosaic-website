@@ -9,16 +9,23 @@ const path = require('path');
 // the computer already uses.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 const Directory = require('../public/directory-request-core.js');
 global.DirectoryRequestCore = Directory;
 const Plan = require('../public/phone-directory-requests.js');
 
-const editor = { permissionLevel: 'editor' };
-const admin = { permissionLevel: 'admin' };
-const elder = { permissionLevel: 'elder' };
-const superAdmin = { permissionLevel: 'super_admin' };
-const member = { permissionLevel: 'member' };
-const assistant = { permissionLevel: 'member', pastoralAssistant: true };
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
+
+const editor = account('editor');
+const admin = account('admin');
+const elder = account('elder');
+const superAdmin = account('super_admin');
+const member = account('member');
+const assistant = account('pastoral_assistant');
 
 const DECLINE_QUESTION = 'Why are you declining? This is shown to the person who asked (optional).';
 const KEEP = 'They will keep their directory record, their membership and every shepherding note — they just will not be signed in as this person any more. You can reconnect an account afterwards.';
@@ -69,7 +76,7 @@ const family = {
 };
 
 test('a member is not offered the queue or the disconnect; a Pastoral Assistant is', () => {
-    for (const user of [member, null, { permissionLevel: 'viewer' }]) {
+    for (const user of [member, null, account('viewer'), { permissionLevel: 'viewer' }]) {
         assert.equal(Plan.offerQueue(user, false), false);
         assert.equal(Plan.offerQueue(user, true), false);
         assert.equal(Plan.offerAccount(user, true, { userId: 'acct' }), false);
@@ -77,7 +84,7 @@ test('a member is not offered the queue or the disconnect; a Pastoral Assistant 
 });
 
 test('an editor is offered the queue with Edit Mode off, and the disconnect only in Edit Mode when the person has a login', () => {
-    for (const user of [editor, admin, elder, superAdmin, assistant, { permissionLevel: 'pastoral_assistant' }]) {
+    for (const user of [editor, admin, elder, superAdmin, assistant, 'pastoral_assistant']) {
         assert.equal(Plan.offerQueue(user, false), true);
         assert.equal(Plan.offerQueue(user, true), true);
         assert.equal(Plan.showQueue(user, false, [connect]), true);
@@ -87,6 +94,8 @@ test('an editor is offered the queue with Edit Mode off, and the disconnect only
         assert.equal(Plan.offerAccount(user, true, { id: 'ada' }), false);
         assert.equal(Plan.offerAccount(user, true, { userId: 'acct', name: 'Ada Lovelace' }), true);
     }
+    assert.equal(Plan.offerQueue({ permissionLevel: 'pastoral_assistant' }), false);
+    assert.equal(Plan.offerQueue({ permissionLevel: 'member', pastoralAssistant: true }), false);
     assert.equal(Plan.ACCOUNT, 'Account');
 });
 

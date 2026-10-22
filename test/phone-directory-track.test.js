@@ -11,18 +11,25 @@ const root = path.join(__dirname, '..');
 // computer directory already uses.
 
 require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 require('../public/phone-directory-edit.js');
 const Shepherding = require('../public/shepherding-core.js');
 // shepherding-core.js only attaches itself when a browser window exists.
 global.ShepherdingCore = Shepherding;
 const Track = require('../public/phone-directory-track.js');
 
-const editor = { permissionLevel: 'editor', uid: 'ed', name: 'Edith' };
-const admin = { permissionLevel: 'admin', uid: 'ad', name: 'Ada' };
-const elder = { permissionLevel: 'elder', uid: 'el', name: 'Eli' };
-const superAdmin = { permissionLevel: 'super_admin', uid: 'sa', name: 'Sam' };
-const member = { permissionLevel: 'member', uid: 'me', name: 'Mia' };
-const assistant = { permissionLevel: 'member', pastoralAssistant: true, uid: 'pa', name: 'Pat' };
+function account(preset, extra) {
+    const id = Levels.BUILTIN_LEVEL_IDS[preset];
+    if (!id) return Object.assign({ accountLevelId: null, permissions: {} }, extra || {});
+    return Object.assign({}, Levels.userWriteFromLevel(id), extra || {});
+}
+
+const editor = account('editor', { uid: 'ed', name: 'Edith' });
+const admin = account('admin', { uid: 'ad', name: 'Ada' });
+const elder = account('elder', { uid: 'el', name: 'Eli' });
+const superAdmin = account('super_admin', { uid: 'sa', name: 'Sam' });
+const member = account('member', { uid: 'me', name: 'Mia' });
+const assistant = account('pastoral_assistant', { uid: 'pa', name: 'Pat' });
 
 function person(over) {
     return Object.assign({
@@ -234,15 +241,17 @@ test('an editor reads the stage or Inactive; a member reads only Member or Non-m
 test('a member is not offered the Track or tag controls; a Pastoral Assistant is', () => {
     assert.equal(Track.offerEdits(member, true), false);
     assert.equal(Track.offerEdits(assistant, true), true);
-    assert.equal(Track.offerEdits({ permissionLevel: 'pastoral_assistant' }, true), true);
+    assert.equal(Track.offerEdits('pastoral_assistant', true), true);
+    assert.equal(Track.offerEdits({ permissionLevel: 'pastoral_assistant' }, true), false);
+    assert.equal(Track.offerEdits({ permissionLevel: 'member', pastoralAssistant: true }, true), false);
     assert.equal(Track.offerEdits(member, false), false);
     assert.equal(Track.offerEdits(assistant, false), false);
 });
 
 test('an editor is offered the Track and tag controls only while Edit Mode is on', () => {
     for (const user of [editor, admin, elder, superAdmin]) {
-        assert.equal(Track.offerEdits(user, false), false, user.permissionLevel);
-        assert.equal(Track.offerEdits(user, true), true, user.permissionLevel);
+        assert.equal(Track.offerEdits(user, false), false, user.accountLevelId);
+        assert.equal(Track.offerEdits(user, true), true, user.accountLevelId);
     }
 });
 
