@@ -57,7 +57,7 @@ gh workflow run "Prod ops script" --ref main \
 | `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args` or `--with-url`; `commit=true` sends one text to Jonathan Harris only) |
 | `textbelt-key-check.js` | Key prefix + whitelist match + Textbelt quota (`--with-url` = Jonathan dry-run with link) |
 | `prayer-request-send-preview.js` | Dry-run pastoral-prayer SMS recipients and bodies (optional `--service-date`) |
-| `prayer-text-notifications-audit.js` | Read-only prayer text failures in `notifications` since `--since` (default `2026-10-13`) |
+| `prayer-text-notifications-audit.js` | Read-only prayer text rows in `notifications` since `--since` (default `2026-10-13`). `--list` prints each row (Chicago time, person, phone last 4, text id, URL flag). `commit=true` is ignored |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |
 | `backfill-occurrence-visibility.js` | [MS-783 — stamp occurrence visibility](./ms-783-occurrence-visibility-backfill.md) (empty `args`; `commit=true` to apply) |
 | `merge-duplicate-person.js` | [MS-771 — merge duplicate person](./ms-771-legacy-oos-audit.md) (`--from` / `--to`; `commit=true` to apply) |
