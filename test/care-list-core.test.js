@@ -322,9 +322,9 @@ test('a Care List from before columns becomes one Notes column, with nothing los
     assert.strictEqual(Core.isOldShape(list()), false);
 });
 
-test('an old-shaped list opens in a session with its cells where the editors look', () => {
-    const s = Core.createSession({ title: 'Old', careListData: { [BOB]: body('Meals') } });
-    assert.strictEqual(s.oldShape(), true);
+test('a normalised list opens in a session with its cells where the editors look', () => {
+    const shaped = Core.normalise({ title: 'Old', careListData: { [BOB]: body('Meals') } });
+    const s = Core.createSession(Object.assign({ title: 'Old' }, shaped));
     assert.deepStrictEqual(s.columns(), [{ id: 'col_default', name: 'Notes' }]);
     assert.deepStrictEqual(s.cell(BOB, 'col_default'), body('Meals'));
 });

@@ -204,7 +204,7 @@ test('a roster legal when drafted warns once the data behind it changes', () => 
 });
 
 test('somebody who has left the church warns if they are still on the rota', () => {
-    const gone = person('ann', { sex: 'female', membership: { status: 'inactive' } });
+    const gone = person('ann', { sex: 'female', membership: { inactive: true } });
     const warnings = ask([seat('setup', 's1', 'ann')], { people: [gone, BEN, CARA] });
 
     assert.equal(warnings.length, 1);

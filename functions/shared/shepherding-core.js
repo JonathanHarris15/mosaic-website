@@ -215,11 +215,8 @@
         const out = [];
         (careListDocs || []).forEach(doc => {
             const stored = doc && doc.careListData && doc.careListData[personId];
-            if (!stored) return;
-            // A list from before columns kept one bare body per person: it
-            // reads as the one Notes column (care-list-core.js says the same).
-            const oldShaped = stored.type === 'doc';
-            const cells = oldShaped ? { col_default: stored } : stored;
+            if (!stored || stored.type === 'doc') return;
+            const cells = stored;
             const columns = (doc.careListColumns && doc.careListColumns.length)
                 ? doc.careListColumns : [{ id: 'col_default', name: 'Notes' }];
             Object.keys(cells).forEach(colId => {
@@ -686,13 +683,11 @@
         return update;
     }
 
-    // Is a Person off the Track / Inactive? The new source of truth is
-    // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
-    // is honoured too so un-migrated records still read correctly. The single
-    // predicate behind every "active people" filter.
+    // Is a Person off the Track / Inactive? membership.inactive (ADR-0012) is
+    // the single predicate behind every "active people" filter.
     function isInactiveMembership(membership) {
         if (!membership) return false;
-        return !!membership.inactive || membership.status === 'inactive';
+        return !!membership.inactive;
     }
 
     // The Membership Directory visibility rule (ADR-0012). The directory splits

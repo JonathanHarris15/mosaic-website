@@ -217,9 +217,9 @@ test('a member saving their profile cannot write their own name', () => {
 
 // ── isInactiveMembership: the single "active people" predicate ────────────────
 
-test('isInactiveMembership reads the new flag and the legacy status, else active', () => {
+test('isInactiveMembership reads only membership.inactive (MS-786)', () => {
     assert.strictEqual(Core.isInactiveMembership({ inactive: true }), true);
-    assert.strictEqual(Core.isInactiveMembership({ status: 'inactive' }), true); // un-migrated
+    assert.strictEqual(Core.isInactiveMembership({ status: 'inactive' }), false);
     assert.strictEqual(Core.isInactiveMembership({ stage: 'member', inactive: false }), false);
     assert.strictEqual(Core.isInactiveMembership({ status: 'member' }), false);
     assert.strictEqual(Core.isInactiveMembership(null), false);
@@ -383,8 +383,6 @@ test('an editor reads the stage itself', () => {
     }
     assert.strictEqual(Core.directoryMembershipLabel({ stage: 'member', inactive: true }, true), 'Inactive');
     assert.strictEqual(Core.directoryMembershipLabel({}, true), 'Not on the Track');
-    // The legacy status field is honoured, exactly as isInactiveMembership does.
-    assert.strictEqual(Core.directoryMembershipLabel({ status: 'inactive' }, true), 'Inactive');
 });
 
 // ── A membership_change is its own Pastoral Record entry, not a status group ──
