@@ -53,8 +53,6 @@ function bucketProviderError(msg) {
     return 'textbelt_other';
 }
 
-const WRITER_FIELDS = ['firedBy', 'trigger', 'writer', 'codePath', 'source'];
-
 /**
  * @param {*} value
  * @return {?Date}
@@ -125,32 +123,18 @@ function bodyContainsUrl(body) {
 }
 
 /**
- * A writer name only when the row itself stores one. The send path does not.
- * @param {object} row
- * @return {?string}
- */
-function recordedWriter(row) {
-    const data = row || {};
-    for (let i = 0; i < WRITER_FIELDS.length; i++) {
-        const value = data[WRITER_FIELDS[i]];
-        if (typeof value === 'string' && value.trim()) return value.trim();
-    }
-    return null;
-}
-
-/**
  * Which writer left this document, inferred from the fields each writer sets.
- * The send path stores `wording`. recordOutbound stores `kind` and does not.
+ * The send path stores `wording` and does not store `kind`. recordOutbound
+ * stores `kind` (null when the ask kind was not passed) and does not store
+ * `wording`. A row that has both is the send path: only that writer sets
+ * `wording`.
  * @param {object} row
  * @return {?string}
  */
 function logCopyOf(row) {
     const data = row || {};
-    const hasWording = Object.prototype.hasOwnProperty.call(data, 'wording');
-    const hasKind = Object.prototype.hasOwnProperty.call(data, 'kind');
-    if (hasWording && hasKind) return 'send-path+recordOutbound';
-    if (hasWording) return 'send-path';
-    if (hasKind) return 'recordOutbound';
+    if (Object.prototype.hasOwnProperty.call(data, 'wording')) return 'send-path';
+    if (Object.prototype.hasOwnProperty.call(data, 'kind')) return 'recordOutbound';
     return null;
 }
 
@@ -180,7 +164,6 @@ function describePrayerTextRow(row, namesById) {
         wording: typeof data.wording === 'string' && data.wording.trim() ?
             data.wording.trim() : null,
         logCopy: logCopyOf(data),
-        writer: recordedWriter(data),
     };
 }
 
@@ -256,7 +239,6 @@ function acceptedPrayerSends(listed) {
         const createdDays = [...new Set(rows
             .map((row) => churchDayFromChicago(row.createdAtChicago))
             .filter(Boolean))].sort();
-        const wording = rows.map((row) => row.wording).find((value) => value) || null;
         const name = rows.map((row) => row.name).find((value) => value) || '';
         return {
             textId: textId,
@@ -265,7 +247,6 @@ function acceptedPrayerSends(listed) {
             serviceDate: rows[0].serviceDate || null,
             createdDays: createdDays,
             copies: rows.length,
-            wording: wording,
             logCopies: rows.map((row) => row.logCopy),
         };
     });
@@ -364,8 +345,8 @@ function oct20SlotSentLater(requests, sends) {
             const later = sends.filter((send) => {
                 if (send.personId !== req.personId) return false;
                 if (send.serviceDate !== req.serviceDate) return false;
-                const days = send.createdDays || [];
-                return days.some((day) => day > OCT20_SCHEDULED);
+                const created = send.createdDays || [];
+                return created.some((createdDay) => createdDay > OCT20_SCHEDULED);
             });
             if (!later.length) return;
             const loggedOn = [...new Set(later.flatMap((send) =>
@@ -408,23 +389,33 @@ function manualSendNowCheck(requests) {
                 'same day. The hourly tick does not.');
             return;
         }
-        if (req.initialSentDate && !sentDays.length && !req.reminderSent) {
+        // Send Now never passes `day`, so it does not append a notice day.
+        // A scheduler reminder always appends its day onto the initial day.
+        // A reminder whose sentDays never gained that day is Send Now,
+        // including a Send Now initial (empty sentDays) followed by Send Now.
+        if (req.reminderSent) {
+            if (sentDays.length < 2) {
+                manual.push(who + ': reminder on ' +
+                    (req.reminderSentDate || '(unset)') + ' and sentDays is ' +
+                    JSON.stringify(sentDays) + '. A scheduler reminder appends ' +
+                    'its notice day. Send Now does not.');
+                return;
+            }
+            scheduler.push(who + ': sentDays ' + JSON.stringify(sentDays) +
+                ' includes the reminder notice day. That stamp is the hourly ' +
+                'tick. Send Now does not append a notice day.');
+            return;
+        }
+        if (req.initialSentDate && !sentDays.length) {
             manual.push(who + ': initialSentDate is ' + req.initialSentDate +
                 ' and sentDays is empty. The scheduler writes the notice ' +
                 'day into sentDays. Send Now does not.');
             return;
         }
-        if (sentDays.length && !req.reminderSent) {
+        if (sentDays.length) {
             scheduler.push(who + ': sentDays ' + JSON.stringify(sentDays) +
                 ' is the scheduler stamp. reminderSent is false, so Send ' +
                 'Now was not pressed after that initial.');
-            return;
-        }
-        if (req.reminderSent && req.reminderSentDate && req.initialSentDate &&
-                req.reminderSentDate !== req.initialSentDate) {
-            scheduler.push(who + ': reminder on ' + req.reminderSentDate +
-                ' is a later church day than the initial ' +
-                req.initialSentDate + ', which is the hourly reminder.');
         }
     });
     if (manual.length) {
