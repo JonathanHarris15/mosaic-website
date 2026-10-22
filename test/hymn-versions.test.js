@@ -110,10 +110,7 @@ test('a blank page slot is not a page that prints', () => {
 test('every reader that prints a hymn asks this rule and not the first version', () => {
     const readers = [
         'public/printable-data-core.js',
-        'public/guide-store.js',
-        'public/service-guide.js',
         'public/service-builder.js',
-        'scripts/export-service-guide.js',
     ];
     readers.forEach(file => {
         const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');

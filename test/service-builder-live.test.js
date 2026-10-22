@@ -212,7 +212,6 @@ function loadPage(overrides) {
     sandbox.db = {};
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
     sandbox.DateUtils = require('../public/date-utils.js');
-    sandbox.GuideStore = require('../public/guide-store.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     sandbox.MosaicIdentity = require('../public/mosaic-identity.js');
     sandbox.ServiceAuthorship = require('../public/service-authorship.js');

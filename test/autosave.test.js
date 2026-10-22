@@ -68,7 +68,6 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AccessCore = require('../public/access-core.js');
     sandbox.AccountLevelsCore = require('../public/account-levels-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
-    sandbox.GuideStore = require('../public/guide-store.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');
     Object.assign(sandbox, overrides || {});
 
@@ -199,49 +198,4 @@ test('a save that fails does not queue itself again', async () => {
 
     assert.ok(page.isDirty, 'the edit is still owed');
     assert.strictEqual(clock.pending, 0, 'but nothing is armed to retry it on a timer');
-});
-
-// ── The Service Guide editor (v2) ────────────────────────────────────────────
-
-test('the guide editor waits 1.5s, the house debounce', () => {
-    const { page, clock } = loadComponent('service-guide-editor.js', 'guideEditorV2');
-    page.permissionLevel = 'editor';
-    page.snapshot = { pages: [] };
-
-    page.scheduleSave();
-
-    assert.deepStrictEqual(clock.delays(), [1500]);
-    assert.strictEqual(page.saveStatus, 'unsaved');
-});
-
-test('the guide editor does not autosave before a template is loaded', () => {
-    const { page, clock } = loadComponent('service-guide-editor.js', 'guideEditorV2');
-    page.permissionLevel = 'editor';
-    page.snapshot = null;
-
-    page.scheduleSave();
-
-    assert.strictEqual(clock.pending, 0);
-});
-
-test('a viewer cannot autosave the guide', () => {
-    const { page, clock } = loadComponent('service-guide-editor.js', 'guideEditorV2');
-    page.permissionLevel = 'viewer';
-    page.snapshot = { pages: [] };
-
-    page.scheduleSave();
-
-    assert.strictEqual(clock.pending, 0);
-});
-
-// ── The legacy Service Guide ─────────────────────────────────────────────────
-
-test('the legacy guide editor debounces on the same 1.5s', () => {
-    const { page, clock } = loadComponent('service-guide.js', 'guideEditor');
-
-    page.scheduleSave();
-    page.scheduleSave();
-
-    assert.deepStrictEqual(clock.delays(), [1500]);
-    assert.strictEqual(page.saveStatus, 'unsaved');
 });

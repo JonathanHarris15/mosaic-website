@@ -457,6 +457,20 @@ test('serviceGuideTarget enables the fill-in href when the order has a known Pri
     assert.equal(hidden.href, null);
 });
 
+test('serviceGuideTarget ignores event-series printables — only the Liturgy Order link counts (MS-779)', () => {
+    const cat = Core.setOrderPrintable(Core.standardCatalog(), 'standard', '');
+    const printables = { 'series-handout': { memberVisible: true } };
+    const target = Core.serviceGuideTarget({ liturgyOrderId: 'standard' }, cat, {
+        date: '2026-10-18',
+        printables,
+        viewerCanEdit: true,
+        // A series-only id is not consulted; this field is absent from the API on purpose.
+        seriesPrintables: ['series-handout'],
+    });
+    assert.equal(target.enabled, false);
+    assert.equal(target.printableId, null);
+});
+
 test('serviceGuideTarget disables when no Printable is linked or the id is unknown', () => {
     const bare = Core.standardCatalog();
     assert.equal(Core.serviceGuideTarget({}, bare, { date: '2026-10-18', viewerCanEdit: true }).enabled, false);
