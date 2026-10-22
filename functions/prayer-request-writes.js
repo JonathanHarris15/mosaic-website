@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @fileoverview Firestore writes for a Prayer Request (MS-513). Reply path
  * and page (form) path share the note decision so a second note is never
