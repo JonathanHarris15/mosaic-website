@@ -2739,21 +2739,66 @@ function serviceForm() {
     };
 }
 
+// Pastoral-prayer subject slots (Pastoral Prayer 1 / 2): same personPicker
+// chrome as every other "who" field, but the candidate list is members only,
+// sex-scoped when the order says so, and least-recently-prayed-first.
+function pastoralPrayerPicker(slot, parent, item, idx) {
+    const who = parent && parent.requestWho(item, idx);
+    const suggestionsKey = who === 'female' ? 'females' : who === 'male' ? 'males' : null;
+    const field = who === 'female' ? 'prayerFemale' : who === 'male' ? 'prayerMale' : null;
+    return personPicker(slot, parent, suggestionsKey, field, who);
+}
+
 // `field` is the Order of Service "who" slot this picker fills —
 // 'preacher', 'serviceLeader', 'prayerMale', etc. — used only to look up
 // each candidate's cached usage stat (usage-stats-store.js). null for a
 // picker this feature doesn't track (baptism candidates, irregular
 // elements), which just shows no stat.
-function personPicker(personRef, parent = null, suggestionsKey = null, field = null) {
+// `prayerWho` — when set ('male' | 'female' | 'either'), this picker is a
+// pastoral-prayer subject slot rather than a serving-role field.
+function personPicker(personRef, parent = null, suggestionsKey = null, field = null, prayerWho = null) {
     if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
         parent: parent,
         suggestionsKey: suggestionsKey,
         field: field,
+        prayerWho: prayerWho,
+        get isPastoralPrayerField() {
+            return this.field === 'prayerMale' || this.field === 'prayerFemale';
+        },
         usageLabelFor(candidate) {
             if (!UsageStats.isTrackedField(this.field)) return '';
             return UsageStats.formatLabel(UsageStats.personStatFor(candidate, this.field));
+        },
+        prayerLastLabel(person) {
+            if (this.parent && typeof this.parent.prayerLastLabel === 'function') {
+                return this.parent.prayerLastLabel(person);
+            }
+            if (window.PastoralPrayerCore) {
+                return PastoralPrayerCore.lastPrayedLabel(person && person.lastPastoralPrayerDate);
+            }
+            return '';
+        },
+        _prayerEligibleFromFound(found) {
+            const parent = this.parent;
+            if (!parent || !this.prayerWho) return found;
+            const memberIds = new Set((parent.prayerMembers || []).map(m => m.id));
+            const who = this.prayerWho;
+            let list = (found || []).filter(p => p && p.id && memberIds.has(p.id));
+            if (who === 'male' || who === 'female') {
+                list = list.filter(p => p.sex === who);
+            }
+            const sortKey = (m) => (window.PastoralPrayerCore
+                ? PastoralPrayerCore.rotationSortKey(m && m.lastPastoralPrayerDate)
+                : '');
+            list.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+            const currentId = this.personRef && this.personRef.id;
+            if (currentId && !list.some(m => m.id === currentId)) {
+                const current = (parent.prayerMembers || []).find(m => m.id === currentId);
+                if (current) list.unshift(current);
+            }
+            return list;
         },
         // prayerMale/prayerFemale already show PastoralPrayerCore.lastPrayedLabel
         // (the one date label every surface uses) — this only adds the count
@@ -2823,6 +2868,27 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
         },
 
         async search() {
+            if (this.prayerWho && this.parent && typeof this.parent.prayerChoices === 'function') {
+                const q = (this.query || '').trim();
+                const named = (this.personRef.name || '').trim();
+                if (!q || q === named) {
+                    let list = this.parent.prayerChoices(this.prayerWho, this.personRef && this.personRef.id);
+                    const suggestions = this.suggestions;
+                    if (suggestions && suggestions.length && typeof PeoplePickerCore !== 'undefined') {
+                        list = PeoplePickerCore.excludeIds(list, suggestions);
+                    }
+                    this.results = list;
+                    return;
+                }
+                const fuse = this.parent.peopleFuse;
+                const registry = this.parent.peopleRegistry;
+                if (fuse && registry) {
+                    let found = fuse.search(this.query).slice(0, 20).map(r => r.item);
+                    this.results = this._prayerEligibleFromFound(found);
+                    return;
+                }
+            }
+
             const fuse = this.parent && this.parent.peopleFuse;
             const registry = this.parent && this.parent.peopleRegistry;
             const hasFuse = !!(fuse && registry);
@@ -2840,7 +2906,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                     found = fuse.search(this.query).slice(0, 5).map(r => r.item);
                 }
 
-                if (this.query && this.query.trim().length >= 2) {
+                if (!this.prayerWho && this.query && this.query.trim().length >= 2) {
                     const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
                     if (!exactMatch) {
                         found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
@@ -2871,11 +2937,13 @@ function personPicker(personRef, parent = null, suggestionsKey = null, field = n
                 let found = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
-                if (!exactMatch && this.query.trim().length >= 2) {
+                if (!this.prayerWho && !exactMatch && this.query.trim().length >= 2) {
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
                 }
 
-                this.results = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
+                let list = this.finalizePickerResults(found, this.parent && this.parent.peopleRegistry);
+                if (this.prayerWho) list = this._prayerEligibleFromFound(list);
+                this.results = list;
             } catch (error) {
                 console.error("Error searching people:", error);
             }
@@ -3054,5 +3122,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm, personPicker, pastoralPrayerPicker };
 }

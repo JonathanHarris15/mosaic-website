@@ -1029,18 +1029,40 @@
                                             <div x-show="item.requests" class="flex flex-col gap-2">
                                                 <template x-for="(slot, idx) in service.liturgy[item.key]" :key="item.key + '-ask-' + idx">
                                                     <div>
-                                                        <label class="flex flex-col gap-1">
+                                                        <div class="flex flex-col gap-1">
                                                             <span class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline" x-text="item.label + ' ' + (idx + 1)"></span>
-                                                            <select class="rounded-lg border border-outline-variant bg-white text-sm px-3 py-2" :disabled="!canEdit"
-                                                                    :aria-label="item.label + ' ' + (idx + 1)"
-                                                                    :value="slot.id || ''"
-                                                                    @change="setPrayerPerson(item.key, idx, $event.target.value)">
-                                                                <option value="">Choose someone</option>
-                                                                <template x-for="p in prayerChoices(requestWho(item, idx), slot.id)" :key="p.id">
-                                                                    <option :value="p.id" :selected="slot.id === p.id" x-text="p.name + ' — ' + prayerLastLabel(p)"></option>
-                                                                </template>
-                                                            </select>
-                                                        </label>
+                                                            <div x-data="pastoralPrayerPicker(slot, $data, item, idx)" @click.away="open = false" class="relative max-w-md">
+                                                                <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
+                                                                    <span class="material-symbols-outlined text-[18px] text-secondary mr-2">person</span>
+                                                                    <input type="text" :aria-label="item.label + ' ' + (idx + 1)" placeholder="Search people…" x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                                                    <button x-show="query && canEdit" type="button" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer ml-1">
+                                                                        <span class="material-symbols-outlined text-[18px]">close</span>
+                                                                    </button>
+                                                                </div>
+                                                                <div x-show="open && (suggestions.length > 0 || results.length > 0)" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-64 overflow-y-auto left-0">
+                                                                    <template x-if="suggestions.length > 0 && (!query || query === personRef.name)">
+                                                                        <div>
+                                                                            <div class="px-4 py-2 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (longest wait)</div>
+                                                                            <template x-for="p in suggestions" :key="'sug-' + p.id">
+                                                                                <button type="button" @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed/30 flex flex-col transition-colors border-b last:border-0">
+                                                                                    <span class="font-label-md text-sm text-primary" x-text="p.name"></span>
+                                                                                    <span class="text-[10px] text-on-surface-variant/60" x-text="prayerLastLabel(p)"></span>
+                                                                                </button>
+                                                                            </template>
+                                                                        </div>
+                                                                    </template>
+                                                                    <template x-for="p in results" :key="p.id">
+                                                                        <button type="button" @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                                                            <p class="font-label-md text-sm text-on-surface" x-text="optionLabel(p)"></p>
+                                                                            <div class="flex items-baseline gap-1">
+                                                                                <span class="text-[10px] text-on-surface-variant/60" x-text="prayerLastLabel(p)"></span>
+                                                                                <span x-show="prayerCountFor(p)" class="text-[10px] text-on-surface-variant/50" x-text="'(' + prayerCountFor(p) + ')'"></span>
+                                                                            </div>
+                                                                        </button>
+                                                                    </template>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                         <div x-show="isShepherd && slot.id" x-init="ensurePrayerRequest(slot.id)" class="mt-2 rounded-xl border border-secondary/30 bg-secondary-container/15 p-3">
                                                             <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-2">
                                                                 <span class="material-symbols-outlined text-[14px] text-secondary">lock</span>
