@@ -13,56 +13,57 @@ const blockFor = pattern => {
 };
 
 test('isKiosk is its own helper, not derived from another rank', () => {
-    const fn = blockFor(/function isKiosk\(\)\s*\{([\s\S]*?)\n    \}/);
-    assert.match(fn, /permissionLevel\(\) == 'kiosk'/);
+    const fn = blockFor(/function isKiosk\(\)\s*\{([\s\S]*?)\n {4}\}/);
+    assert.match(fn, /accessRank\(\) == 'kiosk'/);
+    assert.doesNotMatch(fn, /permissionLevel\(\)/);
     assert.doesNotMatch(fn, /isAdmin|isEditor|isElder|isMember/);
 });
 
 test('people and families name isKiosk on the read rule', () => {
-    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/);
-    const families = blockFor(/match \/families\/\{familyId\}\s*\{([\s\S]*?)\n    \}/);
+    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n {6}match/);
+    const families = blockFor(/match \/families\/\{familyId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.match(person, /allow read: if isSignedIn\(\) \|\| isKiosk\(\)/);
     assert.match(families, /allow read: if isSignedIn\(\) \|\| isKiosk\(\)/);
 });
 
 test('a kiosk cannot read elder-gated shepherding notes', () => {
-    const notes = blockFor(/match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n    \}/);
+    const notes = blockFor(/match \/people\/\{personId\}\/shepherding_notes\/\{noteId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.match(notes, /allow read: if readsAsElder\(\)/);
     assert.match(notes, /allow write: if writesTheRecord\(\)/);
     assert.doesNotMatch(notes, /isKiosk\(\)/);
 });
 
 test('attendance is kiosk-write, and non-kiosk cannot write it', () => {
-    const block = blockFor(/match \/attendance\/\{personId\}\s*\{([\s\S]*?)\n      \}/);
+    const block = blockFor(/match \/attendance\/\{personId\}\s*\{([\s\S]*?)\n {6}\}/);
     assert.match(block, /allow create, update: if isKiosk\(\)/);
     assert.doesNotMatch(block, /allow create, update: if isEditor\(\)/);
     assert.doesNotMatch(block, /allow write: if true/);
 });
 
 test('attendance is readable by the same floors as the roster, plus the kiosk', () => {
-    const block = blockFor(/match \/attendance\/\{personId\}\s*\{([\s\S]*?)\n      \}/);
+    const block = blockFor(/match \/attendance\/\{personId\}\s*\{([\s\S]*?)\n {6}\}/);
     assert.match(block, /isKiosk\(\)/);
     assert.match(block, /readsAsEditor\(\)/);
     assert.match(block, /rosterShared == true/);
 });
 
 test('a kiosk can read every event occurrence, ignoring the visibility ladder', () => {
-    const block = blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n      match \/attendance/);
+    const block = blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n {6}match \/attendance/);
     assert.match(block, /allow read: if isKiosk\(\)/);
 });
 
 test('a kiosk may create a Person and a Household, and cannot delete either', () => {
-    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/);
+    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n {6}match/);
     assert.match(person, /allow create: if isKiosk\(\)/);
     assert.doesNotMatch(person, /allow delete: if isKiosk\(\)/);
-    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n    \}/);
+    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n {4}\}/);
     assert.match(households, /allow create: if isKiosk\(\)/);
     assert.match(households, /allow delete: if isEditor\(\)/);
     assert.doesNotMatch(households, /allow delete: if isKiosk\(\)/);
 });
 
 test('a kiosk may add to a Household but never rename or empty one', () => {
-    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n    \}/);
+    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n {4}\}/);
     const update = households.match(/allow update: if([\s\S]*?);/);
     assert.ok(update, 'no update rule on households');
     assert.match(update[1], /isKiosk\(\)/);
@@ -75,7 +76,7 @@ test('a kiosk may add to a Household but never rename or empty one', () => {
 // MS-709 (ADR-0075): the kiosk's Households are the `families` records, and
 // the desk edits them — but only their seats and children.
 test('a kiosk may write a Household record, and only its seats and children', () => {
-    const families = blockFor(/match \/families\/\{familyId\}\s*\{([\s\S]*?)\n    \}/);
+    const families = blockFor(/match \/families\/\{familyId\}\s*\{([\s\S]*?)\n {4}\}/);
     const write = families.match(/allow create, update: if isKiosk\(\)([\s\S]*?);/);
     assert.ok(write, 'no kiosk write rule on families');
     assert.match(write[1], /keys\(\)\.hasOnly\(\['husbandId', 'wifeId', 'childIds', 'anniversary'\]\)/);
@@ -83,7 +84,7 @@ test('a kiosk may write a Household record, and only its seats and children', ()
 });
 
 test('a kiosk may rename a Person and change nothing else about them', () => {
-    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/);
+    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n {6}match/);
     const kioskUpdates = person.match(/allow update: if isKiosk\(\)[\s\S]*?;/g) || [];
     assert.strictEqual(kioskUpdates.length, 1);
     assert.match(kioskUpdates[0], /affectedKeys\(\)\s*\.hasOnly\(\['name', 'nameParts', 'updatedAt'\]\)/);

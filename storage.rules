@@ -59,66 +59,162 @@ service firebase.storage {
       return myUserData();
     }
 
-    // `permissionLevel` with the legacy `role` fallback, exactly as
-    // firestore.rules reads it during the MS-119 migration.
-    function levelOf(u) {
-      return ('permissionLevel' in u) ? u.permissionLevel : u.role;
+    // MS-776: same resolver as firestore.rules. A saved map is the whole
+    // answer; otherwise a builtin accountLevelId. role, permissionLevel, and
+    // pastoralAssistant grant nothing. These lists restate
+    // account-levels-core buildPresetPermissions; the drift test fails when
+    // either rules file disagrees with that module or with the other file.
+
+    function mapGrants(perms, key) {
+      return perms is map && (
+        (('system.super_admin' in perms) && perms['system.super_admin'] == true)
+        || ((key in perms) && perms[key] == true)
+      );
     }
 
-    // Restates account-levels-core presetKeyFromAccountLevelId / canonical rung
-    // (MS-725). Storage cannot run normalizeAccount(); member-sync may leave
-    // permissionLevel at `member` while accountLevelId or the map still says
-    // super_admin — the client resolves that; these helpers must too.
-    function presetKeyFromAccountLevelId(id) {
-      return id == 'level_super_admin' ? 'super_admin'
-        : id == 'level_elder' ? 'elder'
-        : id == 'level_pastoral_assistant' ? 'pastoral_assistant'
-        : id == 'level_editor' ? 'editor'
-        : id == 'level_admin' ? 'admin'
-        : id == 'level_member' ? 'member'
-        : id == 'level_viewer' ? 'viewer'
-        : id == 'level_kiosk' ? 'kiosk'
-        : '';
+    function grantsElder(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'shep.count_as_elder'
+        || key == 'shep.elder_assignment.be_assignee' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
     }
 
-    function rungFromPermissionMap(perms) {
-      return perms['system.kiosk'] == true ? 'kiosk'
-        : perms['system.super_admin'] == true ? 'super_admin'
-        : perms['shep.count_as_elder'] == true ? 'elder'
-        : perms['visibility.lift_hidden_tags'] == true ? 'pastoral_assistant'
-        : perms['admin.dashboard.access'] == true ? 'admin'
-        : (perms['directory.edit_identity'] == true
-            || perms['services.builder.edit'] == true
-            || perms['printables.edit'] == true) ? 'editor'
-        : perms['directory.view'] == true ? 'member'
-        : '';
+    function grantsPastoralAssistant(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
     }
 
-    function higherBuiltinRung(a, b) {
-      return a == 'super_admin' || b == 'super_admin' ? 'super_admin'
-        : a == 'elder' || b == 'elder' ? 'elder'
-        : a == 'pastoral_assistant' || b == 'pastoral_assistant' ? 'pastoral_assistant'
-        : a == 'admin' || b == 'admin' ? 'admin'
-        : a == 'editor' || b == 'editor' ? 'editor'
-        : a == 'member' || b == 'member' ? 'member'
-        : a == 'kiosk' || b == 'kiosk' ? 'kiosk'
-        : a == 'viewer' || b == 'viewer' ? 'viewer'
-        : '';
+    function grantsEditor(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.mcp.view';
     }
 
-    function permissionLevelAccount() {
+    function grantsAdmin(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.dashboard.access' || key == 'admin.sms.manage'
+        || key == 'admin.push.manage' || key == 'admin.accounts.view'
+        || key == 'admin.accounts.provision'
+        || key == 'admin.accounts.assign_level' || key == 'admin.levels.manage'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsMember(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'directory.view';
+    }
+
+    function grantsViewer(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public';
+    }
+
+    function grantsKiosk(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'system.kiosk';
+    }
+
+    function presetGrants(id, key) {
+      return id == 'level_super_admin' ? true
+        : id == 'level_elder' ? grantsElder(key)
+        : id == 'level_pastoral_assistant' ? grantsPastoralAssistant(key)
+        : id == 'level_editor' ? grantsEditor(key)
+        : id == 'level_admin' ? grantsAdmin(key)
+        : id == 'level_member' ? grantsMember(key)
+        : id == 'level_viewer' ? grantsViewer(key)
+        : id == 'level_kiosk' ? grantsKiosk(key)
+        : false;
+    }
+
+    function keyOnAccount(key) {
       let data = myUserData();
-      let stored = data == null ? '' : levelOf(data);
-      let fromId = data == null ? ''
-        : (('accountLevelId' in data)
-            ? presetKeyFromAccountLevelId(data.accountLevelId)
-            : '');
-      let fromMap = data == null ? ''
-        : (('permissions' in data)
-            ? rungFromPermissionMap(data.permissions)
-            : '');
+      return data != null && (
+        ('permissions' in data)
+          ? mapGrants(data.permissions, key)
+          : (('accountLevelId' in data) && presetGrants(data.accountLevelId, key))
+      );
+    }
+
+    function accessRankAccount() {
+      let data = myUserData();
       return data == null ? ''
-        : higherBuiltinRung(higherBuiltinRung(fromId, stored), fromMap);
+        : keyOnAccount('system.super_admin') ? 'super_admin'
+        : keyOnAccount('system.kiosk') ? 'kiosk'
+        : keyOnAccount('shep.count_as_elder') ? 'elder'
+        : keyOnAccount('visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : keyOnAccount('admin.dashboard.access') ? 'admin'
+        : (keyOnAccount('directory.edit_identity')
+            || keyOnAccount('services.builder.edit')
+            || keyOnAccount('printables.edit')) ? 'editor'
+        : keyOnAccount('directory.view') ? 'member'
+        : 'viewer';
     }
 
     // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`
@@ -143,15 +239,13 @@ service firebase.storage {
     // is decided against the occurrence's own list of Person ids.
     function rankOrParticipantSees(occ, u) {
       return (stampedVisibility(occ) == 'member'
-              && (levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-                  || u.pastoralAssistant == true))
-        || (stampedVisibility(occ) in ['member', 'participant', 'editor']
-              && (levelOf(u) in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-                  || u.pastoralAssistant == true))
+              && (isMemberAccount() || keyOnAccount('visibility.rung.member')))
+        || (stampedVisibility(occ) == 'participant'
+              && (readsAsEditorAccount() || keyOnAccount('visibility.rung.participant')))
+        || (stampedVisibility(occ) == 'editor'
+              && (readsAsEditorAccount() || keyOnAccount('visibility.rung.editor')))
         || (stampedVisibility(occ) == 'elder'
-              && (levelOf(u) in ['elder', 'super_admin']
-                  || levelOf(u) == 'pastoral_assistant'
-                  || u.pastoralAssistant == true))
+              && (readsAsElderAccount() || keyOnAccount('visibility.rung.elder')))
         || (stampedVisibility(occ) == 'participant'
               && ('personId' in u) && ('participantIds' in occ)
               && u.personId in occ.participantIds);
@@ -171,80 +265,54 @@ service firebase.storage {
     }
 
     function isEditorAccount() {
-      return isSignedIn() && usersDocExists() && (
-        permissionLevelAccount() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistantAccount()
-      );
+      return accessRankAccount() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || keyOnAccount('directory.edit_identity')
+        || keyOnAccount('printables.edit')
+        || keyOnAccount('services.builder.edit')
+        || keyOnAccount('roles.manager.edit')
+        || keyOnAccount('hymns.edit');
     }
 
-    // ⚠ AN ADMIN IS NOT AN ELDER. The tier list reads editor → elder → admin,
-    // which suggests an admin sees everything an elder does; isElder() in
-    // firestore.rules has never said so, and this restates that one rather than
-    // the tier list. Shepherding data is closed to admins on purpose.
+    // ⚠ AN ADMIN IS NOT AN ELDER. count_as_elder is the elder office.
+    // Shepherding data is closed to admins on purpose. A super admin's map
+    // includes the key; a pastoral assistant's does not.
     function isElderAccount() {
-      return isSignedIn() && usersDocExists()
-        && permissionLevelAccount() in ['elder', 'super_admin'];
+      return keyOnAccount('shep.count_as_elder');
     }
 
-    // Pastoral Assistant is the permission level, restated from AccessCore
-    // (ADR-0076). The old flag still counts. Fail closed: neither is a grant
-    // when the user doc is missing. Not an elder.
     function isPastoralAssistantAccount() {
-      return isSignedIn() && usersDocExists() && (
-        permissionLevelAccount() == 'pastoral_assistant'
-        || myUserData().pastoralAssistant == true
-      );
+      return accessRankAccount() == 'pastoral_assistant';
     }
 
     function readsAsElderAccount() {
-      return isElderAccount() || isPastoralAssistantAccount();
+      return keyOnAccount('visibility.lift_hidden_tags') || isPastoralAssistantAccount();
     }
 
     function readsAsEditorAccount() {
-      return isEditorAccount() || isPastoralAssistantAccount();
-    }
-
-    // The floor of the `member` rung, restating firestore.rules isMember().
-    // Note what it is not: `request.auth != null`, which on this project is a
-    // self-service account with no rung at all.
-    function isMemberAccount() {
-      return isSignedIn() && usersDocExists() && (
-        permissionLevelAccount() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+      return keyOnAccount('directory.edit_identity')
+        || keyOnAccount('printables.edit')
         || isPastoralAssistantAccount()
-      );
+        || isEditorAccount();
     }
 
-    // MS-722 / MS-725 (ADR 0082): the permission-key write door, restated.
-    // A saved map is the whole answer when there is one; an account that has
-    // never been through Admin → Accounts keeps the level names. Same three
-    // clauses as firestore.rules editsWith(), in the engine that cannot
-    // import them.
-    function usesPermissionMapAccount() {
-      let data = myUserData();
-      return data != null && ('permissions' in data);
-    }
-
-    function isSuperAdminAccount() {
-      return usesPermissionMapAccount()
-        && myUserData().permissions['system.super_admin'] == true;
+    // The floor of the member rung, restating firestore.rules isMember().
+    function isMemberAccount() {
+      return accessRankAccount() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || keyOnAccount('directory.view')
+        || keyOnAccount('visibility.rung.member')
+        || isEditorAccount();
     }
 
     function hasPermissionAccount(key) {
-      return isSuperAdminAccount()
-        || (usesPermissionMapAccount()
-            && myUserData().permissions[key] == true);
+      return keyOnAccount(key);
     }
 
     function editsWithAccount(key) {
-      return hasPermissionAccount(key)
-        || (!usesPermissionMapAccount() && isEditorAccount());
+      return keyOnAccount(key);
     }
 
-    // MS-594: restates AccessCore.canDecide. Storage has no elder-only
-    // shepherding write path today; the helper is here so the restatement
-    // cannot drift from Firestore / the core.
     function canDecideAccount() {
-      return isElderAccount() || isPastoralAssistantAccount();
+      return keyOnAccount('shep.tags.manage') || isPastoralAssistantAccount();
     }
 
     // Event Attachments (MS-287): a file attached to one Event occurrence — a

@@ -19,8 +19,16 @@ test('every catalog key is classified for the client-loss gate', () => {
 });
 
 test('a saved builtin account neither loses nor gains a door', () => {
+    // Prod documents still carry the ladder strings the backfill left in
+    // place. The frozen pre-cutover columns read those strings. A write that
+    // only has accountLevelId and permissions is a gain against that freeze,
+    // which is not how the live accounts look.
     for (const preset of Levels.BUILTIN_PRESET_KEYS) {
-        const user = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset(preset));
+        const user = Object.assign(
+            {},
+            Levels.userWriteFromLevel(Levels.accountLevelIdForPreset(preset)),
+            { permissionLevel: preset, role: preset },
+        );
         const result = diff(user);
         assert.deepEqual(result.blocking, [], preset + ' blocking ' + result.blocking.join(', '));
         assert.deepEqual(result.gains, [], preset + ' gains ' + result.gains.join(', '));
@@ -33,7 +41,8 @@ test('a legacy editor with only permissionLevel loses the doors the ladder still
     assert.ok(result.blocking.includes('firestore isEditor'));
     assert.ok(result.blocking.includes('storage isEditor'));
     assert.ok(result.blocking.includes('rankOf see.editor'));
-    assert.ok(result.blocking.includes('client isEditor'));
+    // The client now refuses the ladder too, so it is not a client loss.
+    assert.equal(result.blocking.includes('client isEditor'), false);
 });
 
 test('a role-only editor is the same loss as a permissionLevel editor', () => {
@@ -45,13 +54,14 @@ test('a role-only editor is the same loss as a permissionLevel editor', () => {
 
 test('a saved map that turns calendar.events.edit off is already refused by the rules', () => {
     const editor = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset('editor'));
-    editor.permissions['calendar.events.edit'] = false;
+    editor.permissions = Object.assign({}, editor.permissions, { 'calendar.events.edit': false });
+    editor.permissionLevel = 'editor';
+    editor.role = 'editor';
     const result = diff(editor);
     assert.equal(Core.firestoreDoors(editor)['write.calendar.events.edit'], false);
     assert.equal(Core.canonicalDoors(editor)['write.calendar.events.edit'], false);
     assert.equal(result.blocking.includes('firestore write.calendar.events.edit'), false);
-    assert.ok(result.noted.some((line) => line.indexOf('key.calendar.events.edit') !== -1),
-        result.noted.join(', '));
+    assert.equal(result.noted.some((line) => line.indexOf('key.calendar.events.edit') !== -1), false);
 });
 
 test('pastoralAssistant on a member with no map loses the flag doors', () => {

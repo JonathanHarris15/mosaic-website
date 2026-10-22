@@ -2,10 +2,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 const Access = require('../public/access-core.js');
+const Levels = require('../public/account-levels-core.js');
 
-// MS-515 — the shared access core is the seam. Every Permission Level, with
-// and without the Pastoral Assistant grant, against every question the core
-// answers. Written first; the module fills the table in.
+// MS-776: a rank-label string and the builtin account it names answer the
+// same way. A stored permissionLevel, role, or pastoralAssistant flag grants
+// nothing.
 
 const LEVELS = [
     'viewer', 'member', 'editor', 'pastoral_assistant', 'elder', 'admin', 'super_admin', 'kiosk',
@@ -56,8 +57,8 @@ const TODAY = {
     },
 };
 
-function account(level, grant) {
-    return { permissionLevel: level, pastoralAssistant: grant };
+function builtin(level) {
+    return Levels.userWriteFromLevel(Levels.accountLevelIdForPreset(level));
 }
 
 function answers(expected, actual, label) {
@@ -84,11 +85,11 @@ function ask(acc) {
     };
 }
 
-test('every Permission Level without the grant keeps today\'s answers', () => {
+test('every builtin preset keeps today\'s answers, as a rank label and as an account', () => {
     LEVELS.forEach(level => {
-        answers(TODAY[level], ask(account(level, false)), level);
-        answers(TODAY[level], ask({ permissionLevel: level }), level + ' (flag absent)');
-        answers(TODAY[level], ask(level), level + ' (bare string)');
+        answers(TODAY[level], ask(level), level + ' string');
+        answers(TODAY[level], ask(builtin(level)), level + ' account');
+        answers(TODAY[level], ask(Levels.accountLevelIdForPreset(level)), level + ' id');
     });
 });
 
@@ -101,88 +102,53 @@ test('a missing account is nobody', () => {
     answers(nobody, ask(null), 'null');
     answers(nobody, ask(undefined), 'undefined');
     answers(nobody, ask({}), 'empty object');
+    answers(nobody, ask('nonsense'), 'unknown label');
 });
 
-test('every Permission Level with the grant reads as elder and editor and writes the record', () => {
+test('a stored permissionLevel, role, or pastoralAssistant flag grants nothing', () => {
+    const nobody = {
+        readsAsElder: false, readsAsEditor: false, writesTheRecord: false,
+        canDecide: false, isAnElder: false, writesAsEditor: false,
+        rungs: ['public'], liftsHidden: false,
+    };
     LEVELS.forEach(level => {
-        const acc = account(level, true);
-        const today = TODAY[level];
-        answers({
-            readsAsElder: true,
-            readsAsEditor: true,
-            writesTheRecord: true,
-            canDecide: true,
-            isAnElder: today.isAnElder,
-            writesAsEditor: true,
-            rungs: ALL_RUNGS,
-            liftsHidden: true,
-        }, ask(acc), level + ' + grant');
-        assert.equal(Access.isPastoralAssistant(acc), true, level + ' isPastoralAssistant');
-        const expectedBadge = level === 'pastoral_assistant' ? '' : 'Pastoral Assistant';
-        assert.equal(Access.badgeLabel(acc), expectedBadge, level + ' badge');
+        answers(nobody, ask({ permissionLevel: level }), level + ' field');
+        answers(nobody, ask({ role: level }), level + ' role');
+        answers(nobody, ask({ permissionLevel: level, pastoralAssistant: true }), level + ' flag');
     });
+    assert.equal(Access.isPastoralAssistant({ pastoralAssistant: true }), false);
+    assert.equal(Access.badgeLabel({ permissionLevel: 'member', pastoralAssistant: true }), '');
+    assert.equal(Access.permissionLevelOf({ role: 'elder' }), 'viewer');
+    assert.equal(Access.permissionLevelOf({ permissionLevel: 'editor', role: 'viewer' }), 'viewer');
 });
 
-test('a member-level Pastoral Assistant has an elder\'s access, including editorial writes, and is not an elder', () => {
-    const acc = account('member', true);
-    assert.equal(Access.readsAsElder(acc), true);
-    assert.equal(Access.readsAsEditor(acc), true);
-    assert.equal(Access.writesTheRecord(acc), true);
-    assert.equal(Access.canDecide(acc), true);
-    assert.equal(Access.isAnElder(acc), false);
-    assert.equal(Access.writesAsEditor(acc), true);
-    assert.deepEqual(Access.eventRungsFor(acc), ALL_RUNGS);
-    assert.equal(Access.liftsHidden(acc), true);
-});
-
-test('the pastoral_assistant Permission Level is an elder for access and not an elder', () => {
-    const acc = account('pastoral_assistant', false);
+test('the pastoral_assistant preset reads as elder for access and is not an elder', () => {
+    const acc = builtin('pastoral_assistant');
     answers(TODAY.pastoral_assistant, ask(acc), 'pastoral_assistant');
     assert.equal(Access.isPastoralAssistant(acc), true);
     assert.equal(Access.isPastoralAssistant('pastoral_assistant'), true);
     assert.equal(Access.badgeLabel(acc), '');
-    assert.equal(Access.isAnElder(acc), false);
-});
-
-test('an editor with the grant still writes as editor', () => {
-    const acc = account('editor', true);
-    assert.equal(Access.writesAsEditor(acc), true);
-    assert.equal(Access.isAnElder(acc), false);
-    assert.equal(Access.writesTheRecord(acc), true);
-});
-
-test('an admin with the grant is still not an elder', () => {
-    const acc = account('admin', true);
-    assert.equal(Access.readsAsElder(acc), true);
-    assert.equal(Access.isAnElder(acc), false);
-    assert.equal(Access.writesAsEditor(acc), true);
-});
-
-test('the grant is fail-closed: only the boolean true counts', () => {
-    ['true', 1, 'yes', 'on'].forEach(value => {
-        const acc = { permissionLevel: 'member', pastoralAssistant: value };
-        assert.equal(Access.isPastoralAssistant(acc), false, String(value));
-        assert.equal(Access.readsAsElder(acc), false, String(value) + ' readsAsElder');
-    });
-});
-
-test('the legacy role field is the Permission Level fallback', () => {
-    assert.equal(Access.permissionLevelOf({ role: 'elder' }), 'elder');
-    assert.equal(Access.isAnElder({ role: 'elder' }), true);
-    assert.equal(Access.readsAsElder({ role: 'member', pastoralAssistant: true }), true);
-    assert.equal(Access.writesAsEditor({ role: 'editor' }), true);
-    assert.equal(Access.permissionLevelOf({ permissionLevel: 'editor', role: 'viewer' }), 'editor');
-});
-
-test('the badge label is the old flag on another level, not the role itself', () => {
-    assert.equal(Access.badgeLabel(account('elder', false)), '');
-    assert.equal(Access.badgeLabel(account('member', false)), '');
-    assert.equal(Access.badgeLabel(account('member', true)), 'Pastoral Assistant');
-    assert.equal(Access.badgeLabel(account('pastoral_assistant', false)), '');
+    assert.equal(Access.badgeLabel('member'), '');
     assert.equal(Access.PASTORAL_ASSISTANT_LABEL, 'Pastoral Assistant');
+    assert.equal(Access.isAnElder(acc), false);
 });
 
-test('the existing shared cores keep today\'s answers for a string rank', () => {
+test('an editor preset writes as editor and does not decide', () => {
+    const acc = builtin('editor');
+    assert.equal(Access.writesAsEditor(acc), true);
+    assert.equal(Access.isAnElder(acc), false);
+    assert.equal(Access.writesTheRecord(acc), false);
+    assert.equal(Access.canDecide(acc), false);
+});
+
+test('an admin preset is still not an elder', () => {
+    const acc = builtin('admin');
+    assert.equal(Access.readsAsElder(acc), false);
+    assert.equal(Access.isAnElder(acc), false);
+    assert.equal(Access.writesAsEditor(acc), true);
+});
+
+test('the existing shared cores keep today\'s answers for a rank label', () => {
     const Events = require('../public/events-occurrence-core.js');
     const Roles = require('../public/roles-core.js');
     const Forms = require('../public/forms-core.js');
@@ -202,44 +168,38 @@ test('the existing shared cores keep today\'s answers for a string rank', () => 
     assert.equal(Printable.mayRead('elder', 'elder'), true);
 });
 
-test('the existing shared cores honour the grant when handed an account', () => {
+test('a ladder object does not open the shared cores', () => {
     const Events = require('../public/events-occurrence-core.js');
     const Roles = require('../public/roles-core.js');
     const Forms = require('../public/forms-core.js');
     const Directory = require('../public/directory-request-core.js');
-    const Printable = require('../public/printable-data-core.js');
-
-    const memberPa = account('member', true);
-    assert.deepEqual(Events.rungsFor(memberPa), ALL_RUNGS);
-    assert.equal(Roles.seesHidden(memberPa), true);
-    assert.equal(Forms.mayShutToElders(memberPa), true);
-    assert.equal(Directory.canResolve(memberPa), true);
-    assert.equal(Printable.mayRead(memberPa, 'editor'), true);
-    assert.equal(Printable.mayRead(memberPa, 'elder'), true);
-    assert.equal(Printable.mayRead(memberPa, 'super_admin'), false);
-
-    const editorPa = account('editor', true);
-    assert.equal(Forms.mayShutToElders(editorPa), true);
-    assert.equal(Directory.canResolve(editorPa), true);
-    assert.equal(Printable.mayRead(editorPa, 'editor'), true);
+    const flag = { permissionLevel: 'member', pastoralAssistant: true };
+    assert.deepEqual(Events.rungsFor(flag), ['public']);
+    assert.equal(Roles.seesHidden(flag), false);
+    assert.equal(Forms.mayShutToElders(flag), false);
+    assert.equal(Directory.canResolve(flag), false);
+    assert.equal(Directory.canResolve({ permissionLevel: 'editor' }), false);
 });
 
-test('pageFlags is the one object a surface stores after reading the account', () => {
-    const flags = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+test('pageFlags stores the account the map actually is', () => {
+    const flags = Access.pageFlags(builtin('pastoral_assistant'));
     assert.equal(flags.canReadElder, true);
     assert.equal(flags.canReadEditor, true);
     assert.equal(flags.canWriteRecord, true);
     assert.equal(flags.canDecide, true);
     assert.equal(flags.canWriteEditor, true);
     assert.equal(flags.pastoralAssistant, true);
-    assert.equal(flags.currentPermissionLevel, 'member');
+    assert.equal(flags.currentPermissionLevel, 'pastoral_assistant');
+    const ladder = Access.pageFlags({ permissionLevel: 'member', pastoralAssistant: true });
+    assert.equal(ladder.canDecide, false);
+    assert.equal(ladder.currentPermissionLevel, 'viewer');
+    assert.equal(ladder.pastoralAssistant, false);
 });
 
-// MS-594 — PA vs elder vs member for decide/write and counted-as-elder.
 test('a Pastoral Assistant decides and writes like an elder, and is still not an elder', () => {
-    const member = account('member', false);
-    const pa = account('member', true);
-    const elder = account('elder', false);
+    const member = builtin('member');
+    const pa = builtin('pastoral_assistant');
+    const elder = builtin('elder');
 
     assert.equal(Access.canDecide(member), false);
     assert.equal(Access.writesTheRecord(member), false);

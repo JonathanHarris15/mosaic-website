@@ -80,8 +80,9 @@ test('pastoral-assistant and existing-map accounts are skipped', () => {
 
     const savedEditor = Levels.userWriteFromLevel(Levels.accountLevelIdForPreset('editor'));
     assert.equal(Backfill.planForUser(savedEditor), null);
-    assert.equal(savedEditor.role, 'editor');
-    assert.equal(savedEditor.permissionLevel, 'editor');
+    assert.equal(savedEditor.accountLevelId, Levels.accountLevelIdForPreset('editor'));
+    assert.equal(savedEditor.role, undefined);
+    assert.equal(savedEditor.permissionLevel, undefined);
 
     const mapOnly = {role: 'member', permissions: {'directory.view': true}};
     assert.equal(Backfill.planForUser(mapOnly), null);

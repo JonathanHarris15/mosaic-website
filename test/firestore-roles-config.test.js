@@ -97,22 +97,51 @@ test('roles and events are writable by editors only', () => {
     });
 });
 
-test('the permission tiers are still the only permission concept', () => {
+test('the permission tiers are accessRank and the key helpers', () => {
     // ADR-0016 builds on what exists; a bespoke tier here would be a second way
     // to say "editor" that could drift from the first. Composition helpers (e.g.
     // canReadRelationshipRecord, MS-133) are fine — they must be BUILT from
     // these, never replace them — so this pins the tier helpers specifically
     // rather than the whole function list.
-    // isMember() joined these in MS-99: the `member` visibility rung needs a
-    // floor, and a viewer is signed in but sees only public things. It is a
-    // fourth TIER, read off permissionLevel() exactly like the other three — not
-    // a second way of saying one of them.
-    ['permissionLevel', 'isAdmin', 'isEditor', 'isElder', 'isMember'].forEach(name => {
+    // MS-776: permissionLevel() is gone. Rank labels come from accessRank().
+    // isMember() is the member floor (MS-99): a viewer is signed in but sees
+    // only public things. isElder() is the count-as-elder key, not a rank list.
+    ['accessRank', 'isAdmin', 'isEditor', 'isElder', 'isMember'].forEach(name => {
         assert.ok(rules.includes(`function ${name}()`), `missing ${name}()`);
     });
+    assert.equal(rules.includes('function permissionLevel()'), false);
+    assert.equal(/function usesPermissionMap\(/.test(rules), false);
 
-    const tierValues = rules.match(/permissionLevel\(\) in \[[^\]]*\]/g) || [];
-    assert.equal(tierValues.length, 4, 'exactly four tier definitions: admin, editor, elder, member');
+    const isAdmin = rules.match(/function isAdmin\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
+    assert.ok(isAdmin, 'isAdmin() missing');
+    assert.match(isAdmin[1], /accessRank\(\) == 'admin'/);
+    assert.match(isAdmin[1], /accessRank\(\) == 'super_admin'/);
+    assert.match(isAdmin[1], /keyOn\('admin\.dashboard\.access'\)/);
+
+    const isEditor = rules.match(/function isEditor\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
+    assert.ok(isEditor, 'isEditor() missing');
+    assert.match(isEditor[1],
+        /accessRank\(\) in \['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
+    ['directory.edit_identity', 'printables.edit', 'services.builder.edit',
+        'roles.manager.edit', 'hymns.edit'].forEach(key => {
+        assert.match(isEditor[1], new RegExp("keyOn\\('" + key + "'\\)"));
+    });
+
+    const isMember = rules.match(/function isMember\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
+    assert.ok(isMember, 'isMember() missing');
+    assert.match(isMember[1],
+        /accessRank\(\) in \['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant'\]/);
+    assert.match(isMember[1], /keyOn\('directory\.view'\)/);
+    assert.match(isMember[1], /keyOn\('visibility\.rung\.member'\)/);
+    assert.match(isMember[1], /isEditor\(\)/);
+
+    const isElder = rules.match(/function isElder\(\) \{\s*return ([\s\S]*?)\n {4}\}/);
+    assert.ok(isElder, 'isElder() missing');
+    assert.match(isElder[1], /keyOn\('shep\.count_as_elder'\)/);
+    assert.doesNotMatch(isElder[1], /in \[/);
+
+    const rankLists = rules.match(/accessRank\(\) in \[[^\]]*\]/g) || [];
+    assert.equal(rankLists.length, 2, 'member and editor are the accessRank lists');
 });
 
 // ── No parallel data universe ─────────────────────────────────────────────────

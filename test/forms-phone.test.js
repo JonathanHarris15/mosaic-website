@@ -150,12 +150,14 @@ test('the dashboard card, the drawer entry and the page agree on who may see it'
     const forms = Destinations.DESTINATIONS.find(d => d.key === 'forms');
     assert.ok(forms, 'the phone drawer has no Forms entry');
     MAY_MANAGE.forEach(level => {
-        assert.equal(Destinations.canSee(forms, { permissionLevel: level }), true, level);
+        assert.equal(Destinations.canSee(forms, level), true, level);
     });
     ['member', 'viewer'].forEach(level => {
-        assert.equal(Destinations.canSee(forms, { permissionLevel: level }), false,
+        assert.equal(Destinations.canSee(forms, level), false,
             `the drawer offers Forms to a ${level}, who the page will refuse`);
     });
+    assert.equal(Destinations.canSee(forms, { permissionLevel: 'editor' }), false,
+        'a stored permissionLevel is not a door');
     assert.equal(Destinations.canSee(forms, null), false, 'a signed-out guest is offered Forms');
 
     // And the page's own check, which is the one that actually refuses.

@@ -65,6 +65,8 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.getUserData = async () => ({});
     sandbox.db = {};
     sandbox.document = { addEventListener() {}, getElementById() { return null; } };
+    sandbox.AccessCore = require('../public/access-core.js');
+    sandbox.AccountLevelsCore = require('../public/account-levels-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.GuideStore = require('../public/guide-store.js');
     sandbox.LiturgyOrderCore = require('../public/liturgy-order-core.js');

@@ -123,16 +123,12 @@
         if (!user) {
             return { account: DashboardNav.accountOf(null), savedOrder: null, who: null };
         }
-        let permissionLevel = 'viewer';
-        let pastoralAssistant = false;
         let savedOrder = null;
         let userData = null;
         try {
             if (typeof getUserData === 'function') {
                 userData = await getUserData(user.uid);
                 if (userData) {
-                    permissionLevel = userData.permissionLevel || userData.role || 'viewer';
-                    pastoralAssistant = userData.pastoralAssistant === true;
                     savedOrder = Array.isArray(userData.dashboardCardOrder)
                         ? userData.dashboardCardOrder : null;
                 }
@@ -140,9 +136,7 @@
         } catch (e) {
             console.error('Error fetching user data:', e);
         }
-        const account = DashboardNav.accountOf({
-            permissionLevel, pastoralAssistant,
-        });
+        const account = DashboardNav.accountOf(userData);
         const DrawerWho = global && global.DrawerWho;
         let who;
         if (DrawerWho && typeof DrawerWho.fromSession === 'function') {

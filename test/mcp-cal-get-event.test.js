@@ -14,6 +14,11 @@ const path = require('node:path');
 
 
 const FUNCTIONS = path.join(__dirname, '..', 'functions');
+const Levels = require(path.join(__dirname, '..', 'public', 'account-levels-core.js'));
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 const ID = 'sunday_service_2026-10-11';
 
 const STORED = {id: ID, seriesId: 'sunday_service', date: '2026-10-11',
@@ -39,7 +44,7 @@ async function connectAsElder() {
     const {buildServer} = require(path.join(FUNCTIONS, 'mcp-server.js'));
     const server = await buildServer({
         db: {collection: () => ({doc: () => ({get: async () => ({exists: false})})})},
-        auth: {uid: 'uid-1', permissionLevel: 'elder'},
+        auth: Object.assign({uid: 'uid-1'}, account('elder')),
         geminiKey: () => 'k',
         fieldValues: {serverTimestamp: () => 'ts', deleteField: () => 'del',
             documentId: () => 'id', FieldValue: {serverTimestamp: () => 'ts',

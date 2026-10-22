@@ -1,13 +1,11 @@
 // Access Core — who may read as an elder, write the record, decide in
 // software, write as an editor, or count as an elder (ADR-0076, MS-695).
 //
-// Pastoral Assistant is a Permission Level (`pastoral_assistant`), chosen
-// the same way as editor, elder, admin, and super admin. It is not a
-// checkbox. A leftover `users.pastoralAssistant` flag still counts, so an
-// account granted the old way keeps the doors until an admin sets the role.
-//
-// MS-695: helpers resolve from the permission catalog when `permissions` or
-// `accountLevelId` is present; legacy `permissionLevel` strings still work.
+// MS-776: every door is accountLevelId plus the saved permissions map
+// (ADR 0082, extended). role, permissionLevel, and pastoralAssistant on a
+// document grant nothing. A rank-label string ('editor', 'level_editor') is
+// that builtin preset — the label accessRank already produced — and is not a
+// read of the stored ladder.
 //
 // Loaded as a classic <script> (window.AccessCore) and exported for Node.
 // Firestore / Storage cannot import this file; they restate the helpers and
@@ -29,12 +27,13 @@
 
     const ELDER_LEVELS = Object.freeze(['elder', 'super_admin']);
 
-    // The floor of the `member` visibility rung, as firestore.rules isMember()
-    // reads it — the STORED level string, not a permission key. Kept beside
-    // the editor list so the two mirrors sit together.
     const MEMBER_READ_LEVELS = Object.freeze([
         'member', 'editor', 'admin', 'elder', 'super_admin',
         PASTORAL_ASSISTANT_LEVEL,
+    ]);
+
+    const WEEK_TOOL_PRESETS = Object.freeze([
+        'editor', 'admin', 'elder', 'super_admin', PASTORAL_ASSISTANT_LEVEL,
     ]);
 
     const VISIBILITY_RUNGS = Object.freeze([
@@ -49,226 +48,151 @@
         elder: ['public', 'member', 'participant', 'editor', 'elder'],
         super_admin: ['public', 'member', 'participant', 'editor', 'elder'],
         pastoral_assistant: ['public', 'member', 'participant', 'editor', 'elder'],
+        kiosk: ['public'],
     });
 
-    // MS-725 (ADR 0082): what the STORED users/{uid} document said, which is
-    // all firestore.rules can see. AccountLevelsCore owns both (it owns what a
-    // stored document means); these two are the way in from here.
-    //
-    // ⚠ A SAVED MAP IS NOT THE SAME THING AS `permissions` BEING PRESENT ON
-    // THE OBJECT IN HAND. normalizeAccount() synthesises one from the preset
-    // for a legacy account, and auth.js hands every page the EFFECTIVE map, so
-    // by the time a page asks, a legacy editor looks like they carry one.
-    function savedPermissionMap(value) {
-        return Levels ? Levels.savedPermissionMap(value) : null;
+    function emptyMap() {
+        return {};
     }
 
-    function storedPermissionLevel(value) {
-        if (Levels) return Levels.storedPermissionLevel(value);
-        if (!value || typeof value !== 'object') {
-            return typeof value === 'string' ? value : null;
-        }
-        return value.permissionLevel || value.role || null;
+    function mapOf(value) {
+        if (!Levels) return emptyMap();
+        return Levels.accessMap(value);
     }
 
-    function storedPastoralAssistant(value) {
-        return storedPermissionLevel(value) === PASTORAL_ASSISTANT_LEVEL
-            || !!(value && typeof value === 'object'
-                && value.pastoralAssistant === true);
+    function keyOn(value, key) {
+        return mapOf(value)[key] === true;
     }
 
     function accountOf(value) {
         if (!Levels) {
-            if (!value || typeof value !== 'object') {
-                const level = typeof value === 'string' ? value : null;
-                return { permissionLevel: level, pastoralAssistant: false };
-            }
             return {
-                permissionLevel: value.permissionLevel || value.role || null,
-                pastoralAssistant: value.pastoralAssistant === true,
+                permissionLevel: 'viewer',
+                pastoralAssistant: false,
+                accountLevelId: null,
+                permissions: emptyMap(),
             };
         }
-        const norm = Levels.normalizeAccount(value);
-        return {
-            permissionLevel: norm.permissionLevel,
-            pastoralAssistant: norm.pastoralAssistant,
-            accountLevelId: norm.accountLevelId,
-            permissions: norm.permissions,
-            // Carried so pageFlags().account can be handed back to a gate and
-            // still answer the question the rules would answer.
-            savedPermissions: savedPermissionMap(value),
-            storedLevel: storedPermissionLevel(value),
-        };
+        return Levels.normalizeAccount(value);
     }
 
     function permissionLevelOf(value) {
-        return accountOf(value).permissionLevel;
+        return accountOf(value).permissionLevel || 'viewer';
     }
 
     function isPastoralAssistant(value) {
-        const account = accountOf(value);
-        if (account.permissionLevel === PASTORAL_ASSISTANT_LEVEL) return true;
-        if (account.pastoralAssistant === true) return true;
-        return false;
+        return permissionLevelOf(value) === PASTORAL_ASSISTANT_LEVEL;
     }
 
-    function legacyIsAnElder(level) {
-        return ELDER_LEVELS.indexOf(level) !== -1;
+    function isEditorAccount(value) {
+        const rank = permissionLevelOf(value);
+        return EDITOR_WRITE_LEVELS.indexOf(rank) !== -1
+            || keyOn(value, 'directory.edit_identity')
+            || keyOn(value, 'printables.edit')
+            || keyOn(value, 'services.builder.edit')
+            || keyOn(value, 'roles.manager.edit')
+            || keyOn(value, 'hymns.edit');
     }
 
     function isAnElder(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'shep.count_as_elder');
-        }
-        return legacyIsAnElder(account.permissionLevel);
-    }
-
-    function legacyWritesAsEditor(level) {
-        return EDITOR_WRITE_LEVELS.indexOf(level) !== -1;
+        return keyOn(value, 'shep.count_as_elder');
     }
 
     function writesAsEditor(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            if (Levels.hasPermission(account, 'directory.edit_identity')) return true;
-            if (Levels.hasPermission(account, 'printables.edit')) return true;
-            if (Levels.hasPermission(account, 'roles.manager.edit')) return true;
-            if (Levels.hasPermission(account, 'services.builder.edit')) return true;
-            return false;
-        }
-        return legacyWritesAsEditor(account.permissionLevel)
-            || isPastoralAssistant(value);
+        return isEditorAccount(value);
     }
 
     function readsAsElder(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'visibility.lift_hidden_tags');
-        }
-        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
+        return keyOn(value, 'visibility.lift_hidden_tags') || isPastoralAssistant(value);
     }
 
     function readsAsEditor(value) {
-        return writesAsEditor(value) || isPastoralAssistant(value);
+        return keyOn(value, 'directory.edit_identity')
+            || keyOn(value, 'printables.edit')
+            || isPastoralAssistant(value)
+            || isEditorAccount(value);
     }
 
     function writesTheRecord(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'shep.notes.write');
-        }
-        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
+        return keyOn(value, 'shep.notes.write') || isPastoralAssistant(value);
     }
 
     function canDecide(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'shep.tags.manage');
-        }
-        return legacyIsAnElder(account.permissionLevel) || isPastoralAssistant(value);
+        return keyOn(value, 'shep.tags.manage') || isPastoralAssistant(value);
     }
 
     function eventRungsFor(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            const perms = Levels.effectivePermissions(account);
-            const rungs = [];
-            if (perms['visibility.rung.public']) rungs.push('public');
-            if (perms['visibility.rung.member']) rungs.push('member');
-            if (perms['visibility.rung.participant']) rungs.push('participant');
-            if (perms['visibility.rung.editor']) rungs.push('editor');
-            if (perms['visibility.rung.elder']) rungs.push('elder');
-            return rungs.length ? rungs : ['public'];
+        if (typeof value === 'string' && RUNGS_BY_LEVEL[value]) {
+            return RUNGS_BY_LEVEL[value].slice();
         }
-        if (readsAsElder(value)) return VISIBILITY_RUNGS.slice();
-        const listed = RUNGS_BY_LEVEL[permissionLevelOf(value)];
-        return (listed || ['public']).slice();
+        const perms = mapOf(value);
+        const rungs = [];
+        if (perms['visibility.rung.public']) rungs.push('public');
+        if (perms['visibility.rung.member']) rungs.push('member');
+        if (perms['visibility.rung.participant']) rungs.push('participant');
+        if (perms['visibility.rung.editor']) rungs.push('editor');
+        if (perms['visibility.rung.elder']) rungs.push('elder');
+        if (rungs.indexOf('public') === -1) rungs.unshift('public');
+        return rungs;
     }
 
     function liftsHidden(value) {
         return readsAsElder(value);
     }
 
-    function badgeLabel(value) {
-        const account = accountOf(value);
-        if (account.permissionLevel === PASTORAL_ASSISTANT_LEVEL) return '';
-        return account.pastoralAssistant === true ? PASTORAL_ASSISTANT_LABEL : '';
+    function badgeLabel() {
+        return '';
     }
 
     function hasPermission(value, key) {
-        const account = accountOf(value);
-        if (Levels) return Levels.hasPermission(account, key);
-        return false;
+        return keyOn(value, key);
     }
 
     function accessesAdminDashboard(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'admin.dashboard.access');
-        }
-        const level = account.permissionLevel;
-        return level === 'admin' || level === 'super_admin';
+        const rank = permissionLevelOf(value);
+        return rank === 'admin' || rank === 'super_admin'
+            || keyOn(value, 'admin.dashboard.access');
     }
 
     function canViewDirectory(value) {
-        const account = accountOf(value);
-        if (Levels && account.permissions) {
-            return Levels.hasPermission(account, 'directory.view');
-        }
-        const level = account.permissionLevel || 'viewer';
-        return [
-            'member', 'editor', 'elder', 'admin', 'super_admin',
-            PASTORAL_ASSISTANT_LEVEL,
-        ].indexOf(level) !== -1;
+        return keyOn(value, 'directory.view');
     }
 
-    // MS-725 (ADR 0082): the mirror of firestore.rules editsWith(key), clause
-    // for clause, so a page never offers a control the rules will refuse and
-    // never hides one they would allow. Any new write gate on one of the
-    // nineteen doors goes through here rather than growing its own shape.
-    //
-    // The saved map is the whole answer when there is one. There is no OR on
-    // the level names beside it, and no overlay: not the Pastoral Assistant
-    // grant, not the preset recompute effectivePermissions() does for a
-    // builtin rung. The rules read a raw map and so does this.
+    // The saved map is the whole answer. There is no OR on level names.
     function writesWith(value, key) {
-        const saved = savedPermissionMap(value);
-        if (saved) return saved[key] === true;
-        return legacyWritesAsEditor(storedPermissionLevel(value))
-            || storedPastoralAssistant(value);
+        return keyOn(value, key);
     }
 
     function canFixSundayService(value) {
         return writesWith(value, 'services.builder.edit');
     }
 
-    // MS-770: Import / Inject / Remove on the Services calendar. Elders carry
-    // services.week_shift; editors carry services.builder.edit. A member-shaped
-    // account may carry builder.edit for the table without getting schedule
-    // tools — the stored level string is what separates them.
+    // MS-770: Import / Inject / Remove. The week_shift key opens them.
+    // A builtin editor-family account level also opens them when the account
+    // can edit the Sunday table, so the editor preset keeps the toolbar
+    // without reading permissionLevel. A custom level does not, unless the
+    // key itself is on.
     function canUseServiceCalendarWeekTools(value) {
-        if (writesWith(value, 'services.week_shift')) return true;
-        if (!writesWith(value, 'services.builder.edit')) return false;
-        return storedPermissionLevel(accountOf(value)) !== 'member';
+        const account = accountOf(value);
+        if (writesWith(account, 'services.week_shift')) return true;
+        if (!writesWith(account, 'services.builder.edit')) return false;
+        if (!Levels) return false;
+        const preset = Levels.presetKeyFromAccountLevelId(account.accountLevelId);
+        return WEEK_TOOL_PRESETS.indexOf(preset) !== -1;
     }
 
-    // MS-720 (ADR 0081): who may change an Event's details.
     function canEditEvents(value) {
         return writesWith(value, 'calendar.events.edit');
     }
 
-    // MS-693: who may open the Resources library. The mirror of
-    // firestore.rules isMember(), clause for clause — the stored level, or the
-    // leftover Pastoral Assistant flag. NOT writesWith: there is no
-    // `resources.view` key, because one shelf the whole congregation reads has
-    // nothing a view key could turn off (ADR-0083).
     function readsAsMember(value) {
-        return MEMBER_READ_LEVELS.indexOf(storedPermissionLevel(value)) !== -1
-            || storedPastoralAssistant(value);
+        const rank = permissionLevelOf(value);
+        return MEMBER_READ_LEVELS.indexOf(rank) !== -1
+            || keyOn(value, 'directory.view')
+            || keyOn(value, 'visibility.rung.member')
+            || isEditorAccount(value);
     }
 
-    // MS-693: who may add to it, rename, move, delete, pin and reorder.
     function canEditResources(value) {
         return writesWith(value, 'resources.edit');
     }
@@ -279,14 +203,13 @@
             account: account,
             currentPermissionLevel: account.permissionLevel || 'viewer',
             pastoralAssistant: account.pastoralAssistant,
-            canReadElder: readsAsElder(account),
-            canDecide: canDecide(account),
-            canWriteRecord: writesTheRecord(account),
-            canWriteEditor: writesAsEditor(account),
-            canReadEditor: readsAsEditor(account),
+            canReadElder: readsAsElder(userData),
+            canDecide: canDecide(userData),
+            canWriteRecord: writesTheRecord(userData),
+            canWriteEditor: writesAsEditor(userData),
+            canReadEditor: readsAsEditor(userData),
         };
     }
-
 
     const AccessCore = {
         PASTORAL_ASSISTANT_LEVEL,
@@ -297,8 +220,6 @@
         VISIBILITY_RUNGS,
         accountOf,
         permissionLevelOf,
-        savedPermissionMap,
-        storedPermissionLevel,
         isPastoralAssistant,
         isAnElder,
         writesAsEditor,

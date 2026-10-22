@@ -1016,8 +1016,8 @@
                 try {
                     userData = await getUserData(user.uid);
                     if (userData) {
-                        permissionLevel = userData.permissionLevel || userData.role || 'viewer';
-                        pastoralAssistant = userData.pastoralAssistant === true;
+                        permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
+                        pastoralAssistant = !!(window.AccessCore && AccessCore.isPastoralAssistant(userData));
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         personId = userData.personId || null;
                     }
@@ -1026,8 +1026,8 @@
                 }
                 const grid = document.getElementById('nav-cards-grid');
                 const account = (typeof AccessCore !== 'undefined')
-                    ? AccessCore.accountOf({ permissionLevel, pastoralAssistant })
-                    : { permissionLevel, pastoralAssistant: false };
+                    ? AccessCore.accountOf(userData)
+                    : { permissionLevel: 'viewer', pastoralAssistant: false };
 
                 if (typeof DrawerWho !== 'undefined') {
                     who = await DrawerWho.fromSession(user, userData, db);

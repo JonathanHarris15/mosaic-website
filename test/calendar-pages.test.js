@@ -3612,8 +3612,9 @@ test('a gated destination is hidden until we know who is looking', () => {
     const shepherd = D.DESTINATIONS.find(d => d.route === 'shepherd');
 
     assert.strictEqual(D.canSee(shepherd, null), false);
-    assert.strictEqual(D.canSee(shepherd, { permissionLevel: 'editor' }), false);
-    assert.strictEqual(D.canSee(shepherd, { permissionLevel: 'elder' }), true);
+    assert.strictEqual(D.canSee(shepherd, 'editor'), false);
+    assert.strictEqual(D.canSee(shepherd, 'elder'), true);
+    assert.strictEqual(D.canSee(shepherd, { permissionLevel: 'elder' }), false);
     // Ungated entries are for everyone, signed in or not.
     assert.strictEqual(D.canSee(D.DESTINATIONS.find(d => d.route === 'events'), null), true);
 });

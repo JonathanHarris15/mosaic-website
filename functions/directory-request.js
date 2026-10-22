@@ -17,6 +17,7 @@
 // test/directory-request.test.js, exactly as member-sync.js duplicates
 // MEMBER_TAG.
 
+const Access = require("./shared/access-core.js");
 const track = require("./membership-track");
 const familyPlan = require("./family-plan");
 const PersonName = require("./shared/person-name.js");
@@ -43,11 +44,11 @@ const RESOLVER_LEVELS = ["editor", "elder", "admin", "super_admin"];
 
 /**
  * May this permission level approve or decline a Directory Request?
- * @param {?string} permissionLevel The caller's permission level.
- * @return {boolean} True for editor, elder, admin and super_admin.
+ * @param {?Object} account The caller's user document.
+ * @return {boolean} True when they write as an editor.
  */
-function canResolve(permissionLevel) {
-  return RESOLVER_LEVELS.includes(permissionLevel);
+function canResolve(account) {
+  return Access.writesAsEditor(account);
 }
 
 // A Person created from a link_new request starts at the FIRST Membership Stage

@@ -70,7 +70,7 @@ test('phone Shepherd no longer aliases isElder = canReadElder', () => {
 
 test('screen entry is canReadElder — a PA still opens Shepherd', () => {
     assert.match(SRC, /: !canReadElder \? html`<div style=\$\{\{ padding: "60px 24px"/);
-    assert.match(SRC, /if \(!canReadElder\) \{\n      return html`<\$\{Screen\}>/);
+    assert.match(SRC, /if \(!canReadElder\) \{\n {6}return html`<\$\{Screen\}>/);
 });
 
 test('New View and dashboard view write/delete are canDecide', () => {

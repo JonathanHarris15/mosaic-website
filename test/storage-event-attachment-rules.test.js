@@ -27,7 +27,7 @@ const firestoreRules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rul
     .replace(/\r\n/g, '\n');
 
 const attachmentBlock = () => {
-    const m = /match \/event_attachments\/\{occurrenceId\}\/\{attachmentId\}\/\{fileName\}\s*\{([\s\S]*?)\n    \}/
+    const m = /match \/event_attachments\/\{occurrenceId\}\/\{attachmentId\}\/\{fileName\}\s*\{([\s\S]*?)\n {4}\}/
         .exec(storageRules);
     assert.ok(m, 'the Event Attachments Storage rule has moved or been renamed');
     return m[1];
@@ -93,11 +93,15 @@ test('storage.rules and firestore.rules name the same permission levels', () => 
     }
 });
 
-test('storage.rules reads permissionLevel with the same legacy fallback', () => {
-    assert.match(
-        storageFn('levelOf'),
-        /\('permissionLevel' in u\) \? u\.permissionLevel : u\.role/,
-        'while MS-119 has both fields live, reading only one of them locks somebody out');
+test('storage.rules does not read permissionLevel with a legacy fallback', () => {
+    assert.equal(storageRules.includes('function levelOf('), false);
+    assert.equal(storageRules.includes('function permissionLevelAccount('), false);
+    assert.doesNotMatch(storageRules, /\('permissionLevel' in [^)]*\) \?/);
+    const keyOn = storageFn('keyOnAccount');
+    assert.match(keyOn, /'permissions' in data/);
+    assert.match(keyOn, /mapGrants\(data\.permissions, key\)/);
+    assert.match(keyOn, /presetGrants\(data\.accountLevelId, key\)/);
+    assert.doesNotMatch(keyOn, /permissionLevel|\.role/);
 });
 
 test('anonymous sign-in is not "signed in" here either', () => {

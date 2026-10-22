@@ -35,6 +35,7 @@
 
 const crypto = require("crypto");
 const Access = require("./shared/access-core.js");
+const AccountLevels = require("./shared/account-levels-core.js");
 
 // ⚠ THROW THESE, NEVER A BARE `Error`. The SDK's token endpoint and bearer
 // middleware both end in the same shape: an OAuthError becomes the status it
@@ -337,16 +338,22 @@ class FirebaseOAuthProvider {
       return {
         permissionLevel: null,
         pastoralAssistant: false,
-        savedPermissions: null,
+        accountLevelId: null,
       };
     }
     const data = snap.data() || {};
-    const saved = data.permissions;
-    return {
-      permissionLevel: data.permissionLevel || data.role || null,
-      pastoralAssistant: data.pastoralAssistant === true,
-      savedPermissions: (saved && typeof saved === "object") ? saved : null,
+    const rank = AccountLevels.accessRank(data);
+    const account = {
+      accountLevelId: data.accountLevelId || null,
+      permissionLevel: rank,
+      pastoralAssistant: rank === "pastoral_assistant",
+      personId: data.personId || null,
     };
+    const saved = data.permissions;
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+      account.permissions = saved;
+    }
+    return account;
   }
 
   /**
@@ -558,7 +565,8 @@ class FirebaseOAuthProvider {
         uid: data.uid,
         permissionLevel: account.permissionLevel,
         pastoralAssistant: account.pastoralAssistant,
-        savedPermissions: account.savedPermissions,
+        accountLevelId: account.accountLevelId || null,
+        permissions: account.permissions || null,
       },
     };
   }

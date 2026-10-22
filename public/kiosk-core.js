@@ -16,7 +16,10 @@
     }
 
     function isKioskAccount(data) {
-        return isKiosk(data && (data.permissionLevel || data.role));
+        const Levels = (typeof AccountLevelsCore !== 'undefined') ? AccountLevelsCore
+            : (typeof require === 'function' ? require('./account-levels-core.js') : null);
+        if (!Levels || !data || typeof data !== 'object') return false;
+        return Levels.accessRank(data) === 'kiosk';
     }
 
     function pageName(pathname) {

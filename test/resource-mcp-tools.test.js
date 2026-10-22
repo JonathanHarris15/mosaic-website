@@ -25,6 +25,11 @@ const {describe, test, beforeEach} = require('node:test');
 const assert = require('node:assert');
 
 const Actor = require('../functions/mcp-actor.js');
+const Levels = require('../public/account-levels-core.js');
+
+function account(preset, extra) {
+    return Object.assign({}, Levels.userWriteFromLevel(Levels.BUILTIN_LEVEL_IDS[preset]), extra || {});
+}
 const Firestore = require('../functions/mcp-firestore.js');
 const resourceTools = require('../functions/mcp-resource-tools.js');
 const Core = require('../functions/shared/resources-core.js');
@@ -117,21 +122,22 @@ const FIELD_VALUES = {
     Timestamp: {fromDate: (d) => d},
 };
 
-const EDITOR = {uid: 'uid-editor', permissionLevel: 'editor', savedPermissions: null};
-const MEMBER = {uid: 'uid-member', permissionLevel: 'member', savedPermissions: null};
-// Editor by rung, and told no by the saved map. ADR-0082: once a map is on the
-// account the key is the whole answer.
-const BARRED = {
-    uid: 'uid-barred',
-    permissionLevel: 'editor',
-    savedPermissions: {'resources.edit': false, 'printables.edit': true},
-};
-// A member the map lets in. The rung alone would refuse this account.
-const GRANTED = {
-    uid: 'uid-granted',
+const EDITOR = Object.assign({uid: 'uid-editor'}, account('editor'));
+const MEMBER = Object.assign({uid: 'uid-member'}, account('member'));
+// Editor preset, with resources.edit forced off. The saved map is the whole
+// answer: the builtin id does not put the key back.
+const BARRED = Object.assign({uid: 'uid-barred'}, account('editor'), {
+    permissions: Object.assign({}, account('editor').permissions, {
+        'resources.edit': false,
+    }),
+});
+// A member map plus the one key that fills the shelf.
+const GRANTED = Object.assign({uid: 'uid-granted'}, account('member'), {
     permissionLevel: 'member',
-    savedPermissions: {'resources.edit': true},
-};
+    permissions: Object.assign({}, account('member').permissions, {
+        'resources.edit': true,
+    }),
+});
 
 const USERS = {
     'uid-editor': {personId: 'p-editor', email: 'ed@example.com'},
@@ -264,7 +270,7 @@ describe('the gate on a registered tool', () => {
     });
 
     test('an account traceable to nobody cannot write in its name', async () => {
-        const {refusal} = wire({uid: 'uid-ghost', permissionLevel: 'editor'});
+        const {refusal} = wire(Object.assign({uid: 'uid-ghost'}, account('editor')));
         const why = await refusal('resource_create_folder', {name: 'Studies'});
         assert.match(why, /cannot be traced/);
     });

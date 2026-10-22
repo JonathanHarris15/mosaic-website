@@ -89,12 +89,11 @@
     async function fromSession(user, userData, db) {
         const name = await displayName(user, userData, db);
         const photo = await linkedPersonPhoto(db, userData && userData.personId);
-        const permissionLevel = (userData && (userData.permissionLevel || userData.role))
-            || 'viewer';
-        const pastoralAssistant = userData && userData.pastoralAssistant === true;
         const account = (typeof DashboardNav !== 'undefined')
-            ? DashboardNav.accountOf({ permissionLevel, pastoralAssistant })
-            : { permissionLevel, pastoralAssistant };
+            ? DashboardNav.accountOf(userData)
+            : (window.AccessCore
+                ? AccessCore.accountOf(userData)
+                : { permissionLevel: 'viewer', pastoralAssistant: false });
         return build({
             account,
             name,

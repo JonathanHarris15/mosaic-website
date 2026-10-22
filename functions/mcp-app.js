@@ -143,14 +143,12 @@ async function buildApp(
     const extra = info.extra || {};
     await mcpServer.handleMcpRequest(req, res, {
       db,
-      auth: {
+      auth: Object.assign({
         uid: extra.uid,
         permissionLevel: extra.permissionLevel,
         pastoralAssistant: extra.pastoralAssistant === true,
-        // The map as users/{uid} stores it, or null. A key gate reads this
-        // and nothing else, so it answers what firestore.rules answers.
-        savedPermissions: extra.savedPermissions || null,
-      },
+        accountLevelId: extra.accountLevelId || null,
+      }, extra.permissions ? {permissions: extra.permissions} : {}),
       geminiKey,
       fieldValues,
       bucket,

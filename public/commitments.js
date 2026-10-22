@@ -130,7 +130,7 @@
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            const r = (data && (data.permissionLevel || data.role)) || 'viewer';
+                            const r = (window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer');
                             if (Cache) {
                                 Cache.writeIdentity(user.uid, {
                                     personId: this.personId, permissionLevel: r,

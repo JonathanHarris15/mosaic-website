@@ -300,7 +300,7 @@
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            resolve((data && (data.permissionLevel || data.role)) || 'viewer');
+                            resolve((window.AccessCore ? AccessCore.permissionLevelOf(data) : 'viewer'));
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');

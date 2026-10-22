@@ -56,7 +56,12 @@ function guideEditorV2() {
         previousAnnouncements: [],
         previousAnnouncementsDate: '',
 
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
+        account: null,
+        get canEdit() {
+            const Access = (typeof AccessCore !== 'undefined') ? AccessCore : null;
+            if (!Access) return false;
+            return Access.writesAsEditor(this.account || this.permissionLevel);
+        },
 
         // Dirty by diff against the last saved state (template + values), so
         // merely opening or clicking around never shows "Unsaved". A new week
@@ -75,7 +80,8 @@ function guideEditorV2() {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
                 if (!userData) { window.location.href = 'service-calendar.html'; return; }
-                self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
+                self.permissionLevel = (window.AccessCore ? AccessCore.permissionLevelOf(userData) : 'viewer');
+                self.account = userData;
                 self.personId = userData.personId || null;
 
                 const params = new URLSearchParams(window.location.search);

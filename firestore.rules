@@ -2,14 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Effective permission level for the signed-in user. Reads the new
-    // `permissionLevel` field, falling back to the legacy `role` field during the
-    // MS-119 migration while both coexist (MS-127 drops `role` afterwards).
-    // Callers guard on request.auth first, so this get() only runs when signed in.
-    function permissionLevel() {
-      let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return ('permissionLevel' in d) ? d.permissionLevel : d.role;
-    }
+    // MS-776: a saved permissions map is the whole answer. `system.super_admin`
+    // opens every catalog key. A permissions field that is present but not a
+    // map opens nothing. With no permissions field, a builtin accountLevelId
+    // contributes that preset. role, permissionLevel, and pastoralAssistant
+    // grant nothing. Super admin is decided before kiosk, because the super
+    // admin preset also sets system.kiosk.
 
     // Somebody holding an account, which is NOT the same as `request.auth !=
     // null` — and on this project the difference is the whole boundary.
@@ -35,143 +33,238 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // Helper to check if user is admin
+    function signedInUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userDocExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function mapGrants(perms, key) {
+      return perms is map && (
+        (('system.super_admin' in perms) && perms['system.super_admin'] == true)
+        || ((key in perms) && perms[key] == true)
+      );
+    }
+
+    function grantsElder(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'shep.count_as_elder'
+        || key == 'shep.elder_assignment.be_assignee' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsPastoralAssistant(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'visibility.rung.elder'
+        || key == 'visibility.lift_hidden_tags' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.dashboard.view' || key == 'shep.profile.view'
+        || key == 'shep.notes.view' || key == 'shep.documents.view'
+        || key == 'shep.tasks.view' || key == 'shep.care_lists.view'
+        || key == 'shep.relationships.view' || key == 'shep.forms.view'
+        || key == 'shep.presence.view' || key == 'shep.notes.write'
+        || key == 'shep.documents.write' || key == 'shep.tasks.write'
+        || key == 'shep.care_lists.write' || key == 'shep.forms.write'
+        || key == 'shep.panels.write' || key == 'shep.tags.manage'
+        || key == 'shep.status.manage' || key == 'shep.views.manage'
+        || key == 'shep.relationships.manage'
+        || key == 'shep.elder_assignment.set'
+        || key == 'shep.membership_stage.set' || key == 'shep.explain_changes'
+        || key == 'shep.prayer.send' || key == 'shep.forms.lock_elder'
+        || key == 'shep.guidance.lock' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.week_shift'
+        || key == 'services.guidance.view' || key == 'hymns.view'
+        || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'analytics.view' || key == 'admin.mcp.view';
+    }
+
+    function grantsEditor(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsAdmin(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'visibility.rung.participant'
+        || key == 'visibility.rung.editor' || key == 'directory.view'
+        || key == 'directory.edit_identity' || key == 'directory.resolve_requests'
+        || key == 'shep.forms.view' || key == 'calendar.view'
+        || key == 'calendar.events.edit' || key == 'calendar.away.view'
+        || key == 'calendar.away.edit' || key == 'services.builder.view'
+        || key == 'services.builder.edit' || key == 'services.guidance.view'
+        || key == 'hymns.view' || key == 'hymns.edit' || key == 'printables.view'
+        || key == 'printables.edit' || key == 'roles.manager.view'
+        || key == 'roles.manager.edit' || key == 'resources.edit'
+        || key == 'admin.dashboard.access' || key == 'admin.sms.manage'
+        || key == 'admin.push.manage' || key == 'admin.accounts.view'
+        || key == 'admin.accounts.provision'
+        || key == 'admin.accounts.assign_level' || key == 'admin.levels.manage'
+        || key == 'admin.mcp.view';
+    }
+
+    function grantsMember(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'visibility.rung.member' || key == 'directory.view';
+    }
+
+    function grantsViewer(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public';
+    }
+
+    function grantsKiosk(key) {
+      return key == 'core.sign_in' || key == 'visibility.rung.public'
+        || key == 'system.kiosk';
+    }
+
+    function presetGrants(id, key) {
+      return id == 'level_super_admin' ? true
+        : id == 'level_elder' ? grantsElder(key)
+        : id == 'level_pastoral_assistant' ? grantsPastoralAssistant(key)
+        : id == 'level_editor' ? grantsEditor(key)
+        : id == 'level_admin' ? grantsAdmin(key)
+        : id == 'level_member' ? grantsMember(key)
+        : id == 'level_viewer' ? grantsViewer(key)
+        : id == 'level_kiosk' ? grantsKiosk(key)
+        : false;
+    }
+
+    function keyOn(key) {
+      return userDocExists() && (
+        ('permissions' in signedInUserData())
+          ? mapGrants(signedInUserData().permissions, key)
+          : (('accountLevelId' in signedInUserData())
+              && presetGrants(signedInUserData().accountLevelId, key))
+      );
+    }
+
+    function accessRank() {
+      return !userDocExists() ? ''
+        : keyOn('system.super_admin') ? 'super_admin'
+        : keyOn('system.kiosk') ? 'kiosk'
+        : keyOn('shep.count_as_elder') ? 'elder'
+        : keyOn('visibility.lift_hidden_tags') ? 'pastoral_assistant'
+        : keyOn('admin.dashboard.access') ? 'admin'
+        : (keyOn('directory.edit_identity')
+            || keyOn('services.builder.edit')
+            || keyOn('printables.edit')) ? 'editor'
+        : keyOn('directory.view') ? 'member'
+        : 'viewer';
+    }
+
     function isAdmin() {
-      return request.auth != null && permissionLevel() in ['admin', 'super_admin'];
+      return accessRank() == 'admin'
+        || accessRank() == 'super_admin'
+        || keyOn('admin.dashboard.access');
     }
 
-    // Helper to check if user is editor
     function isEditor() {
-      return request.auth != null && (
-        permissionLevel() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistant()
-      );
+      return accessRank() in ['editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || keyOn('directory.edit_identity')
+        || keyOn('printables.edit')
+        || keyOn('services.builder.edit')
+        || keyOn('roles.manager.edit')
+        || keyOn('hymns.edit');
     }
 
-    // MS-722 (ADR 0081): a write door names the MS-695 permission key that
-    // Admin Accounts grants for the page that writes there, so a custom
-    // level built from Member plus that key (Admin → Accounts) can do what
-    // its page offers. WRITE paths only; reads are untouched. Signed out is
-    // still no: hasPermission needs a user doc.
-    //
-    // ⚠ MS-725 (ADR 0082): ONCE A MAP HAS BEEN SAVED ON THE ACCOUNT, THE KEY
-    // IS THE WHOLE ANSWER. MS-722 kept isEditor() as a plain OR so nobody
-    // lost a door, and that made the grant one-way: an account whose stored
-    // permissionLevel is `editor` kept all nineteen doors however the admin
-    // set the map, so unticking a key in Admin → Accounts changed nothing.
-    // A permission that cannot be taken away is not a permission.
-    //
-    // usesPermissionMap() is the marker, and it is the marker because it is
-    // exactly what Admin → Accounts writes: assignUserAccountLevel() stores
-    // userWriteFromLevel()'s `permissions` map on users/{uid} every time a
-    // level is assigned. An account that has never been through that screen
-    // has no map to read, so it keeps the level names — the same shape
-    // readsAsEditor(), writesTheRecord() and countsAsElder() already use.
     function editsWith(key) {
-      return hasPermission(key) || (!usesPermissionMap() && isEditor());
+      return keyOn(key);
     }
 
-    // MS-727: the same shape as editsWith, on the admin ladder. app_config
-    // was isAdmin() (admin / super_admin by name). A custom level holding
-    // admin.dashboard.access can now write what the Admin Dashboard offers;
-    // a leftover account with no map still uses the level names. Using
-    // editsWith here would let every leftover editor in — the wrong OR.
     function editsAsAdmin(key) {
-      return hasPermission(key) || (!usesPermissionMap() && isAdmin());
+      return keyOn(key);
     }
 
-    // Helper to check if user is a member or above. The floor of the `member`
-    // visibility rung (MS-99): a viewer is signed in but sees only public things.
     function isMember() {
-      return request.auth != null && (
-        permissionLevel() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
-        || isPastoralAssistant()
-      );
+      return accessRank() in ['member', 'editor', 'admin', 'elder', 'super_admin', 'pastoral_assistant']
+        || keyOn('directory.view')
+        || keyOn('visibility.rung.member')
+        || isEditor();
     }
 
-    // The Person record this signed-in User is linked to, or null. Event
-    // `participant` visibility is answered against Person ids, not User ids.
     function myPersonId() {
       let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return ('personId' in d) ? d.personId : null;
     }
 
-    // Helper to check if user is elder or super_admin
     function isElder() {
-      return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
+      return keyOn('shep.count_as_elder');
     }
 
-    // Pastoral Assistant is the permissionLevel `pastoral_assistant` (ADR-0076).
-    // The old `pastoralAssistant` flag still counts, so an account granted
-    // that way keeps the doors until an admin sets the role. Fail closed: a
-    // missing user doc is not a Pastoral Assistant. isElder() is not this —
-    // a Pastoral Assistant is never counted as an elder.
     function isPastoralAssistant() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && (permissionLevel() == 'pastoral_assistant'
-            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pastoralAssistant == true);
-    }
-
-    // MS-695: denormalized permission map on users/{uid}. When absent, fall
-    // back to the permissionLevel ladder (MS-119 / ADR-0077).
-    function signedInUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function usesPermissionMap() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && ('permissions' in signedInUserData());
+      return accessRank() == 'pastoral_assistant';
     }
 
     function hasPermission(key) {
-      return usesPermissionMap()
-        && signedInUserData().permissions[key] == true;
+      return keyOn(key);
     }
 
-    // isPastoralAssistant() is consulted even when a permissions map is
-    // present. Assigning Pastoral Assistant used to leave a Member map (or
-    // member-sync wrote permissionLevel back to member while the map was
-    // right). The rung itself still opens an elder's doors. countsAsElder
-    // does not: a Pastoral Assistant is never an elder.
     function readsAsElder() {
-      return hasPermission('visibility.lift_hidden_tags')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      return keyOn('visibility.lift_hidden_tags') || isPastoralAssistant();
     }
 
     function readsAsEditor() {
-      return hasPermission('directory.edit_identity')
-        || hasPermission('printables.edit')
+      return keyOn('directory.edit_identity')
+        || keyOn('printables.edit')
         || isPastoralAssistant()
-        || (!usesPermissionMap() && isEditor());
+        || isEditor();
     }
 
     function writesTheRecord() {
-      return hasPermission('shep.notes.write')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      return keyOn('shep.notes.write') || isPastoralAssistant();
     }
 
-    // MS-594: shepherding decision/write actions in software. Same grant as
-    // writesTheRecord; a separate name so counted-as-elder (isElder) stays
-    // permission-level only.
     function canDecide() {
-      return hasPermission('shep.tags.manage')
-        || isPastoralAssistant()
-        || (!usesPermissionMap() && isElder());
+      return keyOn('shep.tags.manage') || isPastoralAssistant();
     }
 
     function countsAsElder() {
-      return hasPermission('shep.count_as_elder')
-        || (!usesPermissionMap() && isElder());
+      return keyOn('shep.count_as_elder');
     }
 
-    // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
-    // ADR-0041). Parallel to isElder()/isAdmin(): an allowlist of one value.
     function isKiosk() {
-      return request.auth != null && permissionLevel() == 'kiosk';
+      return accessRank() == 'kiosk';
     }
 
     // ⚠ NO USER DOCUMENT MAY CARRY A PASSWORD (MS-241, ADR-0040).
@@ -196,11 +289,14 @@ service cloud.firestore {
       // Allow users to create their own document as 'viewer' (permission level).
       // During the MS-119 migration the client writes both permissionLevel and the
       // legacy role; accept whichever the new doc carries.
+      // Self-signup is a viewer account level and nothing else. A permissions
+      // map on this write would let the client grant itself doors. The
+      // pastoralAssistant field is not a grant; it still may not be set true
+      // here. role and permissionLevel are not read.
       allow create: if request.auth != null && request.auth.uid == userId
         && noStoredPassword()
-        && (('permissionLevel' in request.resource.data)
-            ? request.resource.data.permissionLevel == 'viewer'
-            : request.resource.data.role == 'viewer')
+        && request.resource.data.accountLevelId == 'level_viewer'
+        && !('permissions' in request.resource.data)
         && (!('pastoralAssistant' in request.resource.data)
             || request.resource.data.pastoralAssistant != true);
       // Allow users to update ONLY their own dashboard card arrangement.
@@ -341,9 +437,10 @@ service cloud.firestore {
     // Role on them.
     function rankCanSee(visibility) {
       return visibility == 'public'
-        || (isMember() && visibility == 'member')
-        || (readsAsEditor() && visibility in ['member', 'participant', 'editor'])
-        || (readsAsElder() && visibility == 'elder');
+        || (visibility == 'member' && (isMember() || keyOn('visibility.rung.member')))
+        || (visibility == 'participant' && (readsAsEditor() || keyOn('visibility.rung.participant')))
+        || (visibility == 'editor' && (readsAsEditor() || keyOn('visibility.rung.editor')))
+        || (visibility == 'elder' && (readsAsElder() || keyOn('visibility.rung.elder')));
     }
 
     // The one rung rank cannot answer, checked against the occurrence's own

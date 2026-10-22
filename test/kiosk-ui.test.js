@@ -234,7 +234,7 @@ test('the same household typed twice is named rather than quietly duplicated', (
 
 test('marking present returns the kiosk to the bare search screen', () => {
     const js = read('kiosk.js');
-    const submit = js.match(/async submitPresent\(\)[\s\S]*?\n        \},/);
+    const submit = js.match(/async submitPresent\(\)[\s\S]*?\n {8}\},/);
     assert.ok(submit, 'no submitPresent');
     assert.match(submit[0], /this\.toSearch\(\);/);
     // The print is started before the screen resets, never after.
