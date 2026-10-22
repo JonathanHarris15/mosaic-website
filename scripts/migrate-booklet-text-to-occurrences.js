@@ -42,14 +42,17 @@ const BATCH_LIMIT = 400;
 const DATA_URL_MIN_BYTES = 2048;
 const OCCURRENCE_COLLECTION = 'event_occurrences';
 
-/** @param {string[]} argv */
-function committing(argv) {
-    return argv.includes('--commit');
-}
-
-/** @param {string[]} argv */
-function willWrite(argv) {
-    return committing(argv) && argv.includes('--i-mean-prod');
+/**
+ * Dry-run unless both --commit and --i-mean-prod are present.
+ * --commit alone is a mistake and throws before any read.
+ * @param {string[]} argv
+ * @return {{ commit: boolean }}
+ */
+function writeMode(argv) {
+    const asked = argv.includes('--commit');
+    const armed = argv.includes('--i-mean-prod');
+    if (asked && !armed) throw new Error('--commit also needs --i-mean-prod.');
+    return { commit: asked && armed };
 }
 
 /** @param {string[]} argv @param {string} name @return {string|null} */
@@ -371,10 +374,10 @@ function prepareOccurrenceWrite(existing, plans, options) {
     const beforeDoc = exists
         ? Object.assign({}, existing, { printableInputs: merged })
         : newOccurrenceBody(options.date, options.series, plans, options.assignments);
-    const offloaded = offloadDataUrls(
-        exists ? beforeDoc.printableInputs : beforeDoc.printableInputs,
-        { date: options.date, bucket: options.bucket }
-    );
+    const offloaded = offloadDataUrls(beforeDoc.printableInputs, {
+        date: options.date,
+        bucket: options.bucket,
+    });
     const afterDoc = Object.assign({}, beforeDoc, { printableInputs: offloaded.value });
     const currentBytes = exists ? Size.documentSize(pathSegments, existing) : 0;
     const beforeOffloadBytes = Size.documentSize(pathSegments, beforeDoc);
@@ -395,6 +398,19 @@ function prepareOccurrenceWrite(existing, plans, options) {
         largestBefore: largestStrings(beforeDoc, 5),
         largestAfter: largestStrings(afterDoc, 5),
     };
+}
+
+/**
+ * Skip a document that is over the ceiling, or that the server rejected
+ * for size. Any other error is thrown.
+ * @param {{ overLimit?: boolean }} prep
+ * @param {any} [err]
+ * @return {'write'|'skip'|'throw'}
+ */
+function writeOutcome(prep, err) {
+    if (prep && prep.overLimit) return 'skip';
+    if (err) return isSizeError(err) ? 'skip' : 'throw';
+    return 'write';
 }
 
 /** @param {any} err @return {boolean} */
@@ -438,10 +454,7 @@ async function commitBatch(batch, count) {
 async function main() {
     const argv = process.argv;
     const projectId = requireProject(argv);
-    const COMMIT = willWrite(argv);
-    if (committing(argv) && !COMMIT) {
-        throw new Error('--commit also needs --i-mean-prod.');
-    }
+    const COMMIT = writeMode(argv).commit;
     const from = arg(argv, '--from');
     const to = arg(argv, '--to');
 
@@ -581,7 +594,7 @@ async function main() {
             sizeReport.maxResultBytes = prep.resultBytes;
             sizeReport.maxResultOccurrenceId = occId;
         }
-        if (prep.overLimit) {
+        if (writeOutcome(prep) === 'skip') {
             totals.fieldsSkipped += plan.fieldsCopied;
             sizeReport.occurrencesSkipped += 1;
             sizeReport.skipped.push({
@@ -606,7 +619,7 @@ async function main() {
             try {
                 await occRef.set(prep.body, {merge: true});
             } catch (err) {
-                if (!isSizeError(err)) throw err;
+                if (writeOutcome(prep, err) === 'throw') throw err;
                 totals.fieldsSkipped += plan.fieldsCopied;
                 sizeReport.occurrencesSkipped += 1;
                 sizeReport.skipped.push({
@@ -646,6 +659,8 @@ module.exports = {
     newOccurrenceBody,
     offloadDataUrls,
     prepareOccurrenceWrite,
+    writeMode,
+    writeOutcome,
     isSizeError,
     SUNDAY_SERIES,
     DATA_URL_MIN_BYTES,
