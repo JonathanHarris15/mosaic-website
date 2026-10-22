@@ -1,8 +1,8 @@
-# MS-777 — copy Sunday booklet text onto occurrence fill-ins
+# MS-777 — Sunday booklet text onto occurrence fill-ins
 
-This note is the data copy only. Merging it does not change what print reads or writes. Print still uses `services/{date}.typedContent` and the week's guide until the reader change lands.
+Print reads and writes booklet text on the Sunday Service occurrence. It does not read `services/{date}.typedContent` or the week's guide.
 
-The script copies booklet text (prayer-country facts, Mosaic Kids, announcements) onto the Sunday Service occurrence:
+The script copies that text (prayer-country facts, Mosaic Kids, announcements) onto:
 
 `event_occurrences/sunday_service_{YYYY-MM-DD}.printableInputs[printableId]`
 
@@ -10,16 +10,16 @@ Fill-in ids are `legacy_*` (`legacy_prayerNation`, `legacy_announcements`, `lega
 
 ## Order
 
-Prod ops runs from `main` only. The copy has to be on `main`, and `commit=true` has to succeed, before the reader change merges. Merging the reader first makes a week that exists only in the old stores print blank. That is the outage of 21 October 2026.
+Do not merge this reader change until the copy script is already on `main` and `commit=true` has succeeded. Hosting deploys with this merge. A week that still exists only in the old stores prints blank. That is the outage of 21 October 2026.
 
-1. Merge this change.
-2. Dry-run the script on `main`. Read `size.maxResultBytes`, `size.ceilingBytes`, and `size.occurrencesSkipped`.
+1. Merge the migration pull request.
+2. Dry-run `migrate-booklet-text-to-occurrences.js` on `main`. Read `size.maxResultBytes`, `size.ceilingBytes`, and `size.occurrencesSkipped`.
 3. Dispatch `commit=true` only when `size.occurrencesSkipped` is 0 and `size.maxResultBytes` is under `size.ceilingBytes`.
-4. Merge the reader change only after that commit has succeeded.
+4. Merge this change only after that commit has succeeded.
 
-## After this change is on `main`
+## After the copy is on `main`
 
-Print is unchanged. Run the copy from `main`, not from a pull request.
+Run the copy from `main`, not from a pull request. This pull request does not add the script.
 
 ```bash
 gh workflow run "Prod ops script" --ref main \
@@ -51,4 +51,4 @@ Every write is one occurrence, after a size check. The ceiling is 64 KiB under t
 
 ## Do not delete the old fields in that run
 
-Leave `services.typedContent` and booklet keys inside `guide.values` / `guide.elements` in place. Print still reads them. A later script may delete them, and only after the reader change is in production and a dry run of this copy shows nothing left to copy (`fieldsCopied: 0`). That delete is not this script and not this change.
+Leave `services.typedContent` and booklet keys inside `guide.values` / `guide.elements` in place. Print does not read them after this change. A later script may delete them, and only after a dry run of this copy shows nothing left to copy (`fieldsCopied: 0`). That delete is not this script and not this change.

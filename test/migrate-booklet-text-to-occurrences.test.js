@@ -159,10 +159,6 @@ test('the date window is service ids, and the script never deletes', () => {
     assert.equal(src.includes('Migrate.contentFromLegacyStores'), false);
     assert.equal(src.includes('Migrate.planOccurrenceFill'), false);
     assert.equal(src.includes('Migrate.readsBookletText'), false);
-    const store = fs.readFileSync(path.join(__dirname, '../public/printable-data-store.js'), 'utf8');
-    const live = fs.readFileSync(path.join(__dirname, '../public/printable-live.js'), 'utf8');
-    assert.equal(store.includes('mergeEventWithTyped'), true);
-    assert.equal(live.includes('function legacyTypedFallback'), true);
 });
 
 test('a country-map data URL is stored once, as a URL, under the size ceiling', () => {
