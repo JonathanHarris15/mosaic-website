@@ -80,6 +80,8 @@ test('the audit script lists rows and does not write', () => {
     assert.match(src, /describePrayerTextRow/);
     assert.match(src, /explainPrayerTextRows/);
     assert.match(src, /prayer_requests/);
+    assert.match(src, /namesForPeople/);
+    assert.match(src, /data\.name/);
     assert.match(src, /--commit ignored/);
     assert.doesNotMatch(src, /\.(set|update|delete|add|create)\s*\(/);
 });
@@ -207,5 +209,12 @@ test('an initial with empty sentDays is Send Now, and a missing doc is not', () 
     assert.equal(manual.checks.manualSendNow.happened, true);
     const unread = audit.explainPrayerTextRows(listed, []);
     assert.equal(unread.checks.manualSendNow.happened, null);
+    const missing = audit.explainPrayerTextRows(listed, [{
+        personId: 'levi', serviceDate: '2026-10-25', missing: true,
+        sentDays: [], initialSentDate: '2026-10-22', reminderSent: false,
+    }]);
+    assert.equal(missing.checks.manualSendNow.happened, null);
+    assert.equal(missing.checks.oct20SendLoggedAgain.happened, false);
+    assert.doesNotMatch(missing.checks.oct20SendLoggedAgain.detail, /still-unsent/);
     assert.equal(audit.dateMinusDays('2026-10-25', 5), '2026-10-20');
 });

@@ -263,7 +263,6 @@ function acceptedPrayerSends(listed) {
             personId: rows[0].personId || null,
             name: name,
             serviceDate: rows[0].serviceDate || null,
-            createdOn: createdDays[0] || null,
             createdDays: createdDays,
             copies: rows.length,
             wording: wording,
@@ -306,8 +305,7 @@ function sameDayExtraSends(sends) {
     const byPerson = new Map();
     sends.forEach((send) => {
         if (!send.personId) return;
-        const days = send.createdDays && send.createdDays.length ?
-            send.createdDays : (send.createdOn ? [send.createdOn] : []);
+        const days = send.createdDays || [];
         days.forEach((day) => {
             const key = send.personId + '|' + day;
             if (!byPerson.has(key)) byPerson.set(key, []);
@@ -366,16 +364,13 @@ function oct20SlotSentLater(requests, sends) {
             const later = sends.filter((send) => {
                 if (send.personId !== req.personId) return false;
                 if (send.serviceDate !== req.serviceDate) return false;
-                const days = send.createdDays && send.createdDays.length ?
-                    send.createdDays : (send.createdOn ? [send.createdOn] : []);
+                const days = send.createdDays || [];
                 return days.some((day) => day > OCT20_SCHEDULED);
             });
             if (!later.length) return;
-            const loggedOn = [...new Set(later.flatMap((send) => {
-                const days = send.createdDays && send.createdDays.length ?
-                    send.createdDays : (send.createdOn ? [send.createdOn] : []);
-                return days.filter((one) => one > OCT20_SCHEDULED);
-            }))].sort();
+            const loggedOn = [...new Set(later.flatMap((send) =>
+                (send.createdDays || []).filter((one) => one > OCT20_SCHEDULED),
+            ))].sort();
             notes.push({
                 personId: req.personId,
                 serviceDate: req.serviceDate,
@@ -475,7 +470,7 @@ function explainPrayerTextRows(listed, requests) {
             'still-unsent Oct 20 slot, not a second copy of an Oct 20 log row.'
         ).join(' ');
     } else {
-        const created = [...new Set(sends.map((send) => send.createdOn).filter(Boolean))];
+        const created = [...new Set(sends.flatMap((send) => send.createdDays || []))];
         oct20Detail = 'No textId is on both an 2026-10-20 row and a later row. ' +
             'Accepted sends in this list were created on ' +
             (created.join(', ') || '(no accepted send)') + '.';
@@ -538,10 +533,6 @@ module.exports = {
     isFailedTextbeltSend,
     bucketProviderError,
     summarizePrayerTextFailures,
-    formatCreatedAtChicago,
-    maskPhoneLast4,
-    bodyContainsUrl,
-    recordedWriter,
     describePrayerTextRow,
     prayerTextListSummary,
     explainPrayerTextRows,

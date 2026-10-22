@@ -50,7 +50,6 @@ async function loadPrayerRequestStates(db, rows) {
             initialSentDate: data.initialSentDate || null,
             reminderSent: !!data.reminderSent,
             reminderSentDate: data.reminderSentDate || null,
-            lastSendAttemptDate: data.lastSendAttemptDate || null,
         });
     }
     return states;
