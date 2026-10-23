@@ -26,7 +26,7 @@
  *   node scripts/backfill-relationship-types.js --commit   # apply
  */
 
-const Rel = require('../public/relationship-core.js');
+const Rel = require('../public/relationship-type-backfill-core.js');
 
 /**
  * The field patch to write for one legacy Relationship Type doc, or null if the
