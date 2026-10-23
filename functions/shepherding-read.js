@@ -393,7 +393,7 @@ async function listNotes(db, {personId, limit}) {
       sourceDocumentId: note.sourceDocumentId || null,
       // The list is for choosing which note to open, so the body is a taste
       // rather than the whole thing.
-      preview: String(note.content || "").slice(0, 160),
+      preview: notePreviewPlain(note, 160),
     })),
   };
 }
