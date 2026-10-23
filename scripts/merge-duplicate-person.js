@@ -16,9 +16,6 @@ const path = require('path');
 const Merge = require('../public/merge-duplicate-person-core.js');
 const {loadProject} = require('./firebase-project.js');
 
-// Pre-notifications archive; not named in shared cores (see test/notification-migration.test.js).
-const LEGACY_PERSON_REF_COLLECTIONS = Object.freeze(['sms_messages']);
-
 const PERSON_ROOT_PREFIX = 'people/';
 
 function committing(argv) {
@@ -190,7 +187,7 @@ async function countRemainingReferences(db, fromId) {
         if (samples.length < 20) samples.push(p);
     });
 
-    const collections = Merge.TOP_LEVEL_COLLECTIONS.concat(LEGACY_PERSON_REF_COLLECTIONS);
+    const collections = Merge.TOP_LEVEL_COLLECTIONS;
     for (const collection of collections) {
         const snap = await db.collection(collection).get();
         for (const doc of snap.docs) {
@@ -321,7 +318,7 @@ async function main() {
 
     await planPersonSubtreeMoves(db, fromId, toId, toName, plan);
 
-    const collections = Merge.TOP_LEVEL_COLLECTIONS.concat(LEGACY_PERSON_REF_COLLECTIONS);
+    const collections = Merge.TOP_LEVEL_COLLECTIONS;
     for (const collection of collections) {
         await scanTopLevel(db, collection, fromId, toId, toName, plan);
     }
