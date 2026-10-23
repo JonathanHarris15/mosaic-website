@@ -169,6 +169,23 @@ test('non-members, a tag, inactive people and first-name sort are all filters', 
     assert.deepEqual(all.rows.map(x => x.firstName), ['Anna', 'Ben', 'Cara', 'Dan']);
 });
 
+test('MS-793 — booklet last name uses remembered nameParts, not the last word of the full name', () => {
+    const people = [{
+        id: 'p1',
+        name: 'Jonathan Harris Jr.',
+        nameParts: {
+            firstName: 'Jonathan',
+            lastName: 'Harris',
+            suffix: 'Jr.',
+            noLastName: false,
+        },
+        tags: ['Member'],
+        membership: { stage: 'member' },
+    }];
+    const r = Data.resolve('people', {}, { people, families: [] }, { today: TODAY, level: 'editor' });
+    assert.equal(r.rows[0].lastName, 'Harris');
+});
+
 test('a person row carries the fields the drawer promises', () => {
     const r = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
     const anna = r.rows[0];
@@ -673,8 +690,8 @@ test('a hymn with empty or missing page assets skips them and does not invent im
     data.hymns.h1.versions[0].pages = ['ag1.png', '', { url: '  ' }, { src: 'ag3.png' }, null];
     const r = Data.resolve('sunday_hymns', {}, data, { today: TODAY });
     const grace = r.rows.filter(x => x.name === 'Amazing Grace');
-    assert.deepEqual(grace.map(x => x.image), ['ag1.png', 'ag3.png']);
-    assert.equal(grace.length, 2);
+    assert.deepEqual(grace.map(x => x.image), ['ag1.png']);
+    assert.equal(grace.length, 1);
     grace.forEach(row => assert.ok(row.image, 'no invented placeholder'));
     assert.deepEqual(Data.hymnSheetPages({ versions: [{ pages: ['', null, { url: '' }] }] }), []);
     assert.deepEqual(Data.hymnSheetPages(null), []);

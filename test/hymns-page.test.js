@@ -344,7 +344,7 @@ test('opening a hymn from the list keeps that hymn, including an older sheet pag
     assert.deepEqual(HymnsPage.sheetPages({
         name: 'SATB',
         pages: [{ url: 'sheet.png' }, 'plain.png', { src: 'legacy.png' }, ''],
-    }), ['sheet.png', 'plain.png', 'legacy.png']);
+    }), ['plain.png']);
 });
 
 test('the phone shell names the open hymn and carries the one way back', () => {

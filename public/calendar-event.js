@@ -812,10 +812,7 @@
             // Service has to mean every Sunday HAS a sound desk to fill —
             // otherwise the series screen is a list that does nothing.
             get roleSlugsHere() {
-                const fromSeries = this.seriesRoleSlugsHere;
-                const fromDate = ((this.occurrence && this.occurrence.occurrenceRoleSlugs) || [])
-                    .filter(slug => fromSeries.indexOf(slug) === -1);
-                return fromSeries.concat(fromDate);
+                return this.seriesRoleSlugsHere;
             },
 
             get managedRoles() {

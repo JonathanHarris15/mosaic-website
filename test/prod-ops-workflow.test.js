@@ -28,3 +28,18 @@ test('prod ops workflow script choices match the allowlist module', () => {
         assert.match(wf, new RegExp(`- ${name.replace('.', '\\.')}`));
     }
 });
+
+test('allowlisted prod-ops scripts resolve credentials through service-account.js', () => {
+    const badRootScan = /readdirSync\([^)]*\)\.find\([\s\S]*firebase-adminsdk/;
+    const badResolver = /function resolveServiceAccount\s*\(/;
+    for (const name of ALLOWLIST_SORTED) {
+        const src = fs.readFileSync(path.join(ROOT, 'scripts', name), 'utf8');
+        if (!src.includes('firebase-admin')) continue;
+        if (src.includes('applicationDefault()')) continue;
+        if (name === 'migrate-baptism.js') continue; // delegates to migrate-baptism.cjs (ADC)
+        assert.doesNotMatch(src, badRootScan, `${name} must not scan the repo root for a key file`);
+        assert.doesNotMatch(src, badResolver, `${name} must not define resolveServiceAccount`);
+        const usesHelper = /service-account/.test(src);
+        assert.ok(usesHelper, `${name} must use scripts/service-account.js`);
+    }
+});

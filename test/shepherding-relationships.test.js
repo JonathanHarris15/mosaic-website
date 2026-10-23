@@ -126,10 +126,14 @@ test('folding the tab into the page component keeps its getters live', async () 
 
 // ── Loading ───────────────────────────────────────────────────────────────────
 
-test('the tab reads a legacy directional type as its enriched equivalent', async () => {
-    // The tab must work before the MS-102 backfill has run (ADR-0014 s6).
+test('MS-797 — the tab reads an enriched pairwise type from Firestore', async () => {
     const tab = await mountTab({
-        relationship_types: { t1: { name: 'mentors', directional: true } },
+        relationship_types: {
+            t1: {
+                name: 'mentors', kind: 'pairwise', priority: true,
+                holderLabel: 'mentors', counterpartLabel: 'mentors',
+            },
+        },
         people: PEOPLE,
     });
     const type = tab.relTypes[0];

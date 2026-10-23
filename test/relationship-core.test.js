@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Rel = require('../public/relationship-core.js');
+const Backfill = require('../public/relationship-type-backfill-core.js');
 
 const A = 'a', B = 'b', C = 'c';
 const nameOf = id => ({ a: 'Alice', b: 'Bob', c: 'Cara' }[id] || id);
@@ -115,8 +116,8 @@ test('validateEdit refuses to change a type kind, but allows priority and labels
 
 // ── Migration mapping (legacy `directional` -> kind x priority) ────────────────
 
-test('migrateTypeDoc maps a directional type to a Prioritized Pairwise type, seeding both labels from the name', () => {
-    const migrated = Rel.migrateTypeDoc(mentors);
+test('MS-797 — backfill maps directional true with no kind to a prioritized pairwise type', () => {
+    const migrated = Backfill.migrateTypeDoc(mentors);
     assert.strictEqual(migrated.kind, 'pairwise');
     assert.strictEqual(migrated.priority, true);
     assert.strictEqual(migrated.holderLabel, 'mentors');
@@ -125,8 +126,8 @@ test('migrateTypeDoc maps a directional type to a Prioritized Pairwise type, see
     assert.strictEqual(Rel.validateType(migrated).valid, true);
 });
 
-test('migrateTypeDoc maps a non-directional type to a Non-Prioritized Pairwise type', () => {
-    const migrated = Rel.migrateTypeDoc(dating);
+test('backfill maps a non-directional type to a Non-Prioritized Pairwise type', () => {
+    const migrated = Backfill.migrateTypeDoc(dating);
     assert.strictEqual(migrated.kind, 'pairwise');
     assert.strictEqual(migrated.priority, false);
     assert.strictEqual(migrated.label, 'dating');
@@ -134,13 +135,13 @@ test('migrateTypeDoc maps a non-directional type to a Non-Prioritized Pairwise t
     assert.strictEqual(Rel.validateType(migrated).valid, true);
 });
 
-test('migrateTypeDoc is idempotent — re-running it on a migrated type changes nothing', () => {
-    const once = Rel.migrateTypeDoc(mentors);
-    const twice = Rel.migrateTypeDoc(once);
+test('backfill migrateTypeDoc is idempotent', () => {
+    const once = Backfill.migrateTypeDoc(mentors);
+    const twice = Backfill.migrateTypeDoc(once);
     assert.deepStrictEqual(twice, once);
-    assert.strictEqual(Rel.needsMigration(mentors), true);
-    assert.strictEqual(Rel.needsMigration(once), false);
-    assert.strictEqual(Rel.needsMigration(discipleship), false);
+    assert.strictEqual(Backfill.needsMigration(mentors), true);
+    assert.strictEqual(Backfill.needsMigration(once), false);
+    assert.strictEqual(Backfill.needsMigration(discipleship), false);
 });
 
 // ── Describing a Pairwise Relationship on a Person's profile ──────────────────
@@ -186,8 +187,9 @@ test('a Non-Prioritized Pairwise Relationship reads symmetrically, with no orien
 
 test('a legacy directional type still renders its original oriented sentence', () => {
     const edge = { fromId: A, toId: B, typeId: 't1' };
-    const onAlice = Rel.describeRelationship(edge, mentors, A, nameOf);
-    const onBob = Rel.describeRelationship(edge, mentors, B, nameOf);
+    const mentorsType = Backfill.migrateTypeDoc(mentors);
+    const onAlice = Rel.describeRelationship(edge, mentorsType, A, nameOf);
+    const onBob = Rel.describeRelationship(edge, mentorsType, B, nameOf);
     assert.strictEqual(onAlice.sentence, 'Alice mentors Bob');
     assert.strictEqual(onBob.sentence, 'Alice mentors Bob'); // oriented, identical
     assert.strictEqual(onAlice.otherId, B);
@@ -197,7 +199,8 @@ test('a legacy directional type still renders its original oriented sentence', (
 
 test('a legacy non-directional type still renders symmetrically', () => {
     const edge = { fromId: A, toId: B, typeId: 't2' };
-    const onAlice = Rel.describeRelationship(edge, dating, A, nameOf);
+    const datingType = Backfill.migrateTypeDoc(dating);
+    const onAlice = Rel.describeRelationship(edge, datingType, A, nameOf);
     assert.strictEqual(onAlice.sentence, null);
     assert.strictEqual(onAlice.typeName, 'dating');
     assert.strictEqual(onAlice.otherId, B);
@@ -237,7 +240,7 @@ test('canonicalType strips the label fields the current shape does not use', () 
 });
 
 test('canonicalType retires the legacy directional flag', () => {
-    const stored = Rel.canonicalType(mentors);
+    const stored = Rel.canonicalType(Backfill.migrateTypeDoc(mentors));
     assert.strictEqual('directional' in stored, false);
     assert.strictEqual(stored.kind, 'pairwise');
     assert.strictEqual(stored.priority, true);
@@ -250,7 +253,7 @@ test('a migrated directional type still reads as its original verb phrase', () =
     // Until they do, the Relationship must read exactly as it did before the migration
     // rather than degrading to "Alice (mentors) → Bob (mentors)".
     const edge = { fromId: A, toId: B, typeId: 't1' };
-    const migrated = Rel.migrateTypeDoc(mentors);
+    const migrated = Backfill.migrateTypeDoc(mentors);
     const onAlice = Rel.describeRelationship(edge, migrated, A, nameOf);
     assert.strictEqual(onAlice.sentence, 'Alice mentors Bob');
 

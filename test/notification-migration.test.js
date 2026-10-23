@@ -74,6 +74,17 @@ test('code, rules, and tests no longer name the old collection except the migrat
     assert.deepStrictEqual(offenders, []);
 });
 
+test('the duplicate-person merge planner no longer names the archived sms log', () => {
+    const mergeScript = fs.readFileSync(
+        path.join(__dirname, '..', 'scripts', 'merge-duplicate-person.js'),
+        'utf8');
+    const mergeCore = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'merge-duplicate-person-core.js'),
+        'utf8');
+    assert.ok(!mergeScript.includes('sms_messages'));
+    assert.ok(!mergeCore.includes('sms_messages'));
+});
+
 test('the renamed rules match the old ones: admins read, nobody writes', () => {
     const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
     const m = rules.match(/match \/notifications\/\{messageId\}\s*\{([\s\S]*?)\n {4}\}/);
