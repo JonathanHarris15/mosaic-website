@@ -20,7 +20,6 @@ test('MS-796 — irregular elements migrate into liturgyLeftovers', () => {
     assert.equal(added.valueText, 'John 1');
 });
 
-<<<<<<< HEAD
 test('MS-796 — stale legacy keys migrate with zero element copies', () => {
     const plan = Plan.planIrregularSundayMigration({
         isIrregular: false,
@@ -32,8 +31,6 @@ test('MS-796 — stale legacy keys migrate with zero element copies', () => {
     assert.equal(plan.leftoversAdded, 0);
 });
 
-=======
->>>>>>> 41c923a (MS-796: drop mobile isIrregular; idempotent irregular leftovers migration)
 test('MS-796 — replanning does not duplicate legacy-irregular leftovers', () => {
     const doc = {
         isIrregular: true,
