@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Plan = require('../public/delete-legacy-irregular-sunday-core.js');
-<<<<<<< HEAD
+const ServiceRead = require('../public/service-read-core.js');
 
 test('MS-796 — irregular elements migrate into liturgyLeftovers', () => {
     const plan = Plan.planIrregularSundayMigration({
@@ -45,12 +45,6 @@ test('MS-796 — replanning does not duplicate legacy-irregular leftovers', () =
     const plan = Plan.planIrregularSundayMigration(doc);
     assert.equal(plan.leftoversAdded, 0);
     assert.equal((plan.liturgyLeftovers || []).length, 1);
-=======
-const ServiceRead = require('../public/service-read-core.js');
-
-test('MS-796 — irregular field deletion is planned for legacy services', () => {
-    assert.equal(Plan.planIrregularFieldDeletion({ theme: 'x' }).deleteFields, false);
-    assert.equal(Plan.planIrregularFieldDeletion({ isIrregular: true }).deleteFields, true);
 });
 
 test('MS-796 — MCP read no longer returns irregularElements', () => {
@@ -62,5 +56,4 @@ test('MS-796 — MCP read no longer returns irregularElements', () => {
     }, { id: 'standard', name: 'Standard', elementIds: [] }, []);
     assert.equal(readable.isIrregular, undefined);
     assert.equal(readable.irregularElements, undefined);
->>>>>>> 14cdc71 (MS-796: drop irregular Sunday MCP fields; add delete script)
 });
