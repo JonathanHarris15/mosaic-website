@@ -52,12 +52,10 @@
         return versions[0];
     }
 
-    // A stored page is a url, or an older object that carried one. A blank
-    // slot is not a page.
+    // A stored page is a url string. A blank slot is not a page.
     function pageUrl(page) {
         if (page == null) return '';
         if (typeof page === 'string') return page.trim();
-        if (typeof page === 'object') return String(page.url || page.src || '').trim();
         return '';
     }
 

@@ -108,6 +108,7 @@
 
     const HymnVersions = {
         isDefault: isDefault,
+        pageUrl: pageUrl,
         defaultVersion: defaultVersion,
         pagesOf: pagesOf,
         defaultPages: defaultPages,
