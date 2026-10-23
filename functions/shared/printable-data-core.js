@@ -66,10 +66,6 @@
     const Liturgy = (typeof require !== 'undefined')
         ? require('./liturgy-order-core.js')
         : global.LiturgyOrderCore;
-    const PersonName = (typeof require !== 'undefined')
-        ? require('./person-name.js')
-        : global.PersonName;
-
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -929,10 +925,24 @@
     // ADR 0074: when nameParts are stored, the booklet last name is the
     // remembered last name — not the last word of the full name (a suffix
     // would otherwise title the household and the row differently).
+    function personNameCore() {
+        if (typeof global !== 'undefined' && global.PersonName) return global.PersonName;
+        if (typeof window !== 'undefined' && window.PersonName) return window.PersonName;
+        if (typeof require === 'function') {
+            try {
+                return require('./person-name.js');
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     function personLastName(person) {
         if (!person) return '';
-        if (person.nameParts && PersonName) {
-            const remembered = PersonName.rememberedLastName(person);
+        const PN = personNameCore();
+        if (person.nameParts && PN) {
+            const remembered = PN.rememberedLastName(person);
             if (remembered.noLastName) return '';
             if (remembered.lastName) return remembered.lastName;
         }
