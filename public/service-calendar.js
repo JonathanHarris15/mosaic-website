@@ -1648,15 +1648,8 @@ function injectServiceData(serviceMap) {
             let html = '';
             
             // Badges Row
-            if (svc.hasBaptism || svc.isIrregular) {
+            if (svc.hasBaptism) {
                 html += `<div class="flex flex-wrap gap-2 mb-2">`;
-                if (svc.isIrregular) {
-                    html += `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
-                            <span class="material-symbols-outlined text-[14px]">layers</span>
-                            Irregular
-                        </span>`;
-                }
                 if (svc.hasBaptism) {
                     const baptismName = baptismCandidateNames(svc);
                     html += `
@@ -1706,19 +1699,6 @@ function injectServiceData(serviceMap) {
                 summaryEl.classList.remove('hidden');
             } else {
                 summaryEl.classList.add('hidden');
-            }
-        }
-
-        // Table View Injection
-        const dateCell = el.querySelector('.sticky-col-left');
-        if (dateCell && svc.isIrregular) {
-            // Check if badge already exists
-            if (!dateCell.querySelector('.irregular-indicator')) {
-                const indicator = document.createElement('span');
-                indicator.className = 'irregular-indicator material-symbols-outlined text-[14px] text-amber-600 ml-1 align-middle cursor-help';
-                indicator.textContent = 'layers';
-                indicator.title = 'Irregular Service';
-                dateCell.appendChild(indicator);
             }
         }
 

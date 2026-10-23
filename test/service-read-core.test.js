@@ -110,10 +110,13 @@ describe('readableService walks the Sunday\'s Liturgy Order', () => {
             .liturgy.find((r) => r.field === 'baptism').filled, false);
     });
 
-    test('an irregular Sunday still says where its content lives', () => {
-        const s = Read.readableService('2031-04-20', { isIrregular: true, irregularElements: [{ name: 'Lessons and Carols' }] });
-        assert.strictEqual(s.isIrregular, true);
-        assert.deepStrictEqual(s.irregularElements, [{ name: 'Lessons and Carols' }]);
+    test('MS-796 — irregular Sunday legacy fields are not returned on MCP read', () => {
+        const s = Read.readableService('2031-04-20', {
+            isIrregular: true,
+            irregularElements: [{ name: 'Lessons and Carols' }],
+        }, WITH_ORDERS);
+        assert.strictEqual(s.isIrregular, undefined);
+        assert.strictEqual(s.irregularElements, undefined);
     });
 
     test('leftovers come back with the Sunday, and an empty drawer is an empty list', () => {
