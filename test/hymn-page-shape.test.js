@@ -13,6 +13,7 @@ test('MS-802 — migration plan normalises object pages to strings', () => {
     const plan = Shape.planHymnPageShapes({
         versions: [{ pages: [{ url: 'https://example/a.pdf' }, ''] }],
     });
+    assert.ok(plan);
     assert.equal(plan.changed, true);
     assert.deepEqual(plan.versions[0].pages, ['https://example/a.pdf']);
 });

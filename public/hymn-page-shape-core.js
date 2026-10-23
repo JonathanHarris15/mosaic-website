@@ -2,6 +2,7 @@
 (function (global) {
     'use strict';
 
+    /** @param {*} page */
     function pageUrlFromLegacy(page) {
         if (page == null) return '';
         if (typeof page === 'string') return page.trim();
@@ -17,16 +18,20 @@
         const versions = hymn && hymn.versions;
         if (!Array.isArray(versions)) return null;
         let changed = false;
-        const nextVersions = versions.map((version) => {
+        const nextVersions = versions.map(function (version) {
             const pages = version && version.pages;
             if (!Array.isArray(pages)) return version;
-            const nextPages = pages.map((page) => {
+            const nextPages = [];
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
                 const url = pageUrlFromLegacy(page);
-                if (!url) return '';
-                if (typeof page === 'string' && page.trim() === url) return page;
-                changed = true;
-                return url;
-            }).filter((p) => p !== '');
+                if (!url) continue;
+                if (typeof page === 'string' && page.trim() === url) nextPages.push(page);
+                else {
+                    changed = true;
+                    nextPages.push(url);
+                }
+            }
             if (nextPages.length !== pages.length) changed = true;
             return Object.assign({}, version, { pages: nextPages });
         });
