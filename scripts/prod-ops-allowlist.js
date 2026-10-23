@@ -28,6 +28,7 @@ const ALLOWLIST_SORTED = [
     'migrate-service-dotted-keys.js',
     'ms-776-backfill-account-levels.js',
     'normalise-care-list-documents.js',
+    'normalize-hymn-page-shapes.js',
     'prayer-request-send-preview.js',
     'prayer-text-notifications-audit.js',
     'reset-prayer-send-attempt.js',

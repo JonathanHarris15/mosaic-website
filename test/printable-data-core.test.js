@@ -690,8 +690,8 @@ test('a hymn with empty or missing page assets skips them and does not invent im
     data.hymns.h1.versions[0].pages = ['ag1.png', '', { url: '  ' }, { src: 'ag3.png' }, null];
     const r = Data.resolve('sunday_hymns', {}, data, { today: TODAY });
     const grace = r.rows.filter(x => x.name === 'Amazing Grace');
-    assert.deepEqual(grace.map(x => x.image), ['ag1.png', 'ag3.png']);
-    assert.equal(grace.length, 2);
+    assert.deepEqual(grace.map(x => x.image), ['ag1.png']);
+    assert.equal(grace.length, 1);
     grace.forEach(row => assert.ok(row.image, 'no invented placeholder'));
     assert.deepEqual(Data.hymnSheetPages({ versions: [{ pages: ['', null, { url: '' }] }] }), []);
     assert.deepEqual(Data.hymnSheetPages(null), []);
