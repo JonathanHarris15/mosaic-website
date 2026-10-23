@@ -79,17 +79,20 @@ test('folding the card into the profile keeps its getters live', async () => {
 
 // ── The card may only apply what the manager defined ───────────────────────────
 
-test('only Pairwise types are offered, and a legacy type is read as its enriched equivalent', async () => {
+test('MS-797 — only Pairwise types are offered, including enriched types from Firestore', async () => {
     const card = await mountCard({
         relationship_types: {
             t1: DISCIPLESHIP,
             t2: BIBLE_STUDY,                       // a Group type — not offered here
-            t3: { name: 'mentors', directional: true }, // legacy, pre-backfill
+            t3: {
+                name: 'mentors', kind: 'pairwise', priority: true,
+                holderLabel: 'mentors', counterpartLabel: 'mentors',
+            },
         },
     });
     const offered = card.qaPairwiseTypes;
     assert.deepStrictEqual(offered.map(t => t.id).sort(), ['t1', 't3']);
-    assert.strictEqual(offered.find(t => t.id === 't3').priority, true, 'legacy directional reads as Prioritized');
+    assert.strictEqual(offered.find(t => t.id === 't3').priority, true);
 });
 
 test('a group this Person already belongs to is not offered to join again', async () => {

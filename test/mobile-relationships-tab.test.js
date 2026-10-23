@@ -126,8 +126,14 @@ test('a Group type is labelled Group, not Pairwise', async () => {
     assert.match(out, /Leader \/ Member/);
 });
 
-test('a legacy directional type renders as Prioritized, before the backfill has run', async () => {
-    const out = await renderTab({ types: [{ id: 'tm', name: 'mentors', directional: true }], people: PEOPLE });
+test('MS-797 — a prioritized pairwise type renders as Prioritized', async () => {
+    const out = await renderTab({
+        types: [{
+            id: 'tm', name: 'mentors', kind: 'pairwise', priority: true,
+            holderLabel: 'mentors', counterpartLabel: 'mentors',
+        }],
+        people: PEOPLE,
+    });
     assert.match(out, /mentors/);
     assert.match(out, /Prioritized/);
     assert.doesNotMatch(out, /undefined/, 'a legacy doc must not leak undefined labels into the UI');
