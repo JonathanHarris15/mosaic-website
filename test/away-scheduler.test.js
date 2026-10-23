@@ -221,11 +221,16 @@ test('being Out and being Away are different questions, asked separately', () =>
 // ── The rename's one compatibility promise ───────────────────────────────────
 
 test('a draft saved before the rename keeps its out-list', () => {
-    // `away` became `out` in MS-188. Drafts saved under the old key are still
-    // sitting in editors' browsers, and losing somebody's work to tidy a name
-    // would be a poor trade.
-    const packed = Saved.pack({ dates: [] }, { away: { '2026-08-02': ['bob'] } });
-    assert.deepStrictEqual(packed.out, { '2026-08-02': ['bob'] });
+    // `away` became `out` in MS-188 / MS-803. Packing no longer reads `away`;
+    // normalising a stored blob does, once on read.
+    const stored = Saved.normalizeStored({
+        version: Saved.VERSION,
+        away: { '2026-08-02': ['bob'] },
+        draft: { dates: [] },
+        against: Saved.fingerprint({ seriesId: 'sunday_service', dates: [], roles: [], people: [] }),
+    });
+    assert.deepStrictEqual(stored.out, { '2026-08-02': ['bob'] });
+    assert.equal(stored.away, undefined);
 });
 
 test('the new key wins when both are somehow present', () => {
