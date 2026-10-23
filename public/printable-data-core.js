@@ -58,7 +58,6 @@
     const Liturgy = (typeof require !== 'undefined')
         ? require('./liturgy-order-core.js')
         : global.LiturgyOrderCore;
-
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -912,8 +911,38 @@
 
     // ── People ───────────────────────────────────────────────────────────────
 
+    /** @param {string|null|undefined} name */
     function firstName(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+    /** @param {string|null|undefined} name */
     function lastName(name) { const p = String(name || '').trim().split(/\s+/); return p.length > 1 ? p[p.length - 1] : ''; }
+
+    // ADR 0074: when nameParts are stored, the booklet last name is the
+    // remembered last name — not the last word of the full name (a suffix
+    // would otherwise title the household and the row differently).
+    function personNameCore() {
+        if (typeof global !== 'undefined' && global && global.PersonName) return global.PersonName;
+        if (typeof window !== 'undefined' && window && window.PersonName) return window.PersonName;
+        if (typeof require === 'function') {
+            try {
+                return require('./person-name.js');
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** @param {{ name?: string, nameParts?: * }|null|undefined} person */
+    function personLastName(person) {
+        if (!person) return '';
+        const PN = personNameCore();
+        if (person.nameParts && PN) {
+            const remembered = PN.rememberedLastName(person);
+            if (remembered.noLastName) return '';
+            if (remembered.lastName) return remembered.lastName;
+        }
+        return lastName(person.name);
+    }
 
     function isInactive(person) {
         const m = (person && person.membership) || {};
@@ -957,8 +986,12 @@
 
     function comparePeople(sort) {
         return (a, b) => {
-            const ka = sort === 'first' ? firstName(a.name) + ' ' + lastName(a.name) : lastName(a.name) + ' ' + firstName(a.name);
-            const kb = sort === 'first' ? firstName(b.name) + ' ' + lastName(b.name) : lastName(b.name) + ' ' + firstName(b.name);
+            const ka = sort === 'first'
+                ? firstName(a.name) + ' ' + personLastName(a)
+                : personLastName(a) + ' ' + firstName(a.name);
+            const kb = sort === 'first'
+                ? firstName(b.name) + ' ' + personLastName(b)
+                : personLastName(b) + ' ' + firstName(b.name);
             return ka.localeCompare(kb) || String(a.name || '').localeCompare(String(b.name || ''));
         };
     }
@@ -1011,7 +1044,7 @@
             _id: person.id,
             name: person.name || '',
             firstName: firstName(person.name),
-            lastName: lastName(person.name),
+            lastName: personLastName(person),
             photo: person.photoUrl || '',
             email: c.email || person.email || '',
             phone: c.phone || person.phone || '',
@@ -1731,6 +1764,7 @@
         const rows = (data.responses || [])
             .filter(r => r && r.formId === form.id)
             .map((r, i) => {
+                /** @type {Record<string, *>} */
                 const row = { _id: r.id || String(i), personName: r.personName || '', submittedAt: r.submittedAt ? formatDate(String(r.submittedAt).slice(0, 10), 'medium') : '', number: i + 1 };
                 questions.forEach(q => {
                     const v = (r.answers || {})[q.id];

@@ -871,9 +871,8 @@
                     </div>
 
                     <p class="font-body-md text-xs text-on-surface-variant border-t border-outline-variant pt-sm">
-                        Outbound texts sent before the log was renamed may still only exist in
-                        <code class="bg-surface-container rounded px-1 py-[1px]">sms_messages</code>.
-                        Nothing here reads or changes that collection; copying it across is a deliberate one-off, not something this page does.
+                        Outbound texts live in the <code class="bg-surface-container rounded px-1 py-[1px]">notifications</code>
+                        log. Older rows copied during the ADR-0036 rename use the same collection and the same ids.
                     </p>
                 </div>
             </section>

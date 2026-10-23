@@ -769,7 +769,7 @@ test('an editor can set the state of a one-off assignment, not just remove them'
 function eventPageWithRole() {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.rank = 'editor';
-    page.occurrence = { id: 'x', date: '2026-07-15', occurrenceRoleSlugs: ['kids'], oneOffRoles: [{ id: 'o1', label: 'Unlock the hall' }] };
+    page.occurrence = { id: 'x', date: '2026-07-15', seriesRoleSlugs: ['kids'], oneOffRoles: [{ id: 'o1', label: 'Unlock the hall' }] };
     page.people = [{ id: 'p1', name: 'Dave Rowe' }, { id: 'p2', name: 'Sarah Kent' }];
     page.roleDefinitions = [{ slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] }];
     page.saved = 0;
@@ -1518,7 +1518,7 @@ test('a liturgical Role is never drawn as a fillable card on a date', () => {
     assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk']);
 });
 
-test('a Role added to one date only belongs to that date, and can be taken off there', () => {
+test('MS-794 — a legacy per-date occurrenceRoleSlugs value does not add a role card', () => {
     const page = eventPageOn(
         { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02',
           occurrenceRoleSlugs: ['coffee'] },
@@ -1526,11 +1526,8 @@ test('a Role added to one date only belongs to that date, and can be taken off t
         [SOUND, COFFEE]
     );
 
-    // Both show. The Event's Roles come first, because they are the shape of the
-    // thing; the one-date addition sits behind them.
-    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk', 'coffee']);
+    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk']);
     assert.strictEqual(page.managedRoles[0].fromSeries, true);
-    assert.strictEqual(page.managedRoles[1].fromSeries, false);
 });
 
 test('the same Role on both the Event and the date is drawn once', () => {

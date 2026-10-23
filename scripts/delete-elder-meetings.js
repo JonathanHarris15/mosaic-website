@@ -1,10 +1,14 @@
 /**
  * Delete legacy elder_meetings documents (MS-799, ADR-0015).
  *
- * Meeting minutes live in elder_documents. Dry-run by default.
+ * Meeting minutes live in elder_documents. Commit refuses unless the collection
+ * is empty or every meeting id also exists in elder_documents (same id).
+ *
+ * Dry-run by default. Prod requires --project mosaic-hymn-database --i-mean-prod.
  */
 
 const path = require('path');
+const Plan = require('../public/delete-elder-meetings-core.js');
 const {loadProject} = require('./firebase-project.js');
 
 /** @param {string[]} argv */
@@ -36,9 +40,26 @@ async function main() {
     }
     const db = admin.firestore();
 
-    const snap = await db.collection('elder_meetings').get();
-    const ids = snap.docs.map((d) => d.id);
-    console.log(JSON.stringify({ meetingDocsToDelete: ids.length, sampleIds: ids.slice(0, 20) }, null, 2));
+    const [meetingsSnap, documentsSnap] = await Promise.all([
+        db.collection('elder_meetings').get(),
+        db.collection('elder_documents').get(),
+    ]);
+    const meetingIds = meetingsSnap.docs.map((d) => d.id);
+    const elderDocumentIds = documentsSnap.docs.map((d) => d.id);
+    const plan = Plan.planElderMeetingsDeletion(meetingIds, elderDocumentIds);
+
+    console.log(JSON.stringify({
+        meetingDocsToDelete: plan.meetingIds.length,
+        elderDocumentsScanned: elderDocumentIds.length,
+        canDelete: plan.canDelete,
+        missingInElderDocuments: plan.missingInElderDocuments.slice(0, 20),
+        sampleMeetingIds: plan.meetingIds.slice(0, 20),
+    }, null, 2));
+
+    if (!plan.canDelete) {
+        throw new Error(
+            'Refusing to delete elder_meetings: some ids are not present in elder_documents.');
+    }
 
     if (!COMMIT) {
         console.log('Dry run: no writes made.');
@@ -46,13 +67,13 @@ async function main() {
     }
 
     const batchSize = 400;
-    for (let i = 0; i < snap.docs.length; i += batchSize) {
+    for (let i = 0; i < meetingsSnap.docs.length; i += batchSize) {
         const batch = db.batch();
-        snap.docs.slice(i, i + batchSize).forEach((doc) => batch.delete(doc.ref));
+        meetingsSnap.docs.slice(i, i + batchSize).forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
-    console.log('Deleted', ids.length, 'elder_meetings documents.');
+    console.log('Deleted', plan.meetingIds.length, 'elder_meetings documents.');
 }
 
 main()

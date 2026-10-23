@@ -686,7 +686,8 @@ test('a page number round-trips through the code view, and an old chip becomes o
     assert.deepEqual(back.nodes[0].pageNumber, n.pageNumber);
     assert.equal(back.nodes[0].name, 'Folio');
 
-    const legacy = Core.buildNode({
+    const Migrate = require('../public/migrate-printable-page-number-core.js');
+    const legacy = Core.buildNode(Migrate.migrateNode({
         tag: 'p',
         text: '1',
         style: { left: '40px', top: '12px', position: 'absolute' },
@@ -694,7 +695,7 @@ test('a page number round-trips through the code view, and an old chip becomes o
             text: { source: 'insert_page_number', field: 'number', params: { startAt: 3 } },
             class: { source: 'insert_page_number', field: 'edgeClass' },
         },
-    });
+    }, Core.normalizePageNumber).node);
     assert.equal(Core.kindOf(legacy), 'page-number');
     assert.equal(legacy.pageNumber.mirror, true);
     assert.equal(legacy.pageNumber.anchor, 'free');
