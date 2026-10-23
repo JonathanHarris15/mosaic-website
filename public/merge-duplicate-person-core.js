@@ -87,7 +87,6 @@
         'events',
         'people_tags',
         'shepherding_views',
-        'elder_meetings',
         'forms',
         'presence',
     ]);

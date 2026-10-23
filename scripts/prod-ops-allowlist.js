@@ -11,6 +11,7 @@ const ALLOWLIST_SORTED = [
     'backfill-occurrence-visibility.js',
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
+    'delete-elder-meetings.js',
     'delete-legacy-person-picker-fields.js',
     'delete-shepherding-reminders.js',
     'diagnose-storage-fill-in-upload.js',
