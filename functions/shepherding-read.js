@@ -367,7 +367,7 @@ function describeStatusChange(entry) {
 }
 
 /**
- * @param {object} note stored note fields
+ * @param {*} note stored note fields
  * @param {number} maxLen preview cap
  * @return {string}
  */

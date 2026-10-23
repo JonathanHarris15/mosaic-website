@@ -13,6 +13,7 @@
         return global && global.NoteMarkdownCore;
     }
 
+    /** @param {*} contentJson */
     function plainFromJson(contentJson) {
         const Core = noteMarkdownCore();
         if (!Core || typeof Core.toMarkdown !== 'function' || !contentJson) return '';
