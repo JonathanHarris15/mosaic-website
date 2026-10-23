@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const Backfill = require('../scripts/backfill-name-parts.js');
 const Household = require('../public/household-core.js');
@@ -70,6 +72,17 @@ test('the default run does not write, and only the church project is allowed', (
         'node', 'backfill-name-parts.js',
         '--project', 'mosaic-hymn-database',
     ]));
+});
+
+test('prod-ops resolves credentials through service-account.js', () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'scripts', 'backfill-name-parts.js'),
+        'utf8',
+    );
+    assert.match(src, /require\('\.\/service-account\.js'\)/);
+    assert.match(src, /serviceAccount\(\)/);
+    assert.doesNotMatch(src, /resolveServiceAccount/);
+    assert.doesNotMatch(src, /readdirSync\(root\)/);
 });
 
 test('remembered parts name a projected Household after Harris, not Jr.', () => {

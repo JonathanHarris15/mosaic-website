@@ -55,25 +55,17 @@ module.exports = { updateForType };
 
 if (require.main === module) {
     const admin = require('firebase-admin');
-    const path = require('path');
-    const fs = require('fs');
+    const { serviceAccount } = require('./service-account.js');
 
-    const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-    const COMMIT = process.argv.includes('--commit');
-
-    function resolveServiceAccount() {
-        const root = path.join(__dirname, '..');
-        const match = fs.readdirSync(root).find(
-            f => f.startsWith('mosaic-hymn-database-firebase-adminsdk') && f.endsWith('.json')
-        );
-        if (!match) throw new Error('No mosaic-hymn-database-firebase-adminsdk-*.json found in project root.');
-        return require(path.join(root, match));
-    }
-
-    require('./firebase-project').requireProject(process.argv, {
+    const projectId = require('./firebase-project').requireProject(process.argv, {
         hardcoded: 'mosaic-hymn-database',
     });
-    admin.initializeApp({ credential: admin.credential.cert(resolveServiceAccount()), projectId: FIREBASE_PROJECT_ID });
+    const COMMIT = process.argv.includes('--commit');
+
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount()),
+        projectId,
+    });
     const db = admin.firestore();
 
     function describe(patch) {
