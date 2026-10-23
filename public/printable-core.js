@@ -296,43 +296,9 @@
         return Number.isFinite(n) ? Math.round(n) : 0;
     }
 
-    // A text wire to the old page-number chip becomes this element. The class
-    // hook that used to say "outer edge" turns mirroring on.
-    function legacyPageNumber(bind) {
-        if (!bind || !bind.text || bind.text.source !== 'insert_page_number') return null;
-        const cls = bind.class || bind.className;
-        const mirror = !!(cls && cls.source === 'insert_page_number');
-        return { mirror: mirror };
-    }
-
-    function stripLegacyPageNumber(bind) {
-        const next = Object.assign({}, bind || {});
-        if (next.text && next.text.source === 'insert_page_number') delete next.text;
-        ['class', 'className'].forEach(k => {
-            if (next[k] && next[k].source === 'insert_page_number') delete next[k];
-        });
-        return Object.keys(next).length ? next : null;
-    }
-
     function adoptPageNumber(node, explicit) {
-        const legacy = legacyPageNumber(node.bind);
-        let pageNumber = explicit ? normalizePageNumber(explicit) : null;
-        if (!pageNumber && legacy) {
-            const style = node.style || {};
-            const placed = style.left || style.right || style.top || style.bottom;
-            pageNumber = normalizePageNumber({
-                mirror: legacy.mirror,
-                anchor: placed ? 'free' : 'bottom-right',
-                inset: 36,
-                left: parsePx(style.left),
-                top: parsePx(style.top),
-            });
-        }
-        if (legacy) {
-            const rest = stripLegacyPageNumber(node.bind);
-            if (rest) node.bind = rest;
-            else delete node.bind;
-        }
+        if (!explicit) return;
+        const pageNumber = normalizePageNumber(explicit);
         if (!pageNumber) return;
         node.pageNumber = pageNumber;
         delete node.repeat;
