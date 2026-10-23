@@ -919,7 +919,9 @@
 
     // ── People ───────────────────────────────────────────────────────────────
 
+    /** @param {string|null|undefined} name */
     function firstName(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+    /** @param {string|null|undefined} name */
     function lastName(name) { const p = String(name || '').trim().split(/\s+/); return p.length > 1 ? p[p.length - 1] : ''; }
 
     // ADR 0074: when nameParts are stored, the booklet last name is the
@@ -938,6 +940,7 @@
         return null;
     }
 
+    /** @param {{ name?: string, nameParts?: * }|null|undefined} person */
     function personLastName(person) {
         if (!person) return '';
         const PN = personNameCore();
@@ -1769,6 +1772,7 @@
         const rows = (data.responses || [])
             .filter(r => r && r.formId === form.id)
             .map((r, i) => {
+                /** @type {Record<string, *>} */
                 const row = { _id: r.id || String(i), personName: r.personName || '', submittedAt: r.submittedAt ? formatDate(String(r.submittedAt).slice(0, 10), 'medium') : '', number: i + 1 };
                 questions.forEach(q => {
                     const v = (r.answers || {})[q.id];

@@ -920,8 +920,8 @@
     // remembered last name — not the last word of the full name (a suffix
     // would otherwise title the household and the row differently).
     function personNameCore() {
-        if (typeof global !== 'undefined' && global.PersonName) return global.PersonName;
-        if (typeof window !== 'undefined' && window.PersonName) return window.PersonName;
+        if (typeof global !== 'undefined' && global && global.PersonName) return global.PersonName;
+        if (typeof window !== 'undefined' && window && window.PersonName) return window.PersonName;
         if (typeof require === 'function') {
             try {
                 return require('./person-name.js');
