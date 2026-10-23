@@ -8,6 +8,7 @@
 const ALLOWLIST_SORTED = [
     'access-diff.js',
     'backfill-involvement-series.js',
+    'backfill-name-parts.js',
     'backfill-occurrence-visibility.js',
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
