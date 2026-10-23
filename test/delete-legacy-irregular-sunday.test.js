@@ -20,6 +20,23 @@ test('MS-796 — irregular elements migrate into liturgyLeftovers', () => {
     assert.equal(added.valueText, 'John 1');
 });
 
+test('MS-796 — replanning does not duplicate legacy-irregular leftovers', () => {
+    const doc = {
+        isIrregular: true,
+        liturgyLeftovers: [{
+            sourceId: 'legacy-irregular:0',
+            name: 'Sermon',
+            kind: 'text',
+            value: 'John 1',
+            valueText: 'John 1',
+        }],
+        irregularElements: [{ key: 'Sermon', type: 'text', value: 'John 1' }],
+    };
+    const plan = Plan.planIrregularSundayMigration(doc);
+    assert.equal(plan.leftoversAdded, 0);
+    assert.equal((plan.liturgyLeftovers || []).length, 1);
+});
+
 test('MS-796 — MCP read no longer returns irregular fields', () => {
     const readable = ServiceRead.readableService('2026-01-05', {
         liturgyOrderId: 'standard',

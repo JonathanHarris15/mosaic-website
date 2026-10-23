@@ -49,8 +49,13 @@
         }
 
         const existing = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers.slice() : [];
+        const existingSourceIds = new Set(
+            existing.map((row) => row && row.sourceId).filter(Boolean),
+        );
         const additions = [];
         for (let index = 0; index < elements.length; index++) {
+            const sourceId = 'legacy-irregular:' + index;
+            if (existingSourceIds.has(sourceId)) continue;
             const leftover = irregularElementToLeftover(elements[index], index);
             if (leftover) additions.push(leftover);
         }
