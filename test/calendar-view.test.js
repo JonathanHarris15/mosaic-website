@@ -588,13 +588,13 @@ test('somebody standing in a place closes it, and their no opens it again', () =
     assert.strictEqual(declined, 1, 'the warning must come back on its own');
 });
 
-test('the Roles come from both levels, and the same Role twice is one Role', () => {
+test('MS-794 — roles come from the series list; legacy occurrenceRoleSlugs are ignored', () => {
     const date = {
         id: 'x', date: '2026-08-09',
-        seriesRoleSlugs: ['sound_desk'],
-        occurrenceRoleSlugs: ['sound_desk', 'kids'],
+        seriesRoleSlugs: ['sound_desk', 'kids'],
+        occurrenceRoleSlugs: ['sound_desk'],
     };
-    assert.strictEqual(View.openPlaces(date, DEFS), 3, 'the sound desk was counted twice');
+    assert.strictEqual(View.openPlaces(date, DEFS), 3);
 });
 
 test('a liturgical Role is not a place this screen can chase', () => {

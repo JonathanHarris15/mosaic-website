@@ -12,6 +12,7 @@ const ALLOWLIST_SORTED = [
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
     'delete-legacy-person-picker-fields.js',
+    'delete-occurrence-role-slugs.js',
     'delete-shepherding-reminders.js',
     'diagnose-storage-fill-in-upload.js',
     'merge-duplicate-person.js',
