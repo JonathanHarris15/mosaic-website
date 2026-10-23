@@ -367,6 +367,19 @@ function describeStatusChange(entry) {
 }
 
 /**
+ * @param {object} note stored note fields
+ * @param {number} maxLen preview cap
+ * @return {string}
+ */
+function notePreviewPlain(note, maxLen) {
+  const cap = maxLen == null ? 160 : maxLen;
+  const content = String((note && note.content) || "").trim();
+  if (content) return content.slice(0, cap);
+  return String(NoteMarkdownCore.toMarkdown(note && note.contentJson) || "")
+      .slice(0, cap);
+}
+
+/**
  * A Person's Shepherding Notes, without the rest of the record.
  * @param {object} db the Firestore handle
  * @param {object} args personId, limit
