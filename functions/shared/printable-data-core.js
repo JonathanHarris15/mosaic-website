@@ -66,6 +66,9 @@
     const Liturgy = (typeof require !== 'undefined')
         ? require('./liturgy-order-core.js')
         : global.LiturgyOrderCore;
+    const PersonName = (typeof require !== 'undefined')
+        ? require('./person-name.js')
+        : global.PersonName;
 
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
@@ -923,6 +926,19 @@
     function firstName(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
     function lastName(name) { const p = String(name || '').trim().split(/\s+/); return p.length > 1 ? p[p.length - 1] : ''; }
 
+    // ADR 0074: when nameParts are stored, the booklet last name is the
+    // remembered last name — not the last word of the full name (a suffix
+    // would otherwise title the household and the row differently).
+    function personLastName(person) {
+        if (!person) return '';
+        if (person.nameParts && PersonName) {
+            const remembered = PersonName.rememberedLastName(person);
+            if (remembered.noLastName) return '';
+            if (remembered.lastName) return remembered.lastName;
+        }
+        return lastName(person.name);
+    }
+
     function isInactive(person) {
         const m = (person && person.membership) || {};
         return !!m.inactive;
@@ -965,8 +981,12 @@
 
     function comparePeople(sort) {
         return (a, b) => {
-            const ka = sort === 'first' ? firstName(a.name) + ' ' + lastName(a.name) : lastName(a.name) + ' ' + firstName(a.name);
-            const kb = sort === 'first' ? firstName(b.name) + ' ' + lastName(b.name) : lastName(b.name) + ' ' + firstName(b.name);
+            const ka = sort === 'first'
+                ? firstName(a.name) + ' ' + personLastName(a)
+                : personLastName(a) + ' ' + firstName(a.name);
+            const kb = sort === 'first'
+                ? firstName(b.name) + ' ' + personLastName(b)
+                : personLastName(b) + ' ' + firstName(b.name);
             return ka.localeCompare(kb) || String(a.name || '').localeCompare(String(b.name || ''));
         };
     }
@@ -1019,7 +1039,7 @@
             _id: person.id,
             name: person.name || '',
             firstName: firstName(person.name),
-            lastName: lastName(person.name),
+            lastName: personLastName(person),
             photo: person.photoUrl || '',
             email: c.email || person.email || '',
             phone: c.phone || person.phone || '',
