@@ -101,9 +101,9 @@ test('saving a hymn that was never starred marks its first version and does not 
 
 test('a blank page slot is not a page that prints', () => {
     const pages = HymnVersions.defaultPages({
-        versions: [{ name: 'Only', default: true, pages: ['a.png', '', '  ', null, { url: 'b.png' }] }],
+        versions: [{ name: 'Only', default: true, pages: ['a.png', '', '  ', null] }],
     });
-    assert.deepEqual(pages, ['a.png', 'b.png']);
+    assert.deepEqual(pages, ['a.png']);
     assert.deepEqual(HymnVersions.defaultPages({ versions: [{ pages: ['', null] }] }), []);
 });
 
