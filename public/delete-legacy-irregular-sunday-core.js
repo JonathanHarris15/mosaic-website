@@ -49,9 +49,11 @@
         }
 
         const existing = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers.slice() : [];
-        const additions = elements
-            .map((el, index) => irregularElementToLeftover(el, index))
-            .filter(Boolean);
+        const additions = [];
+        for (let index = 0; index < elements.length; index++) {
+            const leftover = irregularElementToLeftover(elements[index], index);
+            if (leftover) additions.push(leftover);
+        }
         return {
             migrate: true,
             irregular: irregular || elements.length > 0,

@@ -13,9 +13,11 @@ test('MS-796 — irregular elements migrate into liturgyLeftovers', () => {
     });
     assert.equal(plan.migrate, true);
     assert.equal(plan.leftoversAdded, 1);
-    assert.equal(plan.liturgyLeftovers.length, 2);
-    assert.equal(plan.liturgyLeftovers[1].name, 'Sermon');
-    assert.equal(plan.liturgyLeftovers[1].valueText, 'John 1');
+    const leftovers = plan.liturgyLeftovers || [];
+    assert.equal(leftovers.length, 2);
+    const added = /** @type {{name?: string, valueText?: string}} */ (leftovers[1]);
+    assert.equal(added.name, 'Sermon');
+    assert.equal(added.valueText, 'John 1');
 });
 
 test('MS-796 — MCP read no longer returns irregular fields', () => {
