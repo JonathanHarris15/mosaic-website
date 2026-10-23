@@ -21,3 +21,8 @@ test('backfill plans content from contentJson when plain is missing', () => {
     });
     assert.ok(plan && plan.content && plan.content.includes('Note'));
 });
+
+test('MS-798 — backfill plans contentJson from plain content when JSON is missing', () => {
+    const plan = Body.planNoteBodyBackfill({ content: 'Visited at home.' });
+    assert.ok(plan && plan.contentJson && plan.contentJson.type === 'doc');
+});

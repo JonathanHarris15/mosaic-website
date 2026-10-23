@@ -10,7 +10,10 @@ const ALLOWLIST_SORTED = [
     'backfill-involvement-series.js',
     'backfill-name-parts.js',
     'backfill-occurrence-visibility.js',
+<<<<<<< HEAD
     'backfill-relationship-types.js',
+=======
+>>>>>>> 1e41375baa3099683a2b7210fceaeeeb7ef1c385
     'backfill-shepherding-note-bodies.js',
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
