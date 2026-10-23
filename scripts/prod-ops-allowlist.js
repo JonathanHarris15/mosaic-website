@@ -22,6 +22,7 @@ const ALLOWLIST_SORTED = [
     'migrate-baptism.js',
     'migrate-hymn-sheets-prefix.js',
     'migrate-inline-liturgy-elements.js',
+    'migrate-printable-page-numbers.js',
     'migrate-meeting-mentions.js',
     'migrate-reminders-to-tasks.js',
     'migrate-service-dotted-keys.js',
