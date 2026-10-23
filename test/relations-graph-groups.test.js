@@ -62,9 +62,12 @@ test('Family and Elder Assignment are never directional', () => {
     assert.strictEqual(g.primaryTypes.elder.prio, false);
 });
 
-test('a legacy directional type still reads as Prioritized before the backfill has run', () => {
+test('MS-797 — a migrated pairwise type reads as Prioritized on the graph', () => {
     const input = base();
-    input.relationshipTypes = [{ id: 'told', name: 'mentors', directional: true }];
+    input.relationshipTypes = [{
+        id: 'told', name: 'mentors', kind: 'pairwise', priority: true,
+        holderLabel: 'mentors', counterpartLabel: 'mentors',
+    }];
     input.relationships = [{ id: 'e9', fromId: 'stephen', toId: 'tim', typeId: 'told' }];
     const g = Graph.buildGraph(input);
     assert.strictEqual(g.customTypes[0].prio, true);
