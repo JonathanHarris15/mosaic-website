@@ -38,27 +38,49 @@ async function main() {
 
     const totals = {
         servicesScanned: 0,
-        irregularServices: 0,
-        wouldMigrate: 0,
-        leftoversToAdd: 0,
+        /** isIrregular === true or non-empty irregularElements */
+        servicesWithIrregularContent: 0,
+        /** Any service that would lose legacy fields (including stale empty keys) */
+        servicesTouched: 0,
+        /** Sum of irregularElements rows copied into liturgyLeftovers */
+        elementsMigrated: 0,
+        /** isIrregular / irregularElements keys removed across touched services */
+        legacyFieldsRemoved: 0,
+        /** Touched services with no element copies (stale keys only) */
+        servicesLegacyFieldsOnly: 0,
     };
     const planned = [];
 
     const snap = await db.collection('services').get();
     for (const doc of snap.docs) {
         totals.servicesScanned += 1;
-        const plan = Plan.planIrregularSundayMigration(doc.data());
-        if (plan.irregular) totals.irregularServices += 1;
+        const data = doc.data();
+        const plan = Plan.planIrregularSundayMigration(data);
+        if (plan.irregular) totals.servicesWithIrregularContent += 1;
         if (!plan.migrate) continue;
-        totals.wouldMigrate += 1;
-        totals.leftoversToAdd += plan.leftoversAdded;
+
+        const fieldsDeleted = [];
+        if (Object.prototype.hasOwnProperty.call(data, 'isIrregular')) {
+            fieldsDeleted.push('isIrregular');
+        }
+        if (Object.prototype.hasOwnProperty.call(data, 'irregularElements')) {
+            fieldsDeleted.push('irregularElements');
+        }
+
+        totals.servicesTouched += 1;
+        totals.elementsMigrated += plan.leftoversAdded;
+        totals.legacyFieldsRemoved += fieldsDeleted.length;
+        if (plan.leftoversAdded === 0) totals.servicesLegacyFieldsOnly += 1;
+
         planned.push({
             date: doc.id,
-            leftoversAdded: plan.leftoversAdded,
+            fieldsDeleted,
+            elementsMigrated: plan.leftoversAdded,
             liturgyLeftoversCount: (plan.liturgyLeftovers || []).length,
         });
     }
 
+    planned.sort((a, b) => b.elementsMigrated - a.elementsMigrated);
     console.log(JSON.stringify({ totals, sample: planned.slice(0, 20) }, null, 2));
 
     if (!COMMIT) {
