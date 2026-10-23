@@ -18,6 +18,7 @@ const ALLOWLIST_SORTED = [
     'diagnose-storage-fill-in-upload.js',
     'merge-duplicate-person.js',
     'migrate-booklet-text-to-occurrences.js',
+    'migrate-baptism.js',
     'migrate-hymn-sheets-prefix.js',
     'migrate-inline-liturgy-elements.js',
     'migrate-meeting-mentions.js',
