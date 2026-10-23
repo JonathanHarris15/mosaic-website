@@ -7,10 +7,12 @@ const Migrate = require('../public/migrate-printable-page-number-core.js');
 const Core = require('../public/printable-core.js');
 const {loadProject} = require('./firebase-project.js');
 
+/** @param {string[]} argv */
 function committing(argv) {
     return argv.includes('--commit');
 }
 
+/** @param {string[]} argv */
 function willWrite(argv) {
     return committing(argv) && argv.includes('--i-mean-prod');
 }

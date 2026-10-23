@@ -299,11 +299,6 @@
         };
     }
 
-    function parsePx(v) {
-        const n = parseFloat(v);
-        return Number.isFinite(n) ? Math.round(n) : 0;
-    }
-
     function adoptPageNumber(node, explicit) {
         if (!explicit) return;
         const pageNumber = normalizePageNumber(explicit);
@@ -889,10 +884,6 @@
 
     function isDescendantOf(page, candidateId, ancestorId) {
         return ancestorsOf(page, candidateId).some(n => n.id === ancestorId);
-    }
-
-    function withNodes(page, nodes) {
-        return Object.assign({}, page, { nodes: nodes });
     }
 
     // Puts an element inside a parent (or at the top level when parentId is

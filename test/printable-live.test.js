@@ -387,7 +387,12 @@ test('a list that spills numbers each physical sheet, not the stored page again'
 
 test('a hymn slot with nothing planned is left out, and the next sheet keeps the number', () => {
     const t = Core.buildTemplate({ paper: 'half_letter', dpi: 150 });
-    const num = { scope: 'global', source: 'insert_page_number', params: { startAt: 1 }, field: 'number' };
+    const folio = () => Core.buildNode({
+        id: 'folio',
+        tag: 'p',
+        name: 'Page',
+        pageNumber: { mirror: false, anchor: 'bottom-right', inset: 36 },
+    });
     const hymn = (/** @type {any} */ id, /** @type {any} */ slot, /** @type {any} */ omit) => Core.buildPage(t, {
         id: id,
         nodes: [{
@@ -408,7 +413,7 @@ test('a hymn slot with nothing planned is left out, and the next sheet keeps the
         pages: [
             Core.buildPage(t, { id: 'cover', nodes: [{ id: 'c', tag: 'p', text: 'Cover' }] }),
             hymn('h2', 'hymn2', true),
-            Core.buildPage(t, { id: 'after', nodes: [{ id: 'a', tag: 'p', text: '', bind: { text: num } }] }),
+            Core.buildPage(t, { id: 'after', nodes: [folio()] }),
         ],
     });
     const res = Live.resolver(p, { services: { '2026-09-06': { liturgy: { hymn1: { name: 'Amazing Grace' } } } } }, { today: '2026-09-03', level: 'editor' });

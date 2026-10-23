@@ -2,6 +2,7 @@
 (function (global) {
     'use strict';
 
+    /** @param {*} bind */
     function legacyPageNumber(bind) {
         if (!bind || !bind.text || bind.text.source !== 'insert_page_number') return null;
         const cls = bind.class || bind.className;
@@ -9,6 +10,7 @@
         return { mirror: mirror };
     }
 
+    /** @param {*} bind */
     function stripLegacyPageNumber(bind) {
         const next = Object.assign({}, bind || {});
         if (next.text && next.text.source === 'insert_page_number') delete next.text;
@@ -18,6 +20,7 @@
         return Object.keys(next).length ? next : null;
     }
 
+    /** @param {*} v */
     function parsePx(v) {
         const n = parseFloat(v);
         return Number.isFinite(n) ? Math.round(n) : 0;
@@ -55,12 +58,16 @@
         return { changed: true, node: next };
     }
 
+    /**
+     * @param {*} project
+     * @param {(spec: any) => any} normalizePageNumber
+     */
     function walkPages(project, normalizePageNumber) {
         let changed = false;
         const pages = (project && project.pages) || [];
-        const nextPages = pages.map((page) => {
+        const nextPages = pages.map(function (page) {
             const nodes = (page && page.nodes) || [];
-            const nextNodes = nodes.map((node) => {
+            const nextNodes = nodes.map(function (node) {
                 const result = migrateNode(node, normalizePageNumber);
                 if (result.changed) changed = true;
                 return result.node;
