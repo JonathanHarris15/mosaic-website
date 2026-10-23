@@ -392,7 +392,6 @@
       serviceLeader: d.serviceLeader || d.leader || "",
       musicLeader: d.musicLeader || "",
       hasBaptism: !!d.hasBaptism,
-      isIrregular: !!d.isIrregular,
       // A hymn pulled out of the order is not part of the readiness tally.
       removedHymns: Array.isArray(d.removedHymns) ? d.removedHymns : [],
       // Which Liturgy Order the tally walks, and who carries the elements

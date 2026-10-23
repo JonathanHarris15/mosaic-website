@@ -117,19 +117,8 @@
         return typeof value === 'string' && value.trim() ? 1 : 0;
     }
 
-    // An Irregular Service from before Liturgy Orders is a different shape.
-    // Until somebody gives it an order, scoring it against Standard would
-    // call a finished custom Sunday unfinished. Once it has a liturgyOrderId,
-    // the tally is that order, the same as any other Sunday.
-    function unscoredIrregular(service) {
-        if (!service || !service.isIrregular) return false;
-        const id = service.liturgyOrderId;
-        return !(typeof id === 'string' && id.trim());
-    }
-
     function checklist(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) return [];
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
         const items = [];
@@ -194,24 +183,11 @@
 
     function readiness(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) {
-            return {
-                irregular: true,
-                total: 0,
-                set: 0,
-                notReady: false,
-                fraction: '',
-                short: '',
-                blanks: [],
-                literals: [],
-            };
-        }
         const items = checklist(service, catalog);
         const blanks = items.filter(function (item) { return item.state === 'blank'; }).map(function (item) { return item.label; });
         const literals = items.filter(function (item) { return item.state === 'literal'; }).map(function (item) { return item.label; });
         const set = items.length - blanks.length - literals.length;
         return {
-            irregular: false,
             total: items.length,
             set: set,
             notReady: blanks.length + literals.length > 0,
@@ -224,9 +200,6 @@
 
     function glance(svc, catalog) {
         const service = svc || {};
-        if (unscoredIrregular(service)) {
-            return { theme: '', sermon: '', pairs: [], baptism: '' };
-        }
         const liturgy = service.liturgy || {};
         const pairs = [];
         if (filledText(liturgy.sermon)) pairs.push({ k: 'Sermon', v: String(liturgy.sermon).trim() });

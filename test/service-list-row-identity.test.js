@@ -217,7 +217,6 @@ test('the adoption path mints the same row handles on both copies', () => {
 test('no row handle ever reaches the document', () => {
     const m = model({
         musicHelpers: withRowIds([{ id: 'p-1', name: 'Ann' }]),
-        irregularElements: stampRowIds([{ key: 'Sermon', type: 'text', value: 'John 1' }]),
     });
     m.liturgy.baptism = withRowIds([{ id: 'p-2', name: 'Kid One' }]);
 
