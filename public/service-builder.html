@@ -692,24 +692,6 @@
                         </template>
                     </div>
 
-                    <!-- A Sunday from before Liturgy Orders that kept its own
-                         list (an Irregular Service). Shown as it was, read-only:
-                         the order below is what the page edits now. -->
-                    <template x-if="irregularRows.length">
-                        <div id="irregular-elements-notice" class="m-notice m-notice--info mb-4">
-                            <span class="material-symbols-outlined m-notice__icon">history</span>
-                            <div class="m-notice__body">
-                                <span class="m-notice__title">This Sunday kept its own list</span>
-                                <ul class="m-notice__text">
-                                    <template x-for="r in irregularRows" :key="r.key">
-                                        <li><span x-text="r.label"></span><span x-show="r.value" x-text="' · ' + r.value"></span></li>
-                                    </template>
-                                </ul>
-                                <span class="m-notice__text">The rows below are its Liturgy Order. Pick or make an order to plan it that way. Nothing on the list is deleted.</span>
-                            </div>
-                        </div>
-                    </template>
-
                     <section id="liturgy-leftovers" class="m-card m-card--sm mb-4" x-show="leftoverItems.length" x-cloak aria-label="Didn't fit this order">
                         <h2 class="m-section__title">Didn't fit this order</h2>
                         <p class="font-body-md text-sm text-on-surface-variant mt-1 mb-3">These were filled in and have no place in this Liturgy Order. Discard one if this Sunday no longer needs it.</p>

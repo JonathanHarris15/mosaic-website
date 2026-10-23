@@ -189,12 +189,6 @@
             people,
             prayedFor,
             hasBaptism: !!doc.hasBaptism,
-            isIrregular: !!doc.isIrregular,
-            // An irregular Sunday keeps its content somewhere else entirely,
-            // so saying the liturgy is empty without saying this would be a
-            // half-truth.
-            irregularElements: doc.isIrregular ?
-                (doc.irregularElements || null) : null,
         };
     }
 

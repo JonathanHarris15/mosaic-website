@@ -1,22 +1,69 @@
-// Plan removal of legacy irregular Sunday fields (MS-796, ADR-0080).
+// Migrate legacy irregular Sunday fields into liturgyLeftovers, then delete (MS-796).
 (function (global) {
     'use strict';
 
     /**
-     * @param {any} doc services/{date} document
-     * @return {{deleteFields: boolean, irregular: boolean}}
+     * @param {any} el legacy irregular element
+     * @param {number} index
+     * @return {object|null}
      */
-    function planIrregularFieldDeletion(doc) {
-        const data = doc || {};
-        const irregular = data.isIrregular === true;
-        const hasElements = Array.isArray(data.irregularElements) && data.irregularElements.length > 0;
-        if (!irregular && !hasElements && !Object.prototype.hasOwnProperty.call(data, 'isIrregular')) {
-            return { deleteFields: false, irregular: false };
+    function irregularElementToLeftover(el, index) {
+        if (!el || typeof el !== 'object') return null;
+        const name = el.key || 'Irregular element';
+        const kind = el.type || 'text';
+        const raw = el.value;
+        let value = raw;
+        let valueText = '';
+        if (raw && typeof raw === 'object') {
+            valueText = String(raw.name || '').trim();
+        } else if (raw != null) {
+            valueText = String(raw).trim();
+            value = valueText;
         }
-        return { deleteFields: irregular || hasElements || Object.prototype.hasOwnProperty.call(data, 'isIrregular'), irregular };
+        return {
+            sourceId: 'legacy-irregular:' + index,
+            name: name,
+            kind: kind,
+            value: value == null ? null : value,
+            valueText: valueText,
+        };
     }
 
-    const DeleteLegacyIrregularSundayCore = { planIrregularFieldDeletion };
+    /**
+     * @param {any} doc services/{date} document
+     * @return {{
+     *   migrate: boolean,
+     *   irregular: boolean,
+     *   leftoversAdded: number,
+     *   liturgyLeftovers?: object[],
+     * }}
+     */
+    function planIrregularSundayMigration(doc) {
+        const data = doc || {};
+        const irregular = data.isIrregular === true;
+        const elements = Array.isArray(data.irregularElements) ? data.irregularElements : [];
+        const hasFlag = Object.prototype.hasOwnProperty.call(data, 'isIrregular');
+        const hasElementsField = Object.prototype.hasOwnProperty.call(data, 'irregularElements');
+        if (!irregular && !elements.length && !hasFlag && !hasElementsField) {
+            return { migrate: false, irregular: false, leftoversAdded: 0 };
+        }
+
+        const existing = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers.slice() : [];
+        const additions = elements
+            .map((el, index) => irregularElementToLeftover(el, index))
+            .filter(Boolean);
+        return {
+            migrate: true,
+            irregular: irregular || elements.length > 0,
+            leftoversAdded: additions.length,
+            liturgyLeftovers: existing.concat(additions),
+        };
+    }
+
+    const DeleteLegacyIrregularSundayCore = {
+        irregularElementToLeftover,
+        planIrregularSundayMigration,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = DeleteLegacyIrregularSundayCore;

@@ -259,15 +259,6 @@ function flattenServiceForSave(service) {
         liturgyOrderId: s.liturgyOrderId || '',
         // Filled elements that did not fit the order this Sunday follows now.
         liturgyLeftovers: Array.isArray(s.liturgyLeftovers) ? s.liturgyLeftovers : [],
-        // Kept as stored so an older Irregular Service round-trips untouched;
-        // nothing on this page edits either any more (ADR-0080).
-        isIrregular: s.isIrregular,
-        // Both carry lists whose rows are keyed by `_rowId` (irregular elements
-        // directly, liturgy through its people elements). The id is a handle
-        // for the screen, so it is left behind on the way to the document — and
-        // on the way into changedFieldPaths, or re-keying a row would read as a
-        // changed field and write a Sunday nobody edited.
-        irregularElements: withoutRowIds(s.irregularElements),
         notes: s.notes,
         carriedBy: s.carriedBy || {},
         liturgy: withoutRowIds(s.liturgy)
@@ -331,7 +322,7 @@ const PERSON_REF_PATHS = {
 // Fields that go into the document as they are.
 const PLAIN_SAVE_FIELDS = [
     'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
-    'liturgyOrderId', 'liturgyLeftovers', 'isIrregular', 'irregularElements', 'notes', 'carriedBy', 'liturgy'
+    'liturgyOrderId', 'liturgyLeftovers', 'notes', 'carriedBy', 'liturgy'
 ];
 
 // Writes one dot-path field back into the editor's nested model — the inverse
@@ -404,14 +395,6 @@ function applyFlatFieldPath(service, path, value) {
         // been careful about this; the helper list was not.
         if (!Array.isArray(service.musicHelpers)) service.musicHelpers = [];
         reconcilePersonList(service.musicHelpers, value);
-        return true;
-    }
-
-    if (path === 'irregularElements') {
-        // Rebuilt wholesale by whoever owns it (see NESTED_SAVE_MAPS), so the
-        // rows are rebuilt with it — but they still need ids, or the x-for has
-        // nothing to key on.
-        service.irregularElements = stampRowIds(value, true);
         return true;
     }
 
@@ -608,8 +591,6 @@ function serviceForm() {
             preacher: { name: '', id: null },
             elements: { name: '', id: null },
             other: { name: '', id: null },
-            isIrregular: false,
-            irregularElements: [],
             hasBaptism: false,
             // Song elements the user has pulled out of this Sunday. Each entry
             // is an element id (e.g. 'hymn2'). Removed songs are kept in the
@@ -1421,11 +1402,6 @@ function serviceForm() {
                 this.service.keyVerse = data.keyVerse || '';
                 this.service.liturgyOrderId = typeof data.liturgyOrderId === 'string' ? data.liturgyOrderId : '';
                 this.service.liturgyLeftovers = Array.isArray(data.liturgyLeftovers) ? data.liturgyLeftovers : [];
-                // An Irregular Service from before Liturgy Orders: its custom
-                // elements are shown read-only and kept as stored (ADR-0080).
-                this.service.isIrregular = data.isIrregular || false;
-                this.service.irregularElements = stampRowIds(data.irregularElements);
-                
                 this.service.serviceLeader.name = data.serviceLeader || '';
                 this.service.serviceLeader.id = data.serviceLeaderId || null;
                 this.service.musicLeader.name = data.musicLeader || '';
@@ -1698,17 +1674,6 @@ function serviceForm() {
             } finally {
                 this.prayerSending[which] = false;
             }
-        },
-
-        // An Irregular Service from before Liturgy Orders, read-only: its own
-        // elements, each as one line, so nothing it carried is out of sight.
-        get irregularRows() {
-            if (!this.service.isIrregular) return [];
-            return (this.service.irregularElements || []).map((el, index) => {
-                const v = el && el.value;
-                const text = (v && typeof v === 'object') ? (v.name || '') : (v == null ? '' : String(v));
-                return { key: (el && el[ROW_ID]) || 'i' + index, label: (el && el.key) || 'Untitled', value: text };
-            });
         },
 
         async validateForm() {
@@ -2214,9 +2179,7 @@ function serviceForm() {
         get filledLabel() {
             const ready = window.HomeDashboard.readiness(
                 flattenServiceForSave(this.service), this.liturgyCatalog);
-            // An old irregular Sunday has not been given an order yet. The
-            // fraction would score it as a blank Standard, which it is not.
-            return ready.irregular ? 'Custom order' : ready.fraction;
+            return ready.fraction;
         },
 
         // Service notes surfaced for the leader, in service order, one card

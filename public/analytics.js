@@ -264,22 +264,6 @@ export function analyticsPage() {
                 data.musicHelpers.forEach(h => addInvolvement(h, 'worship_helper'));
             }
 
-            // Handle irregular elements
-            if (data.isIrregular && Array.isArray(data.irregularElements)) {
-                data.irregularElements.forEach(el => {
-                    if (el.type === 'person' && el.value) {
-                        let type = el.key.toLowerCase().replace(/\s+/g, '_');
-                        // Map common irregular keys to canonical types
-                        if (type.includes('prayer')) type = 'prayer';
-                        if (type.includes('preacher')) type = 'preacher';
-                        if (type.includes('leader')) {
-                            if (type.includes('worship') || type.includes('music')) type = 'worship_leader';
-                            else if (type.includes('service')) type = 'service_leader';
-                        }
-                        addInvolvement(el.value, type);
-                    }
-                });
-            }
         },
 
         async fetchPeople() {

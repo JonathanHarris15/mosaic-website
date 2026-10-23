@@ -1,8 +1,5 @@
 /**
- * Delete isIrregular and irregularElements from services (MS-796).
- *
- * Copies nothing — run only after irregular content has been moved to liturgy
- * orders or liturgyLeftovers by hand. Dry-run reports counts.
+ * Migrate irregularElements into liturgyLeftovers, then delete legacy fields (MS-796).
  */
 
 const path = require('path');
@@ -37,20 +34,30 @@ async function main() {
     const db = admin.firestore();
     const FieldValue = admin.firestore.FieldValue;
 
-    const totals = { servicesScanned: 0, irregularServices: 0, wouldDeleteFields: 0 };
+    const totals = {
+        servicesScanned: 0,
+        irregularServices: 0,
+        wouldMigrate: 0,
+        leftoversToAdd: 0,
+    };
     const planned = [];
 
     const snap = await db.collection('services').get();
     for (const doc of snap.docs) {
         totals.servicesScanned += 1;
-        const plan = Plan.planIrregularFieldDeletion(doc.data());
+        const plan = Plan.planIrregularSundayMigration(doc.data());
         if (plan.irregular) totals.irregularServices += 1;
-        if (!plan.deleteFields) continue;
-        totals.wouldDeleteFields += 1;
-        planned.push({ date: doc.id });
+        if (!plan.migrate) continue;
+        totals.wouldMigrate += 1;
+        totals.leftoversToAdd += plan.leftoversAdded;
+        planned.push({
+            date: doc.id,
+            leftoversAdded: plan.leftoversAdded,
+            liturgyLeftoversCount: (plan.liturgyLeftovers || []).length,
+        });
     }
 
-    console.log(JSON.stringify({ totals, sampleDates: planned.slice(0, 20) }, null, 2));
+    console.log(JSON.stringify({ totals, sample: planned.slice(0, 20) }, null, 2));
 
     if (!COMMIT) {
         console.log('Dry run: no writes made.');
@@ -58,13 +65,17 @@ async function main() {
     }
 
     for (const row of planned) {
+        const plan = Plan.planIrregularSundayMigration(
+            (await db.collection('services').doc(row.date).get()).data(),
+        );
         await db.collection('services').doc(row.date).update({
+            liturgyLeftovers: plan.liturgyLeftovers,
             isIrregular: FieldValue.delete(),
             irregularElements: FieldValue.delete(),
         });
     }
 
-    console.log('Cleared irregular fields on', planned.length, 'services.');
+    console.log('Migrated and cleared irregular fields on', planned.length, 'services.');
 }
 
 main()
