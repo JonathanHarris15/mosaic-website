@@ -47,7 +47,6 @@ const ELDER_READ_PATHS = [
     'shepherding_views',
     'shepherding_tasks',
     'shepherding_task_occurrences',
-    'elder_meetings',
     'elder_documents',
     'elder_document_structure',
 ];
