@@ -10,6 +10,7 @@ const ALLOWLIST_SORTED = [
     'backfill-involvement-series.js',
     'backfill-occurrence-visibility.js',
     'delete-legacy-households.js',
+    'delete-legacy-irregular-sunday-fields.js',
     'delete-legacy-membership-status.js',
     'delete-legacy-person-picker-fields.js',
     'delete-shepherding-reminders.js',
