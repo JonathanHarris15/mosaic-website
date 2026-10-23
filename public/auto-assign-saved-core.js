@@ -71,7 +71,7 @@
             // the Person's own Away. A draft saved before that rename is still
             // in somebody's browser, so the old key is read as a fallback —
             // losing an editor's out-list to tidy a name would be a poor trade.
-            out: (context || {}).out || (context || {}).away || {},
+            out: (context || {}).out || {},
             // Whether the grid started blank (MS-219). Wording only, but a draft
             // picked back up under the wrong heading has the editor looking for
             // an assignment nothing ever made.
@@ -142,11 +142,22 @@
         }
     }
 
+    // MS-188 renamed `away` to `out`. A draft saved before that rename is
+    // normalised once on read so the old key is not consulted forever.
+    function normalizeStored(stored) {
+        const s = stored || {};
+        if (!s.out && s.away && typeof s.away === 'object') {
+            s.out = s.away;
+        }
+        if (Object.prototype.hasOwnProperty.call(s, 'away')) delete s.away;
+        return s;
+    }
+
     function read(storage, key) {
         if (!storage) return null;
         try {
             const raw = storage.getItem(key);
-            return raw ? JSON.parse(raw) : null;
+            return raw ? normalizeStored(JSON.parse(raw)) : null;
         } catch (e) {
             return null;
         }
@@ -163,6 +174,7 @@
         keyFor,
         fingerprint,
         pack,
+        normalizeStored,
         staleReasons,
         save,
         read,
