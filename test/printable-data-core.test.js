@@ -169,6 +169,23 @@ test('non-members, a tag, inactive people and first-name sort are all filters', 
     assert.deepEqual(all.rows.map(x => x.firstName), ['Anna', 'Ben', 'Cara', 'Dan']);
 });
 
+test('MS-793 — booklet last name uses remembered nameParts, not the last word of the full name', () => {
+    const people = [{
+        id: 'p1',
+        name: 'Jonathan Harris Jr.',
+        nameParts: {
+            firstName: 'Jonathan',
+            lastName: 'Harris',
+            suffix: 'Jr.',
+            noLastName: false,
+        },
+        tags: ['Member'],
+        membership: { stage: 'member' },
+    }];
+    const r = Data.resolve('people', {}, { people, families: [] }, { today: TODAY, level: 'editor' });
+    assert.equal(r.rows[0].lastName, 'Harris');
+});
+
 test('a person row carries the fields the drawer promises', () => {
     const r = Data.resolve('people', {}, PEOPLE(), { today: TODAY, level: 'editor' });
     const anna = r.rows[0];
