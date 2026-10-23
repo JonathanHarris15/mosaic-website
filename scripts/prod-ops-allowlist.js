@@ -11,6 +11,7 @@ const ALLOWLIST_SORTED = [
     'backfill-name-parts.js',
     'backfill-occurrence-visibility.js',
     'backfill-relationship-types.js',
+    'backfill-shepherding-note-bodies.js',
     'delete-legacy-households.js',
     'delete-legacy-membership-status.js',
     'delete-legacy-person-picker-fields.js',
