@@ -68,9 +68,8 @@
             // the draft, because that is the only thing it is true of.
             nudges: (context || {}).nudges || {},
             // `out`, renamed from `away` in MS-188 so it stops colliding with
-            // the Person's own Away. A draft saved before that rename is still
-            // in somebody's browser, so the old key is read as a fallback —
-            // losing an editor's out-list to tidy a name would be a poor trade.
+            // the Person's own Away. Legacy `away` on stored drafts is normalised
+            // on read (MS-803), not when packing a fresh save.
             out: (context || {}).out || {},
             // Whether the grid started blank (MS-219). Wording only, but a draft
             // picked back up under the wrong heading has the editor looking for

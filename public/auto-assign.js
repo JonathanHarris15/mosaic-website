@@ -1992,9 +1992,8 @@
                 this.draft = this.offered.draft;
                 this.displaced = this.offered.displaced || [];
                 this.nudges = this.offered.nudges || {};
-                // The old key too: a draft saved before the MS-188 rename is
-                // still sitting in somebody's browser.
-                this.out = this.offered.out || this.offered.away || {};
+                // `read()` normalises legacy `away` → `out` once (MS-803).
+                this.out = this.offered.out || {};
                 // Absent on a draft saved before MS-219, which reads as an
                 // ordinary one — the safe way round, since that is what every
                 // draft saved before it was.
