@@ -48,7 +48,11 @@
             return { content: plain };
         }
         if (hasContent && !hasJson) {
-            return null;
+            const Core = noteMarkdownCore();
+            if (!Core || typeof Core.fromMarkdown !== 'function') return null;
+            const contentJson = Core.fromMarkdown(String(doc.content).trim());
+            if (!contentJson || typeof contentJson !== 'object') return null;
+            return { contentJson };
         }
         return null;
     }
