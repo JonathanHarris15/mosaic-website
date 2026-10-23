@@ -170,3 +170,15 @@ test('rubbish in storage reads as nothing, not as a crash', () => {
 
     assert.equal(Saved.read(store, 'k'), null);
 });
+
+test('MS-803 — a packed draft with away and no out restores the same absences', () => {
+    const packed = {
+        version: Saved.VERSION,
+        against: Saved.fingerprint(context()),
+        draft: draftOf(),
+        away: { '2026-10-04': ['p1'] },
+    };
+    const restored = Saved.normalizeStored(packed);
+    assert.deepEqual(restored.out, { '2026-10-04': ['p1'] });
+    assert.equal(restored.away, undefined);
+});

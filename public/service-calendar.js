@@ -662,12 +662,11 @@ function scrollToClosestSunday(sundays) {
 // and "last prayed for" stay correct.
 // ---------------------------------------------------------------------------
 
-// Renders a Service's Baptism Candidates as a display string. Handles the
-// person-ref array and any legacy free-text value still present in the data.
+// Renders a Service's Baptism Candidates as a display string.
 function baptismCandidateNames(svc) {
-    const bap = svc && (svc.liturgy && svc.liturgy.baptism !== undefined ? svc.liturgy.baptism : svc.baptism);
-    if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
-    return typeof bap === 'string' ? bap : '';
+    const bap = svc && svc.liturgy && svc.liturgy.baptism;
+    if (!Array.isArray(bap)) return '';
+    return bap.map(c => c && c.name).filter(Boolean).join(', ');
 }
 
 // Service-date helpers delegate to DateUtils (date-utils.js) — the single home

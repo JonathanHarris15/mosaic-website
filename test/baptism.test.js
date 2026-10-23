@@ -84,9 +84,7 @@ test('candidates without an id (not yet a Person) carry no date change', () => {
     assert.deepStrictEqual(removed, []);
 });
 
-// ADR-0006: liturgy.baptism is polymorphic during the migration. coerceBaptismCandidates
-// is the single reader that turns whatever shape is on disk into a clean
-// array of { name, id } candidates for the Builder's load path.
+// ADR-0006: liturgy.baptism is an array of Baptism Candidates on disk.
 
 test('an array of candidates is normalised, defaulting missing name/id', () => {
     const out = coerceBaptismCandidates([{ name: 'John Smith', id: 'p1' }, { name: 'Jane' }, { id: 'p3' }]);
@@ -97,12 +95,8 @@ test('an array of candidates is normalised, defaulting missing name/id', () => {
     ]);
 });
 
-test('a legacy free-text string becomes one literal candidate (id null)', () => {
-    assert.deepStrictEqual(coerceBaptismCandidates('  John Smith  '), [{ name: 'John Smith', id: null }]);
-});
-
-test('empty, blank, or absent values become an empty array', () => {
-    for (const v of ['', '   ', null, undefined, 0, false]) {
+test('MS-795 — strings and other non-arrays are not read (migration converts them)', () => {
+    for (const v of ['  John Smith  ', '', '   ', null, undefined, 0, false]) {
         assert.deepStrictEqual(coerceBaptismCandidates(v), [], `value: ${JSON.stringify(v)}`);
     }
 });

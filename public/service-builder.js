@@ -494,20 +494,10 @@ function parseBaptismNames(value) {
     return result;
 }
 
-// ADR-0006: liturgy.baptism is polymorphic during the migration — an array of
-// Person refs post-migration, possibly a legacy free-text string until the
-// migration runs. Coerce either shape to a clean array of { name, id } Baptism
-// Candidates: array entries are normalised (name/id defaulted), a non-empty
-// legacy string becomes a single literal candidate (id null) so it still
-// displays, and anything else (empty, absent, blank) becomes [].
+// ADR-0006: liturgy.baptism is an array of { name, id } Baptism Candidates.
 function coerceBaptismCandidates(bap) {
-    if (Array.isArray(bap)) {
-        return bap.map(c => ({ name: c.name || '', id: c.id || null }));
-    }
-    if (typeof bap === 'string' && bap.trim()) {
-        return [{ name: bap.trim(), id: null }];
-    }
-    return [];
+    if (!Array.isArray(bap)) return [];
+    return bap.map(c => ({ name: c.name || '', id: c.id || null }));
 }
 
 function describeLiturgyReadFailure(error) {
