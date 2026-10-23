@@ -24,7 +24,9 @@ on:
           - backfill-name-parts.js
           - backfill-occurrence-visibility.js
           - backfill-relationship-types.js
+          - delete-elder-meetings.js
           - delete-legacy-households.js
+          - delete-legacy-irregular-sunday-fields.js
           - delete-legacy-membership-status.js
           - delete-legacy-person-picker-fields.js
           - delete-occurrence-role-slugs.js
