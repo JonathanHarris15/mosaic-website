@@ -1,7 +1,12 @@
 {
   "note": "Ratchet ceiling. CI fails when a count is above the number here. Lower a number by editing it down to the new count. Do not raise one.",
+<<<<<<< HEAD
   "tsc": 31815,
   "eslint": 91,
+=======
+  "tsc": 31837,
+  "eslint": 92,
+>>>>>>> 94dde07 (MS-796: do not raise tsc baseline above main)
   "knipFiles": 0,
   "knipExports": 405,
   "knipDependencies": 0,
