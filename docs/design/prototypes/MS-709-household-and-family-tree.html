@@ -265,6 +265,15 @@
                     <p class="proto-note" style="margin:0">Ambrose &amp; Hattie Quill → <strong>Tobias &amp; Petra</strong> → Linus &amp; Nell (with Pip) · Iris · Theo</p>
                 </div>
             </div>
+            <div class="proto-open" role="note" aria-labelledby="open-h">
+                <h3 id="open-h">Open questions <span class="proto-tbd">TBD</span></h3>
+                <p class="proto-note" style="margin-top:0">Not decided in this prototype — copy and UI call these out; no answers assumed.</p>
+                <ul>
+                    <li>Kiosk foyer grouping is still called Household (<code>households</code> collection) and can include a grandmother or friend — rename, derive from stored Households, or keep both? <span class="proto-tbd">TBD</span></li>
+                    <li>Rename the stored <code>families</code> collection vs call it Household only in the UI? <span class="proto-tbd">TBD</span></li>
+                    <li>Remarriage, step-children, or a child in two Households (separated parents). Today a person is a child in at most one record. <span class="proto-tbd">TBD</span></li>
+                </ul>
+            </div>
         </section>
 
         <!-- ═════════════ Tree variants ═════════════ -->
@@ -618,11 +627,11 @@
         <section class="proto-section" id="decide" aria-labelledby="dc-h">
             <h2 id="dc-h">What I need decided</h2>
             <ol class="proto-ask">
-                <li><strong>Tree layout:</strong> A (generation rows), B (outline) or C (drawn pedigree)?</li>
-                <li><strong>The kiosk’s “Household”.</strong> Today the foyer groups anyone who arrives together — a couple and a grandmother, say — and calls it a Household. Under your definition that is not a Household. Rename the foyer one (e.g. “Check-in group”), derive it from the new Household, or keep both?</li>
-                <li><strong>Where Family lives in the data:</strong> keep the stored record as <code>families</code> and call it Household in the UI (no migration), or rename the collection too?</li>
-                <li><strong>Edge cases you haven’t ruled on:</strong> remarriage and step-children, and a child of separated parents who belongs in two Households. Today a person is a child in at most one record, so the error state above is what they would see.</li>
-                <li><strong>Who edits:</strong> editors can edit today; should elders and Pastoral Assistants edit from the Shepherding Profile as shown, or only read?</li>
+                <li><strong>Tree layout:</strong> A (generation rows), B (outline) or C (drawn pedigree)? Surfaces below use <strong>A</strong> until you pick.</li>
+                <li><strong>Kiosk foyer “Household”</strong> <span class="proto-tbd">TBD</span> — rename, derive from stored Households, or keep both?</li>
+                <li><strong>Stored <code>families</code> collection vs UI “Household”</strong> <span class="proto-tbd">TBD</span> — rename in Firestore or label only?</li>
+                <li><strong>Remarriage, step-children, child in two Households</strong> <span class="proto-tbd">TBD</span> — error state above shows today’s “at most one” rule breaking.</li>
+                <li><strong>Who edits from Shepherding Profile:</strong> elders and Pastoral Assistants as shown, or read-only there?</li>
             </ol>
         </section>
     </main>
