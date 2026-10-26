@@ -54,7 +54,7 @@ gh workflow run "Prod ops script" --ref main \
 | --- | --- |
 | `set-liturgy-order-flags.js` | [MS-770 — Textbelt order flag](./ms-770-textbelt-order-flag.md) (`--list`, `--name-match`, `--id`, `--ops` / `--hidden`) |
 | `migrate-hymn-sheets-prefix.js` | [MS-769 — hymn sheet prefix](./ms-769-hymn-sheets-migration.md) (empty `args`; `commit=true` to apply) |
-| `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`). [`--with-url`](./ms-768-prayer-sms-answer-link.md) mints a real Answer link for Jonathan Harris only |
+| `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`). [`--with-url`](./ms-768-prayer-sms-answer-link.md) mints a real Answer link for Jonathan Harris only. If no Sunday in the next 21 days names him, the date is `2099-06-08` and commit creates that ops service when it is absent. It does not edit a live Sunday. |
 | `textbelt-key-check.js` | Key prefix + whitelist match + Textbelt quota (`--with-url` = Jonathan dry-run with link; does not send) |
 | `set-prayer-sms-answer-link.js` | [MS-768 — Answer link in prayer SMS](./ms-768-prayer-sms-answer-link.md) (empty `args`; `commit=true` merges `includeAnswerLinkInSms: true`) |
 | `prayer-request-send-preview.js` | Dry-run pastoral-prayer SMS recipients and bodies (optional `--service-date`) |

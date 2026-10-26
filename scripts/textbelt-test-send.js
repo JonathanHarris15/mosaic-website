@@ -11,6 +11,11 @@
  * people/CErA3v4J4hVm0iLfdG9Y through answer-link-door.mintAnswerLink (the
  * same call dispatchPrayerAsk makes) and sends that URL. Commit refuses
  * unless includeAnswerLinkInSms is already true.
+ *
+ * The service date is the next Sunday in the 21-day window where he is a
+ * pastoral-prayer subject. When none is, commit creates services/2099-06-08
+ * (ops only, not a congregational Sunday) if that document is absent, naming
+ * only him. It does not edit a live Sunday.
  */
 
 const admin = require('firebase-admin');
@@ -22,6 +27,10 @@ const {
 } = require('./textbelt-key-lib');
 const {executeTextbeltTestSend} = require('./textbelt-test-send-lib');
 
+/**
+ * @param {string} projectId
+ * @return {*}
+ */
 function initAdmin(projectId) {
     if (!admin.apps.length) {
         admin.initializeApp({
@@ -31,6 +40,16 @@ function initAdmin(projectId) {
         });
     }
     return admin.firestore();
+}
+
+/**
+ * @param {*} doc
+ * @return {{id: string, data: *}}
+ */
+function serviceDocRow(doc) {
+    const id = doc && doc.id ? String(doc.id) : '';
+    const data = doc && typeof doc.data === 'function' ? (doc.data() || {}) : {};
+    return {id, data};
 }
 
 async function main() {
@@ -49,13 +68,14 @@ async function main() {
                 .where(admin.firestore.FieldPath.documentId(), '>', todayDate)
                 .where(admin.firestore.FieldPath.documentId(), '<=', horizon)
                 .get();
-            return snap.docs.map((doc) => ({id: doc.id, data: doc.data() || {}}));
+            const docs = Array.isArray(snap.docs) ? snap.docs : [];
+            return docs.map(serviceDocRow);
         },
         loadCatalog: () => liturgyCatalog.loadLiturgyCatalog(db),
-        mintAnswerLink: (args) => answerDoor.mintAnswerLink(db, args),
+        mintAnswerLink: (mintArgs) => answerDoor.mintAnswerLink(db, mintArgs),
         resolveKey: () => resolveTextbeltKey(
             projectId,
-            process.env.TEXTBELT_KEY,
+            process.env.TEXTBELT_KEY || null,
             fetchTextbeltKeyFromSecretManager),
         postText: async (payload) => {
             const resp = await fetch('https://textbelt.com/text', {

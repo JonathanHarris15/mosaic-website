@@ -53,22 +53,29 @@ test('flagWriteHeld rejects a webhook or template change', () => {
         includeAnswerLinkInSms: true,
         includeReplyWebhookInSms: true,
         initial: 'Hi {name}',
-    }), /includeReplyWebhookInSms/);
+    }) || '', /includeReplyWebhookInSms/);
     assert.match(flagWriteHeld(before, {
         includeAnswerLinkInSms: true,
         includeReplyWebhookInSms: false,
         initial: 'replaced',
-    }), /initial/);
-    assert.match(flagWriteHeld({}, {includeAnswerLinkInSms: false}), /not true/);
+    }) || '', /initial/);
+    assert.match(flagWriteHeld({}, {includeAnswerLinkInSms: false}) || '', /not true/);
 });
 
+/**
+ * @param {Record<string, *>|null|undefined} initial
+ */
 function memoryConfig(initial) {
+    /** @type {{data: Record<string, *>|null, sets: Array<{patch: *, opts: *}>}} */
     const store = {
         data: initial === undefined ? null : initial,
         sets: [],
     };
     return {
         store,
+        /**
+         * @param {string} docPath
+         */
         doc(docPath) {
             assert.equal(docPath, 'app_config/prayer_request_sms');
             return {
@@ -78,6 +85,10 @@ function memoryConfig(initial) {
                         data: () => store.data || {},
                     };
                 },
+                /**
+                 * @param {{includeAnswerLinkInSms: boolean}} patch
+                 * @param {{merge?: boolean}} opts
+                 */
                 async set(patch, opts) {
                     store.sets.push({patch, opts});
                     if (!opts || opts.merge !== true) {
@@ -96,15 +107,19 @@ test('dry-run prints the merge and does not write', async () => {
         includeReplyWebhookInSms: false,
         initial: 'Hi {name}',
     });
+    /** @type {string[]} */
     const lines = [];
     const result = await executeSetAnswerLinkFlag({
         commit: false,
         db,
-        log: (line) => lines.push(line),
+        log: (line) => {
+            lines.push(line);
+        },
     });
     assert.equal(result.wrote, false);
     assert.equal(db.store.sets.length, 0);
-    assert.equal(db.store.data.includeAnswerLinkInSms, false);
+    const dryStored = db.store.data || {};
+    assert.equal(dryStored.includeAnswerLinkInSms, false);
     assert.match(lines.join('\n'), /DRY RUN/);
     assert.match(lines.join('\n'), /includeAnswerLinkInSms: false → true/);
 });
@@ -116,11 +131,14 @@ test('commit merges the flag and leaves the rest of the doc', async () => {
         initial: 'Hi {name}',
         autoSendEnabled: true,
     });
+    /** @type {string[]} */
     const lines = [];
     const result = await executeSetAnswerLinkFlag({
         commit: true,
         db,
-        log: (line) => lines.push(line),
+        log: (line) => {
+            lines.push(line);
+        },
     });
     assert.equal(result.wrote, true);
     assert.equal(db.store.sets.length, 1);
@@ -128,7 +146,7 @@ test('commit merges the flag and leaves the rest of the doc', async () => {
         patch: {includeAnswerLinkInSms: true},
         opts: {merge: true},
     });
-    assert.deepEqual(db.store.data, {
+    assert.deepEqual(db.store.data || {}, {
         includeAnswerLinkInSms: true,
         includeReplyWebhookInSms: false,
         initial: 'Hi {name}',
@@ -141,8 +159,9 @@ test('commit merges the flag and leaves the rest of the doc', async () => {
 test('commit can create the flag on a missing doc without inventing a webhook', async () => {
     const db = memoryConfig(null);
     await executeSetAnswerLinkFlag({commit: true, db, log: () => {}});
-    assert.deepEqual(db.store.data, {includeAnswerLinkInSms: true});
-    assert.equal(Object.hasOwn(db.store.data, 'includeReplyWebhookInSms'), false);
+    const created = db.store.data || {};
+    assert.deepEqual(created, {includeAnswerLinkInSms: true});
+    assert.equal(Object.hasOwn(created, 'includeReplyWebhookInSms'), false);
 });
 
 test('the prod script is a merge through service-account.js', () => {

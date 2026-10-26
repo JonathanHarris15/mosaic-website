@@ -11,8 +11,71 @@ const ANSWER_LINK_FLAG_PATCH = Object.freeze({
 });
 
 /**
- * @param {?Object} before
- * @return {Object}
+ * @typedef {Object} FlagDescription
+ * @property {string} path
+ * @property {{includeAnswerLinkInSms: boolean}} patch
+ * @property {boolean} merge
+ * @property {boolean} includeAnswerLinkInSms
+ * @property {'absent'|'true'|'false'} includeReplyWebhookInSms
+ * @property {number} preservedFieldCount
+ */
+
+/**
+ * @callback FlagSnapData
+ * @return {Record<string, *>|null|undefined}
+ */
+
+/**
+ * @typedef {Object} FlagSnap
+ * @property {boolean} exists
+ * @property {FlagSnapData} data
+ */
+
+/**
+ * @callback FlagGet
+ * @return {Promise<FlagSnap>}
+ */
+
+/**
+ * @callback FlagSet
+ * @param {{includeAnswerLinkInSms: boolean}} patch
+ * @param {{merge: boolean}} opts
+ * @return {Promise<void>}
+ */
+
+/**
+ * @typedef {Object} FlagRef
+ * @property {FlagGet} get
+ * @property {FlagSet} set
+ */
+
+/**
+ * @callback FlagDocFn
+ * @param {string} path
+ * @return {FlagRef}
+ */
+
+/**
+ * @typedef {Object} FlagDb
+ * @property {FlagDocFn} doc
+ */
+
+/**
+ * @callback LogLine
+ * @param {string} line
+ * @return {void}
+ */
+
+/**
+ * @typedef {Object} SetFlagArgs
+ * @property {boolean} [commit]
+ * @property {FlagDb} db
+ * @property {LogLine} [log]
+ */
+
+/**
+ * @param {Record<string, *>|null|undefined} before
+ * @return {FlagDescription}
  */
 function describeAnswerLinkFlag(before) {
     const data = before && typeof before === 'object' ? before : {};
@@ -29,7 +92,7 @@ function describeAnswerLinkFlag(before) {
 }
 
 /**
- * @param {Object} data
+ * @param {Record<string, *>} data
  * @return {'absent'|'true'|'false'}
  */
 function webhookState(data) {
@@ -40,7 +103,7 @@ function webhookState(data) {
 }
 
 /**
- * @param {Object} described
+ * @param {FlagDescription} described
  * @return {string}
  */
 function formatAnswerLinkFlagPlan(described) {
@@ -55,9 +118,9 @@ function formatAnswerLinkFlagPlan(described) {
 
 /**
  * After a merge write, the flag is true and every other stored field matches.
- * @param {?Object} before
- * @param {?Object} after
- * @return {?string} problem, or null when the write held
+ * @param {Record<string, *>|null|undefined} before
+ * @param {Record<string, *>|null|undefined} after
+ * @return {string|null} problem, or null when the write held
  */
 function flagWriteHeld(before, after) {
     const prior = before && typeof before === 'object' ? before : {};
@@ -80,16 +143,16 @@ function flagWriteHeld(before, after) {
 }
 
 /**
- * @param {Object} args
- * @param {boolean} args.commit
- * @param {Object} args.db
- * @param {function(string): void} [args.log]
+ * @param {SetFlagArgs} args
  * @return {Promise<{wrote: boolean}>}
  */
 async function executeSetAnswerLinkFlag(args) {
     const commit = !!(args && args.commit);
     const db = args && args.db;
-    const log = args && args.log ? args.log : console.log;
+    /** @type {LogLine} */
+    const log = args && args.log ? args.log : function(line) {
+        console.log(line);
+    };
     if (!db || typeof db.doc !== 'function') {
         throw new Error('Firestore db is required.');
     }

@@ -12,6 +12,10 @@
 
 const {executeSetAnswerLinkFlag} = require('./set-prayer-sms-answer-link-lib');
 
+/**
+ * @param {string} projectId
+ * @return {*}
+ */
 function initAdmin(projectId) {
     const admin = require('firebase-admin');
     if (!admin.apps.length) {
