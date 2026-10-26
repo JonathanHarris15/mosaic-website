@@ -1,107 +1,77 @@
 /**
  * Send one Textbelt SMS to Jonathan Harris's phone only — no replyWebhookUrl.
  *
- * Dry-run prints target and body. Commit sends and prints the full Textbelt JSON.
- *
  *   node scripts/textbelt-test-send.js \
  *       --project mosaic-hymn-database --i-mean-prod
  *   node scripts/textbelt-test-send.js \
  *       --project mosaic-hymn-database --i-mean-prod --commit
  *
- * On --commit, reads TEXTBELT_KEY from the environment when set, otherwise
- * Secret Manager in the target project (same secret id as Cloud Functions).
+ * --with-url builds the pastoral-prayer initial SMS. Dry-run prints the body
+ * and serviceDate and does not mint. --commit mints a real Answer link for
+ * people/CErA3v4J4hVm0iLfdG9Y through answer-link-door.mintAnswerLink (the
+ * same call dispatchPrayerAsk makes) and sends that URL. Commit refuses
+ * unless includeAnswerLinkInSms is already true.
  */
 
 const admin = require('firebase-admin');
-const {interpretSend} = require('../functions/sms');
+const answerDoor = require('../functions/answer-link-door');
+const liturgyCatalog = require('../functions/liturgy-catalog');
 const {
     resolveTextbeltKey,
     fetchTextbeltKeyFromSecretManager,
 } = require('./textbelt-key-lib');
-const {
-    JONATHAN_HARRIS_NAME,
-    DEFAULT_MESSAGE,
-    phoneFromPerson,
-    isJonathanHarris,
-    textbeltPayload,
-} = require('./textbelt-test-send-lib');
+const {executeTextbeltTestSend} = require('./textbelt-test-send-lib');
 
 function initAdmin(projectId) {
     if (!admin.apps.length) {
         admin.initializeApp({
-            credential: admin.credential.cert(require(require('./service-account').serviceAccountPath())),
+            credential: admin.credential.cert(
+                require(require('./service-account').serviceAccountPath())),
             projectId,
         });
     }
     return admin.firestore();
 }
 
-async function resolveJonathanPerson(db) {
-    const snap = await db.collection('people')
-        .where('name', '==', JONATHAN_HARRIS_NAME)
-        .limit(2)
-        .get();
-    if (snap.size !== 1) {
-        throw new Error(
-            `Expected exactly one people doc named ${JSON.stringify(JONATHAN_HARRIS_NAME)}; ` +
-            `found ${snap.size}.`);
-    }
-    const doc = snap.docs[0];
-    const data = doc.data() || {};
-    if (!isJonathanHarris(data.name)) {
-        throw new Error('Resolved person failed the Jonathan Harris name check.');
-    }
-    return {id: doc.id, data};
-}
-
 async function main() {
     const commit = process.argv.includes('--commit');
+    const withUrl = process.argv.includes('--with-url');
     const projectId = require('./firebase-project').requireProject(process.argv);
     const db = initAdmin(projectId);
 
-    const {id, data} = await resolveJonathanPerson(db);
-    const to = phoneFromPerson(data);
-    const body = DEFAULT_MESSAGE;
-
-    console.log(`${commit ? 'SEND' : 'DRY RUN'} — people/${id} (${JONATHAN_HARRIS_NAME})`);
-    console.log(`to: ${to}`);
-    console.log(`body: ${body}`);
-    console.log('replyWebhookUrl: (omitted)');
-
-    if (!commit) return;
-
-    let key;
-    let source;
-    try {
-        const resolved = await resolveTextbeltKey(
+    await executeTextbeltTestSend({
+        commit,
+        withUrl,
+        db,
+        now: () => new Date(),
+        listServiceDocs: async (todayDate, horizon) => {
+            const snap = await db.collection('services')
+                .where(admin.firestore.FieldPath.documentId(), '>', todayDate)
+                .where(admin.firestore.FieldPath.documentId(), '<=', horizon)
+                .get();
+            return snap.docs.map((doc) => ({id: doc.id, data: doc.data() || {}}));
+        },
+        loadCatalog: () => liturgyCatalog.loadLiturgyCatalog(db),
+        mintAnswerLink: (args) => answerDoor.mintAnswerLink(db, args),
+        resolveKey: () => resolveTextbeltKey(
             projectId,
             process.env.TEXTBELT_KEY,
-            fetchTextbeltKeyFromSecretManager);
-        key = resolved.key;
-        source = resolved.source;
-    } catch (err) {
-        const detail = err && err.message ? err.message : String(err);
-        throw new Error(
-            'Could not load TEXTBELT_KEY from env or Secret Manager. ' +
-            detail, { cause: err });
-    }
-    console.log(`textbelt key source: ${source}`);
-
-    const resp = await fetch('https://textbelt.com/text', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(textbeltPayload(to, body, key)),
+            fetchTextbeltKeyFromSecretManager),
+        postText: async (payload) => {
+            const resp = await fetch('https://textbelt.com/text', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            return resp.json();
+        },
+        log: console.log,
     });
-    const json = await resp.json();
-    console.log('Textbelt response:');
-    console.log(JSON.stringify(json, null, 2));
-    const shaped = interpretSend(json);
-    if (!shaped.success) {
-        throw new Error(shaped.error || 'Textbelt send failed.');
-    }
 }
 
-main().catch((err) => {
-    console.error(err.message || err);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((err) => {
+        console.error(err.message || err);
+        process.exit(1);
+    });
+}

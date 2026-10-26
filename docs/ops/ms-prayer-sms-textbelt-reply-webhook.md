@@ -1,5 +1,7 @@
 # P0 — pastoral-prayer SMS without Textbelt reply webhook
 
+URL-bearing smoke and the `includeAnswerLinkInSms` flag live in [MS-768 — Answer link in prayer SMS](./ms-768-prayer-sms-answer-link.md). This note stays the no-webhook send. Do not pass `--with-url` here.
+
 Unverified Textbelt keys reject sends when `replyWebhookUrl` is present, even if the SMS body has no `https://` link. Until the church account is verified, `app_config/prayer_request_sms.includeReplyWebhookInSms` stays **false** (default). Inbound SMS replies will not route until that flag is turned on after verification.
 
 ## After deploy (functions)

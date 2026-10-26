@@ -60,7 +60,8 @@ async function main() {
     console.log(`includeAnswerLinkInSms: ${cfg.includeAnswerLinkInSms}`);
     console.log(`includeReplyWebhookInSms: ${cfg.includeReplyWebhookInSms}`);
     console.log('live send: sendPrayerRequestTexts when flags on');
-    console.log('Jonathan URL test: textbelt-test-send.js --with-url commit=true\n');
+    console.log('Answer-link flag: set-prayer-sms-answer-link.js (dry-run, then commit=true)');
+    console.log('Jonathan URL test: textbelt-test-send.js --with-url (dry-run, then commit=true)\n');
 
     const wouldSend = [];
     for (const subject of plan.subjects) {
