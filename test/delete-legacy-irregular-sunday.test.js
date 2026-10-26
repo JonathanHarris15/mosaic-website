@@ -2,6 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const Plan = require('../public/delete-legacy-irregular-sunday-core.js');
+const ServiceRead = require('../public/service-read-core.js');
+const Liturgy = require('../public/liturgy-order-core.js');
 
 test('MS-796 — irregular elements migrate into liturgyLeftovers', () => {
     const plan = Plan.planIrregularSundayMigration({
@@ -44,4 +46,15 @@ test('MS-796 — replanning does not duplicate legacy-irregular leftovers', () =
     const plan = Plan.planIrregularSundayMigration(doc);
     assert.equal(plan.leftoversAdded, 0);
     assert.equal((plan.liturgyLeftovers || []).length, 1);
+});
+
+test('MS-796 — MCP read no longer returns irregular fields', () => {
+    const readable = ServiceRead.readableService('2026-01-05', {
+        liturgyOrderId: 'standard',
+        liturgy: {},
+        isIrregular: true,
+        irregularElements: [{ id: 'e1', name: 'Extra' }],
+    }, { orders: [Liturgy.STANDARD_ORDER] });
+    assert.equal(readable.isIrregular, undefined);
+    assert.equal(readable.irregularElements, undefined);
 });

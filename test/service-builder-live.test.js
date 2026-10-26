@@ -92,8 +92,6 @@ test('every field a save writes can be written back onto the model', () => {
         other: { id: 'p-8', name: 'Hal Vane' },
         hasBaptism: true,
         removedHymns: ['hymn2'],
-        isIrregular: true,
-        irregularElements: [{ key: 'Sermon', value: 'John 1' }],
         notes: { hymn1: 'check the key' },
     });
     full.liturgy.hymn1 = { id: 'h-1', name: 'Holy Holy Holy' };

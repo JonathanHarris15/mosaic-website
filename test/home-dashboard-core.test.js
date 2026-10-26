@@ -131,25 +131,19 @@ test('a person event is unfinished until the person is named', () => {
     assert.equal(named.label, 'Reader');
 });
 
-test('an old irregular Sunday is not scored until it is given an order', () => {
+test('MS-796 — irregular legacy fields are ignored; readiness uses the liturgy order', () => {
     const svc = {
         isIrregular: true,
         irregularElements: [{ key: 'Litany', type: 'text', value: 'x' }],
-        preacher: '',
-        theme: 'Hidden',
+        liturgyOrderId: 'standard',
+        preacher: 'Ada Example',
+        theme: 'Shown',
+        liturgy: { sermon: 'John 1' },
     };
     const ready = Home.readiness(svc);
-    assert.equal(ready.irregular, true);
-    assert.equal(ready.notReady, false);
-    assert.equal(ready.total, 0);
-    assert.equal(ready.fraction, '');
-    assert.deepEqual(Home.checklist(svc), []);
-    assert.deepEqual(Home.glance(svc), { theme: '', sermon: '', pairs: [], baptism: '' });
-
-    const chosen = Home.readiness(Object.assign({}, svc, { liturgyOrderId: 'standard', preacher: 'Ada' }));
-    assert.equal(chosen.irregular, false);
-    assert.ok(chosen.total > 0);
-    assert.equal(Home.glance(Object.assign({}, svc, { liturgyOrderId: 'standard', theme: 'Shown' })).theme, 'Shown');
+    assert.ok(ready.total > 0);
+    assert.ok(ready.fraction.includes(' of '));
+    assert.equal(Home.glance(svc).theme, 'Shown');
 });
 
 test('dotted top-level keys are dropped on read', () => {
