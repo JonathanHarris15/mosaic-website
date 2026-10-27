@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const Home = require('../public/home-dashboard-core.js');
-const { flattenServiceForSave } = require('../public/service-builder.js');
+const { flattenServiceForSave, changedFieldPaths, FIELD_DELETE } = require('../public/service-builder.js');
 
 function hymn(name, id) {
     return { name: name, id: id || null };
@@ -144,6 +144,114 @@ test('the phone home passes removed hymns into the same tally', () => {
     const src = fs.readFileSync(path.join(__dirname, '../public/mobile/data.js'), 'utf8');
     const fn = src.slice(src.indexOf('function mapService'), src.indexOf('function loadServices'));
     assert.match(fn, /removedHymns/);
+});
+
+test('the editor does not count a may-pray prayer until a leader is added', () => {
+    const Liturgy = require('../public/liturgy-order-core.js');
+    const praise = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, {
+        name: 'Prayer of Praise',
+        prayedByOther: true,
+    });
+    const confession = Liturgy.placeKind(praise.catalog, 'standard', 'prayer', 1, {
+        name: 'Prayer of Confession',
+        prayedByOther: true,
+    });
+    const catalog = confession.catalog;
+    const praiseId = praise.element.id;
+    const confessionId = confession.element.id;
+    const service = reportedSunday();
+    service.removedHymns = [];
+    service.liturgy.hymn1 = hymn('A', '1');
+    service.liturgy.hymn2 = hymn('B', '2');
+    service.liturgy.hymnMid1 = hymn('C', '3');
+    const loaded = editorForm(service);
+    loaded.form.liturgyCatalog = catalog;
+    loaded.form._ensureLiturgySlots();
+    assert.equal(loaded.form.service.carriedBy[praiseId], undefined);
+    assert.equal(loaded.form.service.carriedBy[confessionId], undefined);
+
+    const before = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(loaded.form.filledLabel, before.fraction);
+    assert.equal(
+        before.blanks.indexOf('Prayer of Praise'),
+        -1
+    );
+
+    loaded.form.addPrayerLeader(praiseId);
+    const oneEmpty = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(oneEmpty.total, before.total + 1);
+    assert.equal(oneEmpty.set, before.set);
+    assert.equal(loaded.form.filledLabel, oneEmpty.fraction);
+    assert.equal(loaded.form.prayerLeaderOpen(praiseId), true);
+    assert.equal(loaded.form.prayerLeaderOpen(confessionId), false);
+
+    loaded.form.service.carriedBy[praiseId].id = 'p1';
+    loaded.form.service.carriedBy[praiseId].name = 'Ada Example';
+    const oneFilled = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(oneFilled.total, before.total + 1);
+    assert.equal(oneFilled.set, before.set + 1);
+    assert.equal(loaded.form.filledLabel, oneFilled.fraction);
+
+    loaded.form.addPrayerLeader(confessionId);
+    loaded.form.service.carriedBy[confessionId].id = 'p2';
+    loaded.form.service.carriedBy[confessionId].name = 'Owen Example';
+    const twoFilled = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(twoFilled.total, before.total + 2);
+    assert.equal(twoFilled.set, before.set + 2);
+    assert.equal(loaded.form.filledLabel, twoFilled.fraction);
+
+    const namedPraise = flattenServiceForSave(JSON.parse(JSON.stringify(loaded.form.service)));
+    loaded.form.clearPrayerLeader(praiseId);
+    const cleared = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(cleared.total, before.total + 2);
+    assert.equal(cleared.set, before.set + 1);
+    assert.equal(loaded.form.service.carriedBy[praiseId].name, '');
+    assert.equal(loaded.form.service.carriedBy[praiseId].id, null);
+    assert.equal(loaded.form.filledLabel, cleared.fraction);
+    const clearedSlot = changedFieldPaths(namedPraise, flattenServiceForSave(loaded.form.service))['carriedBy.' + praiseId];
+    assert.equal(clearedSlot.name, '');
+    assert.equal(clearedSlot.id, null);
+    assert.notStrictEqual(clearedSlot, FIELD_DELETE);
+
+    const emptyPraise = flattenServiceForSave(JSON.parse(JSON.stringify(loaded.form.service)));
+    loaded.form.clearPrayerLeader(praiseId);
+    const removed = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(removed.total, before.total + 1);
+    assert.equal(loaded.form.service.carriedBy[praiseId], undefined);
+    assert.equal(loaded.form.filledLabel, removed.fraction);
+    const dropped = changedFieldPaths(emptyPraise, flattenServiceForSave(loaded.form.service));
+    assert.strictEqual(dropped['carriedBy.' + praiseId], FIELD_DELETE);
+});
+
+test('a may-pray row does not ask for a name until a leader is added', () => {
+    const Liturgy = require('../public/liturgy-order-core.js');
+    const praise = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, {
+        name: 'Prayer of Praise',
+        prayedByOther: true,
+    });
+    const catalog = praise.catalog;
+    const praiseId = praise.element.id;
+    const service = reportedSunday();
+    const form = editorForm(service).form;
+    form.liturgyCatalog = catalog;
+    form._ensureLiturgySlots();
+
+    const closed = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
+    assert.equal(closed.value, '');
+    assert.equal(closed.emptyLabel, '');
+    assert.equal(closed.status, 'empty');
+
+    form.addPrayerLeader(praiseId);
+    const open = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
+    assert.equal(open.value, '');
+    assert.equal(open.emptyLabel, 'Name who prays…');
+
+    form.service.carriedBy[praiseId].id = 'p1';
+    form.service.carriedBy[praiseId].name = 'Ada Example';
+    const named = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
+    assert.equal(named.value, 'Ada Example');
+    assert.equal(named.emptyLabel, '');
+    assert.equal(named.status, 'people');
 });
 
 test('the service editor loads the shared tally', () => {

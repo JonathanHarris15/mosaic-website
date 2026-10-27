@@ -24,6 +24,7 @@ const vm = require('node:vm');
 
 const {
     flattenServiceForSave,
+    editorCarriedBy,
     changedFieldPaths,
     applyFlatFieldPath,
     pickSaveFields,
@@ -106,6 +107,17 @@ test('every field a save writes can be written back onto the model', () => {
     }
 
     assert.deepStrictEqual(flattenServiceForSave(rebuilt), flat);
+});
+
+test('a reloaded prayer leader is { id, name } and nothing else', () => {
+    assert.deepStrictEqual(editorCarriedBy({
+        prayerOfPraise: { name: '', id: null, added: true },
+        prayerOfConfession: { name: 'Ada Example', id: 'p1' },
+    }), {
+        prayerOfPraise: { name: '', id: null },
+        prayerOfConfession: { name: 'Ada Example', id: 'p1' },
+    });
+    assert.deepStrictEqual(editorCarriedBy(null), {});
 });
 
 test('a liturgy slot is mutated in place, so the hymn picker keeps its object', () => {

@@ -78,6 +78,11 @@ function normalizeDottedKeys(raw) {
 // notes are, so it is not a second element and not a second column.
 const NESTED_SAVE_MAPS = ['liturgy', 'notes', 'carriedBy'];
 
+// A nested key that left the model. Firestore update() only changes paths we
+// send, so a prayer leader taken off has to go out as a delete or the next
+// load puts the slot back (MS-808). Not null: a hymn clear already writes null.
+const FIELD_DELETE = Object.freeze({ deleteField: true });
+
 // ── Row identity for the lists a person is picked into (MS-277) ─────────────
 //
 // Music Helpers, Baptism Candidates and the irregular elements are LISTS, and
@@ -235,6 +240,32 @@ function pastoralSunday(service, date, elements) {
     return { date: date, subjectIds: ids };
 }
 
+// The editor's carriedBy map. One shape: { id, name }. A present key is a
+// prayer leader. Nobody named is an empty slot, still in the tally.
+/**
+ * @param {any} raw
+ * @return {Record<string, {name: string, id: any}>}
+ */
+function editorCarriedBy(raw) {
+    /** @type {Record<string, {name: string, id: any}>} */
+    const carriedBy = {};
+    Object.entries(raw || {}).forEach(([key, ref]) => {
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return;
+        carriedBy[key] = { name: ref.name || '', id: ref.id || null };
+    });
+    return carriedBy;
+}
+
+/**
+ * @param {any} ref
+ * @return {boolean}
+ */
+function slotNamed(ref) {
+    if (!ref || typeof ref !== 'object') return false;
+    const name = ref.name != null && String(ref.name).trim();
+    return !!(ref.id || name);
+}
+
 function flattenServiceForSave(service) {
     const ref = (r) => (r && typeof r === 'object') ? r : { id: null, name: '' };
     const s = service || {};
@@ -278,9 +309,15 @@ function flattenServiceForSave(service) {
 // A hymn is {id, name} chosen as one act, so the SLOT is the unit; splitting
 // it could leave an id pointing at one hymn and a name reading another. Arrays
 // are compared whole and replaced whole — a list is edited as a list.
+/**
+ * @param {any} before
+ * @param {any} after
+ * @return {Record<string, any>}
+ */
 function changedFieldPaths(before, after) {
     const same = (a, b) => JSON.stringify(a === undefined ? null : a) ===
                            JSON.stringify(b === undefined ? null : b);
+    /** @type {Record<string, any>} */
     const update = {};
 
     for (const [key, val] of Object.entries(after || {})) {
@@ -297,6 +334,15 @@ function changedFieldPaths(before, after) {
         const prevMap = (prev && typeof prev === 'object') ? prev : {};
         for (const [slot, slotVal] of Object.entries(val)) {
             if (!same(prevMap[slot], slotVal)) update[`${key}.${slot}`] = slotVal;
+        }
+        // A key that disappeared is a change. Only carriedBy is taken off
+        // this way; liturgy slots stay on the document and are cleared in place.
+        if (key === 'carriedBy') {
+            for (const slot of Object.keys(prevMap)) {
+                if (!Object.prototype.hasOwnProperty.call(val, slot)) {
+                    update[`${key}.${slot}`] = FIELD_DELETE;
+                }
+            }
         }
     }
 
@@ -348,6 +394,11 @@ function applyFlatFieldPath(service, path, value) {
         const slot = path.slice(dot + 1);
         if (!NESTED_SAVE_MAPS.includes(map)) return false;
         if (!service[map] || typeof service[map] !== 'object') service[map] = {};
+
+        if (value === FIELD_DELETE) {
+            delete service[map][slot];
+            return true;
+        }
 
         const current = service[map][slot];
         const bothPlainObjects =
@@ -794,7 +845,11 @@ function serviceForm() {
                 } else if (el.primitive === 'song' && typeof current === 'string') {
                     s.liturgy[el.id] = { name: current, id: null };
                 }
-                if ((el.prayedByOther || el.hasRole) && !s.carriedBy[el.id]) {
+                // A role that must be carried still needs an object for its
+                // picker. A prayer someone else MAY pray does not: an empty
+                // box there is not a prayer leader, and seeding one made the
+                // Sunday look short (MS-808).
+                if (el.hasRole && !s.carriedBy[el.id]) {
                     s.carriedBy[el.id] = { name: '', id: null };
                 }
             }
@@ -1410,11 +1465,7 @@ function serviceForm() {
 
                 this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
-                const carriedBy = {};
-                Object.entries(data.carriedBy || {}).forEach(([key, ref]) => {
-                    if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
-                });
-                this.service.carriedBy = carriedBy;
+                this.service.carriedBy = editorCarriedBy(data.carriedBy);
 
                 // Every liturgy value on the document, whichever order it was
                 // filled under: a value under an element this order leaves out
@@ -1835,6 +1886,11 @@ function serviceForm() {
                 // lose a race it never entered. See changedFieldPaths.
                 const flatNow = flattenServiceForSave(frozenService);
                 const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
+                Object.keys(toSave).forEach((path) => {
+                    if (toSave[path] === FIELD_DELETE) {
+                        toSave[path] = firebase.firestore.FieldValue.delete();
+                    }
+                });
 
                 // Whether this Sunday still owes its serve records. The
                 // scheduled job converts only Services carrying it, which is
@@ -2067,7 +2123,12 @@ function serviceForm() {
             return d.textContent || d.innerText || '';
         },
 
-        _buildItem(el, lit) {
+        /**
+         * @param {any} el
+         * @param {any} lit
+         * @param {any} tally
+         */
+        _buildItem(el, lit, tally) {
             const key = el.id;
             const type = this._ROW_TYPES[el.primitive];
             const removed = type === 'hymn' && this.isHymnRemoved(key);
@@ -2094,10 +2155,23 @@ function serviceForm() {
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
                 if (!el.requests && el.prayedByOther) {
+                    const leader = (tally || []).find(function (/** @type {any} */ item) {
+                        return item.key === el.id && item.part === 'leader';
+                    });
                     const who = liturgyCore().carrierOf(this.service, el);
-                    value = who ? who.name : '';
-                    status = value ? 'people' : 'empty';
-                    emptyLabel = 'Name who prays…';
+                    if (leader && leader.state === 'set' && who) {
+                        value = who.name;
+                        status = 'people';
+                        emptyLabel = '';
+                    } else if (leader && leader.state === 'blank') {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = 'Name who prays…';
+                    } else {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = '';
+                    }
                 }
             } else if (type === 'person') {
                 const ref = lit[key] && !Array.isArray(lit[key]) ? lit[key] : {};
@@ -2134,7 +2208,11 @@ function serviceForm() {
         // show; no value is dropped.
         get rows() {
             const lit = this.service.liturgy;
-            return this.orderElements.map(el => this._buildItem(el, lit));
+            const tally = window.HomeDashboard
+                ? window.HomeDashboard.checklist(
+                    flattenServiceForSave(this.service), this.liturgyCatalog)
+                : [];
+            return this.orderElements.map(el => this._buildItem(el, lit, tally));
         },
 
         get displayRows() {
@@ -2164,8 +2242,9 @@ function serviceForm() {
 
         // "X of Y set" — the same tally the home card and the phone use
         // (home-dashboard-core). This page used to add theme, the key verse,
-        // and the optional prayer leaders, and to count a hymn name as finished
-        // before it was linked, so the two screens disagreed.
+        // and every optional prayer leader, and to count a hymn name as
+        // finished before it was linked, so the two screens disagreed. An
+        // optional prayer leader is in that tally only once one is added.
         get filledLabel() {
             const ready = window.HomeDashboard.readiness(
                 flattenServiceForSave(this.service), this.liturgyCatalog);
@@ -2423,6 +2502,57 @@ function serviceForm() {
         },
 
         // ── People elements (Baptism Candidates, or any other) ───────────────
+        // A prayer leader counts only after one is added (MS-808). The order's
+        // "may pray" flag leaves the box closed; this opens an empty slot.
+        /**
+         * @param {string} key
+         */
+        prayerLeaderClearLabel(key) {
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy || {});
+            const ref = carried[key];
+            return slotNamed(ref) ? 'Clear prayer leader' : 'Remove prayer leader';
+        },
+        /**
+         * @param {string} key
+         */
+        prayerLeaderOpen(key) {
+            if (!window.HomeDashboard || !window.HomeDashboard.prayerLeaderTally) return false;
+            const el = (this.orderElements || []).find(function (/** @type {any} */ item) {
+                return item && item.id === key;
+            });
+            return !!window.HomeDashboard.prayerLeaderTally(this.service, el);
+        },
+        /**
+         * @param {string} key
+         */
+        addPrayerLeader(key) {
+            if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') {
+                this.service.carriedBy = {};
+            }
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy);
+            const current = carried[key];
+            if (current && typeof current === 'object' && !Array.isArray(current)) return;
+            carried[key] = { name: '', id: null };
+        },
+        // A named leader clears back to an empty slot, which stays in the
+        // tally. Clearing that empty slot removes it.
+        /**
+         * @param {string} key
+         */
+        clearPrayerLeader(key) {
+            const raw = this.service.carriedBy;
+            if (!raw || typeof raw !== 'object') return;
+            const map = /** @type {Record<string, any>} */ (raw);
+            const ref = map[key];
+            if (!ref || typeof ref !== 'object') return;
+            if (slotNamed(ref)) {
+                ref.id = null;
+                ref.name = '';
+                return;
+            }
+            delete map[key];
+        },
+
         addPerson(key) {
             if (!Array.isArray(this.service.liturgy[key])) this.service.liturgy[key] = [];
             this.service.liturgy[key].push({ name: '', id: null, [ROW_ID]: newRowId() });
@@ -3032,5 +3162,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, editorCarriedBy, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, FIELD_DELETE, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
 }

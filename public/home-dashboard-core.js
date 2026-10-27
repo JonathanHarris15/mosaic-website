@@ -9,9 +9,10 @@
 // not work left and not work done. A song typed in but not linked to the book
 // is not blank, and it is not set either. A people element (Baptism) counts
 // only once somebody is on it — most Sundays have nobody, and that is not a
-// blank. An element that carries a person is unfinished until the person is
-// named. Theme, the key verse, and the optional prayer leaders are not part
-// of the tally.
+// blank. A person event is unfinished until the person is named. Theme and
+// the key verse are not part of the tally. A prayer the order allows someone
+// else to pray stays out until that Sunday has a carriedBy entry for it. The
+// entry is the prayer leader: unset while nobody is named, set when a person is.
 //
 // Pass the congregation's catalog (LiturgyOrderStore.loadCatalog) as the
 // second argument; without one, every Sunday is read against Standard.
@@ -117,14 +118,42 @@
         return typeof value === 'string' && value.trim() ? 1 : 0;
     }
 
+    // null — leave it out. 'blank' — the Sunday added a prayer leader and
+    // nobody is named yet. 'set' — that person is named.
+    //
+    // `prayedByOther` only allows an alternate. The slot is the carriedBy
+    // entry itself: { id, name }. Absent, the service leader prays it.
+    /**
+     * @param {any} service
+     * @param {any} el
+     * @return {null | 'blank' | 'set'}
+     */
+    function prayerLeaderTally(service, el) {
+        if (!el || el.kind !== 'prayer' || el.prayedByOther !== true) return null;
+        const map = (service && service.carriedBy) || {};
+        const ref = map[el.id];
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
+        return personSet(ref) ? 'set' : 'blank';
+    }
+
     function checklist(svc, catalog) {
         const service = svc || {};
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
+        /** @type {Array<{key: any, label: any, state: any, part?: string}>} */
         const items = [];
 
-        function add(key, label, state) {
-            items.push({ key: key, label: label, state: state });
+        /**
+         * @param {any} key
+         * @param {any} label
+         * @param {any} state
+         * @param {string} [part]
+         */
+        function add(key, label, state, part) {
+            /** @type {{key: any, label: any, state: any, part?: string}} */
+            const item = { key: key, label: label, state: state };
+            if (part) item.part = part;
+            items.push(item);
         }
 
         add('serviceLeader', 'Service Leader', personSet(service.serviceLeader) ? 'set' : 'blank');
@@ -139,16 +168,18 @@
                 if (removed.indexOf(el.id) !== -1) return;
                 state = hymnState(value);
             } else if (el.kind === 'prayer') {
-                const needsRequests = !!el.requests;
-                const needsPerson = el.prayedByOther === true;
-                if (!needsRequests && !needsPerson) return;
-                let ready = true;
-                if (needsRequests) {
+                const leader = prayerLeaderTally(service, el);
+                if (el.requests) {
                     const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
-                    if (named < el.requests.count) ready = false;
+                    add(el.id, Liturgy.elementDisplayName(el), named >= el.requests.count ? 'set' : 'blank');
                 }
-                if (needsPerson && !Liturgy.carrierOf(service, el)) ready = false;
-                state = ready ? 'set' : 'blank';
+                if (leader) {
+                    const label = el.requests
+                        ? Liturgy.elementDisplayName(el) + ' leader'
+                        : Liturgy.elementDisplayName(el);
+                    add(el.id, label, leader, 'leader');
+                }
+                return;
             } else if (el.primitive === 'people') {
                 if (!peopleCount(value)) return;
                 state = 'set';
@@ -297,6 +328,7 @@
         normalizeService: normalizeService,
         checklist: checklist,
         readiness: readiness,
+        prayerLeaderTally: prayerLeaderTally,
         glance: glance,
         compactTime: compactTime,
         weekStrip: weekStrip,
