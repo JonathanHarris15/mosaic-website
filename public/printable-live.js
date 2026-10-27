@@ -289,6 +289,90 @@
         return chain;
     }
 
+    // The origin page of the overflow run that holds an iterated element.
+    function originForRepeatNode(project, repeatNodeId) {
+        const pages = project.pages || [];
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+            if (!Core.findNode(page, repeatNodeId)) continue;
+            const bounds = Core.continuationRunBounds(pages, page.id);
+            if (!bounds) return null;
+            const origin = pages[bounds.start];
+            return origin || page;
+        }
+        return null;
+    }
+
+    // How many stored pages an overflowing list needs after its Repeat range
+    // and row count are applied. Matches layoutPages' pagination plan.
+    function overflowContinuationNeed(project, origin, res, host, options, repeatForRows) {
+        const o = options || {};
+        const canPaginate = !!(res && (host || o.fitsOn));
+        const repeat = repeatForRows || overflowingRepeatOn(origin);
+        if (!repeat || repeat.repeat.overflow !== 'new-page' || !canPaginate) return 1;
+        const rows = res.rowsFor(repeat);
+        if (!rows || !rows.length) return 1;
+        const chain = continuationChain(project, origin);
+        const template = project.template;
+        const assets = project.assets || [];
+        const originCap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
+        const capAt = (i) => {
+            const bg = chain[i] || templateForNew(project, origin, repeat);
+            const r = overflowingRepeatOn(bg) || repeat;
+            return (r.repeat.layout && r.repeat.layout.maxPerPage) || originCap;
+        };
+        const pageAt = (i) => chain[i] || templateForNew(project, origin, repeat);
+        const repeatAt = (i) => overflowingRepeatOn(pageAt(i)) || repeat;
+        const fitsOn = (i, start, n) => {
+            const bg = pageAt(i);
+            const r = repeatAt(i);
+            if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
+            const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, 0, assets));
+            return fits(host, template, bg, probe.nodes, r.id);
+        };
+        return Render.planPages(rows, capAt, fitsOn).length;
+    }
+
+    // MS-810 — after the Repeat from/to range shrinks, drop stored continuation
+    // pages that no longer carry any row of the slice. Only removes pages in
+    // the contiguous overflow run; a page with custom content outside that run
+    // is untouched. Called from the editor when the range changes, not on every
+    // data refresh (so a shorter live list can still leave an edited tail page).
+    function pruneExcessContinuationPages(project, res, host, options) {
+        const o = options || {};
+        if (!project || !project.pages || !res) return [];
+        if (!host && !o.fitsOn) return [];
+        /** @type {any[]} */
+        const origins = [];
+        if (o.repeatNodeId) {
+            const origin = originForRepeatNode(project, o.repeatNodeId);
+            if (origin) origins.push(origin);
+        } else {
+            (project.pages || []).forEach((page) => {
+                if (page.continues && page.continues.from) return;
+                if (overflowingRepeatOn(page)) origins.push(page);
+            });
+        }
+        const removeIds = [];
+        origins.forEach((origin) => {
+            const chain = continuationChain(project, origin);
+            if (chain.length <= 1) return;
+            let repeatForRows = overflowingRepeatOn(origin);
+            if (o.repeatNodeId) {
+                (project.pages || []).some((pg) => {
+                    const node = Core.findNode(pg, o.repeatNodeId);
+                    if (node) { repeatForRows = node; return true; }
+                    return false;
+                });
+            }
+            const needed = overflowContinuationNeed(project, origin, res, host, o, repeatForRows);
+            if (chain.length > needed) chain.slice(needed).forEach((p) => removeIds.push(p.id));
+        });
+        if (!removeIds.length) return [];
+        project.pages = Core.pagesWithout(project.pages, removeIds);
+        return removeIds;
+    }
+
     function templateForNew(project, origin, repeat) {
         const chosenId = repeat.repeat && repeat.repeat.continueWith;
         const chosen = chosenId && (project.pages || []).find(p => p.id === chosenId);
@@ -500,7 +584,17 @@
         return out;
     }
 
-    const PrintableLive = { keyOf, usesOf, collectNeeds, resolver, layoutPages, warningsFor, STAND_INS };
+    const PrintableLive = {
+        keyOf,
+        usesOf,
+        collectNeeds,
+        resolver,
+        layoutPages,
+        warningsFor,
+        pruneExcessContinuationPages,
+        overflowContinuationNeed,
+        STAND_INS,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = PrintableLive;

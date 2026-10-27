@@ -230,6 +230,52 @@ test('a continuation that is not in the chain does not print the list again', ()
     assert.equal(second.nodes[0].children.length, 0);
 });
 
+test('MS-810: shrinking the Repeat row range removes stored overflow pages past the slice', () => {
+    const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
+    const origin = Core.buildPage(t, { id: 'pg1', nodes: [
+        { id: 'card', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page', from: 1, to: 0 }, children: [
+            { id: 'nm', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+        ] },
+        { id: 'keep', tag: 'p', text: 'Page one marker' },
+    ] });
+    const pg2 = Core.buildPage(t, {
+        id: 'pg2',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [
+            { id: 'card2', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+                { id: 'nm2', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+            { id: 'keep2', tag: 'p', text: 'Page two marker' },
+        ],
+    });
+    const pg3 = Core.buildPage(t, {
+        id: 'pg3',
+        continues: { from: 'pg1', repeat: 'card' },
+        nodes: [
+            { id: 'card3', tag: 'div', repeat: { source: 'people', params: { membership: 'members' }, overflow: 'new-page' }, children: [
+                { id: 'nm3', tag: 'p', text: 'Jane', bind: { text: { scope: 'item', field: 'name' } } },
+            ] },
+        ],
+    });
+    const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, pg2, pg3] });
+    const res = Live.resolver(p, peopleBundle(9), { today: '2026-09-03', level: 'editor' });
+    const paginate = { fitsOn: (/** @type {any} */ _i, /** @type {any} */ _start, /** @type {any} */ n) => n <= 3 };
+    const card = Core.findNode(p.pages[0], 'card');
+    assert.equal(Live.overflowContinuationNeed(p, origin, res, true, paginate, card), 3);
+    card.repeat.to = 5;
+    const removed = Live.pruneExcessContinuationPages(p, res, true, Object.assign({ repeatNodeId: 'card' }, paginate));
+    assert.deepEqual(removed, ['pg3']);
+    assert.equal(p.pages.length, 2);
+    assert.equal(Core.findNode(p.pages[0], 'keep').text, 'Page one marker');
+    assert.equal(Core.findNode(p.pages[1], 'keep2').text, 'Page two marker');
+    const pages = Live.layoutPages(p, res, true, paginate);
+    assert.deepEqual(pages[0].nodes[0].children.map(c => c.children[0].text), ['Person 0', 'Person 1', 'Person 2']);
+    assert.deepEqual(pages[1].nodes[0].children.map(c => c.children[0].text), ['Person 3', 'Person 4']);
+    card.repeat.to = 9;
+    const wide = Live.layoutPages(p, res, true, paginate);
+    assert.ok(wide.some(e => e.needsPersist), 'widening the range plans another stored page again');
+});
+
 test('a leftover continuation page stays in the document when the list shrinks', () => {
     const t = Core.buildTemplate({ paper: 'letter', dpi: 96 });
     const origin = Core.buildPage(t, { id: 'pg1', nodes: [

@@ -1975,6 +1975,10 @@
                 if (!r || !page || (key !== 'from' && key !== 'to')) return;
                 const n = Math.max(0, Math.round(Number(value)) || 0);
                 this.replacePage(Core.updateNode(page, r.id, { repeat: Object.assign({}, r.repeat, { [key]: n }) }));
+                if (this.resolver && r.repeat.overflow === 'new-page') {
+                    const host = document.getElementById('pe-measure');
+                    Live.pruneExcessContinuationPages(this.project, this.resolver, host, { repeatNodeId: r.id });
+                }
                 this.commit();
                 this.renderAll();
             },
