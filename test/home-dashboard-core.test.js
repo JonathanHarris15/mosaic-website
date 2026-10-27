@@ -108,18 +108,14 @@ test('a prayer is scored only for what the order asked', () => {
         undefined,
         'allowing someone else to pray it does not add a slot'
     );
-    assert.equal(
-        Home.checklist({ carriedBy: { [id]: { name: '', id: null } } }, marked)
-            .find(function (item) { return item.key === id; }),
-        undefined,
-        'an empty scaffold is not an added prayer leader'
-    );
+    const emptyLeaderItem = Home.checklist({ carriedBy: { [id]: { name: '', id: null } } }, marked)
+        .find(function (item) { return item.key === id && item.part === 'leader'; });
+    assert.equal(emptyLeaderItem.state, 'blank', 'an empty prayer leader is unset');
 
     const el = Liturgy.elementById(marked, id);
     assert.equal(Home.prayerLeaderTally({}, el), null);
-    assert.equal(Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null } } }, el), null);
     assert.equal(
-        Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null, added: true } } }, el),
+        Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null } } }, el),
         'blank'
     );
     assert.equal(
@@ -128,7 +124,7 @@ test('a prayer is scored only for what the order asked', () => {
     );
 
     const added = Home.checklist({
-        carriedBy: { [id]: { name: '', id: null, added: true } },
+        carriedBy: { [id]: { name: '', id: null } },
     }, marked).filter(function (item) { return item.key === id; });
     assert.equal(added.length, 1);
     assert.equal(added[0].part, 'leader');
@@ -159,7 +155,7 @@ test('a prayer is scored only for what the order asked', () => {
     assert.deepEqual(full.map(function (item) { return item.state; }), ['set', 'set']);
 
     const emptyLeader = Home.checklist({
-        carriedBy: { [id]: { name: '', id: null, added: true } },
+        carriedBy: { [id]: { name: '', id: null } },
         liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
     }, both).filter(function (item) { return item.key === id; });
     assert.deepEqual(emptyLeader.map(function (item) { return item.state; }), ['set', 'blank']);
@@ -191,17 +187,8 @@ test('MS-808 — optional prayer leaders stay out of N of M until one is added',
     assert.equal(open.set, base.set);
     assert.equal(open.fraction, open.set + ' of ' + open.total + ' set');
 
-    const scaffold = Home.readiness(Object.assign({}, finished, {
-        carriedBy: {
-            [praiseId]: { name: '', id: null },
-            [confessionId]: { name: '', id: null },
-        },
-    }), catalog);
-    assert.equal(scaffold.total, base.total, 'blank scaffolds are not added leaders');
-    assert.equal(scaffold.set, base.set);
-
     const oneEmpty = Home.readiness(Object.assign({}, finished, {
-        carriedBy: { [praiseId]: { name: '', id: null, added: true } },
+        carriedBy: { [praiseId]: { name: '', id: null } },
     }), catalog);
     assert.equal(oneEmpty.total, base.total + 1);
     assert.equal(oneEmpty.set, base.set);
@@ -217,8 +204,8 @@ test('MS-808 — optional prayer leaders stay out of N of M until one is added',
 
     const twoEmpty = Home.readiness(Object.assign({}, finished, {
         carriedBy: {
-            [praiseId]: { name: '', id: null, added: true },
-            [confessionId]: { name: '', id: null, added: true },
+            [praiseId]: { name: '', id: null },
+            [confessionId]: { name: '', id: null },
         },
     }), catalog);
     assert.equal(twoEmpty.total, base.total + 2);

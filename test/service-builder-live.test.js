@@ -109,15 +109,13 @@ test('every field a save writes can be written back onto the model', () => {
     assert.deepStrictEqual(flattenServiceForSave(rebuilt), flat);
 });
 
-test('a reloaded prayer leader keeps an added empty slot and drops nothing else', () => {
+test('a reloaded prayer leader is { id, name } and nothing else', () => {
     assert.deepStrictEqual(editorCarriedBy({
         prayerOfPraise: { name: '', id: null, added: true },
         prayerOfConfession: { name: 'Ada Example', id: 'p1' },
-        scaffold: { name: '', id: null },
     }), {
-        prayerOfPraise: { name: '', id: null, added: true },
+        prayerOfPraise: { name: '', id: null },
         prayerOfConfession: { name: 'Ada Example', id: 'p1' },
-        scaffold: { name: '', id: null },
     });
     assert.deepStrictEqual(editorCarriedBy(null), {});
 });

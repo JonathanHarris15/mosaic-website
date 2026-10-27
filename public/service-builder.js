@@ -78,6 +78,11 @@ function normalizeDottedKeys(raw) {
 // notes are, so it is not a second element and not a second column.
 const NESTED_SAVE_MAPS = ['liturgy', 'notes', 'carriedBy'];
 
+// A nested key that left the model. Firestore update() only changes paths we
+// send, so a prayer leader taken off has to go out as a delete or the next
+// load puts the slot back (MS-808). Not null: a hymn clear already writes null.
+const FIELD_DELETE = Object.freeze({ deleteField: true });
+
 // ── Row identity for the lists a person is picked into (MS-277) ─────────────
 //
 // Music Helpers, Baptism Candidates and the irregular elements are LISTS, and
@@ -235,18 +240,21 @@ function pastoralSunday(service, date, elements) {
     return { date: date, subjectIds: ids };
 }
 
-// The editor's carriedBy map. A blank { name, id } is the old picker
-// scaffold and is kept as a blank. `added: true` is a prayer leader the
-// Sunday opted into, and a reload has to keep that or the tally forgets it.
+// The editor's carriedBy map. One shape: { id, name }. A present key is a
+// prayer leader. Nobody named is an empty slot, still in the tally.
 function editorCarriedBy(raw) {
     const carriedBy = {};
     Object.entries(raw || {}).forEach(([key, ref]) => {
         if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return;
-        const slot = { name: ref.name || '', id: ref.id || null };
-        if (ref.added === true) slot.added = true;
-        carriedBy[key] = slot;
+        carriedBy[key] = { name: ref.name || '', id: ref.id || null };
     });
     return carriedBy;
+}
+
+function slotNamed(ref) {
+    if (!ref || typeof ref !== 'object') return false;
+    const name = ref.name != null && String(ref.name).trim();
+    return !!(ref.id || name);
 }
 
 function flattenServiceForSave(service) {
@@ -312,6 +320,15 @@ function changedFieldPaths(before, after) {
         for (const [slot, slotVal] of Object.entries(val)) {
             if (!same(prevMap[slot], slotVal)) update[`${key}.${slot}`] = slotVal;
         }
+        // A key that disappeared is a change. Only carriedBy is taken off
+        // this way; liturgy slots stay on the document and are cleared in place.
+        if (key === 'carriedBy') {
+            for (const slot of Object.keys(prevMap)) {
+                if (!Object.prototype.hasOwnProperty.call(val, slot)) {
+                    update[`${key}.${slot}`] = FIELD_DELETE;
+                }
+            }
+        }
     }
 
     return update;
@@ -362,6 +379,11 @@ function applyFlatFieldPath(service, path, value) {
         const slot = path.slice(dot + 1);
         if (!NESTED_SAVE_MAPS.includes(map)) return false;
         if (!service[map] || typeof service[map] !== 'object') service[map] = {};
+
+        if (value === FIELD_DELETE) {
+            delete service[map][slot];
+            return true;
+        }
 
         const current = service[map][slot];
         const bothPlainObjects =
@@ -1849,6 +1871,11 @@ function serviceForm() {
                 // lose a race it never entered. See changedFieldPaths.
                 const flatNow = flattenServiceForSave(frozenService);
                 const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
+                Object.keys(toSave).forEach((path) => {
+                    if (toSave[path] === FIELD_DELETE) {
+                        toSave[path] = firebase.firestore.FieldValue.delete();
+                    }
+                });
 
                 // Whether this Sunday still owes its serve records. The
                 // scheduled job converts only Services carrying it, which is
@@ -2457,8 +2484,7 @@ function serviceForm() {
         // "may pray" flag leaves the box closed; this opens an empty slot.
         prayerLeaderClearLabel(key) {
             const ref = this.service.carriedBy && this.service.carriedBy[key];
-            const named = ref && (ref.id || (ref.name && String(ref.name).trim()));
-            return named ? 'Clear prayer leader' : 'Remove prayer leader';
+            return slotNamed(ref) ? 'Clear prayer leader' : 'Remove prayer leader';
         },
         prayerLeaderOpen(key) {
             if (!window.HomeDashboard || !window.HomeDashboard.prayerLeaderTally) return false;
@@ -2470,25 +2496,21 @@ function serviceForm() {
                 this.service.carriedBy = {};
             }
             const current = this.service.carriedBy[key];
-            if (current && typeof current === 'object' && !Array.isArray(current)) {
-                current.added = true;
-                return;
-            }
-            this.service.carriedBy[key] = { name: '', id: null, added: true };
+            if (current && typeof current === 'object' && !Array.isArray(current)) return;
+            this.service.carriedBy[key] = { name: '', id: null };
         },
-        // A named leader clears back to an empty added slot, which stays in
-        // the tally. Clearing that empty slot removes it.
+        // A named leader clears back to an empty slot, which stays in the
+        // tally. Clearing that empty slot removes it.
         clearPrayerLeader(key) {
-            const ref = this.service.carriedBy && this.service.carriedBy[key];
+            const map = this.service.carriedBy;
+            const ref = map && map[key];
             if (!ref || typeof ref !== 'object') return;
-            const named = !!(ref.id || (ref.name && String(ref.name).trim()));
-            if (named) {
+            if (slotNamed(ref)) {
                 ref.id = null;
                 ref.name = '';
-                ref.added = true;
                 return;
             }
-            delete this.service.carriedBy[key];
+            delete map[key];
         },
 
         addPerson(key) {
@@ -3100,5 +3122,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, editorCarriedBy, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, editorCarriedBy, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, FIELD_DELETE, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
 }

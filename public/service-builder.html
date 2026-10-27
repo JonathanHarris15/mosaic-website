@@ -1075,13 +1075,13 @@
                                                 <div :class="item.requests ? 'mt-4 pt-4 border-t border-dashed border-outline-variant' : ''">
                                                     <template x-if="prayerLeaderOpen(item.key)">
                                                         <div>
-                                                            <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline mb-2">Prayer leader</div>
+                                                            <div class="m-label mb-2">Prayer leader</div>
                                                             <div x-data="personPicker(service.carriedBy[item.key], $data)" @click.away="open = false" class="relative max-w-md">
                                                                 <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
                                                                     <input type="text" :aria-label="'Who prays ' + item.label" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                                                                     <div class="flex items-center gap-1">
-                                                                        <button x-show="canEdit" type="button" @click.stop="clearPrayerLeader(item.key); clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :aria-label="prayerLeaderClearLabel(item.key)">
-                                                                            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                                                                        <button x-show="canEdit" type="button" @click.stop="clearPrayerLeader(item.key); clear()" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" :aria-label="prayerLeaderClearLabel(item.key)">
+                                                                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
                                                                         </button>
                                                                         <span class="material-symbols-outlined text-[18px] text-secondary" aria-hidden="true">person</span>
                                                                     </div>
@@ -1096,8 +1096,9 @@
                                                             </div>
                                                         </div>
                                                     </template>
-                                                    <button x-show="canEdit && !prayerLeaderOpen(item.key)" type="button" @click.stop="addPrayerLeader(item.key)" class="text-[11px] font-label-md uppercase tracking-wider text-primary/70 hover:text-primary transition-colors flex items-center gap-1">
-                                                        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">add</span> Add prayer leader
+                                                    <button x-show="canEdit && !prayerLeaderOpen(item.key)" type="button" @click.stop="addPrayerLeader(item.key)" class="m-btn m-btn--quiet m-btn--sm">
+                                                        <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                                        <span class="m-btn__label">Add prayer leader</span>
                                                     </button>
                                                 </div>
                                             </template>

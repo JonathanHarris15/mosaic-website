@@ -10,10 +10,9 @@
 // is not blank, and it is not set either. A people element (Baptism) counts
 // only once somebody is on it — most Sundays have nobody, and that is not a
 // blank. A person event is unfinished until the person is named. Theme and
-// the key verse are not part of the tally. A prayer the
-// order allows someone else to pray is not part of the tally until a prayer
-// leader is added. An added leader with nobody named is unset. A blank
-// carriedBy box left in place so a picker has an object is not an added leader.
+// the key verse are not part of the tally. A prayer the order allows someone
+// else to pray stays out until that Sunday has a carriedBy entry for it. The
+// entry is the prayer leader: unset while nobody is named, set when a person is.
 //
 // Pass the congregation's catalog (LiturgyOrderStore.loadCatalog) as the
 // second argument; without one, every Sunday is read against Standard.
@@ -119,21 +118,17 @@
         return typeof value === 'string' && value.trim() ? 1 : 0;
     }
 
-    // null — leave it out. 'blank' — a prayer leader was added and nobody is
-    // named yet. 'set' — that person is named.
+    // null — leave it out. 'blank' — the Sunday added a prayer leader and
+    // nobody is named yet. 'set' — that person is named.
     //
-    // `prayedByOther` only allows an alternate. The editor used to drop an
-    // empty { name, id } on carriedBy so the picker had an object, and that
-    // scaffold counted as unfinished. `added: true` is the opt-in: the Sunday
-    // asked for a prayer leader and has not named one.
+    // `prayedByOther` only allows an alternate. The slot is the carriedBy
+    // entry itself: { id, name }. Absent, the service leader prays it.
     function prayerLeaderTally(service, el) {
         if (!el || el.kind !== 'prayer' || el.prayedByOther !== true) return null;
         const map = (service && service.carriedBy) || {};
         const ref = map[el.id];
         if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
-        if (personSet(ref)) return 'set';
-        if (ref.added === true) return 'blank';
-        return null;
+        return personSet(ref) ? 'set' : 'blank';
     }
 
     function checklist(svc, catalog) {

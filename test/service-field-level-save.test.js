@@ -22,7 +22,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const { flattenServiceForSave, changedFieldPaths } = require('../public/service-builder.js');
+const { flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, FIELD_DELETE } = require('../public/service-builder.js');
 
 // A minimal editor model, shaped the way service-builder holds it in memory.
 function model(overrides = {}) {
@@ -181,6 +181,31 @@ test('a changed array is replaced whole', () => {
 });
 
 // ── Notes ──────────────────────────────────────────────────────────────────
+
+test('taking a prayer leader off deletes that carriedBy path and nothing else', () => {
+    const before = flattenServiceForSave(model({
+        carriedBy: {
+            prayerOfPraise: { id: null, name: '' },
+            prayerOfConfession: { id: 'p1', name: 'Ada Example' },
+        },
+    }));
+    const after = flattenServiceForSave(model({
+        carriedBy: { prayerOfConfession: { id: 'p1', name: 'Ada Example' } },
+    }));
+    const update = changedFieldPaths(before, after);
+    assert.strictEqual(update['carriedBy.prayerOfPraise'], FIELD_DELETE);
+    assert.equal(Object.keys(update).length, 1);
+
+    const rebuilt = model({
+        carriedBy: {
+            prayerOfPraise: { id: null, name: '' },
+            prayerOfConfession: { id: 'p1', name: 'Ada Example' },
+        },
+    });
+    assert.strictEqual(applyFlatFieldPath(rebuilt, 'carriedBy.prayerOfPraise', FIELD_DELETE), true);
+    assert.equal(rebuilt.carriedBy.prayerOfPraise, undefined);
+    assert.equal(rebuilt.carriedBy.prayerOfConfession.name, 'Ada Example');
+});
 
 test('one note writes its own path, leaving other notes alone', () => {
     const before = flattenServiceForSave(model({ notes: { hymn1: 'check the key' } }));
