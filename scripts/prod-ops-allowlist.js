@@ -37,6 +37,7 @@ const ALLOWLIST_SORTED = [
     'reset-prayer-send-attempt.js',
     'set-liturgy-order-flags.js',
     'set-prayer-sms-answer-link.js',
+    'set-prayer-sms-reply-webhook.js',
     'sync-pastoral-prayer-dates.js',
     'textbelt-key-check.js',
     'textbelt-test-send.js',

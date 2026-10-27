@@ -4,8 +4,10 @@
  * and page (form) path share the note decision so a second note is never
  * minted. No network — the caller sends any thank-you.
  *
- * MS-768: reply and Answer-link form share one request doc; the first channel
- * wins and the second is deduped (see saveFormAnswer when source is reply).
+ * Reply and Answer-link form share one request doc. The newest submission
+ * replaces the text. The generated Shepherding Note is updated in place
+ * when nobody has edited it; a hand-edited note is left alone. An
+ * elder-typed request is not replaced.
  */
 
 const pr = require("./prayer-request");
@@ -24,51 +26,132 @@ function requestRef(db, personId, serviceDate) {
 }
 
 /**
- * Apply a texted reply: fill once, generate one note, record noteId.
- * @param {FirebaseFirestore.Firestore} db
- * @param {Object} args personId, serviceDate, replyText, now
- * @return {Promise<{filled: boolean, noteId: ?string}>}
+ * A text reply or Answer form replaces stored member text. An elder-typed
+ * request stays. No text yet is open.
+ * @param {?string} existingSource
+ * @param {boolean} hasExistingText
+ * @return {boolean}
  */
-async function applyReply(db, args) {
-  const text = String(args.replyText || "").trim();
+function memberChannelReplaces(existingSource, hasExistingText) {
+  if (!hasExistingText) return true;
+  return existingSource !== "elder";
+}
+
+/**
+ * Author stamped on the Shepherding Note the first time a channel writes it.
+ * A later channel updates the body and leaves this name.
+ * @param {string} source reply | form
+ * @return {string}
+ */
+function noteAuthorName(source) {
+  return source === "reply" ?
+    "Prayer Request (texted)" : "Prayer Request (form)";
+}
+
+/**
+ * Store a member's reply or form text. Newest wins. One note.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {Object} args personId, serviceDate, text, source, now
+ * @return {Promise<{stored: boolean, noteId: ?string, replaced: boolean}>}
+ */
+async function writeMemberChannel(db, args) {
+  const text = String(args.text || "").trim();
+  const source = args.source === "form" ? "form" :
+    (args.source === "reply" ? "reply" : "");
   const {personId, serviceDate} = args;
-  if (!personId || !serviceDate || !text) {
-    return {filled: false, noteId: null};
+  if (!personId || !serviceDate || !text || !source) {
+    return {stored: false, noteId: null, replaced: false};
   }
   const personRef = db.collection("people").doc(personId);
   const reqRef = requestRef(db, personId, serviceDate);
   const [personSnap, reqSnap] = await Promise.all([
     personRef.get(), reqRef.get(),
   ]);
-  if (reqSnap.exists && (reqSnap.data().prayerRequest || "").trim()) {
-    return {filled: false, noteId: null};
+  const req = reqSnap.exists ? (reqSnap.data() || {}) : {};
+  const existing = String(req.prayerRequest || "").trim();
+  const existingSource = req.prayerRequestSource || null;
+  if (!memberChannelReplaces(existingSource, !!existing)) {
+    return {stored: false, noteId: req.noteId || null, replaced: false};
   }
+  if (existing === text && existingSource === source) {
+    return {stored: false, noteId: req.noteId || null, replaced: false};
+  }
+
+  const hadRequestBefore = !!existing;
+  let noteText = null;
+  if (req.noteId) {
+    const noteSnap = await personRef.collection("shepherding_notes")
+        .doc(req.noteId).get();
+    noteText = noteSnap.exists ? (noteSnap.data().content || "") : null;
+  }
+  const decision = pr.prayerRequestNoteDecision({
+    hadRequestBefore,
+    noteId: req.noteId || null,
+    noteText,
+    noteGeneratedText: req.noteGeneratedText || null,
+  });
+  const now = args.now || new Date();
   const personName = personSnap.exists ? (personSnap.data().name || "") : "";
   const note = pr.buildPrayerRequestNote({
     personName, serviceDate, requestText: text,
   });
-  const now = args.now || new Date();
-  const noteRef = personRef.collection("shepherding_notes").doc();
-  await noteRef.set({
-    type: note.type,
-    subject: note.subject,
-    content: note.content,
-    contentJson: note.contentJson,
-    authorName: "Prayer Request (texted)",
-    authorUid: null,
-    createdAt: now,
-  });
+  let noteId = req.noteId || null;
+  let noteGeneratedText = req.noteGeneratedText || null;
+  if (decision.action === "create") {
+    const noteRef = personRef.collection("shepherding_notes").doc();
+    await noteRef.set({
+      type: note.type,
+      subject: note.subject,
+      content: note.content,
+      contentJson: note.contentJson,
+      authorName: noteAuthorName(source),
+      authorUid: null,
+      createdAt: now,
+    });
+    noteId = noteRef.id;
+    noteGeneratedText = text;
+    await personRef.update({lastNoteAt: now});
+  } else if (decision.action === "update" && noteId) {
+    await personRef.collection("shepherding_notes").doc(noteId).update({
+      content: note.content,
+      contentJson: note.contentJson,
+    });
+    noteGeneratedText = text;
+  }
+
   await reqRef.set({
     serviceDate,
     prayerRequest: text,
-    prayerRequestSource: "reply",
-    requestFilledAt: now,
+    prayerRequestSource: source,
+    requestFilledAt: req.requestFilledAt || now,
+    changedAt: now,
     noteGenerated: true,
-    noteId: noteRef.id,
-    noteGeneratedText: text,
+    noteId,
+    noteGeneratedText,
   }, {merge: true});
-  await personRef.update({lastNoteAt: now});
-  return {filled: true, noteId: noteRef.id};
+  return {stored: true, noteId, replaced: hadRequestBefore};
+}
+
+/**
+ * Apply a texted reply. A later reply replaces a form answer or an
+ * earlier reply. An elder-typed request is left alone.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {Object} args personId, serviceDate, replyText, now
+ * @return {Promise<{filled: boolean, noteId: ?string, replaced: boolean}>}
+ */
+async function applyReply(db, args) {
+  const written = await writeMemberChannel(db, {
+    personId: args.personId,
+    serviceDate: args.serviceDate,
+    text: args.replyText,
+    source: "reply",
+    now: args.now,
+  });
+  return {
+    filled: written.stored,
+    noteId: written.noteId,
+    replaced: written.replaced,
+  };
 }
 
 /**
@@ -146,76 +229,15 @@ async function saveFormAnswer(db, args) {
   }
 
   const {personId, serviceDate} = args;
-  const now = args.now || new Date();
-  const personRef = db.collection("people").doc(personId);
-  const reqRef = requestRef(db, personId, serviceDate);
-  const req = loaded.req || {};
-  const hadRequestBefore = !!(req.prayerRequest || "").trim();
-
-  if (hadRequestBefore && req.prayerRequestSource === "reply") {
-    return {
-      ok: true,
-      view: loaded.view,
-      noteId: req.noteId || null,
-    };
-  }
-
-  let noteText = null;
-  if (req.noteId) {
-    const noteSnap = await personRef.collection("shepherding_notes")
-        .doc(req.noteId).get();
-    noteText = noteSnap.exists ? (noteSnap.data().content || "") : null;
-  }
-  const decision = pr.prayerRequestNoteDecision({
-    hadRequestBefore,
-    noteId: req.noteId || null,
-    noteText,
-    noteGeneratedText: req.noteGeneratedText || null,
-  });
-
-  let noteId = req.noteId || null;
-  let noteGeneratedText = req.noteGeneratedText || null;
-  const personName = loaded.personSnap && loaded.personSnap.exists ?
-    (loaded.personSnap.data().name || "") : "";
-  const note = pr.buildPrayerRequestNote({
-    personName, serviceDate, requestText: text,
-  });
-
-  if (decision.action === "create") {
-    const noteRef = personRef.collection("shepherding_notes").doc();
-    await noteRef.set({
-      type: note.type,
-      subject: note.subject,
-      content: note.content,
-      contentJson: note.contentJson,
-      authorName: "Prayer Request (form)",
-      authorUid: null,
-      createdAt: now,
-    });
-    noteId = noteRef.id;
-    noteGeneratedText = text;
-    await personRef.update({lastNoteAt: now});
-  } else if (decision.action === "update" && noteId) {
-    await personRef.collection("shepherding_notes").doc(noteId).update({
-      content: note.content,
-      contentJson: note.contentJson,
-    });
-    noteGeneratedText = text;
-  }
-
-  await reqRef.set({
+  const written = await writeMemberChannel(db, {
+    personId,
     serviceDate,
-    prayerRequest: text,
-    prayerRequestSource: "form",
-    requestFilledAt: req.requestFilledAt || now,
-    changedAt: now,
-    noteGenerated: true,
-    noteId,
-    noteGeneratedText,
-  }, {merge: true});
-
+    text,
+    source: "form",
+    now: args.now,
+  });
   const after = await loadPrayerAnswerState(db, args);
-  return {ok: true, view: after.view, noteId};
+  return {ok: true, view: after.view, noteId: written.noteId};
 }
 
 /**

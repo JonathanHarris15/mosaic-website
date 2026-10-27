@@ -1,5 +1,9 @@
 /**
- * Send one Textbelt SMS to Jonathan Harris's phone only — no replyWebhookUrl.
+ * Send one Textbelt SMS to Jonathan Harris's phone only.
+ *
+ * The default payload omits replyWebhookUrl. --with-reply-webhook attaches
+ * the church smsInbound URL and nothing else. It does not flip
+ * includeReplyWebhookInSms. Prove that send before the flag script.
  *
  *   node scripts/textbelt-test-send.js \
  *       --project mosaic-hymn-database --i-mean-prod
@@ -18,6 +22,7 @@
  * only him. It does not edit a live Sunday.
  */
 
+const path = require('path');
 const admin = require('firebase-admin');
 const answerDoor = require('../functions/answer-link-door');
 const liturgyCatalog = require('../functions/liturgy-catalog');
@@ -26,6 +31,7 @@ const {
     fetchTextbeltKeyFromSecretManager,
 } = require('./textbelt-key-lib');
 const {executeTextbeltTestSend} = require('./textbelt-test-send-lib');
+const {loadProject} = require('./firebase-project');
 
 /**
  * @param {string} projectId
@@ -55,12 +61,16 @@ function serviceDocRow(doc) {
 async function main() {
     const commit = process.argv.includes('--commit');
     const withUrl = process.argv.includes('--with-url');
+    const withReplyWebhook = process.argv.includes('--with-reply-webhook');
     const projectId = require('./firebase-project').requireProject(process.argv);
+    const project = loadProject(path.join(__dirname, '..'), projectId);
     const db = initAdmin(projectId);
 
     await executeTextbeltTestSend({
         commit,
         withUrl,
+        withReplyWebhook,
+        replyWebhookUrl: withReplyWebhook ? project.smsReplyWebhookUrl : '',
         db,
         now: () => new Date(),
         listServiceDocs: async (todayDate, horizon) => {

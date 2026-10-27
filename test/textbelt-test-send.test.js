@@ -10,6 +10,8 @@ const {
     phoneFromPerson,
     isJonathanHarris,
     textbeltPayload,
+    resolveSmokeReplyWebhook,
+    CHURCH_SMS_REPLY_WEBHOOK_URL,
     JONATHAN_HARRIS_NAME,
     JONATHAN_HARRIS_PERSON_ID,
     JONATHAN_HARRIS_PHONE_E164,
@@ -418,6 +420,8 @@ function serviceNamingJonathan() {
  * @typedef {Object} HarnessOverrides
  * @property {boolean} [commit]
  * @property {boolean} [withUrl]
+ * @property {boolean} [withReplyWebhook]
+ * @property {string} [replyWebhookUrl]
  * @property {ReturnType<typeof jonathanDb>} [db]
  * @property {{includeAnswerLinkInSms?: boolean, includeReplyWebhookInSms?: boolean}} [config]
  * @property {{name?: string, contact?: {phone?: string}}} [person]
@@ -438,7 +442,7 @@ function withUrlDeps(overrides) {
     const db = settings.db || jonathanDb(settings);
     /** @type {Array<{purpose: string, personId: string, thing: string, now: Date}>} */
     const mints = [];
-    /** @type {Array<{phone: string, message: string, key: string}>} */
+    /** @type {Array<{phone: string, message: string, key: string, replyWebhookUrl?: string}>} */
     const posts = [];
     /** @type {string[]} */
     const lines = [];
@@ -448,6 +452,8 @@ function withUrlDeps(overrides) {
     const deps = {
         commit: !!settings.commit,
         withUrl: settings.withUrl !== false,
+        withReplyWebhook: !!settings.withReplyWebhook,
+        replyWebhookUrl: settings.replyWebhookUrl || '',
         db,
         now: () => NOW,
         listServiceDocs: async () => (settings.services || [
@@ -561,6 +567,28 @@ test('--with-url commit mints a real token and sends one SMS without a webhook',
     assert.match(harness.lines.join('\n'), /tokenPath: \/a\//);
 });
 
+test('--with-url commit keeps the church webhook when --with-reply-webhook is set', async () => {
+    const harness = withUrlDeps({
+        commit: true,
+        withReplyWebhook: true,
+        replyWebhookUrl: CHURCH_SMS_REPLY_WEBHOOK_URL,
+    });
+    harness.deps.db = jonathanDb({
+        config: {
+            includeAnswerLinkInSms: true,
+            includeReplyWebhookInSms: false,
+        },
+    });
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, true);
+    assert.equal(harness.posts.length, 1);
+    assert.equal(harness.posts[0].phone, '+15805043816');
+    assert.equal(harness.posts[0].replyWebhookUrl, CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.equal(harness.posts[0].message.includes(harness.url), true);
+    assert.match(harness.lines.join('\n'), new RegExp(
+        'replyWebhookUrl: ' + CHURCH_SMS_REPLY_WEBHOOK_URL.replace(/[.]/g, '\\.')));
+});
+
 test('--with-url commit refuses before minting when the flag is off or the box is full', async () => {
     const off = withUrlDeps({commit: true});
     off.deps.db = jonathanDb({
@@ -617,15 +645,92 @@ test('plain smoke still omits the webhook and does not mint', async () => {
     assert.equal(harness.posts.length, 0);
 });
 
-test('the prod script mints through answer-link-door and never sets a webhook', () => {
+test('plain commit sends one SMS and omits replyWebhookUrl', async () => {
+    const harness = withUrlDeps({commit: true, withUrl: false});
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, true);
+    assert.equal(harness.mints.length, 0);
+    assert.equal(harness.posts.length, 1);
+    assert.equal(harness.posts[0].phone, '+15805043816');
+    assert.equal('replyWebhookUrl' in harness.posts[0], false);
+    assert.match(harness.posts[0].message, /no reply webhook/);
+    assert.match(harness.lines.join('\n'), /replyWebhookUrl: \(omitted\)/);
+});
+
+test('the prod script mints through answer-link-door; webhook is opt-in', () => {
     const src = fs.readFileSync(
         path.join(__dirname, '..', 'scripts', 'textbelt-test-send.js'), 'utf8');
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '');
     assert.match(src, /answer-link-door/);
     assert.match(code, /answerDoor\.mintAnswerLink\(db,\s*mintArgs\)/);
     assert.match(code, /--with-url/);
-    assert.doesNotMatch(code, /replyWebhookUrl/);
+    assert.match(code, /--with-reply-webhook/);
+    assert.match(code, /withReplyWebhook/);
+    assert.match(code, /smsReplyWebhookUrl/);
+    assert.doesNotMatch(code, /cloudfunctions\.net/);
     assert.doesNotMatch(src, /textbelt-url-smoke/);
+});
+
+test('textbeltPayload includes the church webhook only when asked', () => {
+    const plain = textbeltPayload('+15551234567', 'hi', 'key-1');
+    assert.equal('replyWebhookUrl' in plain, false);
+    const hooked = textbeltPayload(
+        '+15551234567', 'hi', 'key-1', CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.equal(hooked.replyWebhookUrl, CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.equal(resolveSmokeReplyWebhook(false, CHURCH_SMS_REPLY_WEBHOOK_URL), '');
+    assert.equal(
+        resolveSmokeReplyWebhook(true, CHURCH_SMS_REPLY_WEBHOOK_URL),
+        CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.throws(
+        () => resolveSmokeReplyWebhook(true, 'https://example.com/smsInbound'),
+        /church smsInbound/);
+});
+
+test('--with-reply-webhook dry-run names the church webhook and does not send', async () => {
+    const harness = withUrlDeps({
+        commit: false,
+        withUrl: false,
+        withReplyWebhook: true,
+        replyWebhookUrl: CHURCH_SMS_REPLY_WEBHOOK_URL,
+    });
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, false);
+    assert.equal(harness.posts.length, 0);
+    assert.equal(harness.keyLoads(), 0);
+    assert.match(harness.lines.join('\n'), new RegExp(
+        'replyWebhookUrl: ' + CHURCH_SMS_REPLY_WEBHOOK_URL.replace(/[.]/g, '\\.')));
+});
+
+test('--with-reply-webhook commit sends one SMS to Jonathan with the webhook', async () => {
+    const harness = withUrlDeps({
+        commit: true,
+        withUrl: false,
+        withReplyWebhook: true,
+        replyWebhookUrl: CHURCH_SMS_REPLY_WEBHOOK_URL,
+    });
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, true);
+    assert.equal(result.textId, 'tb_1');
+    assert.equal(harness.mints.length, 0);
+    assert.equal(harness.posts.length, 1);
+    assert.equal(harness.posts[0].phone, '+15805043816');
+    assert.equal(harness.posts[0].replyWebhookUrl, CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.match(harness.posts[0].message, /reply webhook on/);
+    assert.doesNotMatch(harness.posts[0].message, /no reply webhook/);
+});
+
+test('--with-reply-webhook refuses a non-church URL before sending', async () => {
+    const harness = withUrlDeps({
+        commit: true,
+        withUrl: false,
+        withReplyWebhook: true,
+        replyWebhookUrl:
+            'https://us-central1-mosaic-manager-ghost.cloudfunctions.net/smsInbound',
+    });
+    await assert.rejects(
+        () => executeTextbeltTestSend(harness.deps),
+        /church smsInbound/);
+    assert.equal(harness.posts.length, 0);
 });
 
 test('plan stays open for a form submit on the chosen Sunday', () => {
