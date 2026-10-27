@@ -579,13 +579,28 @@
             field-sizing: content;
             caret-color: currentColor;
         }
-        /* An empty blank is one line: a long name clips with an ellipsis.
-           A value leaves :placeholder-shown, so it wraps and the box grows. */
+        /* An empty name stays one line and clips inside the row it already
+           has. field-sizing stays fixed, with width 100% and min-width 0, so
+           the name is not the blank's min-content. nowrap plus
+           field-sizing: content was sizing the control to the whole name and
+           the row grew past the card. A value leaves :placeholder-shown and
+           sizes to its words. Do not zero min-width on every ancestor of a
+           blank: that shrinks a value that already fits onto a second line. */
         textarea.pv-fill.pv-fill--text:placeholder-shown,
         input.pv-fill:placeholder-shown {
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
+            field-sizing: fixed;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+        /* A name that follows a label in the same row keeps a gap, so the two
+           do not read as one word. A blank that is the whole line — a title,
+           a prompt — is the first child and stays put. */
+        :where(:not(li):not(.pv-fill-extra):not(:first-child):has(> .pv-fill:placeholder-shown)) {
+            padding-inline-start: 0.5em;
         }
         textarea.pv-fill.pv-fill--text::placeholder,
         input.pv-fill::placeholder {
