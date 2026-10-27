@@ -242,7 +242,12 @@ function pastoralSunday(service, date, elements) {
 
 // The editor's carriedBy map. One shape: { id, name }. A present key is a
 // prayer leader. Nobody named is an empty slot, still in the tally.
+/**
+ * @param {any} raw
+ * @return {Record<string, {name: string, id: any}>}
+ */
 function editorCarriedBy(raw) {
+    /** @type {Record<string, {name: string, id: any}>} */
     const carriedBy = {};
     Object.entries(raw || {}).forEach(([key, ref]) => {
         if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return;
@@ -251,6 +256,10 @@ function editorCarriedBy(raw) {
     return carriedBy;
 }
 
+/**
+ * @param {any} ref
+ * @return {boolean}
+ */
 function slotNamed(ref) {
     if (!ref || typeof ref !== 'object') return false;
     const name = ref.name != null && String(ref.name).trim();
@@ -300,9 +309,15 @@ function flattenServiceForSave(service) {
 // A hymn is {id, name} chosen as one act, so the SLOT is the unit; splitting
 // it could leave an id pointing at one hymn and a name reading another. Arrays
 // are compared whole and replaced whole — a list is edited as a list.
+/**
+ * @param {any} before
+ * @param {any} after
+ * @return {Record<string, any>}
+ */
 function changedFieldPaths(before, after) {
     const same = (a, b) => JSON.stringify(a === undefined ? null : a) ===
                            JSON.stringify(b === undefined ? null : b);
+    /** @type {Record<string, any>} */
     const update = {};
 
     for (const [key, val] of Object.entries(after || {})) {
@@ -2108,6 +2123,11 @@ function serviceForm() {
             return d.textContent || d.innerText || '';
         },
 
+        /**
+         * @param {any} el
+         * @param {any} lit
+         * @param {any} tally
+         */
         _buildItem(el, lit, tally) {
             const key = el.id;
             const type = this._ROW_TYPES[el.primitive];
@@ -2135,7 +2155,9 @@ function serviceForm() {
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
                 if (!el.requests && el.prayedByOther) {
-                    const leader = (tally || []).find(item => item.key === el.id && item.part === 'leader');
+                    const leader = (tally || []).find(function (/** @type {any} */ item) {
+                        return item.key === el.id && item.part === 'leader';
+                    });
                     const who = liturgyCore().carrierOf(this.service, el);
                     if (leader && leader.state === 'set' && who) {
                         value = who.name;
@@ -2482,28 +2504,46 @@ function serviceForm() {
         // ── People elements (Baptism Candidates, or any other) ───────────────
         // A prayer leader counts only after one is added (MS-808). The order's
         // "may pray" flag leaves the box closed; this opens an empty slot.
+        /**
+         * @param {string} key
+         */
         prayerLeaderClearLabel(key) {
-            const ref = this.service.carriedBy && this.service.carriedBy[key];
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy || {});
+            const ref = carried[key];
             return slotNamed(ref) ? 'Clear prayer leader' : 'Remove prayer leader';
         },
+        /**
+         * @param {string} key
+         */
         prayerLeaderOpen(key) {
             if (!window.HomeDashboard || !window.HomeDashboard.prayerLeaderTally) return false;
-            const el = (this.orderElements || []).find(item => item && item.id === key);
+            const el = (this.orderElements || []).find(function (/** @type {any} */ item) {
+                return item && item.id === key;
+            });
             return !!window.HomeDashboard.prayerLeaderTally(this.service, el);
         },
+        /**
+         * @param {string} key
+         */
         addPrayerLeader(key) {
             if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') {
                 this.service.carriedBy = {};
             }
-            const current = this.service.carriedBy[key];
+            const carried = /** @type {Record<string, any>} */ (this.service.carriedBy);
+            const current = carried[key];
             if (current && typeof current === 'object' && !Array.isArray(current)) return;
-            this.service.carriedBy[key] = { name: '', id: null };
+            carried[key] = { name: '', id: null };
         },
         // A named leader clears back to an empty slot, which stays in the
         // tally. Clearing that empty slot removes it.
+        /**
+         * @param {string} key
+         */
         clearPrayerLeader(key) {
-            const map = this.service.carriedBy;
-            const ref = map && map[key];
+            const raw = this.service.carriedBy;
+            if (!raw || typeof raw !== 'object') return;
+            const map = /** @type {Record<string, any>} */ (raw);
+            const ref = map[key];
             if (!ref || typeof ref !== 'object') return;
             if (slotNamed(ref)) {
                 ref.id = null;

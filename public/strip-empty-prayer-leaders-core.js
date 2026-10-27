@@ -26,6 +26,7 @@
         if (!map || typeof map !== 'object' || Array.isArray(map)) {
             return {deletePaths: []};
         }
+        /** @type {string[]} */
         const deletePaths = [];
         Object.keys(map).forEach(function (key) {
             if (namesNobody(map[key])) deletePaths.push('carriedBy.' + key);

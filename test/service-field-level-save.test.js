@@ -40,6 +40,7 @@ function model(overrides = {}) {
         isIrregular: false,
         irregularElements: [],
         notes: {},
+        carriedBy: /** @type {Record<string, { id: any, name: string }>} */ ({}),
         liturgy: {
             preparatoryHymn: { id: null, name: '' },
             callToWorship: '',

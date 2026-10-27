@@ -236,19 +236,19 @@ test('a may-pray row does not ask for a name until a leader is added', () => {
     form.liturgyCatalog = catalog;
     form._ensureLiturgySlots();
 
-    const closed = form.rows.find(function (row) { return row.key === praiseId; });
+    const closed = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
     assert.equal(closed.value, '');
     assert.equal(closed.emptyLabel, '');
     assert.equal(closed.status, 'empty');
 
     form.addPrayerLeader(praiseId);
-    const open = form.rows.find(function (row) { return row.key === praiseId; });
+    const open = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
     assert.equal(open.value, '');
     assert.equal(open.emptyLabel, 'Name who prays…');
 
     form.service.carriedBy[praiseId].id = 'p1';
     form.service.carriedBy[praiseId].name = 'Ada Example';
-    const named = form.rows.find(function (row) { return row.key === praiseId; });
+    const named = form.rows.find(function (/** @type {any} */ row) { return row.key === praiseId; });
     assert.equal(named.value, 'Ada Example');
     assert.equal(named.emptyLabel, '');
     assert.equal(named.status, 'people');

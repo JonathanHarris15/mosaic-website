@@ -123,6 +123,11 @@
     //
     // `prayedByOther` only allows an alternate. The slot is the carriedBy
     // entry itself: { id, name }. Absent, the service leader prays it.
+    /**
+     * @param {any} service
+     * @param {any} el
+     * @return {null | 'blank' | 'set'}
+     */
     function prayerLeaderTally(service, el) {
         if (!el || el.kind !== 'prayer' || el.prayedByOther !== true) return null;
         const map = (service && service.carriedBy) || {};
@@ -135,9 +140,17 @@
         const service = svc || {};
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
+        /** @type {Array<{key: any, label: any, state: any, part?: string}>} */
         const items = [];
 
+        /**
+         * @param {any} key
+         * @param {any} label
+         * @param {any} state
+         * @param {string} [part]
+         */
         function add(key, label, state, part) {
+            /** @type {{key: any, label: any, state: any, part?: string}} */
             const item = { key: key, label: label, state: state };
             if (part) item.part = part;
             items.push(item);
