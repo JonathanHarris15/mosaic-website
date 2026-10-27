@@ -32,7 +32,7 @@ gh workflow run "Prod ops script" --ref main \
 
 ## 2. Turn the flag on
 
-Only after step 1's commit log shows `success` and a `textId`, and the functions deploy from this change is green. Hosting and Functions deploy on push to `main`. The flag is a separate dispatch. Replies that arrive before that deploy still hit the previous `smsInbound`, which did not apply newest-wins.
+Only after step 1's commit log shows `success` and a `textId`, and a functions deploy whose log lists `functions:smsInbound` in `targets=` is green. Hosting and Functions deploy on push to `main`. The flag is a separate dispatch. `answerLink` ships the form path. Text replies are `smsInbound`. A green deploy that omits `functions:smsInbound` leaves the previous reply handler in place.
 
 | `script` | `args` | `commit` |
 | --- | --- | --- |
