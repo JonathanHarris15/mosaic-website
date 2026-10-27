@@ -645,6 +645,18 @@ test('plain smoke still omits the webhook and does not mint', async () => {
     assert.equal(harness.posts.length, 0);
 });
 
+test('plain commit sends one SMS and omits replyWebhookUrl', async () => {
+    const harness = withUrlDeps({commit: true, withUrl: false});
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, true);
+    assert.equal(harness.mints.length, 0);
+    assert.equal(harness.posts.length, 1);
+    assert.equal(harness.posts[0].phone, '+15805043816');
+    assert.equal('replyWebhookUrl' in harness.posts[0], false);
+    assert.match(harness.posts[0].message, /no reply webhook/);
+    assert.match(harness.lines.join('\n'), /replyWebhookUrl: \(omitted\)/);
+});
+
 test('the prod script mints through answer-link-door; webhook is opt-in', () => {
     const src = fs.readFileSync(
         path.join(__dirname, '..', 'scripts', 'textbelt-test-send.js'), 'utf8');

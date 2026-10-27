@@ -238,6 +238,18 @@ test('a hand-edited note stays while the request text updates', async () => {
     assert.equal(req.noteGeneratedText, 'First');
 });
 
+test('an empty reply does not fill the request', async () => {
+    const db = memoryDb();
+    await seed(db);
+    const reply = await writes.applyReply(db, {
+        personId: JANE, serviceDate: SERVICE, replyText: '   ', now: NOW,
+    });
+    assert.equal(reply.filled, false);
+    assert.equal(reply.noteId, null);
+    assert.equal((await request(db).get()).exists, false);
+    assert.equal((await notes(db).get()).size, 0);
+});
+
 test('an elder-typed request is not replaced by a reply or a form', async () => {
     const db = memoryDb();
     await seed(db);
