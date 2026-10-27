@@ -2856,12 +2856,11 @@ exports.smsInbound = onRequest(
 );
 
 /**
- * Applies a pastoral-prayer subject's texted reply: fills that Sunday's
- * Prayer Request (once), generates a "Prayer Request" Shepherding Note,
- * and sends the thank-you. No date cutoff — a reply is accepted whenever
- * it arrives, as long as the request is still empty. A reply for an
- * already-filled request is ignored so a second reply can't duplicate
- * the note.
+ * Applies a pastoral-prayer subject's texted reply. The newest reply
+ * replaces a form answer or an earlier reply and updates the generated
+ * Shepherding Note in place. An elder-typed request is left alone. The
+ * thank-you goes out whenever the reply is stored, including a replacement.
+ * No date cutoff.
  * @param {Object} db Firestore instance.
  * @param {Object} args personId, serviceDate, and replyText.
  * @return {Promise<void>}

@@ -2,7 +2,7 @@
 
 URL-bearing smoke and the `includeAnswerLinkInSms` flag live in [MS-768 — Answer link in prayer SMS](./ms-768-prayer-sms-answer-link.md). This note stays the no-webhook send. Do not pass `--with-url` here.
 
-Unverified Textbelt keys reject sends when `replyWebhookUrl` is present, even if the SMS body has no `https://` link. Until the church account is verified, `app_config/prayer_request_sms.includeReplyWebhookInSms` stays **false** (default). Inbound SMS replies will not route until that flag is turned on after verification.
+Unverified Textbelt keys reject sends when `replyWebhookUrl` is present, even if the SMS body has no `https://` link. Leave `includeReplyWebhookInSms` off until a Jonathan-only send with `--with-reply-webhook` is accepted. That proof and the flag script are in [Reply webhook flag](./ms-prayer-sms-reply-webhook-flag.md). Do not pass `--with-reply-webhook` on this note's smoke. Inbound SMS replies do not route while the flag is off.
 
 ## After deploy (functions)
 

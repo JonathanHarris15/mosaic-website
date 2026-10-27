@@ -4,6 +4,8 @@
 Accepted.
 
 > **Premise updated by [ADR 0036](0036-a-notification-picks-its-channel-and-delivery-is-best-effort.md).** A text is no longer the only way Mosaic reaches somebody, so the `sms_messages` log below is **renamed `notifications`** and gains a `channel`. Reply correlation stops being the log's reason for existing and becomes a field on an SMS row. Everything decided here about **trust** stands unchanged: the HMAC signature on `smsInbound` is still the boundary, and the log is still used for routing only. The decision reads as written at the time.
+>
+> **Fill rule updated 2026-10-27.** "Fills that Sunday's request (once)" below is no longer the product rule. A later text reply or Answer-form submission replaces the stored request and updates the generated Shepherding Note in place. The thank-you still goes out when a reply is stored. An elder-typed request is not replaced. See `docs/ops/ms-prayer-sms-reply-webhook-flag.md`.
 
 ## Context
 A pastoral-prayer subject is texted (via Textbelt) to ask what they'd like the church to pray about, and their reply must become that Sunday's Prayer Request — written to the elder-only `people/{id}/prayer_requests/{serviceDate}` record described in [ADR 0007](./0007-prayer-request-one-time-generation.md).

@@ -57,6 +57,7 @@ gh workflow run "Prod ops script" --ref main \
 | `textbelt-test-send.js` | [P0 prayer SMS — Textbelt smoke](./ms-prayer-sms-textbelt-reply-webhook.md) (empty `args`). [`--with-url`](./ms-768-prayer-sms-answer-link.md) mints a real Answer link for Jonathan Harris only. If no Sunday in the next 21 days names him, the date is `2099-06-08` and commit creates that ops service when it is absent. It does not edit a live Sunday. |
 | `textbelt-key-check.js` | Key prefix + whitelist match + Textbelt quota (`--with-url` = Jonathan dry-run with link; does not send) |
 | `set-prayer-sms-answer-link.js` | [MS-768 — Answer link in prayer SMS](./ms-768-prayer-sms-answer-link.md) (empty `args`; `commit=true` merges `includeAnswerLinkInSms: true`) |
+| `set-prayer-sms-reply-webhook.js` | [Reply webhook flag](./ms-prayer-sms-reply-webhook-flag.md) (empty `args`; `commit=true` merges `includeReplyWebhookInSms: true`). Run only after the Jonathan-only `--with-reply-webhook` send is accepted. |
 | `prayer-request-send-preview.js` | Dry-run pastoral-prayer SMS recipients and bodies (optional `--service-date`) |
 | `prayer-text-notifications-audit.js` | Read-only prayer text failures in `notifications` since `--since` (default `2026-10-13`) |
 | `reset-prayer-send-attempt.js` | [P0 prayer SMS — clear send attempt](./ms-prayer-sms-textbelt-reply-webhook.md) (`--service-date`, `--ids`) |

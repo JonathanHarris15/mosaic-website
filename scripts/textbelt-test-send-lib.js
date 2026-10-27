@@ -30,6 +30,17 @@ const JONATHAN_HARRIS_PHONE_E164 = '+15805043816';
 const DEFAULT_MESSAGE =
     'Mosaic Church Textbelt smoke test (no reply webhook).';
 
+/** Body for the Jonathan-only send that attaches replyWebhookUrl. */
+const WEBHOOK_SMOKE_MESSAGE =
+    'Mosaic Church Textbelt smoke test (reply webhook on).';
+
+/**
+ * Church smsInbound. --with-reply-webhook refuses any other URL so a
+ * ghost project cannot be handed this church's replies, or the reverse.
+ */
+const CHURCH_SMS_REPLY_WEBHOOK_URL =
+    'https://us-central1-mosaic-hymn-database.cloudfunctions.net/smsInbound';
+
 /**
  * Answer links die 21 days after minting (answer-link.js). A congregational
  * Sunday past that horizon is not used. The ops date below is later than the
@@ -84,6 +95,7 @@ const DRY_RUN_ANSWER_URL = `${al.SITE_ORIGIN}/a/<token>`;
  * @property {string} phone
  * @property {string} message
  * @property {string} key
+ * @property {string} [replyWebhookUrl]
  */
 
 /**
@@ -134,6 +146,7 @@ const DRY_RUN_ANSWER_URL = `${al.SITE_ORIGIN}/a/<token>`;
  * @property {string} answerUrl
  * @property {boolean} includeAnswerLinkInSms
  * @property {boolean} includeReplyWebhookInSms
+ * @property {string} [replyWebhookUrl] set on the send, not read from config
  * @property {string|null} existingPrayerRequest
  * @property {CommitDecision} commitDecision
  * @property {boolean} opsSmoke
@@ -334,6 +347,8 @@ const DRY_RUN_ANSWER_URL = `${al.SITE_ORIGIN}/a/<token>`;
  * @typedef {Object} ExecuteArgs
  * @property {boolean} [commit]
  * @property {boolean} [withUrl]
+ * @property {boolean} [withReplyWebhook]
+ * @property {string} [replyWebhookUrl]
  * @property {FirestoreLike} db
  * @property {LogLine} [log]
  * @property {NowFn} [now]
@@ -398,14 +413,36 @@ function isJonathanHarris(name) {
 }
 
 /**
- * Textbelt payload without replyWebhookUrl.
+ * Textbelt payload. replyWebhookUrl is included only when the caller
+ * passes the church smsInbound URL (--with-reply-webhook).
  * @param {string} to E.164
  * @param {string} body
  * @param {string} key
+ * @param {string} [replyWebhookUrl]
  * @return {TextbeltPayload}
  */
-function textbeltPayload(to, body, key) {
-    return {phone: to, message: body, key};
+function textbeltPayload(to, body, key, replyWebhookUrl) {
+    /** @type {TextbeltPayload} */
+    const payload = {phone: to, message: body, key};
+    const url = typeof replyWebhookUrl === 'string' ? replyWebhookUrl.trim() : '';
+    if (url) payload.replyWebhookUrl = url;
+    return payload;
+}
+
+/**
+ * @param {boolean} withReplyWebhook
+ * @param {string|undefined} replyWebhookUrl
+ * @return {string} church smsInbound URL, or empty when the flag is off
+ */
+function resolveSmokeReplyWebhook(withReplyWebhook, replyWebhookUrl) {
+    if (!withReplyWebhook) return '';
+    const url = typeof replyWebhookUrl === 'string' ? replyWebhookUrl.trim() : '';
+    if (url !== CHURCH_SMS_REPLY_WEBHOOK_URL) {
+        throw new Error(
+            '--with-reply-webhook requires the church smsInbound URL ' +
+            `(${CHURCH_SMS_REPLY_WEBHOOK_URL}).`);
+    }
+    return url;
 }
 
 /**
@@ -917,7 +954,7 @@ function formatWithUrlPlan(plan, mode, minted) {
         `serviceDateReason: ${plan.serviceDateReason}`,
         `includeAnswerLinkInSms: ${plan.includeAnswerLinkInSms}`,
         `includeReplyWebhookInSms: ${plan.includeReplyWebhookInSms} ` +
-            '(unchanged; omitted from this send)',
+            '(config unchanged)',
         `existingPrayerRequest: ${plan.existingPrayerRequest || '(none)'}`,
         `mayAnswer: ${plan.mayAnswerRule}`,
         minted ? `answerUrl: ${plan.answerUrl}` : 'answerUrl: (not minted)',
@@ -926,7 +963,9 @@ function formatWithUrlPlan(plan, mode, minted) {
             'tokenPath: (minted on --commit)',
         'body:',
         plan.body,
-        'replyWebhookUrl: (omitted)',
+        plan.replyWebhookUrl ?
+            `replyWebhookUrl: ${plan.replyWebhookUrl}` :
+            'replyWebhookUrl: (omitted)',
     ];
     if (plan.opsSmoke) {
         lines.push(`opsService: ${plan.opsService}`);
@@ -998,6 +1037,9 @@ async function loadSundayRows(listServiceDocs, catalog, todayDate, personId) {
 async function executeTextbeltTestSend(args) {
     const commit = !!(args && args.commit);
     const withUrl = !!(args && args.withUrl);
+    const webhookUrl = resolveSmokeReplyWebhook(
+        !!(args && args.withReplyWebhook),
+        args && args.replyWebhookUrl);
     const db = args.db;
     /** @type {LogLine} */
     const log = args.log || function(line) {
@@ -1010,14 +1052,16 @@ async function executeTextbeltTestSend(args) {
     const to = resolved.to;
 
     if (!withUrl) {
-        const body = DEFAULT_MESSAGE;
+        const body = webhookUrl ? WEBHOOK_SMOKE_MESSAGE : DEFAULT_MESSAGE;
         log(`${commit ? 'SEND' : 'DRY RUN'} — people/${id} (${JONATHAN_HARRIS_NAME})`);
         log(`to: ${to}`);
         log(`body: ${body}`);
-        log('replyWebhookUrl: (omitted)');
+        log(webhookUrl ?
+            `replyWebhookUrl: ${webhookUrl}` :
+            'replyWebhookUrl: (omitted)');
         if (!commit) return {sent: false, body};
         const key = await loadTextbeltKey(args.resolveKey, log);
-        const payload = textbeltPayload(to, body, key);
+        const payload = textbeltPayload(to, body, key, webhookUrl);
         return finishSend(args.postText, payload, log, {body});
     }
 
@@ -1089,6 +1133,7 @@ async function executeTextbeltTestSend(args) {
 
     if (!commit) {
         const plan = buildPlan(DRY_RUN_ANSWER_URL);
+        plan.replyWebhookUrl = webhookUrl;
         log(formatWithUrlPlan(plan, 'DRY RUN', false));
         return {
             sent: false,
@@ -1101,6 +1146,7 @@ async function executeTextbeltTestSend(args) {
     }
 
     const gate = buildPlan(DRY_RUN_ANSWER_URL);
+    gate.replyWebhookUrl = webhookUrl;
     if (!gate.commitDecision.ok) {
         log(formatWithUrlPlan(gate, 'REFUSED', false));
         throw new Error(gate.commitDecision.reason);
@@ -1132,10 +1178,15 @@ async function executeTextbeltTestSend(args) {
         answerLinkMintArgs(id, choice.serviceDate, now));
     const answerUrl = assertMintedLink(minted);
     const plan = buildPlan(answerUrl);
+    plan.replyWebhookUrl = webhookUrl;
     assertBodyCarriesAnswerUrl(plan.body, answerUrl);
     log(formatWithUrlPlan(plan, 'SEND', true));
-    const payload = textbeltPayload(to, plan.body, key);
-    if (Object.prototype.hasOwnProperty.call(payload, 'replyWebhookUrl')) {
+    const payload = textbeltPayload(to, plan.body, key, webhookUrl);
+    if (webhookUrl) {
+        if (payload.replyWebhookUrl !== webhookUrl) {
+            throw new Error('replyWebhookUrl missing from the Textbelt payload.');
+        }
+    } else if (Object.prototype.hasOwnProperty.call(payload, 'replyWebhookUrl')) {
         throw new Error('replyWebhookUrl must stay omitted.');
     }
     const sent = await finishSend(args.postText, payload, log, {
@@ -1200,6 +1251,7 @@ module.exports = {
     JONATHAN_HARRIS_PERSON_ID,
     JONATHAN_HARRIS_PHONE_E164,
     DEFAULT_MESSAGE,
+    CHURCH_SMS_REPLY_WEBHOOK_URL,
     ANSWER_LINK_HORIZON_DAYS,
     OPS_ANSWER_LINK_SERVICE_DATE,
     OPS_SMOKE_MARKER,
@@ -1208,6 +1260,7 @@ module.exports = {
     phoneFromPerson,
     isJonathanHarris,
     textbeltPayload,
+    resolveSmokeReplyWebhook,
     assertJonathanHarrisRecipient,
     addCalendarDays,
     isSunday,

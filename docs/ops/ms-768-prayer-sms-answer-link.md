@@ -2,7 +2,9 @@
 
 Turn on `app_config/prayer_request_sms.includeAnswerLinkInSms` so live pastoral-prayer texts include the minted Answer URL next to the reply instructions. Then send **one** link-bearing SMS to Jonathan Harris only.
 
-`includeReplyWebhookInSms` stays as it is. The smoke never sends `replyWebhookUrl`. The form path does not need the inbound webhook: `/a/<token>` is `answerLink`, and a submit writes `people/{personId}/prayer_requests/{serviceDate}` with `prayerRequestSource: form`.
+`includeReplyWebhookInSms` stays as it is in this smoke. The smoke never sends `replyWebhookUrl` unless you pass `--with-reply-webhook` (see [Reply webhook flag](./ms-prayer-sms-reply-webhook-flag.md)). The form path does not need the inbound webhook: `/a/<token>` is `answerLink`, and a submit writes `people/{personId}/prayer_requests/{serviceDate}` with `prayerRequestSource: form`.
+
+A later text reply or Answer-form submission replaces that stored request (newest wins, 2026-10-27). The generated Shepherding Note is updated in place. An elder-typed request is left as the elder wrote it.
 
 The workflow runs only from **`main` after this change is merged**. It checks out `main`, so a dispatch from the PR branch will not see these scripts.
 

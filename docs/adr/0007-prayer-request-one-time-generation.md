@@ -42,3 +42,5 @@ After generation the two are **independent**: the Shepherding Note is an ordinar
 The once-only note guard stands. A second save or a duplicate reply still cannot create a second Shepherding Note.
 
 What MS-247 adds is a later edit *by the subject*, on the page an [Answer link](0067-an-answer-link-is-a-personal-expiring-door.md) opens, before that Sunday has ended. That change may update the generated note **only while it still holds exactly the text it was generated with**. An Elder edit always wins: the note is left alone. There is never a second generated note.
+
+A later text reply is the same kind of subject change (2026-10-27, MS-806). The newest reply or Answer-form submission replaces the stored request and refreshes the generated note under that same rule. An elder-typed request is not replaced.

@@ -12,18 +12,29 @@ const JANE = "person-jane";
 const suite = H.skipReason ?
   (n) => test(n, {skip: H.skipReason}, () => {}) : describe;
 
-suite("prayer reply/form dedupe", () => {
+suite("prayer reply/form newest wins", () => {
   let db;
   before(() => { db = H.connect(); });
   beforeEach(async () => {
     await H.wipe();
     await H.seedPerson(db, JANE, {name: "Jane Doe"});
+    await db.collection("liturgy_orders").doc("standard").set({
+      id: "standard",
+      name: "Standard",
+      elements: [{
+        id: "pastoral",
+        name: "Pastoral Prayer",
+        kind: "prayer",
+        requests: {count: 1, who: "either"},
+      }],
+    });
     await db.collection("services").doc(SERVICE).set({
-      liturgy: {prayerMale: {id: JANE, name: "Jane"}},
+      liturgyOrderId: "standard",
+      liturgy: {pastoral: [{id: JANE, name: "Jane"}]},
     });
   });
 
-  test("reply then form keeps one note", async () => {
+  test("reply then form keeps one note and the form wins", async () => {
     await writes.applyReply(db, {
       personId: JANE, serviceDate: SERVICE, replyText: "SMS", now: NOW,
     });
@@ -38,12 +49,15 @@ suite("prayer reply/form dedupe", () => {
     assert.strictEqual(r.ok, true);
     const req = (await db.collection("people").doc(JANE)
         .collection("prayer_requests").doc(SERVICE).get()).data();
-    assert.strictEqual(req.prayerRequest, "SMS");
-    assert.strictEqual((await db.collection("people").doc(JANE)
-        .collection("shepherding_notes").get()).size, 1);
+    assert.strictEqual(req.prayerRequest, "link");
+    assert.strictEqual(req.prayerRequestSource, "form");
+    const notes = await db.collection("people").doc(JANE)
+        .collection("shepherding_notes").get();
+    assert.strictEqual(notes.size, 1);
+    assert.strictEqual(notes.docs[0].data().content, "link");
   });
 
-  test("form then reply keeps one note", async () => {
+  test("form then reply keeps one note and the reply wins", async () => {
     const m = await door.mintAnswerLink(db, {
       purpose: "prayer_request", personId: JANE, thing: SERVICE,
       now: NOW, randomBytes: crypto.randomBytes(16),
@@ -55,11 +69,15 @@ suite("prayer reply/form dedupe", () => {
     const reply = await writes.applyReply(db, {
       personId: JANE, serviceDate: SERVICE, replyText: "SMS", now: NOW,
     });
-    assert.strictEqual(reply.filled, false);
+    assert.strictEqual(reply.filled, true);
+    assert.strictEqual(reply.replaced, true);
     const req = (await db.collection("people").doc(JANE)
         .collection("prayer_requests").doc(SERVICE).get()).data();
-    assert.strictEqual(req.prayerRequest, "link");
-    assert.strictEqual((await db.collection("people").doc(JANE)
-        .collection("shepherding_notes").get()).size, 1);
+    assert.strictEqual(req.prayerRequest, "SMS");
+    assert.strictEqual(req.prayerRequestSource, "reply");
+    const notes = await db.collection("people").doc(JANE)
+        .collection("shepherding_notes").get();
+    assert.strictEqual(notes.size, 1);
+    assert.strictEqual(notes.docs[0].data().content, "SMS");
   });
 });
