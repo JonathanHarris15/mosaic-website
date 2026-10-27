@@ -221,8 +221,18 @@ test('the preview is where an editor fills blanks, and the link place does not l
     const fillCss = viewHtml.slice(viewHtml.indexOf('textarea.pv-fill.pv-fill--text {'), viewHtml.indexOf('.pv-fill-extra .pv-fill'));
     assert.match(fillCss, /white-space:\s*pre-wrap/, 'a filled blank wraps');
     assert.match(fillCss, /overflow-wrap:\s*break-word/, 'a long word stays inside the blank');
+    assert.match(fillCss, /field-sizing:\s*content/, 'a value sizes to its words');
     assert.match(fillCss, /:placeholder-shown[\s\S]*white-space:\s*nowrap/, 'an empty name stays one line');
     assert.match(fillCss, /text-overflow:\s*ellipsis/, 'a long name clips with an ellipsis');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*field-sizing:\s*fixed/, 'an empty name does not size the blank');
+    assert.match(fillCss, /:placeholder-shown[\s\S]*min-width:\s*0/, 'an empty name uses the row it already has');
+    assert.equal(
+        /:where\(:has\(\.pv-fill\)\)\s*\{[^}]*min-width:\s*0/.test(viewHtml),
+        false,
+        'a filled value keeps the width of its words'
+    );
+    assert.match(viewHtml, /:has\(> \.pv-fill:placeholder-shown\)\)\s*\{[^}]*padding-inline-start:\s*0\.5em/, 'a name stays clear of its label');
+    assert.match(viewHtml, /\.pv-fill-extra\s*\{[^}]*min-width:\s*8em/, 'an unplaced column keeps its minimum');
     [eventHtml, sundayHtml].forEach(html => {
         assert.equal(html.includes('For the linked printable'), false);
         assert.equal(html.includes('Save for this date'), false);
