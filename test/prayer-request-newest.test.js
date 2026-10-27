@@ -154,6 +154,50 @@ test('form then reply keeps one note and the reply text wins', async () => {
     assert.equal(stored.docs[0].data().authorName, 'Prayer Request (form)');
 });
 
+test('the same reply text on the same channel is not a new fill', async () => {
+    const db = memoryDb();
+    await seed(db);
+    const first = await writes.applyReply(db, {
+        personId: JANE, serviceDate: SERVICE, replyText: 'First', now: NOW,
+    });
+    const second = await writes.applyReply(db, {
+        personId: JANE, serviceDate: SERVICE, replyText: 'First', now: LATER,
+    });
+    assert.equal(first.filled, true);
+    assert.equal(second.filled, false);
+    assert.equal(second.replaced, false);
+    assert.equal(second.noteId, first.noteId);
+    const req = (await request(db).get()).data();
+    assert.equal(req.prayerRequest, 'First');
+    assert.equal(req.prayerRequestSource, 'reply');
+    assert.equal(req.requestFilledAt, NOW);
+    assert.equal(req.changedAt, NOW);
+    assert.equal((await notes(db).get()).size, 1);
+    assert.equal((await notes(db).get()).docs[0].data().content, 'First');
+});
+
+test('the same words from the other channel still replace the source', async () => {
+    const db = memoryDb();
+    await seed(db);
+    await writes.applyReply(db, {
+        personId: JANE, serviceDate: SERVICE, replyText: 'Same words', now: NOW,
+    });
+    const form = await writes.saveFormAnswer(db, {
+        personId: JANE,
+        serviceDate: SERVICE,
+        todayDate: TODAY,
+        answerText: 'Same words',
+        now: LATER,
+    });
+    assert.equal(form.ok, true);
+    const req = (await request(db).get()).data();
+    assert.equal(req.prayerRequest, 'Same words');
+    assert.equal(req.prayerRequestSource, 'form');
+    assert.equal(req.requestFilledAt, NOW);
+    assert.equal(req.changedAt, LATER);
+    assert.equal((await notes(db).get()).size, 1);
+});
+
 test('a second reply updates the generated note instead of adding one', async () => {
     const db = memoryDb();
     await seed(db);

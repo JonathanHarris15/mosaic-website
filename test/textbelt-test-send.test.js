@@ -567,6 +567,28 @@ test('--with-url commit mints a real token and sends one SMS without a webhook',
     assert.match(harness.lines.join('\n'), /tokenPath: \/a\//);
 });
 
+test('--with-url commit keeps the church webhook when --with-reply-webhook is set', async () => {
+    const harness = withUrlDeps({
+        commit: true,
+        withReplyWebhook: true,
+        replyWebhookUrl: CHURCH_SMS_REPLY_WEBHOOK_URL,
+    });
+    harness.deps.db = jonathanDb({
+        config: {
+            includeAnswerLinkInSms: true,
+            includeReplyWebhookInSms: false,
+        },
+    });
+    const result = await executeTextbeltTestSend(harness.deps);
+    assert.equal(result.sent, true);
+    assert.equal(harness.posts.length, 1);
+    assert.equal(harness.posts[0].phone, '+15805043816');
+    assert.equal(harness.posts[0].replyWebhookUrl, CHURCH_SMS_REPLY_WEBHOOK_URL);
+    assert.equal(harness.posts[0].message.includes(harness.url), true);
+    assert.match(harness.lines.join('\n'), new RegExp(
+        'replyWebhookUrl: ' + CHURCH_SMS_REPLY_WEBHOOK_URL.replace(/[.]/g, '\\.')));
+});
+
 test('--with-url commit refuses before minting when the flag is off or the box is full', async () => {
     const off = withUrlDeps({commit: true});
     off.deps.db = jonathanDb({
