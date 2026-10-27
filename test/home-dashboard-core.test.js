@@ -229,6 +229,28 @@ test('commitments name two ahead, and a cover ask is said as one', () => {
     assert.deepEqual(strip[1], { label: 'Nursery', text: 'cover asked for 18 Oct' });
 });
 
+test('This Sunday keeps its height and Your Places is what scrolls (MS-807)', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+    const sundayRule = html.slice(html.indexOf('.dash-sunday {'), html.indexOf('.dash-sunday__when'));
+    assert.match(sundayRule, /flex:\s*0 0 auto/);
+    assert.match(sundayRule, /min-height:\s*min-content/);
+    assert.match(sundayRule, /overflow:\s*hidden/);
+    const restRule = html.slice(html.indexOf('.dash-rest {'), html.indexOf('.dash-places-head'));
+    assert.match(restRule, /flex:\s*1 1 auto/);
+    assert.match(restRule, /min-height:\s*0/);
+    assert.match(restRule, /overflow-y:\s*auto/);
+    const sunday = html.indexOf('id="sunday-glance"');
+    const sundayEnd = html.indexOf('</section>', sunday);
+    const rest = html.indexOf('class="dash-rest"');
+    const tiles = html.indexOf('id="nav-cards-grid"');
+    const strips = html.indexOf('id="dash-strips"');
+    const restEnd = html.indexOf('</main>');
+    assert.ok(sunday !== -1 && sundayEnd !== -1 && rest !== -1);
+    assert.ok(sundayEnd < rest, 'This Sunday sits above the places scroller');
+    assert.ok(rest < tiles && tiles < strips && strips < restEnd);
+    assert.ok(!html.slice(sunday, sundayEnd).includes('dash-rest'));
+});
+
 test('the home page is the Sunday-first door', () => {
     const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
     assert.match(html, /class="dash-sunday"/);
