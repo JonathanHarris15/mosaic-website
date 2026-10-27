@@ -9,9 +9,11 @@
 // not work left and not work done. A song typed in but not linked to the book
 // is not blank, and it is not set either. A people element (Baptism) counts
 // only once somebody is on it — most Sundays have nobody, and that is not a
-// blank. An element that carries a person is unfinished until the person is
-// named. Theme, the key verse, and the optional prayer leaders are not part
-// of the tally.
+// blank. A person event is unfinished until the person is named. Theme and
+// the key verse are not part of the tally. A prayer the
+// order allows someone else to pray is not part of the tally until a prayer
+// leader is added. An added leader with nobody named is unset. A blank
+// carriedBy box left in place so a picker has an object is not an added leader.
 //
 // Pass the congregation's catalog (LiturgyOrderStore.loadCatalog) as the
 // second argument; without one, every Sunday is read against Standard.
@@ -117,14 +119,33 @@
         return typeof value === 'string' && value.trim() ? 1 : 0;
     }
 
+    // null — leave it out. 'blank' — a prayer leader was added and nobody is
+    // named yet. 'set' — that person is named.
+    //
+    // `prayedByOther` only allows an alternate. The editor used to drop an
+    // empty { name, id } on carriedBy so the picker had an object, and that
+    // scaffold counted as unfinished. `added: true` is the opt-in: the Sunday
+    // asked for a prayer leader and has not named one.
+    function prayerLeaderTally(service, el) {
+        if (!el || el.kind !== 'prayer' || el.prayedByOther !== true) return null;
+        const map = (service && service.carriedBy) || {};
+        const ref = map[el.id];
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
+        if (personSet(ref)) return 'set';
+        if (ref.added === true) return 'blank';
+        return null;
+    }
+
     function checklist(svc, catalog) {
         const service = svc || {};
         const liturgy = service.liturgy || {};
         const removed = Array.isArray(service.removedHymns) ? service.removedHymns : [];
         const items = [];
 
-        function add(key, label, state) {
-            items.push({ key: key, label: label, state: state });
+        function add(key, label, state, part) {
+            const item = { key: key, label: label, state: state };
+            if (part) item.part = part;
+            items.push(item);
         }
 
         add('serviceLeader', 'Service Leader', personSet(service.serviceLeader) ? 'set' : 'blank');
@@ -139,16 +160,18 @@
                 if (removed.indexOf(el.id) !== -1) return;
                 state = hymnState(value);
             } else if (el.kind === 'prayer') {
-                const needsRequests = !!el.requests;
-                const needsPerson = el.prayedByOther === true;
-                if (!needsRequests && !needsPerson) return;
-                let ready = true;
-                if (needsRequests) {
+                const leader = prayerLeaderTally(service, el);
+                if (el.requests) {
                     const named = Array.isArray(value) ? value.filter(function (p) { return p && (p.id || (p.name && String(p.name).trim())); }).length : 0;
-                    if (named < el.requests.count) ready = false;
+                    add(el.id, Liturgy.elementDisplayName(el), named >= el.requests.count ? 'set' : 'blank');
                 }
-                if (needsPerson && !Liturgy.carrierOf(service, el)) ready = false;
-                state = ready ? 'set' : 'blank';
+                if (leader) {
+                    const label = el.requests
+                        ? Liturgy.elementDisplayName(el) + ' leader'
+                        : Liturgy.elementDisplayName(el);
+                    add(el.id, label, leader, 'leader');
+                }
+                return;
             } else if (el.primitive === 'people') {
                 if (!peopleCount(value)) return;
                 state = 'set';
@@ -297,6 +320,7 @@
         normalizeService: normalizeService,
         checklist: checklist,
         readiness: readiness,
+        prayerLeaderTally: prayerLeaderTally,
         glance: glance,
         compactTime: compactTime,
         weekStrip: weekStrip,

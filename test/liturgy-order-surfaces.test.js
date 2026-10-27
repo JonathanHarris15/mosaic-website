@@ -92,9 +92,13 @@ test('the Order of Service fills a locked order and does not compose it', () => 
     const panel = html.indexOf("openKey === item.key || item.type === 'legacy'");
     assert.ok(panel !== -1, 'the row panel is the dropdown');
     assert.ok(panel < html.indexOf('Who prays '), 'a prayer leader is inside the dropdown');
-    const leaderGate = html.indexOf('x-if="item.prayedByOther && service.carriedBy[item.key]"');
+    const leaderBranch = html.indexOf('x-if="item.prayedByOther"');
     const who = html.indexOf("'Who prays '");
-    assert.ok(leaderGate !== -1 && leaderGate < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    const addLeader = html.indexOf('addPrayerLeader(item.key)');
+    assert.ok(leaderBranch !== -1 && leaderBranch < who, 'the person picker is only on a prayer that can be prayed by someone else');
+    assert.ok(addLeader > who, 'the picker is the added slot; Add prayer leader sits with it');
+    assert.match(html, /prayerLeaderOpen\(item\.key\)/);
+    assert.match(html, /Add prayer leader/);
     assert.equal(html.indexOf("'Who prays '", who + 1), -1);
 });
 

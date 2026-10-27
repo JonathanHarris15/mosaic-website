@@ -235,6 +235,20 @@ function pastoralSunday(service, date, elements) {
     return { date: date, subjectIds: ids };
 }
 
+// The editor's carriedBy map. A blank { name, id } is the old picker
+// scaffold and is kept as a blank. `added: true` is a prayer leader the
+// Sunday opted into, and a reload has to keep that or the tally forgets it.
+function editorCarriedBy(raw) {
+    const carriedBy = {};
+    Object.entries(raw || {}).forEach(([key, ref]) => {
+        if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return;
+        const slot = { name: ref.name || '', id: ref.id || null };
+        if (ref.added === true) slot.added = true;
+        carriedBy[key] = slot;
+    });
+    return carriedBy;
+}
+
 function flattenServiceForSave(service) {
     const ref = (r) => (r && typeof r === 'object') ? r : { id: null, name: '' };
     const s = service || {};
@@ -794,7 +808,11 @@ function serviceForm() {
                 } else if (el.primitive === 'song' && typeof current === 'string') {
                     s.liturgy[el.id] = { name: current, id: null };
                 }
-                if ((el.prayedByOther || el.hasRole) && !s.carriedBy[el.id]) {
+                // A role that must be carried still needs an object for its
+                // picker. A prayer someone else MAY pray does not: an empty
+                // box there is not a prayer leader, and seeding one made the
+                // Sunday look short (MS-808).
+                if (el.hasRole && !s.carriedBy[el.id]) {
                     s.carriedBy[el.id] = { name: '', id: null };
                 }
             }
@@ -1410,11 +1428,7 @@ function serviceForm() {
 
                 this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
-                const carriedBy = {};
-                Object.entries(data.carriedBy || {}).forEach(([key, ref]) => {
-                    if (ref && typeof ref === 'object') carriedBy[key] = { name: ref.name || '', id: ref.id || null };
-                });
-                this.service.carriedBy = carriedBy;
+                this.service.carriedBy = editorCarriedBy(data.carriedBy);
 
                 // Every liturgy value on the document, whichever order it was
                 // filled under: a value under an element this order leaves out
@@ -2067,7 +2081,7 @@ function serviceForm() {
             return d.textContent || d.innerText || '';
         },
 
-        _buildItem(el, lit) {
+        _buildItem(el, lit, tally) {
             const key = el.id;
             const type = this._ROW_TYPES[el.primitive];
             const removed = type === 'hymn' && this.isHymnRemoved(key);
@@ -2094,10 +2108,21 @@ function serviceForm() {
                 status = names.length ? 'people' : 'empty';
                 emptyLabel = el.requests ? 'Choose who is prayed for…' : '';
                 if (!el.requests && el.prayedByOther) {
+                    const leader = (tally || []).find(item => item.key === el.id && item.part === 'leader');
                     const who = liturgyCore().carrierOf(this.service, el);
-                    value = who ? who.name : '';
-                    status = value ? 'people' : 'empty';
-                    emptyLabel = 'Name who prays…';
+                    if (leader && leader.state === 'set' && who) {
+                        value = who.name;
+                        status = 'people';
+                        emptyLabel = '';
+                    } else if (leader && leader.state === 'blank') {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = 'Name who prays…';
+                    } else {
+                        value = '';
+                        status = 'empty';
+                        emptyLabel = '';
+                    }
                 }
             } else if (type === 'person') {
                 const ref = lit[key] && !Array.isArray(lit[key]) ? lit[key] : {};
@@ -2134,7 +2159,11 @@ function serviceForm() {
         // show; no value is dropped.
         get rows() {
             const lit = this.service.liturgy;
-            return this.orderElements.map(el => this._buildItem(el, lit));
+            const tally = window.HomeDashboard
+                ? window.HomeDashboard.checklist(
+                    flattenServiceForSave(this.service), this.liturgyCatalog)
+                : [];
+            return this.orderElements.map(el => this._buildItem(el, lit, tally));
         },
 
         get displayRows() {
@@ -2164,8 +2193,9 @@ function serviceForm() {
 
         // "X of Y set" — the same tally the home card and the phone use
         // (home-dashboard-core). This page used to add theme, the key verse,
-        // and the optional prayer leaders, and to count a hymn name as finished
-        // before it was linked, so the two screens disagreed.
+        // and every optional prayer leader, and to count a hymn name as
+        // finished before it was linked, so the two screens disagreed. An
+        // optional prayer leader is in that tally only once one is added.
         get filledLabel() {
             const ready = window.HomeDashboard.readiness(
                 flattenServiceForSave(this.service), this.liturgyCatalog);
@@ -2423,6 +2453,44 @@ function serviceForm() {
         },
 
         // ── People elements (Baptism Candidates, or any other) ───────────────
+        // A prayer leader counts only after one is added (MS-808). The order's
+        // "may pray" flag leaves the box closed; this opens an empty slot.
+        prayerLeaderClearLabel(key) {
+            const ref = this.service.carriedBy && this.service.carriedBy[key];
+            const named = ref && (ref.id || (ref.name && String(ref.name).trim()));
+            return named ? 'Clear prayer leader' : 'Remove prayer leader';
+        },
+        prayerLeaderOpen(key) {
+            if (!window.HomeDashboard || !window.HomeDashboard.prayerLeaderTally) return false;
+            const el = (this.orderElements || []).find(item => item && item.id === key);
+            return !!window.HomeDashboard.prayerLeaderTally(this.service, el);
+        },
+        addPrayerLeader(key) {
+            if (!this.service.carriedBy || typeof this.service.carriedBy !== 'object') {
+                this.service.carriedBy = {};
+            }
+            const current = this.service.carriedBy[key];
+            if (current && typeof current === 'object' && !Array.isArray(current)) {
+                current.added = true;
+                return;
+            }
+            this.service.carriedBy[key] = { name: '', id: null, added: true };
+        },
+        // A named leader clears back to an empty added slot, which stays in
+        // the tally. Clearing that empty slot removes it.
+        clearPrayerLeader(key) {
+            const ref = this.service.carriedBy && this.service.carriedBy[key];
+            if (!ref || typeof ref !== 'object') return;
+            const named = !!(ref.id || (ref.name && String(ref.name).trim()));
+            if (named) {
+                ref.id = null;
+                ref.name = '';
+                ref.added = true;
+                return;
+            }
+            delete this.service.carriedBy[key];
+        },
+
         addPerson(key) {
             if (!Array.isArray(this.service.liturgy[key])) this.service.liturgy[key] = [];
             this.service.liturgy[key].push({ name: '', id: null, [ROW_ID]: newRowId() });
@@ -3032,5 +3100,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
+    module.exports = { worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, editorCarriedBy, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot, stepHref, stepToService, serviceForm };
 }

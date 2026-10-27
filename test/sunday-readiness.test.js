@@ -146,6 +146,74 @@ test('the phone home passes removed hymns into the same tally', () => {
     assert.match(fn, /removedHymns/);
 });
 
+test('the editor does not count a may-pray prayer until a leader is added', () => {
+    const Liturgy = require('../public/liturgy-order-core.js');
+    const praise = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, {
+        name: 'Prayer of Praise',
+        prayedByOther: true,
+    });
+    const confession = Liturgy.placeKind(praise.catalog, 'standard', 'prayer', 1, {
+        name: 'Prayer of Confession',
+        prayedByOther: true,
+    });
+    const catalog = confession.catalog;
+    const praiseId = praise.element.id;
+    const confessionId = confession.element.id;
+    const service = reportedSunday();
+    service.removedHymns = [];
+    service.liturgy.hymn1 = hymn('A', '1');
+    service.liturgy.hymn2 = hymn('B', '2');
+    service.liturgy.hymnMid1 = hymn('C', '3');
+    const loaded = editorForm(service);
+    loaded.form.liturgyCatalog = catalog;
+    loaded.form._ensureLiturgySlots();
+    assert.equal(loaded.form.service.carriedBy[praiseId], undefined);
+    assert.equal(loaded.form.service.carriedBy[confessionId], undefined);
+
+    const before = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(loaded.form.filledLabel, before.fraction);
+    assert.equal(
+        before.blanks.indexOf('Prayer of Praise'),
+        -1
+    );
+
+    loaded.form.addPrayerLeader(praiseId);
+    const oneEmpty = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(oneEmpty.total, before.total + 1);
+    assert.equal(oneEmpty.set, before.set);
+    assert.equal(loaded.form.filledLabel, oneEmpty.fraction);
+    assert.equal(loaded.form.prayerLeaderOpen(praiseId), true);
+    assert.equal(loaded.form.prayerLeaderOpen(confessionId), false);
+
+    loaded.form.service.carriedBy[praiseId].id = 'p1';
+    loaded.form.service.carriedBy[praiseId].name = 'Ada Example';
+    const oneFilled = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(oneFilled.total, before.total + 1);
+    assert.equal(oneFilled.set, before.set + 1);
+    assert.equal(loaded.form.filledLabel, oneFilled.fraction);
+
+    loaded.form.addPrayerLeader(confessionId);
+    loaded.form.service.carriedBy[confessionId].id = 'p2';
+    loaded.form.service.carriedBy[confessionId].name = 'Owen Example';
+    const twoFilled = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(twoFilled.total, before.total + 2);
+    assert.equal(twoFilled.set, before.set + 2);
+    assert.equal(loaded.form.filledLabel, twoFilled.fraction);
+
+    loaded.form.clearPrayerLeader(praiseId);
+    const cleared = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(cleared.total, before.total + 2);
+    assert.equal(cleared.set, before.set + 1);
+    assert.equal(loaded.form.service.carriedBy[praiseId].added, true);
+    assert.equal(loaded.form.service.carriedBy[praiseId].name, '');
+
+    loaded.form.clearPrayerLeader(praiseId);
+    const removed = Home.readiness(flattenServiceForSave(loaded.form.service), catalog);
+    assert.equal(removed.total, before.total + 1);
+    assert.equal(loaded.form.service.carriedBy[praiseId], undefined);
+    assert.equal(loaded.form.filledLabel, removed.fraction);
+});
+
 test('the service editor loads the shared tally', () => {
     const html = fs.readFileSync(path.join(__dirname, '../public/service-builder.html'), 'utf8');
     const core = html.indexOf('<script src="home-dashboard-core.js">');

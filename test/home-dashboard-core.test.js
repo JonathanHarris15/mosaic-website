@@ -103,21 +103,137 @@ test('a prayer is scored only for what the order asked', () => {
 
     const marked = Liturgy.updateElement(plain.catalog, plain.element.id, { prayedByOther: true });
     const id = plain.element.id;
-    const blank = Home.checklist({}, marked).find(function (item) { return item.key === id; });
-    assert.equal(blank.state, 'blank');
+    assert.equal(
+        Home.checklist({}, marked).find(function (item) { return item.key === id; }),
+        undefined,
+        'allowing someone else to pray it does not add a slot'
+    );
+    assert.equal(
+        Home.checklist({ carriedBy: { [id]: { name: '', id: null } } }, marked)
+            .find(function (item) { return item.key === id; }),
+        undefined,
+        'an empty scaffold is not an added prayer leader'
+    );
+
+    const el = Liturgy.elementById(marked, id);
+    assert.equal(Home.prayerLeaderTally({}, el), null);
+    assert.equal(Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null } } }, el), null);
+    assert.equal(
+        Home.prayerLeaderTally({ carriedBy: { [id]: { name: '', id: null, added: true } } }, el),
+        'blank'
+    );
+    assert.equal(
+        Home.prayerLeaderTally({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, el),
+        'set'
+    );
+
+    const added = Home.checklist({
+        carriedBy: { [id]: { name: '', id: null, added: true } },
+    }, marked).filter(function (item) { return item.key === id; });
+    assert.equal(added.length, 1);
+    assert.equal(added[0].part, 'leader');
+    assert.equal(added[0].state, 'blank');
+    assert.equal(added[0].label, 'Opening Prayer');
+
     const named = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, marked)
-        .find(function (item) { return item.key === id; });
-    assert.equal(named.state, 'set');
+        .filter(function (item) { return item.key === id; });
+    assert.equal(named.length, 1);
+    assert.equal(named[0].state, 'set');
 
     const both = Liturgy.updateElement(marked, id, { requests: { count: 1, who: 'either' } });
-    const half = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, both)
-        .find(function (item) { return item.key === id; });
-    assert.equal(half.state, 'blank');
+    const requestsOnly = Home.checklist({}, both).filter(function (item) { return item.key === id; });
+    assert.equal(requestsOnly.length, 1);
+    assert.equal(requestsOnly[0].state, 'blank');
+    assert.equal(requestsOnly[0].part, undefined);
+
+    const leaderNamed = Home.checklist({ carriedBy: { [id]: { id: 'p1', name: 'Ada' } } }, both)
+        .filter(function (item) { return item.key === id; });
+    assert.deepEqual(leaderNamed.map(function (item) { return item.state; }), ['blank', 'set']);
+    assert.equal(leaderNamed[1].part, 'leader');
+    assert.equal(leaderNamed[1].label, 'Opening Prayer leader');
+
     const full = Home.checklist({
         carriedBy: { [id]: { id: 'p1', name: 'Ada' } },
         liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
-    }, both).find(function (item) { return item.key === id; });
-    assert.equal(full.state, 'set');
+    }, both).filter(function (item) { return item.key === id; });
+    assert.deepEqual(full.map(function (item) { return item.state; }), ['set', 'set']);
+
+    const emptyLeader = Home.checklist({
+        carriedBy: { [id]: { name: '', id: null, added: true } },
+        liturgy: { [id]: [{ id: 'p2', name: 'Owen' }] },
+    }, both).filter(function (item) { return item.key === id; });
+    assert.deepEqual(emptyLeader.map(function (item) { return item.state; }), ['set', 'blank']);
+});
+
+test('MS-808 — optional prayer leaders stay out of N of M until one is added', () => {
+    const praise = Liturgy.placeKind(Liturgy.standardCatalog(), 'standard', 'prayer', 0, {
+        name: 'Prayer of Praise',
+        prayedByOther: true,
+    });
+    const confession = Liturgy.placeKind(praise.catalog, 'standard', 'prayer', 1, {
+        name: 'Prayer of Confession',
+        prayedByOther: true,
+    });
+    const catalog = confession.catalog;
+    const praiseId = praise.element.id;
+    const confessionId = confession.element.id;
+    const finished = {
+        serviceLeader: 'Mark',
+        musicLeader: 'Hannah',
+        preacher: 'Daniel',
+        liturgy: fullLiturgy(),
+    };
+    const base = Home.readiness(finished);
+    assert.equal(base.notReady, false);
+
+    const open = Home.readiness(finished, catalog);
+    assert.equal(open.total, base.total, 'may-on and no alternate is excluded');
+    assert.equal(open.set, base.set);
+    assert.equal(open.fraction, open.set + ' of ' + open.total + ' set');
+
+    const scaffold = Home.readiness(Object.assign({}, finished, {
+        carriedBy: {
+            [praiseId]: { name: '', id: null },
+            [confessionId]: { name: '', id: null },
+        },
+    }), catalog);
+    assert.equal(scaffold.total, base.total, 'blank scaffolds are not added leaders');
+    assert.equal(scaffold.set, base.set);
+
+    const oneEmpty = Home.readiness(Object.assign({}, finished, {
+        carriedBy: { [praiseId]: { name: '', id: null, added: true } },
+    }), catalog);
+    assert.equal(oneEmpty.total, base.total + 1);
+    assert.equal(oneEmpty.set, base.set);
+    assert.ok(oneEmpty.blanks.indexOf('Prayer of Praise') !== -1);
+    assert.equal(oneEmpty.fraction, oneEmpty.set + ' of ' + oneEmpty.total + ' set');
+
+    const oneFilled = Home.readiness(Object.assign({}, finished, {
+        carriedBy: { [praiseId]: { id: 'p1', name: 'Ada' } },
+    }), catalog);
+    assert.equal(oneFilled.total, base.total + 1);
+    assert.equal(oneFilled.set, base.set + 1);
+    assert.equal(oneFilled.blanks.indexOf('Prayer of Praise'), -1);
+
+    const twoEmpty = Home.readiness(Object.assign({}, finished, {
+        carriedBy: {
+            [praiseId]: { name: '', id: null, added: true },
+            [confessionId]: { name: '', id: null, added: true },
+        },
+    }), catalog);
+    assert.equal(twoEmpty.total, base.total + 2);
+    assert.equal(twoEmpty.set, base.set);
+
+    const twoFilled = Home.readiness(Object.assign({}, finished, {
+        carriedBy: {
+            [praiseId]: { id: 'p1', name: 'Ada' },
+            [confessionId]: { id: 'p2', name: 'Owen' },
+        },
+    }), catalog);
+    assert.equal(twoFilled.total, base.total + 2);
+    assert.equal(twoFilled.set, base.set + 2);
+    assert.equal(twoFilled.notReady, false);
+    assert.equal(twoFilled.fraction, twoFilled.set + ' of ' + twoFilled.total + ' set');
 });
 
 test('a person event is unfinished until the person is named', () => {
