@@ -290,6 +290,11 @@
     }
 
     // The origin page of the overflow run that holds an iterated element.
+    /**
+     * @param {any} project
+     * @param {string} repeatNodeId
+     * @returns {any}
+     */
     function originForRepeatNode(project, repeatNodeId) {
         const pages = project.pages || [];
         for (let i = 0; i < pages.length; i++) {
@@ -305,6 +310,15 @@
 
     // How many stored pages an overflowing list needs after its Repeat range
     // and row count are applied. Matches layoutPages' pagination plan.
+    /**
+     * @param {any} project
+     * @param {any} origin
+     * @param {any} res
+     * @param {any} host
+     * @param {any} [options]
+     * @param {any} [repeatForRows]
+     * @returns {number}
+     */
     function overflowContinuationNeed(project, origin, res, host, options, repeatForRows) {
         const o = options || {};
         const canPaginate = !!(res && (host || o.fitsOn));
@@ -316,20 +330,28 @@
         const template = project.template;
         const assets = project.assets || [];
         const originCap = (repeat.repeat.layout && repeat.repeat.layout.maxPerPage) || 0;
-        const capAt = (i) => {
+        /** @param {number} i */
+        function capAt(i) {
             const bg = chain[i] || templateForNew(project, origin, repeat);
             const r = overflowingRepeatOn(bg) || repeat;
             return (r.repeat.layout && r.repeat.layout.maxPerPage) || originCap;
-        };
-        const pageAt = (i) => chain[i] || templateForNew(project, origin, repeat);
-        const repeatAt = (i) => overflowingRepeatOn(pageAt(i)) || repeat;
-        const fitsOn = (i, start, n) => {
+        }
+        /** @param {number} i */
+        function pageAt(i) {
+            return chain[i] || templateForNew(project, origin, repeat);
+        }
+        /** @param {number} i */
+        function repeatAt(i) {
+            return overflowingRepeatOn(pageAt(i)) || repeat;
+        }
+        /** @param {number} i @param {number} start @param {number} n */
+        function fitsOn(i, start, n) {
             const bg = pageAt(i);
             const r = repeatAt(i);
             if (o.fitsOn) return o.fitsOn(i, start, n, { page: bg, repeat: r });
             const probe = Render.expandPage(bg, sliceFrom(res, repeat, r.id, start, start + n, 0, assets));
             return fits(host, template, bg, probe.nodes, r.id);
-        };
+        }
         return Render.planPages(rows, capAt, fitsOn).length;
     }
 
@@ -338,6 +360,13 @@
     // the contiguous overflow run; a page with custom content outside that run
     // is untouched. Called from the editor when the range changes, not on every
     // data refresh (so a shorter live list can still leave an edited tail page).
+    /**
+     * @param {any} project
+     * @param {any} res
+     * @param {any} host
+     * @param {any} [options]
+     * @returns {string[]}
+     */
     function pruneExcessContinuationPages(project, res, host, options) {
         const o = options || {};
         if (!project || !project.pages || !res) return [];
@@ -348,25 +377,26 @@
             const origin = originForRepeatNode(project, o.repeatNodeId);
             if (origin) origins.push(origin);
         } else {
-            (project.pages || []).forEach((page) => {
+            (project.pages || []).forEach((/** @type {any} */ page) => {
                 if (page.continues && page.continues.from) return;
                 if (overflowingRepeatOn(page)) origins.push(page);
             });
         }
+        /** @type {string[]} */
         const removeIds = [];
-        origins.forEach((origin) => {
+        origins.forEach((/** @type {any} */ origin) => {
             const chain = continuationChain(project, origin);
             if (chain.length <= 1) return;
             let repeatForRows = overflowingRepeatOn(origin);
             if (o.repeatNodeId) {
-                (project.pages || []).some((pg) => {
+                (project.pages || []).some((/** @type {any} */ pg) => {
                     const node = Core.findNode(pg, o.repeatNodeId);
                     if (node) { repeatForRows = node; return true; }
                     return false;
                 });
             }
             const needed = overflowContinuationNeed(project, origin, res, host, o, repeatForRows);
-            if (chain.length > needed) chain.slice(needed).forEach((p) => removeIds.push(p.id));
+            if (chain.length > needed) chain.slice(needed).forEach((/** @type {any} */ p) => removeIds.push(p.id));
         });
         if (!removeIds.length) return [];
         project.pages = Core.pagesWithout(project.pages, removeIds);

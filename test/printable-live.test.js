@@ -260,17 +260,24 @@ test('MS-810: shrinking the Repeat row range removes stored overflow pages past 
     const p = Core.buildPrintable({ name: 'Directory', template: t, pages: [origin, pg2, pg3] });
     const res = Live.resolver(p, peopleBundle(9), { today: '2026-09-03', level: 'editor' });
     const paginate = { fitsOn: (/** @type {any} */ _i, /** @type {any} */ _start, /** @type {any} */ n) => n <= 3 };
+    /** @type {any} */
     const card = Core.findNode(p.pages[0], 'card');
+    assert.ok(card && card.repeat);
     assert.equal(Live.overflowContinuationNeed(p, origin, res, true, paginate, card), 3);
     card.repeat.to = 5;
     const removed = Live.pruneExcessContinuationPages(p, res, true, Object.assign({ repeatNodeId: 'card' }, paginate));
     assert.deepEqual(removed, ['pg3']);
     assert.equal(p.pages.length, 2);
-    assert.equal(Core.findNode(p.pages[0], 'keep').text, 'Page one marker');
-    assert.equal(Core.findNode(p.pages[1], 'keep2').text, 'Page two marker');
+    /** @type {any} */
+    const keep1 = Core.findNode(p.pages[0], 'keep');
+    /** @type {any} */
+    const keep2 = Core.findNode(p.pages[1], 'keep2');
+    assert.ok(keep1 && keep2);
+    assert.equal(keep1.text, 'Page one marker');
+    assert.equal(keep2.text, 'Page two marker');
     const pages = Live.layoutPages(p, res, true, paginate);
-    assert.deepEqual(pages[0].nodes[0].children.map(c => c.children[0].text), ['Person 0', 'Person 1', 'Person 2']);
-    assert.deepEqual(pages[1].nodes[0].children.map(c => c.children[0].text), ['Person 3', 'Person 4']);
+    assert.deepEqual(pages[0].nodes[0].children.map((/** @type {any} */ c) => c.children[0].text), ['Person 0', 'Person 1', 'Person 2']);
+    assert.deepEqual(pages[1].nodes[0].children.map((/** @type {any} */ c) => c.children[0].text), ['Person 3', 'Person 4']);
     card.repeat.to = 9;
     const wide = Live.layoutPages(p, res, true, paginate);
     assert.ok(wide.some(e => e.needsPersist), 'widening the range plans another stored page again');
