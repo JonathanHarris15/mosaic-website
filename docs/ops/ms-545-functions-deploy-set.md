@@ -8,7 +8,7 @@ target first, then ship through that path. No one-off
 ## Standing `--only` targets
 
 ```
-hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
+hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
 ```
 
 | Target | Why it is in the set |
@@ -21,6 +21,7 @@ hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,
 | `functions:sendPrayerRequestNow` | Service Builder "Send Prayer Request Text Now" (MS-598). Export name in `functions/index.js` (`onCall`). Without this target a Hosting merge that admits Pastoral Assistants on that button (MS-594 / #82) would show PA chrome against an elder-only deployed function. |
 | `functions:sendPrayerRequestTexts` | Hourly pastoral-prayer sender. Export name in `functions/index.js` (`onSchedule`). A prayer's days-in-advance lives on the Liturgy Order; without this target the scheduler stays on the older five-and-three timing and ignores that field. |
 | `functions:notifyEldersOnPrayerComplete` | Elder digest when every person a Sunday asks has answered. Export name in `functions/index.js` (`onDocumentWritten`). It reads the same subject list as the scheduler, including people named on a requesting prayer. |
+| `functions:smsInbound` | Textbelt reply webhook (MS-806). Export name in `functions/index.js` (`onRequest`). A text reply becomes that Sunday's Prayer Request only when this function is the one deployed. `answerLink` ships the form path; it does not update `smsInbound`. Without this target, newest-wins never reaches a text reply. |
 | `functions:mcp` | MCP HTTP surface (MS-598). Export name in `functions/index.js` (`onRequest`). Without this target a Hosting merge that admits PAs on `shep_` DECIDE tools (MS-594 / #82) would show PA chrome against a stale deployed MCP. |
 | `functions:notificationOverview` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). The tab's only opening read: the send-path constants, the registry with its counts, and **the device list**. **This is the only way masked Device tokens reach a browser** — `users/{uid}/push_tokens` stays owner-only in the rules (ADR-0036) and this reads it with the Admin SDK. Without this target the tab falls back to its offline registry and says so. |
 | `functions:notificationHistory` | Push notifications tab (MS-682). Export name in `functions/index.js` (`onCall`). Paged, filtered read of `notifications`. |
@@ -104,7 +105,7 @@ gh workflow run "Deploy Firebase (hosting + publicForm)" --ref MS-598 -f dry_run
 ```
 
 Then open the run under Actions and confirm the log prints
-`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage`
+`targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage`
 and `dry_run=true`. App Check must stay `monitor`.
 
 Live (push to `main`, or `workflow_dispatch` without `dry_run=true`) waits

@@ -17,7 +17,7 @@ name: Deploy Firebase (hosting + publicForm)
 # deployed by this job. test/app-check-agreement.test.js pins both facts.
 #
 # Standing --only targets (do not one-off around this list):
-#   hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
+#   hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage
 # Documented at: docs/ops/ms-545-functions-deploy-set.md
 #
 # The runtime this ships on comes from functions/package.json `engines.node`,
@@ -157,7 +157,7 @@ jobs:
           PROJECT_ID="mosaic-hymn-database"
           echo "project=${PROJECT_ID}"
           echo "sha=${GITHUB_SHA}"
-          echo "targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage"
+          echo "targets=hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage"
           echo "PUBLIC_FORM_APP_CHECK_MODE=monitor"
           echo "MCP_ISSUER_URL=https://mosaic-hymn-mcp.web.app"
           EXTRA=()
@@ -166,7 +166,7 @@ jobs:
             echo "dry_run=true"
           fi
           npx firebase deploy \
-            --only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage \
+            --only hosting,functions:publicForm,functions:answerLink,functions:onAttendanceCreated,functions:syncAccountRankToPerson,functions:sendPrayerRequestNow,functions:sendPrayerRequestTexts,functions:notifyEldersOnPrayerComplete,functions:smsInbound,functions:mcp,functions:notificationOverview,functions:notificationHistory,functions:notificationRevokeToken,functions:notificationTestPush,functions:translateLiturgy,functions:oosUpdateLiturgy,firestore:rules,storage \
             --project "${PROJECT_ID}" \
             --non-interactive \
             "${EXTRA[@]}"
