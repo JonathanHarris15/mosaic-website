@@ -1880,7 +1880,10 @@ async function writeLiturgyField(dateKey, field, value) {
     // recording it in only one place would make that tag a liar. Clearing a
     // slot takes the tag off with it.
     const remove = firebase.firestore.FieldValue.delete();
-    const authorship = ServiceAuthorship.stampFor(field, value, currentIdentity, stamp, remove);
+    // A typo fixed from here keeps whoever chose the element.
+    const authorship = ServiceAuthorship.stampFor(
+        field, value, currentIdentity, stamp, remove,
+        /** @type {Record<string, *>} */ (serviceDataMap)[dateKey]);
 
     try {
         await ref.update(Object.assign(

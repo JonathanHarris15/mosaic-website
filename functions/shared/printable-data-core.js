@@ -66,6 +66,10 @@
     const Liturgy = (typeof require !== 'undefined')
         ? require('./liturgy-order-core.js')
         : global.LiturgyOrderCore;
+    // Who decided each element — read here for who wrote the order of service.
+    const Authorship = (typeof require !== 'undefined')
+        ? require('./service-authorship.js')
+        : /** @type {*} */ (global).ServiceAuthorship;
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -328,6 +332,10 @@
         { key: 'keyVerse', label: 'Key verse', kind: 'text' },
         { key: 'serviceLeader', label: 'Service leader', kind: 'text' },
         { key: 'musicLeader', label: 'Music leader', kind: 'text' },
+        // Whoever decided most of this Sunday's elements (Element authorship).
+        // A typo fixed by somebody else does not move the credit.
+        { key: 'oosWriter', label: 'Order of service by', kind: 'text' },
+        { key: 'oosWriterFirst', label: 'Order of service by (first name)', kind: 'text' },
     ];
 
     // Aspects of a placement beyond its Sunday value. The value stays at
@@ -1197,6 +1205,7 @@
         const lit = (s && s.liturgy) || {};
         const notes = (s && s.notes) || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
+        const writer = writerOfSunday(s, cat, dropped);
         const row = {
             _id: date,
             date: formatDate(date),
@@ -1210,6 +1219,8 @@
             serviceLeader: slotText(s && s.serviceLeader),
             musicLeader: slotText(s && s.musicLeader),
             prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
+            oosWriter: writer ? writer.name : '',
+            oosWriterFirst: writer ? (writer.name.split(/\s+/)[0] || '') : '',
         };
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
         cat.elements.forEach(el => {
@@ -1259,6 +1270,25 @@
             });
         }
         return row;
+    }
+
+    // Who wrote this Sunday's order of service: whoever decided the most of
+    // the elements its order carries (a dropped hymn is not on it).
+    /**
+     * @param {*} s the Sunday, as normaliseService reads it
+     * @param {*} cat the liturgy catalog
+     * @param {string[]} dropped hymns this Sunday has dropped
+     * @return {{name: string}|null}
+     */
+    function writerOfSunday(s, cat, dropped) {
+        if (!s || !Authorship || !Authorship.writerOf) return null;
+        /** @type {Array<{id: string, kind?: string, primitive?: string}>} */
+        const elements = Liturgy.elementsFor(s, cat);
+        const ids = elements
+            .filter(el => !((el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1))
+            .map(el => el.id);
+        const writer = Authorship.writerOf(s, ids);
+        return writer && writer.name ? writer : null;
     }
 
     function resolveSunday(params, data, ctx) {

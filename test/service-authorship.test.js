@@ -318,3 +318,114 @@ test('the first save of a brand-new Sunday still records who decided', () => {
     assert.deepStrictEqual(nested, { hymn1: { id: 'p-1', name: 'Bill Smith', at: AT } });
     assert.strictEqual(Authorship.nestStamps({}), null);
 });
+
+// ── A light touch keeps the credit ─────────────────────────────────────────
+//
+// Fixing a typo in somebody else's element is not choosing it. If it moved
+// the tag, the order of service would be credited to whoever proofread last.
+
+const ANN = { id: 'p-2', name: 'Ann Lee' };
+/**
+ * @param {string} slot
+ * @param {*} value
+ * @param {{id: string, name: string}} who
+ */
+function sundayBy(slot, value, who) {
+    return { liturgy: { [slot]: value }, decidedBy: { [slot]: { id: who.id, name: who.name, at: 'old' } } };
+}
+
+test('a typo fixed in somebody else\'s element leaves their name on it', () => {
+    const before = sundayBy('callToWorship', 'Pslam 95:1-7', ANN);
+    const stamps = Authorship.stampsFor(
+        { 'liturgy.callToWorship': 'Psalm 95:1-7' }, ME, AT, GONE, before);
+    assert.deepStrictEqual(stamps, {});
+});
+
+test('a hymn re-spelt, or a typed hymn linked to the index, keeps its chooser', () => {
+    const before = sundayBy('hymn1', { id: 'h-1', name: 'Holy Holy Holy' }, ANN);
+    assert.deepStrictEqual(Authorship.stampsFor(
+        { 'liturgy.hymn1': { id: 'h-1', name: 'Holy, Holy, Holy!' } }, ME, AT, GONE, before), {});
+
+    const typed = sundayBy('hymn1', { id: null, name: 'It Is Wel With My Soul' }, ANN);
+    assert.deepStrictEqual(Authorship.stampsFor(
+        { 'liturgy.hymn1': { id: 'h-9', name: 'It Is Well With My Soul' } }, ME, AT, GONE, typed), {});
+});
+
+test('a different hymn, passage or chapter is a new decision', () => {
+    const hymn = sundayBy('hymn1', { id: 'h-1', name: 'Holy Holy Holy' }, ANN);
+    assert.ok('decidedBy.hymn1' in Authorship.stampsFor(
+        { 'liturgy.hymn1': { id: 'h-2', name: 'It Is Well' } }, ME, AT, GONE, hymn));
+
+    const verse = sundayBy('benediction', 'Romans 8', ANN);
+    assert.ok('decidedBy.benediction' in Authorship.stampsFor(
+        { 'liturgy.benediction': 'Romans 9' }, ME, AT, GONE, verse));
+
+    const book = sundayBy('benediction', 'Job 3', ANN);
+    assert.ok('decidedBy.benediction' in Authorship.stampsFor(
+        { 'liturgy.benediction': 'Joel 3' }, ME, AT, GONE, book));
+
+    const other = sundayBy('benediction', 'Numbers 6:24-26', ANN);
+    assert.ok('decidedBy.benediction' in Authorship.stampsFor(
+        { 'liturgy.benediction': 'Hebrews 13:20-21' }, ME, AT, GONE, other));
+});
+
+test('the same people re-spelt keep the credit; somebody added is a decision', () => {
+    const before = sundayBy('baptism', [{ id: 'a', name: 'Jon Doe' }, { id: 'b', name: 'Kim' }], ANN);
+    assert.deepStrictEqual(Authorship.stampsFor(
+        { 'liturgy.baptism': [{ id: 'b', name: 'Kim' }, { id: 'a', name: 'John Doe' }] },
+        ME, AT, GONE, before), {});
+    assert.ok('decidedBy.baptism' in Authorship.stampsFor(
+        { 'liturgy.baptism': [{ id: 'a', name: 'Jon Doe' }, { id: 'b', name: 'Kim' }, { id: 'c', name: 'Sam' }] },
+        ME, AT, GONE, before));
+});
+
+test('a light touch to an element nobody is credited with stamps the toucher', () => {
+    const before = { liturgy: { benediction: 'Pslam 23' }, decidedBy: {} };
+    assert.ok('decidedBy.benediction' in Authorship.stampsFor(
+        { 'liturgy.benediction': 'Psalm 23' }, ME, AT, GONE, before));
+});
+
+test('clearing still takes the tag off, light touch or not', () => {
+    const before = sundayBy('benediction', 'Psalm 23', ANN);
+    assert.deepStrictEqual(Authorship.stampsFor(
+        { 'liturgy.benediction': '' }, ME, AT, GONE, before), { 'decidedBy.benediction': GONE });
+});
+
+test('the single-slot writer applies the same rule', () => {
+    const before = sundayBy('benediction', 'Pslam 23', ANN);
+    assert.deepStrictEqual(Authorship.stampFor('benediction', 'Psalm 23', ME, AT, GONE, before), {});
+});
+
+// ── Who wrote the order of service ─────────────────────────────────────────
+
+test('the order of service is credited to whoever decided most of it', () => {
+    const service = {
+        liturgy: { a: 'Psalm 1', b: 'Psalm 2', c: 'Psalm 3', d: '' },
+        decidedBy: {
+            a: { id: 'p-2', name: 'Ann Lee' },
+            b: { id: 'p-1', name: 'Bill Smith' },
+            c: { id: 'p-1', name: 'Bill Smith' },
+            // A leftover over an empty slot is not a decision.
+            d: { id: 'p-2', name: 'Ann Lee' },
+        },
+    };
+    assert.deepStrictEqual(Authorship.writerOf(service, ['a', 'b', 'c', 'd']),
+        { id: 'p-1', name: 'Bill Smith', count: 2, of: 3 });
+});
+
+test('a tie goes to whoever decided the earlier element', () => {
+    const service = {
+        liturgy: { a: 'x', b: 'y' },
+        decidedBy: { a: { id: 'p-2', name: 'Ann Lee' }, b: { id: 'p-1', name: 'Bill Smith' } },
+    };
+    const first = Authorship.writerOf(service, ['a', 'b']);
+    const second = Authorship.writerOf(service, ['b', 'a']);
+    assert.ok(first && second);
+    assert.strictEqual(first.name, 'Ann Lee');
+    assert.strictEqual(second.name, 'Bill Smith');
+});
+
+test('nobody recorded is nobody credited', () => {
+    assert.strictEqual(Authorship.writerOf({ liturgy: { a: 'x' } }, ['a']), null);
+    assert.strictEqual(Authorship.writerOf(null, ['a']), null);
+});
