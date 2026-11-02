@@ -1908,9 +1908,14 @@ function serviceForm() {
                 //
                 // Taking an element back out takes your name out with it.
                 const authorRemove = firebase.firestore.FieldValue.delete();
+                //
+                // A light touch to somebody else's element — a typo fixed —
+                // leaves their name on it, so `original` goes along to say
+                // what was there and who chose it.
                 Object.assign(toSave, ServiceAuthorship.stampsFor(
                     toSave, this.me,
-                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove));
+                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove,
+                    original));
 
                 const serviceRef = db.collection('services').doc(this.date);
                 if (this._docExists) {
