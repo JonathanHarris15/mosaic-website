@@ -69,7 +69,7 @@
     // Who decided each element — read here for who wrote the order of service.
     const Authorship = (typeof require !== 'undefined')
         ? require('./service-authorship.js')
-        : global.ServiceAuthorship;
+        : /** @type {*} */ (global).ServiceAuthorship;
     const LEVELS = ['viewer', 'member', 'editor', 'admin', 'elder', 'super_admin'];
 
     function access() {
@@ -1205,6 +1205,7 @@
         const lit = (s && s.liturgy) || {};
         const notes = (s && s.notes) || {};
         const dropped = (s && Array.isArray(s.removedHymns)) ? s.removedHymns : [];
+        const writer = writerOfSunday(s, cat, dropped);
         const row = {
             _id: date,
             date: formatDate(date),
@@ -1218,10 +1219,9 @@
             serviceLeader: slotText(s && s.serviceLeader),
             musicLeader: slotText(s && s.musicLeader),
             prayerLabel: slotText(lit.prayerLabel) || 'Pastoral Prayer',
+            oosWriter: writer ? writer.name : '',
+            oosWriterFirst: writer ? (writer.name.split(/\s+/)[0] || '') : '',
         };
-        const writer = writerOfSunday(s, cat, dropped);
-        row.oosWriter = writer ? writer.name : '';
-        row.oosWriterFirst = writer ? (writer.name.split(/\s+/)[0] || '') : '';
         const textKeys = SUNDAY_IDENTITY_FIELDS.filter(f => f.kind === 'text').map(f => f.key);
         cat.elements.forEach(el => {
             const dropsOut = (el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1;
@@ -1274,9 +1274,17 @@
 
     // Who wrote this Sunday's order of service: whoever decided the most of
     // the elements its order carries (a dropped hymn is not on it).
+    /**
+     * @param {*} s the Sunday, as normaliseService reads it
+     * @param {*} cat the liturgy catalog
+     * @param {string[]} dropped hymns this Sunday has dropped
+     * @return {{name: string}|null}
+     */
     function writerOfSunday(s, cat, dropped) {
         if (!s || !Authorship || !Authorship.writerOf) return null;
-        const ids = Liturgy.elementsFor(s, cat)
+        /** @type {Array<{id: string, kind?: string, primitive?: string}>} */
+        const elements = Liturgy.elementsFor(s, cat);
+        const ids = elements
             .filter(el => !((el.kind === 'hymn' || el.primitive === 'song') && dropped.indexOf(el.id) !== -1))
             .map(el => el.id);
         const writer = Authorship.writerOf(s, ids);

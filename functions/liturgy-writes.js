@@ -132,7 +132,8 @@ async function updateLiturgy(db, {
   const identity = await resolveIdentity(db, uid);
   // A light touch (a typo fixed) keeps whoever chose the element.
   const authorship = ServiceAuthorship.stampsFor(
-      paths, identity, serverTimestamp, deleteField, sunday.doc);
+      paths, identity, serverTimestamp, deleteField,
+      /** @type {*} */ (sunday).doc);
 
   const ref = db.collection(SERVICES).doc(dateKey);
   try {

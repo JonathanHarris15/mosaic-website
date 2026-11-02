@@ -1882,7 +1882,8 @@ async function writeLiturgyField(dateKey, field, value) {
     const remove = firebase.firestore.FieldValue.delete();
     // A typo fixed from here keeps whoever chose the element.
     const authorship = ServiceAuthorship.stampFor(
-        field, value, currentIdentity, stamp, remove, serviceDataMap[dateKey]);
+        field, value, currentIdentity, stamp, remove,
+        /** @type {Record<string, *>} */ (serviceDataMap)[dateKey]);
 
     try {
         await ref.update(Object.assign(

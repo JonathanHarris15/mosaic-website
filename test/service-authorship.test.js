@@ -325,6 +325,11 @@ test('the first save of a brand-new Sunday still records who decided', () => {
 // the tag, the order of service would be credited to whoever proofread last.
 
 const ANN = { id: 'p-2', name: 'Ann Lee' };
+/**
+ * @param {string} slot
+ * @param {*} value
+ * @param {{id: string, name: string}} who
+ */
 function sundayBy(slot, value, who) {
     return { liturgy: { [slot]: value }, decidedBy: { [slot]: { id: who.id, name: who.name, at: 'old' } } };
 }
@@ -413,8 +418,11 @@ test('a tie goes to whoever decided the earlier element', () => {
         liturgy: { a: 'x', b: 'y' },
         decidedBy: { a: { id: 'p-2', name: 'Ann Lee' }, b: { id: 'p-1', name: 'Bill Smith' } },
     };
-    assert.strictEqual(Authorship.writerOf(service, ['a', 'b']).name, 'Ann Lee');
-    assert.strictEqual(Authorship.writerOf(service, ['b', 'a']).name, 'Bill Smith');
+    const first = Authorship.writerOf(service, ['a', 'b']);
+    const second = Authorship.writerOf(service, ['b', 'a']);
+    assert.ok(first && second);
+    assert.strictEqual(first.name, 'Ann Lee');
+    assert.strictEqual(second.name, 'Bill Smith');
 });
 
 test('nobody recorded is nobody credited', () => {

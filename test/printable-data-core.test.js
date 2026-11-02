@@ -1223,13 +1223,15 @@ test('the Sunday Service for the view date is pinned, and invented when nobody h
 // elements. A dropped hymn is not on the order, so its stamp does not count.
 test('a Sunday credits its order of service to whoever decided most of it', () => {
     const data = SUNDAYS();
+    /** @type {*} */
+    const sunday = data.services['2026-09-06'];
     const ann = { id: 'p-2', name: 'Ann Lee' };
     const bill = { id: 'p-1', name: 'Bill Smith' };
-    data.services['2026-09-06'].decidedBy = {
+    sunday.decidedBy = {
         preparatoryHymn: bill, callToWorship: ann, hymn1: ann,
         hymnEnd2: bill, sermon: bill,
     };
-    const fields = Data.fieldsFor('sunday', {}, {}).map(f => f.key);
+    const fields = Data.fieldsFor('sunday', {}, {}).map((/** @type {*} */ f) => f.key);
     assert.ok(fields.includes('oosWriter') && fields.includes('oosWriterFirst'));
 
     // Bill's dropped hymn is off the order, so it is 2–2 and Bill decided
@@ -1239,7 +1241,7 @@ test('a Sunday credits its order of service to whoever decided most of it', () =
     assert.equal(row.oosWriterFirst, 'Bill');
 
     // Ann takes the sermon too: 3–1.
-    data.services['2026-09-06'].decidedBy.sermon = ann;
+    sunday.decidedBy.sermon = ann;
     row = Data.resolve('sunday', { when: { mode: 'this' } }, data, { today: TODAY }).rows[0];
     assert.equal(row.oosWriter, 'Ann Lee');
 

@@ -24,12 +24,23 @@ var ServiceAuthorship = (function () {
     // `decidedBy.hymn1` are obviously the same element.
     var FIELD = 'decidedBy';
 
+    /** @typedef {{id: string, name?: string, at?: *}} AuthorStamp */
+    /**
+     * A Sunday as far as authorship reads it.
+     * @typedef {{liturgy?: Record<string, *>, decidedBy?: Record<string, AuthorStamp>}} AuthoredSunday
+     */
+    /** @typedef {{id: string, name: string, count: number, of: number}} Writer */
+
     // Is this element empty? An emptied slot has no author, so clearing one
     // has to take the credit with it — see stampsFor.
     //
     // Recursive, because a liturgy slot is not one shape: a hymn is
     // {id, name}, a scripture is a string, the baptism candidates are a list.
     // Blank is blank all the way down.
+    /**
+     * @param {*} value
+     * @return {boolean}
+     */
     function isBlank(value) {
         if (value === null || value === undefined) return true;
         if (typeof value === 'string') return value.trim() === '';
@@ -57,6 +68,10 @@ var ServiceAuthorship = (function () {
     // Anything else — another hymn, another passage, someone added — is a
     // new choice and stamps whoever made it.
 
+    /**
+     * @param {*} value
+     * @return {string}
+     */
     function textOf(value) {
         if (value == null) return '';
         if (typeof value === 'string') return value;
@@ -66,9 +81,15 @@ var ServiceAuthorship = (function () {
 
     // Optimal string alignment distance: insertions, deletions, substitutions
     // and a swap of two neighbours each cost one, so "Pslam" is one slip.
+    /**
+     * @param {string} a
+     * @param {string} b
+     * @return {number}
+     */
     function slips(a, b) {
         var m = a.length;
         var n = b.length;
+        /** @type {number[][]} */
         var d = [];
         for (var i = 0; i <= m; i++) {
             d[i] = [i];
@@ -86,12 +107,17 @@ var ServiceAuthorship = (function () {
         return d[m][n];
     }
 
+    /**
+     * @param {*} a
+     * @param {*} b
+     * @return {boolean}
+     */
     function sameWords(a, b) {
         var x = textOf(a).toLowerCase();
         var y = textOf(b).toLowerCase();
-        var digits = function (s) { return (s.match(/\d+/g) || []).join(' '); };
+        var digits = function (/** @type {string} */ s) { return (s.match(/\d+/g) || []).join(' '); };
         if (digits(x) !== digits(y)) return false;
-        var letters = function (s) { return s.replace(/[^a-z]+/g, ''); };
+        var letters = function (/** @type {string} */ s) { return s.replace(/[^a-z]+/g, ''); };
         var lx = letters(x);
         var ly = letters(y);
         if (lx === ly) return true;
@@ -101,6 +127,11 @@ var ServiceAuthorship = (function () {
         return slips(lx, ly) <= allowed;
     }
 
+    /**
+     * @param {*} a
+     * @param {*} b
+     * @return {boolean}
+     */
     function samePerson(a, b) {
         var ida = a && typeof a === 'object' ? a.id : null;
         var idb = b && typeof b === 'object' ? b.id : null;
@@ -108,6 +139,12 @@ var ServiceAuthorship = (function () {
         return sameWords(a, b);
     }
 
+    /**
+     * Is `after` plainly the same choice as `before`?
+     * @param {*} before
+     * @param {*} after
+     * @return {boolean}
+     */
     function isLightTouch(before, after) {
         if (isBlank(before) || isBlank(after)) return false;
         if (Array.isArray(before) || Array.isArray(after)) {
@@ -149,22 +186,32 @@ var ServiceAuthorship = (function () {
     // and is only lightly touched — a typo fixed, a typed hymn linked to the
     // index — keeps that author: no stamp is written, so theirs stays. See
     // isLightTouch. Without `before` every change is a decision, as it was.
+    /**
+     * @param {Record<string, *>|null|undefined} changedPaths
+     * @param {*} identity
+     * @param {*} at
+     * @param {*} [remove]
+     * @param {AuthoredSunday|null} [before]
+     * @return {Record<string, *>}
+     */
     function stampsFor(changedPaths, identity, at, remove, before) {
         var stamp = MosaicIdentity.stamp(identity, at);
+        /** @type {Record<string, *>} */
         var out = {};
+        var paths = changedPaths || {};
         var oldLiturgy = (before && before.liturgy) || {};
 
-        Object.keys(changedPaths || {}).forEach(function (path) {
+        Object.keys(paths).forEach(function (path) {
             if (path.indexOf('liturgy.') !== 0) return;
             var slot = path.slice('liturgy.'.length);
             if (!slot) return;
 
-            if (isBlank(changedPaths[path])) {
+            if (isBlank(paths[path])) {
                 if (remove !== undefined) out[FIELD + '.' + slot] = remove;
                 return;
             }
             if (decidedBy(before, slot) && !isBlank(oldLiturgy[slot])
-                && isLightTouch(oldLiturgy[slot], changedPaths[path])) {
+                && isLightTouch(oldLiturgy[slot], paths[path])) {
                 return;
             }
             if (stamp) out[FIELD + '.' + slot] = stamp;
@@ -176,8 +223,18 @@ var ServiceAuthorship = (function () {
     // One slot, for the surfaces that write a single field. Same rules — it is
     // the same function underneath, so a cleared hymn loses its tag whichever
     // screen cleared it.
+    /**
+     * @param {string} slot
+     * @param {*} value
+     * @param {*} identity
+     * @param {*} at
+     * @param {*} [remove]
+     * @param {AuthoredSunday|null} [before]
+     * @return {Record<string, *>}
+     */
     function stampFor(slot, value, identity, at, remove, before) {
         if (!slot) return {};
+        /** @type {Record<string, *>} */
         var paths = {};
         paths['liturgy.' + slot] = value;
         return stampsFor(paths, identity, at, remove, before);
@@ -189,21 +246,33 @@ var ServiceAuthorship = (function () {
     // Removals are dropped rather than nested: this shape is only ever used to
     // lay down a document that does not exist yet, and there is nothing there
     // to take a tag off.
+    /**
+     * @param {Record<string, *>|null|undefined} stampPaths
+     * @param {*} [remove]
+     * @return {Record<string, *>|null}
+     */
     function nestStamps(stampPaths, remove) {
+        /** @type {Record<string, *>} */
         var nested = {};
+        var stamps = stampPaths || {};
         var any = false;
-        Object.keys(stampPaths || {}).forEach(function (path) {
+        Object.keys(stamps).forEach(function (path) {
             if (path.indexOf(FIELD + '.') !== 0) return;
-            if (remove !== undefined && stampPaths[path] === remove) return;
-            nested[path.slice(FIELD.length + 1)] = stampPaths[path];
+            if (remove !== undefined && stamps[path] === remove) return;
+            nested[path.slice(FIELD.length + 1)] = stamps[path];
             any = true;
         });
         return any ? nested : null;
     }
 
     // Read the stamp for one slot off a Service.
+    /**
+     * @param {AuthoredSunday|null|undefined} service
+     * @param {string} slot
+     * @return {AuthorStamp|null}
+     */
     function decidedBy(service, slot) {
-        var map = service && service[FIELD];
+        var map = service && service.decidedBy;
         var entry = map && map[slot];
         return (entry && entry.id) ? entry : null;
     }
@@ -219,9 +288,16 @@ var ServiceAuthorship = (function () {
     //
     // Returns {id, name, count, of} — `of` is how many elements carry an
     // author at all — or null when nobody is recorded.
+    /**
+     * @param {AuthoredSunday|null|undefined} service
+     * @param {string[]} elementIds
+     * @return {Writer|null}
+     */
     function writerOf(service, elementIds) {
         var liturgy = (service && service.liturgy) || {};
+        /** @type {Record<string, {id: string, name: string, count: number}>} */
         var tally = {};
+        /** @type {string[]} */
         var order = [];
         var of = 0;
         (elementIds || []).forEach(function (slot) {
@@ -236,10 +312,12 @@ var ServiceAuthorship = (function () {
             tally[entry.id].count += 1;
             if (!tally[entry.id].name && entry.name) tally[entry.id].name = String(entry.name).trim();
         });
+        /** @type {{id: string, name: string, count: number}|null} */
         var best = null;
-        order.forEach(function (id) {
-            if (!best || tally[id].count > best.count) best = tally[id];
-        });
+        for (var i = 0; i < order.length; i++) {
+            var entry = tally[order[i]];
+            if (!best || entry.count > best.count) best = entry;
+        }
         if (!best) return null;
         return { id: best.id, name: best.name, count: best.count, of: of };
     }
@@ -247,6 +325,10 @@ var ServiceAuthorship = (function () {
     // What the tag says. First name only — the tag sits under a row that
     // already carries a label and a value, and a full name turns a quiet note
     // into a third column of text competing with the element itself.
+    /**
+     * @param {AuthorStamp|null|undefined} entry
+     * @return {string}
+     */
     function tagLabel(entry) {
         if (!entry || !entry.id) return '';
         var parts = String(entry.name || '').trim().split(/\s+/).filter(Boolean);
@@ -254,6 +336,10 @@ var ServiceAuthorship = (function () {
     }
 
     // The whole name, for the tooltip.
+    /**
+     * @param {AuthorStamp|null|undefined} entry
+     * @return {string}
+     */
     function tagTitle(entry) {
         if (!entry || !entry.id) return '';
         var name = String(entry.name || '').trim();
